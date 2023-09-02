@@ -287,7 +287,7 @@ auto Hud::try_begin_drag() -> bool
     if (node == nullptr) {
         return false;
     }
-    m_drag_node = as<erhe::scene::Node>(node->shared_from_this());
+    m_drag_node = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
     auto drag_node = m_drag_node.lock();
     if (!drag_node) {
         return false;

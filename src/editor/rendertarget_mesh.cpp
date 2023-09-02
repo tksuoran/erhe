@@ -402,7 +402,7 @@ auto get_rendertarget(
 ) -> std::shared_ptr<Rendertarget_mesh>
 {
     for (const auto& attachment : node->get_attachments()) {
-        auto rendertarget = as<Rendertarget_mesh>(attachment);
+        auto rendertarget = std::dynamic_pointer_cast<Rendertarget_mesh>(attachment);
         if (rendertarget) {
             return rendertarget;
         }

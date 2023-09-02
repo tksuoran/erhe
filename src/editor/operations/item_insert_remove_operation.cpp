@@ -1,8 +1,8 @@
-#include "operations/insert_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/item_parent_change_operation.hpp"
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
-#include "operations/node_operation.hpp"
 #include "tools/selection_tool.hpp"
 
 #include <sstream>

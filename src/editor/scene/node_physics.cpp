@@ -157,7 +157,7 @@ auto is_physics(const std::shared_ptr<erhe::Item>& scene_item) -> bool
 auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
 {
     for (const auto& attachment : node->get_attachments()) {
-        auto node_physics = as<Node_physics>(attachment);
+        auto node_physics = std::dynamic_pointer_cast<Node_physics>(attachment);
         if (node_physics) {
             return node_physics;
         }

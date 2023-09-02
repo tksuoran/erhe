@@ -67,8 +67,8 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         m_selection_before.begin(),
         m_selection_before.end(),
         [](const std::shared_ptr<erhe::Item>& lhs, const std::shared_ptr<erhe::Item>& rhs) {
-            auto lhs_hierarchy = as<erhe::Hierarchy>(lhs);
-            auto rhs_hierarchy = as<erhe::Hierarchy>(rhs);
+            auto lhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(lhs);
+            auto rhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(rhs);
             if (lhs_hierarchy && !rhs_hierarchy) {
                 return true;
             }
@@ -83,7 +83,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     );
 
     for (const auto& item : m_selection_before) {
-        auto shared_node = as<erhe::scene::Node>(item);
+        auto shared_node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (!shared_node) {
             continue;
         }

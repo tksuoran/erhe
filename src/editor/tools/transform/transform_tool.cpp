@@ -277,7 +277,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
     std::size_t i = 0;
 
     for (const auto& item : selection) {
-        std::shared_ptr<erhe::scene::Node> node = as<erhe::scene::Node>(item);
+        std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (!node) {
             continue;
         }

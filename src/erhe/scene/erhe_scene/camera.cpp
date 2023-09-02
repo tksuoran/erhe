@@ -117,7 +117,7 @@ auto get_camera(const erhe::scene::Node* const node) -> std::shared_ptr<Camera>
         return {};
     }
     for (const auto& attachment : node->get_attachments()) {
-        auto camera = as<Camera>(attachment);
+        auto camera = std::dynamic_pointer_cast<Camera>(attachment);
         if (camera) {
             return camera;
         }

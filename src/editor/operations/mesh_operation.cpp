@@ -124,8 +124,8 @@ void Mesh_operation::make_entries(
     scene.sanity_check();
 
     for (auto& item : selected_items) {
-        auto* node = as<erhe::scene::Node>(item).get();
-        auto mesh = as<erhe::scene::Mesh>(item);
+        auto* node = std::dynamic_pointer_cast<erhe::scene::Node>(item).get();
+        auto  mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
         if (!mesh) {
             if (node != nullptr) {
                 mesh = erhe::scene::get_mesh(node);

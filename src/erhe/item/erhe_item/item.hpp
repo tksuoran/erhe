@@ -246,16 +246,4 @@ auto is(const std::shared_ptr<erhe::Item>& base) -> bool
     return static_cast<bool>(std::dynamic_pointer_cast<T>(base));
 }
 
-template <typename T>
-auto as(erhe::Item* const base) -> T*
-{
-    return dynamic_cast<T*>(base);
-}
-
-template <typename T>
-auto as(const std::shared_ptr<erhe::Item>& base) -> std::shared_ptr<T>
-{
-    return std::dynamic_pointer_cast<T>(base);
-}
-
 } // namespace erhe

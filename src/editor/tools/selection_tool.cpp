@@ -302,7 +302,7 @@ auto Selection::delete_selection() -> bool
     Compound_operation::Parameters compound_parameters;
     for (auto& item : m_selection) {
         // TODO
-        auto hierarchy = as<erhe::Hierarchy>(item);
+        const auto hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (!hierarchy) {
             continue;
         }
@@ -366,8 +366,8 @@ auto item_set_sort_predicate(
     const std::shared_ptr<erhe::Item>& lhs,
     const std::shared_ptr<erhe::Item>& rhs
 ) -> bool {
-    const auto lhs_hierarchy = as<erhe::Hierarchy>(lhs);
-    const auto rhs_hierarchy = as<erhe::Hierarchy>(rhs);
+    const auto lhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(lhs);
+    const auto rhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(rhs);
     if (lhs_hierarchy && rhs_hierarchy) {
         const auto lhs_depth = lhs_hierarchy->get_depth();
         const auto rhs_depth = rhs_hierarchy->get_depth();

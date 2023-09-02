@@ -9,9 +9,8 @@ namespace editor
 {
 
 class Item_parent_change_operation;
-class Selection;
 
-class Scene_item_operation
+class Item_insert_remove_operation
     : public IOperation
 {
 public:
@@ -32,12 +31,7 @@ public:
             }
         }
     }
-};
 
-class Item_insert_remove_operation
-    : public Scene_item_operation
-{
-public:
     class Parameters
     {
     public:

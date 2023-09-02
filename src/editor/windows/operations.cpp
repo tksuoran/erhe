@@ -4,7 +4,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
-#include "operations/node_operation.hpp"
+#include "operations/item_parent_change_operation.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -40,7 +40,7 @@ auto Operations::count_selected_meshes() const -> size_t
     const auto& selection = m_context.selection->get_selection();
     std::size_t count = 0;
     for (const auto& item : selection) {
-        auto node = as<erhe::scene::Node>(item);
+        auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (node) {
             for (const auto& attachment : node->get_attachments()) {
                 if (erhe::scene::is_mesh(attachment)) {

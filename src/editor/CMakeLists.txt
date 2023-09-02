@@ -15,15 +15,21 @@ erhe_target_sources_grouped(
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
     operations/geometry_operations.hpp
-    operations/insert_operation.cpp
-    operations/insert_operation.hpp
     operations/ioperation.hpp
+    operations/item_insert_remove_operation.cpp
+    operations/item_insert_remove_operation.hpp
+    operations/item_parent_change_operation.cpp
+    operations/item_parent_change_operation.hpp
+    operations/item_reposition_in_parent_operation.cpp
+    operations/item_reposition_in_parent_operation.hpp
     operations/merge_operation.cpp
     operations/merge_operation.hpp
     operations/mesh_operation.cpp
     operations/mesh_operation.hpp
-    operations/node_operation.cpp
-    operations/node_operation.hpp
+    operations/node_attach_operation.cpp
+    operations/node_attach_operation.hpp
+    operations/node_transform_operation.cpp
+    operations/node_transform_operation.hpp
     operations/operation_stack.cpp
     operations/operation_stack.hpp
     parsers/json_polyhedron.cpp

@@ -240,8 +240,11 @@ auto is_raytrace(const std::shared_ptr<erhe::Item>& scene_item) -> bool
 
 auto get_node_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>
 {
+    if (node == nullptr) {
+        return {};
+    }
     for (const auto& attachment : node->get_attachments()) {
-        auto node_raytrace = as<Node_raytrace>(attachment);
+        auto node_raytrace = std::dynamic_pointer_cast<Node_raytrace>(attachment);
         if (node_raytrace) {
             return node_raytrace;
         }

@@ -332,7 +332,7 @@ auto Viewport_windows::open_new_viewport_window(
     const int msaa_sample_count = m_context.editor_settings->graphics.current_graphics_preset.msaa_sample_count;
     if (scene_root) {
         for (const auto& item : m_context.selection->get_selection()) {
-            const auto camera = as<erhe::scene::Camera>(item);
+            const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
             if (camera) {
                 return create_viewport_window(
                     *m_context.graphics_instance,

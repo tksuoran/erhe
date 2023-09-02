@@ -40,7 +40,7 @@ void color_graph(
         }
     }
     for (const auto& child : node->get_children()) {
-        auto child_node = as<erhe::scene::Node>(child);
+        auto child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
         if (!child_node) {
             continue;
         }
@@ -55,7 +55,7 @@ void color_graph(
     node_colors.emplace(node, node_color);
 
     for (auto& child : node->get_children()) {
-        auto child_node = as<erhe::scene::Node>(child);
+        auto child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
         if (!child_node) {
             continue;
         }

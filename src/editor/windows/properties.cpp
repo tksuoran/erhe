@@ -533,14 +533,14 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item>& item)
         return;
     }
 
-    const auto content_library_node = as<Content_library_node>(item);
-    const auto node_physics         = as<Node_physics        >(item);
-    const auto node_raytrace        = as<Node_raytrace       >(item);
-    const auto rendertarget         = as<Rendertarget_mesh   >(item);
-    const auto camera               = as<erhe::scene::Camera >(item);
-    const auto light                = as<erhe::scene::Light  >(item);
-    const auto mesh                 = as<erhe::scene::Mesh   >(item);
-    const auto node                 = as<erhe::scene::Node   >(item);
+    const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
+    const auto& node_physics         = std::dynamic_pointer_cast<Node_physics        >(item);
+    const auto& node_raytrace        = std::dynamic_pointer_cast<Node_raytrace       >(item);
+    const auto& rendertarget         = std::dynamic_pointer_cast<Rendertarget_mesh   >(item);
+    const auto& camera               = std::dynamic_pointer_cast<erhe::scene::Camera >(item);
+    const auto& light                = std::dynamic_pointer_cast<erhe::scene::Light  >(item);
+    const auto& mesh                 = std::dynamic_pointer_cast<erhe::scene::Mesh   >(item);
+    const auto& node                 = std::dynamic_pointer_cast<erhe::scene::Node   >(item);
 
     const bool default_open = !node_physics && !content_library_node && !node;
 
@@ -665,7 +665,7 @@ void Properties::imgui()
         ERHE_VERIFY(item);
         item_properties(item);
 
-        const auto node = as<erhe::scene::Node>(item);
+        const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (!node) {
             continue;
         }

@@ -427,7 +427,7 @@ auto is_light(const std::shared_ptr<erhe::Item>& item) -> bool
 auto get_light(const erhe::scene::Node* const node) -> std::shared_ptr<Light>
 {
     for (const auto& attachment : node->get_attachments()) {
-        auto light = as<Light>(attachment);
+        auto light = std::dynamic_pointer_cast<Light>(attachment);
         if (light) {
             return light;
         }

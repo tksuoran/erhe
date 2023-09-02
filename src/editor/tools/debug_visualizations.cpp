@@ -118,13 +118,13 @@ auto Debug_visualizations::get_selected_camera(
     const auto& selection = m_context.selection->get_selection();
 
     for (const auto& item : selection) {
-        const auto& node = as<erhe::scene::Node>(item);
+        const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (node) {
             if (node->get_scene() != scene) {
                 continue;
             }
             for (const auto& attachment : node->get_attachments()) {
-                const auto camera = as<erhe::scene::Camera>(attachment);
+                const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
                 if (camera) {
                     return camera;
                 }
@@ -677,7 +677,7 @@ void Debug_visualizations::selection_visualization(
 
     m_selection_bounding_volume = erhe::math::Bounding_volume_combiner{}; // reset
     for (const auto& item : selection) {
-        const auto& node = as<erhe::scene::Node>(item);
+        const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (node) {
             if (node->get_scene() != scene) {
                 continue;
@@ -693,7 +693,7 @@ void Debug_visualizations::selection_visualization(
                 line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
             }
             for (const auto& attachment : node->get_attachments()) {
-                const auto mesh = as<erhe::scene::Mesh>(attachment);
+                const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
                 if (mesh) {
                     mesh_visualization(context, mesh.get());
                 }
@@ -702,7 +702,7 @@ void Debug_visualizations::selection_visualization(
                 //    skin_visualization(context, skin.get());
                 //}
 
-                const auto camera = as<erhe::scene::Camera>(attachment);
+                const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
                 if (
                     camera &&
                     (viewport_config.debug_visualizations.camera == erhe::renderer::Visualization_mode::selected)
@@ -1176,9 +1176,9 @@ void Debug_visualizations::render(
 
     std::shared_ptr<erhe::scene::Camera> selected_camera;
     const auto& selection = m_context.selection->get_selection();
-    for (const auto& node : selection) {
-        if (erhe::scene::is_camera(node)) {
-            selected_camera = as<erhe::scene::Camera>(node);
+    for (const auto& item : selection) {
+        if (erhe::scene::is_camera(item)) {
+            selected_camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
         }
     }
 

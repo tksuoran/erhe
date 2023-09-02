@@ -195,11 +195,11 @@ Scene_root::Scene_root(
                         if (item->get_item_host() != this) {
                             continue;
                         }
-                        const auto node = as<erhe::scene::Node>(item);
+                        const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
                         if (!node) {
                             continue;
                         }
-                        const auto node_physics = get_node_physics(node.get());
+                        const auto& node_physics = get_node_physics(node.get());
                         if (!node_physics) {
                             continue;
                         }
@@ -222,7 +222,7 @@ Scene_root::Scene_root(
                         if (item->get_item_host() != this) {
                             continue;
                         }
-                        const auto node = as<erhe::scene::Node>(item);
+                        const auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
                         if (!node) {
                             continue;
                         }
@@ -409,7 +409,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
     if (is_rendertarget(mesh)) {
         const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
-        m_rendertarget_meshes.push_back(as<Rendertarget_mesh>(mesh));
+        m_rendertarget_meshes.push_back(std::dynamic_pointer_cast<Rendertarget_mesh>(mesh));
     }
 
     // Make sure materials are in the material library
@@ -426,7 +426,7 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     if (is_rendertarget(mesh)) {
         const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
-        const auto rendertarget = as<Rendertarget_mesh>(mesh);
+        const auto rendertarget = std::dynamic_pointer_cast<Rendertarget_mesh>(mesh);
         const auto i = std::remove(m_rendertarget_meshes.begin(), m_rendertarget_meshes.end(), rendertarget);
         if (i == m_rendertarget_meshes.end()) {
             log_scene->error("rendertarget mesh {} not in scene root", rendertarget->get_name());

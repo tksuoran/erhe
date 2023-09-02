@@ -3,8 +3,8 @@
 #include "editor_context.hpp"
 #include "editor_windows.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/insert_operation.hpp"
-#include "operations/node_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_viewport.hpp"
@@ -137,10 +137,10 @@ auto Scene_commands::create_new_camera(
                             .parent  = (parent != nullptr)
                                 ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
                                 : scene_root->get_hosted_scene()->get_root_node(),
-                            .mode    = Scene_item_operation::Mode::insert
+                            .mode    = Item_insert_remove_operation::Mode::insert
                         }
                     ),
-                    std::make_shared<Attach_operation>(new_camera, new_node)
+                    std::make_shared<Node_attach_operation>(new_camera, new_node)
                 }
             }
         )
@@ -168,7 +168,7 @@ auto Scene_commands::create_new_empty_node(
                 .parent  = (parent != nullptr)
                     ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
                     : scene_root->get_hosted_scene()->get_root_node(),
-                .mode    = Scene_item_operation::Mode::insert
+                .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
     );
@@ -201,10 +201,10 @@ auto Scene_commands::create_new_light(
                             .parent  = (parent != nullptr)
                                 ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
                                 : scene_root->get_hosted_scene()->get_root_node(),
-                            .mode    = Scene_item_operation::Mode::insert
+                            .mode    = Item_insert_remove_operation::Mode::insert
                         }
                     ),
-                    std::make_shared<Attach_operation>(new_light, new_node)
+                    std::make_shared<Node_attach_operation>(new_light, new_node)
                 }
             }
         )
@@ -279,10 +279,10 @@ auto Scene_commands::create_new_rendertarget(
                             .parent  = (parent != nullptr)
                                 ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
                                 : scene_root->get_hosted_scene()->get_root_node(),
-                            .mode    = Scene_item_operation::Mode::insert
+                            .mode    = Item_insert_remove_operation::Mode::insert
                         }
                     ),
-                    std::make_shared<Attach_operation>(new_mesh, new_node)
+                    std::make_shared<Node_attach_operation>(new_mesh, new_node)
                 }
             }
         )

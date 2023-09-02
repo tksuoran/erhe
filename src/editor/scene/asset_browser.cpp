@@ -253,7 +253,7 @@ void Asset_browser::scan()
 
 auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item>& item) -> bool
 {
-    const auto gltf = as<Asset_file_gltf>(item);
+    const auto gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
     if (!gltf) {
         return false;
     }

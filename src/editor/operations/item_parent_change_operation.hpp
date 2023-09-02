@@ -2,7 +2,7 @@
 
 #include "operations/ioperation.hpp"
 
-#include "erhe_scene/node.hpp"
+#include "erhe_item/item.hpp"
 
 #include <memory>
 #include <vector>
@@ -18,75 +18,29 @@ namespace erhe::scene {
 namespace editor
 {
 
-// NOTE This is not currently unused.
-// TODO Item_operation
-class Node_operation
-    : public IOperation
-{
-protected:
-    class Entry
-    {
-    public:
-        std::shared_ptr<erhe::scene::Node> node;
-        erhe::scene::Node_data             before;
-        erhe::scene::Node_data             after;
-    };
-
-    // Implements IOperation
-    [[nodiscard]] auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
-
-    // Public API
-    void add_entry(Entry&& entry);
-
-private:
-    std::vector<Entry> m_entries;
-};
-
-class Node_transform_operation
-    : public IOperation
-{
-public:
-    class Parameters
-    {
-    public:
-        std::shared_ptr<erhe::scene::Node> node;
-        erhe::scene::Transform             parent_from_node_before;
-        erhe::scene::Transform             parent_from_node_after;
-    };
-
-    explicit Node_transform_operation(const Parameters& parameters);
-
-    // Implements IOperation
-    [[nodiscard]] auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
-
-private:
-    Parameters m_parameters;
-};
-
-class Attach_operation
-    : public IOperation
-{
-public:
-    Attach_operation();
-    Attach_operation(
-        const std::shared_ptr<erhe::scene::Node_attachment>& attachment,
-        const std::shared_ptr<erhe::scene::Node>&            host_node
-    );
-
-    // Implements IOperation
-    [[nodiscard]] auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
-
-private:
-    std::shared_ptr<erhe::scene::Node_attachment> m_attachment;
-    std::shared_ptr<erhe::scene::Node>            m_host_node_before;
-    std::shared_ptr<erhe::scene::Node>            m_host_node_after;
-};
+//class Item_operation
+//    : public IOperation
+//{
+//protected:
+//    class Entry
+//    {
+//    public:
+//        std::shared_ptr<erhe::Item> item;
+//        erhe::Item_data             before;
+//        erhe::Item_data             after;
+//    };
+//
+//    // Implements IOperation
+//    [[nodiscard]] auto describe() const -> std::string override;
+//    void execute(Editor_context& context) override;
+//    void undo   (Editor_context& context) override;
+//
+//    // Public API
+//    void add_entry(Entry&& entry);
+//
+//private:
+//    std::vector<Entry> m_entries;
+//};
 
 class Item_parent_change_operation
     : public IOperation

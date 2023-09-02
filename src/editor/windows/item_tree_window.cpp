@@ -9,7 +9,8 @@
 #include "windows/item_tree_window.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/node_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/Item_parent_change_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/asset_browser.hpp"
 #include "scene/node_physics.hpp"
@@ -78,7 +79,7 @@ void Item_tree_window::recursive_add_to_selection(
 )
 {
     m_context.selection->add_to_selection(item);
-    auto hierarchy = as<erhe::Hierarchy>(item);
+    auto hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
     if (!hierarchy) {
         return;
     }
@@ -139,7 +140,7 @@ void Item_tree_window::move_selection(
         // In this case we apply reposition to whole selection.
         if (placement == Placement::Before_anchor) {
             for (const auto& item : selection) {
-                const auto& node = as<erhe::scene::Node>(item);
+                const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
                 if (node) {
                     reposition(compound_parameters, anchor, node, placement, Selection_usage::Selection_used);
                 }
@@ -147,7 +148,7 @@ void Item_tree_window::move_selection(
         } else { // if (placement == Placement::After_anchor)
             for (auto i = selection.rbegin(), end = selection.rend(); i < end; ++i) {
                 const auto& item = *i;
-                const auto& node = as<erhe::scene::Node>(item);
+                const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
                 if (node) {
                     reposition(compound_parameters, anchor, node, placement, Selection_usage::Selection_used);
                 }
@@ -156,7 +157,7 @@ void Item_tree_window::move_selection(
     } else if (compound_parameters.operations.empty()) {
         // Dragging a single node which is not part of the selection.
         // In this case we ignore selection and apply operation only to dragged node.
-        const auto& drag_node = as<erhe::scene::Node>(drag_item);
+        const auto& drag_node = std::dynamic_pointer_cast<erhe::scene::Node>(drag_item);
         if (drag_node) {
             reposition(compound_parameters, anchor, drag_node, placement, Selection_usage::Selection_ignored);
         }
@@ -174,7 +175,7 @@ namespace {
     const std::vector<std::shared_ptr<erhe::Item>>& selection
 ) -> std::shared_ptr<erhe::Item>
 {
-    auto hierarchy = as<erhe::Hierarchy>(item);
+    const auto hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
     if (!hierarchy) {
         return {};
     }
@@ -225,8 +226,8 @@ void Item_tree_window::reposition(
         return;
     }
 
-    auto hierarchy        = as<erhe::Hierarchy>(item);
-    auto anchor_hierarchy = as<erhe::Hierarchy>(anchor);
+    const auto hierarchy        = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    const auto anchor_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(anchor);
     if (!hierarchy || !anchor_hierarchy) {
         return;
     }
@@ -306,8 +307,8 @@ void Item_tree_window::try_add_to_attach(
         return;
     }
 
-    auto hierarchy        = as<erhe::Hierarchy>(item);
-    auto target_hierarchy = as<erhe::Hierarchy>(target);
+    const auto hierarchy        = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    const auto target_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(target);
     if (!hierarchy || !target_hierarchy) {
         return;
     }
@@ -478,7 +479,7 @@ auto Item_tree_window::drag_and_drop_target(
     const ImGuiID     imgui_id_after    = ImGui::GetID(label_move_after.c_str());
 
     // Move selection before drop target
-    const auto& node = as<erhe::scene::Node>(item);
+    const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     if (node) {
         log_tree_frame->trace("Dnd item is Node: {}", node->describe());
         const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
@@ -649,7 +650,7 @@ void Item_tree_window::item_popup_menu(
     const std::shared_ptr<erhe::Item>& item
 )
 {
-    const auto& node       = as<erhe::scene::Node>(item);
+    const auto& node       = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     Scene_root* scene_root = static_cast<Scene_root*>(item->get_item_host());
     if (!node || (scene_root == nullptr))
     {
@@ -766,11 +767,11 @@ void Item_tree_window::item_icon(
     if (erhe::scene::is_bone(item)) {
         icon = icons.bone;
     }
-    const auto& material = as<erhe::primitive::Material>(item);
+    const auto& material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
     if (material) {
         color = material->base_color;
     }
-    const auto& light = as<erhe::scene::Light>(item);
+    const auto& light = std::dynamic_pointer_cast<erhe::scene::Light>(item);
     if (light) {
         color = glm::vec4{light->color, 1.0f};
         switch (light->type) {
@@ -800,17 +801,16 @@ auto Item_tree_window::item_icon_and_text(
 
     item_icon(item);
 
-    const auto& node = as<erhe::scene::Node>(item);
+    const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     if (!m_context.editor_settings->node_tree_expand_attachments && node) {
         for (const auto& node_attachment : node->get_attachments()) {
             item_icon(node_attachment);
         }
     }
 
-    const auto& scene                = as<erhe::scene::Scene  >(item);
-    const auto& content_library_node = as<Content_library_node>(item);
-
-    const auto& hierarchy = as<erhe::Hierarchy>(item);
+    const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
+    const auto& hierarchy            = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    const auto& scene                = std::dynamic_pointer_cast<erhe::scene::Scene  >(item);
 
     bool is_leaf = true;
     if (hierarchy && (hierarchy->get_child_count(m_filter) > 0)) {
@@ -897,7 +897,7 @@ auto Item_tree_window::should_show(
     }
 
     bool show_by_attachments = false;
-    const auto& node = as<erhe::scene::Node>(item);
+    const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     if (node) {
         for (const auto& node_attachment : node->get_attachments()) {
             if (should_show(node_attachment) != Show_mode::Hide) {
@@ -910,7 +910,7 @@ auto Item_tree_window::should_show(
         return Show_mode::Show;
     }
 
-    const auto& hierarchy = as<erhe::Hierarchy>(item);
+    const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
     if (hierarchy) {
         for (const auto& child_node : hierarchy->get_children()) {
             if (should_show(child_node) != Show_mode::Hide) {
@@ -928,7 +928,7 @@ void Item_tree_window::imgui_item_node(
 {
     // Special handling for invisible parents (scene root)
     if (erhe::bit::test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
-        const auto& hierarchy = as<erhe::Hierarchy>(item);
+        const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (hierarchy) {
             for (const auto& child_node : hierarchy->get_children()) {
                 imgui_item_node(child_node);
@@ -954,7 +954,7 @@ void Item_tree_window::imgui_item_node(
     );
     if (tree_node_state.is_open) {
         if (m_context.editor_settings->node_tree_expand_attachments) {
-            const auto& node = as<erhe::scene::Node>(item);
+            const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
             if (node) {
                 const float attachment_indent = 15.0f; // TODO
                 ImGui::Indent(attachment_indent);
@@ -964,7 +964,7 @@ void Item_tree_window::imgui_item_node(
                 ImGui::Unindent(attachment_indent);
             }
         }
-        const auto& hierarchy = as<erhe::Hierarchy>(item);
+        const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (hierarchy) {
             for (const auto& child_node : hierarchy->get_children()) {
                 imgui_item_node(child_node);

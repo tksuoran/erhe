@@ -208,8 +208,8 @@ void Create::imgui()
         const auto& selection = m_context.selection->get_selection();
         if (!selection.empty()) {
             std::shared_ptr<erhe::geometry::Geometry> source_geometry;
-            for (const auto& node : selection) {
-                const auto& mesh = as<erhe::scene::Mesh>(node);
+            for (const auto& item : selection) {
+                const auto& mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
                 if (mesh) {
                     for (const auto& primitive : mesh->mesh_data.primitives) {
                         const auto& geometry_primitive = primitive.geometry_primitive;

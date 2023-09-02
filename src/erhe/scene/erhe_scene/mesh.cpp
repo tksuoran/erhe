@@ -84,7 +84,7 @@ auto get_mesh(const erhe::scene::Node* const node) -> std::shared_ptr<Mesh>
         return {};
     }
     for (const auto& attachment : node->get_attachments()) {
-        auto mesh = as<Mesh>(attachment);
+        auto mesh = std::dynamic_pointer_cast<Mesh>(attachment);
         if (mesh) {
             return mesh;
         }

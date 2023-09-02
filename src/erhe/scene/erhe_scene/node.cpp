@@ -298,7 +298,7 @@ void Node::handle_item_host_update(
     }
 
     for (const auto& child : get_children()) {
-        auto child_node = as<Node>(child);
+        auto child_node = std::dynamic_pointer_cast<Node>(child);
         if (!child_node) {
             continue;
         }
