@@ -69,12 +69,14 @@ public:
     void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
     // Implements / overrides Hierarchy
-    void set_parent          (const std::shared_ptr<erhe::Hierarchy>& parent, std::size_t position = 0) override;
-    void handle_parent_update(erhe::Hierarchy* old_parent, erhe::Hierarchy* new_parent)                 override;
+    using Hierarchy::set_parent;
+    void set_parent          (const std::shared_ptr<erhe::Hierarchy>& parent, std::size_t position) override;
+    void handle_parent_update(erhe::Hierarchy* old_parent, erhe::Hierarchy* new_parent)             override;
 
     // Public API
     [[nodiscard]] auto get_parent_node() const -> std::shared_ptr<Node>;
-    void set_parent(Node* parent, std::size_t position = 0);
+    void set_node_parent(Node* parent);
+    void set_node_parent(Node* parent, std::size_t position);
 
     void attach                  (const std::shared_ptr<Node_attachment>& attachment);
     auto detach                  (Node_attachment* attachment) -> bool;

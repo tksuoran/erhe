@@ -5,6 +5,7 @@
 #include "erhe_item/unique_id.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -29,10 +30,11 @@ public:
     [[nodiscard]] auto get_type     () const -> uint64_t         override { return get_static_type(); }
     [[nodiscard]] auto get_type_name() const -> std::string_view override { return static_type_name; }
 
-    virtual void set_parent          (const std::shared_ptr<Hierarchy>& parent, std::size_t position = 0)    ;
-    virtual void handle_add_child    (const std::shared_ptr<Hierarchy>& child_node, std::size_t position = 0);
-    virtual void handle_remove_child (Hierarchy* child_node)                                                 ;
-    virtual void handle_parent_update(Hierarchy* old_parent, Hierarchy* new_parent)                     ;
+    virtual void set_parent          (const std::shared_ptr<Hierarchy>& parent);
+    virtual void set_parent          (const std::shared_ptr<Hierarchy>& parent, std::size_t position);
+    virtual void handle_add_child    (const std::shared_ptr<Hierarchy>& child_node, std::size_t position);
+    virtual void handle_remove_child (Hierarchy* child_node);
+    virtual void handle_parent_update(Hierarchy* old_parent, Hierarchy* new_parent);
 
     [[nodiscard]] auto get_parent          () const -> std::weak_ptr<Hierarchy>;
     [[nodiscard]] auto get_depth           () const -> size_t;
@@ -45,13 +47,31 @@ public:
     [[nodiscard]] auto get_index_of_child  (const Hierarchy* child) const -> std::optional<std::size_t>;
     [[nodiscard]] auto is_ancestor         (const Hierarchy* ancestor_candidate) const -> bool;
 
-    void remove                ();
-    void recursive_remove      ();
-    void set_parent            (Hierarchy* parent, std::size_t position = 0);
-    void set_depth_recursive   (std::size_t depth);
-    void hierarchy_sanity_check() const;
-    void sanity_check_root_path(const Hierarchy* node) const;
-    void trace                 ();
+    void remove                         ();
+    void recursive_remove               ();
+    void remove_all_children_recursively();
+    void set_parent                     (Hierarchy* parent);
+    void set_parent                     (Hierarchy* parent, std::size_t position);
+    void set_depth_recursive            (std::size_t depth);
+    void hierarchy_sanity_check         () const;
+    void sanity_check_root_path         (const Hierarchy* node) const;
+    void trace                          ();
+    void for_each                       (const std::function<bool(Hierarchy& hierarchy)>& fun);
+
+    template <typename T>
+    void for_each(const std::function<bool(const T& item)>& fun) const
+    {
+        const T* item = dynamic_cast<const T*>(this);
+        if (item != nullptr) {
+            if (!fun(*item)) {
+                return;
+            }
+        }
+
+        for (const auto& child : m_children) {
+            child->for_each(fun);
+        }
+    }
 
 protected:
     std::weak_ptr<Hierarchy>                m_parent{};

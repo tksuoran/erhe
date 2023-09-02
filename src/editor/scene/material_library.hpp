@@ -5,6 +5,6 @@
 namespace editor
 {
 
-void add_default_materials(Library<erhe::primitive::Material>& library);
+void add_default_materials(Content_library& library);
 
 } // namespace editor

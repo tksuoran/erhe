@@ -17,6 +17,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -486,7 +487,7 @@ auto Item_tree_window::drag_and_drop_target(
             drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (top rect)");
-                IM_ASSERT(payload->DataSize == sizeof(erhe::Unique_id<erhe::scene::Node>::id_type));
+                IM_ASSERT(payload->DataSize == sizeof(erhe::Item*));
                 erhe::Item* payload_item = *(static_cast<erhe::Item**>(payload->Data));
                 move_selection(node, payload_item, Placement::Before_anchor);
             } else {
@@ -503,7 +504,7 @@ auto Item_tree_window::drag_and_drop_target(
             drag_and_drop_rectangle_preview(middle_rect);
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (middle rect)");
-                IM_ASSERT(payload->DataSize == sizeof(erhe::Unique_id<erhe::scene::Node>::id_type));
+                IM_ASSERT(payload->DataSize == sizeof(erhe::Item*));
                 erhe::Item* payload_item = *(static_cast<erhe::Item**>(payload->Data));
                 attach_selection_to(node, payload_item);
             } else {
@@ -520,7 +521,7 @@ auto Item_tree_window::drag_and_drop_target(
             drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (bottom rect)");
-                IM_ASSERT(payload->DataSize == sizeof(erhe::Unique_id<erhe::scene::Node>::id_type));
+                IM_ASSERT(payload->DataSize == sizeof(erhe::Item*));
                 erhe::Item* payload_item = *(static_cast<erhe::Item**>(payload->Data));
                 move_selection(node, payload_item, Placement::After_anchor);
             } else {
@@ -734,28 +735,40 @@ void Item_tree_window::item_icon(
     const std::shared_ptr<erhe::Item>& item
 )
 {
-    std::optional<glm::vec2> icon;
+    const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
+    if (content_node && content_node->item) {
+        item_icon(content_node->item);
+        return;
+    }
 
-    glm::vec4 color = item->get_wireframe_color();
-    auto& icons = m_context.icon_set->icons;
-    const auto& node = as<erhe::scene::Node>(item);
-    if (node) {
-        icon = icons.node;
+    std::optional<glm::vec2> icon;
+    glm::vec4                color = item->get_wireframe_color();
+
+    auto&          icons      = m_context.icon_set->icons;
+    const auto&    type_icons = m_context.icon_set->type_icons;
+    const uint64_t type_mask  = item->get_type();
+    using namespace erhe::bit;
+    for (uint64_t bit_position = 0; bit_position < erhe::Item_type::count; ++bit_position) {
+        const uint64_t bit_mask = (uint64_t{1} << bit_position);
+        if (test_all_rhs_bits_set(type_mask, bit_mask)) {
+            const auto& icon_opt = type_icons.at(bit_position);
+            if (icon_opt.has_value()) {
+                const auto& type_icon = icon_opt.value();
+                icon  = type_icon.icon;
+                if (type_icon.color.has_value()) {
+                    color = type_icon.color.value();
+                }
+                break;
+            }
+        }
     }
-    const auto& mesh = as<erhe::scene::Mesh>(item);
-    if (mesh) {
-        icon = icons.mesh;
-    }
-    const auto& skin = as<erhe::scene::Skin>(item);
-    if (skin) {
-        icon = icons.skin;
-    }
-    const auto& node_physics = as<Node_physics>(item);
-    if (node_physics) {
-        icon = icons.physics;
-    }
+
     if (erhe::scene::is_bone(item)) {
         icon = icons.bone;
+    }
+    const auto& material = as<erhe::primitive::Material>(item);
+    if (material) {
+        color = material->base_color;
     }
     const auto& light = as<erhe::scene::Light>(item);
     if (light) {
@@ -767,27 +780,6 @@ void Item_tree_window::item_icon(
             case erhe::scene::Light_type::point:       icon = icons.point_light; break;
             default: break;
         }
-    }
-    const auto& camera = as<erhe::scene::Camera>(item);
-    if (camera) {
-        icon = icons.camera;
-    }
-    const auto& scene = as<erhe::scene::Scene>(item);
-    if (scene) {
-        icon = icons.scene;
-    }
-
-    if (is<Asset_folder>(item)) {
-        icon  = icons.folder;
-        color = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
-    }
-    if (is<Asset_file_gltf>(item)) {
-        icon  = icons.scene;
-        color = glm::vec4{0.0f, 1.0f, 0.0f, 1.0f};
-    }
-    if (is<Asset_file_other>(item)) {
-        icon  = icons.file;
-        color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f};
     }
 
     if (icon.has_value()) {
@@ -801,7 +793,7 @@ void Item_tree_window::item_icon(
 auto Item_tree_window::item_icon_and_text(
     const std::shared_ptr<erhe::Item>& item,
     const bool                         update,
-    const bool                         force_expand
+    bool                               force_expand
 ) -> Tree_node_state
 {
     ERHE_PROFILE_FUNCTION();
@@ -815,7 +807,8 @@ auto Item_tree_window::item_icon_and_text(
         }
     }
 
-    const auto& scene = as<erhe::scene::Scene>(item);
+    const auto& scene                = as<erhe::scene::Scene  >(item);
+    const auto& content_library_node = as<Content_library_node>(item);
 
     const auto& hierarchy = as<erhe::Hierarchy>(item);
 
@@ -826,10 +819,13 @@ auto Item_tree_window::item_icon_and_text(
     if (scene && scene->get_root_node() && scene->get_root_node()->get_child_count(m_filter) > 0) {
         is_leaf = false;
     }
+    if (scene || content_library_node) {
+        force_expand = true;
+    }
 
     const ImGuiTreeNodeFlags flags =
         ImGuiTreeNodeFlags_SpanAvailWidth |
-        (scene || force_expand
+        (force_expand
             ? ImGuiTreeNodeFlags_DefaultOpen
             : ImGuiTreeNodeFlags_None
         ) |

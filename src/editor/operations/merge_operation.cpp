@@ -240,7 +240,7 @@ void Merge_operation::execute(Editor_context& context)
 
             first_entry = false;
         } else {
-            node->set_parent({});
+            node->set_node_parent(nullptr);
         }
     }
     context.selection->set_selection(m_selection_after);

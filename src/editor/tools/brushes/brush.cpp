@@ -393,7 +393,7 @@ auto Brush::make_instance(
     );
 
     auto node = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
-    auto mesh = instance_create_info.scene_root->content_library()->meshes.make(
+    auto mesh = std::make_shared<erhe::scene::Mesh>( //instance_create_info.scene_root->content_library()->meshes.make(
         fmt::format("{} mesh", name)
     );
     mesh->mesh_data.primitives.push_back(

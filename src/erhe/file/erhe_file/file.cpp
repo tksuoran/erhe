@@ -10,6 +10,18 @@
 namespace erhe::file
 {
 
+auto to_string(const std::filesystem::path& path) -> std::string
+{
+    auto utf8 = path.u8string();
+    auto s = std::string(reinterpret_cast<char const*>(utf8.data()), utf8.size());
+    return s;
+}
+
+auto from_string(const std::string& path) -> std::filesystem::path
+{
+    return std::filesystem::u8path(path);
+}
+
 [[nodiscard]] auto check_is_existing_non_empty_regular_file(
     const std::string_view       description,
     const std::filesystem::path& path,
@@ -22,7 +34,7 @@ namespace erhe::file
         log_file->warn(
             "{}: std::filesystem::exists('{}') returned error code {}: {}",
             description,
-            path.string(),
+            to_string(path),
             error_code.value(),
             error_code.message()
         );
@@ -30,7 +42,7 @@ namespace erhe::file
     }
     if (!exists) {
         if (!silent_if_not_exists) {
-            log_file->warn("{}: File '{}' not found", description, path.string());
+            log_file->warn("{}: File '{}' not found", description, to_string(path));
         }
         return false;
     }
@@ -39,21 +51,21 @@ namespace erhe::file
         log_file->warn(
             "{}: std::filesystem::is_regular_file('{}') returned error code {}: {}",
             description,
-            path.string(),
+            to_string(path),
             error_code.value(),
             error_code.message()
         );
         return false;
     }
     if (!is_regular_file) {
-        log_file->warn("{}: File '{}' is not regular file", description, path.string());
+        log_file->warn("{}: File '{}' is not regular file", description, to_string(path));
         return false;
     }
     const bool is_empty = std::filesystem::is_empty(path, error_code);
     if (error_code) {
         log_file->warn(
             "{}: std::filesystem::is_empty('{}') returned error code {}",
-            path.string(),
+            to_string(path),
             error_code.value(),
             error_code.message()
         );
@@ -83,7 +95,7 @@ auto read(
         std::fopen(path.c_str(), "rb");
 #endif
     if (file == nullptr) {
-        log_file->error("{}: Could not open file '{}' for reading", description, path.string());
+        log_file->error("{}: Could not open file '{}' for reading", description, to_string(path));
         return {};
     }
 
@@ -93,7 +105,7 @@ auto read(
     do {
         const auto read_byte_count = std::fread(result.data() + bytes_read, 1, bytes_to_read, file);
         if (read_byte_count == 0) {
-            log_file->error("{}: Error reading file '{}'", description, path.string());
+            log_file->error("{}: Error reading file '{}'", description, to_string(path));
             return {};
         }
         bytes_read += read_byte_count;

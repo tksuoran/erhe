@@ -16,7 +16,6 @@
 #include "tools/brushes/create/create_preview_settings.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
-#include "windows/content_library_window.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -136,7 +135,9 @@ void Create::imgui()
     brush_create_button("Torus",     &m_create_torus);
     brush_create_button("Box",       &m_create_box);
 
-    if (m_create_shape != nullptr) {
+    auto material = m_context.selection->get<erhe::primitive::Material>();
+
+    if ((m_create_shape != nullptr) && material) {
         m_create_shape->imgui();
         erhe::imgui::make_combo(
             "Normal Style",
@@ -180,7 +181,7 @@ void Create::imgui()
                     .mesh_flags      = mesh_flags,
                     .scene_root      = scene_root,
                     .world_from_node = world_from_node,
-                    .material        = m_context.content_library_window->selected_material(),
+                    .material        = material,
                     .scale           = 1.0
                 };
                 const auto instance_node = m_brush->make_instance(brush_instance_create_info);
@@ -198,7 +199,7 @@ void Create::imgui()
             m_create_shape = nullptr;
         }
         if (m_brush && create_brush) {
-            content_library->brushes.add(m_brush);
+            content_library->brushes->add(m_brush);
             m_brush.reset();
         }
     }
@@ -254,7 +255,7 @@ void Create::imgui()
                     //// source_geometry->compute_tangents();
                     //// source_geometry->compute_polygon_centroids();
                     //// source_geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
-                    content_library->brushes.make(brush_create_info);
+                    content_library->brushes->make<Brush>(brush_create_info);
                 }
             }
         }

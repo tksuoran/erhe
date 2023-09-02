@@ -61,7 +61,10 @@ Material_preview::Material_preview(
     m_content_library->is_shown_in_ui = false;
 
     m_scene_root = std::make_shared<Scene_root>(
+        nullptr, // No content library
+        nullptr, // No content library
         scene_message_bus,
+        nullptr, // No content library
         nullptr, // Don't process editor messages
         nullptr, // Don't register to Editor_scenes
         m_content_library,
@@ -71,15 +74,30 @@ Material_preview::Material_preview(
     m_scene_root->get_scene().disable_flag_bits(erhe::Item_flags::show_in_ui);
 
     make_preview_scene(mesh_memory);
-    make_rendertarget(graphics_instance);
+
+    set_area_size(256);
+    update_rendertarget(graphics_instance);
 }
 
-void Material_preview::make_rendertarget(
+void Material_preview::set_area_size(int size)
+{
+    size = std::max(1, size);
+    m_width  = size;
+    m_height = size;
+}
+
+void Material_preview::update_rendertarget(
     erhe::graphics::Instance& graphics_instance
 )
 {
-    m_width        = 256;
-    m_height       = 256;
+    if (
+        m_color_texture &&
+        (m_color_texture->width () == m_width) &&
+        (m_color_texture->height() == m_height)
+    )
+    {
+        return;
+    }
     m_color_format = gl::Internal_format::rgba16f;
     m_depth_format = gl::Internal_format::depth_component32f;
 
@@ -256,8 +274,8 @@ void Material_preview::render_preview(
 {
     erhe::graphics::Scoped_debug_group outer_debug_scope{"Material preview"};
 
-    m_content_library->materials.entries().clear();
-    m_content_library->materials.add(material);
+    m_content_library->materials->remove_all_children_recursively();
+    m_content_library->materials->add(material);
     m_last_material = material;
 
     m_mesh->mesh_data.primitives.front().material = material;
@@ -282,7 +300,7 @@ void Material_preview::render_preview(
         m_camera.get(),
         erhe::math::Viewport{},
         std::shared_ptr<erhe::graphics::Texture>{},
-        0
+        erhe::graphics::invalid_texture_handle
     };
 
     const Render_context context{

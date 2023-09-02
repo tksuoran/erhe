@@ -154,7 +154,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     harfbuzz
     GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
-    GIT_TAG        main
+    GIT_TAG        8.1.1
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

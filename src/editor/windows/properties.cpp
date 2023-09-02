@@ -4,13 +4,14 @@
 #include "editor_message_bus.hpp"
 #include "rendertarget_mesh.hpp"
 #include "tools/selection_tool.hpp"
+#include "scene/content_library.hpp"
 #include "scene/frame_controller.hpp"
 #include "scene/material_preview.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/animation_curve.hpp"
-#include "windows/content_library_window.hpp"
+#include "windows/brdf_slice.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
@@ -335,7 +336,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 
         if (ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Indent(indent);
-            material_library.combo(m_context, "Material", primitive.material, false);
+            material_library->combo(m_context, "Material", primitive.material, false);
             if (primitive.material) {
                 ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
             } else {
@@ -532,14 +533,16 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item>& item)
         return;
     }
 
-    const auto node_physics  = as<Node_physics       >(item);
-    const auto node_raytrace = as<Node_raytrace      >(item);
-    const auto rendertarget  = as<Rendertarget_mesh  >(item);
-    const auto camera        = as<erhe::scene::Camera>(item);
-    const auto light         = as<erhe::scene::Light >(item);
-    const auto mesh          = as<erhe::scene::Mesh  >(item);
+    const auto content_library_node = as<Content_library_node>(item);
+    const auto node_physics         = as<Node_physics        >(item);
+    const auto node_raytrace        = as<Node_raytrace       >(item);
+    const auto rendertarget         = as<Rendertarget_mesh   >(item);
+    const auto camera               = as<erhe::scene::Camera >(item);
+    const auto light                = as<erhe::scene::Light  >(item);
+    const auto mesh                 = as<erhe::scene::Mesh   >(item);
+    const auto node                 = as<erhe::scene::Node   >(item);
 
-    const bool default_open = true; // !node_physics;
+    const bool default_open = !node_physics && !content_library_node && !node;
 
     if (
         !ImGui::TreeNodeEx(
@@ -611,21 +614,34 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item>& item)
 void Properties::material_properties()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const auto selected_material = m_context.content_library_window->selected_material();
+    const auto selected_material = m_context.selection->get<erhe::primitive::Material>();
     if (selected_material) {
         if (
             ImGui::TreeNodeEx(
                 "Material",
                 ImGuiTreeNodeFlags_Framed |
-                0 //ImGuiTreeNodeFlags_DefaultOpen
+                ImGuiTreeNodeFlags_DefaultOpen
             )
         ) {
             std::string name = selected_material->get_name();
             if (ImGui::InputText("Name", &name)) {
                 selected_material->set_name(name);
             }
+            const auto  available_size = ImGui::GetContentRegionAvail();
+            const float area_size_0    = std::min(available_size.x, available_size.y);
+            const int   area_size      = std::max(1, static_cast<int>(area_size_0));
+            m_context.material_preview->set_area_size(area_size);
+            m_context.material_preview->update_rendertarget(*m_context.graphics_instance);
             m_context.material_preview->render_preview(selected_material);
             m_context.material_preview->show_preview();
+            if (ImGui::TreeNodeEx("BRDF Slice", ImGuiTreeNodeFlags_None)) {
+                auto* node = m_context.brdf_slice->get_node();
+                if (node != nullptr) {
+                    node->set_material(selected_material);
+                    m_context.brdf_slice->show_brdf_slice(area_size);
+                }
+                ImGui::TreePop();
+            }
             ImGui::SliderFloat("Metallic",    &selected_material->metallic,     0.0f,  1.0f);
             ImGui::SliderFloat("Reflectance", &selected_material->reflectance,  0.35f, 1.0f);
             ImGui::SliderFloat("Roughness X", &selected_material->roughness.x,  0.1f,  0.8f);
@@ -659,12 +675,12 @@ void Properties::imgui()
         }
     }
 
-    const auto selected_animation = m_context.content_library_window->selected_animation();
+    const auto selected_animation = m_context.selection->get<erhe::scene::Animation>();
     if (selected_animation) {
         animation_properties(*selected_animation.get());
     }
 
-    const auto selected_skin = m_context.content_library_window->selected_skin();
+    const auto selected_skin = m_context.selection->get<erhe::scene::Skin>();
     if (selected_skin) {
         skin_properties(*selected_skin.get());
     }

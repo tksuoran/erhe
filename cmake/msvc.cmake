@@ -8,6 +8,7 @@ add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/MP>)
 function (erhe_target_settings target)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_CRT_SECURE_NO_WARNINGS>)
+    target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_SILENCE_CXX20_U8PATH_DEPRECATION_WARNING>)
 
     # Enable Just My Code - which cmake does not seem to set even though
     # Visual Studio has documented it to be enabled by default

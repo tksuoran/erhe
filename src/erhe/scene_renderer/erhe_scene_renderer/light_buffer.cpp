@@ -88,7 +88,7 @@ Light_buffer::Light_buffer(
 }
 
 Light_projections::Light_projections()
-    : shadow_map_texture_handle{0xffffffffu}
+    : shadow_map_texture_handle{erhe::graphics::invalid_texture_handle}
 {
 }
 

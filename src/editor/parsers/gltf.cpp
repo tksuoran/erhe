@@ -6,6 +6,7 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
@@ -78,7 +79,7 @@ void import_gltf(
     const auto scene_root_node = scene->get_root_node();
 
     // TODO Make importing an operation
-    auto root_node = std::make_shared<erhe::scene::Node>(path.filename().string());
+    auto root_node = std::make_shared<erhe::scene::Node>(erhe::file::to_string(path.filename()));
     root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     root_node->set_parent(scene_root_node);
 
@@ -98,16 +99,16 @@ void import_gltf(
 
     std::shared_ptr<Content_library> content_library = scene_root.content_library();
 
-    for (const auto& image : gltf_data.images) {
-        content_library->textures.add(image);
-    }
+    // for (const auto& image : gltf_data.images) {
+    //     content_library->textures.add(image);
+    // }
 
     for (const auto& material : gltf_data.materials) {
-        content_library->materials.add(material);
+        content_library->materials->add(material);
     }
 
     for (const auto& skin : gltf_data.skins) {
-        content_library->skins.add(skin);
+        content_library->skins->add(skin);
     }
 
     // Assign node colors
@@ -130,20 +131,20 @@ void import_gltf(
         // Apply primitive data, attach node raytrace
         auto camera = erhe::scene::get_camera(node.get());
         if (camera) {
-            content_library->cameras.add(camera);
+            //content_library->cameras.add(camera);
             add_default_camera = false;
         }
 
         auto light = erhe::scene::get_light(node.get());
         if (light) {
-            content_library->lights.add(light);
+            //content_library->lights.add(light);
             add_default_light = false;
         }
 
-        auto mesh = erhe::scene::get_mesh(node.get());
-        if (mesh) {
-            content_library->meshes.add(mesh);
-        }
+        //auto mesh = erhe::scene::get_mesh(node.get());
+        //if (mesh) {
+        //    content_library->meshes.add(mesh);
+        //}
 
         if (node->get_parent_node() == root_node) {
             color_graph(node.get(), node_colors, available_colors);
@@ -152,7 +153,7 @@ void import_gltf(
 
     if (add_default_camera) {
         auto node   = std::make_shared<erhe::scene::Node>("Default Camera Node");
-        auto camera = content_library->cameras.make("Default Camera");
+        auto camera = std::make_shared<erhe::scene::Camera>("Default Camera"); //content_library->cameras.make("Default Camera");
         camera->projection()->fov_y           = glm::radians(35.0f);
         camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
         camera->projection()->z_near          = 0.03f;
@@ -172,7 +173,7 @@ void import_gltf(
 
     if (add_default_light) {
         auto node  = std::make_shared<erhe::scene::Node>("Default Light Node");
-        auto light = content_library->lights.make("Default Light");
+        auto light = std::make_shared<erhe::scene::Light>("Default Light"); //content_library->lights.make("Default Light");
         light->type      = erhe::scene::Light::Type::directional;
         light->color     = glm::vec3{1.0f, 1.0f, 1.0};
         light->intensity = 1.0f;
@@ -200,7 +201,7 @@ void import_gltf(
     }
 
     for (const auto& animation : gltf_data.animations) {
-        scene_root.content_library()->animations.add(animation);
+        scene_root.content_library()->animations->add(animation);
         //animation->apply(0.0f);
     }
 }

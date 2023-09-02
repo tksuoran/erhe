@@ -85,7 +85,10 @@ void Renderpass::render(const Render_context& context) const
 
     const auto& layers           = scene_root->layers();
     const auto& material_library = scene_root->content_library()->materials;
-    const auto& materials        = material_library.entries();
+
+    // TODO: Keep this vector in content library and update when needed.
+    //       Make content library item host for content library nodes.
+    std::vector<std::shared_ptr<erhe::primitive::Material>> materials = material_library->get_all<erhe::primitive::Material>();
 
     using namespace erhe::primitive;
 

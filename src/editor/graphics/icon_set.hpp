@@ -104,7 +104,6 @@ public:
     void add_icons(uint64_t item_type, float scale);
 
 private:
-
     int                                 m_row_count   {0};
     int                                 m_column_count{0};
     int                                 m_row         {0};
@@ -120,7 +119,7 @@ public:
     {
     public:
         glm::vec2 icon;
-        glm::vec4 color;
+        std::optional<glm::vec4> color;
     };
     std::vector<std::optional<Type_icon>> type_icons;
 };

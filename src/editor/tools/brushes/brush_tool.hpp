@@ -10,7 +10,6 @@ namespace editor
 {
 
 class Brush_tool;
-class Content_library_window;
 class Editor_message;
 class Editor_message_bus;
 class Editor_scenes;

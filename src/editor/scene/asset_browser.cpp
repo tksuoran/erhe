@@ -13,11 +13,12 @@
 #include "scene/scene_root.hpp"
 #include "windows/item_tree_window.hpp"
 
-#include "erhe_physics/iworld.hpp"
+#include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/scene_message_bus.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -62,11 +63,14 @@ void Scene_open_operation::execute(Editor_context& context)
         m_content_library = std::make_shared<Content_library>();
 
         m_scene_root = std::make_shared<Scene_root>(
+            context.imgui_renderer,
+            context.imgui_windows,
             *context.scene_message_bus,
+            &context,
             context.editor_message_bus,
             context.editor_scenes, // registers into Editor_scenes
             m_content_library,
-            m_path.filename().string()
+            erhe::file::to_string(m_path.filename())
         );
 
         auto browser_window = m_scene_root->make_browser_window(
@@ -107,7 +111,7 @@ void Scene_open_operation::undo(Editor_context& context)
 //
 
 Asset_node::Asset_node(const std::filesystem::path& path, std::size_t id) 
-    : erhe::Hierarchy{path.filename().string(), id}
+    : erhe::Hierarchy{erhe::file::to_string(path.filename()), id}
 {
     set_source_path(path);
 }
@@ -195,14 +199,14 @@ void Asset_browser::scan(
     Asset_node*                  parent
 )
 {
-    log_asset_browser->trace("Scanning {}", path.string());
+    log_asset_browser->trace("Scanning {}", erhe::file::to_string(path));
 
     std::error_code error_code;
     auto directory_iterator = std::filesystem::directory_iterator{path, error_code};
     if (error_code) {
         log_asset_browser->warn(
             "Scanning {}: directory_iterator() failed with error {} - {}",
-            path.string(), error_code.value(), error_code.message()
+            erhe::file::to_string(path), error_code.value(), error_code.message()
         );
         return;
     }
@@ -211,7 +215,7 @@ void Asset_browser::scan(
         if (error_code) {
             log_asset_browser->warn(
                 "Scanning {}: is_directory() failed with error {} - {}",
-                path.string(), error_code.value(), error_code.message()
+                erhe::file::to_string(path), error_code.value(), error_code.message()
             );
             continue;
         }
@@ -220,14 +224,14 @@ void Asset_browser::scan(
         if (error_code) {
             log_asset_browser->warn(
                 "Scanning {}: is_regular_file() failed with error {} - {}",
-                path.string(), error_code.value(), error_code.message()
+                erhe::file::to_string(path), error_code.value(), error_code.message()
             );
             continue;
         }
         if (!is_directory && !is_regular_file) {
             log_asset_browser->warn(
                 "Scanning {}: is neither regular file nor directory",
-                path.string()
+                erhe::file::to_string(path)
             );
             continue;
         }
@@ -287,7 +291,7 @@ auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item>& item) -> bo
                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
             );
             if (begin_popup_context_item) {
-                std::string import_label = fmt::format("Import '{}'", gltf->get_source_path().string());
+                std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(gltf->get_source_path()));
                 if (ImGui::MenuItem(import_label.c_str())) {
                     import_gltf(
                         *m_context.graphics_instance,
@@ -308,7 +312,7 @@ auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item>& item) -> bo
                     ImGui::CloseCurrentPopup();
                 }
 
-                std::string open_label = fmt::format("Open '{}'", gltf->get_source_path().string());
+                std::string open_label = fmt::format("Open '{}'", erhe::file::to_string(gltf->get_source_path()));
                 if (ImGui::MenuItem(open_label.c_str())) {
                     //////
                     m_context.operation_stack->queue(

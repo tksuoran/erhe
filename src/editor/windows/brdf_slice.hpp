@@ -24,8 +24,8 @@ namespace erhe::scene_renderer {
 namespace editor
 {
 
-class Brdf_slice_window;
-class Content_library_window;
+class Brdf_slice;
+class Editor_context;
 class Programs;
 
 class Brdf_slice_rendergraph_node
@@ -35,8 +35,7 @@ public:
     Brdf_slice_rendergraph_node(
         erhe::rendergraph::Rendergraph&         rendergraph,
         erhe::scene_renderer::Forward_renderer& forward_renderer,
-        Brdf_slice_window&                      brdf_slice_window,
-        Content_library_window&                 content_library_window,
+        Brdf_slice&                             brdf_slice,
         Programs&                               programs
     );
 
@@ -51,10 +50,14 @@ public:
         int                                 depth = 0
     ) const -> erhe::math::Viewport override;
 
+    // Public API
+    void set_material(const std::shared_ptr<erhe::primitive::Material>& material);
+    [[nodiscard]] auto get_material() const -> erhe::primitive::Material*;
+
 private:
-    erhe::scene_renderer::Forward_renderer& m_forward_renderer;
-    Brdf_slice_window&                      m_brdf_slice_window;
-    Content_library_window&                 m_content_library_window;
+    erhe::scene_renderer::Forward_renderer&    m_forward_renderer;
+    Brdf_slice&                                m_brdf_slice;
+    std::shared_ptr<erhe::primitive::Material> m_material;
 
     erhe::graphics::Vertex_input_state  m_empty_vertex_input;
     erhe::renderer::Pipeline_renderpass m_renderpass;
@@ -64,30 +67,25 @@ private:
 
 
 /// Rendergraph sink node for showing texture in ImGui window
-class Brdf_slice_window
-    : public erhe::imgui::Imgui_window
+class Brdf_slice
 {
 public:
-    Brdf_slice_window(
-        erhe::imgui::Imgui_renderer&            imgui_renderer,
-        erhe::imgui::Imgui_windows&             imgui_windows,
+    Brdf_slice(
         erhe::rendergraph::Rendergraph&         rendergraph,
         erhe::scene_renderer::Forward_renderer& forward_renderer,
-        Content_library_window&                 content_library_window,
+        Editor_context&                         editor_context,
         Programs&                               programs
     );
 
-    // Overrides Framebuffer_window / Imgui_window
-    void imgui() override;
+    auto get_node() const -> Brdf_slice_rendergraph_node*;
+    void show_brdf_slice(int area_size);
 
-    float                                      phi         {0.0f};
-    float                                      incident_phi{0.0f};
-    std::shared_ptr<erhe::primitive::Material> material;
+    float phi         {0.0f};
+    float incident_phi{0.0f};
 
 private:
-    erhe::rendergraph::Rendergraph& m_rendergraph;
-    Content_library_window&         m_content_library_window;
-
+    erhe::rendergraph::Rendergraph&              m_rendergraph;
+    Editor_context&                              m_context;
     std::shared_ptr<Brdf_slice_rendergraph_node> m_node;
 };
 

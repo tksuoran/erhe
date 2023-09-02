@@ -131,10 +131,13 @@ Scene_builder::Scene_builder(
     : m_context{editor_context}
 {
     auto content_library = std::make_shared<Content_library>();
-    add_default_materials(content_library->materials);
+    add_default_materials(*content_library.get());
 
     m_scene_root = std::make_shared<Scene_root>(
+        &imgui_renderer,
+        &imgui_windows,
         scene_message_bus,
+        &editor_context,
         &editor_message_bus,
         &editor_scenes,
         content_library,
@@ -261,7 +264,7 @@ auto Scene_builder::make_camera(
 ) -> std::shared_ptr<erhe::scene::Camera>
 {
     auto node   = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
-    auto camera = m_scene_root->content_library()->cameras.make(name);
+    auto camera = std::make_shared<erhe::scene::Camera>(name);
     camera->projection()->fov_y           = glm::radians(35.0f);
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;
@@ -362,7 +365,7 @@ auto Scene_builder::make_brush(
 ) -> std::shared_ptr<Brush>
 {
     auto content_library = m_scene_root->content_library();
-    const auto brush = content_library->brushes.make(brush_create_info);
+    const auto brush = content_library->brushes->make<Brush>(brush_create_info);
     if (instantiate_to_scene) {
         const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
 
@@ -769,8 +772,10 @@ void Scene_builder::make_brushes(
     if constexpr (anisotropic_test_object) {
         ERHE_PROFILE_SCOPE("test scene for anisotropic debugging");
 
-        auto&       material_library  = m_scene_root->content_library()->materials;
-        auto        aniso_material    = material_library.make("aniso", vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.8f, 0.2f}, 0.0f);
+        auto& material_library = m_scene_root->content_library()->materials;
+        auto aniso_material = material_library->make<erhe::primitive::Material>(
+            "aniso", vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.8f, 0.2f}, 0.0f
+        );
         const float ring_major_radius = 4.0f;
         const float ring_minor_radius = 0.55f; // 0.15f;
         auto        ring_geometry     = make_torus(
@@ -867,7 +872,7 @@ void Scene_builder::add_room()
     }
 
     auto& material_library = m_scene_root->content_library()->materials;
-    auto floor_material = material_library.make(
+    auto floor_material = material_library->make<erhe::primitive::Material>(
         "Floor",
         //vec4{0.02f, 0.02f, 0.02f, 1.0f},
         vec4{0.01f, 0.01f, 0.01f, 1.0f},
@@ -998,7 +1003,7 @@ void Scene_builder::make_mesh_nodes()
         ERHE_PROFILE_SCOPE("make instances");
 
         auto&       material_library = m_scene_root->content_library()->materials;
-        const auto& materials        = material_library.entries();
+        const auto  materials        = material_library->get_all<erhe::primitive::Material>();
         std::size_t material_index   = 0;
 
         std::size_t visible_material_count = 0;
@@ -1061,9 +1066,11 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
 
     m_scene_root->get_scene().sanity_check();
 
-    auto& material_library   = m_scene_root->content_library()->materials;
-    auto  material           = material_library.make("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
-    auto  geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+    auto& material_library = m_scene_root->content_library()->materials;
+    auto material = material_library->make<erhe::primitive::Material>(
+        "cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f
+    );
+    auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
         make_geometry_mesh(
             make_cube(0.1f),
             build_info(mesh_memory),
@@ -1109,7 +1116,7 @@ auto Scene_builder::make_directional_light(
 ) -> std::shared_ptr<Light>
 {
     auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
-    auto light = m_scene_root->content_library()->lights.make(name);
+    auto light = std::make_shared<erhe::scene::Light>(name);
     light->type      = Light::Type::directional;
     light->color     = color;
     light->intensity = intensity;
@@ -1140,7 +1147,7 @@ auto Scene_builder::make_spot_light(
 ) -> std::shared_ptr<Light>
 {
     auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
-    auto light = m_scene_root->content_library()->lights.make(name);
+    auto light = std::make_shared<erhe::scene::Light>(name);
     light->type             = Light::Type::spot;
     light->color            = color;
     light->intensity        = intensity;

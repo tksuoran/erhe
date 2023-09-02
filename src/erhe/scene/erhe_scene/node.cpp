@@ -83,7 +83,12 @@ auto Node::get_parent_node() const -> std::shared_ptr<Node>
     return std::static_pointer_cast<Node>(shared_parent_item);
 }
 
-void Node::set_parent(Node* const new_parent_node, const std::size_t position)
+void Node::set_node_parent(Node* parent)
+{
+    set_parent(parent, std::numeric_limits<std::size_t>::max());
+}
+
+void Node::set_node_parent(Node* const new_parent_node, const std::size_t position)
 {
     if (new_parent_node != nullptr) {
         auto shared_parent_node = std::static_pointer_cast<erhe::Hierarchy>(new_parent_node->shared_from_this());

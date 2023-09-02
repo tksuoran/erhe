@@ -1,12 +1,12 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "windows/brdf_slice_window.hpp"
+#include "windows/brdf_slice.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
-#include "windows/content_library_window.hpp"
 
-#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
@@ -24,8 +24,7 @@ namespace editor
 Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     erhe::rendergraph::Rendergraph&         rendergraph,
     erhe::scene_renderer::Forward_renderer& forward_renderer,
-    Brdf_slice_window&                      brdf_slice_window,
-    Content_library_window&                 content_library_window,
+    Brdf_slice&                             brdf_slice,
     Programs&                               programs
 )
     : erhe::rendergraph::Texture_rendergraph_node{
@@ -37,9 +36,8 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
             .depth_stencil_format = gl::Internal_format{0}
         }
     }
-    , m_forward_renderer{forward_renderer}
-    , m_brdf_slice_window{brdf_slice_window}
-    , m_content_library_window{content_library_window}
+    , m_forward_renderer  {forward_renderer}
+    , m_brdf_slice        {brdf_slice}
     , m_empty_vertex_input{
         erhe::graphics::Vertex_input_state_data{}
     }
@@ -64,6 +62,18 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     );
 }
 
+void Brdf_slice_rendergraph_node::set_material(
+    const std::shared_ptr<erhe::primitive::Material>& material
+)
+{
+    m_material = material;
+}
+
+auto Brdf_slice_rendergraph_node::get_material() const -> erhe::primitive::Material*
+{
+    return m_material.get();
+}
+
 // Implements erhe::rendergraph::Rendergraph_node
 void Brdf_slice_rendergraph_node::execute_rendergraph_node()
 {
@@ -77,8 +87,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    const auto selected_material = m_content_library_window.selected_material();
-    if (!selected_material) {
+    if (!m_material) {
         return;
     }
 
@@ -97,16 +106,16 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
     );
 
     erhe::scene_renderer::Light_projections light_projections;
-    light_projections.brdf_phi          = m_brdf_slice_window.phi;
-    light_projections.brdf_incident_phi = m_brdf_slice_window.incident_phi;
-    light_projections.brdf_material     = m_brdf_slice_window.material;
+    light_projections.brdf_phi          = m_brdf_slice.phi;
+    light_projections.brdf_incident_phi = m_brdf_slice.incident_phi;
+    light_projections.brdf_material     = m_material;
 
     m_forward_renderer.render_fullscreen(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
             .index_type         = gl::Draw_elements_type::unsigned_int, // Note: This indices are not used by render_fullscreen()
             .light_projections  = &light_projections,
             .lights             = {},
-            .materials          = gsl::span<const std::shared_ptr<erhe::primitive::Material>>(&selected_material, 1),
+            .materials          = gsl::span<const std::shared_ptr<erhe::primitive::Material>>(&m_material, 1),
             .mesh_spans         = {},
             .passes             = { &m_renderpass },
             .shadow_texture     = nullptr,
@@ -141,47 +150,46 @@ void Brdf_slice_rendergraph_node::set_area_size(const int size)
     };
 }
 
-Brdf_slice_window::Brdf_slice_window(
-    erhe::imgui::Imgui_renderer&            imgui_renderer,
-    erhe::imgui::Imgui_windows&             imgui_windows,
+Brdf_slice::Brdf_slice(
     erhe::rendergraph::Rendergraph&         rendergraph,
     erhe::scene_renderer::Forward_renderer& forward_renderer,
-    Content_library_window&                 content_library_window,
+    Editor_context&                         editor_context,
     Programs&                               programs
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "BRDF Slice", "brdf_slice"}
-    , m_rendergraph{rendergraph}
-    , m_content_library_window{content_library_window}
+    : m_rendergraph{rendergraph}
+    , m_context    {editor_context}
     , m_node{
         std::make_shared<Brdf_slice_rendergraph_node>(
             rendergraph,
             forward_renderer,
             *this,
-            content_library_window,
             programs
         )
     }
 {
 }
 
-void Brdf_slice_window::imgui()
+auto Brdf_slice::get_node() const -> Brdf_slice_rendergraph_node*
 {
-    SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui()");
+    return m_node.get();
+}
 
+void Brdf_slice::show_brdf_slice(int area_size)
+{
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    const auto selected_material = m_content_library_window.selected_material();
-    if (!selected_material) {
+    const auto* material = m_node->get_material();
+    if (material == nullptr) {
         return;
     }
 
     ImGui::SliderFloat("Phi",          &phi, 0.0, 1.57);
     ImGui::SliderFloat("Incident Phi", &incident_phi, 0.0, 1.57);
 
-    const auto  available_size = ImGui::GetContentRegionAvail();
-    const float image_size     = std::min(available_size.x, available_size.y);
-    const int   area_size      = static_cast<int>(image_size);
+    //const auto  available_size = ImGui::GetContentRegionAvail();
+    //const float image_size     = available_size.x; //std::min(available_size.x, available_size.y);
+    //const int   area_size      = static_cast<int>(image_size);
     m_node->set_enabled(true);
     m_node->set_area_size(area_size);
 
@@ -190,7 +198,7 @@ void Brdf_slice_window::imgui()
         erhe::rendergraph::Rendergraph_node_key::texture_for_gui
     );
     if (!texture) {
-        log_render->warn("Brdf_slice_window has no output render graph node");
+        log_render->warn("Brdf_slice has no output render graph node");
         return;
     }
 
@@ -202,19 +210,8 @@ void Brdf_slice_window::imgui()
         (texture_height > 0) &&
         (area_size      > 0)
     ) {
-        ////auto cursor_position = ImGui::GetCursorPos();
-        ////cursor_position.x += (available_size.x - image_size) / 2.0f;
-        ////cursor_position.y += (available_size.y - image_size) / 2.0f;
-        ////ImGui::SetCursorPos(cursor_position);
-        ////ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-        ////SPDLOG_LOGGER_TRACE(log_render, "Brdf_slice_window::imgui() - drawing image using texture {}", m_texture->gl_name());
-        image(texture, area_size, area_size);
-        ////// bool is_hovered = ImGui::IsItemHovered();
-        ////ImGui::PopStyleVar();
-    } else {
-        SPDLOG_LOGGER_TRACE(log_render, "Brdf_slice_window::imgui() - skipped - no texture or empty size");
+        m_context.imgui_renderer->image(texture, area_size, area_size);
     }
-    SPDLOG_LOGGER_TRACE(log_render, "Brdf_slice_window::imgui() - done");
 #endif
 }
 

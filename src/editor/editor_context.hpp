@@ -30,8 +30,8 @@ namespace erhe::window {
 
 namespace editor {
 
+class Brdf_slice;
 class Brush_tool;
-class Content_library_window;
 class Create;
 class Editor_message_bus;
 class Editor_rendering;
@@ -87,8 +87,8 @@ public:
     erhe::scene_renderer::Forward_renderer* forward_renderer      {nullptr};
     erhe::scene_renderer::Shadow_renderer*  shadow_renderer       {nullptr};
     erhe::window::Context_window*           context_window        {nullptr};
+    Brdf_slice*                             brdf_slice            {nullptr};
     Brush_tool*                             brush_tool            {nullptr};
-    Content_library_window*                 content_library_window{nullptr};
     Create*                                 create                {nullptr};
     Editor_message_bus*                     editor_message_bus    {nullptr};
     Editor_rendering*                       editor_rendering      {nullptr};

@@ -69,14 +69,15 @@ public:
     // Public API
     [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;
 
+    void set_area_size(int size);
+    void update_rendertarget(erhe::graphics::Instance& graphics_instance);
     void render_preview(
         const std::shared_ptr<erhe::primitive::Material>& material
     );
     void show_preview();
 
 private:
-    void make_rendertarget (erhe::graphics::Instance& graphics_instance);
-    void make_preview_scene(Mesh_memory& mesh_memory);
+    void make_preview_scene (Mesh_memory& mesh_memory);
     //// void generate_torus_geometry();
 
     int                                           m_width{0};

@@ -149,14 +149,10 @@ erhe_target_sources_grouped(
     tools/tools.hpp
     windows/animation_curve.cpp
     windows/animation_curve.hpp
-    windows/animation_window.cpp
-    windows/animation_window.hpp
-    windows/brdf_slice_window.cpp
-    windows/brdf_slice_window.hpp
+    windows/brdf_slice.cpp
+    windows/brdf_slice.hpp
     windows/commands_window.cpp
     windows/commands_window.hpp
-    windows/content_library_window.cpp
-    windows/content_library_window.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
     windows/imgui_viewport_window.cpp

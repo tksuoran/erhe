@@ -85,21 +85,25 @@ void Icon_set::load_icons(
     icons.vive_trigger      = load(icon_directory / "vive_trigger.svg");
 
     type_icons.resize(erhe::Item_type::count);
-    type_icons[erhe::Item_type::index_scene         ] = { .icon = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_content_folder] = { .icon = icons.folder,      .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
-    type_icons[erhe::Item_type::index_brush         ] = { .icon = icons.brush_small, .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
-    type_icons[erhe::Item_type::index_material      ] = { .icon = icons.material,    .color = glm::vec4{1.0f, 0.1f, 0.1f, 1.0f}};
-    type_icons[erhe::Item_type::index_node          ] = { .icon = icons.node,        .color = glm::vec4{0.2f, 0.2f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_mesh          ] = { .icon = icons.mesh,        .color = glm::vec4{0.4f, 1.0f, 0.3f, 1.0f}};
-    type_icons[erhe::Item_type::index_skin          ] = { .icon = icons.skin,        .color = glm::vec4{1.0f, 0.5f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_bone          ] = { .icon = icons.bone,        .color = glm::vec4{0.5f, 1.0f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_animation     ] = { .icon = icons.anim,        .color = glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_camera        ] = { .icon = icons.camera,      .color = glm::vec4{0.4f, 0.0f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_light         ] = { .icon = icons.point_light, .color = glm::vec4{1.0f, 0.8f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_physics       ] = { .icon = icons.physics,     .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_raytrace      ] = { .icon = icons.raytrace,    .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_grid          ] = { .icon = icons.grid,        .color = glm::vec4{0.0f, 0.6f, 0.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_texture       ] = { .icon = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_scene               ] = { .icon = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_content_library_node] = { .icon = icons.folder,      .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
+    type_icons[erhe::Item_type::index_brush               ] = { .icon = icons.brush_small, .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
+    type_icons[erhe::Item_type::index_material            ] = { .icon = icons.material};   // .color = glm::vec4{1.0f, 0.1f, 0.1f, 1.0f}};
+    type_icons[erhe::Item_type::index_node                ] = { .icon = icons.node};       // .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
+    type_icons[erhe::Item_type::index_mesh                ] = { .icon = icons.mesh,        .color = glm::vec4{0.6f, 1.0f, 0.6f, 1.0f}};
+    type_icons[erhe::Item_type::index_skin                ] = { .icon = icons.skin,        .color = glm::vec4{1.0f, 0.5f, 0.5f, 1.0f}};
+    type_icons[erhe::Item_type::index_bone                ] = { .icon = icons.bone,        .color = glm::vec4{0.5f, 1.0f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_animation           ] = { .icon = icons.anim,        .color = glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_camera              ] = { .icon = icons.camera};     // .color = glm::vec4{0.4f, 0.0f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_light               ] = { .icon = icons.point_light};// .color = glm::vec4{1.0f, 0.8f, 0.5f, 1.0f}};
+    type_icons[erhe::Item_type::index_physics             ] = { .icon = icons.physics,     .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_raytrace            ] = { .icon = icons.raytrace,    .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
+    type_icons[erhe::Item_type::index_grid                ] = { .icon = icons.grid,        .color = glm::vec4{0.0f, 0.6f, 0.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_texture             ] = { .icon = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_asset_folder        ] = { .icon = icons.folder,      .color = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_asset_file_gltf     ] = { .icon = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_asset_file_png      ] = { .icon = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
+    type_icons[erhe::Item_type::index_asset_file_other    ] = { .icon = icons.file,        .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
 }
 
 void Icon_set::add_icons(
@@ -117,7 +121,8 @@ void Icon_set::add_icons(
                 const auto& icon_rasterization = scale < 1.5f
                     ? get_small_rasterization()
                     : get_large_rasterization();
-                icon_rasterization.icon(icon.icon, icon.color);
+                glm::vec4 color = icon.color.has_value() ? icon.color.value() : glm::vec4{0.9f, 0.9f, 0.9f, 1.0f};
+                icon_rasterization.icon(icon.icon, color);
             }
         }
     }

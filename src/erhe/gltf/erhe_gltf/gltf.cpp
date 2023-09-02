@@ -4,6 +4,7 @@
 #include "gltf_log.hpp"
 #include "image_transfer.hpp"
 
+#include "erhe_file/file.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/instance.hpp"
@@ -35,6 +36,10 @@ extern "C" {
 #include <limits>
 #include <string>
 #include <vector>
+
+#include <filesystem>
+#include <fstream>
+#include <string>
 
 namespace erhe::gltf {
 
@@ -324,6 +329,57 @@ using Item_flags = erhe::Item_flags;
     // std::unreachable() return gl::Internal_format::rgba8;
 }
 
+namespace {
+
+cgltf_result cgltf_custom_file_read(
+    const cgltf_memory_options* ,
+    const cgltf_file_options*   ,
+    const char*                 path,
+    cgltf_size*                 size,
+    void**                      data
+)
+{
+    std::string str_path{path};
+    std::filesystem::path fs_path = std::filesystem::u8path(str_path);
+    std::optional<std::string> file_contents_opt = erhe::file::read("cgltf file read", fs_path);
+    if (!file_contents_opt.has_value())  {
+        if (size != nullptr) {
+            *size = 0;
+        }
+        if (data != nullptr) {
+            *data = nullptr;
+        }
+        return cgltf_result_file_not_found;
+    }
+    const std::string& file_contents = file_contents_opt.value();
+    cgltf_size file_size = file_contents.size();
+    char* file_data = (char*)malloc(file_size);
+    if (file_data == nullptr) {
+        return cgltf_result_out_of_memory;
+    }
+    memcpy(file_data, file_contents.data(), file_size);
+
+    if (size) {
+        *size = file_size;
+    }
+    if (data) {
+        *data = file_data;
+    }
+
+    return cgltf_result_success;
+}
+
+void cgltf_custom_file_release(
+    const cgltf_memory_options* ,
+    const cgltf_file_options*   ,
+    void*                       data
+)
+{
+    free(data);
+}
+
+}
+
 class Gltf_parser
 {
 public:
@@ -421,6 +477,10 @@ public:
 private:
     auto open(const std::filesystem::path& path) -> bool
     {
+        std::optional<std::string> file_contents_opt = erhe::file::read("GLTF file", path);
+        if (!file_contents_opt.has_value()) {
+            return false;
+        }
         const cgltf_options parse_options{
             .type             = cgltf_file_type_invalid, // auto
             .json_token_count = 0, // 0 == auto
@@ -430,15 +490,17 @@ private:
                 .user_data    = nullptr
             },
             .file = {
-                .read         = nullptr,
-                .release      = nullptr,
+                .read         = cgltf_custom_file_read,
+                .release      = cgltf_custom_file_release,
                 .user_data    = nullptr
             }
         };
 
-        const cgltf_result parse_result = cgltf_parse_file(
+        const std::string& file_contents = file_contents_opt.value();
+        const cgltf_result parse_result = cgltf_parse(
             &parse_options,
-            path.string().c_str(),
+            file_contents.data(),
+            file_contents.size(),
             &m_data
         );
 
@@ -447,7 +509,8 @@ private:
             return false;
         }
 
-        const cgltf_result load_buffers_result = cgltf_load_buffers(&parse_options, m_data, path.string().c_str());
+        const std::string path_string = erhe::file::to_string(path);
+        const cgltf_result load_buffers_result = cgltf_load_buffers(&parse_options, m_data, path_string.c_str());
         if (load_buffers_result != cgltf_result::cgltf_result_success) {
             log_gltf->error("glTF load buffers error: {}", c_str(load_buffers_result));
             return false;
@@ -622,9 +685,7 @@ private:
         }
         m_data_out.animations[animation_index] = erhe_animation;
     }
-    auto load_image_file(
-        const std::filesystem::path& path
-    ) -> std::shared_ptr<erhe::graphics::Texture>
+    auto load_image_file(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>
     {
         const bool file_is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::load_image_file", path);
         if (!file_is_ok) {
@@ -670,7 +731,7 @@ private:
 
         auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
         // TODO texture->set_source_path(m_path);
-        texture->set_debug_label(path.string());
+        texture->set_debug_label(erhe::file::to_string(path));
 
         gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
         gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
@@ -684,9 +745,7 @@ private:
         }
         return texture;
     }
-    auto load_png_buffer(
-        const cgltf_buffer_view* buffer_view
-    ) -> std::shared_ptr<erhe::graphics::Texture>
+    auto load_png_buffer(const cgltf_buffer_view* buffer_view) -> std::shared_ptr<erhe::graphics::Texture>
     {
         const cgltf_size  buffer_view_index = buffer_view - m_data->buffer_views;
         const std::string name              = safe_resource_name(buffer_view->name, "buffer_view", buffer_view_index);
@@ -1554,13 +1613,9 @@ private:
         log_gltf->trace("Node: node index = {}, name = {}", node_index, node_name);
         auto erhe_node = std::make_shared<erhe::scene::Node>(node_name);
         erhe_node->set_source_path(m_path);
-        erhe_node->enable_flag_bits(
-            Item_flags::content |
-            Item_flags::visible |
-            Item_flags::show_in_ui
-        );
+        erhe_node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
         m_data_out.nodes[node_index] = erhe_node;
-        erhe_node->set_parent(parent);
+        erhe_node->Hierarchy::set_parent(parent);
         parse_node_transform(node, erhe_node);
 
         for (cgltf_size i = 0; i < node->children_count; ++i) {
@@ -1624,6 +1679,10 @@ auto parse_gltf(
 
 auto scan_gltf(std::filesystem::path path) -> Gltf_scan
 {
+    std::optional<std::string> file_contents_opt = erhe::file::read("GLTF file", path);
+    if (!file_contents_opt.has_value()) {
+        return {};
+    }
     const cgltf_options parse_options{
         .type             = cgltf_file_type_invalid, // auto
         .json_token_count = 0, // 0 == auto
@@ -1633,16 +1692,18 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
             .user_data    = nullptr
         },
         .file = {
-            .read         = nullptr,
-            .release      = nullptr,
+            .read         = cgltf_custom_file_read,
+            .release      = cgltf_custom_file_release,
             .user_data    = nullptr
         }
     };
 
-    cgltf_data* data{nullptr};
-    const cgltf_result parse_result = cgltf_parse_file(
+    const std::string& file_contents = file_contents_opt.value();
+    cgltf_data* data = nullptr;
+    const cgltf_result parse_result = cgltf_parse(
         &parse_options,
-        path.string().c_str(),
+        file_contents.data(),
+        file_contents.size(),
         &data
     );
 

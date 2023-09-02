@@ -60,6 +60,13 @@ void Hierarchy::recursive_remove()
     set_parent({});
 }
 
+void Hierarchy::remove_all_children_recursively()
+{
+    while (!m_children.empty()) {
+        m_children.back()->recursive_remove();
+    }
+}
+
 auto Hierarchy::get_child_count() const -> std::size_t
 {
     return m_children.size();
@@ -112,6 +119,11 @@ auto Hierarchy::is_ancestor(const Hierarchy* ancestor_candidate) const -> bool
     return current_parent->is_ancestor(ancestor_candidate);
 }
 
+void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& parent)
+{
+    set_parent(parent, std::numeric_limits<std::size_t>::max());
+}
+
 void Hierarchy::set_parent(
     const std::shared_ptr<Hierarchy>& new_parent_,
     const std::size_t                 position
@@ -160,6 +172,11 @@ void Hierarchy::set_parent(
     hierarchy_sanity_check();
 }
 
+void Hierarchy::set_parent(Hierarchy* parent)
+{
+    set_parent(parent, std::numeric_limits<std::size_t>::max());
+}
+
 void Hierarchy::set_parent(
     Hierarchy* const  new_parent,
     const std::size_t position
@@ -178,7 +195,7 @@ void Hierarchy::set_parent(
 
 void Hierarchy::handle_add_child(
     const std::shared_ptr<Hierarchy>& child,
-    const std::size_t                 position
+    std::size_t                       position
 )
 {
     ERHE_VERIFY(child);
@@ -193,6 +210,8 @@ void Hierarchy::handle_add_child(
 #endif
 
     log->trace("Adding child '{}' to '{}'", child->describe(), describe());
+
+    position = std::min(m_children.size(), position);
     m_children.insert(m_children.begin() + position, child);
 }
 
@@ -239,6 +258,16 @@ void Hierarchy::set_depth_recursive(const std::size_t depth)
     for (const auto& child : m_children) {
         ERHE_VERIFY(child.get() != this);
         child->set_depth_recursive(depth + 1);
+    }
+}
+
+void Hierarchy::for_each(const std::function<bool(Hierarchy& hierarchy)>& fun)
+{
+    if (!fun(*this)) {
+        return;
+    }
+    for (const auto& child : m_children) {
+        child->for_each(fun);
     }
 }
 

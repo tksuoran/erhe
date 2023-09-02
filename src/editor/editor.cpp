@@ -30,10 +30,8 @@
 #include "tools/transform/move_tool.hpp"
 #include "tools/transform/rotate_tool.hpp"
 #include "tools/transform/scale_tool.hpp"
-#include "windows/animation_window.hpp"
-#include "windows/brdf_slice_window.hpp"
+#include "windows/brdf_slice.hpp"
 #include "windows/commands_window.hpp"
-#include "windows/content_library_window.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/layers_window.hpp"
 #include "windows/network_window.hpp"
@@ -170,7 +168,6 @@ public:
         , m_editor_scenes         {m_editor_context,    m_time}
         , m_editor_windows        {m_editor_context}
         , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
-        , m_content_library_window{m_imgui_renderer,    m_imgui_windows,     m_editor_context,        m_editor_scenes}
         , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_editor_settings.icons, m_programs}
         , m_post_processing       {m_graphics_instance, m_editor_context,    m_programs}
         , m_id_renderer           {m_graphics_instance, m_program_interface, m_mesh_memory,     m_programs}
@@ -180,7 +177,6 @@ public:
         , m_selection             {m_commands,          m_editor_context,    m_editor_message_bus}
         , m_operation_stack       {m_commands,          m_imgui_renderer,    m_imgui_windows,   m_editor_context}
         , m_scene_commands        {m_commands,          m_editor_context}
-        , m_animation_window      {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus}
         , m_commands_window       {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_layers_window         {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_network_window        {m_imgui_renderer, m_imgui_windows, m_editor_context, m_time}
@@ -250,9 +246,8 @@ public:
         }
         , m_hover_tool       {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus, m_tools}
 
-        , m_brdf_slice_window{
-            m_imgui_renderer,   m_imgui_windows,          m_rendergraph,
-            m_forward_renderer, m_content_library_window, m_programs
+        , m_brdf_slice{
+            m_rendergraph, m_forward_renderer, m_editor_context, m_programs
         }
         , m_debug_draw            {m_editor_context}
         , m_debug_view_window     {
@@ -344,8 +339,8 @@ public:
         m_editor_context.forward_renderer       = &m_forward_renderer      ;
         m_editor_context.shadow_renderer        = &m_shadow_renderer       ;
         m_editor_context.context_window         = &m_context_window        ;
+        m_editor_context.brdf_slice             = &m_brdf_slice            ;
         m_editor_context.brush_tool             = &m_brush_tool            ;
-        m_editor_context.content_library_window = &m_content_library_window;
         m_editor_context.create                 = &m_create                ;
         m_editor_context.editor_message_bus     = &m_editor_message_bus    ;
         m_editor_context.editor_rendering       = &m_editor_rendering      ;
@@ -460,7 +455,6 @@ public:
     Editor_windows                          m_editor_windows;
 
     Asset_browser                           m_asset_browser;
-    Content_library_window                  m_content_library_window;
     Icon_set                                m_icon_set;
     Post_processing                         m_post_processing;
     Id_renderer                             m_id_renderer;
@@ -470,7 +464,6 @@ public:
     Selection                               m_selection;
     Operation_stack                         m_operation_stack;
     Scene_commands                          m_scene_commands;
-    Animation_window                        m_animation_window;
     Commands_window                         m_commands_window;
     Layers_window                           m_layers_window;
     Network_window                          m_network_window;
@@ -501,7 +494,7 @@ public:
     Hud                                     m_hud;
     Hotbar                                  m_hotbar;
     Hover_tool                              m_hover_tool;
-    Brdf_slice_window                       m_brdf_slice_window;
+    Brdf_slice                              m_brdf_slice;
     Debug_draw                              m_debug_draw;
     Debug_view_window                       m_debug_view_window;
     Debug_visualizations                    m_debug_visualizations;

@@ -5,10 +5,12 @@
 #include "tools/brushes/brush.hpp"
 #include "graphics/icon_set.hpp"
 
+#include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_scene/animation.hpp"
-#include "erhe_item/item.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -19,16 +21,13 @@
 #include <imgui/imgui_internal.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <string_view>
 #include <vector>
 
-namespace erhe::graphics {
-    class Texture;
-};
-namespace erhe::primitive {
-    class Material;
-};
 namespace erhe::scene {
     class Animation;
     class Camera;
@@ -43,34 +42,24 @@ namespace editor
 class Brush;
 class Editor_context;
 
-template <typename T>
-class Library
+class Content_library_node
+    : public erhe::Hierarchy
 {
 public:
-    // T is derived from erhe::Item
-    Library() 
-        : m_type_code{T::get_static_type()}
-        , m_type_name{T::static_type_name}
-    {
-    }
+    Content_library_node(std::string_view folder_name, uint64_t type, std::string_view type_name);
+    Content_library_node(const std::shared_ptr<erhe::Item>& item);
+    ~Content_library_node();
 
-    // T is NOT derived from erhe::Item
-    Library(
-        const uint64_t         item_type,
-        const std::string_view type_name
-    )
-        : m_type_code{item_type}
-        , m_type_name{type_name}
-    {}
+    // Implements Item
+    static constexpr std::string_view static_type_name{"Content_library_node"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
 
-    [[nodiscard]] auto get_type_code() const -> uint64_t         { return m_type_code; }
-    [[nodiscard]] auto get_type_name() const -> std::string_view { return m_type_name; }
-    [[nodiscard]] auto entries() -> std::vector<std::shared_ptr<T>>&;
-    [[nodiscard]] auto entries() const -> const std::vector<std::shared_ptr<T>>&;
-
-    template <typename ...Args>
+    template <typename T, typename ...Args>
     auto make(Args&& ...args) -> std::shared_ptr<T>;
 
+    template <typename T>
     auto combo(
         Editor_context&     context,
         const char*         label,
@@ -78,64 +67,57 @@ public:
         const bool          empty_option
     ) const -> bool;
 
+    template <typename T>
     void add   (const std::shared_ptr<T>& entry);
-    auto remove(const std::shared_ptr<T>& entry) -> bool;
-    void clear ();
 
-private:
-    mutable std::mutex              m_mutex;
-    uint64_t                        m_type_code;
-    std::string_view                m_type_name;
-    std::vector<std::shared_ptr<T>> m_entries;
+    template <typename T>
+    auto remove(const std::shared_ptr<T>& entry) -> bool;
+
+    template <typename T>
+    [[nodiscard]] auto get_all() -> std::vector<std::shared_ptr<T>> {
+        std::vector<std::shared_ptr<T>> result;
+        for_each<Content_library_node>(
+            [&result](const Content_library_node& node) {
+                auto entry = std::dynamic_pointer_cast<T>(node.item);
+                if (entry) {
+                    result.push_back(entry);
+                }
+                return true;
+            }
+        );
+        return result;
+    }
+
+    uint64_t                    type_code;
+    std::string                 type_name;
+    std::shared_ptr<erhe::Item> item;
 };
 
 class Content_library
 {
 public:
-    ~Content_library() noexcept;
+    Content_library();
 
-    bool                               is_shown_in_ui{true};
-    Library<Brush>                     brushes {erhe::Item_type::brush, "Brush"};
-    Library<erhe::scene::Animation>    animations;
-    Library<erhe::scene::Camera>       cameras;
-    Library<erhe::scene::Light>        lights;
-    Library<erhe::scene::Mesh>         meshes;
-    Library<erhe::scene::Skin>         skins;
-    Library<erhe::primitive::Material> materials{erhe::Item_type::material, "Material"};
-    Library<erhe::graphics::Texture>   textures {erhe::Item_type::texture,  "Texture"};
+    bool is_shown_in_ui{true};
+    std::shared_ptr<Content_library_node> root;
+    std::shared_ptr<Content_library_node> brushes;
+    std::shared_ptr<Content_library_node> animations;
+    std::shared_ptr<Content_library_node> skins;
+    std::shared_ptr<Content_library_node> materials;
+    std::shared_ptr<Content_library_node> textures;
 };
 
-template <typename T>
-auto Library<T>::entries() -> std::vector<std::shared_ptr<T>>&
+template <typename T, typename ...Args>
+auto Content_library_node::make(Args&& ...args) -> std::shared_ptr<T>
 {
-    return m_entries;
+    auto new_item = std::make_shared<T>(std::forward<Args>(args)...);
+    auto new_node = std::make_shared<Content_library_node>(new_item);
+    new_node->set_parent(this);
+    return new_item;
 }
 
 template <typename T>
-auto Library<T>::entries() const -> const std::vector<std::shared_ptr<T>>&
-{
-    return m_entries;
-}
-
-template <typename T>
-template <typename ...Args>
-auto Library<T>::make(Args&& ...args) -> std::shared_ptr<T>
-{
-    auto entry = std::make_shared<T>(std::forward<Args>(args)...);
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    m_entries.push_back(entry);
-    return entry;
-}
-
-template <typename T>
-void Library<T>::clear()
-{
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    m_entries.clear();
-}
-
-template <typename T>
-auto Library<T>::combo(
+auto Content_library_node::combo(
     Editor_context&     context,
     const char*         label,
     std::shared_ptr<T>& in_out_selected_entry,
@@ -158,71 +140,105 @@ auto Library<T>::combo(
             }
         }
 
-        for (const auto& entry : m_entries) {
-            if (!entry) {
-                continue;
+        // TODO Consideer keeping flat vector of entries
+        for_each<Content_library_node>(
+            [this, &context, &selection_changed, &in_out_selected_entry](const Content_library_node& node) -> bool {
+                auto node_item_shared = std::dynamic_pointer_cast<T>(node.item);
+                if (!node_item_shared) {
+                    return true; // in for_each() lambda - continue to children
+                }
+                if (!node.item->is_shown_in_ui()) {
+                    return true; // in for_each() lambda - continue to children
+                }
+                bool is_selected = (in_out_selected_entry == node.item);
+                context.icon_set->add_icons(node.item->get_type(), 1.0f);
+                if (ImGui::Selectable(node.item->get_label().c_str(), is_selected)) {
+                    in_out_selected_entry = node_item_shared;
+                    selection_changed = true;
+                }
+                if (is_selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+                return !selection_changed; // in for_each() lambda - continue to children if not selection_changed
             }
-            if (!entry->is_shown_in_ui()) {
-                continue;
-            }
-            bool is_selected = (in_out_selected_entry == entry);
-            context.icon_set->add_icons(get_type_code(), 1.0f);
-            if (ImGui::Selectable(entry->get_label().c_str(), is_selected)) {
-                in_out_selected_entry = entry;
-                selection_changed = true;
-            }
-            if (is_selected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
+        );
+
         ImGui::EndCombo();
     } else if (ImGui::BeginDragDropTarget()) {
-        const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(T::static_type_name.data());
-        if (payload != nullptr) {
-            log_tree_frame->trace("Dnd payload is {}", T::static_type_name.data());
-            const auto payload_id = *static_cast<std::size_t*>(payload->Data);
-            for (const auto& entry : m_entries) {
-                if (!entry) {
-                    continue;
+        const ImGuiPayload* drag_node_payload = ImGui::AcceptDragDropPayload(Content_library_node::static_type_name.data());
+        const ImGuiPayload* drag_item_payload = ImGui::AcceptDragDropPayload(T::static_type_name.data());
+        if ((drag_node_payload == nullptr) && (drag_item_payload == nullptr)) {
+            return false;
+        }
+        const erhe::Item*           drag_node_ = (drag_node_payload != nullptr) ? *(static_cast<erhe::Item**>(drag_node_payload->Data)) : nullptr;
+        const Content_library_node* drag_node  = dynamic_cast<const Content_library_node*>(drag_node_);
+        const erhe::Item*           drag_item  = (drag_item_payload != nullptr)
+            ? *(static_cast<erhe::Item**>(drag_item_payload->Data))
+            : drag_node->item.get();
+        if (drag_item != nullptr) {
+            for_each<Content_library_node>(
+                [&selection_changed, &in_out_selected_entry, drag_item](const Content_library_node& node) -> bool {
+                    auto node_item_shared = std::dynamic_pointer_cast<T>(node.item);
+                    if (node_item_shared && (node_item_shared.get() == drag_item)) {
+                        in_out_selected_entry = node_item_shared;
+                        selection_changed = true;
+                        return false; // in for_each() lambda - selection changed, do not continue to children
+                    }
+                    return true; // in for_each() lambda - selection not changed, continue to childnre
                 }
-                if (entry->get_id() == payload_id) {
-                    in_out_selected_entry = entry;
-                    selection_changed = true;
-                    break;
-                }
-            }
+            );
         } else {
             log_tree_frame->trace("Dnd payload is not {}", T::static_type_name.data());
         }
         ImGui::EndDragDropTarget();
-        return false;
+        return selection_changed;
     }
 
     return selection_changed;
 }
 
 template <typename T>
-void Library<T>::add(const std::shared_ptr<T>& entry)
+void Content_library_node::add(const std::shared_ptr<T>& entry)
 {
     ERHE_VERIFY(entry);
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    auto i = std::find(m_entries.begin(), m_entries.end(), entry);
-    if (i != m_entries.end()) {
+    const auto i = std::find_if(
+        m_children.begin(),
+        m_children.end(),
+        [&entry](const std::shared_ptr<Hierarchy>& hierarchy) {
+            std::shared_ptr<Content_library_node> node = std::dynamic_pointer_cast<Content_library_node>(hierarchy);
+            if (!node) {
+                return false;
+            }
+            return std::dynamic_pointer_cast<T>(node->item) == entry;
+        }
+    );
+    if (i != m_children.end()) {
         return;
     }
-    m_entries.push_back(entry);
+    auto node = std::make_shared<Content_library_node>(entry);
+    node->set_parent(this);
 }
 
 template <typename T>
-auto Library<T>::remove(const std::shared_ptr<T>& entry) -> bool
+auto Content_library_node::remove(const std::shared_ptr<T>& entry) -> bool
 {
     ERHE_VERIFY(entry);
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    const auto i = std::remove(m_entries.begin(), m_entries.end(), entry);
-    if (i == m_entries.end()) {
+    const auto i = std::find_if(
+        m_children.begin(),
+        m_children.end(),
+        [&entry](const std::shared_ptr<Hierarchy>& hierarchy) {
+            std::shared_ptr<Content_library_node> node = std::dynamic_pointer_cast<Content_library_node>(hierarchy);
+            if (!node) {
+                return false;
+            }
+            return std::dynamic_pointer_cast<T>(node->item) == entry;
+        }
+    );
+    if (i == m_children.end()) {
         return false;
     }
-    m_entries.erase(i, m_entries.end());
+    std::shared_ptr<Hierarchy> hierarchy = *i;
+    i->remove();
     return true;
 }
 

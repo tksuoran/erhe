@@ -516,9 +516,9 @@ auto Handle_visualizations::make_rotate_ring(Mesh_memory& mesh_memory) -> Part
 {
     auto& material_library = tools.get_tool_scene_root()->content_library()->materials;
     switch (mode) {
-        case Mode::Normal: return material_library.make(name, color);
-        case Mode::Active: return material_library.make(name, glm::vec3(1.0f, 0.7f, 0.1f));
-        case Mode::Hover:  return material_library.make(name, 2.0f * color);
+        case Mode::Normal: return material_library->make<erhe::primitive::Material>(name, color);
+        case Mode::Active: return material_library->make<erhe::primitive::Material>(name, glm::vec3(1.0f, 0.7f, 0.1f));
+        case Mode::Hover:  return material_library->make<erhe::primitive::Material>(name, 2.0f * color);
         default:           return {};
     }
 }

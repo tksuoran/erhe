@@ -95,7 +95,10 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 }
 
 Scene_root::Scene_root(
+    erhe::imgui::Imgui_renderer*            imgui_renderer,
+    erhe::imgui::Imgui_windows*             imgui_windows,
     erhe::scene::Scene_message_bus&         scene_message_bus,
+    Editor_context*                         editor_context,
     Editor_message_bus*                     editor_message_bus,
     Editor_scenes*                          editor_scenes,
     const std::shared_ptr<Content_library>& content_library,
@@ -158,6 +161,29 @@ Scene_root::Scene_root(
 
     if (editor_scenes != nullptr) {
         register_to_editor_scenes(*editor_scenes);
+    }
+
+    if (
+        (imgui_renderer != nullptr) &&
+        (imgui_windows  != nullptr) &&
+        (editor_context != nullptr)
+    ) {
+        m_content_library_tree_window = std::make_shared<Item_tree_window>(
+            *imgui_renderer,
+            *imgui_windows,
+            *editor_context,
+            "Content Library",
+            "Content_library",
+            m_content_library->root
+        );
+        m_content_library_tree_window->set_item_filter(
+            erhe::Item_filter{
+                .require_all_bits_set           = 0,
+                .require_at_least_one_bit_set   = 0,
+                .require_all_bits_clear         = 0,
+                .require_at_least_one_bit_clear = 0
+            }
+        );
     }
 
     if (editor_message_bus != nullptr) {
@@ -234,17 +260,30 @@ Scene_root::~Scene_root() noexcept
     }
 }
 
+auto custom_isprint(const char c) -> bool
+{
+    return (c >= 32 && c <= 126);
+}
+
+auto custom_isalnum(const char c) -> bool
+{
+    if (c >= '0' && c <= '9') return true;
+    if (c >= 'A' && c <= 'Z') return true;
+    if (c >= 'a' && c <= 'z') return true;
+    return false;
+}
+
 void sanitize(std::string& s)
 {
     s.erase(
         std::remove_if(
             s.begin(), s.end(), [](const char c) {
-                return '\n' == c || '\r' == c || '\0' == c || '\x1A' == c;
+                return !custom_isprint(c);
             }
         ),
         s.end()
     );
-    std::replace_if(s.begin(), s.end(), [](const char c){ return !std::isalnum(c); }, '_');
+    std::replace_if(s.begin(), s.end(), [](const char c){ return !custom_isalnum(c); }, '_');
 }
 
 auto Scene_root::make_browser_window(
@@ -379,7 +418,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         if (!primitive.material) {
             continue;
         }
-        material_library.add(primitive.material);
+        material_library->add(primitive.material);
     }
 }
 

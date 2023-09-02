@@ -1,5 +1,6 @@
 #pragma once
 
+#include "scene/content_library.hpp"
 #include "tools/tool.hpp"
 
 #include "erhe_commands/command.hpp"
@@ -212,12 +213,27 @@ auto Selection::get(const std::size_t index) -> std::shared_ptr<T>
         if (!item) {
             continue;
         }
-        if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
-            continue;
-        }
-        if (i == index) {
-            return std::static_pointer_cast<T>(item);
+        if (item->get_type() == erhe::Item_type::content_library_node) {
+            const auto node = std::dynamic_pointer_cast<Content_library_node>(item);
+            if (node) {
+                const auto node_item = node->item;
+                if (node_item) {
+                    if (!erhe::bit::test_all_rhs_bits_set(node_item->get_type(), T::get_static_type())) {
+                        continue;
+                    }
+                    if (i == index) {
+                        return std::static_pointer_cast<T>(node_item);
+                    }
+                    ++i;
+                }
+            }
         } else {
+            if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
+                continue;
+            }
+            if (i == index) {
+                return std::static_pointer_cast<T>(item);
+            }
             ++i;
         }
     }

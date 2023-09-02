@@ -7,25 +7,27 @@
 namespace editor
 {
 
-void add_default_materials(Library<erhe::primitive::Material>& library)
+void add_default_materials(Content_library& library)
 {
     //const glm::vec2 roughness{0.68f, 0.34f};
     const glm::vec2 roughness{0.34f, 0.20f};
 
-    library.make("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
-    library.make("Titanium",  glm::vec3{0.542f, 0.497f, 0.449f}, roughness, 1.0f);
-    library.make("Chromium",  glm::vec3{0.549f, 0.556f, 0.554f}, roughness, 1.0f);
-    library.make("Iron",      glm::vec3{0.562f, 0.565f, 0.578f}, roughness, 1.0f);
-    library.make("Nickel",    glm::vec3{0.660f, 0.609f, 0.526f}, roughness, 1.0f);
-    library.make("Platinum",  glm::vec3{0.673f, 0.637f, 0.585f}, roughness, 1.0f);
-    library.make("Copper",    glm::vec3{0.955f, 0.638f, 0.538f}, roughness, 1.0f);
-    library.make("Palladium", glm::vec3{0.733f, 0.697f, 0.652f}, roughness, 1.0f);
-    library.make("Zinc",      glm::vec3{0.664f, 0.824f, 0.850f}, roughness, 1.0f);
-    library.make("Gold",      glm::vec3{1.022f, 0.782f, 0.344f}, roughness, 1.0f);
-    library.make("Aluminum",  glm::vec3{0.913f, 0.922f, 0.924f}, roughness, 1.0f);
-    library.make("Silver",    glm::vec3{0.972f, 0.960f, 0.915f}, roughness, 1.0f);
+    auto& materials = *library.materials.get();
 
-    library.make("Cobalt",    glm::vec3{0.662f, 0.655f, 0.634f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
+    materials.make<erhe::primitive::Material>("Titanium",  glm::vec3{0.542f, 0.497f, 0.449f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Chromium",  glm::vec3{0.549f, 0.556f, 0.554f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Iron",      glm::vec3{0.562f, 0.565f, 0.578f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Nickel",    glm::vec3{0.660f, 0.609f, 0.526f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Platinum",  glm::vec3{0.673f, 0.637f, 0.585f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Copper",    glm::vec3{0.955f, 0.638f, 0.538f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Palladium", glm::vec3{0.733f, 0.697f, 0.652f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Zinc",      glm::vec3{0.664f, 0.824f, 0.850f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Gold",      glm::vec3{1.022f, 0.782f, 0.344f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Aluminum",  glm::vec3{0.913f, 0.922f, 0.924f}, roughness, 1.0f);
+    materials.make<erhe::primitive::Material>("Silver",    glm::vec3{0.972f, 0.960f, 0.915f}, roughness, 1.0f);
+
+    materials.make<erhe::primitive::Material>("Cobalt",    glm::vec3{0.662f, 0.655f, 0.634f}, roughness, 1.0f);
 
     // water          0.020
     // plastic, glass 0.040 .. 0.045
@@ -57,7 +59,7 @@ void add_default_materials(Library<erhe::primitive::Material>& library)
         float R, G, B;
         erhe::math::hsv_to_rgb(hue, saturation, value, R, G, B);
         //const std::string label = fmt::format("Hue {}", static_cast<int>(hue));
-        library.make(
+        materials.make<erhe::primitive::Material>(
             fmt::format("Hue {}", static_cast<int>(hue)),
             glm::vec3{R, G, B},
             glm::vec2{rel, rel}, // roughness

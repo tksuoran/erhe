@@ -144,5 +144,7 @@ public:
 
 [[nodiscard]] auto format_texture_handle(uint64_t handle) -> std::string;
 
+constexpr uint64_t invalid_texture_handle = 0xffffffffu;
+
 
 } // namespace erhe::graphics

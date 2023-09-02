@@ -17,7 +17,6 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
-#include "windows/content_library_window.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
@@ -194,7 +193,7 @@ auto Brush_tool::try_insert_ready() -> bool
 
 auto Brush_tool::try_insert() -> bool
 {
-    auto brush = m_context.content_library_window->selected_brush();
+    auto brush = m_context.selection->get<Brush>();
     if (
         !m_brush_node ||
         !m_brush_mesh ||
@@ -249,7 +248,7 @@ void Brush_tool::on_motion()
 // Returns transform which places brush in parent (hover) mesh space.
 auto Brush_tool::get_hover_mesh_transform() -> mat4
 {
-    auto brush = m_context.content_library_window->selected_brush();
+    auto brush = m_context.selection->get<Brush>();
 
     if (
         (m_hover.mesh == nullptr)                                            ||
@@ -306,7 +305,7 @@ auto Brush_tool::get_hover_grid_transform() -> mat4
     }
 
     m_transform_scale = m_scale;
-    auto brush = m_context.content_library_window->selected_brush();
+    auto brush = m_context.selection->get<Brush>();
     Reference_frame brush_frame = brush->get_reference_frame(
         static_cast<uint32_t>(m_polygon_offset),
         static_cast<uint32_t>(m_corner_offset)
@@ -329,7 +328,7 @@ auto Brush_tool::get_hover_grid_transform() -> mat4
 
 void Brush_tool::update_mesh_node_transform()
 {
-    auto brush = m_context.content_library_window->selected_brush();
+    auto brush = m_context.selection->get<Brush>();
     if (
         !brush ||
         !m_hover.position.has_value() ||
@@ -360,10 +359,12 @@ void Brush_tool::update_mesh_node_transform()
 
 void Brush_tool::do_insert_operation()
 {
-    auto brush = m_context.content_library_window->selected_brush();
+    auto brush    = m_context.selection->get<Brush>();
+    auto material = m_context.selection->get<erhe::primitive::Material>();
     if (
         !m_hover.position.has_value() ||
-        !brush
+        !brush                        ||
+        !material
     ) {
         return;
     }
@@ -402,7 +403,7 @@ void Brush_tool::do_insert_operation()
         .world_from_node  = (hover_node != nullptr)
             ? hover_node->world_from_node() * hover_from_brush
             : hover_from_brush,
-        .material         = m_context.content_library_window->selected_material(),
+        .material         = material,
         .scale            = m_transform_scale
     };
     const auto instance_node = brush->make_instance(brush_instance_create_info);
@@ -428,20 +429,16 @@ void Brush_tool::do_insert_operation()
 
 void Brush_tool::add_brush_mesh()
 {
-    auto brush = m_context.content_library_window->selected_brush();
+    const auto brush    = m_context.selection->get<Brush>();
+    const auto material = m_context.selection->get<erhe::primitive::Material>();
     auto* scene_view = get_hover_scene_view();
     if (
         !brush ||
+        !material ||
         !m_hover.position.has_value() ||
         (!m_hover.mesh && (m_hover.grid == nullptr)) ||
         (scene_view == nullptr)
     ) {
-        return;
-    }
-
-    const auto& material = m_context.content_library_window->selected_material();
-    if (!material) {
-        log_brush->warn("No material selected");
         return;
     }
 
@@ -481,7 +478,7 @@ void Brush_tool::add_brush_mesh()
 
 void Brush_tool::update_mesh()
 {
-    auto brush = m_context.content_library_window->selected_brush();
+    const auto brush = m_context.selection->get<Brush>();
     if (!m_brush_mesh && is_enabled()) {
         if (
             !brush ||

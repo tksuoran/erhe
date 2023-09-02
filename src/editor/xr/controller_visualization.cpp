@@ -24,7 +24,7 @@ Controller_visualization::Controller_visualization(
     ERHE_PROFILE_FUNCTION();
 
     auto& material_library = scene_root.content_library()->materials;
-    auto controller_material = material_library.make(
+    auto controller_material = material_library->make<erhe::primitive::Material>(
         "Controller",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
