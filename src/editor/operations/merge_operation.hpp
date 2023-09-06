@@ -53,8 +53,8 @@ private:
     std::vector<erhe::primitive::Primitive>                    m_first_mesh_primitives_before{};
     std::vector<erhe::primitive::Primitive>                    m_first_mesh_primitives_after{};
 
-    std::vector<std::shared_ptr<erhe::Item>>                   m_selection_before;
-    std::vector<std::shared_ptr<erhe::Item>>                   m_selection_after;
+    std::vector<std::shared_ptr<erhe::Item_base>>              m_selection_before;
+    std::vector<std::shared_ptr<erhe::Item_base>>              m_selection_after;
     std::vector<std::shared_ptr<erhe::scene::Node>>            m_hold_nodes;
     std::vector<std::shared_ptr<erhe::scene::Node_attachment>> m_hold_node_attachments;
 };

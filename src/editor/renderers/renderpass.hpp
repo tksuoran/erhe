@@ -25,18 +25,22 @@ class Render_style_data;
 class Scene_root;
 
 class Renderpass
-    : public erhe::Item
+    : public erhe::Item<erhe::Item_base, erhe::Item_base, Renderpass>
 {
 public:
+    explicit Renderpass(const Renderpass&);
+    Renderpass& operator=(const Renderpass&);
+    ~Renderpass() noexcept override;
+
     explicit Renderpass(const std::string_view name);
 
     void render(const Render_context& context) const;
 
-    // Implements Item
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Renderpass"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
-    [[nodiscard]] auto get_type     () const -> uint64_t         override;
-    [[nodiscard]] auto get_type_name() const -> std::string_view override;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
 
     std::vector<erhe::scene::Layer_id>                mesh_layers;
     std::vector<erhe::renderer::Pipeline_renderpass*> passes;

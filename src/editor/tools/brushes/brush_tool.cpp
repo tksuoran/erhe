@@ -6,7 +6,7 @@
 #include "editor_message_bus.hpp"
 #include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
-#include "operations/insert_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/node_raytrace.hpp"
@@ -421,7 +421,7 @@ void Brush_tool::do_insert_operation()
             .context = m_context,
             .item    = instance_node,
             .parent  = parent,
-            .mode    = Scene_item_operation::Mode::insert
+            .mode    = Item_insert_remove_operation::Mode::insert
         }
     );
     m_context.operation_stack->queue(op);

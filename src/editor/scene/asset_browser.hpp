@@ -19,22 +19,30 @@ class Editor_context;
 class Item_tree_window;
 
 class Asset_node
-    : public erhe::Hierarchy
+    : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Asset_node>
 {
 public:
-    Asset_node(const std::filesystem::path& path, std::size_t id);
+    explicit Asset_node(const Asset_node&);
+    Asset_node& operator=(const Asset_node&);
+    ~Asset_node() noexcept override;
+
+    Asset_node(const std::filesystem::path& path);
 
     glm::vec2 icon      {0.0f, 0.0f};
     glm::vec4 icon_color{1.0f, 1.0f, 1.0f, 1.0f};
 };
 
 class Asset_folder
-    : public Asset_node
+    : public erhe::Item<erhe::Item_base, Asset_node, Asset_folder>
 {
 public:
-    Asset_folder(const std::filesystem::path& path);
+    explicit Asset_folder(const Asset_folder&);
+    Asset_folder& operator=(const Asset_folder&);
+    ~Asset_folder() noexcept override;
 
-    // Implements Item
+    explicit Asset_folder(const std::filesystem::path& path);
+
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_folder"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;
@@ -42,12 +50,16 @@ public:
 };
 
 class Asset_file_gltf
-    : public Asset_node
+    : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_gltf>
 {
 public:
-    Asset_file_gltf(const std::filesystem::path& path);
+    explicit Asset_file_gltf(const Asset_file_gltf& src);
+    Asset_file_gltf& operator=(const Asset_file_gltf& src);
+    ~Asset_file_gltf() noexcept override;
 
-    // Implements Item
+    explicit Asset_file_gltf(const std::filesystem::path& path);
+
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_gltf"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;
@@ -58,12 +70,16 @@ public:
 };
 
 class Asset_file_other
-    : public Asset_node
+    : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_other>
 {
 public:
-    Asset_file_other(const std::filesystem::path& path);
+    explicit Asset_file_other(const Asset_file_other& src);
+    Asset_file_other& operator=(const Asset_file_other& src);
+    ~Asset_file_other() noexcept override;
 
-    // Implements Item
+    explicit Asset_file_other(const std::filesystem::path& path);
+
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_other"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;
@@ -84,7 +100,7 @@ private:
     void scan(const std::filesystem::path& path, Asset_node* parent);
 
     auto make_node    (const std::filesystem::path& path, Asset_node* parent) -> std::shared_ptr<Asset_node>;
-    auto item_callback(const std::shared_ptr<erhe::Item>& item) -> bool;
+    auto item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
     Editor_context& m_context;
     Asset_node*     m_popup_node{nullptr};

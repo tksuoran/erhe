@@ -1,7 +1,9 @@
 #include "graphics/icon_set.hpp"
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_settings.hpp"
 #include "renderers/programs.hpp"
+#include "scene/content_library.hpp"
 
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_item/item.hpp"
@@ -17,9 +19,11 @@ namespace editor {
 Icon_set::Icon_set(
     erhe::graphics::Instance&    graphics_instance,
     erhe::imgui::Imgui_renderer& imgui_renderer,
+    Editor_context&              editor_context,
     Icon_settings&               icon_settings,
     Programs&                    programs
 )
+    : m_context{editor_context}
 {
     load_icons(graphics_instance, imgui_renderer, icon_settings, programs);
 }
@@ -183,6 +187,64 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::
 [[nodiscard]] auto Icon_set::get_hotbar_rasterization() const -> const Icon_rasterization&
 {
     return *m_hotbar.get();
+}
+
+void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const float scale)
+{
+    const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
+    if (content_node && content_node->item) {
+        item_icon(content_node->item, scale);
+        return;
+    }
+
+    std::optional<glm::vec2> icon;
+    //// glm::vec4                color = item->get_wireframe_color();
+    glm::vec4                color{0.8f, 0.8f, 0.8f, 1.0f};
+
+    //auto&          icons      = m_context.icon_set->icons;
+    //const auto&    type_icons = m_context.icon_set->type_icons;
+    const uint64_t type_mask = item->get_type();
+    using namespace erhe::bit;
+    for (uint64_t bit_position = 0; bit_position < erhe::Item_type::count; ++bit_position) {
+        const uint64_t bit_mask = (uint64_t{1} << bit_position);
+        if (test_all_rhs_bits_set(type_mask, bit_mask)) {
+            const auto& icon_opt = type_icons.at(bit_position);
+            if (icon_opt.has_value()) {
+                const auto& type_icon = icon_opt.value();
+                icon  = type_icon.icon;
+                if (type_icon.color.has_value()) {
+                    color = type_icon.color.value();
+                }
+                break;
+            }
+        }
+    }
+
+    if (erhe::scene::is_bone(item)) {
+        icon = icons.bone;
+    }
+    const auto& material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
+    if (material) {
+        color = material->base_color;
+    }
+    const auto& light = std::dynamic_pointer_cast<erhe::scene::Light>(item);
+    if (light) {
+        color = glm::vec4{light->color, 1.0f};
+        switch (light->type) {
+            //using enum erhe::scene::Light_type;
+            case erhe::scene::Light_type::spot:        icon = icons.spot_light; break;
+            case erhe::scene::Light_type::directional: icon = icons.directional_light; break;
+            case erhe::scene::Light_type::point:       icon = icons.point_light; break;
+            default: break;
+        }
+    }
+
+    if (icon.has_value()) {
+        const auto& icon_rasterization = (scale < 1.5f)
+            ? m_context.icon_set->get_small_rasterization()
+            : m_context.icon_set->get_large_rasterization();
+        icon_rasterization.icon(icon.value(), color);
+    }
 }
 
 } // namespace editor

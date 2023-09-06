@@ -125,7 +125,7 @@ auto Brush::get_type_name() const -> std::string_view
 }
 
 Brush::Brush(const Brush_data& create_info)
-    : erhe::Item{create_info.get_name(), erhe::Unique_id<Brush>{}.get_id()}
+    : Item{create_info.get_name()}
     , data{create_info}
 {
 }
@@ -167,7 +167,7 @@ void Brush::late_initialize()
     }
 }
 
-Brush::Brush(Brush&& other) noexcept = default;
+Brush::Brush(Brush&&) noexcept = default;
 
 auto Brush::get_reference_frame(
     const uint32_t corner_count,

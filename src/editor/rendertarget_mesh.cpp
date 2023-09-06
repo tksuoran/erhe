@@ -384,17 +384,17 @@ void Rendertarget_mesh::render_done(Editor_context& context)
     return m_pixels_per_meter;
 }
 
-auto is_rendertarget(const erhe::Item* const scene_item) -> bool
+auto is_rendertarget(const erhe::Item_base* const item) -> bool
 {
-    if (scene_item == nullptr) {
+    if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(scene_item->get_type(), erhe::Item_type::rendertarget);
+    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::rendertarget);
 }
 
-auto is_rendertarget(const std::shared_ptr<erhe::Item>& scene_item) -> bool
+auto is_rendertarget(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
-    return is_rendertarget(scene_item.get());
+    return is_rendertarget(item.get());
 }
 
 auto get_rendertarget(

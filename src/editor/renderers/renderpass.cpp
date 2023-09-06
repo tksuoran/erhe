@@ -17,32 +17,36 @@
 namespace editor
 {
 
+Renderpass::Renderpass(const Renderpass&)            = default;
+Renderpass& Renderpass::operator=(const Renderpass&) = default;
+Renderpass::~Renderpass() noexcept                   = default;
+
 Renderpass::Renderpass(const std::string_view name)
-    : erhe::Item{name, erhe::Unique_id<Renderpass>{}.get_id()}
+    : Item{name}
 {
 }
 
-[[nodiscard]] auto Renderpass::get_static_type() -> uint64_t
+auto Renderpass::get_static_type() -> uint64_t
 {
     return erhe::Item_type::renderpass;
 }
 
-[[nodiscard]] auto Renderpass::get_type() const -> uint64_t
+auto Renderpass::get_type() const -> uint64_t
 {
     return get_static_type();
 }
 
-[[nodiscard]] auto Renderpass::get_type_name() const -> std::string_view
+auto Renderpass::get_type_name() const -> std::string_view
 {
     return static_type_name;
 }
 
-[[nodiscard]] auto mix(float x, float y, float a) -> float
+auto mix(float x, float y, float a) -> float
 {
     return x * (1.0f - a) + y * a;
 }
 
-[[nodiscard]] auto triangle_wave(float t, float p) -> float
+auto triangle_wave(float t, float p) -> float
 {
     return 2.0f * std::abs(2.0f * (t / p - std::floor(t / p + 0.5f))) - 1.0f;
 }

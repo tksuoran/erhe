@@ -29,7 +29,7 @@ public:
     static constexpr std::string_view static_type_name{"Frame_controller"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
 
-    // Implements Item
+    // Implements Item_base
     [[nodiscard]] auto get_type     () const -> uint64_t         override;
     [[nodiscard]] auto get_type_name() const -> std::string_view override;
 
@@ -71,11 +71,8 @@ private:
     bool      m_transform_update{false};
 };
 
-auto is_frame_controller(const erhe::Item* item) -> bool;
-auto is_frame_controller(const std::shared_ptr<erhe::Item>& item) -> bool;
-auto as_frame_controller(erhe::Item* item) -> Frame_controller*;
-auto as_frame_controller(const std::shared_ptr<erhe::Item>& item) -> std::shared_ptr<Frame_controller>;
-
+auto is_frame_controller(const erhe::Item_base* item) -> bool;
+auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>;
 
 } // namespace example

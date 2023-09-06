@@ -45,9 +45,7 @@ private:
     std::shared_ptr<Content_library> m_content_library;
 };
 
-Scene_open_operation::Scene_open_operation(
-    const std::filesystem::path& path
-)
+Scene_open_operation::Scene_open_operation(const std::filesystem::path& path)
     : m_path{path}
 {
 }
@@ -109,27 +107,40 @@ void Scene_open_operation::undo(Editor_context& context)
 }
 
 //
+Asset_node::Asset_node(const Asset_node&)            = default;
+Asset_node& Asset_node::operator=(const Asset_node&) = default;
+Asset_node::~Asset_node() noexcept                   = default;
 
-Asset_node::Asset_node(const std::filesystem::path& path, std::size_t id) 
-    : erhe::Hierarchy{erhe::file::to_string(path.filename()), id}
+Asset_node::Asset_node(const std::filesystem::path& path) 
+    : Item{erhe::file::to_string(path.filename())}
 {
     set_source_path(path);
 }
 
+
 auto Asset_folder::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_folder; }
 auto Asset_folder::get_type       () const -> uint64_t        { return get_static_type(); }
 auto Asset_folder::get_type_name  () const -> std::string_view{ return static_type_name; }
-Asset_folder::Asset_folder(const std::filesystem::path& path) : Asset_node{path, erhe::Unique_id<Asset_folder>{}.get_id()} {}
+Asset_folder::Asset_folder(const Asset_folder&)            = default;
+Asset_folder& Asset_folder::operator=(const Asset_folder&) = default;
+Asset_folder::~Asset_folder() noexcept                     = default;
+Asset_folder::Asset_folder(const std::filesystem::path& path) : Item{path} {}
 
 auto Asset_file_gltf::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_file_gltf; }
 auto Asset_file_gltf::get_type       () const -> uint64_t        { return get_static_type(); }
 auto Asset_file_gltf::get_type_name  () const -> std::string_view{ return static_type_name; }
-Asset_file_gltf::Asset_file_gltf(const std::filesystem::path& path) : Asset_node{path, erhe::Unique_id<Asset_file_gltf>{}.get_id()} {}
+Asset_file_gltf::Asset_file_gltf(const Asset_file_gltf&)            = default;
+Asset_file_gltf& Asset_file_gltf::operator=(const Asset_file_gltf&) = default;
+Asset_file_gltf::~Asset_file_gltf() noexcept                        = default;
+Asset_file_gltf::Asset_file_gltf(const std::filesystem::path& path) : Item{path} {}
 
 auto Asset_file_other::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_file_other; }
 auto Asset_file_other::get_type       () const -> uint64_t        { return get_static_type(); }
 auto Asset_file_other::get_type_name  () const -> std::string_view{ return static_type_name; }
-Asset_file_other::Asset_file_other(const std::filesystem::path& path) : Asset_node{path, erhe::Unique_id<Asset_file_other>{}.get_id()} {}
+Asset_file_other::Asset_file_other(const Asset_file_other&)            = default;
+Asset_file_other& Asset_file_other::operator=(const Asset_file_other&) = default;
+Asset_file_other::~Asset_file_other() noexcept                         = default;
+Asset_file_other::Asset_file_other(const std::filesystem::path& path) : Item{path} {}
 
 auto Asset_browser::make_node(
     const std::filesystem::path& path,
@@ -188,7 +199,7 @@ Asset_browser::Asset_browser(
         }
     );
     m_node_tree_window->set_item_callback(
-        [&](const std::shared_ptr<erhe::Item>& item) -> bool {
+        [&](const std::shared_ptr<erhe::Item_base>& item) -> bool {
             return item_callback(item);
         }
     );
@@ -251,7 +262,7 @@ void Asset_browser::scan()
     scan(assets_root, m_root.get());
 }
 
-auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item>& item) -> bool
+auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     const auto gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
     if (!gltf) {

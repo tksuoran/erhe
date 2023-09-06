@@ -20,11 +20,22 @@ using erhe::physics::IRigid_body;
 using erhe::physics::Motion_mode;
 using erhe::scene::Node_attachment;
 
+Node_physics::Node_physics(const Node_physics&) = default;
+Node_physics& Node_physics::operator=(const Node_physics&) = default;
+
+Node_physics::Node_physics(const Node_physics& src, erhe::for_clone)
+    : Item               {src, erhe::for_clone{}}
+    , markers            {}        // clone does not initially have markers
+    , physics_motion_mode{src.physics_motion_mode}
+    , m_physics_world    {nullptr} // clone is initially detached
+    , m_rigid_body       {}        // clone rigid body is not initially created
+{
+}
+
 Node_physics::Node_physics(
     const IRigid_body_create_info& create_info
 )
-    : erhe::scene::Node_attachment{erhe::Unique_id<Node_physics>{}.get_id()}
-    , m_create_info{create_info}
+    : m_create_info{create_info}
 {
 }
 
@@ -138,7 +149,7 @@ auto Node_physics::get_rigid_body() const -> const IRigid_body*
     return (m_physics_world != nullptr) ? m_rigid_body.get() : nullptr;
 }
 
-auto is_physics(const erhe::Item* const scene_item) -> bool
+auto is_physics(const erhe::Item_base* const scene_item) -> bool
 {
     if (scene_item == nullptr) {
         return false;
@@ -149,9 +160,9 @@ auto is_physics(const erhe::Item* const scene_item) -> bool
     );
 }
 
-auto is_physics(const std::shared_ptr<erhe::Item>& scene_item) -> bool
+auto is_physics(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
-    return is_physics(scene_item.get());
+    return is_physics(item.get());
 }
 
 auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>

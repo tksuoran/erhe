@@ -54,7 +54,7 @@ void Layers_window::imgui()
         ? m_context.icon_set->get_small_rasterization()
         : m_context.icon_set->get_large_rasterization();
 
-    std::shared_ptr<erhe::Item> item_clicked;
+    std::shared_ptr<erhe::Item_base> item_clicked;
     for (const auto& scene_root : scene_roots) {
         if (ImGui::TreeNodeEx(scene_root->get_name().c_str(), parent_flags)) {
             const auto& scene       = scene_root->get_scene();

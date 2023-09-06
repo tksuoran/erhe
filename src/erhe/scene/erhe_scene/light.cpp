@@ -13,12 +13,14 @@
 namespace erhe::scene
 {
 
+Light::Light(const Light&)            = default;
+Light& Light::operator=(const Light&) = default;
+Light::~Light() noexcept              = default;
+
 Light::Light(const std::string_view name)
-    : Node_attachment{name, erhe::Unique_id<Light>{}.get_id()}
+    : Item{name}
 {
 }
-
-Light::~Light() noexcept = default;
 
 auto Light::get_static_type() -> uint64_t
 {
@@ -411,7 +413,7 @@ auto Light::stable_directional_light_projection_transforms(
     };
 }
 
-auto is_light(const erhe::Item* const item) -> bool
+auto is_light(const erhe::Item_base* const item) -> bool
 {
     if (item == nullptr) {
         return false;
@@ -419,7 +421,7 @@ auto is_light(const erhe::Item* const item) -> bool
     return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::light);
 }
 
-auto is_light(const std::shared_ptr<erhe::Item>& item) -> bool
+auto is_light(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     return is_light(item.get());
 }

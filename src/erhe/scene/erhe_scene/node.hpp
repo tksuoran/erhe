@@ -40,6 +40,9 @@ private:
 class Node_data
 {
 public:
+    Node_data();
+    Node_data(const Node_data& src, for_clone);
+
     Node_transforms                               transforms;
     Scene_host*                                   host     {nullptr};
     std::vector<std::shared_ptr<Node_attachment>> attachments;
@@ -51,16 +54,25 @@ public:
 };
 
 class Node
-    : public erhe::Hierarchy
+    : public erhe::Item<
+        Item_base,
+        Hierarchy,
+        Node,
+        erhe::Item_kind::clone_using_custom_clone_constructor
+    >
 {
 public:
     Node();
+    explicit Node(const Node&);
+    Node& operator=(const Node&);
+
     explicit Node(const std::string_view name);
-    ~Node() noexcept;
+    Node(const Node& src, for_clone);
+    ~Node() noexcept override;
 
     [[nodiscard]] auto shared_node_from_this() -> std::shared_ptr<Node>;
 
-    // Implements Item
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Node"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type               () const -> uint64_t                             override;
@@ -120,7 +132,7 @@ public:
     Node_data node_data;
 };
 
-[[nodiscard]] auto is_node(const erhe::Item* item) -> bool;
-[[nodiscard]] auto is_node(const std::shared_ptr<erhe::Item>& item) -> bool;
+[[nodiscard]] auto is_node(const erhe::Item_base* item) -> bool;
+[[nodiscard]] auto is_node(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
 } // namespace erhe::scene

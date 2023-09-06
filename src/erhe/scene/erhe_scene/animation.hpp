@@ -71,18 +71,20 @@ public:
     std::size_t                        value_offset;   // in sampler data floats
 };
 
-class Animation
-    : public Item
+class Animation : public Item<Item_base, Item_base, Animation>
 {
 public:
-    explicit Animation(const std::string_view name);
+    explicit Animation(const Animation& src);
+    Animation& operator=(const Animation& src);
     ~Animation() noexcept override;
 
-    // Implements Item
+    explicit Animation(const std::string_view name);
+
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Animation"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
-    [[nodiscard]] auto get_type     () const -> uint64_t         override;
-    [[nodiscard]] auto get_type_name() const -> std::string_view override;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
 
     // Public API
     [[nodiscard]] auto evaluate(float time_current, std::size_t channel_index, std::size_t component) -> float;
@@ -91,7 +93,5 @@ public:
     std::vector<Animation_sampler> samplers;
     std::vector<Animation_channel> channels;
 };
-
-auto as_animation(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Animation>;
 
 } // namespace erhe::scene

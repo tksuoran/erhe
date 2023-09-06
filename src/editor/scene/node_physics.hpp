@@ -16,19 +16,26 @@ namespace editor
 {
 
 class Node_physics
-    : public erhe::scene::Node_attachment
+    : public erhe::Item<
+        erhe::Item_base,
+        erhe::scene::Node_attachment,
+        Node_physics,
+        erhe::Item_kind::clone_using_custom_clone_constructor
+    >
 {
 public:
-    explicit Node_physics(
-        const erhe::physics::IRigid_body_create_info& create_info
-    );
+    explicit Node_physics(const erhe::physics::IRigid_body_create_info& create_info);
+    Node_physics(const Node_physics& src, erhe::for_clone);
+
+    explicit Node_physics(const Node_physics&);
+    Node_physics& operator=(const Node_physics&);
     ~Node_physics() noexcept override;
 
-    // Implements Item
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Node_physics"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
-    [[nodiscard]] auto get_type     () const -> uint64_t         override;
-    [[nodiscard]] auto get_type_name() const -> std::string_view override;
+    auto get_type     () const -> uint64_t                    override;
+    auto get_type_name() const -> std::string_view            override;
 
     // Implements / overrides Node_attachment
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
@@ -54,8 +61,8 @@ private:
     std::shared_ptr<erhe::physics::IRigid_body> m_rigid_body;
 };
 
-auto is_physics(const erhe::Item* item) -> bool;
-auto is_physics(const std::shared_ptr<erhe::Item>& item) -> bool;
+auto is_physics(const erhe::Item_base* item) -> bool;
+auto is_physics(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
 auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>;
 

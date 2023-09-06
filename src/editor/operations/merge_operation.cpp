@@ -66,7 +66,10 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     std::sort(
         m_selection_before.begin(),
         m_selection_before.end(),
-        [](const std::shared_ptr<erhe::Item>& lhs, const std::shared_ptr<erhe::Item>& rhs) {
+        [](
+            const std::shared_ptr<erhe::Item_base>& lhs,
+            const std::shared_ptr<erhe::Item_base>& rhs
+        ) {
             auto lhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(lhs);
             auto rhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(rhs);
             if (lhs_hierarchy && !rhs_hierarchy) {

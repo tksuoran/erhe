@@ -1,18 +1,20 @@
 #include "erhe_scene/mesh.hpp"
-#include "erhe_scene/skin.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 
 namespace erhe::scene
 {
 
-Mesh::Mesh()
-    : Node_attachment{erhe::Unique_id<Mesh>{}.get_id()}
-{
-}
+Mesh::Mesh()                       = default;
+Mesh::Mesh(const Mesh&)            = default;
+Mesh& Mesh::operator=(const Mesh&) = default;
+Mesh::~Mesh() noexcept             = default;
+
 
 Mesh::Mesh(const std::string_view name)
-    : Node_attachment{name, erhe::Unique_id<Mesh>{}.get_id()}
+    : Item{name}
 {
 }
 
@@ -20,12 +22,10 @@ Mesh::Mesh(
     const std::string_view           name,
     const erhe::primitive::Primitive primitive
 )
-    : Node_attachment{name, erhe::Unique_id<Mesh>{}.get_id()}
+    : Item{name}
 {
     mesh_data.primitives.emplace_back(primitive);
 }
-
-Mesh::~Mesh() noexcept = default;
 
 auto Mesh::get_static_type() -> uint64_t
 {
@@ -65,7 +65,7 @@ auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool
     return lhs.get_id() < rhs.get_id();
 }
 
-auto is_mesh(const Item* const item) -> bool
+auto is_mesh(const Item_base* const item) -> bool
 {
     if (item == nullptr) {
         return false;
@@ -73,7 +73,7 @@ auto is_mesh(const Item* const item) -> bool
     return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::mesh);
 }
 
-auto is_mesh(const std::shared_ptr<erhe::Item>& item) -> bool
+auto is_mesh(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     return is_mesh(item.get());
 }

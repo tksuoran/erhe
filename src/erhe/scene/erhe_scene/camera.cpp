@@ -7,17 +7,14 @@
 namespace erhe::scene
 {
 
-Camera::Camera()
-    : Node_attachment{erhe::Unique_id<Camera>{}.get_id()}
-{
-}
+Camera::Camera()                         = default;
+Camera::Camera(const Camera&)            = default;
+Camera& Camera::operator=(const Camera&) = default;
+Camera::~Camera() noexcept               = default;
+
 
 Camera::Camera(const std::string_view name)
-    : Node_attachment{name, erhe::Unique_id<Camera>{}.get_id()}
-{
-}
-
-Camera::~Camera() noexcept
+    : erhe::Item<Item_base, Node_attachment, Camera>{name}
 {
 }
 
@@ -98,7 +95,7 @@ auto Camera::projection() const -> const Projection*
     return &m_projection;
 }
 
-auto is_camera(const Item* const item) -> bool
+auto is_camera(const Item_base* const item) -> bool
 {
     if (item == nullptr) {
         return false;
@@ -106,7 +103,7 @@ auto is_camera(const Item* const item) -> bool
     return erhe::bit::test_all_rhs_bits_set(item->get_type(), Item_type::camera);
 }
 
-auto is_camera(const std::shared_ptr<Item>& item) -> bool
+auto is_camera(const std::shared_ptr<Item_base>& item) -> bool
 {
     return is_camera(item.get());
 }

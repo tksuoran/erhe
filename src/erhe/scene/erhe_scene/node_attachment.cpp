@@ -4,15 +4,29 @@
 
 namespace erhe::scene {
 
-Node_attachment::Node_attachment() = default;
+Node_attachment::Node_attachment()                       = default;
+Node_attachment::Node_attachment(const Node_attachment&) = default;
 
-Node_attachment::Node_attachment(const std::size_t id)
-    : Item{id}
+Node_attachment& Node_attachment::operator=(const Node_attachment&)
+{
+    if (m_node != nullptr) {
+        m_node->detach(this);
+    }
+    ERHE_FATAL("This probably won't work correctly.");
+}
+
+Node_attachment::Node_attachment(const Node_attachment&, for_clone)
+    : m_node{nullptr} // clone is created as not attached
 {
 }
 
-Node_attachment::Node_attachment(const std::string_view name, const std::size_t id)
-    : Item{name, id}
+auto Node_attachment::clone_attachment() const -> std::shared_ptr<Node_attachment>
+{
+    return std::make_shared<Node_attachment>(static_cast<const Node_attachment&>(*this));
+}
+
+Node_attachment::Node_attachment(const std::string_view name)
+    : Item{name}
 {
 }
 
@@ -58,10 +72,7 @@ void Node_attachment::handle_node_flag_bits_update(
     set_selected(selected);
 };
 
-void Node_attachment::set_node(
-    Node* const       node,
-    const std::size_t position
-)
+void Node_attachment::set_node(Node* const node, const std::size_t position)
 {
     if (m_node == node) {
         return;

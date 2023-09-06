@@ -25,17 +25,24 @@ enum class Variable : unsigned int {
 };
 
 class Frame_controller
-    : public erhe::scene::Node_attachment
+    : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Frame_controller, erhe::Item_kind::not_clonable>
 {
 public:
+    explicit Frame_controller(const Frame_controller&);
+    Frame_controller& operator=(const Frame_controller&);
+    ~Frame_controller() noexcept override;
+
     Frame_controller();
 
     static constexpr std::string_view static_type_name{"Frame_controller"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
 
+    // TODO disallow cloning
+    auto clone() const -> std::shared_ptr<erhe::Item_base> override;
+
     // Implements Node_attachment
-    [[nodiscard]] auto get_type     () const -> uint64_t                                        override;
-    [[nodiscard]] auto get_type_name() const -> std::string_view                                override;
+    auto get_type                    () const -> uint64_t                                       override;
+    auto get_type_name               () const -> std::string_view                               override;
     void handle_node_update          (erhe::scene::Node* old_node, erhe::scene::Node* new_node) override;
     void handle_node_transform_update()                                                         override;
 
@@ -73,8 +80,8 @@ private:
     bool      m_transform_update{false};
 };
 
-auto is_frame_controller(const erhe::Item* item) -> bool;
-auto is_frame_controller(const std::shared_ptr<erhe::Item>& item) -> bool;
+auto is_frame_controller(const erhe::Item_base* item) -> bool;
+auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
 auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>;
 

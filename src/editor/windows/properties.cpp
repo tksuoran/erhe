@@ -485,9 +485,10 @@ void Properties::node_raytrace_properties(Node_raytrace& node_raytrace) const
     node_raytrace.properties_imgui();
 }
 
-void Properties::item_flags(const std::shared_ptr<erhe::Item>& item)
+void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 {
     if (!ImGui::TreeNodeEx("Flags")) {
+
         return;
     }
 
@@ -518,7 +519,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item>& item)
     ImGui::TreePop();
 }
 
-[[nodiscard]] auto show_item_details(const erhe::Item* const item)
+[[nodiscard]] auto show_item_details(const erhe::Item_base* const item)
 {
     return
         !is_physics         (item) &&
@@ -527,7 +528,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item>& item)
         !is_rendertarget    (item);
 }
 
-void Properties::item_properties(const std::shared_ptr<erhe::Item>& item)
+void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item)
 {
     if (is_raytrace(item)) { // currently hidden from user
         return;
@@ -568,19 +569,19 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item>& item)
 
         item_flags(item);
 
-        if (!erhe::scene::is_light(item)) { // light uses light color, so hide item color
-            glm::vec4 color = item->get_wireframe_color();
-            if (
-                ImGui::ColorEdit4(
-                    "Item Color",
-                    &color.x,
-                    ImGuiColorEditFlags_Float |
-                    ImGuiColorEditFlags_NoInputs
-                )
-            ) {
-                item->set_wireframe_color(color);
-            }
-        }
+        //// if (!erhe::scene::is_light(item)) { // light uses light color, so hide item color
+        ////     glm::vec4 color = item->get_wireframe_color();
+        ////     if (
+        ////         ImGui::ColorEdit4(
+        ////             "Item_base Color",
+        ////             &color.x,
+        ////             ImGuiColorEditFlags_Float |
+        ////             ImGuiColorEditFlags_NoInputs
+        ////         )
+        ////     ) {
+        ////         item->set_wireframe_color(color);
+        ////     }
+        //// }
     }
 
     if (node_physics) {

@@ -15,20 +15,25 @@ namespace erhe
 {
 
 class Hierarchy
-    : public Item
+    : public Item<Item_base, Item_base, Hierarchy>
 {
 public:
     Hierarchy();
-    explicit Hierarchy(std::size_t id);
-    Hierarchy(const std::string_view name, std::size_t id);
+    ~Hierarchy() noexcept override;
+
+    explicit Hierarchy(const Hierarchy& src);
+    Hierarchy& operator=(const Hierarchy& src);
+    Hierarchy(const std::string_view name);
+
+    Hierarchy(const Hierarchy& src, for_clone);
 
     [[nodiscard]] auto shared_hierarchy_from_this() -> std::shared_ptr<Hierarchy>;
 
-    // Overrides Item
+    // Overrides Item_base
     static constexpr std::string_view static_type_name{"Hierarchy"};
     [[nodiscard]] static auto get_static_type() -> uint64_t{ return 0; }
-    [[nodiscard]] auto get_type     () const -> uint64_t         override { return get_static_type(); }
-    [[nodiscard]] auto get_type_name() const -> std::string_view override { return static_type_name; }
+    [[nodiscard]] auto get_type     () const -> uint64_t          override { return get_static_type(); }
+    [[nodiscard]] auto get_type_name() const -> std::string_view  override { return static_type_name; }
 
     virtual void set_parent          (const std::shared_ptr<Hierarchy>& parent);
     virtual void set_parent          (const std::shared_ptr<Hierarchy>& parent, std::size_t position);

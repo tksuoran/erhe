@@ -55,9 +55,9 @@ private:
     std::shared_ptr<erhe::Hierarchy>                           m_after_parent {};
     std::vector<std::shared_ptr<Item_parent_change_operation>> m_parent_changes;
 
-    erhe::Item_host*                         m_scene_host{nullptr};
-    std::vector<std::shared_ptr<erhe::Item>> m_selection_before;
-    std::vector<std::shared_ptr<erhe::Item>> m_selection_after;
+    erhe::Item_host*                              m_scene_host{nullptr};
+    std::vector<std::shared_ptr<erhe::Item_base>> m_selection_before;
+    std::vector<std::shared_ptr<erhe::Item_base>> m_selection_after;
 };
 
 }

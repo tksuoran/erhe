@@ -8,7 +8,7 @@
 #include "editor_message_bus.hpp"
 #include "editor_settings.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/node_operation.hpp"
+#include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 
 #include "renderers/mesh_memory.hpp" // need to be able to pass to visualization

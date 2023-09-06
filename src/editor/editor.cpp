@@ -26,11 +26,13 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/brushes/brush.hpp"
+#include "tools/clipboard.hpp"
 #include "tools/tools.hpp"
 #include "tools/transform/move_tool.hpp"
 #include "tools/transform/rotate_tool.hpp"
 #include "tools/transform/scale_tool.hpp"
 #include "windows/brdf_slice.hpp"
+#include "windows/clipboard_window.hpp"
 #include "windows/commands_window.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/layers_window.hpp"
@@ -41,6 +43,7 @@
 #include "windows/post_processing_window.hpp"
 #include "windows/properties.hpp"
 #include "windows/rendergraph_window.hpp"
+#include "windows/selection_window.hpp"
 #include "windows/settings_window.hpp"
 #include "windows/tool_properties_window.hpp"
 #include "windows/viewport_config_window.hpp"
@@ -149,6 +152,7 @@ public:
         , m_time              {}
         , m_editor_context    {}
 
+        , m_clipboard             {m_commands, m_editor_context}
         , m_context_window        {create_window()}
         , m_editor_settings       {m_editor_message_bus}
         , m_graphics_instance     {m_context_window}
@@ -168,15 +172,17 @@ public:
         , m_editor_scenes         {m_editor_context,    m_time}
         , m_editor_windows        {m_editor_context}
         , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
-        , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_editor_settings.icons, m_programs}
+        , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_editor_context, m_editor_settings.icons, m_programs}
         , m_post_processing       {m_graphics_instance, m_editor_context,    m_programs}
         , m_id_renderer           {m_graphics_instance, m_program_interface, m_mesh_memory,     m_programs}
+        , m_selection_window      {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_settings_window       {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_viewport_windows      {m_commands,          m_editor_context,    m_editor_message_bus}
         , m_editor_rendering      {m_commands,          m_graphics_instance, m_editor_context,  m_editor_message_bus, m_mesh_memory, m_programs}
         , m_selection             {m_commands,          m_editor_context,    m_editor_message_bus}
         , m_operation_stack       {m_commands,          m_imgui_renderer,    m_imgui_windows,   m_editor_context}
         , m_scene_commands        {m_commands,          m_editor_context}
+        , m_clipboard_window      {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_commands_window       {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_layers_window         {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_network_window        {m_imgui_renderer, m_imgui_windows, m_editor_context, m_time}
@@ -341,6 +347,8 @@ public:
         m_editor_context.context_window         = &m_context_window        ;
         m_editor_context.brdf_slice             = &m_brdf_slice            ;
         m_editor_context.brush_tool             = &m_brush_tool            ;
+        m_editor_context.clipboard              = &m_clipboard             ;
+        m_editor_context.clipboard_window       = &m_clipboard_window      ;
         m_editor_context.create                 = &m_create                ;
         m_editor_context.editor_message_bus     = &m_editor_message_bus    ;
         m_editor_context.editor_rendering       = &m_editor_rendering      ;
@@ -427,7 +435,7 @@ public:
     bool m_close_requested{false};
     bool m_openxr         {false};
 
-    // No constructors
+    // No dependencies (constructors)
     erhe::commands::Commands       m_commands;
     erhe::scene::Scene_message_bus m_scene_message_bus;
     Editor_message_bus             m_editor_message_bus;
@@ -435,6 +443,7 @@ public:
     Time                           m_time;
     Editor_context                 m_editor_context;
 
+    Clipboard                               m_clipboard;
     erhe::window::Context_window            m_context_window;
     Editor_settings                         m_editor_settings;
     erhe::graphics::Instance                m_graphics_instance;
@@ -458,12 +467,14 @@ public:
     Icon_set                                m_icon_set;
     Post_processing                         m_post_processing;
     Id_renderer                             m_id_renderer;
+    Selection_window                        m_selection_window;
     Settings_window                         m_settings_window;
     Viewport_windows                        m_viewport_windows;
     Editor_rendering                        m_editor_rendering;
     Selection                               m_selection;
     Operation_stack                         m_operation_stack;
     Scene_commands                          m_scene_commands;
+    Clipboard_window                        m_clipboard_window;
     Commands_window                         m_commands_window;
     Layers_window                           m_layers_window;
     Network_window                          m_network_window;

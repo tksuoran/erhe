@@ -30,7 +30,7 @@ using erhe::raytrace::IInstance;
 using erhe::scene::Node_attachment;
 using erhe::Item_flags;
 
-auto raytrace_node_mask(erhe::Item& item) -> uint32_t
+auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
 {
     uint32_t result{0};
     const uint64_t flags = item.get_flag_bits();
@@ -42,6 +42,10 @@ auto raytrace_node_mask(erhe::Item& item) -> uint32_t
     if ((flags & Item_flags::controller  ) != 0) result |= Raytrace_node_mask::controller  ;
     return result;
 }
+
+Raytrace_primitive::Raytrace_primitive(Raytrace_primitive&&)            = default;
+Raytrace_primitive& Raytrace_primitive::operator=(Raytrace_primitive&&) = default;
+Raytrace_primitive::~Raytrace_primitive() noexcept                      = default;
 
 Raytrace_primitive::Raytrace_primitive(
     erhe::scene::Mesh*         mesh,
@@ -81,6 +85,31 @@ Node_raytrace::Node_raytrace(
     initialize(mesh, primitives);
 }
 
+Node_raytrace::Node_raytrace(const Node_raytrace& src, erhe::for_clone)
+    : Item      {src, erhe::for_clone{}}
+    , m_rt_scene{nullptr} // clone is created detached
+{
+    const erhe::scene::Node* node = src.get_node();
+    if (node == nullptr) {
+        return;
+    }
+    const std::shared_ptr<erhe::scene::Mesh> mesh = get_mesh(node);
+    if (!mesh) {
+        return;
+    }
+    initialize(mesh, mesh->mesh_data.primitives);
+}
+
+Node_raytrace::Node_raytrace(Node_raytrace&&) = default;
+Node_raytrace& Node_raytrace::operator=(Node_raytrace&&) = default;
+
+Node_raytrace::~Node_raytrace() noexcept
+{
+    if (m_rt_scene != nullptr) {
+        detach_from_scene(m_rt_scene);
+    }
+}
+
 void Node_raytrace::initialize(
     const std::shared_ptr<erhe::scene::Mesh>&      mesh,
     const std::vector<erhe::primitive::Primitive>& primitives
@@ -98,13 +127,6 @@ void Node_raytrace::initialize(
         } else {
             log_raytrace->info("No raytrace geometry in {}", mesh->get_name());
         }
-    }
-}
-
-Node_raytrace::~Node_raytrace() noexcept
-{
-    if (m_rt_scene != nullptr) {
-        detach_from_scene(m_rt_scene);
     }
 }
 
@@ -222,20 +244,17 @@ void Node_raytrace::detach_from_scene(erhe::raytrace::IScene* rt_scene)
     m_rt_scene = nullptr;
 }
 
-auto is_raytrace(const erhe::Item* const scene_item) -> bool
+auto is_raytrace(const erhe::Item_base* const item) -> bool
 {
-    if (scene_item == nullptr) {
+    if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(
-        scene_item->get_type(),
-        erhe::Item_type::raytrace
-    );
+    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::raytrace);
 }
 
-auto is_raytrace(const std::shared_ptr<erhe::Item>& scene_item) -> bool
+auto is_raytrace(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
-    return is_raytrace(scene_item.get());
+    return is_raytrace(item.get());
 }
 
 auto get_node_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>

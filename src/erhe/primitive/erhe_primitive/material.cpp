@@ -9,10 +9,10 @@ auto Material::get_static_type()       -> uint64_t         { return erhe::Item_t
 auto Material::get_type       () const -> uint64_t         { return get_static_type(); }
 auto Material::get_type_name  () const -> std::string_view { return static_type_name; }
 
-Material::Material()
-    : erhe::Item{erhe::Unique_id<Material>{}.get_id()}
-{
-}
+Material::Material()                           = default;
+Material::Material(const Material&)            = default;
+Material& Material::operator=(const Material&) = default;
+Material::~Material() noexcept                 = default;
 
 Material::Material(
     const std::string_view name,
@@ -20,7 +20,7 @@ Material::Material(
     const glm::vec2        roughness,
     const float            metallic
 )
-    : erhe::Item{name, erhe::Unique_id<Material>{}.get_id()}
+    : Item      {name}
     , base_color{base_color, 1.0f}
     , roughness {roughness}
     , metallic  {metallic}
@@ -28,7 +28,5 @@ Material::Material(
 {
     enable_flag_bits(erhe::Item_flags::show_in_ui);
 }
-
-Material::~Material() = default;
 
 } // namespace erhe::primitive

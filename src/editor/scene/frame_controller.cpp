@@ -16,7 +16,7 @@ using glm::vec3;
 using glm::vec4;
 
 Frame_controller::Frame_controller()
-    : Node_attachment{"frame controller", erhe::Unique_id<Frame_controller>{}.get_id()}
+    : Item{"frame controller"}
 {
     reset();
     rotate_x      .set_damp     (0.700f);
@@ -36,6 +36,16 @@ Frame_controller::Frame_controller()
     speed_modifier.set_max_delta(0.5f);
 
     update();
+}
+
+Frame_controller::Frame_controller(const Frame_controller&) = default;
+Frame_controller& Frame_controller::operator=(const Frame_controller&) = default;
+Frame_controller::~Frame_controller() noexcept = default;
+
+auto Frame_controller::clone() const -> std::shared_ptr<erhe::Item_base>
+{
+    // It doesn't make sense copy Frame_controller - does it?
+    return std::shared_ptr<erhe::Item_base>{};
 }
 
 auto Frame_controller::get_variable(const Variable control) 
@@ -245,9 +255,7 @@ void Frame_controller::update_fixed_step()
     update();
 }
 
-auto is_frame_controller(
-    const erhe::Item* const item
-) -> bool
+auto is_frame_controller(const erhe::Item_base* const item) -> bool
 {
     if (item == nullptr) {
         return false;
@@ -258,16 +266,12 @@ auto is_frame_controller(
     );
 }
 
-auto is_frame_controller(
-    const std::shared_ptr<erhe::Item>& item
-) -> bool
+auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     return is_frame_controller(item.get());
 }
 
-auto as_frame_controller(
-    erhe::Item* item
-) -> Frame_controller*
+auto as_frame_controller(erhe::Item_base* item) -> Frame_controller*
 {
     if (item == nullptr) {
         return nullptr;
@@ -283,30 +287,12 @@ auto as_frame_controller(
     return static_cast<Frame_controller*>(item);
 }
 
-auto as_frame_controller(
-    const std::shared_ptr<erhe::Item>& item
-) -> std::shared_ptr<Frame_controller>
-{
-    if (!item) {
-        return {};
-    }
-    if (
-        !erhe::bit::test_all_rhs_bits_set(
-            item->get_type(),
-            erhe::Item_type::frame_controller
-        )
-    ) {
-        return {};
-    }
-    return std::static_pointer_cast<Frame_controller>(item);
-}
-
 auto get_frame_controller(
     const erhe::scene::Node* node
 ) -> std::shared_ptr<Frame_controller>
 {
     for (const auto& attachment : node->get_attachments()) {
-        auto frame_controller = as_frame_controller(attachment);
+        auto frame_controller = std::dynamic_pointer_cast<Frame_controller>(attachment);
         if (frame_controller) {
             return frame_controller;
         }

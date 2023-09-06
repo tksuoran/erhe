@@ -3,22 +3,24 @@
 namespace editor
 {
 
+Content_library_node::Content_library_node(const Content_library_node&)            = default;
+Content_library_node& Content_library_node::operator=(const Content_library_node&) = default;
+Content_library_node::~Content_library_node() noexcept                             = default;
+
+
 Content_library_node::Content_library_node(
     std::string_view folder_name,
     uint64_t         type_code,
     std::string_view type_name
 )
-    : erhe::Hierarchy{folder_name, erhe::Unique_id<Content_library_node>{}.get_id()}
-    , type_code      {type_code}
-    , type_name      {type_name}
+    : Item     {folder_name}
+    , type_code{type_code}
+    , type_name{type_name}
 {
 }
 
-Content_library_node::Content_library_node(const std::shared_ptr<erhe::Item>& in_item)
-    : erhe::Hierarchy{
-        in_item->get_name(),
-        erhe::Unique_id<Content_library_node>{}.get_id()
-    }
+Content_library_node::Content_library_node(const std::shared_ptr<erhe::Item_base>& in_item)
+    : Item{in_item->get_name()}
     , item{in_item}
 {
 }
@@ -37,8 +39,6 @@ auto Content_library_node::get_type_name() const -> std::string_view
 {
     return static_type_name;
 }
-
-Content_library_node::~Content_library_node() noexcept = default;
 
 Content_library::Content_library()
 {

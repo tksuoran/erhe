@@ -4,7 +4,7 @@
 #include <vector>
 
 namespace erhe {
-    class Item;
+    class Item_base;
 }
 namespace erhe::scene {
     class Node;
@@ -35,12 +35,12 @@ class Scene_view;
 class Editor_message
 {
 public:
-    uint64_t                                 update_flags{0};
-    Scene_view*                              scene_view  {nullptr};
-    erhe::scene::Node*                       node        {nullptr};
-    std::vector<std::shared_ptr<erhe::Item>> no_longer_selected;
-    std::vector<std::shared_ptr<erhe::Item>> newly_selected;
-    Graphics_preset*                         graphics_preset{nullptr};
+    uint64_t                                      update_flags{0};
+    Scene_view*                                   scene_view  {nullptr};
+    erhe::scene::Node*                            node        {nullptr};
+    std::vector<std::shared_ptr<erhe::Item_base>> no_longer_selected;
+    std::vector<std::shared_ptr<erhe::Item_base>> newly_selected;
+    Graphics_preset*                              graphics_preset{nullptr};
 };
 
 }

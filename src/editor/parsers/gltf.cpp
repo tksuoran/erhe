@@ -192,13 +192,13 @@ void import_gltf(
         node->set_parent_from_node(m);
     }
 
-    for (const auto& node : gltf_data.nodes) {
-        auto i = node_colors.find(node.get());
-        if (i != node_colors.end()) {
-            int color = i->second;
-            node->set_wireframe_color(colors.at(color));
-        }
-    }
+    //// for (const auto& node : gltf_data.nodes) {
+    ////     auto i = node_colors.find(node.get());
+    ////     if (i != node_colors.end()) {
+    ////         int color = i->second;
+    ////         node->set_wireframe_color(colors.at(color));
+    ////     }
+    //// }
 
     for (const auto& animation : gltf_data.animations) {
         scene_root.content_library()->animations->add(animation);

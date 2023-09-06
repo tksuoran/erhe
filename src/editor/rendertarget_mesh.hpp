@@ -47,7 +47,7 @@ public:
         float                     pixels_per_meter
     );
 
-    // Implements Item
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Rendertarget_mesh"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     [[nodiscard]] auto get_type     () const -> uint64_t         override;
@@ -95,8 +95,8 @@ private:
 #endif
 };
 
-[[nodiscard]] auto is_rendertarget(const erhe::Item* item) -> bool;
-[[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::Item>& item) -> bool;
+[[nodiscard]] auto is_rendertarget(const erhe::Item_base* item) -> bool;
+[[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
 [[nodiscard]] auto get_rendertarget(const erhe::scene::Node* node) -> std::shared_ptr<Rendertarget_mesh>;
 

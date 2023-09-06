@@ -3,17 +3,28 @@
 namespace editor
 {
 
-Render_style::Render_style()
-    : erhe::Item{erhe::Unique_id<Render_style>{}.get_id()}
+auto Render_style::get_static_type() -> uint64_t
 {
+    return erhe::Item_type::node;
 }
+
+auto Render_style::get_type() const -> uint64_t
+{
+    return get_static_type();
+}
+
+auto Render_style::get_type_name() const -> std::string_view
+{
+    return static_type_name;
+}
+
+Render_style::Render_style() = default;
+Render_style::~Render_style() noexcept = default;
 
 Render_style::Render_style(const std::string_view name)
-    : erhe::Item{name, erhe::Unique_id<Render_style>{}.get_id()}
+    : Item{name}
 {
 }
-
-Render_style::~Render_style() noexcept = default;
 
 auto Render_style_data::is_primitive_mode_enabled(
     erhe::primitive::Primitive_mode primitive_mode

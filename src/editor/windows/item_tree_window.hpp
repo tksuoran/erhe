@@ -70,32 +70,32 @@ public:
     void on_end  () override;
 
     void set_item_filter  (const erhe::Item_filter& filter);
-    void set_item_callback(std::function<bool(const std::shared_ptr<erhe::Item>&)> fun);
+    void set_item_callback(std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
 
-    auto drag_and_drop_target(const std::shared_ptr<erhe::Item>& node) -> bool;
+    auto drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& node) -> bool;
 
 private:
-    void set_item_selection_terminator(const std::shared_ptr<erhe::Item>& item);
-    void set_item_selection           (const std::shared_ptr<erhe::Item>& item, bool selected);
+    void set_item_selection_terminator(const std::shared_ptr<erhe::Item_base>& item);
+    void set_item_selection           (const std::shared_ptr<erhe::Item_base>& item, bool selected);
     void clear_selection              ();
-    void recursive_add_to_selection   (const std::shared_ptr<erhe::Item>& node);
+    void recursive_add_to_selection   (const std::shared_ptr<erhe::Item_base>& node);
     void select_all                   ();
 
     void move_selection(
-        const std::shared_ptr<erhe::Item>& target,
-        erhe::Item*                        payload_item,
-        Placement                          placement
+        const std::shared_ptr<erhe::Item_base>& target,
+        erhe::Item_base*                        payload_item,
+        Placement                               placement
     );
     void attach_selection_to(
-        const std::shared_ptr<erhe::Item>& target_node,
-        erhe::Item*                        payload_item
+        const std::shared_ptr<erhe::Item_base>& target_node,
+        erhe::Item_base*                        payload_item
     );
 
-    void item_popup_menu      (const std::shared_ptr<erhe::Item>& item);
-    void item_icon            (const std::shared_ptr<erhe::Item>& item);
-    auto item_icon_and_text   (const std::shared_ptr<erhe::Item>& item, bool update, bool force_expand) -> Tree_node_state;
-    void item_update_selection(const std::shared_ptr<erhe::Item>& item);
-    void imgui_item_node      (const std::shared_ptr<erhe::Item>& item);
+    void item_popup_menu      (const std::shared_ptr<erhe::Item_base>& item);
+    void item_icon            (const std::shared_ptr<erhe::Item_base>& item);
+    auto item_icon_and_text   (const std::shared_ptr<erhe::Item_base>& item, bool update, bool force_expand) -> Tree_node_state;
+    void item_update_selection(const std::shared_ptr<erhe::Item_base>& item);
+    void imgui_item_node      (const std::shared_ptr<erhe::Item_base>& item);
 
     enum class Show_mode : unsigned int {
         Hide          = 0,
@@ -103,41 +103,41 @@ private:
         Show_expanded = 2
     };
     [[nodiscard]] auto should_show(
-        const std::shared_ptr<erhe::Item>& item
+        const std::shared_ptr<erhe::Item_base>& item
     ) -> Show_mode;
 
     auto get_item_by_id(
         std::size_t id
-    ) const -> std::shared_ptr<erhe::Item>;
+    ) const -> std::shared_ptr<erhe::Item_base>;
 
     void try_add_to_attach(
-        Compound_operation::Parameters&    compound_parameters,
-        const std::shared_ptr<erhe::Item>& target_node,
-        const std::shared_ptr<erhe::Item>& node,
-        Selection_usage                    selection_usage
+        Compound_operation::Parameters&         compound_parameters,
+        const std::shared_ptr<erhe::Item_base>& target_node,
+        const std::shared_ptr<erhe::Item_base>& node,
+        Selection_usage                         selection_usage
     );
 
     void reposition(
-        Compound_operation::Parameters&    compound_parameters,
-        const std::shared_ptr<erhe::Item>& anchor_node,
-        const std::shared_ptr<erhe::Item>& child_node,
-        Placement                          placement,
-        Selection_usage                    selection_usage
+        Compound_operation::Parameters&         compound_parameters,
+        const std::shared_ptr<erhe::Item_base>& anchor_node,
+        const std::shared_ptr<erhe::Item_base>& child_node,
+        Placement                               placement,
+        Selection_usage                         selection_usage
     );
-    void drag_and_drop_source(const std::shared_ptr<erhe::Item>& node);
+    void drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& node);
 
-    Editor_context&                                         m_context;
-    erhe::Item_filter                                       m_filter;
-    ImGuiTextFilter                                         m_text_filter;
-    std::shared_ptr<erhe::Hierarchy>                        m_root;
-    std::function<bool(const std::shared_ptr<erhe::Item>&)> m_item_callback;
+    Editor_context&                                              m_context;
+    erhe::Item_filter                                            m_filter;
+    ImGuiTextFilter                                              m_text_filter;
+    std::shared_ptr<erhe::Hierarchy>                             m_root;
+    std::function<bool(const std::shared_ptr<erhe::Item_base>&)> m_item_callback;
 
     std::shared_ptr<IOperation>        m_operation;
     std::vector<std::function<void()>> m_operations;
 
     bool                               m_toggled_open{false};
-    std::weak_ptr<erhe::Item>          m_last_focus_item;
-    std::shared_ptr<erhe::Item>        m_popup_item;
+    std::weak_ptr<erhe::Item_base>     m_last_focus_item;
+    std::shared_ptr<erhe::Item_base>   m_popup_item;
     std::string                        m_popup_id_string;
     unsigned int                       m_popup_id{0};
 

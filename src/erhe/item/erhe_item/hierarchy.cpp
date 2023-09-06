@@ -13,15 +13,44 @@ namespace erhe
 using namespace erhe::item;
 
 
-Hierarchy::Hierarchy() = default;
+Hierarchy::Hierarchy()           = default;
+Hierarchy::~Hierarchy() noexcept = default;
 
-Hierarchy::Hierarchy(std::size_t id)
-    : erhe::Item{id}
+Hierarchy::Hierarchy(const Hierarchy& src)
+    : Item{src}
+    // m_parent is not copied from other
 {
+    m_children.reserve(src.m_children.size());
+    for (const auto& src_child : src.m_children) {
+        std::shared_ptr<erhe::Item_base> base      = src_child->clone();
+        std::shared_ptr<erhe::Hierarchy> dst_child = std::dynamic_pointer_cast<erhe::Hierarchy>(base);
+        if (dst_child) {
+            m_children.push_back(dst_child);
+            dst_child->set_parent(this);
+        }
+    }
 }
 
-Hierarchy::Hierarchy(const std::string_view name, std::size_t id)
-    : erhe::Item{name, id}
+Hierarchy::Hierarchy(const Hierarchy& src, for_clone) : Hierarchy{src} {}
+
+Hierarchy& Hierarchy::operator=(const Hierarchy& src)
+{
+    Item::operator=(src);
+    m_children.reserve(src.m_children.size());
+    m_parent.reset();
+    m_depth = 0;
+    for (const auto& src_child : src.m_children) {
+        auto dst_child = std::dynamic_pointer_cast<erhe::Hierarchy>(src_child->clone());
+        if (dst_child) {
+            m_children.push_back(dst_child);
+            dst_child->set_parent(this);
+        }
+    }
+    return *this;
+}
+
+Hierarchy::Hierarchy(const std::string_view name)
+    : Item<Item_base, Item_base, Hierarchy>{name}
 {
 }
 
@@ -33,7 +62,7 @@ auto Hierarchy::shared_hierarchy_from_this() -> std::shared_ptr<Hierarchy>
 void Hierarchy::remove()
 {
     log->trace(
-        "Item::remove '{}' depth = {} child count = {}",
+        "Hierarchy::remove() '{}' depth = {} child count = {}",
         describe(),
         get_depth(),
         m_children.size()

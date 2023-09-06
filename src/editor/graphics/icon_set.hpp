@@ -9,6 +9,9 @@
 #include <optional>
 #include <vector>
 
+namespace erhe {
+    class Item_base;
+}
 namespace erhe::graphics {
     class Texture;
 }
@@ -22,6 +25,7 @@ namespace lunasvg {
 
 namespace editor {
 
+class Editor_context;
 class Icon_set;
 class Icon_rasterization;
 class Icons;
@@ -83,6 +87,7 @@ public:
     Icon_set(
         erhe::graphics::Instance&    graphics_instance,
         erhe::imgui::Imgui_renderer& imgui_renderer,
+        Editor_context&              editor_context,
         Icon_settings&               icon_settings,
         Programs&                    programs
     );
@@ -94,6 +99,8 @@ public:
         Programs&                    programs
     );
 
+    void item_icon(const std::shared_ptr<erhe::Item_base>& item, float scale);
+
     [[nodiscard]] auto load    (const std::filesystem::path& path) -> glm::vec2;
     [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const glm::vec2;
 
@@ -104,6 +111,7 @@ public:
     void add_icons(uint64_t item_type, float scale);
 
 private:
+    Editor_context&                     m_context;
     int                                 m_row_count   {0};
     int                                 m_column_count{0};
     int                                 m_row         {0};
@@ -113,7 +121,7 @@ private:
     std::unique_ptr<Icon_rasterization> m_hotbar;
 
 public:
-    Icons                                 icons;
+    Icons icons;
 
     class Type_icon
     {

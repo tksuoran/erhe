@@ -216,7 +216,7 @@ private:
     std::vector<std::shared_ptr<Node_raytrace>>     m_node_raytraces;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 
-    std::vector<std::shared_ptr<erhe::Item>>        m_physics_disabled_nodes;
+    std::vector<std::shared_ptr<erhe::Item_base>>   m_physics_disabled_nodes;
 
     std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
     std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_visualization_scene;

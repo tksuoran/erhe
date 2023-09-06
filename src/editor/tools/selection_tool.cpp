@@ -7,9 +7,10 @@
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/insert_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/clipboard.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe_commands/commands.hpp"
@@ -40,7 +41,7 @@ Range_selection::Range_selection(Selection& selection)
 }
 
 void Range_selection::set_terminator(
-    const std::shared_ptr<erhe::Item>& item
+    const std::shared_ptr<erhe::Item_base>& item
 )
 {
     if (!m_primary_terminator) {
@@ -74,7 +75,7 @@ void Range_selection::set_terminator(
 }
 
 void Range_selection::entry(
-    const std::shared_ptr<erhe::Item>& item
+    const std::shared_ptr<erhe::Item_base>& item
 )
 {
     m_entries.push_back(item);
@@ -94,7 +95,7 @@ void Range_selection::end()
     }
     log_selection->trace("setting selection since range was modified");
 
-    std::vector<std::shared_ptr<erhe::Item>> selection;
+    std::vector<std::shared_ptr<erhe::Item_base>> selection;
     bool between_terminators{false};
 
     auto primary_terminator   = m_primary_terminator;
@@ -216,6 +217,55 @@ auto Selection_delete_command::try_call() -> bool
     return m_context.selection->delete_selection();
 }
 
+//
+
+Selection_cut_command::Selection_cut_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           editor_context
+)
+    : Command  {commands, "Selection.cut"}
+    , m_context{editor_context}
+{
+}
+
+auto Selection_cut_command::try_call() -> bool
+{
+    return m_context.selection->cut_selection();
+}
+
+//
+
+Selection_copy_command::Selection_copy_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           editor_context
+)
+    : Command  {commands, "Selection.copy"}
+    , m_context{editor_context}
+{
+}
+
+auto Selection_copy_command::try_call() -> bool
+{
+    return m_context.selection->copy_selection();
+}
+
+//
+
+Selection_duplicate_command::Selection_duplicate_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           editor_context
+)
+    : Command  {commands, "Selection.duplicate"}
+    , m_context{editor_context}
+{
+}
+
+auto Selection_duplicate_command::try_call() -> bool
+{
+    return m_context.selection->duplicate_selection();
+}
+
+
 #pragma endregion Commands
 
 Selection_tool::Selection_tool(
@@ -241,12 +291,22 @@ Selection::Selection(
     , m_viewport_select_command       {commands, editor_context}
     , m_viewport_select_toggle_command{commands, editor_context}
     , m_delete_command                {commands, editor_context}
+    , m_cut_command                   {commands, editor_context}
+    , m_copy_command                  {commands, editor_context}
+    , m_duplicate_command             {commands, editor_context}
     , m_range_selection               {*this}
 {
     commands.register_command            (&m_viewport_select_command);
     commands.register_command            (&m_delete_command);
+    commands.register_command            (&m_cut_command);
+    commands.register_command            (&m_copy_command);
+    commands.register_command            (&m_duplicate_command);
     commands.bind_command_to_mouse_button(&m_viewport_select_command, erhe::window::Mouse_button_left, false);
     commands.bind_command_to_key         (&m_delete_command,          erhe::window::Key_delete,        true);
+    commands.bind_command_to_key         (&m_cut_command,             erhe::window::Key_x,             true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key         (&m_copy_command,            erhe::window::Key_insert,        true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key         (&m_copy_command,            erhe::window::Key_c,             true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key         (&m_duplicate_command,       erhe::window::Key_d,             true, erhe::window::Key_modifier_bit_ctrl);
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
@@ -288,7 +348,7 @@ void Selection_tool::handle_priority_update(
     }
 }
 
-auto Selection::get_selection() const -> const std::vector<std::shared_ptr<erhe::Item>>&
+auto Selection::get_selection() const -> const std::vector<std::shared_ptr<erhe::Item_base>>&
 {
     return m_selection;
 }
@@ -313,7 +373,7 @@ auto Selection::delete_selection() -> bool
                     .context = m_context,
                     .item    = hierarchy,
                     .parent  = hierarchy->get_parent().lock(),
-                    .mode    = Scene_item_operation::Mode::remove,
+                    .mode    = Item_insert_remove_operation::Mode::remove,
                 }
             )
         );
@@ -328,12 +388,75 @@ auto Selection::delete_selection() -> bool
     return true;
 }
 
+auto Selection::cut_selection() -> bool
+{
+    if (m_selection.empty()) {
+        return false;
+    }
+
+    m_context.clipboard->set_contents(m_selection);
+    return delete_selection();
+}
+
+auto Selection::copy_selection() -> bool
+{
+    if (m_selection.empty()) {
+        return false;
+    }
+
+    m_context.clipboard->set_contents(m_selection);
+    return true;
+}
+
+auto Selection::duplicate_selection() -> bool
+{
+    if (m_selection.empty()) {
+        return false;
+    }
+
+    Compound_operation::Parameters compound_parameters{};
+
+    for (const auto& item : m_selection) {
+        const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+        if (hierarchy) {
+            compound_parameters.operations.push_back(
+                std::make_shared<Item_insert_remove_operation>(
+                    Item_insert_remove_operation::Parameters{
+                        .context = m_context,
+                        .item    = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone()),
+                        .parent  = hierarchy->get_parent().lock(),
+                        .mode    = Item_insert_remove_operation::Mode::insert
+                    }
+                )
+            );
+        }
+            //const auto& node_attachment = std::dynamic_pointer_cast<erhe::scene::Node_attachment>(item);
+            //if (node_attachment) {
+            //    compound_parameters.operations.push_back(
+            //        std::make_shared<Node_attach_operation>(
+            //            node_attachment,
+            //            target_node
+            //        )
+            //    );
+            //}
+        //}
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(std::move(compound_parameters))
+    );
+
+    return true; // TODO
+}
+
 auto Selection::range_selection() -> Range_selection&
 {
     return m_range_selection;
 }
 
-auto Selection::get(erhe::Item_filter filter, const std::size_t index) -> std::shared_ptr<erhe::Item>
+auto Selection::get(
+    erhe::Item_filter filter,
+    const std::size_t index
+) -> std::shared_ptr<erhe::Item_base>
 {
     std::size_t i = 0;
     for (const auto& item : m_selection) {
@@ -363,8 +486,8 @@ template <typename T>
 }
 
 auto item_set_sort_predicate(
-    const std::shared_ptr<erhe::Item>& lhs,
-    const std::shared_ptr<erhe::Item>& rhs
+    const std::shared_ptr<erhe::Item_base>& lhs,
+    const std::shared_ptr<erhe::Item_base>& rhs
 ) -> bool {
     const auto lhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(lhs);
     const auto rhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(rhs);
@@ -388,15 +511,15 @@ auto item_set_sort_predicate(
 }
 
 [[nodiscard]] auto get_sorted(
-    const std::vector<std::shared_ptr<erhe::Item>>& in_items
-) -> std::vector<std::shared_ptr<erhe::Item>>
+    const std::vector<std::shared_ptr<erhe::Item_base>>& in_items
+) -> std::vector<std::shared_ptr<erhe::Item_base>>
 {
-    std::vector<std::shared_ptr<erhe::Item>> out_items = in_items;
+    std::vector<std::shared_ptr<erhe::Item_base>> out_items = in_items;
     std::sort(out_items.begin(), out_items.end(), item_set_sort_predicate);
     return out_items;
 }
 
-void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item>>& selection)
+void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item_base>>& selection)
 {
     Scoped_selection_change selection_change{*this};
 
@@ -611,7 +734,7 @@ void Selection::toggle_mesh_selection(
 }
 
 auto Selection::is_in_selection(
-    const std::shared_ptr<erhe::Item>& item
+    const std::shared_ptr<erhe::Item_base>& item
 ) const -> bool
 {
     if (!item) {
@@ -626,7 +749,7 @@ auto Selection::is_in_selection(
 }
 
 auto Selection::add_to_selection(
-    const std::shared_ptr<erhe::Item>& item
+    const std::shared_ptr<erhe::Item_base>& item
 ) -> bool
 {
     Scoped_selection_change selection_change{*this};
@@ -649,7 +772,7 @@ auto Selection::add_to_selection(
 }
 
 auto Selection::remove_from_selection(
-    const std::shared_ptr<erhe::Item>& item
+    const std::shared_ptr<erhe::Item_base>& item
 ) -> bool
 {
     Scoped_selection_change selection_change{*this};
@@ -677,8 +800,8 @@ auto Selection::remove_from_selection(
 }
 
 void Selection::update_selection_from_scene_item(
-    const std::shared_ptr<erhe::Item>& item,
-    const bool                                added
+    const std::shared_ptr<erhe::Item_base>& item,
+    const bool                              added
 )
 {
     Scoped_selection_change selection_change{*this};
@@ -711,7 +834,7 @@ void Selection::sanity_check()
         const auto& scene = scene_root->get_scene();
         const auto& flat_nodes = scene.get_flat_nodes();
         for (const auto& node : flat_nodes) {
-            const auto item = std::static_pointer_cast<erhe::Item>(node);
+            const auto item = std::static_pointer_cast<erhe::Item_base>(node);
             if (
                 node->is_selected() &&
                 !is_in(item, m_selection)

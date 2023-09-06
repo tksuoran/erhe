@@ -297,12 +297,14 @@ void Animation_sampler::apply(
 //
 //
 
+Animation::Animation(const Animation&)            = default;
+Animation& Animation::operator=(const Animation&) = default;
+Animation::~Animation() noexcept                  = default;
+
 Animation::Animation(const std::string_view name)
-    : Item{name, erhe::Unique_id<Animation>{}.get_id()}
+    : Item<Item_base, Item_base, Animation>{name}
 {
 }
-
-Animation::~Animation() noexcept = default;
 
 auto Animation::get_static_type() -> uint64_t
 {
@@ -337,18 +339,6 @@ void Animation::apply(float time_current)
         auto& sampler = samplers.at(channel.sampler_index);
         sampler.apply(channel, time_current);
     }
-}
-
-auto as_animation(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Animation>
-{
-    if (!scene_item) {
-        return {};
-    }
-    using namespace erhe::bit;
-    if (!test_all_rhs_bits_set(scene_item->get_type(), Item_type::physics)) {
-        return {};
-    }
-    return std::static_pointer_cast<Animation>(scene_item);
 }
 
 } // namespace erhe::scene

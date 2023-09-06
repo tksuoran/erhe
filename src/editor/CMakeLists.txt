@@ -3,6 +3,24 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    editor.cpp
+    editor.hpp
+    editor_context.cpp
+    editor_context.hpp
+    editor_log.cpp
+    editor_log.hpp
+    editor_message.hpp
+    editor_message_bus.cpp
+    editor_message_bus.hpp
+    editor_rendering.cpp
+    editor_rendering.hpp
+    editor_scenes.cpp
+    editor_scenes.hpp
+    editor_settings.cpp
+    editor_settings.hpp
+    editor_windows.cpp
+    editor_windows.hpp
+    erhe.ini
     graphics/gradients.cpp
     graphics/gradients.hpp
     graphics/icon_rasterization.cpp
@@ -11,6 +29,10 @@ erhe_target_sources_grouped(
     graphics/icon_set.hpp
     graphics/image_transfer.cpp
     graphics/image_transfer.hpp
+    input_state.cpp
+    input_state.hpp
+    logging.ini
+    main.cpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
@@ -36,6 +58,8 @@ erhe_target_sources_grouped(
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
+    presets.ini
+    renderable.hpp
     renderers/composer.cpp
     renderers/composer.hpp
     renderers/frustum_tiler.cpp
@@ -62,6 +86,60 @@ erhe_target_sources_grouped(
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp
     rendergraph/shadow_render_node.hpp
+    rendertarget_imgui_viewport.cpp
+    rendertarget_imgui_viewport.hpp
+    rendertarget_mesh.cpp
+    rendertarget_mesh.hpp
+    res/shaders/anisotropic_engine_ready.frag
+    res/shaders/anisotropic_engine_ready.vert
+    res/shaders/anisotropic_slope.frag
+    res/shaders/anisotropic_slope.vert
+    res/shaders/brdf_slice.frag
+    res/shaders/brdf_slice.vert
+    res/shaders/brush.frag
+    res/shaders/brush.vert
+    res/shaders/circular_brushed_metal.frag
+    res/shaders/circular_brushed_metal.vert
+    res/shaders/compose.frag
+    res/shaders/compute_before_line.comp
+    res/shaders/depth.frag
+    res/shaders/depth.vert
+    res/shaders/downsample_x.frag
+    res/shaders/downsample_y.frag
+    res/shaders/edge_lines.frag
+    res/shaders/edge_lines.vert
+    res/shaders/error.frag
+    res/shaders/error.vert
+    res/shaders/fat_triangle.frag
+    res/shaders/fat_triangle.geom
+    res/shaders/fat_triangle.vert
+    res/shaders/id.frag
+    res/shaders/id.vert
+    res/shaders/line.frag
+    res/shaders/line.geom
+    res/shaders/line.vert
+    res/shaders/line_after_compute.frag
+    res/shaders/line_after_compute.vert
+    res/shaders/points.frag
+    res/shaders/points.vert
+    res/shaders/post_processing.vert
+    res/shaders/sky.frag
+    res/shaders/sky.vert
+    res/shaders/standard.frag
+    res/shaders/standard.vert
+    res/shaders/standard_debug.frag
+    res/shaders/standard_debug.vert
+    res/shaders/text.frag
+    res/shaders/text.vert
+    res/shaders/textured.frag
+    res/shaders/textured.vert
+    res/shaders/tool.frag
+    res/shaders/tool.vert
+    res/shaders/visualize_depth.frag
+    res/shaders/visualize_depth.vert
+    res/shaders/wide_lines.frag
+    res/shaders/wide_lines.geom
+    res/shaders/wide_lines.vert
     scene/asset_browser.cpp
     scene/asset_browser.hpp
     scene/content_library.cpp
@@ -82,8 +160,6 @@ erhe_target_sources_grouped(
     scene/scene_builder.hpp
     scene/scene_commands.cpp
     scene/scene_commands.hpp
-    #scene/scene_message_bus.cpp
-    #scene/scene_message_bus.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
     scene/scene_view.cpp
@@ -92,41 +168,30 @@ erhe_target_sources_grouped(
     scene/viewport_window.hpp
     scene/viewport_windows.cpp
     scene/viewport_windows.hpp
+    settings.ini
+    task_queue.cpp
+    task_queue.hpp
+    time.cpp
+    time.hpp
     tools/brushes/brush.cpp
     tools/brushes/brush.hpp
     tools/brushes/brush_tool.cpp
     tools/brushes/brush_tool.hpp
     tools/brushes/create/create.cpp
     tools/brushes/create/create.hpp
-    tools/brushes/create/create_preview_settings.hpp
     tools/brushes/create/create_box.cpp
     tools/brushes/create/create_box.hpp
     tools/brushes/create/create_cone.cpp
     tools/brushes/create/create_cone.hpp
+    tools/brushes/create/create_preview_settings.hpp
     tools/brushes/create/create_shape.cpp
     tools/brushes/create/create_shape.hpp
     tools/brushes/create/create_torus.cpp
     tools/brushes/create/create_torus.hpp
     tools/brushes/create/create_uv_sphere.cpp
     tools/brushes/create/create_uv_sphere.hpp
-    tools/transform/handle_enums.cpp
-    tools/transform/handle_enums.hpp
-    tools/transform/handle_visualizations.cpp
-    tools/transform/handle_visualizations.hpp
-    tools/transform/move_tool.cpp
-    tools/transform/move_tool.hpp
-    tools/transform/rotate_tool.cpp
-    tools/transform/rotate_tool.hpp
-    tools/transform/rotation_inspector.cpp
-    tools/transform/rotation_inspector.hpp
-    tools/transform/scale_tool.cpp
-    tools/transform/scale_tool.hpp
-    tools/transform/subtool.cpp
-    tools/transform/subtool.hpp
-    tools/transform/transform_tool.cpp
-    tools/transform/transform_tool.hpp
-    tools/transform/transform_tool_settings.cpp
-    tools/transform/transform_tool_settings.hpp
+    tools/clipboard.cpp
+    tools/clipboard.hpp
     tools/debug_visualizations.cpp
     tools/debug_visualizations.hpp
     tools/fly_camera_tool.cpp
@@ -153,133 +218,61 @@ erhe_target_sources_grouped(
     tools/tool.hpp
     tools/tools.cpp
     tools/tools.hpp
+    tools/transform/handle_enums.cpp
+    tools/transform/handle_enums.hpp
+    tools/transform/handle_visualizations.cpp
+    tools/transform/handle_visualizations.hpp
+    tools/transform/move_tool.cpp
+    tools/transform/move_tool.hpp
+    tools/transform/rotate_tool.cpp
+    tools/transform/rotate_tool.hpp
+    tools/transform/rotation_inspector.cpp
+    tools/transform/rotation_inspector.hpp
+    tools/transform/scale_tool.cpp
+    tools/transform/scale_tool.hpp
+    tools/transform/subtool.cpp
+    tools/transform/subtool.hpp
+    tools/transform/transform_tool.cpp
+    tools/transform/transform_tool.hpp
+    tools/transform/transform_tool_settings.cpp
+    tools/transform/transform_tool_settings.hpp
+    windows.ini
     windows/animation_curve.cpp
     windows/animation_curve.hpp
     windows/brdf_slice.cpp
     windows/brdf_slice.hpp
+    windows/clipboard_window.cpp
+    windows/clipboard_window.hpp
     windows/commands_window.cpp
     windows/commands_window.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
     windows/imgui_viewport_window.cpp
     windows/imgui_viewport_window.hpp
+    windows/item_tree_window.cpp
+    windows/item_tree_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
     windows/network_window.cpp
     windows/network_window.hpp
-    windows/item_tree_window.cpp
-    windows/item_tree_window.hpp
     windows/operations.cpp
     windows/operations.hpp
-    windows/post_processing_window.cpp
-    windows/post_processing_window.hpp
     windows/physics_window.cpp
     windows/physics_window.hpp
+    windows/post_processing_window.cpp
+    windows/post_processing_window.hpp
     windows/properties.cpp
     windows/properties.hpp
     windows/rendergraph_window.cpp
     windows/rendergraph_window.hpp
+    windows/selection_window.cpp
+    windows/selection_window.hpp
     windows/settings_window.cpp
     windows/settings_window.hpp
     windows/tool_properties_window.cpp
     windows/tool_properties_window.hpp
     windows/viewport_config_window.cpp
     windows/viewport_config_window.hpp
-    editor.cpp
-    editor.hpp
-    editor_context.cpp
-    editor_context.hpp
-    editor_log.cpp
-    editor_log.hpp
-    editor_message.hpp
-    editor_message_bus.cpp
-    editor_message_bus.hpp
-    editor_rendering.cpp
-    editor_rendering.hpp
-    editor_scenes.cpp
-    editor_scenes.hpp
-    editor_settings.cpp
-    editor_settings.hpp
-    editor_windows.cpp
-    editor_windows.hpp
-    input_state.cpp
-    input_state.hpp
-    main.cpp
-    renderable.hpp
-    rendertarget_mesh.cpp
-    rendertarget_mesh.hpp
-    rendertarget_imgui_viewport.cpp
-    rendertarget_imgui_viewport.hpp
-    task_queue.cpp
-    task_queue.hpp
-    time.cpp
-    time.hpp
-    res/icons/camera.svg
-    res/icons/directional_light.svg
-    res/icons/drag.svg
-    res/icons/mesh.svg
-    res/icons/move.svg
-    res/icons/node.svg
-    res/icons/point_light.svg
-    res/icons/pull.svg
-    res/icons/push.svg
-    res/icons/rotate.svg
-    res/icons/spot_light.svg
-    res/shaders/anisotropic_engine_ready.frag
-    res/shaders/anisotropic_engine_ready.vert
-    res/shaders/anisotropic_slope.frag
-    res/shaders/anisotropic_slope.vert
-    res/shaders/brdf_slice.frag
-    res/shaders/brdf_slice.vert
-    res/shaders/brush.frag
-    res/shaders/brush.vert
-    res/shaders/circular_brushed_metal.frag
-    res/shaders/circular_brushed_metal.vert
-    res/shaders/compose.frag
-    res/shaders/compute_before_line.comp
-    res/shaders/depth.frag
-    res/shaders/depth.vert
-    res/shaders/downsample_x.frag
-    res/shaders/downsample_y.frag
-    res/shaders/edge_lines.frag
-    res/shaders/edge_lines.vert
-    res/shaders/error.frag
-    res/shaders/error.vert
-    res/shaders/fat_triangle.frag
-    res/shaders/fat_triangle.geom
-    res/shaders/fat_triangle.vert
-    res/shaders/id.frag
-    res/shaders/id.vert
-    res/shaders/line_after_compute.frag
-    res/shaders/line_after_compute.vert
-    res/shaders/line.frag
-    res/shaders/line.geom
-    res/shaders/line.vert
-    res/shaders/points.frag
-    res/shaders/points.vert
-    res/shaders/post_processing.vert
-    res/shaders/sky.frag
-    res/shaders/sky.vert
-    res/shaders/standard_debug.frag
-    res/shaders/standard_debug.vert
-    res/shaders/standard.frag
-    res/shaders/standard.vert
-    res/shaders/text.frag
-    res/shaders/text.vert
-    res/shaders/textured.frag
-    res/shaders/textured.vert
-    res/shaders/tool.frag
-    res/shaders/tool.vert
-    res/shaders/visualize_depth.frag
-    res/shaders/visualize_depth.vert
-    res/shaders/wide_lines.frag
-    res/shaders/wide_lines.geom
-    res/shaders/wide_lines.vert
-    erhe.ini
-    logging.ini
-    presets.ini
-    settings.ini
-    windows.ini
 )
 if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
     erhe_target_sources_grouped(

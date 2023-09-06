@@ -20,17 +20,20 @@ namespace erhe::primitive
 {
 
 class Material
-    : public erhe::Item
+    : public erhe::Item<erhe::Item_base, erhe::Item_base, Material>
 {
 public:
     Material();
+    explicit Material(const Material&);
+    Material& operator=(const Material&);
+    ~Material() noexcept override;
+
     explicit Material(
         const std::string_view name,
         const glm::vec3        base_color = glm::vec3{1.0f, 1.0f, 1.0f},
         const glm::vec2        roughness  = glm::vec2{0.5f, 0.5f},
         const float            metallic   = 0.0f
     );
-    ~Material() override;
 
     // Interface similar to erhe::scene::Scene_item
     static constexpr std::string_view static_type_name{"Material"};

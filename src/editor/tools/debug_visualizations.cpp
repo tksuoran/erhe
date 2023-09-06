@@ -71,16 +71,16 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 }
 
 [[nodiscard]] auto should_visualize(
-    const Visualization_mode           mode,
-    const std::shared_ptr<erhe::Item>& item
+    const Visualization_mode                mode,
+    const std::shared_ptr<erhe::Item_base>& item
 )
 {
     return should_visualize(mode, item->is_selected());
 }
 
 [[nodiscard]] auto should_visualize(
-    const Visualization_mode mode,
-    const erhe::Item* const  item
+    const Visualization_mode     mode,
+    const erhe::Item_base* const item
 )
 {
     return should_visualize(mode, item->is_selected());
@@ -264,7 +264,8 @@ void Debug_visualizations::skin_visualization(
         }
         const mat4 world_from_joint = joint->world_from_node();
 
-        line_renderer.set_line_color(joint->get_wireframe_color());
+        //// line_renderer.set_line_color(joint->get_wireframe_color());
+        line_renderer.set_line_color(glm::vec4{0.0f, 1.0f, 1.0f, 1.0});
         vec3 a = joint->position_in_world();
         vec3 b = a + vec3{0.2f, 0.0f, 0.0f};
 
@@ -651,7 +652,7 @@ void Debug_visualizations::camera_visualization(
     line_renderer.set_thickness(m_camera_visualization_width);
     line_renderer.add_cube(
         world_from_clip,
-        camera->get_wireframe_color(),
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, //// camera->get_wireframe_color(),
         clip_min_corner,
         clip_max_corner,
         true

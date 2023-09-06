@@ -43,14 +43,17 @@ class Brush;
 class Editor_context;
 
 class Content_library_node
-    : public erhe::Hierarchy
+    : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Content_library_node>
 {
 public:
-    Content_library_node(std::string_view folder_name, uint64_t type, std::string_view type_name);
-    Content_library_node(const std::shared_ptr<erhe::Item>& item);
-    ~Content_library_node();
+    explicit Content_library_node(const Content_library_node&);
+    Content_library_node& operator=(const Content_library_node&);
+    ~Content_library_node() noexcept override;
 
-    // Implements Item
+    explicit Content_library_node(const std::shared_ptr<erhe::Item_base>& item);
+    Content_library_node(std::string_view folder_name, uint64_t type, std::string_view type_name);
+
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Content_library_node"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;
@@ -88,9 +91,9 @@ public:
         return result;
     }
 
-    uint64_t                    type_code;
-    std::string                 type_name;
-    std::shared_ptr<erhe::Item> item;
+    uint64_t                         type_code;
+    std::string                      type_name;
+    std::shared_ptr<erhe::Item_base> item;
 };
 
 class Content_library
@@ -170,10 +173,10 @@ auto Content_library_node::combo(
         if ((drag_node_payload == nullptr) && (drag_item_payload == nullptr)) {
             return false;
         }
-        const erhe::Item*           drag_node_ = (drag_node_payload != nullptr) ? *(static_cast<erhe::Item**>(drag_node_payload->Data)) : nullptr;
+        const erhe::Item_base*      drag_node_ = (drag_node_payload != nullptr) ? *(static_cast<erhe::Item_base**>(drag_node_payload->Data)) : nullptr;
         const Content_library_node* drag_node  = dynamic_cast<const Content_library_node*>(drag_node_);
-        const erhe::Item*           drag_item  = (drag_item_payload != nullptr)
-            ? *(static_cast<erhe::Item**>(drag_item_payload->Data))
+        const erhe::Item_base*      drag_item  = (drag_item_payload != nullptr)
+            ? *(static_cast<erhe::Item_base**>(drag_item_payload->Data))
             : drag_node->item.get();
         if (drag_item != nullptr) {
             for_each<Content_library_node>(

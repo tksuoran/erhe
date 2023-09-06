@@ -34,12 +34,18 @@ public:
 };
 
 class Render_style
-    : public erhe::Item
+    : public erhe::Item<erhe::Item_base, erhe::Item_base, Render_style, erhe::Item_kind::not_clonable>
 {
 public:
     Render_style();
-    explicit Render_style(const std::string_view name);
     ~Render_style() noexcept override;
+
+    explicit Render_style(const std::string_view name);
+
+    static constexpr std::string_view static_type_name{"Render_style"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
 
     Render_style_data data;
 };

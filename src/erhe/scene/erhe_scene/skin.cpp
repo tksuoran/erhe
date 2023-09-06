@@ -7,16 +7,13 @@ namespace erhe::scene
 {
 
 
-Skin::Skin()
-{
-}
+Skin::Skin()                       = default;
+Skin::Skin(const Skin&)            = default;
+Skin& Skin::operator=(const Skin&) = default;
+Skin::~Skin() noexcept             = default;
 
 Skin::Skin(const std::string_view name)
-    : Item{name, erhe::Unique_id<Skin>{}.get_id()}
-{
-}
-
-Skin::~Skin() noexcept
+    : Item{name}
 {
 }
 
@@ -42,7 +39,7 @@ auto operator<(const Skin& lhs, const Skin& rhs) -> bool
 
 using namespace erhe::bit;
 
-auto is_skin(const Item* const item) -> bool
+auto is_skin(const Item_base* const item) -> bool
 {
     if (item == nullptr) {
         return false;
@@ -50,12 +47,12 @@ auto is_skin(const Item* const item) -> bool
     return test_all_rhs_bits_set(item->get_type(), Item_type::skin);
 }
 
-auto is_skin(const std::shared_ptr<Item>& item) -> bool
+auto is_skin(const std::shared_ptr<Item_base>& item) -> bool
 {
     return is_skin(item.get());
 }
 
-auto is_bone(const Item* const item) -> bool
+auto is_bone(const Item_base* const item) -> bool
 {
     if (item == nullptr) {
         return false;
@@ -63,7 +60,7 @@ auto is_bone(const Item* const item) -> bool
     return test_all_rhs_bits_set(item->get_type(), Item_type::bone);
 }
 
-auto is_bone(const std::shared_ptr<Item>& item) -> bool
+auto is_bone(const std::shared_ptr<Item_base>& item) -> bool
 {
     return is_bone(item.get());
 }

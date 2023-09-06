@@ -30,7 +30,6 @@ public:
     Normal_style                               normal_style             {Normal_style::corner_normals};
     erhe::graphics::Vertex_attribute_mappings* vertex_attribute_mappings{nullptr};
     bool                                       autocolor                {false};
-
 };
 
 } // namespace erhe::primitive

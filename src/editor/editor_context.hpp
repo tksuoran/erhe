@@ -32,6 +32,8 @@ namespace editor {
 
 class Brdf_slice;
 class Brush_tool;
+class Clipboard;
+class Clipboard_window;
 class Create;
 class Editor_message_bus;
 class Editor_rendering;
@@ -89,6 +91,8 @@ public:
     erhe::window::Context_window*           context_window        {nullptr};
     Brdf_slice*                             brdf_slice            {nullptr};
     Brush_tool*                             brush_tool            {nullptr};
+    Clipboard*                              clipboard             {nullptr};
+    Clipboard_window*                       clipboard_window      {nullptr};
     Create*                                 create                {nullptr};
     Editor_message_bus*                     editor_message_bus    {nullptr};
     Editor_rendering*                       editor_rendering      {nullptr};

@@ -32,19 +32,16 @@ static constexpr const char* grid_plane_type_strings[] = {
 
 auto get_plane_transform(Grid_plane_type plane_type) -> glm::mat4;
 
-class Grid
-    : public erhe::scene::Node_attachment
+class Grid : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Grid>
 {
 public:
-    Grid();
-
-    // Implements Node_attachment
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Grid"};
-    [[nodiscard]] auto get_type     () const -> uint64_t         override;
-    [[nodiscard]] auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
 
     // Public API
-    [[nodiscard]] auto get_name           () const -> const std::string&;
     [[nodiscard]] auto snap_world_position(const glm::vec3& position_in_world) const -> glm::vec3;
     [[nodiscard]] auto snap_grid_position (const glm::vec3& position_in_grid ) const -> glm::vec3;
     [[nodiscard]] auto world_from_grid    () const -> glm::mat4;
@@ -66,7 +63,6 @@ public:
     void set_minor_width(float width) { m_minor_width = width; }
 
 private:
-    std::string     m_name;
     Grid_plane_type m_plane_type      {Grid_plane_type::XZ};
     float           m_rotation        {0.0f}; // Used only if plane type != node
     glm::vec3       m_center          {0.0f}; // Used only if plane type != node

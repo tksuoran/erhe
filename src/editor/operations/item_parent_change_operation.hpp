@@ -25,9 +25,9 @@ namespace editor
 //    class Entry
 //    {
 //    public:
-//        std::shared_ptr<erhe::Item> item;
-//        erhe::Item_data             before;
-//        erhe::Item_data             after;
+//        std::shared_ptr<erhe::Item_base> item;
+//        erhe::Item_data                  before;
+//        erhe::Item_data                  after;
 //    };
 //
 //    // Implements IOperation

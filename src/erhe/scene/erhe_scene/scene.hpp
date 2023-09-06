@@ -53,11 +53,8 @@ class Light_layer
 public:
     Light_layer(const std::string_view name, Layer_id id);
 
-    [[nodiscard]] auto get_light_by_id(
-        const erhe::Unique_id<Node>::id_type id
-    ) const -> std::shared_ptr<Light>;
-
-    [[nodiscard]] auto get_name() const -> const std::string&;
+    [[nodiscard]] auto get_light_by_id(std::size_t id) const -> std::shared_ptr<Light>;
+    [[nodiscard]] auto get_name       ()               const -> const std::string&;
 
     void add   (const std::shared_ptr<Light>& light);
     void remove(const std::shared_ptr<Light>& light);
@@ -68,8 +65,7 @@ public:
     Layer_id                            id;
 };
 
-class Scene
-    : public Item
+class Scene : public erhe::Item<erhe::Item_base, erhe::Item_base, Scene>
 {
 public:
     Scene(
@@ -77,15 +73,17 @@ public:
         const std::string_view          name,
         Scene_host*                     host = nullptr
     );
-    ~Scene();
+    explicit Scene(const Scene& src);
+    Scene& operator=(const Scene& src);
+    ~Scene() noexcept override;
 
-    // Implements Item
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Scene"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
-    // Overrrides Item
+    // Overrrides Item_base
     auto get_item_host() const -> erhe::Item_host* override;
 
     // Public API
@@ -135,8 +133,5 @@ private:
     std::vector<std::shared_ptr<Camera>>      m_cameras;
     bool                                      m_nodes_sorted{false};
 };
-
-[[nodiscard]] auto is_scene(const erhe::Item* value) -> bool;
-[[nodiscard]] auto is_scene(const std::shared_ptr<erhe::Item>& value) -> bool;
 
 } // namespace erhe::scene

@@ -3,7 +3,7 @@
 
 #include "editor_context.hpp"
 #include "editor_settings.hpp"
-#include "operations/insert_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
@@ -191,7 +191,7 @@ void Create::imgui()
                         .context = m_context,
                         .item    = instance_node,
                         .parent  = parent,
-                        .mode    = Scene_item_operation::Mode::insert
+                        .mode    = Item_insert_remove_operation::Mode::insert
                     }
                 );
                 m_context.operation_stack->queue(op);

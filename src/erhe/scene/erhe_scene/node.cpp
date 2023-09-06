@@ -29,6 +29,15 @@ auto Node_transforms::get_next_serial() -> uint64_t
     return ++s_global_update_serial;
 }
 
+Node_data::Node_data() = default;
+
+Node_data::Node_data(const Node_data& src, for_clone)
+    : transforms{src.transforms}
+    , host      {nullptr} // clone is created as not attached to anything
+{
+    // Attachments are handled in Node(const Node&)
+}
+
 auto Node::get_static_type() -> uint64_t
 {
     return erhe::Item_type::node;
@@ -44,15 +53,27 @@ auto Node::get_type_name() const -> std::string_view
     return static_type_name;
 }
 
-Node::Node()
-    : erhe::Hierarchy{erhe::Unique_id<Node>{}.get_id()}
+
+Node::Node() = default;
+Node::Node(const Node&) { ERHE_FATAL("TODO"); }
+Node& Node::operator=(const Node&) { ERHE_FATAL("TODO"); }
+
+Node::Node(const std::string_view name)
+    : Item{name}
 {
 }
 
-
-Node::Node(const std::string_view name)
-    : erhe::Hierarchy{name, erhe::Unique_id<Node>{}.get_id()}
+Node::Node(const Node& src, for_clone)
+    : Item     {src, erhe::for_clone{}}
+    , node_data{src.node_data, erhe::for_clone{}}
 {
+    for (const auto& src_attachment : src.get_attachments()) {
+        auto attachment_clone_item = src_attachment->clone();
+        auto attachment_clone = std::dynamic_pointer_cast<Node_attachment>(attachment_clone_item);
+        if (attachment_clone) {
+            attach(attachment_clone);
+        }
+    }
 }
 
 Node::~Node() noexcept
@@ -623,7 +644,7 @@ auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs)
     return mask;
 }
 
-auto is_node(const Item* const item) -> bool
+auto is_node(const Item_base* const item) -> bool
 {
     if (item == nullptr) {
         return false;
@@ -631,7 +652,7 @@ auto is_node(const Item* const item) -> bool
     return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::node);
 }
 
-auto is_node(const std::shared_ptr<erhe::Item>& item) -> bool
+auto is_node(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     return is_node(item.get());
 }

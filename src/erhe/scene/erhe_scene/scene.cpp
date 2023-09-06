@@ -298,12 +298,23 @@ void Scene::update_node_transforms()
     }
 }
 
+Scene::Scene(const Scene& src)
+    : m_message_bus{src.m_message_bus}
+{
+    ERHE_FATAL("This probably won't work");
+}
+
+Scene& Scene::operator=(const Scene&)
+{
+    ERHE_FATAL("This probably won't work");
+}
+
 Scene::Scene(
     Scene_message_bus&     message_bus,
     const std::string_view name,
     Scene_host* const      host
 )
-    : Item         {name, erhe::Unique_id<Scene>{}.get_id()}
+    : Item         {name}
     , m_message_bus{message_bus}
     , m_host       {host}
     , m_root_node  {std::make_shared<Node>("root")}

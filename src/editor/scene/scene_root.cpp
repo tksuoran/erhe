@@ -319,7 +319,7 @@ auto Scene_root::make_browser_window(
             }
     );
     m_node_tree_window->set_item_callback(
-        [this](const std::shared_ptr<erhe::Item>& item) {
+        [this](const std::shared_ptr<erhe::Item_base>& item) {
             return ImGui::IsDragDropActive() && m_node_tree_window->drag_and_drop_target(item);
         }
     );

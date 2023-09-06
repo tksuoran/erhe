@@ -99,8 +99,7 @@ public:
     erhe::physics::Motion_mode                 motion_mode    {erhe::physics::Motion_mode::e_dynamic};
 };
 
-class Brush
-    : public erhe::Item
+class Brush : public erhe::Item<erhe::Item_base, erhe::Item_base, Brush, erhe::Item_kind::not_clonable>
 {
 public:
     static constexpr float c_scale_factor = 65536.0f;
@@ -117,16 +116,21 @@ public:
     };
 
     explicit Brush(const Brush_data& create_info);
-    Brush         (const Brush&) = delete;
-    void operator=(const Brush&) = delete;
-    Brush         (Brush&& other) noexcept;
-    void operator=(Brush&&)      = delete;
+    Brush           (const Brush&) = delete;
+    Brush& operator=(const Brush&) = delete;
+    Brush           (Brush&& other) noexcept;
+    Brush& operator=(Brush&&) = delete;
 
-    // Implements Item
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Brush"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
+
+    [[nodiscard]] auto clone() const -> std::shared_ptr<Item_base> override
+    {
+        return std::shared_ptr<Item_base>{}; // No clone() for brush
+    }
 
     // Public API
     void late_initialize();

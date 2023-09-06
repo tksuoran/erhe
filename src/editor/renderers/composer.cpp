@@ -5,11 +5,16 @@
 namespace editor
 {
 
+// TODO Do deep copy instead / use Hierarchy
+
+Composer::Composer(const Composer&)            = default;
+Composer& Composer::operator=(const Composer&) = default;
+Composer::~Composer() noexcept                 = default;
+
 Composer::Composer(const std::string_view name)
-    : erhe::Item{name, erhe::Unique_id<Composer>{}.get_id()}
+    : Item{name}
 {
 }
-
 
 [[nodiscard]] auto Composer::get_type() const -> uint64_t
 {

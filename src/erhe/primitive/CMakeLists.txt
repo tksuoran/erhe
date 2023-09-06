@@ -3,6 +3,7 @@ add_library(${_target})
 add_library(erhe::primitive ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_primitive/buffer_info.cpp
     erhe_primitive/buffer_info.hpp
     erhe_primitive/buffer_range.cpp
     erhe_primitive/buffer_range.hpp
@@ -10,6 +11,7 @@ erhe_target_sources_grouped(
     erhe_primitive/buffer_sink.hpp
     erhe_primitive/buffer_writer.cpp
     erhe_primitive/buffer_writer.hpp
+    erhe_primitive/build_info.cpp
     erhe_primitive/build_info.hpp
     erhe_primitive/enums.hpp
     erhe_primitive/format_info.cpp

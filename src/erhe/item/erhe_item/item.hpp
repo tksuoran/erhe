@@ -101,7 +101,8 @@ public:
     static constexpr uint64_t index_physics              = 26;
     static constexpr uint64_t index_raytrace             = 27;
     static constexpr uint64_t index_node_attachment      = 28;
-    static constexpr uint64_t count                      = 29;
+    static constexpr uint64_t index_render_style         = 29;
+    static constexpr uint64_t count                      = 30;
 
     static constexpr uint64_t none                 =  0u;
     static constexpr uint64_t animation            = (1u << index_animation           );
@@ -111,7 +112,6 @@ public:
     static constexpr uint64_t brush                = (1u << index_brush               );
     static constexpr uint64_t camera               = (1u << index_camera              );
     static constexpr uint64_t composer             = (1u << index_composer            );
-    static constexpr uint64_t content_library_node = (1u << index_content_library_node);
     static constexpr uint64_t frame_controller     = (1u << index_frame_controller    );
     static constexpr uint64_t grid                 = (1u << index_grid                );
     static constexpr uint64_t light                = (1u << index_light               );
@@ -119,19 +119,21 @@ public:
     static constexpr uint64_t material             = (1u << index_material            );
     static constexpr uint64_t mesh                 = (1u << index_mesh                );
     static constexpr uint64_t mesh_layer           = (1u << index_mesh_layer          );
-    static constexpr uint64_t node                 = (1u << index_node                );
-    static constexpr uint64_t node_attachment      = (1u << index_node_attachment     );
-    static constexpr uint64_t physics              = (1u << index_physics             );
-    static constexpr uint64_t raytrace             = (1u << index_raytrace            );
     static constexpr uint64_t renderpass           = (1u << index_renderpass          );
     static constexpr uint64_t rendertarget         = (1u << index_rendertarget        );
     static constexpr uint64_t scene                = (1u << index_scene               );
     static constexpr uint64_t skin                 = (1u << index_skin                );
     static constexpr uint64_t texture              = (1u << index_texture             );
+    static constexpr uint64_t node                 = (1u << index_node                );
     static constexpr uint64_t asset_folder         = (1u << index_asset_folder        );
     static constexpr uint64_t asset_file_gltf      = (1u << index_asset_file_gltf     );
     static constexpr uint64_t asset_file_png       = (1u << index_asset_file_png      );
     static constexpr uint64_t asset_file_other     = (1u << index_asset_file_other    );
+    static constexpr uint64_t content_library_node = (1u << index_content_library_node);
+    static constexpr uint64_t physics              = (1u << index_physics             );
+    static constexpr uint64_t raytrace             = (1u << index_raytrace            );
+    static constexpr uint64_t node_attachment      = (1u << index_node_attachment     );
+    static constexpr uint64_t render_style         = (1u << index_render_style        );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -143,7 +145,6 @@ public:
         "Brush",
         "Camera",
         "Composer",
-        "Content_library_node",
         "Frame_controller",
         "Grid",
         "Light",
@@ -151,20 +152,21 @@ public:
         "Material",
         "Mesh",
         "Mesh_layer",
-        "Node",
-        "Node_attachment",
-        "None",
-        "Physics",
-        "Raytrace",
         "Renderpass",
         "Rendertarget",
         "Scene",
         "Skin",
         "Texture",
+        "Node",
         "Asset Folder",
         "Asset File Folder",
         "Asset File glTF",
-        "Asset File Other"
+        "Asset File Other",
+        "Content_library_node",
+        "Physics",
+        "Raytrace",
+        "Node_attachment",
+        "Render style"
     };
 };
 
@@ -181,23 +183,63 @@ public:
     uint64_t require_at_least_one_bit_clear{0};
 };
 
-class Item
-    : public std::enable_shared_from_this<Item>
+// https://herbsutter.com/2019/10/03/gotw-ish-solution-the-clonable-pattern/
+
+enum class Item_kind : unsigned int {
+    clone_using_copy_constructor = 0,
+    clone_using_custom_clone_constructor,
+    not_clonable
+};
+using for_clone = bool;
+
+template <typename T>
+class Clonable_base
 {
 public:
-    Item() = default;
-    explicit Item(std::size_t id) : m_id{id} {}
-    Item(const std::string_view name, std::size_t id) : m_id{id} { set_name(name); }
-    virtual ~Item() noexcept = default;
+    [[nodiscard]] virtual auto clone() const -> std::shared_ptr<T> {
+        return std::make_shared<T>(static_cast<const T&>(*this));
+    }
+};
 
-    [[nodiscard]] virtual auto get_type     () const -> uint64_t { return 0; }
-    [[nodiscard]] virtual auto get_type_name() const -> std::string_view { return "Item"; }
-    [[nodiscard]] virtual auto get_item_host() const -> Item_host* { return nullptr; }
+template <typename Base, typename Intermediate, typename Self, Item_kind kind = Item_kind::clone_using_copy_constructor>
+class Item
+    : public Intermediate
+{
+public:
+    using Intermediate::Intermediate;
+    auto clone() const -> std::shared_ptr<Base> override {
+        if constexpr (kind == Item_kind::clone_using_copy_constructor) {
+            return std::make_shared<Self>(static_cast<const Self&>(*this));
+        } else if constexpr(kind == Item_kind::clone_using_custom_clone_constructor) {
+            return std::make_shared<Self>(static_cast<const Self&>(*this), for_clone{});
+        } else if constexpr(kind == Item_kind::not_clonable) {
+            return std::shared_ptr<Base>{};
+        }
+    }
+};
+
+class Item_base
+    : public std::enable_shared_from_this<Item_base>
+    , public Clonable_base<Item_base>
+{
+public:
+    Item_base();
+
+    Item_base(const std::string_view name);
+    Item_base(const Item_base& other);
+    Item_base& operator=(const Item_base& other);
+    virtual ~Item_base() noexcept;
+
+    [[nodiscard]] virtual auto get_type     () const -> uint64_t         { return 0; };
+    [[nodiscard]] virtual auto get_type_name() const -> std::string_view { return "Item_base"; };
+    [[nodiscard]] virtual auto get_item_host() const -> Item_host*       { return nullptr; }
+
     virtual void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) {
         static_cast<void>(old_flag_bits);
         static_cast<void>(new_flag_bits);
     }
 
+    [[nodiscard]] auto get_id() const -> std::size_t;
     [[nodiscard]] auto get_flag_bits               () const -> uint64_t;
     [[nodiscard]] auto is_no_transform_update      () const -> bool;
     [[nodiscard]] auto is_transform_world_normative() const -> bool;
@@ -205,43 +247,38 @@ public:
     [[nodiscard]] auto is_visible                  () const -> bool;
     [[nodiscard]] auto is_shown_in_ui              () const -> bool;
     [[nodiscard]] auto is_hidden                   () const -> bool;
-    [[nodiscard]] auto get_wireframe_color         () const -> glm::vec4;
     [[nodiscard]] auto get_source_path             () const -> const std::filesystem::path&;
     [[nodiscard]] auto get_name                    () const -> const std::string&;
     [[nodiscard]] auto get_label                   () const -> const std::string&;
-    [[nodiscard]] auto get_id                      () const -> std::size_t;
     [[nodiscard]] auto describe                    (int level = 0) const -> std::string;
 
     void set_flag_bits    (uint64_t mask, bool value);
     void enable_flag_bits (uint64_t mask);
     void disable_flag_bits(uint64_t mask);
-
-    void set_name           (const std::string_view name);
-    void set_selected       (bool value);
-    void set_visible        (bool value);
-    void show               ();
-    void hide               ();
-    void set_wireframe_color(const glm::vec4& color);
-    void set_source_path    (const std::filesystem::path& path);
+    void set_name         (const std::string_view name);
+    void set_selected     (bool value);
+    void set_visible      (bool value);
+    void show             ();
+    void hide             ();
+    void set_source_path  (const std::filesystem::path& path);
 
 protected:
-    uint64_t              m_flag_bits      {Item_flags::none};
-    glm::vec4             m_wireframe_color{0.6f, 0.7f, 0.8f, 0.7f};
-    std::string           m_name           {};
-    std::string           m_label          {};
-    std::filesystem::path m_source_path    {};
-    std::size_t           m_id             {0};
+    Unique_id<Item_base>  m_id         {};
+    uint64_t              m_flag_bits  {Item_flags::none};
+    std::string           m_name       {};
+    std::string           m_label      {};
+    std::filesystem::path m_source_path{};
 };
 
 template <typename T>
-auto is(const erhe::Item* const base) -> bool
+auto is(const erhe::Item_base* const base) -> bool
 {
     auto ptr = dynamic_cast<const T*>(base);
     return ptr != nullptr;
 }
 
 template <typename T>
-auto is(const std::shared_ptr<erhe::Item>& base) -> bool
+auto is(const std::shared_ptr<erhe::Item_base>& base) -> bool
 {
     return static_cast<bool>(std::dynamic_pointer_cast<T>(base));
 }

@@ -20,15 +20,17 @@ public:
     Transform clip_from_world;
 };
 
-class Camera
-    : public Node_attachment
+class Camera : public erhe::Item<Item_base, Node_attachment, Camera>
 {
 public:
     Camera();
-    explicit Camera(const std::string_view name);
+    explicit Camera(const Camera&);
+    Camera& operator=(const Camera&);
     ~Camera() noexcept override;
 
-    // Implements Item
+    explicit Camera(const std::string_view name);
+
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Camera"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;
@@ -53,8 +55,8 @@ private:
     float      m_shadow_range{22.0f};
 };
 
-[[nodiscard]] auto is_camera(const Item* scene_item) -> bool;
-[[nodiscard]] auto is_camera(const std::shared_ptr<Item>& scene_item) -> bool;
+[[nodiscard]] auto is_camera(const Item_base* item) -> bool;
+[[nodiscard]] auto is_camera(const std::shared_ptr<Item_base>& item) -> bool;
 
 auto get_camera(const erhe::scene::Node* node) -> std::shared_ptr<Camera>;
 

@@ -8,7 +8,7 @@
 #include <memory>
 
 namespace erhe {
-    class Item;
+    class Item_base;
 }
 namespace erhe::imgui {
     class Imgui_windows;
@@ -55,8 +55,8 @@ private:
     void rendertarget_properties (Rendertarget_mesh& rendertarget) const;
     void node_physics_properties (Node_physics& node_physics) const;
     void node_raytrace_properties(Node_raytrace& node_raytrace) const;
-    void item_flags              (const std::shared_ptr<erhe::Item>& item);
-    void item_properties         (const std::shared_ptr<erhe::Item>& item);
+    void item_flags              (const std::shared_ptr<erhe::Item_base>& item);
+    void item_properties         (const std::shared_ptr<erhe::Item_base>& item);
 
     Editor_context& m_context;
 };

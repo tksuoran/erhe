@@ -38,8 +38,7 @@ public:
     Transform    texture_from_world;
 };
 
-class Light
-    : public Node_attachment
+class Light : public erhe::Item<Item_base, Node_attachment, Light>
 {
 public:
     using Type = Light_type;
@@ -50,10 +49,13 @@ public:
         "Spot"
     };
 
-    explicit Light(const std::string_view name);
+    explicit Light(const Light&);
+    Light& operator=(const Light&);
     ~Light() noexcept override;
 
-    // Implements Item
+    explicit Light(const std::string_view name);
+
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Light"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;
@@ -66,15 +68,15 @@ public:
     [[nodiscard]] auto projection           (const Light_projection_parameters& parameters) const -> Projection;
     [[nodiscard]] auto projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
-    Type      type             {Type::directional};
-    glm::vec3 color            {1.0f, 1.0f, 1.0f};
-    float     intensity        {1.0f};
-    float     range            {100.0f}; // TODO projection far?
-    float     inner_spot_angle {glm::pi<float>() * 0.4f};
-    float     outer_spot_angle {glm::pi<float>() * 0.5f};
-    bool      cast_shadow      {true};
-    bool      tight_frustum_fit{false};
-    erhe::Unique_id<Light_layer>::id_type layer_id{};
+    Type        type             {Type::directional};
+    glm::vec3   color            {1.0f, 1.0f, 1.0f};
+    float       intensity        {1.0f};
+    float       range            {100.0f}; // TODO projection far?
+    float       inner_spot_angle {glm::pi<float>() * 0.4f};
+    float       outer_spot_angle {glm::pi<float>() * 0.5f};
+    bool        cast_shadow      {true};
+    bool        tight_frustum_fit{false};
+    std::size_t layer_id         {};
 
 private:
     [[nodiscard]] auto stable_directional_light_projection(const Light_projection_parameters& parameters) const -> Projection;
@@ -106,8 +108,8 @@ private:
     };
 };
 
-[[nodiscard]] auto is_light(const Item* scene_item) -> bool;
-[[nodiscard]] auto is_light(const std::shared_ptr<Item>& scene_item) -> bool;
+[[nodiscard]] auto is_light(const Item_base* item) -> bool;
+[[nodiscard]] auto is_light(const std::shared_ptr<Item_base>& item) -> bool;
 
 auto get_light(const erhe::scene::Node* node) -> std::shared_ptr<Light>;
 
