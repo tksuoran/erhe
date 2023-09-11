@@ -34,7 +34,6 @@ namespace editor
 class Editor_context;
 class Editor_settings;
 class Node_physics;
-class Node_raytrace;
 class Raytrace_primitive;
 
 class Reference_frame

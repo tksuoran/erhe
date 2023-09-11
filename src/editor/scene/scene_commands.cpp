@@ -230,7 +230,7 @@ auto Scene_commands::create_new_rendertarget(
         2048,
         600.0f
     );
-    new_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
+    new_mesh->layer_id = scene_root->layers().rendertarget()->id;
     new_mesh->enable_flag_bits(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::visible      |
@@ -249,8 +249,6 @@ auto Scene_commands::create_new_rendertarget(
         erhe::Item_flags::visible      |
         erhe::Item_flags::show_in_ui
     );
-    auto node_raytrace = std::make_shared<Node_raytrace>(new_mesh);
-    new_node->attach(node_raytrace);
 
     auto rendertarget_imgui_viewport = std::make_shared<Rendertarget_imgui_viewport>(
         *m_context.imgui_renderer,
@@ -267,7 +265,7 @@ auto Scene_commands::create_new_rendertarget(
         }
     );
 
-    new_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
+    new_mesh->layer_id = scene_root->layers().rendertarget()->id;
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(
             Compound_operation::Parameters{

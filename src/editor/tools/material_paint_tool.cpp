@@ -172,7 +172,7 @@ auto Material_paint_tool::on_paint() -> bool
     if (!hover.valid || (hover.mesh == nullptr)) {
         return false;
     }
-    auto& hover_primitive = hover.mesh->mesh_data.primitives.at(hover.primitive_index);
+    auto& hover_primitive = hover.mesh->get_mutable_primitives().at(hover.primitive_index);
     hover_primitive.material = m_material;
 
     return true;
@@ -188,7 +188,7 @@ auto Material_paint_tool::on_pick() -> bool
     if (!hover.valid || (hover.mesh == nullptr)) {
         return false;
     }
-    auto& hover_primitive = hover.mesh->mesh_data.primitives.at(hover.primitive_index);
+    auto& hover_primitive = hover.mesh->get_primitives().at(hover.primitive_index);
     m_material = hover_primitive.material;
 
     return true;

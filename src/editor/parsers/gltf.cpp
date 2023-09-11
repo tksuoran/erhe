@@ -3,7 +3,6 @@
 #include "parsers/gltf.hpp"
 
 #include "scene/content_library.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_file/file.hpp"

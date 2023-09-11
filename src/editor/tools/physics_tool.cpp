@@ -442,7 +442,7 @@ auto Physics_tool::on_drag() -> bool
         m_grab_position_world = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_grab_position_in_node, 1.0f}};
 
         float max_radius = 0.0f;
-        for (const auto& primitive : m_target_mesh->mesh_data.primitives) {
+        for (const auto& primitive : m_target_mesh->get_primitives()) {
             const auto& geometry_primitive = primitive.geometry_primitive;
             if (!geometry_primitive) {
                 continue;

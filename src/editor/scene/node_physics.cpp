@@ -28,6 +28,7 @@ Node_physics::Node_physics(const Node_physics& src, erhe::for_clone)
     , markers            {}        // clone does not initially have markers
     , physics_motion_mode{src.physics_motion_mode}
     , m_physics_world    {nullptr} // clone is initially detached
+    , m_create_info      {src.m_create_info}
     , m_rigid_body       {}        // clone rigid body is not initially created
 {
 }

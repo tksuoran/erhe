@@ -132,7 +132,8 @@ void Rendertarget_mesh::resize_rendertarget(
         std::move(geometry)
     );
 
-    mesh_data.primitives.emplace_back(
+    clear_primitives();
+    add_primitive(
         erhe::primitive::Primitive{
             .material           = m_material,
             .geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(

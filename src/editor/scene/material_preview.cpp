@@ -188,7 +188,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
 {
     m_node = std::make_shared<erhe::scene::Node>("Material Preview Node");
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
-    m_mesh->mesh_data.primitives.push_back(
+    m_mesh->add_primitive(
         erhe::primitive::Primitive{
             .geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
                 erhe::primitive::make_geometry_mesh(
@@ -208,7 +208,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     );
 
     using Item_flags = erhe::Item_flags;
-    m_mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
+    m_mesh->layer_id = m_scene_root->layers().content()->id;
     m_mesh->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::opaque);
     m_node->attach          (m_mesh);
     m_node->enable_flag_bits(Item_flags::content | Item_flags::visible);
@@ -278,7 +278,7 @@ void Material_preview::render_preview(
     m_content_library->materials->add(material);
     m_last_material = material;
 
-    m_mesh->mesh_data.primitives.front().material = material;
+    m_mesh->get_mutable_primitives().front().material = material;
 
     const erhe::math::Viewport viewport{0, 0, m_width, m_height};
 

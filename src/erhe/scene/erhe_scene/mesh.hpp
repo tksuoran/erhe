@@ -11,46 +11,71 @@
 namespace erhe::geometry {
     class Geometry;
 }
+namespace erhe::raytrace {
+    class IGeometry;
+    class IInstance;
+    class IScene;
+    class Hit;
+    class Ray;
+}
 
 namespace erhe::scene
 {
 
 using Layer_id = uint64_t;
 
+class Raytrace_primitive;
 class Skin;
 
-class Mesh_data
-{
-public:
-    Layer_id                                layer_id{0xff};
-    std::vector<erhe::primitive::Primitive> primitives;
-    std::shared_ptr<Skin>                   skin;
-    float                                   point_size{3.0f};
-    float                                   line_width{1.0f};
-};
-
 class Mesh
-    : public erhe::Item<Item_base, Node_attachment, Mesh>
+    : public erhe::Item<Item_base, Node_attachment, Mesh, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
-    Mesh();
-    explicit Mesh(const Mesh& src);
-    Mesh& operator=(const Mesh& src);
+    Mesh(); // default
+    explicit Mesh(Mesh&&);
+    Mesh& operator=(Mesh&&);
     ~Mesh() noexcept override;
+
+    explicit Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
 
     explicit Mesh(const std::string_view name);
     Mesh(const std::string_view name, const erhe::primitive::Primitive primitive);
+    Mesh(const Mesh&, erhe::for_clone);
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Mesh"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    auto get_type               () const -> uint64_t                             override;
+    auto get_type_name          () const -> std::string_view                     override;
+    void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
     // Implements Node_attachment
-    void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
+    void handle_item_host_update     (erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
+    void handle_node_transform_update()                                                               override;
 
-    Mesh_data mesh_data;
+    // Public API
+    void clear_primitives    ();
+    void add_primitive       (erhe::primitive::Primitive primitive);
+    void set_primitives      (const std::vector<erhe::primitive::Primitive>& primitives);
+    void set_rt_mask         (uint32_t rt_mask);
+    void attach_rt_to_scene  (erhe::raytrace::IScene* rt_scene);
+    void detach_rt_from_scene();
+    void update_rt_mask      ();
+    [[nodiscard]] auto get_mutable_primitives()       ->       std::vector<erhe::primitive::Primitive>&;
+    [[nodiscard]] auto get_primitives        () const -> const std::vector<erhe::primitive::Primitive>&;
+    [[nodiscard]] auto get_rt_scene          () const -> erhe::raytrace::IScene*;
+    [[nodiscard]] auto get_rt_primitives     () const -> const std::vector<Raytrace_primitive>&;
+
+    Layer_id              layer_id{0xff};
+    std::shared_ptr<Skin> skin;
+    float                 point_size{3.0f};
+    float                 line_width{1.0f};
+
+private:
+    std::vector<erhe::primitive::Primitive> m_primitives;
+    erhe::raytrace::IScene*                 m_rt_scene{nullptr};
+    std::vector<Raytrace_primitive>         m_rt_primitives;
 };
 
 [[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;

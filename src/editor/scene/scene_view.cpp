@@ -6,7 +6,6 @@
 #include "editor_log.hpp"
 
 #include "editor_message_bus.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/grid.hpp"
 #include "tools/grid_tool.hpp"
@@ -19,6 +18,7 @@
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -325,7 +325,7 @@ void Scene_view::update_hover_with_raytrace()
         entry.valid = (hit.instance != nullptr);
         if (entry.valid) {
             void* node_instance_user_data = hit.instance->get_user_data();
-            auto* raytrace_primitive      = static_cast<Raytrace_primitive*>(node_instance_user_data);
+            auto* raytrace_primitive      = static_cast<erhe::scene::Raytrace_primitive*>(node_instance_user_data);
             ERHE_VERIFY(raytrace_primitive != nullptr);
             entry.uv                      = hit.uv;
             entry.position                = ray.origin + ray.t_far * ray.direction;
@@ -336,9 +336,9 @@ void Scene_view::update_hover_with_raytrace()
             ERHE_VERIFY(entry.mesh != nullptr);
             auto* const node = entry.mesh->get_node();
             ERHE_VERIFY(node != nullptr);
-            auto& mesh_data = entry.mesh->mesh_data;
-            ERHE_VERIFY(raytrace_primitive->primitive_index < mesh_data.primitives.size());
-            const auto& primitive = entry.mesh->mesh_data.primitives[raytrace_primitive->primitive_index];
+            const auto& mesh_primitives = entry.mesh->get_primitives();
+            ERHE_VERIFY(raytrace_primitive->primitive_index < mesh_primitives.size());
+            const auto& primitive = mesh_primitives[raytrace_primitive->primitive_index];
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit node: {}", Hover_entry::slot_names[slot], node->get_name());
             ERHE_VERIFY(raytrace_primitive->rt_instance);
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: RT instance {}", Hover_entry::slot_names[slot], raytrace_primitive->rt_instance->is_enabled());
@@ -369,10 +369,7 @@ void Scene_view::update_hover_with_raytrace()
     }
 }
 
-auto Scene_view::get_closest_point_on_line(
-    const glm::vec3 P0,
-    const glm::vec3 P1
-) -> std::optional<glm::vec3>
+auto Scene_view::get_closest_point_on_line(const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3>
 {
     ERHE_PROFILE_FUNCTION();
 

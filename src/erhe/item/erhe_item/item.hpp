@@ -212,7 +212,7 @@ public:
             return std::make_shared<Self>(static_cast<const Self&>(*this));
         } else if constexpr(kind == Item_kind::clone_using_custom_clone_constructor) {
             return std::make_shared<Self>(static_cast<const Self&>(*this), for_clone{});
-        } else if constexpr(kind == Item_kind::not_clonable) {
+        } else { // if constexpr(kind == Item_kind::not_clonable) {
             return std::shared_ptr<Base>{};
         }
     }

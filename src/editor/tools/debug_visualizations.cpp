@@ -26,6 +26,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_bit/bit_helpers.hpp"
@@ -164,7 +165,7 @@ void Debug_visualizations::mesh_visualization(
         ? used_camera_node->world_from_node_transform()
         : Trs_transform{};
 
-    for (const auto& primitive : mesh->mesh_data.primitives) {
+    for (const auto& primitive : mesh->get_primitives()) {
         if (!primitive.geometry_primitive) {
             continue;
         }
@@ -938,11 +939,7 @@ void Debug_visualizations::raytrace_nodes_visualization(
             continue;
         }
 
-        const auto& node_raytrace = get_node_raytrace(node);
-        if (!node_raytrace) {
-            continue;
-        }
-        for (const auto& rt_primitive : node_raytrace->get_rt_primitives()) {
+        for (const auto& rt_primitive : mesh->get_rt_primitives()) {
             const auto m = rt_primitive.rt_instance->get_transform();
             line_renderer.add_lines( m, red,   {{ O, axis_x }} );
             line_renderer.add_lines( m, green, {{ O, axis_y }} );
@@ -972,7 +969,7 @@ void Debug_visualizations::mesh_labels(
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     const glm::mat4 world_from_node = node->world_from_node();
-    for (auto& primitive : mesh->mesh_data.primitives) {
+    for (const auto& primitive : mesh->get_primitives()) {
         const auto& geometry_primitive = primitive.geometry_primitive;
         if (!geometry_primitive) {
             continue;
@@ -1228,8 +1225,8 @@ void Debug_visualizations::render(
     // Visualize each skin only once.
     std::set<erhe::scene::Skin*> skins;
     for (const auto& mesh : scene_root->layers().content()->meshes) {
-        if (mesh->mesh_data.skin && should_visualize(m_skins, mesh)) {
-            skins.insert(mesh->mesh_data.skin.get());
+        if (mesh->skin && should_visualize(m_skins, mesh)) {
+            skins.insert(mesh->skin.get());
         }
     }
     for (auto* skin : skins) {

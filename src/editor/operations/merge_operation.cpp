@@ -6,7 +6,6 @@
 #include "operations/merge_operation.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -98,16 +97,13 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         mat4 transform;
-        const auto node_physics  = get_node_physics(node);
-        const auto node_raytrace = get_node_raytrace(node);
+        const auto node_physics = get_node_physics(node);
 
-        //rt_primitive = std::make_shared<Raytrace_primitive>(geometry);
         Entry source_entry{
             .mesh          = mesh,
             .node          = std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this()),
             .before_parent = node->get_parent_node(),
             .node_physics  = node_physics,
-            .node_raytrace = node_raytrace
         };
 
         ERHE_VERIFY(source_entry.before_parent);
@@ -118,7 +114,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             transform                 = mat4{1};
             first_mesh                = false;
             m_selection_after.push_back(mesh);
-            m_first_mesh_primitives_before = mesh->mesh_data.primitives;
+            m_first_mesh_primitives_before = mesh->get_primitives();
         } else {
             transform = reference_node_from_world * node->world_from_node();
         }
@@ -136,7 +132,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             }
         }
 
-        for (auto& primitive : mesh->mesh_data.primitives) {
+        for (auto& primitive : mesh->get_primitives()) {
             const auto& render_geometry = primitive.geometry_primitive->source_geometry;
             if (render_geometry) {
                 combined_render_geometry.merge(*render_geometry, transform);
@@ -189,11 +185,6 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             )
         }
     );
-
-    m_combined_node_raytrace = std::make_shared<Node_raytrace>(
-        m_sources.front().mesh,
-        m_first_mesh_primitives_after
-    );
 }
 
 void Merge_operation::execute(Editor_context& context)
@@ -223,7 +214,7 @@ void Merge_operation::execute(Editor_context& context)
 
         if (first_entry) {
             // For first mesh: Replace mesh primitives
-            mesh->mesh_data.primitives = m_first_mesh_primitives_after;
+            mesh->set_primitives(m_first_mesh_primitives_after);
 
             auto old_node_physics = get_node_physics(node);
             if (old_node_physics) {
@@ -231,14 +222,6 @@ void Merge_operation::execute(Editor_context& context)
             }
             if (m_combined_node_physics) {
                 node->attach(m_combined_node_physics);
-            }
-
-            auto old_node_raytrace = get_node_raytrace(node);
-            if (old_node_raytrace) {
-                node->detach(old_node_raytrace.get());
-            }
-            if (m_combined_node_raytrace) {
-                node->attach(m_combined_node_raytrace);
             }
 
             first_entry = false;
@@ -273,7 +256,7 @@ void Merge_operation::undo(Editor_context& context)
 
         if (first_entry) {
             first_entry = false;
-            mesh->mesh_data.primitives = m_first_mesh_primitives_before;
+            mesh->set_primitives(m_first_mesh_primitives_before);
 
             auto old_node_physics = get_node_physics(node);
             if (old_node_physics) {
@@ -281,14 +264,6 @@ void Merge_operation::undo(Editor_context& context)
             }
             if (entry.node_physics) {
                 node->attach(entry.node_physics);
-            }
-
-            auto old_node_raytrace = get_node_raytrace(node);
-            if (old_node_raytrace) {
-                node->detach(old_node_raytrace.get());
-            }
-            if (entry.node_raytrace) {
-                node->attach(entry.node_raytrace);
             }
         } else {
             node->set_parent(entry.before_parent);

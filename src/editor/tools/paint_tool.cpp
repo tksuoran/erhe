@@ -93,7 +93,7 @@ auto vertex_id_from_corner_id(
     const erhe::geometry::Corner_id corner_id
 ) -> std::optional<uint32_t>
 {
-    for (const auto& primitive : mesh.mesh_data.primitives) {
+    for (const auto& primitive : mesh.get_primitives()) {
         const auto& geometry_primitive = primitive.geometry_primitive;
         if (geometry_primitive) {
             if (geometry_primitive->source_geometry.get() == &geometry) {
@@ -263,7 +263,7 @@ void Paint_tool::paint_vertex(
 
     std::vector<std::uint8_t> buffer;
 
-    for (const auto& primitive : mesh.mesh_data.primitives) {
+    for (const auto& primitive : mesh.get_primitives()) {
         const auto& geometry_primitive = primitive.geometry_primitive;
         if (!geometry_primitive) {
             continue;
@@ -441,7 +441,7 @@ void Paint_tool::imgui()
                     continue;
                 }
             }
-            for (const auto& primitive : mesh->mesh_data.primitives) {
+            for (const auto& primitive : mesh->get_primitives()) {
                 const auto& geometry_primitive = primitive.geometry_primitive;
                 if (!geometry_primitive) {
                     continue;

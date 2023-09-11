@@ -199,7 +199,7 @@ auto Node::get_attachment_count(const erhe::Item_filter& filter) const -> std::s
 
 void Node::handle_add_attachment(
     const std::shared_ptr<Node_attachment>& attachment,
-    const std::size_t                       position
+    std::size_t                             position
 )
 {
     ERHE_VERIFY(attachment);
@@ -213,6 +213,7 @@ void Node::handle_add_attachment(
 #endif
 
     log->trace("'{}'::handle_add_attachment '{}'", describe(), attachment->get_name());
+    position = std::min(node_data.attachments.size(), position);
     node_data.attachments.insert(node_data.attachments.begin() + position, attachment);
 }
 

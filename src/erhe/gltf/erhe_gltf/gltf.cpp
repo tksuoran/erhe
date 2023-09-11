@@ -1525,7 +1525,7 @@ private:
         Geometry_entry geometry_entry;
         get_primitive_geometry(primitive, geometry_entry);
 
-        erhe_mesh->mesh_data.primitives.push_back(
+        erhe_mesh->add_primitive(
             erhe::primitive::Primitive{
                 .material        = (primitive->material != nullptr)
                     ? m_data_out.materials.at(primitive->material - m_data->materials)
@@ -1589,7 +1589,7 @@ private:
 
         auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
         erhe_mesh->set_source_path(m_path);
-        erhe_mesh->mesh_data.layer_id = m_mesh_layer_id;
+        erhe_mesh->layer_id = m_mesh_layer_id;
         m_data_out.meshes[mesh_index] = erhe_mesh;
         erhe_mesh->enable_flag_bits(
             Item_flags::content     |
@@ -1648,7 +1648,7 @@ private:
             const auto erhe_mesh = m_data_out.meshes[mesh_index];
             if (node->skin != nullptr) {
                 const cgltf_size skin_index = node->skin - m_data->skins;
-                erhe_mesh->mesh_data.skin = m_data_out.skins[skin_index];
+                erhe_mesh->skin = m_data_out.skins[skin_index];
             }
             erhe_node->attach(erhe_mesh);
         }

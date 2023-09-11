@@ -3,7 +3,6 @@
 #include "editor_settings.hpp"
 #include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/node_raytrace.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_geometry/operation/clone.hpp"
@@ -392,11 +391,9 @@ auto Brush::make_instance(
         instance_create_info.material->material_buffer_index
     );
 
-    auto node = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
-    auto mesh = std::make_shared<erhe::scene::Mesh>( //instance_create_info.scene_root->content_library()->meshes.make(
-        fmt::format("{} mesh", name)
-    );
-    mesh->mesh_data.primitives.push_back(
+    auto node = std::make_shared<erhe::scene::Node>(name);
+    auto mesh = std::make_shared<erhe::scene::Mesh>(name);
+    mesh->add_primitive(
         erhe::primitive::Primitive{
             .material           = instance_create_info.material,
             .geometry_primitive = scaled.geometry_primitive,
@@ -405,7 +402,7 @@ auto Brush::make_instance(
 
     ERHE_VERIFY(instance_create_info.scene_root != nullptr);
 
-    mesh->mesh_data.layer_id = instance_create_info.scene_root->layers().content()->id;
+    mesh->layer_id = instance_create_info.scene_root->layers().content()->id;
     mesh->enable_flag_bits   (instance_create_info.mesh_flags);
     node->set_world_from_node(instance_create_info.world_from_node);
     node->attach             (mesh);

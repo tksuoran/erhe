@@ -19,6 +19,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
@@ -157,7 +158,7 @@ Scene_root::Scene_root(
         }
     );
 
-    m_raytrace_visualization_scene = erhe::raytrace::IScene::create_unique("rt_root_scene");
+    m_raytrace_scene = erhe::raytrace::IScene::create_unique("rt_root_scene");
 
     if (editor_scenes != nullptr) {
         register_to_editor_scenes(*editor_scenes);
@@ -386,25 +387,34 @@ void Scene_root::unregister_camera(const std::shared_ptr<erhe::scene::Camera>& c
     }
 }
 
+auto Scene_root::get_node_rt_mask(erhe::scene::Node* node) -> uint32_t
+{
+    uint32_t mask = 0;
+    if (node != nullptr) {
+        for (const auto& node_attachment : node->get_attachments()) {
+            mask = mask | raytrace_node_mask(*node_attachment.get());
+        }
+        log_raytrace->info("RT node attach to {}, mask = {}", node->get_name(), m_scene->get_name(), mask);
+    }
+
+    return mask;
+}
+
 void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
 
-    // Automatically add Node_raytrace to every mesh added to Scene_root
-    auto* node = mesh->get_node();
-    ERHE_VERIFY(node != nullptr);
-    std::shared_ptr<Node_raytrace> node_raytrace = get_node_raytrace(node);
-    if (!node_raytrace) {
-        node_raytrace = std::make_shared<Node_raytrace>(mesh);
-        node->attach(node_raytrace);
-    }
+    log_scene->info("Registering Mesh '{}' into scene", mesh->get_name());
+
+    mesh->attach_rt_to_scene(m_raytrace_scene.get());
+    mesh->set_rt_mask(get_node_rt_mask(mesh->get_node())); // TODO If scene changes, the mesh/node masks need to be updated somehow
 
     if (m_scene) {
         m_scene->register_mesh(mesh);
     }
 
-    if (mesh->mesh_data.skin) {
-        register_skin(mesh->mesh_data.skin);
+    if (mesh->skin) {
+        register_skin(mesh->skin);
     }
 
     if (is_rendertarget(mesh)) {
@@ -414,7 +424,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
     // Make sure materials are in the material library
     auto& material_library = content_library()->materials;
-    for (const auto& primitive : mesh->mesh_data.primitives) {
+    for (const auto& primitive : mesh->get_primitives()) {
         if (!primitive.material) {
             continue;
         }
@@ -424,6 +434,12 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
 void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
+    ERHE_VERIFY(mesh);
+
+    log_scene->info("Unregistering Mesh '{}' from scene", mesh->get_name());
+
+    mesh->detach_rt_from_scene(); //m_raytrace_scene.get());
+
     if (is_rendertarget(mesh)) {
         const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
         const auto rendertarget = std::dynamic_pointer_cast<Rendertarget_mesh>(mesh);
@@ -435,8 +451,8 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         }
     }
 
-    if (mesh->mesh_data.skin) {
-        unregister_skin(mesh->mesh_data.skin);
+    if (mesh->skin) {
+        unregister_skin(mesh->skin);
     }
 
     if (m_scene) {
@@ -578,63 +594,6 @@ void Scene_root::after_physics_simulation_steps()
     }
 }
 
-void Scene_root::register_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace)
-{
-    log_raytrace->trace("RT add {} node {} to {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
-    if (!m_raytrace_visualization_scene) {
-        return;
-    }
-
-#ifndef NDEBUG
-    const auto i = std::find(m_node_raytraces.begin(), m_node_raytraces.end(), node_raytrace);
-    if (i != m_node_raytraces.end()) {
-        auto* node = node_raytrace->get_node();
-        log_raytrace->error("Node_raytrace for '{}' already in {}", (node != nullptr) ? node->get_name().c_str() : "", m_scene->get_name());
-    } else
-#endif
-    {
-        m_node_raytraces.push_back(node_raytrace);
-    }
-
-    node_raytrace->attach_to_scene(m_raytrace_visualization_scene.get());
-
-    uint32_t mask = 0;
-    for (const auto& node_attachment : node_raytrace->get_node()->get_attachments()) {
-        mask = mask | raytrace_node_mask(*node_attachment.get());
-    }
-    node_raytrace->set_mask(mask);
-    log_raytrace->trace("RT {} node {} attached to {}, mask = {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name(), mask);
-}
-
-void Scene_root::unregister_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace)
-{
-    log_raytrace->trace("RT remove {} node {} from {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
-    if (!m_raytrace_visualization_scene) {
-        return;
-    }
-
-    const auto i = std::remove(
-        m_node_raytraces.begin(),
-        m_node_raytraces.end(),
-        node_raytrace
-    );
-    if (i == m_node_raytraces.end()) {
-        auto* node = node_raytrace->get_node();
-        log_raytrace->error("Node_raytrace for '{}' not in {}", (node != nullptr) ? node->get_name().c_str() : "", m_scene->get_name());
-        for (const auto& entry : m_node_raytraces) {
-            Scene_root* root = static_cast<Scene_root*>(entry->get_item_host());
-            log_raytrace->info("  - {} {} {}" , entry->get_label(), entry->get_node()->get_name(), root->get_hosted_scene()->get_name());
-        }
-    } else {
-        m_node_raytraces.erase(i, m_node_raytraces.end());
-    }
-
-    //erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
-    //m_raytrace_visualization_scene->detach(rt_instance);
-    node_raytrace->detach_from_scene(m_raytrace_visualization_scene.get());
-    log_raytrace->trace("RT {} node {} detached from {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
-}
-
 [[nodiscard]] auto Scene_root::layers() -> Scene_layers&
 {
     return m_layers;
@@ -653,8 +612,8 @@ auto Scene_root::get_physics_world() -> erhe::physics::IWorld&
 
 auto Scene_root::get_raytrace_scene() -> erhe::raytrace::IScene&
 {
-    ERHE_VERIFY(m_raytrace_visualization_scene);
-    return *m_raytrace_visualization_scene.get();
+    ERHE_VERIFY(m_raytrace_scene);
+    return *m_raytrace_scene.get();
 }
 
 auto Scene_root::get_scene() -> erhe::scene::Scene&

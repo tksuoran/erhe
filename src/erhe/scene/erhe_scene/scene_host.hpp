@@ -10,6 +10,7 @@ namespace erhe::scene
 class Camera;
 class Light;
 class Mesh;
+class Mesh_raytrace;
 class Node;
 class Scene;
 class Skin;

@@ -1135,7 +1135,7 @@ private:
         }
 
         const cgltf_size material_index = primitive->material - m_data->materials;
-        erhe_mesh->mesh_data.primitives.push_back(
+        erhe_mesh->add_primitive(
             erhe::primitive::Primitive{
                 .material           = m_materials.at(material_index),
                 .geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
@@ -1209,7 +1209,7 @@ private:
             parse_primitive(erhe_mesh, mesh, i);
         }
 
-        erhe_mesh->mesh_data.layer_id = 0;
+        erhe_mesh->layer_id = 0;
     }
     void parse_node(
         const cgltf_node*                  node,
@@ -1258,7 +1258,7 @@ private:
             const cgltf_size mesh_index = node->mesh - m_data->meshes;
             if (node->skin != nullptr) {
                 const cgltf_size skin_index = node->skin - m_data->skins;
-                m_meshes[mesh_index]->mesh_data.skin = m_skins[skin_index];
+                m_meshes[mesh_index]->skin = m_skins[skin_index];
             }
             erhe_node->attach(m_meshes[mesh_index]);
         }

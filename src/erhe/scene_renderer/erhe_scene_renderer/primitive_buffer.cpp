@@ -97,8 +97,7 @@ auto Primitive_buffer::update(
             continue;
         }
 
-        const auto& mesh_data = mesh->mesh_data;
-        primitive_count += mesh_data.primitives.size();
+        primitive_count += mesh->get_primitives().size();
     }
 
     auto&             buffer             = current_buffer();
@@ -127,14 +126,13 @@ auto Primitive_buffer::update(
             break;
         }
 
-        const auto&     mesh_data       = mesh->mesh_data;
         const glm::mat4 world_from_node = node->world_from_node();
 
         // TODO Use compute shader
         const glm::mat4 world_from_node_cofactor = erhe::math::compute_cofactor(world_from_node);
 
         std::size_t mesh_primitive_index{0};
-        for (const auto& primitive : mesh_data.primitives) {
+        for (const auto& primitive : mesh->get_primitives()) {
             if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
                 log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
                 ERHE_FATAL("primitive buffer capacity exceeded");
@@ -163,7 +161,7 @@ auto Primitive_buffer::update(
             const glm::vec3 id_offset_vec3   = erhe::math::vec3_from_uint(m_id_offset);
             const glm::vec4 id_offset_vec4   = glm::vec4{id_offset_vec3, 0.0f};
             const uint32_t  material_index   = (primitive.material != nullptr) ? primitive.material->material_buffer_index : 0u;
-            const auto      skin             = mesh_data.skin;
+            const auto      skin             = mesh->skin;
             const float     skinning_factor  = skin ? 1.0f : 0.0f;
             const uint32_t  base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0;
 
@@ -173,8 +171,8 @@ auto Primitive_buffer::update(
                 (settings.color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(wireframe_color        ) :
                                                                                           as_span(settings.constant_color);
             const auto size_span =
-                (settings.size_source == Primitive_size_source::mesh_point_size) ? as_span(mesh_data.point_size   ) :
-                (settings.size_source == Primitive_size_source::mesh_line_width) ? as_span(mesh_data.line_width   ) :
+                (settings.size_source == Primitive_size_source::mesh_point_size) ? as_span(mesh->point_size      ) :
+                (settings.size_source == Primitive_size_source::mesh_line_width) ? as_span(mesh->line_width      ) :
                                                                                    as_span(settings.constant_size);
             //memset(reinterpret_cast<uint8_t*>(model_gpu_data.data()) + offset, 0, entry_size);
             {

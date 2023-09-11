@@ -406,7 +406,7 @@ void Viewport_window::update_hover_with_id_render()
     if (entry.mesh != nullptr) {
         const erhe::scene::Node* node = entry.mesh->get_node();
         ERHE_VERIFY(node != nullptr);
-        const auto& primitive          = entry.mesh->mesh_data.primitives[entry.primitive_index];
+        const auto& primitive          = entry.mesh->get_primitives()[entry.primitive_index];
         const auto& geometry_primitive = primitive.geometry_primitive;
         ERHE_VERIFY(geometry_primitive);
         entry.geometry = geometry_primitive->source_geometry;

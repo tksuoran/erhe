@@ -52,7 +52,7 @@ auto Draw_indirect_buffer::update(
         if (!filter(mesh->get_flag_bits())) {
             continue;
         }
-        primitive_count += mesh->mesh_data.primitives.size();
+        primitive_count += mesh->get_primitives().size();
     }
 
     auto&             buffer         = current_buffer();
@@ -74,7 +74,7 @@ auto Draw_indirect_buffer::update(
             break;
         }
 
-        for (auto& primitive : mesh->mesh_data.primitives) {
+        for (auto& primitive : mesh->get_primitives()) {
             const auto& geometry_mesh = primitive.geometry_primitive->gl_geometry_mesh;
             const auto  index_range   = geometry_mesh.index_range(primitive_mode);
             if (index_range.index_count == 0) {

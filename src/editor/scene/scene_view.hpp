@@ -45,7 +45,6 @@ class Editor_context;
 class Editor_message;
 class Editor_message_bus;
 class Grid;
-class Node_raytrace;
 class Raytrace_primitive;
 class Scene_root;
 class Shadow_render_node;

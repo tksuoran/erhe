@@ -184,10 +184,7 @@ void Hierarchy::set_parent(
     }
 
     if (new_parent) {
-        new_parent->handle_add_child(
-            shared_this,
-            position
-        );
+        new_parent->handle_add_child(shared_this, position);
     } else {
         log->trace("Now orphan: '{}'", describe());
     }

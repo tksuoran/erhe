@@ -15,7 +15,7 @@ namespace editor
 
 class Editor_context;
 class Node_physics;
-class Node_raytrace;
+class Mesh_raytrace;
 
 class Merge_operation
     : public IOperation
@@ -43,13 +43,11 @@ private:
         std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<erhe::scene::Node> before_parent;
         std::shared_ptr<Node_physics>      node_physics;
-        std::shared_ptr<Node_raytrace>     node_raytrace;
     };
 
     Parameters                                                 m_parameters;
     std::vector<Entry>                                         m_sources;
     std::shared_ptr<Node_physics>                              m_combined_node_physics;
-    std::shared_ptr<Node_raytrace>                             m_combined_node_raytrace;
     std::vector<erhe::primitive::Primitive>                    m_first_mesh_primitives_before{};
     std::vector<erhe::primitive::Primitive>                    m_first_mesh_primitives_after{};
 

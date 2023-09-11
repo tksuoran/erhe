@@ -11,6 +11,8 @@ erhe_target_sources_grouped(
     erhe_scene/light.hpp
     erhe_scene/mesh.cpp
     erhe_scene/mesh.hpp
+    erhe_scene/mesh_raytrace.cpp
+    erhe_scene/mesh_raytrace.hpp
     erhe_scene/node.cpp
     erhe_scene/node.hpp
     erhe_scene/node_attachment.cpp

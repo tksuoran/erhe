@@ -9,7 +9,6 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/render_context.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/brushes/brush.hpp"
@@ -353,8 +352,14 @@ void Brush_tool::update_mesh_node_transform()
         m_brush_node->set_parent_from_node(transform);
     }
 
-    auto& primitive = m_brush_mesh->mesh_data.primitives.front();
-    primitive.geometry_primitive = brush_scaled.geometry_primitive;
+    auto material = m_brush_mesh->get_primitives().front().material;
+    m_brush_mesh->clear_primitives();
+    m_brush_mesh->add_primitive(
+        erhe::primitive::Primitive{
+            .material           = material,
+            .geometry_primitive = brush_scaled.geometry_primitive
+        }
+    );
 }
 
 void Brush_tool::do_insert_operation()
@@ -468,7 +473,7 @@ void Brush_tool::add_brush_mesh()
         erhe::Item_flags::no_message
     );
 
-    m_brush_mesh->mesh_data.layer_id = scene_root->layers().brush()->id;
+    m_brush_mesh->layer_id = scene_root->layers().brush()->id;
 
     m_brush_node->attach(m_brush_mesh);
     m_brush_node->set_parent(scene_root->get_scene().get_root_node());

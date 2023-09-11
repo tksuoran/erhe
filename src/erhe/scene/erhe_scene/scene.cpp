@@ -446,7 +446,7 @@ void Scene::unregister_camera(const std::shared_ptr<Camera>& camera)
 void Scene::register_mesh(const std::shared_ptr<Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
-    auto mesh_layer = get_mesh_layer_by_id(mesh->mesh_data.layer_id);
+    auto mesh_layer = get_mesh_layer_by_id(mesh->layer_id);
     if (mesh_layer) {
         mesh_layer->add(mesh);
     } else {
@@ -457,7 +457,7 @@ void Scene::register_mesh(const std::shared_ptr<Mesh>& mesh)
 void Scene::unregister_mesh(const std::shared_ptr<Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
-    auto mesh_layer = get_mesh_layer_by_id(mesh->mesh_data.layer_id);
+    auto mesh_layer = get_mesh_layer_by_id(mesh->layer_id);
     if (mesh_layer) {
         mesh_layer->remove(mesh);
     } else {

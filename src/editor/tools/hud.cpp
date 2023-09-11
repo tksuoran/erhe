@@ -165,7 +165,7 @@ Hud::Hud(
         config.ppm
     );
     auto scene_root = scene_builder.get_scene_root();
-    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
+    m_rendertarget_mesh->layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::visible      |
@@ -181,9 +181,6 @@ Hud::Hud(
         erhe::Item_flags::visible      |
         erhe::Item_flags::show_in_ui
     );
-
-    m_node_raytrace = std::make_shared<Node_raytrace>(m_rendertarget_mesh);
-    m_rendertarget_node->attach(m_node_raytrace);
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         imgui_renderer,

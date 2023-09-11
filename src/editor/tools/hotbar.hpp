@@ -35,7 +35,6 @@ class Editor_message_bus;
 class Hotbar;
 class Icon_set;
 class Mesh_memory;
-class Node_raytrace;
 class Rendertarget_imgui_viewport;
 class Rendertarget_mesh;
 class Scene_builder;
@@ -136,7 +135,6 @@ private:
     std::shared_ptr<erhe::scene::Node>              m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>              m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport>    m_rendertarget_imgui_viewport;
-    std::shared_ptr<Node_raytrace>                  m_node_raytrace;
     //Scene_view*                                     m_hover_scene_view{nullptr};
 
     std::shared_ptr<erhe::scene::Node>              m_radial_menu_node;

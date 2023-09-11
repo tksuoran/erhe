@@ -202,7 +202,7 @@ void Hotbar::init_hotbar()
         4000.0f
     );
     const auto scene_root = m_context.scene_builder->get_scene_root();
-    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
+    m_rendertarget_mesh->layer_id = scene_root->layers().rendertarget()->id;
 
     m_rendertarget_mesh->enable_flag_bits(
         erhe::Item_flags::visible     |
@@ -220,9 +220,6 @@ void Hotbar::init_hotbar()
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
     m_rendertarget_node->attach(m_rendertarget_mesh);
-
-    m_node_raytrace = std::make_shared<Node_raytrace>(m_rendertarget_mesh);
-    m_rendertarget_node->attach(m_node_raytrace);
 
     m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
@@ -280,7 +277,7 @@ void Hotbar::init_radial_menu(
     const auto  root_node  = scene->get_root_node();
     ERHE_VERIFY(scene != nullptr);
     ERHE_VERIFY(root_node);
-    m_radial_menu_background_mesh->mesh_data.layer_id = scene_root.layers().content()->id;
+    m_radial_menu_background_mesh->layer_id = scene_root.layers().content()->id;
 
     m_radial_menu_background_mesh->enable_flag_bits(
         erhe::Item_flags::content     |
@@ -611,13 +608,12 @@ void Hotbar::set_visibility(const bool value)
     if (m_rendertarget_mesh) {
         m_rendertarget_imgui_viewport->set_enabled(value);
         m_rendertarget_mesh->set_visible(value);
-        m_node_raytrace->set_visible(value);
-        log_hud->trace("horizontal menu visibility set to {}", value);
+        log_hud->trace("Horizontal menu visibility set to {}", value);
     }
 
     if (m_radial_menu_background_mesh) {
         m_radial_menu_background_mesh->set_visible(value);
-        log_hud->trace("radial menu visibility set to {}", value);
+        log_hud->trace("Radial menu visibility set to {}", value);
     }
 }
 

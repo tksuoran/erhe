@@ -5,6 +5,7 @@
 
 #include "erhe_renderer/line_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
@@ -43,233 +44,6 @@ auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
     return result;
 }
 
-Raytrace_primitive::Raytrace_primitive(Raytrace_primitive&&)            = default;
-Raytrace_primitive& Raytrace_primitive::operator=(Raytrace_primitive&&) = default;
-Raytrace_primitive::~Raytrace_primitive() noexcept                      = default;
-
-Raytrace_primitive::Raytrace_primitive(
-    erhe::scene::Mesh*         mesh,
-    std::size_t                primitive_index,
-    erhe::raytrace::IGeometry* rt_geometry
-)
-    : mesh           {mesh}
-    , primitive_index{primitive_index}
-{
-    const std::string name = fmt::format("{}[{}]", mesh->get_name(), primitive_index);
-    rt_instance = erhe::raytrace::IInstance::create_unique(name);
-    rt_scene    = erhe::raytrace::IScene::create_unique(name);
-    rt_instance->set_user_data(this);
-    rt_instance->set_scene(rt_scene.get());
-    rt_scene   ->attach(rt_geometry);
-    if (mesh->is_visible()) {
-        rt_instance->enable();
-    } else {
-        rt_instance->disable();
-    }
-    rt_scene   ->commit();
-    rt_instance->commit();
-}
-
-Node_raytrace::Node_raytrace(
-    const std::shared_ptr<erhe::scene::Mesh>& mesh
-)
-{
-    initialize(mesh, mesh->mesh_data.primitives);
-}
-
-Node_raytrace::Node_raytrace(
-    const std::shared_ptr<erhe::scene::Mesh>&      mesh,
-    const std::vector<erhe::primitive::Primitive>& primitives
-)
-{
-    initialize(mesh, primitives);
-}
-
-Node_raytrace::Node_raytrace(const Node_raytrace& src, erhe::for_clone)
-    : Item      {src, erhe::for_clone{}}
-    , m_rt_scene{nullptr} // clone is created detached
-{
-    const erhe::scene::Node* node = src.get_node();
-    if (node == nullptr) {
-        return;
-    }
-    const std::shared_ptr<erhe::scene::Mesh> mesh = get_mesh(node);
-    if (!mesh) {
-        return;
-    }
-    initialize(mesh, mesh->mesh_data.primitives);
-}
-
-Node_raytrace::Node_raytrace(Node_raytrace&&) = default;
-Node_raytrace& Node_raytrace::operator=(Node_raytrace&&) = default;
-
-Node_raytrace::~Node_raytrace() noexcept
-{
-    if (m_rt_scene != nullptr) {
-        detach_from_scene(m_rt_scene);
-    }
-}
-
-void Node_raytrace::initialize(
-    const std::shared_ptr<erhe::scene::Mesh>&      mesh,
-    const std::vector<erhe::primitive::Primitive>& primitives
-)
-{
-    for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
-        const auto primitive = primitives[i];
-        const auto& geometry_primitive = primitive.geometry_primitive;
-        if (!geometry_primitive) {
-            continue;
-        }
-        const auto& rt_geometry = geometry_primitive->raytrace.rt_geometry;
-        if (rt_geometry) {
-            m_rt_primitives.emplace_back(mesh.get(), i, rt_geometry.get());
-        } else {
-            log_raytrace->info("No raytrace geometry in {}", mesh->get_name());
-        }
-    }
-}
-
-auto Node_raytrace::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node_attachment | erhe::Item_type::raytrace;
-}
-
-auto Node_raytrace::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Node_raytrace::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
-void Node_raytrace::handle_item_host_update(
-    erhe::Item_host* const old_item_host,
-    erhe::Item_host* const new_item_host
-)
-{
-    ERHE_VERIFY(old_item_host != new_item_host);
-    Scene_root* old_scene_root = static_cast<Scene_root*>(old_item_host);
-    Scene_root* new_scene_root = static_cast<Scene_root*>(new_item_host);
-    log_raytrace->trace(
-        "RT {} node {} old host = {} new host = {}",
-        get_label(), get_node()->get_name(),
-        (old_scene_root != nullptr) ? old_scene_root->get_name().c_str() : "",
-        (new_scene_root != nullptr) ? new_scene_root->get_name().c_str() : ""
-    );
-
-    // NOTE: This also keeps this alive if old host has the only shared_ptr to it
-    const auto shared_this = std::static_pointer_cast<Node_raytrace>(shared_from_this());
-
-    if (old_item_host != nullptr) {
-        old_scene_root->unregister_node_raytrace(shared_this);
-    }
-    if (new_item_host != nullptr) {
-        new_scene_root->register_node_raytrace(shared_this);
-    }
-}
-
-void Node_raytrace::handle_node_transform_update()
-{
-    ERHE_PROFILE_FUNCTION();
-
-    for (auto& rt_primitive : m_rt_primitives) {
-        rt_primitive.rt_instance->set_transform(m_node->world_from_node());
-        rt_primitive.rt_instance->commit();
-    }
-}
-
-void Node_raytrace::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
-{
-    const bool visibility_changed = (
-        (old_flag_bits ^ new_flag_bits) & erhe::Item_flags::visible
-    ) == erhe::Item_flags::visible;
-    if (!visibility_changed) {
-        return;
-    }
-
-    for (auto& rt_primitive : m_rt_primitives) {
-        const bool visible = (new_flag_bits & erhe::Item_flags::visible) == erhe::Item_flags::visible;
-        if (visible && !rt_primitive.rt_instance->is_enabled()) {
-            rt_primitive.rt_instance->enable();
-        } else if (!visible && rt_primitive.rt_instance->is_enabled()) {
-            rt_primitive.rt_instance->disable();
-        }
-    }
-}
-
-void Node_raytrace::properties_imgui()
-{
-    ImGui::Text("%d instances", static_cast<int>(m_rt_primitives.size()));
-    for (auto& rt_primitive : m_rt_primitives) {
-        ImGui::BulletText(
-            "%s %s",
-            rt_primitive.rt_instance->debug_label().data(),
-            rt_primitive.rt_instance->is_enabled() ? "Enabled" : "Disabled"
-        );
-    }
-}
-
-auto Node_raytrace::get_rt_primitives() const -> const std::vector<Raytrace_primitive>&
-{
-    return m_rt_primitives;
-}
-
-void Node_raytrace::set_mask(const uint32_t mask)
-{
-    for (auto& rt_primitive : m_rt_primitives) {
-        rt_primitive.rt_instance->set_mask(mask);
-    }
-}
-
-void Node_raytrace::attach_to_scene(erhe::raytrace::IScene* rt_scene)
-{
-    ERHE_VERIFY(rt_scene != nullptr);
-    ERHE_VERIFY(m_rt_scene == nullptr);
-    for (auto& rt_primitive : m_rt_primitives) {
-        rt_scene->attach(rt_primitive.rt_instance.get());
-    }
-    m_rt_scene = rt_scene;
-}
-
-void Node_raytrace::detach_from_scene(erhe::raytrace::IScene* rt_scene)
-{
-    ERHE_VERIFY(rt_scene == m_rt_scene);
-    ERHE_VERIFY(m_rt_scene != nullptr);
-    for (auto& rt_primitive : m_rt_primitives) {
-        rt_scene->detach(rt_primitive.rt_instance.get());
-    }
-    m_rt_scene = nullptr;
-}
-
-auto is_raytrace(const erhe::Item_base* const item) -> bool
-{
-    if (item == nullptr) {
-        return false;
-    }
-    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::raytrace);
-}
-
-auto is_raytrace(const std::shared_ptr<erhe::Item_base>& item) -> bool
-{
-    return is_raytrace(item.get());
-}
-
-auto get_node_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>
-{
-    if (node == nullptr) {
-        return {};
-    }
-    for (const auto& attachment : node->get_attachments()) {
-        auto node_raytrace = std::dynamic_pointer_cast<Node_raytrace>(attachment);
-        if (node_raytrace) {
-            return node_raytrace;
-        }
-    }
-    return {};
-}
 
 [[nodiscard]] auto get_hit_node(const erhe::raytrace::Hit& hit) -> erhe::scene::Node*
 {
@@ -278,17 +52,13 @@ auto get_node_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_ra
     }
 
     void* const user_data          = hit.instance->get_user_data();
-    auto* const raytrace_primitive = static_cast<Raytrace_primitive*>(user_data);
+    auto* const raytrace_primitive = static_cast<erhe::scene::Raytrace_primitive*>(user_data);
     if (raytrace_primitive == nullptr) {
         log_raytrace->error("This should not happen");
         return nullptr;
     }
 
-    auto* const mesh = raytrace_primitive->mesh;
-    if (mesh == nullptr) {
-        log_raytrace->error("This should not happen");
-        return nullptr;
-    }
+    auto* mesh = raytrace_primitive->mesh;
     return mesh->get_node();
 }
 
@@ -299,28 +69,30 @@ auto get_node_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_ra
     }
 
     void* const user_data          = hit.instance->get_user_data();
-    auto* const raytrace_primitive = static_cast<Raytrace_primitive*>(user_data);
+    auto* const raytrace_primitive = static_cast<erhe::scene::Raytrace_primitive*>(user_data);
     if (raytrace_primitive == nullptr) {
         log_raytrace->error("This should not happen");
         return {};
     }
-    auto* const mesh = raytrace_primitive->mesh;
+    auto* mesh = raytrace_primitive->mesh;
     if (mesh == nullptr) {
         log_raytrace->error("This should not happen");
         return {};
     }
-    auto* const node = mesh->get_node();
+    auto* node = mesh->get_node();
     if (node == nullptr) {
         log_raytrace->error("This should not happen");
         return {};
     }
 
-    if (raytrace_primitive->primitive_index >= mesh->mesh_data.primitives.size()) {
+    const auto& mesh_primitives = mesh->get_primitives();
+
+    if (raytrace_primitive->primitive_index >= mesh_primitives.size()) {
         log_raytrace->error("This should not happen");
         return {};
     }
 
-    const auto& primitive = mesh->mesh_data.primitives[raytrace_primitive->primitive_index];
+    const auto& primitive = mesh_primitives[raytrace_primitive->primitive_index];
     if (!primitive.geometry_primitive) {
         log_raytrace->error("This should not happen");
         return {};
@@ -423,16 +195,14 @@ void draw_ray_hit(
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::scene::Node*             ignore_node     = ignore_mesh->get_node();
-    std::shared_ptr<Node_raytrace> ignore_raytrace = get_node_raytrace(ignore_node);
     bool stored_visibility_state{false};
-    if (ignore_raytrace) {
-        stored_visibility_state = ignore_raytrace->is_visible();
-        ignore_raytrace->hide();
+    if (ignore_mesh != nullptr) {
+        stored_visibility_state = ignore_mesh->is_visible();
+        ignore_mesh->hide();
     }
     ERHE_DEFER(
-        if (ignore_raytrace) {
-            ignore_raytrace->set_visible(stored_visibility_state);
+        if (ignore_mesh != nullptr) {
+            ignore_mesh->set_visible(stored_visibility_state);
         }
     );
 

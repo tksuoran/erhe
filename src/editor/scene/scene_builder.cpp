@@ -176,7 +176,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
             1080,  // height
             2000.0f // pixels per meter
         );
-        rendertarget_mesh_1->mesh_data.layer_id = Mesh_layer_id::rendertarget;
+        rendertarget_mesh_1->layer_id = Mesh_layer_id::rendertarget;
         rendertarget_node_1->attach(rendertarget_mesh_1);
         rendertarget_node_1->set_parent(test_scene_root->get_scene().get_root_node());
 
@@ -263,7 +263,7 @@ auto Scene_builder::make_camera(
     vec3             look_at
 ) -> std::shared_ptr<erhe::scene::Camera>
 {
-    auto node   = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
+    auto node   = std::make_shared<erhe::scene::Node>(name);
     auto camera = std::make_shared<erhe::scene::Camera>(name);
     camera->projection()->fov_y           = glm::radians(35.0f);
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
@@ -798,7 +798,7 @@ void Scene_builder::make_brushes(
         using erhe::scene::Transform;
         auto make_mesh_node = [&](const char* name, const Transform& transform) {
             auto mesh = std::make_shared<erhe::scene::Mesh>(name);
-            mesh->mesh_data.primitives.push_back(
+            mesh->add_primitive(
                 erhe::primitive::Primitive{
                     .material           = aniso_material,
                     .geometry_primitive = geometry_primitive
@@ -809,7 +809,7 @@ void Scene_builder::make_brushes(
                 Item_flags::content |
                 Item_flags::opaque
             );
-            mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
+            mesh->layer_id = m_scene_root->layers().content()->id;
 
             auto node = std::make_shared<erhe::scene::Node>(name);
             node->attach              (mesh);
@@ -1097,7 +1097,7 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
                 const vec3 pos{scale * x_rel, 1.0f + scale * y_rel, scale * z_rel};
                 auto node = std::make_shared<erhe::scene::Node>();
                 auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
-                mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
+                mesh->layer_id = m_scene_root->layers().content()->id;
                 mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast | Item_flags::opaque);
                 node->attach(mesh);
                 node->set_world_from_node(erhe::math::create_translation<float>(pos));
@@ -1116,7 +1116,7 @@ auto Scene_builder::make_directional_light(
     const float            intensity
 ) -> std::shared_ptr<Light>
 {
-    auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
+    auto node  = std::make_shared<erhe::scene::Node>(name);
     auto light = std::make_shared<erhe::scene::Light>(name);
     light->type      = Light::Type::directional;
     light->color     = color;
@@ -1147,7 +1147,7 @@ auto Scene_builder::make_spot_light(
     const vec2             spot_cone_angle
 ) -> std::shared_ptr<Light>
 {
-    auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
+    auto node  = std::make_shared<erhe::scene::Node>(name);
     auto light = std::make_shared<erhe::scene::Light>(name);
     light->type             = Light::Type::spot;
     light->color            = color;

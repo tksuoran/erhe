@@ -53,6 +53,7 @@ namespace erhe::scene {
     class Light_layer;
     class Mesh;
     class Mesh_layer;
+    class Mesh_raytrace;
     class Message_bus;
     class Node;
     class Scene;
@@ -69,7 +70,6 @@ class Editor_scenes;
 class Editor_settings;
 class Item_tree_window;
 class Node_physics;
-class Node_raytrace;
 class Raytrace_primitive;
 class Rendertarget_mesh;
 class Scene_root;
@@ -143,23 +143,20 @@ public:
     void register_to_editor_scenes    (Editor_scenes& editor_scenes);
     void unregister_from_editor_scenes(Editor_scenes& editor_scenes);
 
-    void register_node          (const std::shared_ptr<erhe::scene::Node>&   node)   override;
-    void unregister_node        (const std::shared_ptr<erhe::scene::Node>&   node)   override;
-    void register_camera        (const std::shared_ptr<erhe::scene::Camera>& camera) override;
-    void unregister_camera      (const std::shared_ptr<erhe::scene::Camera>& camera) override;
-    void register_mesh          (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
-    void unregister_mesh        (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
-    void register_skin          (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
-    void unregister_skin        (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
-    void register_light         (const std::shared_ptr<erhe::scene::Light>&  light)  override;
-    void unregister_light       (const std::shared_ptr<erhe::scene::Light>&  light)  override;
-    auto get_hosted_scene       () -> erhe::scene::Scene* override;
+    void register_node    (const std::shared_ptr<erhe::scene::Node>&   node)   override;
+    void unregister_node  (const std::shared_ptr<erhe::scene::Node>&   node)   override;
+    void register_camera  (const std::shared_ptr<erhe::scene::Camera>& camera) override;
+    void unregister_camera(const std::shared_ptr<erhe::scene::Camera>& camera) override;
+    void register_mesh    (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
+    void unregister_mesh  (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
+    void register_skin    (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
+    void unregister_skin  (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
+    void register_light   (const std::shared_ptr<erhe::scene::Light>&  light)  override;
+    void unregister_light (const std::shared_ptr<erhe::scene::Light>&  light)  override;
+    auto get_hosted_scene () -> erhe::scene::Scene* override;
 
     void register_node_physics  (const std::shared_ptr<Node_physics>& node_physics);
     void unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics);
-
-    void register_node_raytrace  (const std::shared_ptr<Node_raytrace>& node_raytrace);
-    void unregister_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace);
 
     void before_physics_simulation_steps     ();
     void update_physics_simulation_fixed_step(double dt);
@@ -202,6 +199,8 @@ public:
     void sanity_check();
 
 private:
+    [[nodiscard]] auto get_node_rt_mask(erhe::scene::Node* node) -> uint32_t;
+
     // Live longest
     mutable std::mutex                              m_mutex;
     std::mutex                                      m_rendertarget_meshes_mutex;
@@ -213,13 +212,12 @@ private:
     // Must live longer than m_scene for example
     bool                                            m_node_physics_sorted{false};
     std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
-    std::vector<std::shared_ptr<Node_raytrace>>     m_node_raytraces;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 
     std::vector<std::shared_ptr<erhe::Item_base>>   m_physics_disabled_nodes;
 
     std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
-    std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_visualization_scene;
+    std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
 
     std::unique_ptr<erhe::scene::Scene>             m_scene;
     Scene_layers                                    m_layers;

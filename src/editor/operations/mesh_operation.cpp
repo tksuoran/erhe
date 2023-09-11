@@ -4,7 +4,6 @@
 #include "editor_log.hpp"
 #include "editor_settings.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -43,7 +42,7 @@ void Mesh_operation::execute(Editor_context&)
 
     for (const auto& entry : m_entries) {
         auto* node = entry.mesh->get_node();
-        entry.mesh->mesh_data.primitives = entry.after.primitives;
+        entry.mesh->set_primitives(entry.after.primitives);
 
         auto old_node_physics = get_node_physics(node);
         if (old_node_physics) {
@@ -51,14 +50,6 @@ void Mesh_operation::execute(Editor_context&)
         }
         if (entry.after.node_physics) {
             node->attach(entry.after.node_physics);
-        }
-
-        auto old_node_raytrace = get_node_raytrace(node);
-        if (old_node_raytrace) {
-            node->detach(old_node_raytrace.get());
-        }
-        if (entry.after.node_raytrace) {
-            node->attach(entry.after.node_raytrace);
         }
     }
 }
@@ -69,7 +60,7 @@ void Mesh_operation::undo(Editor_context&)
 
     for (const auto& entry : m_entries) {
         auto* node = entry.mesh->get_node();
-        entry.mesh->mesh_data.primitives = entry.before.primitives;
+        entry.mesh->set_primitives(entry.before.primitives);
 
         auto old_node_physics = get_node_physics(node);
         if (old_node_physics) {
@@ -77,14 +68,6 @@ void Mesh_operation::undo(Editor_context&)
         }
         if (entry.before.node_physics) {
             node->attach(entry.before.node_physics);
-        }
-
-        auto old_node_raytrace = get_node_raytrace(node);
-        if (old_node_raytrace) {
-            node->detach(old_node_raytrace.get());
-        }
-        if (entry.before.node_raytrace) {
-            node->attach(entry.before.node_raytrace);
         }
     }
 }
@@ -141,13 +124,12 @@ void Mesh_operation::make_entries(
         Entry entry{
             .mesh   = mesh,
             .before = {
-                .node_physics  = get_node_physics(node),
-                .node_raytrace = get_node_raytrace(node),
-                .primitives    = mesh->mesh_data.primitives
+                .node_physics = get_node_physics(node),
+                .primitives   = mesh->get_primitives()
             },
         };
 
-        for (auto& primitive : mesh->mesh_data.primitives) {
+        for (auto& primitive : mesh->get_primitives()) {
             if (!primitive.geometry_primitive->source_geometry) {
                 continue;
             }
@@ -164,7 +146,6 @@ void Mesh_operation::make_entries(
                     )
                 }
             );
-            entry.after.node_raytrace = std::make_shared<Node_raytrace>(entry.mesh, entry.after.primitives);
             if (m_parameters.context.editor_settings->physics.static_enable) {
                 auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
                     reinterpret_cast<const float*>(

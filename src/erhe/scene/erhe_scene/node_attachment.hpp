@@ -50,7 +50,7 @@ public:
     }
 
     void handle_node_flag_bits_update(uint64_t old_node_flag_bits, uint64_t new_node_flag_bits);
-    void set_node                    (Node* node, std::size_t position = 0);
+    void set_node                    (Node* node, std::size_t position = std::numeric_limits<std::size_t>::max());
 
     [[nodiscard]] auto get_node() -> Node*;
     [[nodiscard]] auto get_node() const -> const Node*;

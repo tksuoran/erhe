@@ -198,8 +198,7 @@ auto Animation_sampler::evaluate(
     const Cubic_constants cubic{t};
 
     switch (channel.path) {
-        case Animation_path::TRANSLATION:
-        {
+        case Animation_path::TRANSLATION: {
             if (interpolation_mode != Animation_interpolation_mode::CUBICSPLINE) {
                 vec3 start_value{data[offset    ], data[offset + 1], data[offset + 2]};
                 vec3 next_value {data[offset + 3], data[offset + 4], data[offset + 5]};
@@ -233,8 +232,7 @@ auto Animation_sampler::evaluate(
             break;
         }
 
-        case Animation_path::SCALE:
-        {
+        case Animation_path::SCALE: {
             if (interpolation_mode != Animation_interpolation_mode::CUBICSPLINE) {
                 vec3 start_value{data[offset    ], data[offset + 1], data[offset + 2]};
                 vec3 next_value {data[offset + 3], data[offset + 4], data[offset + 5]};
@@ -251,8 +249,7 @@ auto Animation_sampler::evaluate(
             break;
         }
 
-        default: // TODO
-        {
+        default: { // TODO
         }
     }
 
@@ -271,8 +268,7 @@ void Animation_sampler::apply(
     const glm::vec4 value = evaluate(channel, time_current);
 
     switch (channel.path) {
-        case Animation_path::TRANSLATION:
-        {
+        case Animation_path::TRANSLATION: {
             target.set_translation(glm::vec3{value});
             break;
         }
@@ -281,8 +277,7 @@ void Animation_sampler::apply(
             break;
         }
 
-        case Animation_path::SCALE:
-        {
+        case Animation_path::SCALE: {
             target.set_scale(glm::vec3{value});
             break;
         }

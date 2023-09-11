@@ -8,7 +8,6 @@
 #include "scene/frame_controller.hpp"
 #include "scene/material_preview.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/animation_curve.hpp"
 #include "windows/brdf_slice.hpp"
@@ -21,10 +20,14 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/geometry_mesh.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_raytrace/iinstance.hpp"
+#include "erhe_raytrace/igeometry.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
@@ -306,7 +309,6 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 
     //ERHE_VERIFY(mesh.node_data.host != nullptr);
 
-    auto& mesh_data  = mesh.mesh_data;
     const auto* node = mesh.get_node();
     auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
     if (scene_root == nullptr) {
@@ -314,14 +316,32 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
         return;
     }
     auto& material_library = scene_root->content_library()->materials;
-    ImGui::Text("Layer ID: %u %s", static_cast<unsigned int>(mesh_data.layer_id), layer_name(mesh_data.layer_id));
+    ImGui::Text("Layer ID: %u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id));
 
-    if (mesh_data.skin) {
-        skin_properties(*mesh_data.skin.get());
+    if (mesh.skin) {
+        skin_properties(*mesh.skin.get());
+    }
+
+    if (ImGui::TreeNodeEx("Mesh Raytrace", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const auto* mesh_rt_scene = mesh.get_rt_scene();
+        ImGui::Text("RT Scene: %s", (mesh_rt_scene != nullptr) ? mesh_rt_scene->debug_label().data() : "(nullptr)");
+        const auto& rt_primitives = mesh.get_rt_primitives();
+        if (ImGui::TreeNodeEx("Raytrace Primitives", ImGuiTreeNodeFlags_DefaultOpen )) {
+            for (const auto& rt_primitive : rt_primitives) {
+                ImGui::Text("Mesh: %s", (rt_primitive.mesh != nullptr) ? rt_primitive.mesh->get_name().c_str() : "(nullptr)");
+                ImGui::Text("Primitive Index: %zu", rt_primitive.primitive_index);
+                const auto* rt_instance = rt_primitive.rt_instance.get();
+                ImGui::Text("RT Instance: %s", (rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)");
+                const auto* rt_scene = rt_primitive.rt_scene.get();
+                ImGui::Text("RT Scene: %s", (rt_scene!= nullptr) ? rt_scene->debug_label().data() : "(nullptr)");
+            }
+            ImGui::TreePop();
+        }
+        ImGui::TreePop();
     }
 
     int primitive_index = 0;
-    for (auto& primitive : mesh_data.primitives) {
+    for (auto& primitive : mesh.get_mutable_primitives()) {
         const auto& geometry_primitive = primitive.geometry_primitive;
         if (!geometry_primitive) {
             continue;
@@ -480,11 +500,6 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
     }
 }
 
-void Properties::node_raytrace_properties(Node_raytrace& node_raytrace) const
-{
-    node_raytrace.properties_imgui();
-}
-
 void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 {
     if (!ImGui::TreeNodeEx("Flags")) {
@@ -524,19 +539,13 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
     return
         !is_physics         (item) &&
         !is_frame_controller(item) &&
-        !is_raytrace        (item) &&
         !is_rendertarget    (item);
 }
 
 void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item)
 {
-    if (is_raytrace(item)) { // currently hidden from user
-        return;
-    }
-
     const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
     const auto& node_physics         = std::dynamic_pointer_cast<Node_physics        >(item);
-    const auto& node_raytrace        = std::dynamic_pointer_cast<Node_raytrace       >(item);
     const auto& rendertarget         = std::dynamic_pointer_cast<Rendertarget_mesh   >(item);
     const auto& camera               = std::dynamic_pointer_cast<erhe::scene::Camera >(item);
     const auto& light                = std::dynamic_pointer_cast<erhe::scene::Light  >(item);
@@ -586,10 +595,6 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item)
 
     if (node_physics) {
         node_physics_properties(*node_physics);
-    }
-
-    if (node_raytrace) {
-        node_raytrace_properties(*node_raytrace);
     }
 
     if (camera) {

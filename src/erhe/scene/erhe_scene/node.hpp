@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace erhe {
@@ -95,7 +96,7 @@ public:
     auto get_attachment_count    (const erhe::Item_filter& filter) const -> std::size_t;
     void handle_item_host_update (erhe::Item_host* old_scene_host, erhe::Item_host* new_scene_host);
     void handle_transform_update (uint64_t serial) const;
-    void handle_add_attachment   (const std::shared_ptr<Node_attachment>& attachment, std::size_t position = 0);
+    void handle_add_attachment   (const std::shared_ptr<Node_attachment>& attachment, std::size_t position = std::numeric_limits<std::size_t>::max());
     void handle_remove_attachment(Node_attachment* attachment);
 
     [[nodiscard]] auto get_attachments                        () const -> const std::vector<std::shared_ptr<Node_attachment>>&;

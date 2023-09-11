@@ -260,7 +260,7 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        auto node   = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
+        auto node   = std::make_shared<erhe::scene::Node>(name);
         auto camera = std::make_shared<erhe::scene::Camera>(name);
         camera->projection()->fov_y           = glm::radians(45.0f);
         camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
@@ -290,7 +290,7 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
+        auto node  = std::make_shared<erhe::scene::Node>(name);
         auto light = std::make_shared<erhe::scene::Light>(name);
         light->type      = erhe::scene::Light::Type::directional;
         light->color     = color;
@@ -321,7 +321,7 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
+        auto node  = std::make_shared<erhe::scene::Node>(name);
         auto light = std::make_shared<erhe::scene::Light>(name);
         light->type      = erhe::scene::Light::Type::point;
         light->color     = color;

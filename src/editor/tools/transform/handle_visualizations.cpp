@@ -257,7 +257,7 @@ void Handle_visualizations::update_mesh_visibility(
 
     const auto& material = get_handle_material(handle, mode);
 
-    mesh->mesh_data.primitives.front().material = material;
+    mesh->get_mutable_primitives().front().material = material;
 
     log_trs_tool->trace(
         "{}->set_visible({}) mode = {}, material = {}",
@@ -355,7 +355,7 @@ auto Handle_visualizations::make_mesh(
 
     const auto scene_root    = tools.get_tool_scene_root();
     const auto tool_layer_id = scene_root->layers().tool()->id;
-    mesh->mesh_data.layer_id = tool_layer_id;
+    mesh->layer_id = tool_layer_id;
     node->set_parent(m_tool_node);
     return mesh;
 }

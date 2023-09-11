@@ -256,19 +256,17 @@ void Item_tree_window::reposition(
         }
     }
 
-    if (hierarchy && anchor_hierarchy) {
-        if (anchor_hierarchy->get_parent().lock() != hierarchy->get_parent().lock()) {
-            compound_parameters.operations.push_back(
-                std::make_shared<Item_parent_change_operation>(
-                    anchor_hierarchy->get_parent().lock(),
-                    hierarchy,
-                    (placement == Placement::Before_anchor) ? anchor_hierarchy : std::shared_ptr<erhe::Hierarchy>{}
-                    ,
-                    (placement == Placement::After_anchor ) ? anchor_hierarchy : std::shared_ptr<erhe::Hierarchy>{}
-                )
-            );
-            return;
-        }
+    if (anchor_hierarchy->get_parent().lock() != hierarchy->get_parent().lock()) {
+        compound_parameters.operations.push_back(
+            std::make_shared<Item_parent_change_operation>(
+                anchor_hierarchy->get_parent().lock(),
+                hierarchy,
+                (placement == Placement::Before_anchor) ? anchor_hierarchy : std::shared_ptr<erhe::Hierarchy>{}
+                ,
+                (placement == Placement::After_anchor ) ? anchor_hierarchy : std::shared_ptr<erhe::Hierarchy>{}
+            )
+        );
+        return;
     }
 
     compound_parameters.operations.push_back(
