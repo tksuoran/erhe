@@ -121,7 +121,8 @@ FetchContent_Declare(
 FetchContent_Declare(
     glslang
     GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
-    GIT_TAG        origin/master
+    GIT_TAG        13.0.0
+    #GIT_TAG        origin/master
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

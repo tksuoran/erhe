@@ -98,7 +98,7 @@ target_link_libraries(${_target}
         erhe::window
         fmt::fmt
         glm::glm-header-only
-        #### glslang
+        glslang
         Microsoft.GSL::GSL
     PRIVATE
         erhe::bit

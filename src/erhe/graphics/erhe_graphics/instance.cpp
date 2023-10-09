@@ -10,6 +10,8 @@
 #include "erhe_graphics/state/depth_stencil_state.hpp"
 #include "erhe_graphics/texture.hpp"
 
+#include "glslang/Public/ShaderLang.h"
+
 #if !defined(WIN32)
 #   include <csignal>
 #endif
@@ -448,6 +450,13 @@ Instance::Instance(erhe::window::Context_window& context_window)
     }
 
     shader_monitor.begin();
+
+    glslang::InitializeProcess();
+}
+
+Instance::~Instance()
+{
+    glslang::FinalizeProcess();
 }
 
 auto Instance::depth_clear_value_pointer() const -> const float*

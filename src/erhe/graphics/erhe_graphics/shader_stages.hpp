@@ -7,6 +7,10 @@
 #include <map>
 #include <string>
 
+namespace glslang {
+    class TShader;
+};
+
 namespace erhe::graphics
 {
 
@@ -92,8 +96,9 @@ public:
 private:
     void post_link();
 
-    [[nodiscard]] auto compile     (const Shader_stage& shader) -> Gl_shader;
-    [[nodiscard]] auto post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool;
+    [[nodiscard]] auto compile        (const Shader_stage& shader) -> Gl_shader;
+    [[nodiscard]] auto compile_glslang(const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
+    [[nodiscard]] auto post_compile   (const Shader_stage& shader, Gl_shader& gl_shader) -> bool;
 
     friend class Shader_stages;
 

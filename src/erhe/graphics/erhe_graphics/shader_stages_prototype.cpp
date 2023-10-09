@@ -5,6 +5,8 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include "glslang/Public/ShaderLang.h"
+
 #include <algorithm>
 
 namespace erhe::graphics
@@ -392,6 +394,175 @@ template <typename T>
     return gl_shader;
 }
 
+[[nodiscard]] auto Shader_stages_prototype::compile_glslang(
+    const Shader_stage& shader
+) -> std::shared_ptr<glslang::TShader>
+{
+    EShLanguage language = [](gl::Shader_type gl_shader_type) -> EShLanguage {
+        switch (gl_shader_type) {
+            case gl::Shader_type::vertex_shader:   return EShLanguage::EShLangVertex;
+            case gl::Shader_type::fragment_shader: return EShLanguage::EShLangFragment;
+            case gl::Shader_type::geometry_shader: return EShLanguage::EShLangGeometry;
+            case gl::Shader_type::compute_shader:  return EShLanguage::EShLangCompute;
+            default:
+                ERHE_FATAL("TODO");
+        }
+    }(shader.type);
+
+    std::shared_ptr<glslang::TShader> glslang_shader = std::make_unique<glslang::TShader>(language);
+
+    const char* source_string = shader.source.data();
+    const int   source_length = static_cast<int>(shader.source.size());
+    if (!shader.path.empty()) {
+        const char* source_name = shader.path.string().data();
+        glslang_shader->setStringsWithLengthsAndNames(&source_string, &source_length, &source_name, 1);
+    } else {
+        glslang_shader->setStringsWithLengths(&source_string, &source_length, 1);
+    }
+
+    glslang_shader->setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientOpenGL, 460);
+    glslang_shader->setEnvClient(glslang::EShClient::EShClientOpenGL, glslang::EShTargetOpenGL_450);
+
+    const TBuiltInResource built_in_resources{
+        .maxLights                                 = 32,
+        .maxClipPlanes                             = 6,
+        .maxTextureUnits                           = 32,
+        .maxTextureCoords                          = 32,
+        .maxVertexAttribs                          = 64,
+        .maxVertexUniformComponents                = 4096,
+        .maxVaryingFloats                          = 64,
+        .maxVertexTextureImageUnits                = 32,
+        .maxCombinedTextureImageUnits              = 80,
+        .maxTextureImageUnits                      = 32,
+        .maxFragmentUniformComponents              = 4096,
+        .maxDrawBuffers                            = 32,
+        .maxVertexUniformVectors                   = 128,
+        .maxVaryingVectors                         = 8,
+        .maxFragmentUniformVectors                 = 16,
+        .maxVertexOutputVectors                    = 16,
+        .maxFragmentInputVectors                   = 15,
+        .minProgramTexelOffset                     = -8,
+        .maxProgramTexelOffset                     = 7,
+        .maxClipDistances                          = 8,
+        .maxComputeWorkGroupCountX                 = 65535,
+        .maxComputeWorkGroupCountY                 = 65535,
+        .maxComputeWorkGroupCountZ                 = 65535,
+        .maxComputeWorkGroupSizeX                  = 1024,
+        .maxComputeWorkGroupSizeY                  = 1024,
+        .maxComputeWorkGroupSizeZ                  = 64,
+        .maxComputeUniformComponents               = 1024,
+        .maxComputeTextureImageUnits               = 16,
+        .maxComputeImageUniforms                   = 8,
+        .maxComputeAtomicCounters                  = 8,
+        .maxComputeAtomicCounterBuffers            = 1,
+        .maxVaryingComponents                      = 60,
+        .maxVertexOutputComponents                 = 64,
+        .maxGeometryInputComponents                = 64,
+        .maxGeometryOutputComponents               = 128,
+        .maxFragmentInputComponents                = 128,
+        .maxImageUnits                             = 8,
+        .maxCombinedImageUnitsAndFragmentOutputs   = 8,
+        .maxCombinedShaderOutputResources          = 8,
+        .maxImageSamples                           = 0,
+        .maxVertexImageUniforms                    = 0,
+        .maxTessControlImageUniforms               = 0,
+        .maxTessEvaluationImageUniforms            = 0,
+        .maxGeometryImageUniforms                  = 0,
+        .maxFragmentImageUniforms                  = 8,
+        .maxCombinedImageUniforms                  = 8,
+        .maxGeometryTextureImageUnits              = 16,
+        .maxGeometryOutputVertices                 = 256,
+        .maxGeometryTotalOutputComponents          = 1024,
+        .maxGeometryUniformComponents              = 1024,
+        .maxGeometryVaryingComponents              = 64,
+        .maxTessControlInputComponents             = 128,
+        .maxTessControlOutputComponents            = 128,
+        .maxTessControlTextureImageUnits           = 16,
+        .maxTessControlUniformComponents           = 1024,
+        .maxTessControlTotalOutputComponents       = 4096,
+        .maxTessEvaluationInputComponents          = 128,
+        .maxTessEvaluationOutputComponents         = 128,
+        .maxTessEvaluationTextureImageUnits        = 16,
+        .maxTessEvaluationUniformComponents        = 1024,
+        .maxTessPatchComponents                    = 120,
+        .maxPatchVertices                          = 32,
+        .maxTessGenLevel                           = 64,
+        .maxViewports                              = 16,
+        .maxVertexAtomicCounters                   = 0,
+        .maxTessControlAtomicCounters              = 0,
+        .maxTessEvaluationAtomicCounters           = 0,
+        .maxGeometryAtomicCounters                 = 0,
+        .maxFragmentAtomicCounters                 = 8,
+        .maxCombinedAtomicCounters                 = 8,
+        .maxAtomicCounterBindings                  = 1,
+        .maxVertexAtomicCounterBuffers             = 0,
+        .maxTessControlAtomicCounterBuffers        = 0,
+        .maxTessEvaluationAtomicCounterBuffers     = 0,
+        .maxGeometryAtomicCounterBuffers           = 0,
+        .maxFragmentAtomicCounterBuffers           = 1,
+        .maxCombinedAtomicCounterBuffers           = 1,
+        .maxAtomicCounterBufferSize                = 16384,
+        .maxTransformFeedbackBuffers               = 4,
+        .maxTransformFeedbackInterleavedComponents = 64,
+        .maxCullDistances                          = 8,
+        .maxCombinedClipAndCullDistances           = 8,
+        .maxSamples                                = 4,
+        .maxMeshOutputVerticesNV                   = 256,
+        .maxMeshOutputPrimitivesNV                 = 512,
+        .maxMeshWorkGroupSizeX_NV                  = 32,
+        .maxMeshWorkGroupSizeY_NV                  = 1,
+        .maxMeshWorkGroupSizeZ_NV                  = 1,
+        .maxTaskWorkGroupSizeX_NV                  = 32,
+        .maxTaskWorkGroupSizeY_NV                  = 1,
+        .maxTaskWorkGroupSizeZ_NV                  = 1,
+        .maxMeshViewCountNV                        = 4,
+        .maxMeshOutputVerticesEXT                  = 256,
+        .maxMeshOutputPrimitivesEXT                = 256,
+        .maxMeshWorkGroupSizeX_EXT                 = 128,
+        .maxMeshWorkGroupSizeY_EXT                 = 128,
+        .maxMeshWorkGroupSizeZ_EXT                 = 128,
+        .maxTaskWorkGroupSizeX_EXT                 = 128,
+        .maxTaskWorkGroupSizeY_EXT                 = 128,
+        .maxTaskWorkGroupSizeZ_EXT                 = 128,
+        .maxMeshViewCountEXT                       = 4,
+        .maxDualSourceDrawBuffersEXT               = 1,
+        .limits = {
+            .nonInductiveForLoops                 = 1,
+            .whileLoops                           = 1,
+            .doWhileLoops                         = 1,
+            .generalUniformIndexing               = 1,
+            .generalAttributeMatrixVectorIndexing = 1,
+            .generalVaryingIndexing               = 1,
+            .generalSamplerIndexing               = 1,
+            .generalVariableIndexing              = 1,
+            .generalConstantMatrixVectorIndexing  = 1
+        }
+    };
+
+    unsigned int messages{0};
+    //messages = messages | EShMsgAST;                // print the AST intermediate representation
+    messages = messages | EShMsgSpvRules;           // issue messages for SPIR-V generation
+    messages = messages | EShMsgDebugInfo;          // save debug information
+    messages = messages | EShMsgBuiltinSymbolTable; // print the builtin symbol table
+    messages = messages | EShMsgEnhanced;           // enhanced message readability
+
+    const bool  parse_ok = glslang_shader->parse(&built_in_resources, 450, true, static_cast<const EShMessages>(messages));
+    if (!parse_ok) {
+        log_glsl->error("glslang parse error");
+    }
+    const char* info_log = glslang_shader->getInfoLog();
+
+    log_glsl->info("glslang info log:\n{}\n", info_log);
+
+    //class TProgram
+    //    void addShader(...);
+    //    bool link(...);
+    //    const char* getInfoLog();
+    //    Reflection queries
+
+    return glslang_shader;
+}
+
 [[nodiscard]] auto Shader_stages_prototype::post_compile(
     const Shader_stage& shader,
     Gl_shader&          gl_shader
@@ -456,6 +627,7 @@ void Shader_stages_prototype::compile_shaders()
     ERHE_VERIFY(m_state == state_init);
     for (const auto& shader : m_create_info.shaders) {
         m_prelink_shaders.emplace_back(compile(shader));
+        auto glslang_shader = compile_glslang(shader); // TODO WIP
         if (m_state == state_fail) {
             break;
         }

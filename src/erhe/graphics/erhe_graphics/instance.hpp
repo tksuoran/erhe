@@ -38,6 +38,7 @@ class Instance
 {
 public:
     explicit Instance(erhe::window::Context_window& context_window);
+    ~Instance();
     Instance      (const Instance&) = delete;
     void operator=(const Instance&) = delete;
     Instance      (Instance&&)      = delete;
