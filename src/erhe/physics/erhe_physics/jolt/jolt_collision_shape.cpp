@@ -175,7 +175,8 @@ static_cast<void>(inRenderer);
     void CollideSoftBodyVertices(
         JPH::Mat44Arg                    inCenterOfMassTransform,
         JPH::Vec3Arg                     inScale,
-        JPH::Array<JPH::SoftBodyVertex>& ioVertices,
+        JPH::SoftBodyVertex*             ioVertices,
+        JPH::uint                        inNumVertices,
         float                            inDeltaTime,
         JPH::Vec3Arg                     inDisplacementDueToGravity,
         int                              inCollidingShapeIndex
@@ -184,6 +185,7 @@ static_cast<void>(inRenderer);
         static_cast<void>(inCenterOfMassTransform);
         static_cast<void>(inScale);
         static_cast<void>(ioVertices);
+        static_cast<void>(inNumVertices);
         static_cast<void>(inDeltaTime);
         static_cast<void>(inDisplacementDueToGravity);
         static_cast<void>(inCollidingShapeIndex);
