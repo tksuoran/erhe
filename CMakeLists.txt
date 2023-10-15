@@ -83,6 +83,10 @@ message("Fetching spdlog")
 include(spdlog)
 FetchContent_MakeAvailable_spdlog()
 
+message("Fetching igl")
+include(igl)
+FetchContent_MakeAvailable_igl()
+
 message("Fetching concurrentqueue")
 FetchContent_MakeAvailable(concurrentqueue)
 

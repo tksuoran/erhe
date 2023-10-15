@@ -12,6 +12,8 @@
 
 #include "glslang/Public/ShaderLang.h"
 
+#include "igl/IGL.h"
+
 #if !defined(WIN32)
 #   include <csignal>
 #endif

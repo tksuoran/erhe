@@ -162,6 +162,14 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
+FetchContent_Declare(
+    igl
+    GIT_REPOSITORY https://github.com/tksuoran/igl.git
+    GIT_TAG        main
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
 #FetchContent_Declare(
 #    ImGui
 #    GIT_REPOSITORY https://github.com/ocornut/imgui.git

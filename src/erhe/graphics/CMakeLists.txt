@@ -101,6 +101,7 @@ target_link_libraries(${_target}
         glslang
         Microsoft.GSL::GSL
     PRIVATE
+        IGLLibrary
         erhe::bit
         erhe::defer
         erhe::file
