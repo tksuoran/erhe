@@ -22,7 +22,6 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"

@@ -4,7 +4,6 @@
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
@@ -288,7 +287,7 @@ auto Post_processing::make_program(
     const std::vector<std::pair<std::string, std::string>> empty_defines{};
 
     const std::vector<erhe::graphics::Shader_stage_extension> bindless_extensions{
-        {gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"}
+        {igl::ShaderStage::fragment_shader, "GL_ARB_bindless_texture"}
     };
     const std::vector<erhe::graphics::Shader_stage_extension> empty_extensions{};
     const bool bindless_textures = graphics_instance.info.use_bindless_texture;
@@ -302,8 +301,8 @@ auto Post_processing::make_program(
             .fragment_outputs      = &m_fragment_outputs,
             .default_uniform_block = bindless_textures ? nullptr : &m_default_uniform_block,
             .shaders = {
-                { gl::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path("post_processing.vert")},
-                { gl::Shader_type::fragment_shader, m_shader_path / fs_path}
+                { igl::ShaderStage::vertex_shader,   m_shader_path / std::filesystem::path("post_processing.vert")},
+                { igl::ShaderStage::fragment_shader, m_shader_path / fs_path}
             },
             .build                 = true
         };
@@ -345,14 +344,14 @@ Post_processing::Post_processing(
     , m_downsample_source_texture_resource{
         graphics_instance.info.use_bindless_texture
             ? nullptr
-            : m_default_uniform_block.add_sampler("s_source", gl::Uniform_type::sampler_2d, 0)
+            : m_default_uniform_block.add_sampler("s_source", igl::UniformType::sampler_2d, 0)
     }
     , m_compose_source_textures_resource{
         graphics_instance.info.use_bindless_texture
             ? nullptr
             : m_default_uniform_block.add_sampler(
                 "s_source_textures",
-                gl::Uniform_type::sampler_2d,
+                igl::UniformType::sampler_2d,
                 0,
                 m_source_texture_count
             )

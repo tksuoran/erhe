@@ -41,7 +41,8 @@ target_link_libraries(${_target}
         fmt::fmt
         erhe::commands
         erhe::concurrency
-        erhe::graphics
+        #erhe::graphics
+        IGLLibrary
         erhe::log
         erhe::math
         erhe::rendergraph
@@ -52,7 +53,7 @@ target_link_libraries(${_target}
         concurrentqueue
         cxxopts
         etl::etl
-        erhe::gl
+        #erhe::gl
         erhe::profile
         erhe::renderer
         erhe::time

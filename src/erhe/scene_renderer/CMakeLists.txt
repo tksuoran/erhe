@@ -25,7 +25,8 @@ erhe_target_sources_grouped(
 target_link_libraries(
     ${_target}
     PUBLIC
-        erhe::graphics
+        #erhe::graphics
+        IGLLibrary
         erhe::math
         erhe::primitive
         erhe::renderer
@@ -33,7 +34,7 @@ target_link_libraries(
     PRIVATE
         erhe::concurrency
         erhe::file
-        erhe::gl
+        #erhe::gl
         erhe::log
         erhe::message_bus
         erhe::profile

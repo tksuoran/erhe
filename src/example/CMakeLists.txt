@@ -35,8 +35,9 @@ target_link_libraries(
     PRIVATE
     erhe::bit
     erhe::file
-    erhe::gl
-    erhe::graphics
+    #erhe::gl
+    #erhe::graphics
+    IGLLibrary
     erhe::log
     erhe::math
     erhe::primitive

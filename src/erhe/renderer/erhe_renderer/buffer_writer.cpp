@@ -9,7 +9,7 @@
 namespace erhe::renderer
 {
 
-Buffer_writer::Buffer_writer(erhe::graphics::Instance& instance)
+Buffer_writer::Buffer_writer(igl::IDevice& device)
     : m_instance{instance}
 {
 }

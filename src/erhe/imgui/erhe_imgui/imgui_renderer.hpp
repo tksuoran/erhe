@@ -1,20 +1,11 @@
 #pragma once
 
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_graphics/vertex_format.hpp"
-#include "erhe_graphics/sampler.hpp"
-#include "erhe_graphics/state/color_blend_state.hpp"
-#include "erhe_graphics/state/depth_stencil_state.hpp"
-#include "erhe_graphics/state/input_assembly_state.hpp"
-#include "erhe_graphics/state/rasterization_state.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_graphics/pipeline.hpp"
 #include "erhe_renderer/multi_buffer.hpp"
 
 #include <imgui/imgui.h>

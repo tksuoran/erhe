@@ -92,8 +92,9 @@ target_link_libraries(
     erhe::concurrency
     erhe::file
     erhe::geometry
-    erhe::gl
-    erhe::graphics
+    #erhe::gl
+    #erhe::graphics
+    IGLLibrary
     erhe::imgui
     erhe::log
     erhe::net

@@ -21,7 +21,8 @@ target_link_libraries(${_target}
         erhe::file
         erhe::profile
         erhe::geometry
-        erhe::graphics
+        #erhe::graphics
+        IGLLibrary
         erhe::log
         erhe::primitive
         erhe::scene

@@ -28,8 +28,9 @@ target_link_libraries(${_target}
         etl::etl
         fmt::fmt
         erhe::concurrency
-        erhe::gl
-        erhe::graphics
+        #erhe::gl
+        #erhe::graphics
+        IGLLibrary
         erhe::log
         erhe::math
         erhe::ui

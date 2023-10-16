@@ -136,17 +136,17 @@ namespace {
     }
 };
 
-[[nodiscard]] auto to_erhe(const cgltf_primitive_type value) -> gl::Primitive_type
+[[nodiscard]] auto to_erhe(const cgltf_primitive_type value) -> igl::PrimitiveType
 {
     switch (value) {
-        case cgltf_primitive_type::cgltf_primitive_type_points:         return gl::Primitive_type::points;
-        case cgltf_primitive_type::cgltf_primitive_type_lines:          return gl::Primitive_type::lines;
-        case cgltf_primitive_type::cgltf_primitive_type_line_loop:      return gl::Primitive_type::line_loop;
-        case cgltf_primitive_type::cgltf_primitive_type_line_strip:     return gl::Primitive_type::line_strip;
-        case cgltf_primitive_type::cgltf_primitive_type_triangles:      return gl::Primitive_type::triangles;
-        case cgltf_primitive_type::cgltf_primitive_type_triangle_strip: return gl::Primitive_type::triangle_strip;
-        case cgltf_primitive_type::cgltf_primitive_type_triangle_fan:   return gl::Primitive_type::triangle_fan;
-        default:                                                        return gl::Primitive_type::points;
+        case cgltf_primitive_type::cgltf_primitive_type_points:         return igl::PrimitiveType::points;
+        case cgltf_primitive_type::cgltf_primitive_type_lines:          return igl::PrimitiveType::lines;
+        case cgltf_primitive_type::cgltf_primitive_type_line_loop:      return igl::PrimitiveType::line_loop;
+        case cgltf_primitive_type::cgltf_primitive_type_line_strip:     return igl::PrimitiveType::line_strip;
+        case cgltf_primitive_type::cgltf_primitive_type_triangles:      return igl::PrimitiveType::triangles;
+        case cgltf_primitive_type::cgltf_primitive_type_triangle_strip: return igl::PrimitiveType::triangle_strip;
+        case cgltf_primitive_type::cgltf_primitive_type_triangle_fan:   return igl::PrimitiveType::triangle_fan;
+        default:                                                        return igl::PrimitiveType::points;
     }
 };
 
@@ -1058,7 +1058,7 @@ private:
                 const cgltf_size component_count = cgltf_num_components(accessor->type);
 
                 switch (erhe_attribute->data_type.type) {
-                    case gl::Vertex_attrib_type::float_: {
+                    case igl::VertexAttributeFormat::float_: {
                         for (cgltf_size i = 0; i < accessor->count; ++i) {
                             cgltf_float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
                             cgltf_accessor_read_float(accessor, i, &value[0], component_count);
@@ -1076,7 +1076,7 @@ private:
                         break;
                     }
 
-                    case gl::Vertex_attrib_type::unsigned_byte: {
+                    case igl::VertexAttributeFormat::unsigned_byte: {
                         for (cgltf_size i = 0; i < accessor->count; ++i) {
                             cgltf_uint value[4] = { 0, 0, 0, 0 };
                             cgltf_accessor_read_uint(accessor, i, &value[0], component_count);
@@ -1088,7 +1088,7 @@ private:
                         }
                         break;
                     }
-                    case gl::Vertex_attrib_type::byte: {
+                    case igl::VertexAttributeFormat::byte: {
                         for (cgltf_size i = 0; i < accessor->count; ++i) {
                             cgltf_uint value[4] = { 0, 0, 0, 0 };
                             cgltf_accessor_read_uint(accessor, i, &value[0], component_count);
@@ -1100,7 +1100,7 @@ private:
                         }
                         break;
                     }
-                    case gl::Vertex_attrib_type::unsigned_short: {
+                    case igl::VertexAttributeFormat::unsigned_short: {
                         for (cgltf_size i = 0; i < accessor->count; ++i) {
                             cgltf_uint value[4] = { 0, 0, 0, 0 };
                             cgltf_accessor_read_uint(accessor, i, &value[0], component_count);
@@ -1112,7 +1112,7 @@ private:
                         }
                         break;
                     }
-                    case gl::Vertex_attrib_type::short_: {
+                    case igl::VertexAttributeFormat::short_: {
                         for (cgltf_size i = 0; i < accessor->count; ++i) {
                             cgltf_uint value[4] = { 0, 0, 0, 0 };
                             cgltf_accessor_read_uint(accessor, i, &value[0], component_count);

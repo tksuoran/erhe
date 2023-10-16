@@ -13,8 +13,6 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/gl_helpers.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui/imgui.h>

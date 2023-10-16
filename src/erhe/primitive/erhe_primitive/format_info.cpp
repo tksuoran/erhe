@@ -139,7 +139,7 @@ auto prepare_vertex_format(
         ////             },
         ////             .shader_type   = gl::Attribute_type::unsigned_int,
         ////             .data_type = {
-        ////                 .type      = gl::Vertex_attrib_type::unsigned_int,
+        ////                 .type      = igl::VertexAttributeFormat::unsigned_int,
         ////                 .dimension = 1
         ////             }
         ////         }

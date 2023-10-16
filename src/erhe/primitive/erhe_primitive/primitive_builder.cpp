@@ -84,7 +84,7 @@ void Build_context_root::get_mesh_info()
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} triangle fill indices", mi.index_count_fill_triangles);
         total_index_count += mi.index_count_fill_triangles;
         allocate_index_range(
-            gl::Primitive_type::triangles,
+            igl::PrimitiveType::triangles,
             mi.index_count_fill_triangles,
             geometry_mesh->triangle_fill_indices
         );
@@ -96,7 +96,7 @@ void Build_context_root::get_mesh_info()
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} edge line indices", mi.index_count_edge_lines);
         total_index_count += mi.index_count_edge_lines;
         allocate_index_range(
-            gl::Primitive_type::lines,
+            igl::PrimitiveType::lines,
             mi.index_count_edge_lines,
             geometry_mesh->edge_line_indices
         );
@@ -106,7 +106,7 @@ void Build_context_root::get_mesh_info()
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} corner point indices", mi.index_count_corner_points);
         total_index_count += mi.index_count_corner_points;
         allocate_index_range(
-            gl::Primitive_type::points,
+            igl::PrimitiveType::points,
             mi.index_count_corner_points,
             geometry_mesh->corner_point_indices
         );
@@ -116,7 +116,7 @@ void Build_context_root::get_mesh_info()
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} centroid point indices", mi.index_count_centroid_points);
         total_index_count += mi.index_count_centroid_points;
         allocate_index_range(
-            gl::Primitive_type::points,
+            igl::PrimitiveType::points,
             mi.polygon_count,
             geometry_mesh->polygon_centroid_indices
         );
@@ -907,7 +907,7 @@ void Build_context::build_centroid_points()
 }
 
 void Build_context_root::allocate_index_range(
-    const gl::Primitive_type primitive_type,
+    const igl::PrimitiveType primitive_type,
     const std::size_t        index_count,
     Index_range&             out_range
 )

@@ -30,7 +30,8 @@ target_link_libraries(
     PUBLIC
         erhe::time
     PRIVATE
-        erhe::gl
+        #erhe::gl
+        IGLLibrary
         erhe::log
         erhe::profile
         erhe::verify

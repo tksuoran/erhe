@@ -51,27 +51,27 @@ inline void write_low(
 
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
+    const igl::VertexAttributeFormat  type,
     const unsigned int            value
 )
 {
     switch (type) {
-        //using enum gl::Vertex_attrib_type;
-        case gl::Vertex_attrib_type::unsigned_byte: {
+        //using enum igl::VertexAttributeFormat;
+        case igl::VertexAttributeFormat::unsigned_byte: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             Expects(value <= 0xffU);
             ptr[0] = value & 0xffU;
             break;
         }
 
-        case gl::Vertex_attrib_type::unsigned_short: {
+        case igl::VertexAttributeFormat::unsigned_short: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value <= 0xffffU);
             ptr[0] = value & 0xffffU;
             break;
         }
 
-        case gl::Vertex_attrib_type::unsigned_int: {
+        case igl::VertexAttributeFormat::unsigned_int: {
             auto* ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value;
             break;
@@ -85,18 +85,18 @@ inline void write_low(
 
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
+    const igl::VertexAttributeFormat  type,
     const glm::vec2               value
 )
 {
     switch (type) {
-        case gl::Vertex_attrib_type::float_: {
+        case igl::VertexAttributeFormat::float_: {
             auto* const ptr = reinterpret_cast<float*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
             break;
         }
-        case gl::Vertex_attrib_type::half_float: {
+        case igl::VertexAttributeFormat::half_float: {
             // TODO(tksuoran@gmail.com): Would this be safe even if we are not aligned?
             // uint* ptr = reinterpret_cast<uint*>(data_ptr);
             // *ptr = glm::packHalf2x16(value);
@@ -105,7 +105,7 @@ inline void write_low(
             ptr[1] = glm::packHalf1x16(value.y);
             break;
         }
-        case gl::Vertex_attrib_type::unsigned_byte: {
+        case igl::VertexAttributeFormat::unsigned_byte: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
             float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
@@ -124,26 +124,26 @@ inline void write_low(
 
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
+    const igl::VertexAttributeFormat  type,
     const glm::vec3               value
 )
 {
     switch (type) {
-        case gl::Vertex_attrib_type::float_: {
+        case igl::VertexAttributeFormat::float_: {
             auto* const ptr = reinterpret_cast<float*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
             ptr[2] = value.z;
             break;
         }
-        case gl::Vertex_attrib_type::half_float: {
+        case igl::VertexAttributeFormat::half_float: {
             auto* const ptr = reinterpret_cast<glm::uint16 *>(destination.data());
             ptr[0] = glm::packHalf1x16(value.x);
             ptr[1] = glm::packHalf1x16(value.y);
             ptr[2] = glm::packHalf1x16(value.z);
             break;
         }
-        case gl::Vertex_attrib_type::unsigned_byte: {
+        case igl::VertexAttributeFormat::unsigned_byte: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
             float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
@@ -165,12 +165,12 @@ inline void write_low(
 
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
+    const igl::VertexAttributeFormat  type,
     const glm::vec4               value
 )
 {
     switch (type) {
-        case gl::Vertex_attrib_type::float_: {
+        case igl::VertexAttributeFormat::float_: {
             auto* const ptr = reinterpret_cast<float*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
@@ -178,7 +178,7 @@ inline void write_low(
             ptr[3] = value.w;
             break;
         }
-        case gl::Vertex_attrib_type::half_float: { 
+        case igl::VertexAttributeFormat::half_float: { 
             auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
             // TODO(tksuoran@gmail.com): glm::packHalf4x16() - but what if we are not aligned?
             ptr[0] = glm::packHalf1x16(value.x);
@@ -187,7 +187,7 @@ inline void write_low(
             ptr[3] = glm::packHalf1x16(value.w);
             break;
         }
-        case gl::Vertex_attrib_type::unsigned_byte: {
+        case igl::VertexAttributeFormat::unsigned_byte: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
             float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
@@ -212,13 +212,13 @@ inline void write_low(
 
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
+    const igl::VertexAttributeFormat  type,
     const glm::uvec4              value
 )
 {
     switch (type) {
-        //using enum gl::Vertex_attrib_type;
-        case gl::Vertex_attrib_type::unsigned_byte: {
+        //using enum igl::VertexAttributeFormat;
+        case igl::VertexAttributeFormat::unsigned_byte: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             Expects(value.x <= 0xffU);
             Expects(value.y <= 0xffU);
@@ -231,7 +231,7 @@ inline void write_low(
             break;
         }
 
-        case gl::Vertex_attrib_type::unsigned_short: {
+        case igl::VertexAttributeFormat::unsigned_short: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value.x <= 0xffffU);
             Expects(value.y <= 0xffffU);
@@ -244,7 +244,7 @@ inline void write_low(
             break;
         }
 
-        case gl::Vertex_attrib_type::unsigned_int: {
+        case igl::VertexAttributeFormat::unsigned_int: {
             auto* ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;

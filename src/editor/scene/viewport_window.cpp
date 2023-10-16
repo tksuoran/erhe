@@ -25,7 +25,6 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_rendergraph/multisample_resolve.hpp"
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"

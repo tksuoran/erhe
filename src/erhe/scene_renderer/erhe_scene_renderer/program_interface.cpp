@@ -192,14 +192,14 @@ auto Program_interface::make_prototype(
 
     if (graphics_instance.info.gl_version < 430) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
-        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        create_info.extensions.push_back({igl::ShaderStage::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+        create_info.extensions.push_back({igl::ShaderStage::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
+        create_info.extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
     }
     if (graphics_instance.info.gl_version < 460) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
-        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_draw_parameters"});
+        create_info.extensions.push_back({igl::ShaderStage::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        create_info.extensions.push_back({igl::ShaderStage::geometry_shader, "GL_ARB_shader_draw_parameters"});
         create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
     }
 
@@ -207,20 +207,20 @@ auto Program_interface::make_prototype(
 
     if (graphics_instance.info.use_bindless_texture) {
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        create_info.extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
     if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", cs_path, true)) {
-        create_info.shaders.emplace_back(gl::Shader_type::compute_shader,  cs_path);
+        create_info.shaders.emplace_back(igl::ShaderStage::compute_shader,  cs_path);
     }
     if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", fs_path, true)) {
-        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
+        create_info.shaders.emplace_back(igl::ShaderStage::fragment_shader, fs_path);
     }
     if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", gs_path, true)) {
-        create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
+        create_info.shaders.emplace_back(igl::ShaderStage::geometry_shader, gs_path);
     }
     if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", vs_path, true)) {
-        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
+        create_info.shaders.emplace_back(igl::ShaderStage::vertex_shader,   vs_path);
     }
 
     return erhe::graphics::Shader_stages_prototype{graphics_instance, create_info};

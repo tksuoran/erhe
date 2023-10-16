@@ -42,9 +42,9 @@ target_link_libraries(${_target}
         glm::glm-header-only
         etl::etl
         erhe::geometry
-        erhe::gl
         erhe::graphics # TODO Get rid of this dependency?
         erhe::item
+        IGLLibrary
         erhe::math
         erhe::raytrace
     PRIVATE

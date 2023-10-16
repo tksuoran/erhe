@@ -39,7 +39,7 @@ static constexpr gl::Buffer_storage_mask storage_mask_persistent{
 static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
     gl::Buffer_storage_mask::map_write_bit
 };
-inline auto storage_mask(erhe::graphics::Instance& instance) -> gl::Buffer_storage_mask
+inline auto storage_mask(igl::IDevice& device) -> gl::Buffer_storage_mask
 {
     return instance.info.use_persistent_buffers
         ? storage_mask_persistent
@@ -54,7 +54,7 @@ static constexpr gl::Map_buffer_access_mask access_mask_persistent{
 static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
     gl::Map_buffer_access_mask::map_write_bit
 };
-inline auto access_mask(erhe::graphics::Instance& instance) -> gl::Map_buffer_access_mask
+inline auto access_mask(igl::IDevice& device) -> gl::Map_buffer_access_mask
 {
     return instance.info.use_persistent_buffers
         ? access_mask_persistent

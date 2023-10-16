@@ -216,18 +216,18 @@ Text_renderer::Text_renderer(
             .vertex_attribute_mappings = &m_attribute_mappings,
             .fragment_outputs          = &m_fragment_outputs,
             .shaders = {
-                { gl::Shader_type::vertex_shader,   vs_path },
-                { gl::Shader_type::fragment_shader, fs_path }
+                { igl::ShaderStage::vertex_shader,   vs_path },
+                { igl::ShaderStage::fragment_shader, fs_path }
             }
         };
 
         if (graphics_instance.info.use_bindless_texture) {
-            create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+            create_info.extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_bindless_texture"});
             create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
         } else {
             m_default_uniform_block.add_sampler(
                 "s_texture",
-                gl::Uniform_type::sampler_2d,
+                igl::UniformType::sampler_2d,
                 0
             );
             create_info.default_uniform_block = &m_default_uniform_block;

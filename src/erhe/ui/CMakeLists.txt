@@ -20,8 +20,9 @@ endif ()
 target_link_libraries(
     ${_target}
     PUBLIC
-        erhe::gl
-        erhe::graphics
+        #erhe::gl
+        #erhe::graphics
+        IGLLibrary
         erhe::primitive
         fmt::fmt
         glm::glm-header-only

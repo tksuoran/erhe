@@ -12,7 +12,6 @@
 #include "tools/tool.hpp"
 
 #include "erhe_commands/commands.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_raytrace/iscene.hpp"

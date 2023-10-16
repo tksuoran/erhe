@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/framebuffer.hpp"

@@ -30,15 +30,15 @@ auto Geometry_mesh::index_range(const Primitive_mode primitive_mode) const -> In
 
 auto primitive_type(
     const Primitive_mode primitive_mode
-) -> std::optional<gl::Primitive_type>
+) -> std::optional<igl::PrimitiveType>
 {
     switch (primitive_mode) {
         //using enum Primitive_mode;
         case Primitive_mode::not_set          : return {};
-        case Primitive_mode::polygon_fill     : return gl::Primitive_type::triangles;
-        case Primitive_mode::edge_lines       : return gl::Primitive_type::lines;
-        case Primitive_mode::corner_points    : return gl::Primitive_type::points;
-        case Primitive_mode::polygon_centroids: return gl::Primitive_type::points;
+        case Primitive_mode::polygon_fill     : return igl::PrimitiveType::triangles;
+        case Primitive_mode::edge_lines       : return igl::PrimitiveType::lines;
+        case Primitive_mode::corner_points    : return igl::PrimitiveType::points;
+        case Primitive_mode::polygon_centroids: return igl::PrimitiveType::points;
         case Primitive_mode::count            : return {};
         default:                                return {};
     }

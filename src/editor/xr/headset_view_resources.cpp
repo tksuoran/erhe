@@ -2,7 +2,6 @@
 #include "editor_log.hpp"
 #include "xr/headset_view.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene/camera.hpp"

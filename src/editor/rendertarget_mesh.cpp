@@ -8,8 +8,6 @@
 #include "scene/scene_view.hpp"
 #include "windows/viewport_config_window.hpp"
 
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/framebuffer.hpp"

@@ -24,7 +24,8 @@ if (${ERHE_USE_PRECOMPILED_HEADERS})
 endif ()
 target_link_libraries(${_target}
     PUBLIC
-        erhe::gl
+        #erhe::gl
+        IGLLibrary
         erhe::window
         glm::glm-header-only
     PRIVATE

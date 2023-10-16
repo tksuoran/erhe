@@ -8,8 +8,6 @@
 #include "scene/scene_view.hpp"
 
 #include "erhe_rendergraph/rendergraph.hpp"
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/texture.hpp"

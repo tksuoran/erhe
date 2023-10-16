@@ -5,7 +5,6 @@
 #include "scene/frame_controller.hpp"
 
 #include "erhe_commands/command.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/enums.hpp"

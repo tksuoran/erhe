@@ -60,8 +60,6 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
-#include "erhe_gl/gl_log.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gltf/gltf_log.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"

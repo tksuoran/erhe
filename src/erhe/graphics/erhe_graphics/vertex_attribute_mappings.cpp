@@ -1,9 +1,10 @@
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/instance.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/vertex_format.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_graphics/shader_resource.hpp"
+
+#include <igl/Common.h>
+#include <igl/Device.h>
 
 namespace erhe::graphics
 {
@@ -11,32 +12,27 @@ namespace erhe::graphics
 using std::string;
 using std::string_view;
 
-Vertex_attribute_mappings::Vertex_attribute_mappings(
-    erhe::graphics::Instance& instance
-)
-    : m_instance{instance}
+Vertex_attribute_mappings::Vertex_attribute_mappings(igl::IDevice& device)
+    : m_device{device}
 {
 }
 
 Vertex_attribute_mappings::Vertex_attribute_mappings(
-    erhe::graphics::Instance&                       instance,
-    std::initializer_list<Vertex_attribute_mapping> mappings
+    igl::IDevice&                                   device,
+    std::initializer_list<Vertex_attribute_mapping> mappings_in
 )
-    : mappings  {mappings}
-    , m_instance{instance}
+    : mappings{mappings_in}
+    , m_device{device}
 {
 }
 
 void Vertex_attribute_mappings::collect_attributes(
     std::vector<Vertex_input_attribute>& attributes,
-    const Buffer*                        vertex_buffer,
+    const igl::IBuffer*                  vertex_buffer,
     const Vertex_format&                 vertex_format
 ) const
 {
-    const unsigned int max_attribute_count = std::min(
-        MAX_ATTRIBUTE_COUNT,
-        m_instance.limits.max_vertex_attribs
-    );
+    const unsigned int max_attribute_count = igl::IGL_VERTEX_ATTRIBUTES_MAX;
 
     if (vertex_buffer == nullptr) {
         log_vertex_attribute_mappings->error("error: vertex buffer == nullptr");
@@ -55,12 +51,11 @@ void Vertex_attribute_mappings::collect_attributes(
                 static_cast<unsigned int>(mapping.src_usage.index)
             );
             log_vertex_attribute_mappings->trace(
-                "vertex attribute: shader type = {}, name = {}, usage = {}, data_type = {}, dimension = {}, index = {}",
-                gl::c_str(mapping.shader_type),
+                "vertex attribute: shader type = {}, name = {}, usage = {}, data_type = {}, index = {}",
+                c_str(mapping.shader_type),
                 mapping.name,
                 Vertex_attribute::desc(attribute->usage.type),
-                gl::c_str(attribute->data_type.type),
-                attribute->data_type.dimension,
+                c_str(attribute->data_type),
                 attribute->usage.index
             );
 
@@ -75,15 +70,13 @@ void Vertex_attribute_mappings::collect_attributes(
 
             attributes.push_back(
                 {
-                    .layout_location = static_cast<GLuint>(mapping.layout_location),       // layout_location
-                    .vertex_buffer   = vertex_buffer,                                      // vertex buffer
-                    .stride          = static_cast<GLsizei>(vertex_format.stride()),       // stride
-                    .dimension       = static_cast<GLint>(attribute->data_type.dimension), // dimension
-                    .shader_type     = attribute->shader_type,                             // shader type
-                    .data_type       = attribute->data_type.type,                          // data type
-                    .normalized      = attribute->data_type.normalized,                    // normalized
-                    .offset          = static_cast<GLuint>(attribute->offset),             // offset
-                    .divisor         = attribute->divisor                                  // divisor
+                    .layout_location = mapping.layout_location,
+                    .vertex_buffer   = vertex_buffer,
+                    .stride          = static_cast<uint32_t>(vertex_format.stride()),
+                    .shader_type     = attribute->shader_type,
+                    .data_type       = attribute->data_type,
+                    .offset          = attribute->offset,
+                    .divisor         = attribute->divisor
                 }
             );
         }

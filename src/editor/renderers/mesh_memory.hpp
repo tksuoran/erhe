@@ -1,8 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/buffer_sink.hpp"

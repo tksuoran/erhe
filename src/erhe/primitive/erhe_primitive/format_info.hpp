@@ -31,18 +31,18 @@ public:
 class Attribute_types
 {
 public:
-    gl::Vertex_attrib_type position     {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type normal       {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type normal_flat  {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type normal_smooth{gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type tangent      {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type bitangent    {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type color        {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type texcoord     {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type id_vec3      {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type id_uint      {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type joint_indices{gl::Vertex_attrib_type::unsigned_byte};
-    gl::Vertex_attrib_type joint_weights{gl::Vertex_attrib_type::float_};
+    igl::VertexAttributeFormat position     {igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat normal       {igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat normal_flat  {igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat normal_smooth{igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat tangent      {igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat bitangent    {igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat color        {igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat texcoord     {igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat id_vec3      {igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat id_uint      {igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat joint_indices{igl::VertexAttributeFormat::unsigned_byte};
+    igl::VertexAttributeFormat joint_weights{igl::VertexAttributeFormat::float_};
 };
 
 [[nodiscard]] auto prepare_vertex_format(

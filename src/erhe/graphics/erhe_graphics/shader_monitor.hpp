@@ -14,7 +14,7 @@ class Shader_stages;
 class Shader_monitor
 {
 public:
-    Shader_monitor(Instance& instance);
+    Shader_monitor(igl::IDevice& device);
     ~Shader_monitor() noexcept;
 
     void begin();
@@ -80,7 +80,7 @@ private:
         std::set<Reload_entry, Compare_object> reload_entries;
     };
 
-    Instance&                             m_graphics_instance;
+    igl::IDevice&                         m_device;
     bool                                  m_run{false};
     std::map<std::filesystem::path, File> m_files;
     std::mutex                            m_mutex;

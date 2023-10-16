@@ -1,8 +1,7 @@
+#if 0
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_graphics/buffer_transfer_queue.hpp"
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/scoped_buffer_mapping.hpp"
@@ -70,3 +69,4 @@ void Buffer_transfer_queue::flush()
 }
 
 } // namespace erhe::graphics
+#endif

@@ -272,7 +272,7 @@ void Paint_tool::paint_vertex(
             continue;
         }
         const std::size_t range_byte_offset = geometry_primitive->gl_geometry_mesh.vertex_buffer_range.byte_offset;
-        if (attribute.get()->data_type.type == gl::Vertex_attrib_type::float_) {
+        if (attribute.get()->data_type.type == igl::VertexAttributeFormat::float_) {
             buffer.resize(sizeof(float) * 4);
             auto* const ptr = reinterpret_cast<float*>(buffer.data());
             ptr[0] = color.x;
@@ -284,7 +284,7 @@ void Paint_tool::paint_vertex(
                 range_byte_offset + vertex_offset,
                 std::move(buffer)
             );
-        } else if (attribute.get()->data_type.type == gl::Vertex_attrib_type::unsigned_byte) {
+        } else if (attribute.get()->data_type.type == igl::VertexAttributeFormat::unsigned_byte) {
             buffer.resize(sizeof(uint8_t) * 4);
             auto* const ptr = reinterpret_cast<uint8_t*>(buffer.data());
             ptr[0] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.x, 255.0f)));

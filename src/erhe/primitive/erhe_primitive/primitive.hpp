@@ -72,6 +72,6 @@ public:
     std::shared_ptr<Geometry_primitive> geometry_primitive;
 };
 
-[[nodiscard]] auto primitive_type(Primitive_mode primitive_mode) -> std::optional<gl::Primitive_type>;
+[[nodiscard]] auto primitive_type(Primitive_mode primitive_mode) -> std::optional<igl::PrimitiveType>;
 
 } // namespace erhe::primitive

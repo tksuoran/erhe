@@ -1,6 +1,7 @@
 #include "erhe_graphics/png_loader_mango_spng.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <igl/TextureFormat.h>
 
 #include "spng.h"
 
@@ -11,27 +12,27 @@
 namespace erhe::graphics
 {
 
-[[nodiscard]] auto from_spng(const enum ::spng_format format) -> Image_format
+[[nodiscard]] auto from_spng(const enum ::spng_format format) -> igl::TextureFormat
 {
     if (format == SPNG_FMT_RGB8) {
-        return Image_format::srgb8; // gl::Internal_format::rgb8;
+        return igl::TextureFormat::RGBX_UNorm8;
     }
 
     if (format == SPNG_FMT_RGBA8) {
-        return Image_format::srgb8_alpha8; //gl::Internal_format::rgba8;
+        return igl::TextureFormat::RGBA_SRGB;
     }
 
     ERHE_FATAL("unsupported PNG image color type");
 }
 
-[[nodiscard]] auto to_spng(const gl::Internal_format format) -> enum ::spng_format
+[[nodiscard]] auto to_spng(const igl::TextureFormat format) -> enum ::spng_format
 {
     //using Format = mango::image::Format;
 
     switch (format) {
         //using enum gl::Internal_format;
-        case gl::Internal_format::rgb8:  return ::spng_format::SPNG_FMT_RGB8;
-        case gl::Internal_format::rgba8: return ::spng_format::SPNG_FMT_RGBA8;
+        case igl::TextureFormat::RGBX_UNorm8: return ::spng_format::SPNG_FMT_RGB8;
+        case igl::TextureFormat::RGBA_SRGB:   return ::spng_format::SPNG_FMT_RGBA8;
         default: break;
     }
 

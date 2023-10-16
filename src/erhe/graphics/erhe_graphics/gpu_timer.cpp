@@ -1,3 +1,4 @@
+#if 0
 #include <fmt/core.h>
 #include <fmt/ostream.h>
 
@@ -276,3 +277,4 @@ Scoped_gpu_timer::~Scoped_gpu_timer() noexcept
 }
 
 } // namespace erhe::graphics
+#endif

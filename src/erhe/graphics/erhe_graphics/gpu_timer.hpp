@@ -1,3 +1,4 @@
+#if 0
 #pragma once
 
 #include "erhe_graphics/gl_objects.hpp"
@@ -69,3 +70,4 @@ private:
 };
 
 } // namespace erhe::graphics
+#endif

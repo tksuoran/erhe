@@ -4,10 +4,6 @@
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_viewport.hpp"
 
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/draw_indirect.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/instance.hpp"
@@ -16,7 +12,6 @@
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_graphics/vertex_format.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -179,15 +174,15 @@ auto get_shader_extensions(erhe::graphics::Instance& graphics_instance) -> std::
     std::vector<erhe::graphics::Shader_stage_extension> extensions;
     if (graphics_instance.info.gl_version < 430) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
-        extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
-        extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        extensions.push_back({igl::ShaderStage::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+        extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
     }
     if (graphics_instance.info.gl_version < 460) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
-        extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        extensions.push_back({igl::ShaderStage::vertex_shader,   "GL_ARB_shader_draw_parameters"});
     }
     if (graphics_instance.info.use_bindless_texture) {
-        extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_bindless_texture"});
     }
     return extensions;
 }
@@ -215,7 +210,7 @@ auto get_shader_default_uniform_block(
     if (!graphics_instance.info.use_bindless_texture) {
         default_uniform_block.add_sampler(
             "s_textures",
-            gl::Uniform_type::sampler_2d,
+            igl::UniformType::sampler_2d,
             0,
             dedicated_texture_unit
         );
@@ -287,7 +282,7 @@ Imgui_program_interface::Imgui_program_interface(
             },
             .shader_type   = gl::Attribute_type::float_vec2,
             .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
+                .type      = igl::VertexAttributeFormat::float_,
                 .dimension = 2
             }
         },
@@ -297,7 +292,7 @@ Imgui_program_interface::Imgui_program_interface(
             },
             .shader_type   = gl::Attribute_type::float_vec2,
             .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
+                .type      = igl::VertexAttributeFormat::float_,
                 .dimension = 2
             }
         },
@@ -307,7 +302,7 @@ Imgui_program_interface::Imgui_program_interface(
             },
             .shader_type    = gl::Attribute_type::float_vec4,
             .data_type = {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
+                .type       = igl::VertexAttributeFormat::unsigned_byte,
                 .normalized = true,
                 .dimension  = 4
             }
@@ -329,8 +324,8 @@ Imgui_program_interface::Imgui_program_interface(
                     ? nullptr
                     : &default_uniform_block,
                 .shaders = {
-                    { gl::Shader_type::vertex_shader,   c_vertex_shader_source },
-                    { gl::Shader_type::fragment_shader, c_fragment_shader_source }
+                    { igl::ShaderStage::vertex_shader,   c_vertex_shader_source },
+                    { igl::ShaderStage::fragment_shader, c_fragment_shader_source }
                 },
                 .build = true
             }

@@ -5,11 +5,6 @@
 #include "renderers/programs.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/draw_indirect.hpp"
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/framebuffer.hpp"

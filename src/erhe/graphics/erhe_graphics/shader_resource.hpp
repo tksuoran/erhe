@@ -1,8 +1,11 @@
 #pragma once
 
-#include "erhe_gl/wrapper_enums.hpp"
-
 #include <gsl/pointers>
+
+#include <igl/Buffer.h>
+#include <igl/Uniform.h>
+#include <igl/Device.h>
+#include <igl/VertexInputState.h>
 
 #include <deque>
 #include <optional>
@@ -13,8 +16,69 @@
 namespace erhe::graphics
 {
 
-class Instance;
 class Vertex_attribute;
+
+enum class Glsl_type
+{
+    invalid = 0,
+    float_,
+    float_vec2,
+    float_vec3,
+    float_vec4,
+    bool_,
+    int_,
+    int_vec2,
+    int_vec3,
+    int_vec4,
+    unsigned_int,
+    unsigned_int_vec2,
+    unsigned_int_vec3,
+    unsigned_int_vec4,
+    float_mat_2x2,
+    float_mat_3x3,
+    float_mat_4x4,
+    sampler_1d,
+    sampler_2d,
+    sampler_3d,
+    sampler_cube,
+    sampler_1d_shadow,
+    sampler_2d_shadow,
+    sampler_1d_array,
+    sampler_2d_array,
+    sampler_buffer,
+    sampler_1d_array_shadow,
+    sampler_2d_array_shadow,
+    sampler_cube_shadow,
+    int_sampler_1d,
+    int_sampler_2d,
+    int_sampler_3d,
+    int_sampler_cube,
+    int_sampler_1d_array,
+    int_sampler_2d_array,
+    int_sampler_buffer,
+    unsigned_int_sampler_1d,
+    unsigned_int_sampler_2d,
+    unsigned_int_sampler_3d,
+    unsigned_int_sampler_cube,
+    unsigned_int_sampler_1d_array,
+    unsigned_int_sampler_2d_array,
+    unsigned_int_sampler_buffer,
+    sampler_cube_map_array,
+    sampler_cube_map_array_shadow,
+    int_sampler_cube_map_array,
+    unsigned_int_sampler_cube_map_array,
+    sampler_2d_multisample,
+    int_sampler_2d_multisample,
+    unsigned_int_sampler_2d_multisample,
+    sampler_2d_multisample_array,
+    int_sampler_2d_multisample_array,
+    unsigned_int_sampler_2d_multisample_array,
+};
+
+auto glsl_type_name(Glsl_type type) -> const char*;
+auto get_dimension(Glsl_type type) -> std::size_t;
+
+auto c_str(igl::VertexAttributeFormat format) -> const char*;
 
 // Shader resource represents data or data structure that can
 // be made available to shader program.
@@ -64,14 +128,14 @@ public:
 
     // Struct definition
     Shader_resource(
-        Instance&              instance,
+        igl::IDevice&          device,
         const std::string_view struct_type_name,
         Shader_resource*       parent = nullptr
     );
 
     // Struct member
     Shader_resource(
-        Instance&                        instance,
+        igl::IDevice&                    device,
         const std::string_view           struct_member_name,
         gsl::not_null<Shader_resource*>  struct_type,
         const std::optional<std::size_t> array_size = {},
@@ -80,7 +144,7 @@ public:
 
     // Block (uniform block or shader storage block)
     Shader_resource(
-        Instance&                        instance,
+        igl::IDevice&                    device,
         const std::string_view           block_name,
         int                              binding_point,
         Type                             block_type,
@@ -89,26 +153,26 @@ public:
 
     // Basic type
     Shader_resource(
-        Instance&                        instance,
+        igl::IDevice&                    device,
         std::string_view                 basic_name,
-        gl::Uniform_type                 basic_type,
+        Glsl_type                        basic_type,
         const std::optional<std::size_t> array_size = {},
         Shader_resource*                 parent = nullptr
     );
 
     // Sampler
     Shader_resource(
-        Instance&                        instance,
+        igl::IDevice&                    device,
         const std::string_view           sampler_name,
         gsl::not_null<Shader_resource*>  parent,
         int                              location,
-        gl::Uniform_type                 sampler_type,
+        Glsl_type                        sampler_type,
         const std::optional<std::size_t> array_size = {},
         const std::optional<int>         dedicated_texture_unit = {}
     );
 
     // Constructor for creating  default uniform block
-    explicit Shader_resource(Instance& instance);
+    explicit Shader_resource(igl::IDevice& device);
     ~Shader_resource() noexcept;
     Shader_resource(const Shader_resource& other) = delete;
     Shader_resource(Shader_resource&& other) = default;
@@ -117,7 +181,7 @@ public:
     [[nodiscard]] auto type            () const -> Type;
     [[nodiscard]] auto name            () const -> const std::string&;
     [[nodiscard]] auto array_size      () const -> std::optional<std::size_t>;
-    [[nodiscard]] auto basic_type      () const -> gl::Uniform_type;
+    [[nodiscard]] auto basic_type      () const -> Glsl_type;
 
     // Only? for uniforms in default uniform block
     // For default uniform block, this is the next available location.
@@ -128,7 +192,7 @@ public:
     [[nodiscard]] auto member_count      () const -> std::size_t;
     [[nodiscard]] auto member            (const std::string_view name) const -> Shader_resource*;
     [[nodiscard]] auto binding_point     () const -> unsigned int;
-    [[nodiscard]] auto get_binding_target() const -> gl::Buffer_target;
+    //[[nodiscard]] auto get_binding_target() const -> gl::Buffer_target; igl::BufferType
 
     // Returns size of block.
     // For arrays, size of one element is returned.
@@ -155,7 +219,7 @@ public:
 
     auto add_sampler(
         const std::string_view           name,
-        gl::Uniform_type                 sampler_type,
+        Glsl_type                        sampler_type,
         const std::optional<int>         dedicated_texture_unit = {},
         const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
@@ -222,7 +286,7 @@ private:
 
     void indent(std::stringstream& ss, const int indent_level) const;
 
-    Instance&                  m_instance;
+    igl::IDevice&              m_device;
 
     // Any shader type declaration
     Type                       m_type{Type::default_uniform_block};
@@ -234,7 +298,7 @@ private:
 
     // Basic type declaration
     //Precision              m_precision{Precision::highp};
-    gl::Uniform_type  m_basic_type{gl::Uniform_type::bool_};
+    Glsl_type         m_basic_type{Glsl_type::bool_};
 
     // Uniforms in default uniform block - TODO plus some others?
     // For default uniform block, this is next available location (initialized to 0)

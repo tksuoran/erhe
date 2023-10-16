@@ -108,7 +108,7 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             },
             .shader_type   = gl::Attribute_type::float_vec4,
             .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
+                .type      = igl::VertexAttributeFormat::float_,
                 .dimension = 4
             }
         }
@@ -164,7 +164,7 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             .name             = "compute_before_line",
             .struct_types     = { line_vertex_struct.get(), triangle_vertex_struct.get() },
             .interface_blocks = { line_vertex_buffer_block.get(), triangle_vertex_buffer_block.get(), view_block.get() },
-            .shaders = { { gl::Shader_type::compute_shader, comp_path }, }
+            .shaders = { { igl::ShaderStage::compute_shader, comp_path }, }
         };
 
         erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
@@ -188,8 +188,8 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             .vertex_attribute_mappings = &attribute_mappings,
             .fragment_outputs          = &fragment_outputs,
             .shaders = {
-                { gl::Shader_type::vertex_shader,   vert_path },
-                { gl::Shader_type::fragment_shader, frag_path }
+                { igl::ShaderStage::vertex_shader,   vert_path },
+                { igl::ShaderStage::fragment_shader, frag_path }
             }
         };
 

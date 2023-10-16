@@ -2,8 +2,6 @@
 
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/gl_context_provider.hpp"
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"

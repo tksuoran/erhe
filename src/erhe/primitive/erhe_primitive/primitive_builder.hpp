@@ -60,7 +60,7 @@ public:
     void allocate_vertex_buffer   ();
     void allocate_index_buffer    ();
     void allocate_index_range(
-        const gl::Primitive_type primitive_type,
+        const igl::PrimitiveType primitive_type,
         const std::size_t        index_count,
         Index_range&             out_range
     );

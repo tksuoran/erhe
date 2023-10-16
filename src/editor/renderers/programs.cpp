@@ -43,7 +43,7 @@ Programs::Programs(
             ? nullptr
             : default_uniform_block.add_sampler(
                 "s_shadow",
-                gl::Uniform_type::sampler_2d_array,
+                igl::UniformType::sampler_2d_array,
                 shadow_texture_unit
             )
     }
@@ -52,7 +52,7 @@ Programs::Programs(
             ? nullptr
             : default_uniform_block.add_sampler(
                 "s_texture",
-                gl::Uniform_type::sampler_2d,
+                igl::UniformType::sampler_2d,
                 base_texture_unit,
                 s_texture_unit_count
             )
@@ -115,7 +115,7 @@ Programs::Programs(
     , debug_misc              {"debug_misc-not_loaded"}
 {
     // Not available on Dell laptop.
-    //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
+    //standard      = make_program("standard", {}, {{igl::ShaderStage::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
 
     std::vector<Shader_stages_builder> prototypes;
 

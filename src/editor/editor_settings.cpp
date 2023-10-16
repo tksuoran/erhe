@@ -2,8 +2,6 @@
 #include "editor_message_bus.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
 
 #include <fmt/format.h>
 

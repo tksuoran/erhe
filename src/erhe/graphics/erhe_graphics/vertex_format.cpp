@@ -1,6 +1,5 @@
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <gsl/assert>
@@ -35,12 +34,7 @@ void Vertex_format::add_attribute(
     const Vertex_attribute& attribute
 )
 {
-    ERHE_VERIFY(
-        (attribute.data_type.dimension >= 1) &&
-        (attribute.data_type.dimension <= 4)
-    );
-
-    const std::size_t attribute_stride = attribute.data_type.dimension * gl_helpers::size_of_type(attribute.data_type.type);
+    const std::size_t attribute_stride = get_size(attribute.data_type);
     // Note: Vertex attributes have no alignment requirements - do *not* align attribute offsets
     auto& new_attribute = m_attributes.emplace_back(attribute);
     new_attribute.offset = m_stride;

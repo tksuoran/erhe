@@ -50,7 +50,8 @@ target_link_libraries(
         glm::glm-header-only
     PRIVATE
         erhe::bit
-        erhe::gl
+        #erhe::gl
+        IGLLibrary
         erhe::log
         fmt::fmt
         Microsoft.GSL::GSL

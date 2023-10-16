@@ -1,7 +1,5 @@
 #include "image_transfer.hpp"
 
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"

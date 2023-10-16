@@ -118,8 +118,8 @@ auto Tile_renderer::make_prototype(erhe::graphics::Instance& graphics_instance) 
             ? nullptr
             : &m_default_uniform_block,
         .shaders = {
-            { gl::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path{"tile.vert"} },
-            { gl::Shader_type::fragment_shader, m_shader_path / std::filesystem::path{"tile.frag"} }
+            { igl::ShaderStage::vertex_shader,   m_shader_path / std::filesystem::path{"tile.vert"} },
+            { igl::ShaderStage::fragment_shader, m_shader_path / std::filesystem::path{"tile.frag"} }
         },
         .dump_interface    = true,
         .dump_final_source = true
@@ -127,18 +127,18 @@ auto Tile_renderer::make_prototype(erhe::graphics::Instance& graphics_instance) 
 
     if (m_graphics_instance.info.gl_version < 430) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        create_info.extensions.push_back({igl::ShaderStage::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+        create_info.extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
     }
     if (m_graphics_instance.info.gl_version < 460) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        create_info.extensions.push_back({igl::ShaderStage::vertex_shader,   "GL_ARB_shader_draw_parameters"});
         create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
     }
 
     if (m_graphics_instance.info.use_bindless_texture) {
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        create_info.extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
     return erhe::graphics::Shader_stages_prototype{graphics_instance, create_info};
@@ -169,7 +169,7 @@ Tile_renderer::Tile_renderer(
     , m_texture_sampler{
         graphics_instance.info.use_bindless_texture
             ? nullptr
-            : m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, 0)
+            : m_default_uniform_block.add_sampler("s_texture", igl::UniformType::sampler_2d, 0)
     }
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{

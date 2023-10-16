@@ -5,7 +5,6 @@
 #include "image_transfer.hpp"
 
 #include "erhe_file/file.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/png_loader.hpp"
@@ -153,17 +152,17 @@ constexpr glm::mat4 mat4_yup_from_zup{
     }
 };
 
-[[nodiscard]] auto to_erhe(const cgltf_primitive_type value) -> gl::Primitive_type
+[[nodiscard]] auto to_erhe(const cgltf_primitive_type value) -> igl::PrimitiveType
 {
     switch (value) {
-        case cgltf_primitive_type::cgltf_primitive_type_points:         return gl::Primitive_type::points;
-        case cgltf_primitive_type::cgltf_primitive_type_lines:          return gl::Primitive_type::lines;
-        case cgltf_primitive_type::cgltf_primitive_type_line_loop:      return gl::Primitive_type::line_loop;
-        case cgltf_primitive_type::cgltf_primitive_type_line_strip:     return gl::Primitive_type::line_strip;
-        case cgltf_primitive_type::cgltf_primitive_type_triangles:      return gl::Primitive_type::triangles;
-        case cgltf_primitive_type::cgltf_primitive_type_triangle_strip: return gl::Primitive_type::triangle_strip;
-        case cgltf_primitive_type::cgltf_primitive_type_triangle_fan:   return gl::Primitive_type::triangle_fan;
-        default:                                                        return gl::Primitive_type::points;
+        case cgltf_primitive_type::cgltf_primitive_type_points:         return igl::PrimitiveType::points;
+        case cgltf_primitive_type::cgltf_primitive_type_lines:          return igl::PrimitiveType::lines;
+        case cgltf_primitive_type::cgltf_primitive_type_line_loop:      return igl::PrimitiveType::line_loop;
+        case cgltf_primitive_type::cgltf_primitive_type_line_strip:     return igl::PrimitiveType::line_strip;
+        case cgltf_primitive_type::cgltf_primitive_type_triangles:      return igl::PrimitiveType::triangles;
+        case cgltf_primitive_type::cgltf_primitive_type_triangle_strip: return igl::PrimitiveType::triangle_strip;
+        case cgltf_primitive_type::cgltf_primitive_type_triangle_fan:   return igl::PrimitiveType::triangle_fan;
+        default:                                                        return igl::PrimitiveType::points;
     }
 };
 

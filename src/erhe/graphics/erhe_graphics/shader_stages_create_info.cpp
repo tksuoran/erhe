@@ -1,5 +1,5 @@
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_file/file.hpp"
@@ -7,30 +7,6 @@
 
 namespace erhe::graphics
 {
-
-auto glsl_token(gl::Attribute_type type) -> const char*
-{
-    switch (type) {
-        //using enum gl::Attribute_type;
-        case gl::Attribute_type::int_:              return "int      ";
-        case gl::Attribute_type::int_vec2:          return "ivec2    ";
-        case gl::Attribute_type::int_vec3:          return "ivec3    ";
-        case gl::Attribute_type::int_vec4:          return "ivec4    ";
-        case gl::Attribute_type::unsigned_int:      return "uint     ";
-        case gl::Attribute_type::unsigned_int_vec2: return "uvec2    ";
-        case gl::Attribute_type::unsigned_int_vec3: return "uvec3    ";
-        case gl::Attribute_type::unsigned_int_vec4: return "uvec4    ";
-        case gl::Attribute_type::unsigned_int64_arb:return "uint64_t ";
-        case gl::Attribute_type::float_:            return "float    ";
-        case gl::Attribute_type::float_vec2:        return "vec2     ";
-        case gl::Attribute_type::float_vec3:        return "vec3     ";
-        case gl::Attribute_type::float_vec4:        return "vec4     ";
-        case gl::Attribute_type::float_mat4:        return "mat4     ";
-        default: {
-            ERHE_FATAL("TODO");
-        }
-    }
-}
 
 auto Shader_stages_create_info::attributes_source() const -> std::string
 {
@@ -44,7 +20,7 @@ auto Shader_stages_create_info::attributes_source() const -> std::string
         sb << "// Attributes\n";
         for (const auto& mapping : vertex_attribute_mappings->mappings) {
             sb << "in layout(location = " << mapping.layout_location << ") ";
-            sb << glsl_token(mapping.shader_type) << " ";
+            sb << c_str(mapping.shader_type) << " ";
             sb << mapping.name,
             sb << ";\n";
         }
@@ -110,13 +86,10 @@ auto Shader_stages_create_info::interface_source() const -> std::string
     return sb.str();
 }
 
-auto Shader_stages_create_info::final_source(
-    Instance&           graphics_instance,
-    const Shader_stage& shader
-) const -> std::string
+auto Shader_stages_create_info::final_source(const Shader_stage& shader) const -> std::string
 {
     std::stringstream sb;
-    sb << "#version " << graphics_instance.info.glsl_version << " core\n\n";
+    sb << "#version 450 core\n\n";
 
     if (!pragmas.empty()) {
         sb << "// Pragmas\n";
@@ -136,9 +109,9 @@ auto Shader_stages_create_info::final_source(
         sb << "\n";
     }
 
-    if (shader.type == gl::Shader_type::vertex_shader) {
+    if (shader.type == igl::ShaderStage::Vertex) {
         sb << attributes_source();
-    } else if (shader.type == gl::Shader_type::fragment_shader) {
+    } else if (shader.type == igl::ShaderStage::Fragment) {
         sb << fragment_outputs_source();
     }
 

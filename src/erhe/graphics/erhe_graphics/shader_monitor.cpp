@@ -23,8 +23,8 @@ void Shader_monitor::begin()
     m_poll_filesystem_thread = std::thread(&Shader_monitor::poll_thread, this);
 }
 
-Shader_monitor::Shader_monitor(Instance& instance)
-    : m_graphics_instance{instance}
+Shader_monitor::Shader_monitor(igl::IDevice& device)
+    : m_device{device}
 {
 }
 
@@ -136,7 +136,7 @@ void Shader_monitor::update_once_per_frame()
     for (auto* f : m_reload_list) {
         for (const auto& entry : f->reload_entries) {
             const auto& create_info = entry.create_info;
-            erhe::graphics::Shader_stages_prototype prototype{m_graphics_instance, create_info};
+            erhe::graphics::Shader_stages_prototype prototype{m_device, create_info};
             if (prototype.is_valid()) {
                 entry.shader_stages->reload(std::move(prototype));
                 log_shader_monitor->info("Shader reload OK {}", entry.create_info.shaders.front().path.string());

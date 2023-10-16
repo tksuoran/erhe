@@ -5,35 +5,17 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_graphics/buffer_transfer_queue.cpp
     erhe_graphics/buffer_transfer_queue.hpp
-    erhe_graphics/buffer.cpp
-    erhe_graphics/buffer.hpp
     erhe_graphics/debug.cpp
     erhe_graphics/debug.hpp
     erhe_graphics/fragment_output.cpp
     erhe_graphics/fragment_output.hpp
     erhe_graphics/fragment_outputs.cpp
     erhe_graphics/fragment_outputs.hpp
-    erhe_graphics/framebuffer.cpp
-    erhe_graphics/framebuffer.hpp
-    erhe_graphics/gl_context_provider.cpp
-    erhe_graphics/gl_context_provider.hpp
-    erhe_graphics/gl_objects.cpp
-    erhe_graphics/gl_objects.hpp
     erhe_graphics/gpu_timer.cpp
     erhe_graphics/gpu_timer.hpp
     erhe_graphics/graphics_log.cpp
     erhe_graphics/graphics_log.hpp
-    erhe_graphics/instance.cpp
-    erhe_graphics/instance.hpp
-    erhe_graphics/opengl_state_tracker.cpp
-    erhe_graphics/opengl_state_tracker.hpp
-    erhe_graphics/pipeline.cpp
-    erhe_graphics/pipeline.hpp
     erhe_graphics/png_loader.hpp
-    erhe_graphics/renderbuffer.cpp
-    erhe_graphics/renderbuffer.hpp
-    erhe_graphics/sampler.cpp
-    erhe_graphics/sampler.hpp
     erhe_graphics/shader_monitor.cpp
     erhe_graphics/shader_monitor.hpp
     erhe_graphics/shader_resource.cpp
@@ -43,20 +25,6 @@ erhe_target_sources_grouped(
     erhe_graphics/shader_stages.cpp
     erhe_graphics/shader_stages.hpp
     erhe_graphics/span.hpp
-    erhe_graphics/state/color_blend_state.cpp
-    erhe_graphics/state/color_blend_state.hpp
-    erhe_graphics/state/depth_stencil_state.cpp
-    erhe_graphics/state/depth_stencil_state.hpp
-    erhe_graphics/state/input_assembly_state.cpp
-    erhe_graphics/state/input_assembly_state.hpp
-    erhe_graphics/state/rasterization_state.cpp
-    erhe_graphics/state/rasterization_state.hpp
-    erhe_graphics/state/vertex_input_state.cpp
-    erhe_graphics/state/vertex_input_state.hpp
-    erhe_graphics/state/viewport_state.cpp
-    erhe_graphics/state/viewport_state.hpp
-    erhe_graphics/texture.cpp
-    erhe_graphics/texture.hpp
     erhe_graphics/vertex_attribute_mapping.cpp
     erhe_graphics/vertex_attribute_mapping.hpp
     erhe_graphics/vertex_attribute_mappings.cpp
@@ -93,15 +61,15 @@ target_link_libraries(${_target}
     PUBLIC
         concurrentqueue
         erhe::configuration
-        erhe::gl
+        #erhe::gl
         erhe::item
+        IGLLibrary
         erhe::window
         fmt::fmt
-        glm::glm-header-only
+        glm::glm
         glslang
         Microsoft.GSL::GSL
     PRIVATE
-        IGLLibrary
         erhe::bit
         erhe::defer
         erhe::file

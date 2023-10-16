@@ -5,8 +5,6 @@
 
 #include "erhe_imgui/imgui_viewport.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
