@@ -496,11 +496,11 @@ private:
             }
         };
 
-        const std::string& file_contents = file_contents_opt.value();
+        m_file_contents = file_contents_opt.value();
         const cgltf_result parse_result = cgltf_parse(
             &parse_options,
-            file_contents.data(),
-            file_contents.size(),
+            m_file_contents.data(),
+            m_file_contents.size(),
             &m_data
         );
 
@@ -1660,6 +1660,7 @@ private:
     std::shared_ptr<erhe::scene::Node> m_root_node;
     erhe::scene::Layer_id              m_mesh_layer_id;
     std::filesystem::path              m_path;
+    std::string                        m_file_contents; // GLB needs file contents in memory
     cgltf_data*                        m_data{nullptr};
 };
 
