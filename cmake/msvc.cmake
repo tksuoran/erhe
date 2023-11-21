@@ -24,6 +24,9 @@ function (erhe_target_settings target)
 
     # Source code is UTF-8
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
+
+    # Allow glm constexpr by disabling SIMD
+    target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:GLM_FORCE_PURE>)
 endfunction()
 
 function (erhe_disable_incremental_linking)
