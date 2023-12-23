@@ -5,8 +5,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_window/renderdoc_capture.cpp
     erhe_window/renderdoc_capture.hpp
-    erhe_window/space_mouse.cpp
-    erhe_window/space_mouse.hpp
+    #erhe_window/space_mouse.cpp
+    #erhe_window/space_mouse.hpp
     erhe_window/window_log.cpp
     erhe_window/window_log.hpp
     erhe_window/window.cpp
@@ -39,7 +39,7 @@ target_link_libraries(
         MathGeoLib
         Microsoft.GSL::GSL
 )
-target_link_libraries(${_target} PUBLIC hidapi)
+#target_link_libraries(${_target} PUBLIC hidapi)
 if (ERHE_TARGET_OS_WINDOWS)
     target_link_libraries(${_target} PUBLIC Setupapi.lib)
 endif ()
