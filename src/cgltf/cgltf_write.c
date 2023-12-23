@@ -1,2 +1,2 @@
-#define CGLTF_IMPLEMENTATION 1
-#include "cgltf_write.h"
+//// #define CGLTF_IMPLEMENTATION 1
+//// #include "cgltf_write.h"
