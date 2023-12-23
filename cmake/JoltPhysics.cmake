@@ -24,6 +24,7 @@ function (FetchContent_MakeAvailable_JoltPhysics)
         option(USE_F16C "Enable F16C" ON)
         option(USE_FMADD "Enable FMADD" ON)
         option(ENABLE_ALL_WARNINGS "Enable all warnings and warnings as errors" ON)
+        option(USE_STATIC_MSVC_RUNTIME_LIBRARY "Use the static MSVC runtime library" OFF)
         
         add_definitions(-DJPH_FLOATING_POINT_EXCEPTIONS_ENABLED)
 
