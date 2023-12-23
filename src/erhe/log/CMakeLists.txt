@@ -18,7 +18,7 @@ target_link_libraries(${_target}
         #spdlog::spdlog
         spdlog::spdlog_header_only
         fmt::fmt
-        glm::glm
+        glm::glm-header-only
     PRIVATE
         erhe::hash
         erhe::configuration

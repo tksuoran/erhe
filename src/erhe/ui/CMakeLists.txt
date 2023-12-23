@@ -24,7 +24,7 @@ target_link_libraries(
         erhe::graphics
         erhe::primitive
         fmt::fmt
-        glm::glm
+        glm::glm-header-only
         glfw
     PRIVATE
         erhe::log

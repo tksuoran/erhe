@@ -77,7 +77,7 @@ endif ()
 target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
-        glm::glm
+        glm::glm-header-only
     PRIVATE
         erhe::log
         erhe::math

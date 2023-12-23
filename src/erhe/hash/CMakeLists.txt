@@ -10,6 +10,6 @@ erhe_target_sources_grouped(
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(${_target} PUBLIC glm::glm)
+target_link_libraries(${_target} PUBLIC glm::glm-header-only)
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

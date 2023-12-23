@@ -13,7 +13,7 @@ endif ()
 target_link_libraries(${_target}
     PUBLIC
         mINI
-        glm::glm
+        glm::glm-header-only
     PRIVATE
         erhe::profile
 )

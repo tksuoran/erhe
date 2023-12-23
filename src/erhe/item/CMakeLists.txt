@@ -22,7 +22,7 @@ target_link_libraries(
     ${_target}
     PUBLIC
         erhe::profile
-        glm::glm
+        glm::glm-header-only
     PRIVATE
         erhe::bit
         erhe::log

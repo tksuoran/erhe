@@ -26,7 +26,7 @@ target_link_libraries(${_target}
     PUBLIC
         erhe::gl
         erhe::window
-        glm::glm
+        glm::glm-header-only
     PRIVATE
         erhe::log
         erhe::profile

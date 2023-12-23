@@ -47,7 +47,7 @@ target_link_libraries(
         erhe::message_bus
         erhe::primitive
         erhe::profile
-        glm::glm
+        glm::glm-header-only
     PRIVATE
         erhe::bit
         erhe::gl

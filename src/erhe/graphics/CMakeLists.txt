@@ -96,7 +96,7 @@ target_link_libraries(${_target}
         erhe::gl
         erhe::window
         fmt::fmt
-        glm::glm
+        glm::glm-header-only
         #### glslang
         Microsoft.GSL::GSL
     PRIVATE

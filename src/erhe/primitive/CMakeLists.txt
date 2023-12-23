@@ -39,7 +39,7 @@ if (${ERHE_USE_PRECOMPILED_HEADERS})
 endif ()
 target_link_libraries(${_target}
     PUBLIC
-        glm::glm
+        glm::glm-header-only
         etl::etl
         erhe::geometry
         erhe::gl

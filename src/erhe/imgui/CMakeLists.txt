@@ -46,7 +46,7 @@ target_link_libraries(${_target}
         erhe::math
         erhe::rendergraph
         erhe::window
-        glm::glm
+        glm::glm-header-only
         imgui
     PRIVATE
         concurrentqueue

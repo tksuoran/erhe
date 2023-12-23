@@ -17,7 +17,7 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(
     ${_target}
     PUBLIC
-        glm::glm
+        glm::glm-header-only
     PRIVATE
         erhe::log
         erhe::profile

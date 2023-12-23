@@ -97,7 +97,7 @@ target_link_libraries(
         erhe::primitive
         erhe::profile
         fmt::fmt
-        glm::glm
+        glm::glm-header-only
     PRIVATE
         Microsoft.GSL::GSL
 )

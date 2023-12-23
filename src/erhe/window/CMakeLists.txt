@@ -35,7 +35,7 @@ target_link_libraries(
         erhe::profile
         erhe::verify
         fmt::fmt
-        glm::glm
+        glm::glm-header-only
         MathGeoLib
         Microsoft.GSL::GSL
 )
