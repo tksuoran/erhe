@@ -257,11 +257,11 @@ void Geometry::sort_point_corners()
     });
 
     ///// TODO
-    if (failures) {
-        log_geometry->error("Could not sort point corners");
-        debug_trace();
-        log_geometry->error("Could not sort point corners");
-    }
+    // if (failures) {
+    //     log_geometry->error("Could not sort point corners");
+    //     debug_trace();
+    //     log_geometry->error("Could not sort point corners");
+    // }
 }
 
 // Allocates new edge polygon.
