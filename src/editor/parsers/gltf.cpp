@@ -127,6 +127,9 @@ void import_gltf(
     bool add_default_camera = true;
     bool add_default_light = true;
     for (const auto& node : gltf_data.nodes) {
+        if (!node) {
+            continue;
+        }
         // Apply primitive data, attach node raytrace
         auto camera = erhe::scene::get_camera(node.get());
         if (camera) {
@@ -200,6 +203,9 @@ void import_gltf(
     //// }
 
     for (const auto& animation : gltf_data.animations) {
+        if (!animation) {
+            continue;
+        }
         scene_root.content_library()->animations->add(animation);
         //animation->apply(0.0f);
     }

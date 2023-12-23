@@ -1626,6 +1626,9 @@ private:
     {
         const cgltf_node* node = &m_data->nodes[node_index];
         auto& erhe_node = m_data_out.nodes.at(node_index);
+        if (!erhe_node) {
+            return;
+        }
         for (cgltf_size i = 0; i < node->children_count; ++i) {
             cgltf_node* child_node       = node->children[i];
             cgltf_size  child_node_index = child_node - m_data->nodes;
