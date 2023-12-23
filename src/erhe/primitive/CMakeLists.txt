@@ -44,6 +44,7 @@ target_link_libraries(${_target}
         erhe::geometry
         erhe::gl
         erhe::graphics # TODO Get rid of this dependency?
+        erhe::item
         erhe::math
         erhe::raytrace
     PRIVATE

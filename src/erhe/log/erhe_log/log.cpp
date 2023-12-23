@@ -1,7 +1,7 @@
 #include "erhe_log/log.hpp"
 #include "erhe_configuration/configuration.hpp"
 //#include "erhe_hash/hash.hpp"
-#include "erhe_time/timestamp.hpp"
+#include "erhe_log/timestamp.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <spdlog/sinks/base_sink.h>
@@ -74,7 +74,7 @@ void Store_log_sink::sink_it_(const spdlog::details::log_msg& msg)
     m_entries.push_back(
         Entry{
             .serial       = m_serial,
-            .timestamp    = erhe::time::timestamp_short(),
+            .timestamp    = erhe::log::timestamp_short(),
             .message      = std::string{msg.payload.begin(), msg.payload.end()},
             .logger       = std::string{msg.logger_name.begin(), msg.logger_name.end()},
             .repeat_count = 0,

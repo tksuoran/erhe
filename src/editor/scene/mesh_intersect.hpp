@@ -4,12 +4,11 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Mesh;
 }
 
-namespace erhe::raytrace
+namespace editor
 {
 
 auto intersect(
@@ -23,5 +22,4 @@ auto intersect(
     float&                      out_v
 ) -> bool;
 
-
-} // namespace erhe::raytrace
+} // namespace editor

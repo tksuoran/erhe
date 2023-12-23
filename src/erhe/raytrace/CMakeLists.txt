@@ -50,8 +50,6 @@ erhe_target_sources_grouped(
     erhe_raytrace/igeometry.hpp
     erhe_raytrace/iinstance.hpp
     erhe_raytrace/iscene.hpp
-    erhe_raytrace/mesh_intersect.cpp
-    erhe_raytrace/mesh_intersect.hpp
     erhe_raytrace/ray.cpp
     erhe_raytrace/ray.hpp
     erhe_raytrace/raytrace_log.cpp
@@ -64,9 +62,8 @@ endif ()
 target_link_libraries(${_target}
     PUBLIC
         erhe::hash
-        erhe::primitive
+        erhe::geometry
         erhe::profile
-        erhe::scene
         erhe::verify
     PRIVATE
         ${impl_link_libraries}

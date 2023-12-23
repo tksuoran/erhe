@@ -1,10 +1,10 @@
-#include "erhe_raytrace/mesh_intersect.hpp"
-#include "erhe_raytrace/raytrace_log.hpp"
+#include "scene/mesh_intersect.hpp"
+#include "editor_log.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::raytrace
+namespace editor
 {
 
 using erhe::geometry::c_point_locations;
@@ -68,7 +68,7 @@ auto ray_triangle_intersect(
     return true;
 }
 
-}
+} // namespace
 
 auto intersect(
     const erhe::scene::Mesh&    mesh,
@@ -125,7 +125,7 @@ auto intersect(
                 float hit_v;
                 const bool hit = ray_triangle_intersect(origin_in_mesh, direction_in_mesh, v0, v1, v2, hit_t, hit_u, hit_v);
                 if (hit) {
-                    log_geometry->trace(
+                    log_raytrace->trace(
                         "hit polygon {} {}-{}-{} with t = {}",
                         i.polygon_id,
                         first_point_id,
@@ -146,9 +146,9 @@ auto intersect(
     }
 
     if (out_t != std::numeric_limits<float>::max()) {
-        log_geometry->trace("final hit polygon {} with t = {}", out_polygon_id, out_t);
+        log_raytrace->trace("final hit polygon {} with t = {}", out_polygon_id, out_t);
     }
     return out_t != std::numeric_limits<float>::max();
 }
 
-} // namespace
+} // namespace editor

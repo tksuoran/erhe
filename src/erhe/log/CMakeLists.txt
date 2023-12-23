@@ -6,6 +6,8 @@ erhe_target_sources_grouped(
     erhe_log/log.cpp
     erhe_log/log.hpp
     erhe_log/log_glm.hpp
+    erhe_log/timestamp.cpp
+    erhe_log/timestamp.hpp
 )
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})
@@ -19,7 +21,6 @@ target_link_libraries(${_target}
         glm::glm
     PRIVATE
         erhe::hash
-        erhe::time
         erhe::configuration
         erhe::verify
 )

@@ -25,6 +25,7 @@ target_link_libraries(
         erhe::graphics
         erhe::math
         erhe::primitive
+        erhe::scene
         erhe::ui
         Microsoft.GSL::GSL
     PRIVATE
