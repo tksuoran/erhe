@@ -31,7 +31,8 @@ class Scene_open_operation
 {
 public:
     Scene_open_operation(
-        const std::filesystem::path& path
+        const std::filesystem::path& path,
+        const bool                   y_up
     );
 
     // Implements IOperation
@@ -43,16 +44,18 @@ private:
     std::filesystem::path            m_path;
     std::shared_ptr<Scene_root>      m_scene_root;
     std::shared_ptr<Content_library> m_content_library;
+    bool                             m_y_up;
 };
 
-Scene_open_operation::Scene_open_operation(const std::filesystem::path& path)
+Scene_open_operation::Scene_open_operation(const std::filesystem::path& path, const bool y_up)
     : m_path{path}
+    , m_y_up{y_up}
 {
 }
 
 auto Scene_open_operation::describe() const -> std::string
 {
-    return fmt::format("Scene_open_operation(path = {})", m_path.string());
+    return fmt::format("Scene_open_operation(path = {}, y_up = {})", m_path.string(), m_y_up);
 }
 
 void Scene_open_operation::execute(Editor_context& context)
@@ -91,7 +94,8 @@ void Scene_open_operation::execute(Editor_context& context)
                 .buffer_info = context.mesh_memory->buffer_info
             },
             *m_scene_root.get(),
-            m_path
+            m_path,
+            m_y_up
         );
     } else {
         // Re-register
@@ -262,6 +266,53 @@ void Asset_browser::scan()
     scan(assets_root, m_root.get());
 }
 
+auto Asset_browser::try_import(
+    const std::shared_ptr<Asset_file_gltf>& gltf,
+    const bool                              y_up
+) -> bool
+{
+    std::string import_label = fmt::format("Import {} '{}'", y_up ? "Y-up" : "Z-up", erhe::file::to_string(gltf->get_source_path()));
+    if (ImGui::MenuItem(import_label.c_str())) {
+        import_gltf(
+            *m_context.graphics_instance,
+            erhe::primitive::Build_info{
+                .primitive_types = {
+                    .fill_triangles  = true,
+                    .edge_lines      = true,
+                    .corner_points   = true,
+                    .centroid_points = true
+                },
+                .buffer_info = m_context.mesh_memory->buffer_info
+            },
+            *m_context.scene_builder->get_scene_root().get(),
+            gltf->get_source_path(),
+            y_up
+        );
+        ImGui::CloseCurrentPopup();
+        return true;
+    }
+    return false;
+}
+
+auto Asset_browser::try_open(
+    const std::shared_ptr<Asset_file_gltf>& gltf,
+    const bool                              y_up
+) -> bool
+{
+    std::string open_label = fmt::format("Open {} '{}'", y_up ? "Y-up" : "Z-up", erhe::file::to_string(gltf->get_source_path()));
+    if (ImGui::MenuItem(open_label.c_str())) {
+        //////
+        m_context.operation_stack->queue(
+            std::make_shared<Scene_open_operation>(gltf->get_source_path(), y_up)
+        );
+
+        m_popup_node = nullptr;
+        ImGui::CloseCurrentPopup();
+        return true;
+    }
+    return false;
+}
+
 auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     const auto gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
@@ -302,36 +353,13 @@ auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) 
                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
             );
             if (begin_popup_context_item) {
-                std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(gltf->get_source_path()));
-                if (ImGui::MenuItem(import_label.c_str())) {
-                    import_gltf(
-                        *m_context.graphics_instance,
-                        erhe::primitive::Build_info{
-                            .primitive_types = {
-                                .fill_triangles  = true,
-                                .edge_lines      = true,
-                                .corner_points   = true,
-                                .centroid_points = true
-                            },
-                            .buffer_info = m_context.mesh_memory->buffer_info
-                        },
-                        *m_context.scene_builder->get_scene_root().get(),
-                        gltf->get_source_path()
-                    );
-
+                if (
+                    try_import(gltf, true ) ||
+                    try_import(gltf, false) || 
+                    try_open  (gltf, true ) ||
+                    try_open  (gltf, false)
+                ) {
                     m_popup_node = nullptr;
-                    ImGui::CloseCurrentPopup();
-                }
-
-                std::string open_label = fmt::format("Open '{}'", erhe::file::to_string(gltf->get_source_path()));
-                if (ImGui::MenuItem(open_label.c_str())) {
-                    //////
-                    m_context.operation_stack->queue(
-                        std::make_shared<Scene_open_operation>(gltf->get_source_path())
-                    );
-
-                    m_popup_node = nullptr;
-                    ImGui::CloseCurrentPopup();
                 }
 
                 ImGui::EndPopup();

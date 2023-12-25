@@ -68,7 +68,8 @@ void import_gltf(
     erhe::graphics::Instance&    graphics_instance,
     erhe::primitive::Build_info  build_info,
     Scene_root&                  scene_root,
-    const std::filesystem::path& path
+    const std::filesystem::path& path,
+    bool                         y_up
 )
 {
     erhe::scene::Scene* scene = scene_root.get_hosted_scene();
@@ -82,15 +83,18 @@ void import_gltf(
     root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     root_node->set_parent(scene_root_node);
 
-    const erhe::scene::Layer_id content_layer_id = scene_root.layers().content()->id;
     erhe::gltf::Image_transfer image_transfer{graphics_instance};
-    erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(
-        graphics_instance,
-        image_transfer,
-        root_node,
-        content_layer_id,
-        path
-    );
+
+    erhe::gltf::Gltf_parse_arguments parse_arguments
+    {
+        .graphics_instance  = graphics_instance,
+        .image_transfer     = image_transfer,
+        .root_node          = root_node,
+        .mesh_layer_id      = scene_root.layers().content()->id,
+        .path               = path,
+        .coordinate_system  = y_up ? erhe::gltf::Coordinate_system::Y_up : erhe::gltf::Coordinate_system::Z_up
+    };
+    erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 
     for (const auto& geometry_primitive : gltf_data.geometry_primitives) {
         geometry_primitive->build_from_geometry(build_info, erhe::primitive::Normal_style::corner_normals);

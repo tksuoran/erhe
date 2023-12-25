@@ -64,13 +64,22 @@ public:
     std::vector<std::string> scenes;
 };
 
-[[nodiscard]] auto parse_gltf(
-    erhe::graphics::Instance&                 graphics_instance,
-    Image_transfer&                           image_transfer,
-    const std::shared_ptr<erhe::scene::Node>& root_node,
-    erhe::scene::Layer_id                     mesh_layer_id,
-    std::filesystem::path                     path
-) -> Gltf_data;
+enum class Coordinate_system : unsigned int {
+    Y_up = 0,
+    Z_up = 1
+};
+
+struct Gltf_parse_arguments
+{
+    erhe::graphics::Instance&                 graphics_instance;
+    Image_transfer&                           image_transfer;
+    const std::shared_ptr<erhe::scene::Node>& root_node;
+    erhe::scene::Layer_id                     mesh_layer_id;
+    std::filesystem::path                     path;
+    Coordinate_system                         coordinate_system{Coordinate_system::Y_up};
+};
+
+[[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;
 
 [[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
 
