@@ -75,9 +75,10 @@ auto Geometry::compute_tangents(
     class Geometry_context
     {
     public:
-        Geometry* geometry         {nullptr};
-        int       triangle_count   {0};
-        bool      override_existing{false};
+        Geometry* geometry           {nullptr};
+        int       triangle_count     {0};
+        bool      override_existing  {false};
+        int       tangent_error_count{0};
 
         Property_map<Polygon_id, vec3>* polygon_normals     {nullptr};
         Property_map<Polygon_id, vec3>* polygon_centroids   {nullptr};
@@ -446,10 +447,7 @@ auto Geometry::compute_tangents(
                 (std::abs(N_dot_T0) > 0.01f) ||
                 (std::abs(N_dot_B0) > 0.01f)
             ) {
-                log_tangent_gen->error(
-                    "polygon_id = {}, corner_id = {}, P = {}, N = {}, T0 = {}, B0 = {}",
-                    polygon_id, corner_id, P, N, T0, B0
-                );
+                ++context->tangent_error_count;
             }
             //ERHE_VERIFY(std::abs(N_dot_B0) < 0.01f);
             const vec3  T        = glm::normalize(T0 - N_dot_T0 * N);
@@ -615,6 +613,11 @@ auto Geometry::compute_tangents(
     if (corner_bitangents) {
         m_serial_corner_bitangents = m_serial;
     }
+
+    if (g.tangent_error_count != 0) {
+        log_tangent_gen->warn("{} geometry = {} - tangent errors (T or B collinear with N) count = {}.", __func__, name, g.tangent_error_count);
+    }
+
     return true;
 }
 

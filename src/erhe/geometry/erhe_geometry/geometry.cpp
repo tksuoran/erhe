@@ -262,6 +262,8 @@ void Geometry::build_edges(bool is_manifold)
     std::size_t polygon_index{0};
 
     std::size_t polygon_edge_count = 0;
+
+    std::size_t non_manifold_edge_count = 0;
     // First pass - shared edges
     {
         ERHE_PROFILE_SCOPE("first pass");
@@ -274,7 +276,8 @@ void Geometry::build_edges(bool is_manifold)
                 const Point_id b = j.corner.point_id;
                 ++polygon_edge_count;
                 if (a == b) {
-                    log_build_edges->warn("Bad edge {} - {}", a, b);
+                    //log_build_edges->warn("Bad edge {} - {}", a, b);
+                    ++non_manifold_edge_count;
                     return;
                 }
                 if (a < b) { // This does not work for non-shared edges going wrong direction
@@ -337,6 +340,10 @@ void Geometry::build_edges(bool is_manifold)
                 }
             });
         });
+    }
+
+    if (non_manifold_edge_count > 0) {
+        log_build_edges->warn("Geometry {}: Non-manifold edge count = {}", name, non_manifold_edge_count);
     }
 
     m_serial_edges = m_serial;

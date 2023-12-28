@@ -7,13 +7,17 @@
 
 #include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
 
 #include <fmt/format.h>
 
@@ -85,14 +89,13 @@ void import_gltf(
 
     erhe::gltf::Image_transfer image_transfer{graphics_instance};
 
-    erhe::gltf::Gltf_parse_arguments parse_arguments
-    {
-        .graphics_instance  = graphics_instance,
-        .image_transfer     = image_transfer,
-        .root_node          = root_node,
-        .mesh_layer_id      = scene_root.layers().content()->id,
-        .path               = path,
-        .coordinate_system  = y_up ? erhe::gltf::Coordinate_system::Y_up : erhe::gltf::Coordinate_system::Z_up
+    erhe::gltf::Gltf_parse_arguments parse_arguments{
+        .graphics_instance = graphics_instance,
+        .image_transfer    = image_transfer,
+        .root_node         = root_node,
+        .mesh_layer_id     = scene_root.layers().content()->id,
+        .path              = path,
+        .coordinate_system = y_up ? erhe::gltf::Coordinate_system::Y_up : erhe::gltf::Coordinate_system::Z_up
     };
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 
@@ -102,16 +105,22 @@ void import_gltf(
 
     std::shared_ptr<Content_library> content_library = scene_root.content_library();
 
-    // for (const auto& image : gltf_data.images) {
-    //     content_library->textures.add(image);
-    // }
+    for (const auto& image : gltf_data.images) {
+        if (image) {
+            content_library->textures->add(image);
+        }
+    }
 
     for (const auto& material : gltf_data.materials) {
-        content_library->materials->add(material);
+        if (material) {
+            content_library->materials->add(material);
+        }
     }
 
     for (const auto& skin : gltf_data.skins) {
-        content_library->skins->add(skin);
+        if (skin) {
+            content_library->skins->add(skin);
+        }
     }
 
     // Assign node colors
@@ -154,6 +163,15 @@ void import_gltf(
 
         if (node->get_parent_node() == root_node) {
             color_graph(node.get(), node_colors, available_colors);
+        }
+    }
+    if (!scene->get_cameras().empty()) {
+        add_default_camera = false;
+    }
+    for (const auto& layer : scene->get_light_layers()) {
+        if (!layer->lights.empty()) {
+            add_default_light = false;
+            break;
         }
     }
 

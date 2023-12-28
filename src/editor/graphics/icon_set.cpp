@@ -7,7 +7,9 @@
 
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)

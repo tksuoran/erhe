@@ -35,7 +35,7 @@ public:
         const float            metallic   = 0.0f
     );
 
-    // Interface similar to erhe::scene::Scene_item
+    // Implements Item_base
     static constexpr std::string_view static_type_name{"Material"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;

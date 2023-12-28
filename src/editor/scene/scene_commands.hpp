@@ -15,6 +15,9 @@ namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
 }
+namespace erhe::primitive {
+    class Material;
+}
 namespace erhe::rendergraph {
     class Rendergraph;
 }
@@ -92,6 +95,7 @@ public:
     auto create_new_light       (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
     auto create_new_rendertarget(erhe::scene::Node* parent = nullptr) -> std::shared_ptr<Rendertarget_mesh>;
     auto get_scene_root         (erhe::scene::Node* parent) const -> Scene_root*;
+    auto get_scene_root         (erhe::primitive::Material* material) const -> Scene_root*;
 
 private:
     Editor_context& m_context;

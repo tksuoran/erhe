@@ -99,13 +99,38 @@ auto Scene_commands::get_scene_root(
     const auto  first_selected_scene = m_context.selection->get<erhe::scene::Scene>();
     const auto& viewport_window      = m_context.viewport_windows->last_window();
 
-    erhe::Item_host* item_host = first_selected_node
-        ? first_selected_node->get_item_host()
-        : first_selected_scene
-            ? first_selected_scene->get_root_node()->get_item_host()
-            : viewport_window
-                ? viewport_window->get_scene_root().get()
-                : nullptr;
+    erhe::Item_host* item_host = first_selected_node ? first_selected_node->get_item_host() : nullptr;
+    if ((item_host == nullptr) && first_selected_scene) {
+        item_host = first_selected_scene->get_root_node()->get_item_host();
+    }
+    if ((item_host == nullptr) && viewport_window) {
+        return viewport_window->get_scene_root().get();
+    }
+    if (item_host == nullptr) {
+        return nullptr;
+    }
+    Scene_root* scene_root = static_cast<Scene_root*>(item_host);
+    return scene_root;
+}
+
+auto Scene_commands::get_scene_root(
+    erhe::primitive::Material* material
+) const -> Scene_root*
+{
+    const auto  first_selected_node  = m_context.selection->get<erhe::scene::Node>();
+    const auto  first_selected_scene = m_context.selection->get<erhe::scene::Scene>();
+    const auto& viewport_window      = m_context.viewport_windows->last_window();
+
+    erhe::Item_host* item_host = (material != nullptr) ? material->get_item_host() : nullptr;
+    if ((item_host == nullptr) && first_selected_node) {
+        item_host = first_selected_node->get_item_host();
+    }
+    if ((item_host == nullptr) && first_selected_scene) {
+        item_host = first_selected_scene->get_root_node()->get_item_host();
+    }
+    if ((item_host == nullptr) && viewport_window) {
+        return viewport_window->get_scene_root().get();
+    }
     if (item_host == nullptr) {
         return nullptr;
     }

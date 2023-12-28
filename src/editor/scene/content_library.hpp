@@ -2,19 +2,10 @@
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
-#include "tools/brushes/brush.hpp"
 #include "graphics/icon_set.hpp"
 
-#include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_primitive/material.hpp"
 #include "erhe_item/hierarchy.hpp"
-#include "erhe_scene/animation.hpp"
-#include "erhe_scene/camera.hpp"
-#include "erhe_scene/mesh.hpp"
-#include "erhe_scene/node.hpp"
-#include "erhe_scene/scene.hpp"
-#include "erhe_scene/skin.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>

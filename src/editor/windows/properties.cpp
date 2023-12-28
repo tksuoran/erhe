@@ -8,6 +8,7 @@
 #include "scene/frame_controller.hpp"
 #include "scene/material_preview.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/animation_curve.hpp"
 #include "windows/brdf_slice.hpp"
@@ -16,6 +17,7 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/geometry_mesh.hpp"
@@ -655,6 +657,12 @@ void Properties::material_properties()
             ImGui::ColorEdit4 ("Base Color",  &selected_material->base_color.x, ImGuiColorEditFlags_Float);
             ImGui::ColorEdit4 ("Emissive",    &selected_material->emissive.x,   ImGuiColorEditFlags_Float);
             ImGui::SliderFloat("Opacity",     &selected_material->opacity,      0.0f,  1.0f);
+            Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material.get());
+            if (scene_root != nullptr) {
+                const auto& content_library = scene_root->content_library();
+                content_library->textures->combo(m_context, "Base Color Texture",         selected_material->base_color_texture,         true);
+                content_library->textures->combo(m_context, "Metallic Roughness Texture", selected_material->metallic_roughness_texture, true);
+            }
             ImGui::TreePop();
         }
     }

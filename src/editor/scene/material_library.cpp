@@ -1,6 +1,7 @@
 #include "scene/material_library.hpp"
 
 #include "erhe_math/math_util.hpp"
+#include "erhe_primitive/material.hpp"
 
 #include <fmt/format.h>
 

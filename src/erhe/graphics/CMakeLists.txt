@@ -94,6 +94,7 @@ target_link_libraries(${_target}
         concurrentqueue
         erhe::configuration
         erhe::gl
+        erhe::item
         erhe::window
         fmt::fmt
         glm::glm-header-only

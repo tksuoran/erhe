@@ -239,7 +239,7 @@ public:
         static_cast<void>(new_flag_bits);
     }
 
-    [[nodiscard]] auto get_id() const -> std::size_t;
+    [[nodiscard]] auto get_id                      () const -> std::size_t;
     [[nodiscard]] auto get_flag_bits               () const -> uint64_t;
     [[nodiscard]] auto is_no_transform_update      () const -> bool;
     [[nodiscard]] auto is_transform_world_normative() const -> bool;

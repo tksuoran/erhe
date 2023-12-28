@@ -224,6 +224,23 @@ auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
     }
 }
 
+auto Texture::get_static_type() -> uint64_t
+{
+    return erhe::Item_type::texture;
+}
+
+auto Texture::get_type() const -> uint64_t
+{
+    return get_static_type();
+}
+
+auto Texture::get_type_name() const -> std::string_view
+{
+    return static_type_name;
+}
+
+Texture::Texture(Texture&&) noexcept = default;
+
 Texture::~Texture() noexcept
 {
     SPDLOG_LOGGER_TRACE(
@@ -309,7 +326,8 @@ auto Texture_create_info::calculate_level_count() const -> int
 }
 
 Texture::Texture(const Create_info& create_info)
-    : m_handle                {create_info.target, create_info.wrap_texture_name}
+    : Item                    {create_info.debug_label}
+    , m_handle                {create_info.target, create_info.wrap_texture_name}
     , m_target                {create_info.target}
     , m_internal_format       {create_info.internal_format}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
@@ -332,6 +350,9 @@ Texture::Texture(const Create_info& create_info)
         m_height,
         gl::c_str(m_internal_format)
     );
+
+    enable_flag_bits(erhe::Item_flags::show_in_ui);
+    set_debug_label(create_info.debug_label);
 
     Instance& instance = create_info.instance;
     m_sample_count = std::min(m_sample_count, instance.limits.max_samples);

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "erhe_graphics/gl_objects.hpp"
+#include "erhe_item/item.hpp"
+#include "erhe_item/unique_id.hpp"
 
 #include <gsl/span>
 
@@ -38,19 +40,32 @@ public:
     int                 row_stride            {0};
     Buffer*             buffer                {nullptr};
     GLuint              wrap_texture_name     {0};
+    std::string         debug_label;
 };
 
 class Texture
+    : public erhe::Item<erhe::Item_base, erhe::Item_base, Texture, erhe::Item_kind::not_clonable>
 {
 public:
+    Texture           (const Texture&) = delete;
+    Texture& operator=(const Texture&) = delete;
+    Texture(Texture&&) noexcept;
+    Texture& operator=(Texture&&) = delete;
+    ~Texture() noexcept override;
+
+    explicit Texture(const Texture_create_info& create_info);
+
+    // Implements Item_base
+    static constexpr std::string_view static_type_name{"Material"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
+
     using Create_info = Texture_create_info;
 
     static auto storage_dimensions(gl::Texture_target target) -> int;
     static auto mipmap_dimensions (gl::Texture_target target) -> int;
     static auto size_level_count  (int size) -> int;
-
-    explicit Texture(const Create_info& create_info);
-    ~Texture        () noexcept;
 
     void upload(
         gl::Internal_format internal_format,
