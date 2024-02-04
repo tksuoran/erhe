@@ -22,6 +22,12 @@
             }
         },
         {
+            "name": "Configure Empty",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
             "name": "Configure Debug",
             "inherits": "Configure Base",
             "cacheVariables": {
@@ -241,6 +247,10 @@
             "hidden": true,
             "verbose": false,
             "configurePreset": "Configure Base"
+        },
+        {
+            "name": "Build Empty",
+            "configurePreset": "Configure Empty"
         },
         {
             "name": "Build Debug",

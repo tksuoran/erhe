@@ -9,7 +9,7 @@
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
-#include "operations/Item_parent_change_operation.hpp"
+#include "operations/item_parent_change_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/asset_browser.hpp"
 #include "scene/node_physics.hpp"

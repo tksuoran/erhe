@@ -11,6 +11,8 @@
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Physics/Body/Body.h>
 
+#include <cstdarg>
+
 namespace erhe::physics
 {
 

@@ -94,6 +94,8 @@ FetchContent_MakeAvailable(etl)
 
 message("Fetching glm")
 FetchContent_MakeAvailable(glm)
+# Enable GLM_GTX_component_wise
+add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
 message("Fetching GSL")
 FetchContent_MakeAvailable(GSL)
