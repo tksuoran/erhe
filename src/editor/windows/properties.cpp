@@ -62,6 +62,11 @@ Properties::Properties(
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Properties::animation_properties(erhe::scene::Animation& animation) const
 {
+    static float time       = 0.0f;
+    static float start_time = 0.0f;
+    static float end_time   = 5.0f;
+
+    const bool time_changed = ImGui::SliderFloat("Time##animation-time", &time, start_time, end_time);
     ImGui::Text("Samplers: %d", static_cast<int>(animation.samplers.size()));
     ImGui::Text("Channels: %d", static_cast<int>(animation.channels.size()));
     //ImGui::BulletText("Samplers");
@@ -88,12 +93,6 @@ void Properties::animation_properties(erhe::scene::Animation& animation) const
     //ImGui::Unindent(10.0f);
 
     animation_curve(animation);
-
-    static float time       = 0.0f;
-    static float start_time = 0.0f;
-    static float end_time   = 5.0f;
-
-    const bool time_changed = ImGui::SliderFloat("Time##animation-time", &time, start_time, end_time);
 
     if (!time_changed) {
         return;

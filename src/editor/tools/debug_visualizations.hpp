@@ -119,7 +119,7 @@ private:
 
     Visualization_mode m_lights                 {Visualization_mode::None};
     Visualization_mode m_cameras                {Visualization_mode::None};
-    Visualization_mode m_skins                  {Visualization_mode::None};
+    Visualization_mode m_skins                  {Visualization_mode::All};
     Visualization_mode m_node_axis_visualization{Visualization_mode::None};
     Visualization_mode m_physics_visualization  {Visualization_mode::None};
     Visualization_mode m_point_labels           {Visualization_mode::None};

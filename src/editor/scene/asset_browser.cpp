@@ -353,12 +353,9 @@ auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) 
                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
             );
             if (begin_popup_context_item) {
-                if (
-                    try_import(gltf, true ) ||
-                    try_import(gltf, false) || 
-                    try_open  (gltf, true ) ||
-                    try_open  (gltf, false)
-                ) {
+                // Z-Up is experimental (Blender has been able to export Z-Up):
+                // try_import(gltf, false) || try_open  (gltf, false)
+                if (try_import(gltf, true) || try_open(gltf, true)) {
                     m_popup_node = nullptr;
                 }
 
