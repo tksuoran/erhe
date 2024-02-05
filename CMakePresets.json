@@ -23,6 +23,7 @@
         },
         {
             "name": "Configure Empty",
+            "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
