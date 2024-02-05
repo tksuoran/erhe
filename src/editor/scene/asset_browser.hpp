@@ -1,5 +1,7 @@
 #pragma once
 
+#include "windows/item_tree_window.hpp"
+
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_item/hierarchy.hpp"
 
@@ -16,7 +18,6 @@ namespace editor
 {
 
 class Editor_context;
-class Item_tree_window;
 
 class Asset_node
     : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Asset_node>
@@ -86,6 +87,27 @@ public:
     auto get_type_name() const -> std::string_view override;
 };
 
+class Asset_browser;
+
+class Asset_browser_window : public Item_tree_window
+{
+public:
+    Asset_browser_window(
+        Asset_browser&                          asset_browser,
+        erhe::imgui::Imgui_renderer&            imgui_renderer,
+        erhe::imgui::Imgui_windows&             imgui_windows,
+        Editor_context&                         context,
+        const std::string_view                  window_title,
+        const std::string_view                  ini_label,
+        const std::shared_ptr<erhe::Hierarchy>& root
+    );
+
+    void imgui() override;
+
+private:
+    Asset_browser& m_asset_browser;
+};
+
 class Asset_browser
 {
 public:
@@ -95,8 +117,9 @@ public:
         Editor_context&              editor_context
     );
 
-private:
     void scan();
+
+private:
     void scan(const std::filesystem::path& path, Asset_node* parent);
 
     auto make_node    (const std::filesystem::path& path, Asset_node* parent) -> std::shared_ptr<Asset_node>;
@@ -108,8 +131,8 @@ private:
     Editor_context& m_context;
     Asset_node*     m_popup_node{nullptr};
 
-    std::shared_ptr<Asset_node>       m_root;
-    std::shared_ptr<Item_tree_window> m_node_tree_window;
+    std::shared_ptr<Asset_node>           m_root;
+    std::shared_ptr<Asset_browser_window> m_node_tree_window;
 };
 
 } // namespace editor

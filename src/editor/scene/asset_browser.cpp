@@ -177,6 +177,28 @@ auto Asset_browser::make_node(
     return new_node;
 }
 
+Asset_browser_window::Asset_browser_window(
+    Asset_browser&                          asset_browser,
+    erhe::imgui::Imgui_renderer&            imgui_renderer,
+    erhe::imgui::Imgui_windows&             imgui_windows,
+    Editor_context&                         context,
+    const std::string_view                  window_title,
+    const std::string_view                  ini_label,
+    const std::shared_ptr<erhe::Hierarchy>& root
+)
+    : Item_tree_window{imgui_renderer, imgui_windows, context, window_title, ini_label, root}
+    , m_asset_browser{asset_browser}
+{
+}
+
+void Asset_browser_window::imgui()
+{
+    if (ImGui::Button("Scan")) {
+        m_asset_browser.scan();
+    }
+    Item_tree_window::imgui();
+}
+
 Asset_browser::Asset_browser(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -186,7 +208,8 @@ Asset_browser::Asset_browser(
 {
     scan();
 
-    m_node_tree_window = std::make_shared<Item_tree_window>(
+    m_node_tree_window = std::make_shared<Asset_browser_window>(
+        *this,
         imgui_renderer, 
         imgui_windows, 
         editor_context,
