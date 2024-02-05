@@ -178,10 +178,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     JoltPhysics
-    #GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
-    #GIT_TAG         origin/master
-    GIT_REPOSITORY   https://github.com/tksuoran/JoltPhysics.git
-    GIT_TAG          gcc-fixes
+    GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
+    GIT_TAG         origin/master
+    #GIT_REPOSITORY   https://github.com/tksuoran/JoltPhysics.git
+    #GIT_TAG          gcc-fixes
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )
