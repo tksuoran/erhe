@@ -348,7 +348,7 @@ cgltf_result cgltf_custom_file_read(
 )
 {
     std::string str_path{path};
-    std::filesystem::path fs_path = std::filesystem::u8path(str_path);
+    std::filesystem::path fs_path = std::filesystem::path((const char8_t*)&*path);
     std::optional<std::string> file_contents_opt = erhe::file::read("cgltf file read", fs_path);
     if (!file_contents_opt.has_value())  {
         if (size != nullptr) {

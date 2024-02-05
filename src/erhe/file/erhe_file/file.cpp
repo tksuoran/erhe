@@ -19,7 +19,7 @@ auto to_string(const std::filesystem::path& path) -> std::string
 
 auto from_string(const std::string& path) -> std::filesystem::path
 {
-    return std::filesystem::u8path(path);
+    return std::filesystem::path((const char8_t*)&*path.c_str());
 }
 
 [[nodiscard]] auto check_is_existing_non_empty_regular_file(
