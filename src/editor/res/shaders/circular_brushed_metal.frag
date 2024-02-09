@@ -5,7 +5,7 @@ in vec2      v_aniso_control;
 in mat3      v_TBN;
 in flat uint v_material_index;
 
-const uint  max_u32 = 4294967295;
+const uint  max_u32 = 4294967295u;
 
 vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
 {

@@ -96,13 +96,13 @@ void erhe_opengl_callback(
             : ""
     );
 
-    if (severity == gl::Debug_severity::debug_severity_high) {
-#if defined(WIN32)
-        DebugBreak();
-#else
-        raise(SIGTRAP);
-#endif
-    }
+//    if (severity == gl::Debug_severity::debug_severity_high) {
+//#if defined(WIN32)
+//        DebugBreak();
+//#else
+//        raise(SIGTRAP);
+//#endif
+//    }
 }
 
 Scoped_debug_group::Scoped_debug_group(

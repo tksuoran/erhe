@@ -344,11 +344,12 @@ Texture::Texture(const Create_info& create_info)
 {
     SPDLOG_LOGGER_TRACE(
         log_texture,
-        "Created texture {} {}x{} {}",
+        "New texture {} {}x{} {} sample count = {}",
         gl_name(),
         m_width,
         m_height,
-        gl::c_str(m_internal_format)
+        gl::c_str(m_internal_format),
+        m_sample_count
     );
 
     enable_flag_bits(erhe::Item_flags::show_in_ui);
@@ -476,6 +477,16 @@ Texture::Texture(const Create_info& create_info)
             ERHE_FATAL("Bad texture target");
         }
     }
+
+    SPDLOG_LOGGER_TRACE(
+        log_texture,
+        "Created texture {} {}x{} {} sample count = {}",
+        gl_name(),
+        m_width,
+        m_height,
+        gl::c_str(m_internal_format),
+        m_sample_count
+    );
 }
 
 auto Texture::is_sparse() const -> bool

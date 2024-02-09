@@ -379,7 +379,8 @@ template <typename T>
     std::array<const char* , 1> sources{ c_source };
 
     log_glsl->trace(
-        "Shader_stage source:\n{}\n",
+        "Shader_stage source:\nPath: {}\n{}\n",
+        shader.path.string(),
         format_source(m_create_info.final_source(m_graphics_instance, shader))
     );
 

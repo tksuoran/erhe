@@ -7,7 +7,7 @@ in flat uint v_material_index;
 
 const float m_pi    = 3.1415926535897932384626434;
 const float m_i_pi  = 0.3183098861837906715377675;
-const uint  max_u32 = 4294967295;
+const uint  max_u32 = 4294967295u;
 
 vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
 {

@@ -8,7 +8,7 @@ in float     v_tangent_scale;
 in float     v_line_width;
 in vec4      v_bone_color;
 
-const uint  max_u32 = 4294967295;
+const uint  max_u32 = 4294967295u;
 
 vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
 {
