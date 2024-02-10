@@ -66,24 +66,24 @@ public:
 
     void bind_command_to_key(
         Command*                command,
-        erhe::window::Keycode  code,
+        erhe::window::Keycode   code,
         bool                    pressed       = true,
         std::optional<uint32_t> modifier_mask = {}
     );
 
     void bind_command_to_mouse_button(
-        Command*                    command,
+        Command*                   command,
         erhe::window::Mouse_button button,
-        bool                        trigger_on_pressed
+        bool                       trigger_on_pressed
     );
 
     void bind_command_to_mouse_wheel(Command* command);
     void bind_command_to_mouse_motion(Command* command);
 
     void bind_command_to_mouse_drag(
-        Command*                    command,
+        Command*                   command,
         erhe::window::Mouse_button button,
-        bool                        call_on_button_down_without_motion
+        bool                       call_on_button_down_without_motion
     );
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
