@@ -16,9 +16,12 @@ void Editor_windows::builtin_imgui_window_menu()
 {
     if (ImGui::BeginMenu("ImGui")) {
         ImGui::MenuItem("Demo",             "", &m_imgui_builtin_windows.demo);
-        ImGui::MenuItem("Style Editor",     "", &m_imgui_builtin_windows.style_editor);
         ImGui::MenuItem("Metrics/Debugger", "", &m_imgui_builtin_windows.metrics);
-        ImGui::MenuItem("Stack Tool",       "", &m_imgui_builtin_windows.stack_tool);
+        ImGui::MenuItem("Debug Log",        "", &m_imgui_builtin_windows.debug_log);
+        ImGui::MenuItem("ID Stack Tool",    "", &m_imgui_builtin_windows.id_stack_tool);
+        ImGui::MenuItem("About",            "", &m_imgui_builtin_windows.about);
+        ImGui::MenuItem("Style Editor",     "", &m_imgui_builtin_windows.style_editor);
+        ImGui::MenuItem("User Guide",       "", &m_imgui_builtin_windows.user_guide);
         ImGui::EndMenu();
     }
 }
@@ -63,18 +66,26 @@ void Editor_windows::viewport_menu(erhe::imgui::Imgui_viewport& imgui_viewport)
         ImGui::ShowDemoWindow(&m_imgui_builtin_windows.demo);
     }
 
-    if (m_imgui_builtin_windows.style_editor) {
-        ImGui::Begin("Dear ImGui Style Editor", &m_imgui_builtin_windows.style_editor);
-        ImGui::ShowStyleEditor();
-        ImGui::End();
-    }
-
     if (m_imgui_builtin_windows.metrics) {
         ImGui::ShowMetricsWindow(&m_imgui_builtin_windows.metrics);
     }
 
-    if (m_imgui_builtin_windows.stack_tool) {
-        ImGui::ShowStackToolWindow(&m_imgui_builtin_windows.stack_tool);
+    if (m_imgui_builtin_windows.debug_log) {
+        ImGui::ShowDebugLogWindow(&m_imgui_builtin_windows.debug_log);
+    }
+
+    if (m_imgui_builtin_windows.id_stack_tool) {
+        ImGui::ShowIDStackToolWindow(&m_imgui_builtin_windows.id_stack_tool);
+    }
+
+    if (m_imgui_builtin_windows.about) {
+        ImGui::ShowAboutWindow(&m_imgui_builtin_windows.about);
+    }
+
+    if (m_imgui_builtin_windows.style_editor) {
+        ImGui::Begin("Dear ImGui Style Editor", &m_imgui_builtin_windows.style_editor);
+        ImGui::ShowStyleEditor();
+        ImGui::End();
     }
 }
 

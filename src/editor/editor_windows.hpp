@@ -11,10 +11,13 @@ class Editor_context;
 class Imgui_builtin_windows
 {
 public:
-    bool demo        {false};
-    bool style_editor{false};
-    bool metrics     {false};
-    bool stack_tool  {false};
+    bool demo         {false};
+    bool metrics      {false};
+    bool debug_log    {false};
+    bool id_stack_tool{false};
+    bool about        {false};
+    bool style_editor {false};
+    bool user_guide   {false};
 };
 
 class Editor_windows

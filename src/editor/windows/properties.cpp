@@ -106,7 +106,15 @@ void Properties::animation_properties(erhe::scene::Animation& animation) const
     );
 
     // TODO assert all animation channels targets point to same scene?
-    animation.channels.front().target->get_scene()->update_node_transforms();
+    std::shared_ptr<erhe::scene::Node> target = animation.channels.front().target;
+    if (!target) {
+        return;
+    }
+    erhe::scene::Scene* scene = animation.channels.front().target->get_scene();
+    if (scene == nullptr) {
+        return;
+    }
+    scene->update_node_transforms();
 }
 
 void Properties::camera_properties(erhe::scene::Camera& camera) const

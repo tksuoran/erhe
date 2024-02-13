@@ -224,7 +224,7 @@ void Rendergraph_window::imgui()
                             "Format: {}",
                             gl::c_str(texture->internal_format())
                         );
-                        ImGui::BeginTooltipEx(ImGuiTooltipFlags_OverridePreviousTooltip, ImGuiWindowFlags_None);
+                        ImGui::BeginTooltipEx(ImGuiTooltipFlags_OverridePrevious, ImGuiWindowFlags_None);
                         ImGui::TextUnformatted(size.c_str());
                         ImGui::TextUnformatted(format.c_str());
                         ImGui::EndTooltip();
