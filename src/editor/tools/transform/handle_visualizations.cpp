@@ -73,7 +73,7 @@ Handle_visualizations::Handle_visualizations(
     const auto arrow_cylinder = make_arrow_cylinder(mesh_memory);
     const auto arrow_cone     = make_arrow_cone    (mesh_memory);
     const auto thin_box       = make_box           (mesh_memory, false);
-    const auto uniform_box    = make_box           (mesh_memory, true);
+    ////const auto uniform_box    = make_box           (mesh_memory, true);
     const auto rotate_ring    = make_rotate_ring   (mesh_memory);
 
     m_x_arrow_cylinder_mesh  = make_mesh(tools, "X arrow cylinder", m_x_material, arrow_cylinder);
