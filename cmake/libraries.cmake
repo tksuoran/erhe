@@ -63,7 +63,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     etl
     GIT_REPOSITORY https://github.com/ETLCPP/etl.git
-    GIT_TAG        20.35.14 
+    GIT_TAG        20.38.10
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -81,7 +81,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
     #GIT_TAG        origin/master
     #GIT_TAG        171a020c828669490b98af0c2640e50f1511d2cc
-    GIT_TAG        10.1.1
+    GIT_TAG        10.2.1
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -90,7 +90,7 @@ FetchContent_Declare(
     freetype
     #GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
     GIT_REPOSITORY https://github.com/freetype/freetype.git
-    GIT_TAG        VER-2-13-0
+    GIT_TAG        VER-2-13-2
 )
 
 # Not in use yet
@@ -105,7 +105,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG        3.3.8
+    GIT_TAG        3.4
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -154,7 +154,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     harfbuzz
     GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
-    GIT_TAG        8.1.1
+    GIT_TAG        8.4.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -179,7 +179,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     JoltPhysics
     GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
-    GIT_TAG         origin/master
+    GIT_TAG         v5.0.0
     #GIT_REPOSITORY   https://github.com/tksuoran/JoltPhysics.git
     #GIT_TAG          gcc-fixes
     GIT_SHALLOW     TRUE
@@ -189,7 +189,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     lunasvg
     GIT_REPOSITORY  https://github.com/sammycage/lunasvg.git
-    GIT_TAG         origin/master
+    GIT_TAG         v2.3.9
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )
@@ -206,7 +206,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     meshoptimizer
     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
-    GIT_TAG        v0.19
+    GIT_TAG        v0.20
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -214,7 +214,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     nlohmann_json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG        v3.11.2
+    GIT_TAG        v3.11.3
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -222,7 +222,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     nvtx
     GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
-    GIT_TAG        release-v3
+    GIT_TAG        v3.1.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -231,7 +231,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     OpenXR-SDK
     GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git
-    GIT_TAG        origin/main
+    GIT_TAG        release-1.0.34
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -239,7 +239,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG        v1.x
+    GIT_TAG        v1.13.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -255,7 +255,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     tracy
     GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-    GIT_TAG        v0.9.1
+    GIT_TAG        v0.10
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
