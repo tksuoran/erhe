@@ -108,7 +108,7 @@ using Node           = bvh::v2::Node<Scalar, 3>;
 using Bvh            = bvh::v2::Bvh<Node>;
 using PrecomputedTri = bvh::v2::PrecomputedTri<Scalar>;
 
-static constexpr bool should_permute = false; //// TODO
+static constexpr bool should_permute = true; // TODO
 
 // TODO Are these ok here?
 bvh::v2::ThreadPool thread_pool;
@@ -200,11 +200,12 @@ void Bvh_geometry::commit()
             log_geometry->trace("BVH hash for {} : {:x}", debug_label(), hash_code);
         }
 
-        const bool load_ok = load_bvh(m_bvh, hash_code);
-        if (!load_ok) {
+        // For now, bvh cache is disabled.
+        //const bool load_ok = load_bvh(m_bvh, hash_code);
+        //if (!load_ok)
+        {
             typename bvh::v2::DefaultBuilder<Node>::Config config;
-            //config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High;
-            config.quality = bvh::v2::DefaultBuilder<Node>::Quality::Low;
+            config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High; // TODO Low
 
             {
                 ERHE_PROFILE_SCOPE("bvh build");
