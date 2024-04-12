@@ -15,8 +15,8 @@ public:
     ~Gl_texture        () noexcept;
     Gl_texture         (const Gl_texture&) = delete;
     void operator=     (const Gl_texture&) = delete;
-    Gl_texture         (Gl_texture&& other) noexcept;
-    auto operator=     (Gl_texture&& other) noexcept -> Gl_texture&;
+    Gl_texture         (Gl_texture&& old) noexcept;
+    auto operator=     (Gl_texture&& old) noexcept -> Gl_texture&;
 
     [[nodiscard]] auto gl_name() const -> GLuint;
 
