@@ -153,8 +153,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     harfbuzz
-    GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
-    GIT_TAG        8.4.0
+    #GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
+    #GIT_TAG        8.4.0
+    GIT_REPOSITORY https://github.com/tksuoran/harfbuzz.git
+    GIT_TAG        fix-bigobj
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
