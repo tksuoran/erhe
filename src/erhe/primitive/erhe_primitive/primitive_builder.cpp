@@ -9,8 +9,6 @@
 #include "erhe_primitive/geometry_mesh.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/property_map.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_math/math_util.hpp"
@@ -34,7 +32,6 @@ using Polygon           = erhe::geometry::Polygon;
 using Edge              = erhe::geometry::Edge;
 using Mesh_info         = erhe::geometry::Mesh_info;
 using erhe::graphics::Vertex_attribute;
-using gl_helpers::size_of_type;
 
 using vec2 = glm::vec2;
 using vec3 = glm::vec3;
@@ -48,11 +45,11 @@ Build_context_root::Build_context_root(
     const Build_info&               build_info,
     Geometry_mesh*                  geometry_mesh
 )
-    : geometry          {geometry}
-    , build_info        {build_info}
+    : geometry     {geometry}
+    , build_info   {build_info}
     , geometry_mesh{geometry_mesh}
-    , vertex_format     {build_info.buffer_info.vertex_format}
-    , vertex_stride     {vertex_format.stride()}
+    , vertex_format{build_info.buffer_info.vertex_format}
+    , vertex_stride{vertex_format.stride()}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -84,7 +81,7 @@ void Build_context_root::get_mesh_info()
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} triangle fill indices", mi.index_count_fill_triangles);
         total_index_count += mi.index_count_fill_triangles;
         allocate_index_range(
-            igl::PrimitiveType::triangles,
+            igl::PrimitiveType::Triangle,
             mi.index_count_fill_triangles,
             geometry_mesh->triangle_fill_indices
         );
@@ -96,7 +93,7 @@ void Build_context_root::get_mesh_info()
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} edge line indices", mi.index_count_edge_lines);
         total_index_count += mi.index_count_edge_lines;
         allocate_index_range(
-            igl::PrimitiveType::lines,
+            igl::PrimitiveType::Line,
             mi.index_count_edge_lines,
             geometry_mesh->edge_line_indices
         );
@@ -106,7 +103,7 @@ void Build_context_root::get_mesh_info()
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} corner point indices", mi.index_count_corner_points);
         total_index_count += mi.index_count_corner_points;
         allocate_index_range(
-            igl::PrimitiveType::points,
+            igl::PrimitiveType::Point,
             mi.index_count_corner_points,
             geometry_mesh->corner_point_indices
         );
@@ -116,7 +113,7 @@ void Build_context_root::get_mesh_info()
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} centroid point indices", mi.index_count_centroid_points);
         total_index_count += mi.index_count_centroid_points;
         allocate_index_range(
-            igl::PrimitiveType::points,
+            igl::PrimitiveType::Point,
             mi.polygon_count,
             geometry_mesh->polygon_centroid_indices
         );
@@ -163,8 +160,8 @@ void Build_context_root::allocate_index_buffer()
 
     Expects(total_index_count > 0);
 
-    const gl::Draw_elements_type index_type     {build_info.buffer_info.index_type};
-    const std::size_t            index_type_size{size_of_type(index_type)};
+    const igl::IndexFormat index_type      = build_info.buffer_info.index_type;
+    const std::size_t      index_type_size = (index_type == igl::IndexFormat::UInt16) ? 2 : 4;
 
     log_primitive_builder->trace(
         "allocating index buffer "
@@ -268,7 +265,7 @@ void Primitive_builder::build(Geometry_mesh* geometry_mesh)
     SPDLOG_LOGGER_INFO(
         log_primitive_builder,
         "Primitive_builder::build(usage = {}, normal_style = {}) geometry = {}",
-        gl::c_str(m_build_info.buffer_info.usage),
+        c_str(m_build_info.buffer_info.usage),
         c_str(m_normal_style),
         m_geometry.name
     );

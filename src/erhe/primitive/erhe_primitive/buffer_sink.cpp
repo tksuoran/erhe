@@ -1,8 +1,9 @@
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/buffer_writer.hpp"
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_raytrace/ibuffer.hpp"
+
+#include "igl/Buffer.h"
 
 namespace erhe::primitive
 {
@@ -11,26 +12,34 @@ Buffer_sink::~Buffer_sink() noexcept
 {
 }
 
-Gl_buffer_sink::Gl_buffer_sink(
-    erhe::graphics::Buffer_transfer_queue& buffer_transfer_queue,
-    erhe::graphics::Buffer&                vertex_buffer,
-    erhe::graphics::Buffer&                index_buffer
+Igl_buffer_sink::Igl_buffer_sink(
+    igl::IDevice& device,
+    igl::IBuffer& vertex_buffer,
+    std::size_t   vertex_buffer_offset,
+    igl::IBuffer& index_buffer,
+    std::size_t   index_buffer_offset
 )
-    : m_buffer_transfer_queue{buffer_transfer_queue}
-    , m_vertex_buffer        {vertex_buffer}
-    , m_index_buffer         {index_buffer}
+    : m_device              {device}
+    , m_vertex_buffer       {vertex_buffer}
+    , m_vertex_buffer_offset{vertex_buffer_offset}
+    , m_index_buffer        {index_buffer}
+    , m_index_buffer_offset {index_buffer_offset}
 {
 }
 
-auto Gl_buffer_sink::allocate_vertex_buffer(
+auto align(const std::size_t value, const std::size_t alignment) -> std::size_t
+{
+	return ((value + alignment - 1) / alignment) * alignment;
+}
+
+auto Igl_buffer_sink::allocate_vertex_buffer(
     const std::size_t vertex_count,
     const std::size_t vertex_element_size
 ) -> Buffer_range
 {
-    const auto byte_offset = m_vertex_buffer.allocate_bytes(
-        vertex_count * vertex_element_size,
-        vertex_element_size
-    );
+    const auto byte_offset = m_vertex_buffer_offset;
+    const auto byte_count  = vertex_count * vertex_element_size;
+    m_vertex_buffer_offset += byte_count;
 
     return Buffer_range{
         .count        = vertex_count,
@@ -39,54 +48,41 @@ auto Gl_buffer_sink::allocate_vertex_buffer(
     };
 }
 
-auto Gl_buffer_sink::allocate_index_buffer(
+auto Igl_buffer_sink::allocate_index_buffer(
     const std::size_t index_count,
     const std::size_t index_element_size
 ) -> Buffer_range
 {
-    const auto index_byte_offset = m_index_buffer.allocate_bytes(index_count * index_element_size);
+    m_index_buffer_offset = align(m_index_buffer_offset, index_element_size);
+    const auto byte_offset = m_index_buffer_offset;
+    const auto byte_count  = index_count * index_element_size;
+    m_vertex_buffer_offset += byte_count;
 
     return Buffer_range{
         .count        = index_count,
         .element_size = index_element_size,
-        .byte_offset  = index_byte_offset
+        .byte_offset  = byte_offset
     };
 }
 
-void Gl_buffer_sink::enqueue_index_data(std::size_t offset, std::vector<uint8_t>&& data) const
+void Igl_buffer_sink::enqueue_index_data(std::size_t offset, std::vector<uint8_t>&& data) const
 {
-    m_buffer_transfer_queue.enqueue(
-        m_index_buffer,
-        offset,
-        std::move(data)
-    );
+    m_index_buffer.upload(data.data(), igl::BufferRange{data.size(), offset});
 }
 
-void Gl_buffer_sink::enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const
+void Igl_buffer_sink::enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const
 {
-    m_buffer_transfer_queue.enqueue(
-        m_vertex_buffer,
-        offset,
-        std::move(data)
-    );
+    m_vertex_buffer.upload(data.data(), igl::BufferRange{data.size(), offset});
 }
 
-void Gl_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const
+void Igl_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const
 {
-    m_buffer_transfer_queue.enqueue(
-        m_vertex_buffer,
-        writer.start_offset(),
-        std::move(writer.vertex_data)
-    );
+    m_vertex_buffer.upload(writer.vertex_data.data(), igl::BufferRange{writer.vertex_data.size(), writer.start_offset()});
 }
 
-void Gl_buffer_sink::buffer_ready(Index_buffer_writer& writer) const
+void Igl_buffer_sink::buffer_ready(Index_buffer_writer& writer) const
 {
-    m_buffer_transfer_queue.enqueue(
-        m_index_buffer,
-        writer.start_offset(),
-        std::move(writer.index_data)
-    );
+    m_index_buffer.upload(writer.index_data.data(), igl::BufferRange{writer.index_data.size(), writer.start_offset()});
 }
 
 Raytrace_buffer_sink::Raytrace_buffer_sink(

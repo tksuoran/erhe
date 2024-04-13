@@ -74,9 +74,9 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
 Rendertarget_imgui_viewport::~Rendertarget_imgui_viewport() noexcept = default;
 
 template <typename T>
-[[nodiscard]] inline auto as_span(const T& value) -> gsl::span<const T>
+[[nodiscard]] inline auto as_span(const T& value) -> std::span<const T>
 {
-    return gsl::span<const T>(&value, 1);
+    return std::span<const T>(&value, 1);
 }
 
 [[nodiscard]] auto Rendertarget_imgui_viewport::rendertarget_mesh() -> Rendertarget_mesh*
@@ -301,7 +301,7 @@ auto Rendertarget_imgui_viewport::get_consumer_input_texture(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
@@ -313,7 +313,7 @@ auto Rendertarget_imgui_viewport::get_producer_output_texture(
     erhe::rendergraph::Resource_routing resource_routing,
     int                                 key,
     int                                 depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
@@ -325,7 +325,7 @@ auto Rendertarget_imgui_viewport::get_consumer_input_framebuffer(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+) const -> std::shared_ptr<igl::IFramebuffer>
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate

@@ -9,14 +9,14 @@ namespace editor {
 
 Programs::Shader_stages_builder::Shader_stages_builder(
     erhe::graphics::Reloadable_shader_stages& reloadable_shader_stages,
-    erhe::graphics::Instance&                 graphics_instance,
+    igl::IDevice&                             device,
     erhe::scene_renderer::Program_interface&  program_interface,
     std::filesystem::path                     shader_path
 )
     : reloadable_shader_stages{reloadable_shader_stages}
     , prototype{
         program_interface.make_prototype(
-            graphics_instance,
+            device,
             shader_path,
             reloadable_shader_stages.create_info
         )
@@ -31,7 +31,7 @@ Programs::Shader_stages_builder::Shader_stages_builder(Shader_stages_builder&& o
 }
 
 Programs::Programs(
-    erhe::graphics::Instance&                graphics_instance,
+    igl::IDevice&                            device,
     erhe::scene_renderer::Program_interface& program_interface
 )
     : shader_path{
@@ -39,18 +39,20 @@ Programs::Programs(
     }
     , default_uniform_block{graphics_instance}
     , shadow_sampler{
-        graphics_instance.info.use_bindless_texture
-            ? nullptr
-            : default_uniform_block.add_sampler(
+        //graphics_instance.info.use_bindless_texture
+        //    ? nullptr
+        //    :
+            default_uniform_block.add_sampler(
                 "s_shadow",
                 igl::UniformType::sampler_2d_array,
                 shadow_texture_unit
             )
     }
     , texture_sampler{
-        graphics_instance.info.use_bindless_texture
-            ? nullptr
-            : default_uniform_block.add_sampler(
+        //graphics_instance.info.use_bindless_texture
+        //    ? nullptr
+        //    :
+            default_uniform_block.add_sampler(
                 "s_texture",
                 igl::UniformType::sampler_2d,
                 base_texture_unit,

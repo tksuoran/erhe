@@ -42,8 +42,8 @@ Downsample_node::Downsample_node(
     int                             axis
 )
     : texture{
-        std::make_shared<erhe::graphics::Texture>(
-            erhe::graphics::Texture::Create_info{
+        std::make_shared<igl::ITexture>(
+            igl::ITexture::Create_info{
                 .instance        = graphics_instance,
                 .target          = gl::Texture_target::texture_2d,
                 .internal_format = gl::Internal_format::rgba16f, // TODO other formats
@@ -57,8 +57,8 @@ Downsample_node::Downsample_node(
 {
     ERHE_VERIFY(width > 0);
     ERHE_VERIFY(height > 0);
-    using erhe::graphics::Framebuffer;
-    using erhe::graphics::Texture;
+    using igl::IFramebuffer;
+    using igl::ITexture;
 
     texture->set_debug_label(label);
 
@@ -212,14 +212,14 @@ void Post_processing_node::viewport_toolbar()
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
     return !m_downsample_nodes.empty()
         ? m_downsample_nodes.front().texture
-        : std::shared_ptr<erhe::graphics::Texture>{};
+        : std::shared_ptr<igl::ITexture>{};
 }
 
 // Overridden to provide framebuffer from the first downsample node
@@ -227,14 +227,14 @@ void Post_processing_node::viewport_toolbar()
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+) const -> std::shared_ptr<igl::IFramebuffer>
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
     return !m_downsample_nodes.empty()
         ? m_downsample_nodes.front().framebuffer
-        : std::shared_ptr<erhe::graphics::Framebuffer>{};
+        : std::shared_ptr<igl::IFramebuffer>{};
 }
 
 [[nodiscard]] auto Post_processing_node::get_consumer_input_viewport(
@@ -455,7 +455,7 @@ void Post_processing::post_process(Post_processing_node& node)
         ) {
             const Downsample_node&               source_downsample_node = downsample_nodes.at(i);
             const Downsample_node&               downsample_node        = downsample_nodes.at(i + 1);
-            const erhe::graphics::Texture* const source_texture         = source_downsample_node.texture.get();
+            const igl::ITexture* const source_texture         = source_downsample_node.texture.get();
             const int width  = source_texture->width();
             const int height = source_texture->height();
 
@@ -481,7 +481,7 @@ void Post_processing::post_process(Post_processing_node& node)
 static constexpr std::string_view c_downsample{"Post_processing::downsample"};
 
 void Post_processing::downsample(
-    const erhe::graphics::Texture*  source_texture,
+    const igl::ITexture*  source_texture,
     const Downsample_node&          downsample_node,
     const erhe::graphics::Pipeline& pipeline
 )
@@ -497,8 +497,8 @@ void Post_processing::downsample(
     std::byte* const          start      = parameter_gpu_data.data();
     const std::size_t         byte_count = parameter_gpu_data.size_bytes();
     const std::size_t         word_count = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     const uint64_t handle = m_context.graphics_instance->get_handle(
         *source_texture,
@@ -508,7 +508,7 @@ void Post_processing::downsample(
         static_cast<uint32_t>((handle & 0xffffffffu)),
         static_cast<uint32_t>(handle >> 32u)
     };
-    const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+    const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
     using erhe::graphics::write;
     write<float   >(gpu_float_data, parameter_writer.write_offset + m_offsets.texel_scale,   1.0f / source_texture->width());
@@ -580,8 +580,8 @@ void Post_processing::compose(Post_processing_node& node)
     std::byte* const          start      = parameter_gpu_data.data();
     const std::size_t         byte_count = parameter_gpu_data.size_bytes();
     const std::size_t         word_count = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     using erhe::graphics::write;
     //const uint32_t texture_count = static_cast<uint32_t>(m_rendertargets.size());
@@ -599,7 +599,7 @@ void Post_processing::compose(Post_processing_node& node)
         ERHE_PROFILE_SCOPE("make textures resident");
         std::size_t texture_slot = 0;
         for (const Downsample_node& downsample_node : downsample_nodes) {
-            const erhe::graphics::Texture* const texture = downsample_node.texture.get();
+            const igl::ITexture* const texture = downsample_node.texture.get();
             const uint64_t handle = graphics_instance.get_handle(
                 *texture,
                 m_linear_sampler
@@ -610,7 +610,7 @@ void Post_processing::compose(Post_processing_node& node)
                 static_cast<uint32_t>((handle & 0xffffffffu)),
                 static_cast<uint32_t>(handle >> 32u)
             };
-            const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+            const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
             if (graphics_instance.info.use_bindless_texture) {
                 gl::make_texture_handle_resident_arb(handle);
@@ -689,7 +689,7 @@ void Post_processing::compose(Post_processing_node& node)
         ERHE_PROFILE_SCOPE("make textures non-resident");
 
         for (const Downsample_node& downsample_node : downsample_nodes) {
-            const erhe::graphics::Texture* const texture = downsample_node.texture.get();
+            const igl::ITexture* const texture = downsample_node.texture.get();
             const uint64_t handle = graphics_instance.get_handle(
                 *texture,
                 m_linear_sampler
@@ -699,7 +699,7 @@ void Post_processing::compose(Post_processing_node& node)
                 static_cast<uint32_t>((handle & 0xffffffffu)),
                 static_cast<uint32_t>(handle >> 32u)
             };
-            const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+            const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
             gl::make_texture_handle_non_resident_arb(handle);
         }

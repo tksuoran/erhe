@@ -1,8 +1,13 @@
 #include "erhe_renderer/buffer_writer.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_renderer/renderer_log.hpp"
-#include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/instance.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include "igl/Buffer.h"
+#include "igl/vulkan/Buffer.h"
+#include "igl/vulkan/VulkanBuffer.h"
+#include "igl/Device.h"
 
 #include <sstream>
 
@@ -10,89 +15,80 @@ namespace erhe::renderer
 {
 
 Buffer_writer::Buffer_writer(igl::IDevice& device)
-    : m_instance{instance}
+    : m_device{device}
 {
-}
-
-void Buffer_writer::shader_storage_align()
-{
-    while (write_offset % m_instance.implementation_defined.shader_storage_buffer_offset_alignment) {
-        write_offset++;
-    }
-}
-
-void Buffer_writer::uniform_align()
-{
-    while (write_offset % m_instance.implementation_defined.uniform_buffer_offset_alignment) {
-        write_offset++;
-    }
 }
 
 auto Buffer_writer::begin(
-    erhe::graphics::Buffer* const buffer,
-    std::size_t                   byte_count
-) -> gsl::span<std::byte>
+    igl::IBuffer* const buffer,
+    std::size_t         byte_count
+) -> std::span<std::byte>
 {
     ERHE_VERIFY(m_buffer == nullptr);
     m_buffer = buffer;
-    const gl::Buffer_target buffer_target = m_buffer->target();
 
-    switch (buffer_target) {
-        //using enum gl::Buffer_target;
-        case gl::Buffer_target::shader_storage_buffer: {
-            shader_storage_align();
-            break;
-        }
-
-        case gl::Buffer_target::uniform_buffer: {
-            uniform_align();
-            break;
-        }
-        default: {
-            // TODO
-            break;
-        }
+    using namespace erhe::bit;
+    const igl::BufferDesc::BufferType buffer_type = buffer->getBufferType();
+    bool uniform_buffer        = test_all_rhs_bits_set(buffer_type, static_cast<igl::BufferDesc::BufferType>(igl::BufferDesc::BufferTypeBits::Uniform));
+    bool shader_storage_buffer = test_all_rhs_bits_set(buffer_type, static_cast<igl::BufferDesc::BufferType>(igl::BufferDesc::BufferTypeBits::Storage));
+    std::size_t required_binding_offset_alignment = 1;
+    if (uniform_buffer) {
+        std::size_t uniform_buffer_aligment = 1;
+        m_device.getFeatureLimits(igl::DeviceFeatureLimits::BufferAlignment, uniform_buffer_aligment);
+        required_binding_offset_alignment = std::max(required_binding_offset_alignment, uniform_buffer_aligment);
     }
+    if (shader_storage_buffer) {
+        std::size_t shader_storage_buffer_aligment = 1;
+        m_device.getFeatureLimits(igl::DeviceFeatureLimits::ShaderStorageBufferOffsetAlignment, shader_storage_buffer_aligment);
+        required_binding_offset_alignment = std::max(required_binding_offset_alignment, shader_storage_buffer_aligment);
+    }
+
+    write_offset = erhe::math::align(write_offset, required_binding_offset_alignment);
 
     if (byte_count == 0) {
-        byte_count = buffer->capacity_byte_count() - write_offset;
+        byte_count = buffer->getSizeInBytes() - write_offset;
     } else {
-        byte_count = std::min(byte_count, buffer->capacity_byte_count() - write_offset);
+        byte_count = std::min(byte_count, buffer->getSizeInBytes() - write_offset);
     }
 
-    if (!m_instance.info.use_persistent_buffers) {
-        // Only requested range will be temporarily mapped
-        map_offset   = write_offset;
-        write_offset = 0;
-        write_end    = byte_count;
-        m_buffer->begin_write(map_offset, byte_count);
-        range.first_byte_offset = map_offset + write_offset;
-        m_map = buffer->map();
-        return m_map;
-    } else {
-        // The whole buffer is always mapped - return subspan for requested range
-        write_end               = write_offset + byte_count;
-        range.first_byte_offset = write_offset;
-        write_offset = 0;
-        m_map = buffer->map().subspan(range.first_byte_offset, byte_count);
-        return m_map;
-    }
+    // The whole buffer is always mapped - return subspan for requested range
+    auto* vk_buffer = static_cast<igl::vulkan::Buffer*>(buffer);
+    const std::shared_ptr<igl::vulkan::VulkanBuffer>& vulkan_buffer = vk_buffer->currentVulkanBuffer();
+    uint8_t* const map_ptr = vulkan_buffer->getMappedPtr();
+    assert(vulkan_buffer->isCoherentMemory());
 
+    write_end               = write_offset + byte_count;
+    range.first_byte_offset = write_offset;
+    write_offset = 0;
+
+    m_range = std::span<std::byte>{reinterpret_cast<std::byte*>(map_ptr + write_offset), byte_count};
+    return m_range;
 }
 
-auto Buffer_writer::subspan(const std::size_t byte_count) -> gsl::span<std::byte>
+auto Buffer_writer::subspan(const std::size_t byte_count) -> std::span<std::byte>
 {
-    ERHE_VERIFY(m_map.size() >= write_offset + byte_count);
-    auto result = m_map.subspan(write_offset, byte_count);
+    ERHE_VERIFY(m_range.size() >= write_offset + byte_count);
+    auto result = m_range.subspan(write_offset, byte_count);
     write_offset += byte_count;
     return result;
 }
 
 void Buffer_writer::dump()
 {
-    auto span = m_buffer->map();
-    uint8_t* data = reinterpret_cast<uint8_t*>(span.data());
-    const std::size_t byte_count = span.size();
+    if (m_range.empty() || (m_buffer == nullptr))
+    {
+        return;
+    }
+
+    auto* vk_buffer = static_cast<igl::vulkan::Buffer*>(m_buffer);
+    const std::shared_ptr<igl::vulkan::VulkanBuffer>& vulkan_buffer = vk_buffer->currentVulkanBuffer();
+    uint8_t* const map_ptr = vulkan_buffer->getMappedPtr();
+    assert(vulkan_buffer->isCoherentMemory());
+
+    uint8_t* data = reinterpret_cast<uint8_t*>(map_ptr);
+
+
+    const std::size_t byte_count = m_range.size();
     const std::size_t word_count{byte_count / sizeof(uint32_t)};
 
     std::stringstream ss;
@@ -116,18 +112,20 @@ void Buffer_writer::dump()
 void Buffer_writer::end()
 {
     ERHE_VERIFY(m_buffer != nullptr);
-    if (!m_instance.info.use_persistent_buffers) {
-        range.byte_count = write_offset;
-        m_buffer->end_write(map_offset, write_offset);
-        write_offset += map_offset;
-        map_offset = 0;
-        write_end = 0;
-    } else {
-        range.byte_count = write_offset;
-        write_offset += range.first_byte_offset;
-    }
+
+    //if (!m_instance.info.use_persistent_buffers) {
+    //    range.byte_count = write_offset;
+    //    m_buffer->end_write(map_offset, write_offset);
+    //    write_offset += map_offset;
+    //    map_offset = 0;
+    //    write_end = 0;
+    //} else {
+    range.byte_count = write_offset;
+    write_offset += range.first_byte_offset;
+    //}
+
     m_buffer = nullptr;
-    m_map = {};
+    m_range = {};
 
 }
 
@@ -137,7 +135,7 @@ void Buffer_writer::reset()
     range.byte_count        = 0;
     map_offset              = 0;
     write_offset            = 0;
-    m_map                   = {};
+    m_range                 = {};
 }
 
 } // namespace erhe::renderer

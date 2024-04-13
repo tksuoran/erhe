@@ -84,7 +84,7 @@ class Editor_rendering
 public:
     Editor_rendering(
         erhe::commands::Commands& commands,
-        erhe::graphics::Instance& graphics_instance,
+        igl::IDevice&             device,
         Editor_context&           editor_context,
         Editor_message_bus&       editor_message_bus,
         Mesh_memory&              mesh_memory,
@@ -92,7 +92,7 @@ public:
     );
 
     [[nodiscard]] auto create_shadow_node_for_scene_view(
-        erhe::graphics::Instance&       graphics_instance,
+        igl::IDevice&                   device,
         erhe::rendergraph::Rendergraph& rendergraph,
         Editor_settings&                editor_settings,
         Scene_view&                     scene_view

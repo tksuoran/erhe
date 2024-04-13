@@ -19,7 +19,7 @@
 namespace editor {
 
 Icon_set::Icon_set(
-    erhe::graphics::Instance&    graphics_instance,
+    igl::IDevice&                device,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     Editor_context&              editor_context,
     Icon_settings&               icon_settings,
@@ -31,7 +31,7 @@ Icon_set::Icon_set(
 }
 
 void Icon_set::load_icons(
-    erhe::graphics::Instance&    graphics_instance,
+    igl::IDevice&                device,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     Icon_settings&               icon_settings,
     Programs&                    programs

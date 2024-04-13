@@ -3,8 +3,9 @@
 #include <mutex>
 #include <vector>
 
-namespace erhe::graphics {
-    class Instance;
+namespace igl {
+    class IDevice;
+    class ITexture;
 }
 
 namespace erhe::rendergraph {
@@ -14,7 +15,7 @@ class Rendergraph_node;
 class Rendergraph final
 {
 public:
-    explicit Rendergraph(erhe::graphics::Instance& graphics_instance);
+    explicit Rendergraph(igl::IDevice& graphics_instance);
     ~Rendergraph();
 
     // Public API
@@ -24,19 +25,9 @@ public:
     void register_node  (Rendergraph_node* node);
     void unregister_node(Rendergraph_node* node);
 
-    auto connect(
-        int               key,
-        Rendergraph_node* source_node,
-        Rendergraph_node* sink_node
-    ) -> bool;
-
-    auto disconnect(
-        int               key,
-        Rendergraph_node* source_node,
-        Rendergraph_node* sink_node
-    ) -> bool;
-
-    [[nodiscard]] auto get_graphics_instance() -> erhe::graphics::Instance&;
+    auto connect(int key, Rendergraph_node* source_node, Rendergraph_node* sink_node) -> bool;
+    auto disconnect(int key, Rendergraph_node* source_node, Rendergraph_node* sink_node) -> bool;
+    [[nodiscard]] auto get_device() -> igl::IDevice&;
 
     void automatic_layout(float image_size);
 
@@ -44,7 +35,7 @@ public:
     float y_gap{100.0f};
 
 private:
-    erhe::graphics::Instance&      m_graphics_instance;
+    igl::IDevice&                  m_device;
     std::mutex                     m_mutex;
     std::vector<Rendergraph_node*> m_nodes;
 };

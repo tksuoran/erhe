@@ -79,7 +79,7 @@ constexpr uint32_t c_texture_unused_32 = 4294967295u;
 constexpr uint32_t c_texture_unused_64 = 4294967295u;
 
 auto Material_buffer::update(
-    const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials
+    const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials
 ) -> erhe::renderer::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();

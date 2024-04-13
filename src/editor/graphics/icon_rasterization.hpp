@@ -25,7 +25,7 @@ class Icon_rasterization
 {
 public:
     Icon_rasterization(
-        erhe::graphics::Instance&    graphics_instance,
+        igl::IDevice&                device,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         Programs&                    programs,
         int                          size,
@@ -59,7 +59,7 @@ private:
 
     erhe::imgui::Imgui_renderer& m_imgui_renderer;
 
-    std::shared_ptr<erhe::graphics::Texture> m_texture;
+    std::shared_ptr<igl::ITexture> m_texture;
     uint64_t                                 m_texture_handle{0};
     int                                      m_icon_width    {0};
     int                                      m_icon_height   {0};

@@ -22,7 +22,7 @@ target_link_libraries(
         erhe::log
         erhe::profile
         erhe::verify
-        MathGeoLib
+        #MathGeoLib
 )
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

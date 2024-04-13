@@ -69,7 +69,7 @@ void Image_transfer::Slot::map()
     );
     ERHE_VERIFY(map_pointer != nullptr);
 
-    m_span = gsl::span(
+    m_span = std::span(
         reinterpret_cast<std::byte*>(map_pointer),
         m_capacity
     );
@@ -78,7 +78,7 @@ void Image_transfer::Slot::map()
 void Image_transfer::Slot::unmap()
 {
     gl::unmap_named_buffer(m_pbo.gl_name());
-    m_span = gsl::span<std::byte>{};
+    m_span = std::span<std::byte>{};
 }
 
 void Image_transfer::Slot::end()
@@ -92,7 +92,7 @@ auto Image_transfer::Slot::begin_span_for(
     const int                 span_width,
     const int                 span_height,
     const gl::Internal_format internal_format
-) -> gsl::span<std::byte>
+) -> std::span<std::byte>
 {
     Expects(span_width >= 1);
     Expects(span_height >= 1);

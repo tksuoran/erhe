@@ -68,11 +68,11 @@ class Light_projections
 public:
     Light_projections();
     Light_projections(
-        const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
+        const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
         const erhe::scene::Camera*                                  view_camera,
         ////const erhe::math::Viewport&                             view_camera_viewport,
         const erhe::math::Viewport&                                 light_texture_viewport,
-        const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
+        const std::shared_ptr<igl::ITexture>&             shadow_map_texture,
         uint64_t                                                    shadow_map_texture_handle
     );
 
@@ -89,7 +89,7 @@ public:
 
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
-    std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
+    std::shared_ptr<igl::ITexture>              shadow_map_texture;
     uint64_t                                              shadow_map_texture_handle;
 
     // TODO A bit hacky injection of these parameters..
@@ -107,7 +107,7 @@ public:
     );
 
     auto update(
-        const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
+        const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
         const Light_projections*                                    light_projections,
         const glm::vec3&                                            ambient_light
     ) -> erhe::renderer::Buffer_range;

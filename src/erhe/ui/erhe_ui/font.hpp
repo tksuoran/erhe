@@ -1,11 +1,13 @@
 #pragma once
 
-#include "erhe_graphics/texture.hpp"
 #include "erhe_ui/bitmap.hpp"
 #include "erhe_ui/rectangle.hpp"
 
+#include "igl/Device.h"
+#include "igl/Texture.h"
+
 #include <gsl/pointers>
-#include <gsl/span>
+#include <span>
 
 #include <filesystem>
 #include <map>
@@ -25,7 +27,7 @@ class Font final
 {
 public:
     Font(
-        erhe::graphics::Instance&    graphics_instance,
+        igl::IDevice&                device,
         const std::filesystem::path& path,
         unsigned int                 size,
         float                        outline_thickness = 0.0f
@@ -41,8 +43,8 @@ public:
     }
 
     auto print(
-        gsl::span<float>    float_data,
-        gsl::span<uint32_t> uint_data,
+        std::span<float>    float_data,
+        std::span<uint32_t> uint_data,
         std::string_view    text,
         glm::vec3           text_position,
         const uint32_t      text_color,
@@ -53,7 +55,7 @@ public:
 
     auto measure(const std::string_view text) const -> Rectangle;
 
-    [[nodiscard]] auto texture() const -> gsl::not_null<erhe::graphics::Texture*>
+    [[nodiscard]] auto texture() const -> igl::ITexture*
     {
         Expects(m_texture);
 
@@ -164,7 +166,7 @@ private:
         std::array<float, 4> v{0.0f, 0.0f, 0.0f, 0.0f};
     };
 
-    erhe::graphics::Instance&  m_graphics_instance;
+    igl::IDevice& m_device;
 
     std::map<uint32_t, size_t> m_glyph_to_char;
 
@@ -185,15 +187,15 @@ private:
     int          m_texture_width    {0};
     int          m_texture_height   {0};
 
-    std::unique_ptr<erhe::graphics::Texture> m_texture;
-    std::unique_ptr<Bitmap>                  m_bitmap;
+    std::shared_ptr<igl::ITexture> m_texture;
+    std::unique_ptr<Bitmap>        m_bitmap;
 #if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
-    struct FT_LibraryRec_*                   m_freetype_library{nullptr};
-    struct FT_FaceRec_*                      m_freetype_face{nullptr};
+    struct FT_LibraryRec_*         m_freetype_library{nullptr};
+    struct FT_FaceRec_*            m_freetype_face{nullptr};
 #endif
 #if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
-    hb_font_t*                               m_harfbuzz_font{nullptr};
-    hb_buffer_t*                             m_harfbuzz_buffer{nullptr};
+    hb_font_t*                     m_harfbuzz_font{nullptr};
+    hb_buffer_t*                   m_harfbuzz_buffer{nullptr};
 #endif
 };
 

@@ -46,25 +46,25 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    ) const -> std::shared_ptr<igl::ITexture> override;
 
     [[nodiscard]] auto get_producer_output_texture(
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    ) const -> std::shared_ptr<igl::ITexture> override;
 
     [[nodiscard]] auto get_consumer_input_framebuffer(
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    ) const -> std::shared_ptr<igl::IFramebuffer> override;
 
     [[nodiscard]] auto get_producer_output_framebuffer(
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    ) const -> std::shared_ptr<igl::IFramebuffer> override;
 
     // Public API
     [[nodiscard]] auto get_viewport_window() const -> std::shared_ptr<Viewport_window>;

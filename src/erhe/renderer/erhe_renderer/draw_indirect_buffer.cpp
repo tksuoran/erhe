@@ -5,10 +5,11 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 
-#include "erhe_gl/draw_indirect.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include "igl/Buffer.h"
 
 ////#if defined(ERHE_GUI_LIBRARY_IMGUI)
 ////#   include <imgui/imgui.h>
@@ -17,22 +18,20 @@
 namespace erhe::renderer
 {
 
-Draw_indirect_buffer::Draw_indirect_buffer(
-    erhe::graphics::Instance& graphics_instance
-)
-    : Multi_buffer{graphics_instance, "draw indirect"}
+Draw_indirect_buffer::Draw_indirect_buffer(igl::IDevice& device)
+    : Multi_buffer{device, "draw indirect"}
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
     ini->get("max_draw_count", m_max_draw_count);
 
     Multi_buffer::allocate(
-        gl::Buffer_target::draw_indirect_buffer,
-        sizeof(gl::Draw_elements_indirect_command) * m_max_draw_count
+        static_cast<igl::BufferDesc::BufferType>(igl::BufferDesc::BufferTypeBits::Indirect),
+        sizeof(Draw_elements_indirect_command) * m_max_draw_count
     );
 }
 
 auto Draw_indirect_buffer::update(
-    const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
     erhe::primitive::Primitive_mode                            primitive_mode,
     const erhe::Item_filter&                                   filter
 ) -> Draw_indirect_buffer_range
@@ -56,9 +55,9 @@ auto Draw_indirect_buffer::update(
     }
 
     auto&             buffer         = current_buffer();
-    const std::size_t entry_size     = sizeof(gl::Draw_elements_indirect_command);
+    const std::size_t entry_size     = sizeof(Draw_elements_indirect_command);
     const std::size_t max_byte_count = primitive_count * entry_size;
-    const auto        gpu_data       = m_writer.begin(&buffer, max_byte_count);
+    const auto        gpu_data       = m_writer.begin(buffer.get(), max_byte_count);
     uint32_t          instance_count     {1};
     uint32_t          base_instance      {0};
     std::size_t       draw_indirect_count{0};
@@ -69,7 +68,7 @@ auto Draw_indirect_buffer::update(
         }
 
         if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
-            log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
+            log_render->critical("draw indirect buffer capacity {} exceeded", buffer->getSizeInBytes());
             ERHE_FATAL("draw indirect buffer capacity exceeded");
             break;
         }
@@ -82,7 +81,7 @@ auto Draw_indirect_buffer::update(
             }
 
             if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
-                log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
+                log_render->critical("draw indirect buffer capacity {} exceeded", buffer->getSizeInBytes());
                 ERHE_FATAL("draw indirect buffer capacity exceeded");
                 break;
             }
@@ -96,19 +95,20 @@ auto Draw_indirect_buffer::update(
             const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
             const uint32_t base_vertex = geometry_mesh.base_vertex();
 
-            const gl::Draw_elements_indirect_command draw_command{
-                index_count,
-                instance_count,
-                first_index,
-                base_vertex,
-                base_instance
+            const Draw_elements_indirect_command draw_command{
+                .index_count    = index_count,
+                .instance_count = instance_count,
+                .first_index    = first_index,
+                .base_vertex    = base_vertex,
+                .base_instance  = base_instance
             };
 
-            erhe::graphics::write(
-                gpu_data,
-                m_writer.write_offset,
-                erhe::graphics::as_span(draw_command)
-            );
+            memcpy(gpu_data.data() + m_writer.write_offset, &draw_command, sizeof(draw_command));
+            //erhe::graphics::write(
+            //    gpu_data,
+            //    m_writer.write_offset,
+            //    erhe::graphics::as_span(draw_command)
+            //);
 
             m_writer.write_offset += entry_size;
             ERHE_VERIFY(m_writer.write_offset <= m_writer.write_end);

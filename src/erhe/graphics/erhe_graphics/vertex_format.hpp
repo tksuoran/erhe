@@ -6,10 +6,16 @@
 
 #include <vector>
 
+namespace igl {
+    class IBuffer;
+    class IDevice;
+}
+
 namespace erhe::graphics
 {
 
 class Shader_resource;
+class Vertex_attribute_mappings;
 
 /// Describes vertex data layout in buffer / memory
 class Vertex_format final
@@ -48,6 +54,12 @@ public:
         Shader_resource& vertex_struct,
         Shader_resource& vertices_block
     );
+
+    auto make_vertex_input_state(
+        igl::IDevice&                    device,
+        const Vertex_attribute_mappings& mappings,
+        igl::IBuffer*                    vertex_buffer
+    ) const -> std::shared_ptr<igl::IVertexInputState>;
 
 private:
     void align_to(std::size_t alignment);

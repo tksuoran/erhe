@@ -117,7 +117,7 @@ auto load_png(const std::filesystem::path& path) -> Image
 auto load_texture(
     erhe::graphics::Instance&    graphics_instance,
     const std::filesystem::path& path
-) -> std::shared_ptr<erhe::graphics::Texture>
+) -> std::shared_ptr<igl::ITexture>
 {
     const Image image = load_png(path);
     if (image.data.size() == 0) {
@@ -135,7 +135,7 @@ auto load_texture(
         .row_stride      = image.info.row_stride,
     };
 
-    auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
+    auto texture = std::make_shared<igl::ITexture>(texture_create_info);
     texture->set_debug_label(path.string());
     texture->upload(
         texture_create_info.internal_format,

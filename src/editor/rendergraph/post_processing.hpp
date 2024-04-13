@@ -50,8 +50,8 @@ public:
 
     void bind_framebuffer() const;
 
-    std::shared_ptr<erhe::graphics::Texture>     texture;
-    std::shared_ptr<erhe::graphics::Framebuffer> framebuffer;
+    std::shared_ptr<igl::ITexture>     texture;
+    std::shared_ptr<igl::IFramebuffer> framebuffer;
     int                                          axis{0};
 };
 
@@ -75,14 +75,14 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    ) const -> std::shared_ptr<igl::ITexture> override;
 
     // Overridden to provide framebuffer from the first downsample node
     [[nodiscard]] auto get_consumer_input_framebuffer(
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    ) const -> std::shared_ptr<igl::IFramebuffer> override;
 
     // Override so that size is always sources from output
     [[nodiscard]] auto get_consumer_input_viewport(
@@ -136,7 +136,7 @@ private:
     ) -> erhe::graphics::Shader_stages_create_info;
 
     void downsample(
-        const erhe::graphics::Texture*  source_texture,
+        const igl::ITexture*  source_texture,
         const Downsample_node&          node,
         const erhe::graphics::Pipeline& pipeline
     );
@@ -161,7 +161,7 @@ private:
     Editor_context&                                    m_context;
     std::vector<std::shared_ptr<Post_processing_node>> m_nodes;
     erhe::graphics::Fragment_outputs                   m_fragment_outputs;
-    std::shared_ptr<erhe::graphics::Texture>           m_dummy_texture;
+    std::shared_ptr<igl::ITexture>           m_dummy_texture;
     erhe::graphics::Sampler&                           m_linear_sampler;
     erhe::graphics::Sampler&                           m_nearest_sampler;
     erhe::renderer::Multi_buffer                       m_parameter_buffer;

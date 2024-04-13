@@ -258,7 +258,7 @@ int point_inside_polygon(const std::vector<glm::vec2>& points, glm::vec2 p)
 }
 
 Frustum_tiler::Frustum_tiler(
-    const erhe::graphics::Texture& texture
+    const igl::ITexture& texture
 )
     : m_texture     {texture}
     , m_tile_size   {texture.get_sparse_tile_size()}

@@ -54,8 +54,8 @@ public:
     [[nodiscard]] auto get_type_name() const -> std::string_view override;
 
     // Public API
-    [[nodiscard]] auto texture         () const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] auto framebuffer     () const -> std::shared_ptr<erhe::graphics::Framebuffer>;
+    [[nodiscard]] auto texture         () const -> std::shared_ptr<igl::ITexture>;
+    [[nodiscard]] auto framebuffer     () const -> std::shared_ptr<igl::IFramebuffer>;
     [[nodiscard]] auto width           () const -> float;
     [[nodiscard]] auto height          () const -> float;
     [[nodiscard]] auto pixels_per_meter() const -> float;
@@ -83,10 +83,10 @@ private:
     float                                        m_local_width     {0.0f};
     float                                        m_local_height    {0.0f};
 
-    std::shared_ptr<erhe::graphics::Texture>     m_texture;
+    std::shared_ptr<igl::ITexture>     m_texture;
     std::shared_ptr<erhe::graphics::Sampler>     m_sampler;
     std::shared_ptr<erhe::primitive::Material>   m_material;
-    std::shared_ptr<erhe::graphics::Framebuffer> m_framebuffer;
+    std::shared_ptr<igl::IFramebuffer> m_framebuffer;
     std::optional<glm::vec2>                     m_pointer;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

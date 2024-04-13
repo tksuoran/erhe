@@ -55,8 +55,8 @@ public:
 
     auto update(
         const glm::uvec4&                                          debug_joint_indices,
-        const gsl::span<glm::vec4>&                                debug_joint_colors,
-        const gsl::span<const std::shared_ptr<erhe::scene::Skin>>& skins
+        const std::span<glm::vec4>&                                debug_joint_colors,
+        const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins
     ) -> erhe::renderer::Buffer_range;
 
 private:

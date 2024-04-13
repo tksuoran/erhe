@@ -31,6 +31,6 @@ auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format;
 auto load_png    (const std::filesystem::path& path) -> Image;
 auto load_texture(
     erhe::graphics::Instance&    graphics_instance,
-    const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
+    const std::filesystem::path& path) -> std::shared_ptr<igl::ITexture>;
 
 }

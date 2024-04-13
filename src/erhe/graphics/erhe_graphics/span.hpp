@@ -6,37 +6,37 @@
 namespace erhe::graphics
 {
 
-[[nodiscard]] inline auto as_span(const glm::mat4& m) -> gsl::span<const float>
+[[nodiscard]] inline auto as_span(const glm::mat4& m) -> std::span<const float>
 {
-    return gsl::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(m)), 16);
+    return std::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(m)), 16);
 }
 
-[[nodiscard]] inline auto as_span(const glm::vec4& v) -> gsl::span<const float>
+[[nodiscard]] inline auto as_span(const glm::vec4& v) -> std::span<const float>
 {
-    return gsl::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 4);
+    return std::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 4);
 }
 
-[[nodiscard]] inline auto as_span(const glm::vec3& v) -> gsl::span<const float>
+[[nodiscard]] inline auto as_span(const glm::vec3& v) -> std::span<const float>
 {
-    return gsl::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 3);
+    return std::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 3);
 }
 
-[[nodiscard]] inline auto as_span(const glm::vec2& v) -> gsl::span<const float>
+[[nodiscard]] inline auto as_span(const glm::vec2& v) -> std::span<const float>
 {
-    return gsl::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 2);
+    return std::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 2);
 }
 
 template <typename T>
-[[nodiscard]] inline auto as_span(const T& value) -> gsl::span<const T>
+[[nodiscard]] inline auto as_span(const T& value) -> std::span<const T>
 {
-    return gsl::span<const T>(&value, 1);
+    return std::span<const T>(&value, 1);
 }
 
 template <typename T>
 inline void write(
-    const gsl::span<std::byte>& dst,
+    const std::span<std::byte>& dst,
     const std::size_t           write_byte_offset,
-    const gsl::span<const T>    source
+    const std::span<const T>    source
 )
 {
     //Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
@@ -47,9 +47,9 @@ inline void write(
 
 template <typename T>
 inline void write(
-    const gsl::span<T>&      dst,
+    const std::span<T>&      dst,
     const std::size_t        write_byte_offset,
-    const gsl::span<const T> source
+    const std::span<const T> source
 )
 {
     //Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
@@ -60,7 +60,7 @@ inline void write(
 
 template <typename T>
 inline void write(
-    const gsl::span<T>& dst,
+    const std::span<T>& dst,
     const std::size_t   write_byte_offset,
     const T&            value
 )

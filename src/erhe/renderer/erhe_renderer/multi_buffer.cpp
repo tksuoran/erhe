@@ -3,24 +3,22 @@
 #include "erhe_renderer/multi_buffer.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/gl_helpers.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/instance.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include "igl/Device.h"
+#include "igl/Buffer.h"
 
 namespace erhe::renderer
 {
 
 Multi_buffer::Multi_buffer(
-    erhe::graphics::Instance& graphics_instance,
-    const std::string_view    name
+    igl::IDevice&          device,
+    const std::string_view name
 )
-    : m_instance{graphics_instance}
-    , m_writer  {graphics_instance}
-    , m_name    {name}
+    : m_device{device}
+    , m_writer{device}
+    , m_name  {name}
 {
 }
 
@@ -29,96 +27,77 @@ auto Multi_buffer::writer() -> Buffer_writer&
     return m_writer;
 }
 
-namespace {
-
-static constexpr gl::Buffer_storage_mask storage_mask_persistent{
-    gl::Buffer_storage_mask::map_coherent_bit   |
-    gl::Buffer_storage_mask::map_persistent_bit |
-    gl::Buffer_storage_mask::map_write_bit
-};
-static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
-    gl::Buffer_storage_mask::map_write_bit
-};
-inline auto storage_mask(igl::IDevice& device) -> gl::Buffer_storage_mask
-{
-    return instance.info.use_persistent_buffers
-        ? storage_mask_persistent
-        : storage_mask_not_persistent;
-}
-
-static constexpr gl::Map_buffer_access_mask access_mask_persistent{
-    gl::Map_buffer_access_mask::map_coherent_bit   |
-    gl::Map_buffer_access_mask::map_persistent_bit |
-    gl::Map_buffer_access_mask::map_write_bit
-};
-static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
-    gl::Map_buffer_access_mask::map_write_bit
-};
-inline auto access_mask(igl::IDevice& device) -> gl::Map_buffer_access_mask
-{
-    return instance.info.use_persistent_buffers
-        ? access_mask_persistent
-        : access_mask_not_persistent;
-}
-
-}
 
 void Multi_buffer::allocate(
-    const gl::Buffer_target target,
-    const unsigned int      binding_point,
-    const std::size_t       size
+    igl::BufferDesc::BufferType buffer_type,
+    const unsigned int          binding_point,
+    const std::size_t           size
 )
 {
-    ERHE_VERIFY(gl_helpers::is_indexed(target));
+    // TODO ERHE_VERIFY(gl_helpers::is_indexed(target));
     m_binding_point = binding_point;
 
     log_multi_buffer->trace("{}: binding point = {} size = {}", m_name, binding_point, size);
 
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot) {
-        m_buffers.emplace_back(
-            m_instance,
-            target,
-            size,
-            storage_mask(m_instance),
-            access_mask(m_instance),
-            fmt::format("{} {}", m_name, slot)
+        igl::Result result{};
+        const std::shared_ptr<igl::IBuffer> buffer = m_device.createBuffer(
+            igl::BufferDesc{
+                buffer_type,
+                nullptr,
+                size,
+                igl::ResourceStorage::Shared,
+                0, // BufferAPIHint
+                fmt::format("{} {}", m_name, slot)
+            },
+            &result
         );
+        assert(result.isOk());
+        assert(buffer);
+        m_buffers.push_back(buffer);
     }
 }
 
 void Multi_buffer::allocate(
-    const gl::Buffer_target target,
-    const std::size_t       size
+    igl::BufferDesc::BufferType buffer_type,
+    const std::size_t           size
 )
 {
-    ERHE_VERIFY(!gl_helpers::is_indexed(target));
+    // TODO ERHE_VERIFY(!gl_helpers::is_indexed(target));
     m_binding_point = 0;
 
     log_multi_buffer->trace("{}: size = {}", m_name, size);
 
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot) {
-        m_buffers.emplace_back(
-            m_instance,
-            target,
-            size,
-            storage_mask(m_instance),
-            access_mask(m_instance),
-            fmt::format("{} {}", m_name, slot)
+        igl::Result result{};
+        const std::shared_ptr<igl::IBuffer> buffer = m_device.createBuffer(
+            igl::BufferDesc{
+                buffer_type,
+                nullptr,
+                size,
+                igl::ResourceStorage::Shared,
+                0, // BufferAPIHint
+                fmt::format("{} {}", m_name, slot)
+            },
+            &result
         );
+        assert(result.isOk());
+        assert(buffer);
+        m_buffers.push_back(buffer);
     }
 }
 
-[[nodiscard]] auto Multi_buffer::buffers() -> std::vector<erhe::graphics::Buffer>&
+[[nodiscard]] auto Multi_buffer::buffers() -> std::vector<std::shared_ptr<igl::IBuffer>>&
 {
     return m_buffers;
 }
 
-[[nodiscard]] auto Multi_buffer::buffers() const -> const std::vector<erhe::graphics::Buffer>&
+[[nodiscard]] auto Multi_buffer::buffers() const -> const std::vector<std::shared_ptr<igl::IBuffer>>&
 {
     return m_buffers;
 }
 
-[[nodiscard]] auto Multi_buffer::current_buffer() -> erhe::graphics::Buffer&
+[[nodiscard]] auto Multi_buffer::current_buffer() -> const std::shared_ptr<igl::IBuffer>&
 {
     return m_buffers.at(m_current_slot);
 }
@@ -142,6 +121,7 @@ void Multi_buffer::next_frame()
     );
 }
 
+#if 0
 void Multi_buffer::bind(const erhe::renderer::Buffer_range& range)
 {
     ERHE_PROFILE_FUNCTION();
@@ -163,14 +143,15 @@ void Multi_buffer::bind(const erhe::renderer::Buffer_range& range)
         range.byte_count
     );
 
+    // TODO ERHE_VERIFY(
+    //     (buffer.target() != gl::Buffer_target::uniform_buffer) ||
+    //     (range.byte_count <= static_cast<std::size_t>(m_instance.limits.max_uniform_block_size))
+    // );
     ERHE_VERIFY(
-        (buffer.target() != gl::Buffer_target::uniform_buffer) ||
-        (range.byte_count <= static_cast<std::size_t>(m_instance.limits.max_uniform_block_size))
-    );
-    ERHE_VERIFY(
-        range.first_byte_offset + range.byte_count <= buffer.capacity_byte_count()
+        range.first_byte_offset + range.byte_count <= buffer->getSizeInBytes()
     );
 
+    // static_cast<igl::BufferDesc::BufferType>(igl::BufferDesc::BufferTypeBits::Indirect),
     if (gl_helpers::is_indexed(buffer.target())) {
         gl::bind_buffer_range(
             buffer.target(),
@@ -183,6 +164,7 @@ void Multi_buffer::bind(const erhe::renderer::Buffer_range& range)
         gl::bind_buffer(buffer.target(), static_cast<GLuint>(buffer.gl_name()));
     }
 }
+#endif
 
 void Multi_buffer::reset()
 {

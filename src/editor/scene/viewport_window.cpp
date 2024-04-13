@@ -50,9 +50,9 @@ using erhe::graphics::Input_assembly_state;
 using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
-using erhe::graphics::Framebuffer;
+using igl::IFramebuffer;
 using erhe::graphics::Renderbuffer;
-using erhe::graphics::Texture;
+using igl::ITexture;
 
 int Viewport_window::s_serial = 0;
 

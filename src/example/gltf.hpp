@@ -48,7 +48,7 @@ public:
     std::vector<std::shared_ptr<erhe::scene::Mesh>>         meshes;
     std::vector<std::shared_ptr<erhe::scene::Skin>>         skins;
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
-    std::vector<std::shared_ptr<erhe::graphics::Texture>>   images;
+    std::vector<std::shared_ptr<igl::ITexture>>   images;
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
 };
 

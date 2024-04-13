@@ -92,6 +92,7 @@ void initialize_frame_capture()
     is_initialized = true;
 }
 
+#if 0
 void start_frame_capture(
     const erhe::window::Context_window& context_window
 )
@@ -121,5 +122,6 @@ void end_frame_capture(const erhe::window::Context_window& context_window)
     renderdoc_api->LaunchReplayUI(1, nullptr);
     renderdoc_api->ShowReplayUI();
 }
+#endif
 
 }

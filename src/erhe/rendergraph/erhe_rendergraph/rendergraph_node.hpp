@@ -11,9 +11,9 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe::graphics {
-    class Framebuffer;
-    class Texture;
+namespace igl {
+    class IFramebuffer;
+    class ITexture;
 }
 
 namespace erhe::rendergraph {
@@ -91,13 +91,13 @@ public:
         Resource_routing resource_routing,
         int              key,
         int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture>;
+    ) const -> std::shared_ptr<igl::ITexture>;
 
     [[nodiscard]] virtual auto get_consumer_input_framebuffer(
         Resource_routing resource_routing,
         int              key,
         int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer>;
+    ) const -> std::shared_ptr<igl::IFramebuffer>;
 
     [[nodiscard]] virtual auto get_consumer_input_viewport(
         Resource_routing resource_routing,
@@ -121,13 +121,13 @@ public:
         Resource_routing resource_routing,
         int              key,
         int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture>;
+    ) const -> std::shared_ptr<igl::ITexture>;
 
     [[nodiscard]] virtual auto get_producer_output_framebuffer(
         Resource_routing resource_routing,
         int              key,
         int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer>;
+    ) const -> std::shared_ptr<igl::IFramebuffer>;
 
     [[nodiscard]] virtual auto get_producer_output_viewport(
         Resource_routing resource_routing,

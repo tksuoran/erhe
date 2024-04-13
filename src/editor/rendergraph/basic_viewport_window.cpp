@@ -6,8 +6,8 @@
 namespace editor
 {
 
-using erhe::graphics::Framebuffer;
-using erhe::graphics::Texture;
+using igl::IFramebuffer;
+using igl::ITexture;
 
 //Basic_viewport_window::Basic_viewport_window(
 //    erhe::rendergraph::Rendergraph&         rendergraph,
@@ -92,7 +92,7 @@ Basic_viewport_window::Basic_viewport_window(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     static_cast<void>(resource_routing);
     static_cast<void>(key);
@@ -104,7 +104,7 @@ Basic_viewport_window::Basic_viewport_window(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     static_cast<void>(resource_routing);
     static_cast<void>(key);
@@ -116,7 +116,7 @@ Basic_viewport_window::Basic_viewport_window(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+) const -> std::shared_ptr<igl::IFramebuffer>
 {
     static_cast<void>(resource_routing);
     static_cast<void>(key);
@@ -128,7 +128,7 @@ Basic_viewport_window::Basic_viewport_window(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+) const -> std::shared_ptr<igl::IFramebuffer>
 {
     static_cast<void>(resource_routing);
     static_cast<void>(key);

@@ -35,10 +35,10 @@ auto primitive_type(
     switch (primitive_mode) {
         //using enum Primitive_mode;
         case Primitive_mode::not_set          : return {};
-        case Primitive_mode::polygon_fill     : return igl::PrimitiveType::triangles;
-        case Primitive_mode::edge_lines       : return igl::PrimitiveType::lines;
-        case Primitive_mode::corner_points    : return igl::PrimitiveType::points;
-        case Primitive_mode::polygon_centroids: return igl::PrimitiveType::points;
+        case Primitive_mode::polygon_fill     : return igl::PrimitiveType::Triangle;
+        case Primitive_mode::edge_lines       : return igl::PrimitiveType::Line;
+        case Primitive_mode::corner_points    : return igl::PrimitiveType::Point;
+        case Primitive_mode::polygon_centroids: return igl::PrimitiveType::Point;
         case Primitive_mode::count            : return {};
         default:                                return {};
     }

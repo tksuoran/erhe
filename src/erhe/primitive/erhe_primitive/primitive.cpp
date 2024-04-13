@@ -70,7 +70,7 @@ Geometry_raytrace::Geometry_raytrace(
         },
         .buffer_info = {
             .normal_style  = erhe::primitive::Normal_style::corner_normals,
-            .index_type    = gl::Draw_elements_type::unsigned_int,
+            .index_type    = igl::IndexFormat::UInt16,
             .vertex_format = vertex_format,
             .buffer_sink   = buffer_sink
         }

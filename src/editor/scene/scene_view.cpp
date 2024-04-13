@@ -85,7 +85,7 @@ auto Scene_view::get_light_projections() const -> const erhe::scene_renderer::Li
     return &light_projections;
 }
 
-auto Scene_view::get_shadow_texture() const -> erhe::graphics::Texture*
+auto Scene_view::get_shadow_texture() const -> igl::ITexture*
 {
     const auto* shadow_render_node = get_shadow_render_node();
     if (shadow_render_node == nullptr) {

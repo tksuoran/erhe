@@ -64,7 +64,7 @@ public:
     );
 
     // Public API
-    [[nodiscard]] auto tileset_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
+    [[nodiscard]] auto tileset_texture() const -> const std::shared_ptr<igl::ITexture>&;
     [[nodiscard]] auto tileset_image  () const -> const Image&;
 
     [[nodiscard]] auto get_multi_unit_tile  (std::array<int, Battle_type::bit_count> battle_type_players) const -> unit_tile_t;
@@ -111,8 +111,8 @@ private:
     erhe::imgui::Imgui_renderer& m_imgui_renderer;
     Tiles&                       m_tiles;
 
-    gsl::span<float>    m_gpu_float_data;
-    gsl::span<uint32_t> m_gpu_uint_data;
+    std::span<float>    m_gpu_float_data;
+    std::span<uint32_t> m_gpu_uint_data;
     size_t              m_word_offset{0};
     bool                m_can_blit   {false};
 
@@ -178,7 +178,7 @@ private:
     size_t                                    m_u_texture_offset         {0};
     std::filesystem::path                     m_shader_path;
     erhe::graphics::Shader_stages             m_shader_stages;
-    std::shared_ptr<erhe::graphics::Texture>  m_tileset_texture;
+    std::shared_ptr<igl::ITexture>  m_tileset_texture;
     Image                                     m_tileset_image;
 
     std::deque<Frame_resources>   m_frame_resources;

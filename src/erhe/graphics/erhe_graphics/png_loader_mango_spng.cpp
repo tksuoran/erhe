@@ -121,7 +121,7 @@ auto PNG_loader::open(
 }
 
 auto PNG_loader::open(
-    const gsl::span<const std::byte>& buffer_view,
+    const std::span<const std::byte>& buffer_view,
     Image_info&                       info
 ) -> bool
 {
@@ -170,7 +170,7 @@ auto PNG_loader::open(
     return true;
 }
 
-auto PNG_loader::load(gsl::span<std::byte> transfer_buffer) -> bool
+auto PNG_loader::load(std::span<std::byte> transfer_buffer) -> bool
 {
     int result = ::spng_decode_image(m_image_decoder, transfer_buffer.data(), transfer_buffer.size(), SPNG_FMT_RGBA8, 0);
     return (result == 0);
@@ -202,7 +202,7 @@ auto PNG_writer::stream_op(void* dst_src, std::size_t length) -> int
 auto PNG_writer::write(
     const std::filesystem::path& path,
     const Image_info&            info,
-    gsl::span<std::byte>         data
+    std::span<std::byte>         data
 ) -> bool
 {
     if (m_image_encoder == nullptr) {

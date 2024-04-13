@@ -1,5 +1,4 @@
 ﻿#include "erhe_xr/xr_session.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
@@ -10,7 +9,6 @@
 
 #ifdef _WIN32
 #   define GLFW_EXPOSE_NATIVE_WIN32 1
-#   define GLFW_EXPOSE_NATIVE_WGL   1
 #endif
 #include <GLFW/glfw3.h>
 
@@ -32,8 +30,7 @@
 #   define XR_USE_PLATFORM_LINUX      1
 #endif
 
-//#define XR_USE_GRAPHICS_API_VULKAN 1
-#define XR_USE_GRAPHICS_API_OPENGL 1
+#define XR_USE_GRAPHICS_API_VULKAN 1
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
@@ -50,8 +47,8 @@ Xr_session::Xr_session(
     : m_instance                {instance}
     , m_context_window          {context_window}
     , m_xr_session              {XR_NULL_HANDLE}
-    , m_swapchain_color_format  {gl::Internal_format::srgb8_alpha8}
-    , m_swapchain_depth_format  {gl::Internal_format::depth24_stencil8}
+    , m_swapchain_color_format  {igl::TextureFormat::RGBA_SRGB}
+    , m_swapchain_depth_format  {igl::TextureFormat::S8_UInt_Z24_UNorm}
     , m_xr_reference_space_local{XR_NULL_HANDLE}
     , m_xr_reference_space_stage{XR_NULL_HANDLE}
     , m_xr_reference_space_view {XR_NULL_HANDLE}

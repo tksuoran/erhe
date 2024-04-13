@@ -2,14 +2,10 @@
 
 #include "gltf.hpp"
 #include "gltf_log.hpp"
-#include "image_transfer.hpp"
 
 #include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/png_loader.hpp"
-#include "erhe_graphics/sampler.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_raytrace/ibuffer.hpp"
@@ -30,6 +26,12 @@ extern "C" {
     #include "cgltf.h"
 }
 
+#include "igl/Device.h"
+#include "igl/Texture.h"
+#include "igl/Buffer.h"
+#include "igl/SamplerState.h"
+#include "igl/TextureFormat.h"
+
 #include <glm/glm.hpp>
 
 #include <algorithm>
@@ -39,6 +41,7 @@ extern "C" {
 
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 
 namespace erhe::gltf {
@@ -155,14 +158,14 @@ constexpr glm::mat4 mat4_yup_from_zup{
 [[nodiscard]] auto to_erhe(const cgltf_primitive_type value) -> igl::PrimitiveType
 {
     switch (value) {
-        case cgltf_primitive_type::cgltf_primitive_type_points:         return igl::PrimitiveType::points;
-        case cgltf_primitive_type::cgltf_primitive_type_lines:          return igl::PrimitiveType::lines;
-        case cgltf_primitive_type::cgltf_primitive_type_line_loop:      return igl::PrimitiveType::line_loop;
-        case cgltf_primitive_type::cgltf_primitive_type_line_strip:     return igl::PrimitiveType::line_strip;
-        case cgltf_primitive_type::cgltf_primitive_type_triangles:      return igl::PrimitiveType::triangles;
-        case cgltf_primitive_type::cgltf_primitive_type_triangle_strip: return igl::PrimitiveType::triangle_strip;
-        case cgltf_primitive_type::cgltf_primitive_type_triangle_fan:   return igl::PrimitiveType::triangle_fan;
-        default:                                                        return igl::PrimitiveType::points;
+        case cgltf_primitive_type::cgltf_primitive_type_points:         return igl::PrimitiveType::Point;
+        case cgltf_primitive_type::cgltf_primitive_type_lines:          return igl::PrimitiveType::Line;
+        case cgltf_primitive_type::cgltf_primitive_type_line_loop:      ERHE_FATAL("TODO"); return igl::PrimitiveType::LineStrip; 
+        case cgltf_primitive_type::cgltf_primitive_type_line_strip:     return igl::PrimitiveType::LineStrip;
+        case cgltf_primitive_type::cgltf_primitive_type_triangles:      return igl::PrimitiveType::Triangle;
+        case cgltf_primitive_type::cgltf_primitive_type_triangle_strip: return igl::PrimitiveType::TriangleStrip;
+        case cgltf_primitive_type::cgltf_primitive_type_triangle_fan:   ERHE_FATAL("TODO"); return igl::PrimitiveType::TriangleStrip;
+        default:                                                        ERHE_FATAL("Bad primitive type"); return igl::PrimitiveType::Point;
     }
 };
 
@@ -323,12 +326,12 @@ namespace {
 
 using Item_flags = erhe::Item_flags;
 
-[[nodiscard]] auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
+[[nodiscard]] auto to_igl(erhe::graphics::Image_format format) -> igl::TextureFormat
 {
     switch (format) {
         //using enum erhe::graphics::Image_format;
-        case erhe::graphics::Image_format::srgb8:        return gl::Internal_format::srgb8;
-        case erhe::graphics::Image_format::srgb8_alpha8: return gl::Internal_format::srgb8_alpha8;
+        case erhe::graphics::Image_format::srgb8:        return igl::TextureFormat::RGBA_SRGB;
+        case erhe::graphics::Image_format::srgb8_alpha8: return igl::TextureFormat::RGBA_SRGB;
         default: {
             ERHE_FATAL("Bad image format %04x", static_cast<unsigned int>(format));
         }
@@ -337,6 +340,67 @@ using Item_flags = erhe::Item_flags;
 }
 
 namespace {
+
+auto gltf_to_igl_sampler_min_mag_filter(int gltf_sampler_filter) -> igl::SamplerMinMagFilter
+{
+    static constexpr int GLTF_NEAREST                = 9728;
+    static constexpr int GLTF_LINEAR                 = 9729;
+    static constexpr int GLTF_NEAREST_MIPMAP_NEAREST = 9984;
+    static constexpr int GLTF_LINEAR_MIPMAP_NEAREST  = 9985;
+    static constexpr int GLTF_NEAREST_MIPMAP_LINEAR  = 9986;
+    static constexpr int GLTF_LINEAR_MIPMAP_LINEAR   = 9987;
+    switch (gltf_sampler_filter) {
+        case 0                          : return igl::SamplerMinMagFilter::Nearest;
+        case GLTF_NEAREST               : return igl::SamplerMinMagFilter::Nearest;
+        case GLTF_LINEAR                : return igl::SamplerMinMagFilter::Linear;
+        case GLTF_NEAREST_MIPMAP_NEAREST: return igl::SamplerMinMagFilter::Nearest;
+        case GLTF_LINEAR_MIPMAP_NEAREST : return igl::SamplerMinMagFilter::Linear;
+        case GLTF_NEAREST_MIPMAP_LINEAR : return igl::SamplerMinMagFilter::Nearest;
+        case GLTF_LINEAR_MIPMAP_LINEAR  : return igl::SamplerMinMagFilter::Linear;
+        default:
+            ERHE_FATAL("Invalid gltf sampler filter");
+            //return igl::SamplerMinMagFilter::Nearest;
+    }
+}
+
+auto gltf_to_igl_sampler_mip_filter(int gltf_sampler_filter) -> igl::SamplerMipFilter
+{
+    static constexpr int GLTF_NEAREST                = 9728;
+    static constexpr int GLTF_LINEAR                 = 9729;
+    static constexpr int GLTF_NEAREST_MIPMAP_NEAREST = 9984;
+    static constexpr int GLTF_LINEAR_MIPMAP_NEAREST  = 9985;
+    static constexpr int GLTF_NEAREST_MIPMAP_LINEAR  = 9986;
+    static constexpr int GLTF_LINEAR_MIPMAP_LINEAR   = 9987;
+    switch (gltf_sampler_filter) {
+        case 0                          : return igl::SamplerMipFilter::Disabled;
+        case GLTF_NEAREST               : return igl::SamplerMipFilter::Disabled;
+        case GLTF_LINEAR                : return igl::SamplerMipFilter::Disabled;
+        case GLTF_NEAREST_MIPMAP_NEAREST: return igl::SamplerMipFilter::Nearest;
+        case GLTF_LINEAR_MIPMAP_NEAREST : return igl::SamplerMipFilter::Nearest;
+        case GLTF_NEAREST_MIPMAP_LINEAR : return igl::SamplerMipFilter::Linear;
+        case GLTF_LINEAR_MIPMAP_LINEAR  : return igl::SamplerMipFilter::Linear;
+        default:
+            ERHE_FATAL("Invalid gltf sampler filter");
+            //return igl::SamplerMipFilter::Disabled;
+    }
+}
+
+auto gltf_to_igl_sampler_address_mode(int gltf_sampler_address_mode) -> igl::SamplerAddressMode
+{
+    static constexpr int GLTF_CLAMP_TO_EDGE   = 33071;
+    static constexpr int GLTF_MIRRORED_REPEAT = 33648;
+    static constexpr int GLTF_REPEAT          = 10497;
+
+    switch (gltf_sampler_address_mode) {
+        case 0                   : return igl::SamplerAddressMode::Repeat;
+        case GLTF_CLAMP_TO_EDGE  : return igl::SamplerAddressMode::Clamp;
+        case GLTF_MIRRORED_REPEAT: return igl::SamplerAddressMode::MirrorRepeat;
+        case GLTF_REPEAT         : return igl::SamplerAddressMode::Repeat;
+        default:
+            ERHE_FATAL("Invalid gltf sampler address mode filter");
+            //return igl::SamplerAddressMode::Repeat;
+    }
+}
 
 cgltf_result cgltf_custom_file_read(
     const cgltf_memory_options* ,
@@ -695,7 +759,10 @@ private:
         }
         m_data_out.animations[animation_index] = erhe_animation;
     }
-    auto load_image_file(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>
+    auto load_image_file(
+        std::string_view             debug_label,
+        const std::filesystem::path& path
+    ) -> std::shared_ptr<igl::ITexture>
     {
         const bool file_is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::load_image_file", path);
         if (!file_is_ok) {
@@ -709,54 +776,60 @@ private:
             return {};
         }
 
-        auto& slot = m_arguments.image_transfer.get_slot();
-
-        erhe::graphics::Texture_create_info texture_create_info{
-            .instance        = m_arguments.graphics_instance,
-            .internal_format = to_gl(image_info.format),
-            .use_mipmaps     = true, //(image_info.level_count > 1),
-            .width           = image_info.width,
-            .height          = image_info.height,
-            .depth           = image_info.depth,
-            .level_count     = image_info.level_count,
-            .row_stride      = image_info.row_stride,
-            .debug_label     = path.filename().string()
+        igl::TextureDesc texture_desc{
+            .width        = image_info.width,
+            .height       = image_info.height,
+            .depth        = 1,
+            .numLayers    = 1,
+            .numSamples   = 1,
+            .usage        = igl::TextureDesc::TextureUsageBits::Sampled,
+            .numMipLevels = igl::TextureDesc::calcNumMipLevels(image_info.width, image_info.height, image_info.depth),
+            .type         = igl::TextureType::TwoD,
+            .format       = to_igl(image_info.format),
+            .storage      = igl::ResourceStorage::Private,
+            .debugName    = fmt::format("{} from file {}", debug_label, erhe::file::to_string(path))
         };
-        const int  mipmap_count    = texture_create_info.calculate_level_count();
-        const bool generate_mipmap = mipmap_count != image_info.level_count;
-        if (generate_mipmap) {
-            texture_create_info.level_count = mipmap_count;
-        }
-        gsl::span<std::byte> span = slot.begin_span_for(
-            image_info.width,
-            image_info.height,
-            texture_create_info.internal_format
-        );
-
+        igl::TextureFormatProperties texture_format_properties = igl::TextureFormatProperties::fromTextureFormat(texture_desc.format);
+        igl::TextureRangeDesc range{
+            .x            = 0,
+            .y            = 0,
+            .z            = 0,
+            .width        = image_info.width,
+            .height       = image_info.height,
+            .depth        = 1,
+            .layer        = 0,
+            .numLayers    = 1,
+            .mipLevel     = 0,
+            .numMipLevels = 1,
+            .face         = 0,
+            .numFaces     = 1,
+        };
+        std::size_t bytes_per_row = texture_format_properties.getBytesPerRow(range);
+        std::size_t bytes_per_layer = texture_format_properties.getBytesPerLayer(range);
+        std::vector<std::byte> data;
+        data.resize(bytes_per_layer);
+        std::span<std::byte> span{data.data(), data.size()};
         const bool ok = loader.load(span);
         loader.close();
         if (!ok) {
-            slot.end();
             return {};
         }
 
-        auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
-        texture->set_source_path(path);
-        texture->set_debug_label(erhe::file::to_string(path));
-
-        gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
-        gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
-        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
-        texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
-        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
-
-        slot.end();
-        if (generate_mipmap) {
-            gl::generate_texture_mipmap(texture->gl_name());
+        igl::Result create_result{};
+        std::shared_ptr<igl::ITexture> texture = m_device.createTexture(texture_desc, &create_result);
+        if (!texture || !create_result.isOk()) {
+            return {};
         }
+
+        // TODO Generate mipmaps if needed
+
+        texture->upload(range, data.data(), bytes_per_row);
         return texture;
     }
-    auto load_png_buffer(const cgltf_buffer_view* buffer_view, const cgltf_size image_index) -> std::shared_ptr<erhe::graphics::Texture>
+    auto load_png_buffer(
+        std::string_view         debug_label,
+        const cgltf_buffer_view* buffer_view
+    ) -> std::shared_ptr<igl::ITexture>
     {
         const cgltf_size  buffer_view_index = buffer_view - m_data->buffer_views;
         const std::string name              = safe_resource_name(buffer_view->name, "buffer_view", buffer_view_index);
@@ -765,7 +838,7 @@ private:
 
         const uint8_t*   data_u8 = cgltf_buffer_view_data(buffer_view);
         const std::byte* data    = reinterpret_cast<const std::byte*>(data_u8);
-        gsl::span<const std::byte> png_encoded_buffer_view{
+        std::span<const std::byte> png_encoded_buffer_view{
             data,
             static_cast<std::size_t>(buffer_view->size)
         };
@@ -774,51 +847,56 @@ private:
             return {};
         }
 
-        auto& slot = m_arguments.image_transfer.get_slot();
-
-        erhe::graphics::Texture_create_info texture_create_info{
-            .instance        = m_arguments.graphics_instance,
-            .internal_format = to_gl(image_info.format),
-            .use_mipmaps     = true, //(image_info.level_count > 1),
-            .width           = image_info.width,
-            .height          = image_info.height,
-            .depth           = image_info.depth,
-            .level_count     = image_info.level_count,
-            .row_stride      = image_info.row_stride,
-            .debug_label     = fmt::format("{} image {}", m_arguments.path.filename().string(), image_index) 
+        igl::TextureDesc texture_desc{
+            .width        = image_info.width,
+            .height       = image_info.height,
+            .depth        = 1,
+            .numLayers    = 1,
+            .numSamples   = 1,
+            .usage        = igl::TextureDesc::TextureUsageBits::Sampled,
+            .numMipLevels = igl::TextureDesc::calcNumMipLevels(image_info.width, image_info.height, image_info.depth),
+            .type         = igl::TextureType::TwoD,
+            .format       = to_igl(image_info.format),
+            .storage      = igl::ResourceStorage::Private,
+            .debugName    = fmt::format(
+                    "{} from buffer {} offset {}",
+                    debug_label,
+                    buffer_view->buffer - m_data->buffers,
+                    buffer_view->offset
+                )
         };
-        const int  mipmap_count    = texture_create_info.calculate_level_count();
-        const bool generate_mipmap = mipmap_count != image_info.level_count;
-        if (generate_mipmap) {
-            texture_create_info.level_count = mipmap_count;
-        }
-        gsl::span<std::byte> span = slot.begin_span_for(
-            image_info.width,
-            image_info.height,
-            texture_create_info.internal_format
-        );
-
+        igl::TextureFormatProperties texture_format_properties = igl::TextureFormatProperties::fromTextureFormat(texture_desc.format);
+        igl::TextureRangeDesc range{
+            .x            = 0,
+            .y            = 0,
+            .z            = 0,
+            .width        = image_info.width,
+            .height       = image_info.height,
+            .depth        = 1,
+            .layer        = 0,
+            .numLayers    = 1,
+            .mipLevel     = 0,
+            .numMipLevels = 1,
+            .face         = 0,
+            .numFaces     = 1,
+        };
+        std::size_t bytes_per_row = texture_format_properties.getBytesPerRow(range);
+        std::size_t bytes_per_layer = texture_format_properties.getBytesPerLayer(range);
+        std::vector<std::byte> image_data;
+        image_data.resize(bytes_per_layer);
+        std::span<std::byte> span{image_data.data(), image_data.size()};
         const bool ok = loader.load(span);
         loader.close();
         if (!ok) {
-            slot.end();
             return {};
         }
-
-        auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
-        texture->set_source_path(m_arguments.path);
-        texture->set_debug_label(name);
-
-        gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
-        gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
-        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
-        texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
-        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
-
-        slot.end();
-        if (generate_mipmap) {
-            gl::generate_texture_mipmap(texture->gl_name());
+        igl::Result create_result{};
+        std::shared_ptr<igl::ITexture> texture = m_device.createTexture(texture_desc, &create_result);
+        if (!texture || !create_result.isOk()) {
+            return {};
         }
+        // TODO Generate mipmaps if needed
+        texture->upload(range, image_data.data(), bytes_per_row);
         return texture;
     }
     void parse_image(const cgltf_size image_index)
@@ -827,41 +905,58 @@ private:
         const std::string image_name = safe_resource_name(image->name, "image", image_index);
         log_gltf->trace("Image: image index = {}, name = {}", image_index, image_name);
 
-        std::shared_ptr<erhe::graphics::Texture> erhe_texture;
+        std::shared_ptr<igl::ITexture> texture;
         if (image->uri != nullptr) {
             std::filesystem::path uri{image->uri};
-            erhe_texture = load_image_file(m_arguments.path.replace_filename(uri));
-            if (!erhe_texture) {
-                erhe_texture = load_image_file(image->uri);
+            texture = load_image_file(image_name, m_path.replace_filename(uri));
+            if (!texture) {
+                texture = load_image_file(image_name, image->uri);
             }
         } else if (image->buffer_view != nullptr) {
-            erhe_texture = load_png_buffer(image->buffer_view, image_index);
+            texture = load_png_buffer(image_name, image->buffer_view);
         }
-        if (erhe_texture) {
-            erhe_texture->set_debug_label(image_name);
-            m_data_out.images.push_back(erhe_texture);
+        if (texture) {
+            m_data_out.images.push_back(texture);
         }
-        m_data_out.images[image_index] = erhe_texture;
+        m_data_out.images[image_index] = texture;
     }
     void parse_sampler(const cgltf_size sampler_index)
     {
+        static constexpr int GLTF_NEAREST                = 9728;
+        static constexpr int GLTF_LINEAR                 = 9729;
+        static constexpr int GLTF_NEAREST_MIPMAP_NEAREST = 9984;
+        static constexpr int GLTF_LINEAR_MIPMAP_NEAREST  = 9985;
+        static constexpr int GLTF_NEAREST_MIPMAP_LINEAR  = 9986;
+        static constexpr int GLTF_LINEAR_MIPMAP_LINEAR   = 9987;
+
         const cgltf_sampler* sampler = &m_data->samplers[sampler_index];
         const std::string sampler_name = safe_resource_name(sampler->name, "sampler", sampler_index);
         log_gltf->trace("Sampler: sampler index = {}, name = {}", sampler_index, sampler_name);
 
-        erhe::graphics::Sampler_create_info create_info;
-        create_info.min_filter     = (sampler->min_filter != 0) ? static_cast<gl::Texture_min_filter>(sampler->min_filter) : gl::Texture_min_filter::nearest;
-        create_info.mag_filter     = (sampler->mag_filter != 0) ? static_cast<gl::Texture_mag_filter>(sampler->mag_filter) : gl::Texture_mag_filter::nearest;
-        create_info.wrap_mode[0]   = (sampler->wrap_s != 0) ? static_cast<gl::Texture_wrap_mode>(sampler->wrap_s) : gl::Texture_wrap_mode::repeat;
-        create_info.wrap_mode[1]   = (sampler->wrap_t != 0) ? static_cast<gl::Texture_wrap_mode>(sampler->wrap_t) : gl::Texture_wrap_mode::repeat;
-        create_info.max_anisotropy = m_arguments.graphics_instance.limits.max_texture_max_anisotropy;
-        create_info.debug_label    = sampler_name;
+        igl::SamplerStateDesc desc{
+            .minFilter            = gltf_to_igl_sampler_min_mag_filter(sampler->min_filter),
+            .magFilter            = gltf_to_igl_sampler_min_mag_filter(sampler->mag_filter),
+            .mipFilter            = gltf_to_igl_sampler_mip_filter(sampler->min_filter),
+            .addressModeU         = gltf_to_igl_sampler_address_mode(sampler->wrap_s),
+            .addressModeV         = gltf_to_igl_sampler_address_mode(sampler->wrap_t),
+            .addressModeW         = igl::SamplerAddressMode::Repeat,
+            .depthCompareFunction = igl::CompareFunction::LessEqual,
+            .mipLodMin            = 0,
+            .mipLodMax            = 15,
+            .maxAnisotropic       = 16,
+            .depthCompareEnabled  = false,
+            .debugName            = fmt::format("Sampler {} '{}'", sampler_index, sampler_name)
+        };
 
-        auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(create_info);
-        // TODO erhe_sampler->set_source_path(m_path);
-        erhe_sampler->set_debug_label(sampler_name);
-        m_data_out.samplers[sampler_index] = erhe_sampler;
-        m_data_out.samplers.push_back(erhe_sampler);
+        igl::Result result{};
+        std::shared_ptr<igl::ISamplerState> igl_sampler = m_device.createSamplerState(desc, &result);
+        if (!igl_sampler || !result.isOk())
+        {
+            return;
+        }
+
+        m_data_out.samplers[sampler_index] = igl_sampler;
+        //m_data_out.samplers.push_back(sampler);
     }
     void parse_material(const cgltf_size material_index)
     {
@@ -874,7 +969,7 @@ private:
         );
 
         auto new_material = std::make_shared<erhe::primitive::Material>(material_name);
-        new_material->set_source_path(m_arguments.path);
+        // TODO new_material->set_source_path(m_path);
         m_data_out.materials[material_index] = new_material;
         if (material->has_pbr_metallic_roughness) {
             const cgltf_pbr_metallic_roughness& pbr_metallic_roughness = material->pbr_metallic_roughness;
@@ -1741,6 +1836,7 @@ private:
 
     Gltf_data&           m_data_out;
     Gltf_parse_arguments m_arguments;
+    ////igl::IDevice&        m_device;
     std::string          m_file_contents; // GLB needs file contents in memory
     cgltf_data*          m_data{nullptr};
 };

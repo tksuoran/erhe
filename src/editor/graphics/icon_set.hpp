@@ -85,7 +85,7 @@ class Icon_set
 {
 public:
     Icon_set(
-        erhe::graphics::Instance&    graphics_instance,
+        igl::IDevice&                device,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         Editor_context&              editor_context,
         Icon_settings&               icon_settings,
@@ -93,7 +93,7 @@ public:
     );
 
     void load_icons(
-        erhe::graphics::Instance&    graphics_instance,
+        igl::IDevice&                device,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         Icon_settings&               icon_settings,
         Programs&                    programs

@@ -98,9 +98,9 @@ void Material_preview::update_rendertarget(
     m_color_format = gl::Internal_format::rgba16f;
     m_depth_format = gl::Internal_format::depth_component32f;
 
-    using Framebuffer  = erhe::graphics::Framebuffer;
+    using Framebuffer  = igl::IFramebuffer;
     using Renderbuffer = erhe::graphics::Renderbuffer;
-    using Texture      = erhe::graphics::Texture;
+    using Texture      = igl::ITexture;
     m_color_texture = std::make_shared<Texture>(
         Texture::Create_info{
             .instance        = graphics_instance,
@@ -296,7 +296,7 @@ void Material_preview::render_preview(
         layers.light()->lights,
         m_camera.get(),
         erhe::math::Viewport{},
-        std::shared_ptr<erhe::graphics::Texture>{},
+        std::shared_ptr<igl::ITexture>{},
         erhe::graphics::invalid_texture_handle
     };
 
@@ -344,7 +344,7 @@ auto Material_preview::get_light_projections() const -> const erhe::scene_render
     return &m_light_projections;
 }
 
-auto Material_preview::get_shadow_texture() const -> erhe::graphics::Texture*
+auto Material_preview::get_shadow_texture() const -> igl::ITexture*
 {
     return m_shadow_texture.get();
 }

@@ -56,17 +56,17 @@ public:
         const erhe::scene::Camera*                                 view_camera;
         const erhe::math::Viewport                                 view_camera_viewport;
         const erhe::math::Viewport                                 light_camera_viewport;
-        std::shared_ptr<erhe::graphics::Texture>                   texture;
+        std::shared_ptr<igl::ITexture>                   texture;
         const std::vector<
-            std::unique_ptr<erhe::graphics::Framebuffer>
+            std::unique_ptr<igl::IFramebuffer>
         >&                                                         framebuffers;
         const std::initializer_list<
-            const gsl::span<
+            const std::span<
                 const std::shared_ptr<erhe::scene::Mesh>
             >
         >&                                                         mesh_spans;
-        const gsl::span<const std::shared_ptr<erhe::scene::Light>> lights;
-        const gsl::span<const std::shared_ptr<erhe::scene::Skin>>& skins{};
+        const std::span<const std::shared_ptr<erhe::scene::Light>> lights;
+        const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins{};
         Light_projections&                                         light_projections;
     };
 

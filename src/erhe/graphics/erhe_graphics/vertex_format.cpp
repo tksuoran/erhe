@@ -1,5 +1,6 @@
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <gsl/assert>
@@ -109,4 +110,30 @@ void Vertex_format::add_to(
     vertices_block.add_struct("vertices", &vertex_struct, erhe::graphics::Shader_resource::unsized_array);
 }
 
+auto Vertex_format::make_vertex_input_state(
+    igl::IDevice&                    device,
+    const Vertex_attribute_mappings& mappings,
+    igl::IBuffer*                    vertex_buffer
+) const -> std::shared_ptr<igl::IVertexInputState>
+{
+    std::vector<Vertex_input_attribute> attributes;
+    mappings.collect_attributes(attributes, vertex_buffer, *this);
+    igl::VertexInputStateDesc desc{};
+    desc.numAttributes = attributes.size();
+    for (size_t i = 0; i < desc.numAttributes; ++i)
+    {
+        desc.attributes[i].bufferIndex = 0; // TODO
+        desc.attributes[i].format      = attributes[i].data_type;
+        desc.attributes[i].offset      = attributes[i].offset;
+        desc.attributes[i].location    = attributes[i].layout_location;
+    }
+
+    igl::Result result{};
+    std::shared_ptr<igl::IVertexInputState> vertex_input_state = device.createVertexInputState(desc, &result);
+    assert(result.isOk());
+    assert(vertex_input_state);
+    return vertex_input_state;
+}
+
 } // namespace erhe::graphics
+

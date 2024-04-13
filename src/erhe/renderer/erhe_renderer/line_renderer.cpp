@@ -2,12 +2,7 @@
 
 #include "erhe_renderer/renderer_log.hpp"
 
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/instance.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
@@ -26,64 +21,29 @@
 namespace erhe::renderer
 {
 
-namespace
-{
-
-static constexpr gl::Buffer_storage_mask storage_mask_persistent{
-    gl::Buffer_storage_mask::map_coherent_bit   |
-    gl::Buffer_storage_mask::map_persistent_bit |
-    gl::Buffer_storage_mask::map_write_bit
-};
-static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
-    gl::Buffer_storage_mask::map_write_bit
-};
-inline auto storage_mask(erhe::graphics::Instance& graphics_instance) -> gl::Buffer_storage_mask
-{
-    return graphics_instance.info.use_persistent_buffers
-        ? storage_mask_persistent
-        : storage_mask_not_persistent;
-}
-
-static constexpr gl::Map_buffer_access_mask access_mask_persistent{
-    gl::Map_buffer_access_mask::map_coherent_bit   |
-    gl::Map_buffer_access_mask::map_persistent_bit |
-    gl::Map_buffer_access_mask::map_write_bit
-};
-static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
-    gl::Map_buffer_access_mask::map_write_bit
-};
-inline auto access_mask(erhe::graphics::Instance& graphics_instance) -> gl::Map_buffer_access_mask
-{
-    return graphics_instance.info.use_persistent_buffers
-        ? access_mask_persistent
-        : access_mask_not_persistent;
-}
-
-}
-
 using glm::mat4;
 using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 
 Line_renderer_pipeline::Line_renderer_pipeline(
-    erhe::graphics::Instance& graphics_instance
+    igl::IDevice& device
 )
     : fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
-            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .type     = erhe::graphics::Glsl_type::float_vec4,
             .location = 0
         }
     }
     , attribute_mappings{
-        graphics_instance,
+        device,
         {
             erhe::graphics::Vertex_attribute_mapping::a_position0_float_vec4(),
             erhe::graphics::Vertex_attribute_mapping::a_color_float_vec4(),
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 2,
-                .shader_type     = gl::Attribute_type::float_vec4,
+                .shader_type     = erhe::graphics::Glsl_attribute_type::float_vec4,
                 .name            = "a_line_start_end",
                 .src_usage =
                 {
@@ -103,28 +63,24 @@ Line_renderer_pipeline::Line_renderer_pipeline(
         erhe::graphics::Vertex_attribute                      // clipped line start (xy) and end (zw)
         {
             .usage = {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::custom,
-                .index     = 0
+                .type    = erhe::graphics::Vertex_attribute::Usage_type::custom,
+                .index   = 0
             },
-            .shader_type   = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type      = igl::VertexAttributeFormat::float_,
-                .dimension = 4
-            }
-        }
+            .shader_type = erhe::graphics::Glsl_attribute_type::float_vec4, // gl::Attribute_type::float_vec4,
+            .data_type   = igl::VertexAttributeFormat::Float4
     }
 {
     // Line vertex buffer will contain vertex positions, width and colors.
     // These are written by CPU are read by compute shader.
     // Vertex colors are are also read by the vertex shader
     line_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
-        graphics_instance,
+        device,
         "line_vertex_buffer",
         0,
         erhe::graphics::Shader_resource::Type::shader_storage_block
     );
     line_vertex_buffer_block->set_readonly(true);
-    line_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_instance, "line_vertex");
+    line_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(device, "line_vertex");
     line_vertex_format.add_to(
         *line_vertex_struct.get(),
         *line_vertex_buffer_block.get()
@@ -132,9 +88,9 @@ Line_renderer_pipeline::Line_renderer_pipeline(
 
     // Triangle vertex buffer will contain triangle vertex positions.
     // These are written by compute shader, after which they are read by vertex shader.
-    triangle_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_instance, "triangle_vertex");
+    triangle_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(device, "triangle_vertex");
     triangle_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
-        graphics_instance,
+        device,
         "triangle_vertex_buffer",
         1,
         erhe::graphics::Shader_resource::Type::shader_storage_block
@@ -146,7 +102,7 @@ Line_renderer_pipeline::Line_renderer_pipeline(
     );
 
     view_block = std::make_unique<erhe::graphics::Shader_resource>(
-        graphics_instance,
+        device,
         "view",
         3,
         erhe::graphics::Shader_resource::Type::uniform_block
@@ -167,10 +123,10 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             .shaders = { { igl::ShaderStage::compute_shader, comp_path }, }
         };
 
-        erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+        erhe::graphics::Shader_stages_prototype prototype{device, create_info};
         if (prototype.is_valid()) {
             compute_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
-            graphics_instance.shader_monitor.add(create_info, compute_shader_stages.get());
+            // TODO shader_monitor.add(create_info, compute_shader_stages.get());
         } else {
             const auto current_path = std::filesystem::current_path();
             log_startup->error(
@@ -193,10 +149,10 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             }
         };
 
-        erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+        erhe::graphics::Shader_stages_prototype prototype{device, create_info};
         if (prototype.is_valid()) {
             graphics_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
-            graphics_instance.shader_monitor.add(create_info, graphics_shader_stages.get());
+            // TODO shader_monitor.add(create_info, graphics_shader_stages.get());
         } else {
             const auto current_path = std::filesystem::current_path();
             log_startup->error(
@@ -210,7 +166,7 @@ Line_renderer_pipeline::Line_renderer_pipeline(
 static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer_set::initialize_component()"};
 
 Line_renderer_set::Line_renderer_set(
-    erhe::graphics::Instance& graphics_instance
+    igl::IDevice& device
 )
     : m_graphics_instance{graphics_instance}
     , m_pipeline         {graphics_instance}
@@ -328,18 +284,18 @@ void Line_renderer_set::render(
 }
 
 Line_renderer::Frame_resources::Frame_resources(
-    erhe::graphics::Instance&                 graphics_instance,
-    const unsigned int                        stencil_reference,
-    const bool                                reverse_depth,
-    const std::size_t                         view_stride,
-    const std::size_t                         view_count,
-    const std::size_t                         line_count,
-    erhe::graphics::Shader_stages* const      shader_stages,
-    erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-    erhe::graphics::Vertex_format&            line_vertex_format,
-    erhe::graphics::Vertex_format&            triangle_vertex_format,
-    const std::string&                        style_name,
-    const std::size_t                         slot
+    erhe::graphics::Instance&                  graphics_instance,
+    const unsigned int                         stencil_reference,
+    const bool                                 reverse_depth,
+    const std::size_t                          view_stride,
+    const std::size_t                          view_count,
+    const std::size_t                          line_count,
+    const std::shared_ptr<igl::IShaderStages>& shader_stages,
+    erhe::graphics::Vertex_attribute_mappings  attribute_mappings,
+    erhe::graphics::Vertex_format&             line_vertex_format,
+    erhe::graphics::Vertex_format&             triangle_vertex_format,
+    const std::string&                         style_name,
+    const std::size_t                          slot
 )
     : compute_shader_stages{compute_shader_stages}
     , line_vertex_buffer{
@@ -448,7 +404,7 @@ void Line_renderer::put(
     const vec3&             point,
     const float             thickness,
     const vec4&             color,
-    const gsl::span<float>& gpu_float_data,
+    const std::span<float>& gpu_float_data,
     std::size_t&            word_offset
 )
 {
@@ -475,7 +431,7 @@ void Line_renderer::add_lines(
     std::byte* const       start             = vertex_gpu_data.data();
     const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
     const std::size_t      word_count        = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
+    const std::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line& line : lines) {
@@ -500,7 +456,7 @@ void Line_renderer::add_lines(
     std::byte* const       start             = vertex_gpu_data.data();
     const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
     const std::size_t      word_count        = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
+    const std::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line4& line : lines) {
@@ -559,7 +515,7 @@ void Line_renderer::add_lines(
     std::byte* const       start             = vertex_gpu_data.data();
     const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
     const std::size_t      word_count        = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
+    const std::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line& line : lines) {
@@ -1384,8 +1340,8 @@ void Line_renderer::render(
     std::byte* const          start                  = view_gpu_data.data();
     const std::size_t         byte_count             = view_gpu_data.size_bytes();
     const std::size_t         word_count             = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const auto  projection_transforms  = camera.projection_transforms(viewport);
     const mat4  clip_from_world        = projection_transforms.clip_from_world.get_matrix();

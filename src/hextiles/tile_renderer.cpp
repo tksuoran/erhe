@@ -380,7 +380,7 @@ void Tile_renderer::compose_tileset_texture()
         .level_count     = 1
     };
 
-    m_tileset_texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
+    m_tileset_texture = std::make_shared<igl::ITexture>(texture_create_info);
     m_tileset_texture->set_debug_label(texture_path.string());
     float clear_rgba[4] = { 1.0f, 0.0f, 1.0f, 1.0f};
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
@@ -679,14 +679,14 @@ void Tile_renderer::begin()
     std::byte* const start           = vertex_gpu_data.data()       + m_vertex_writer.write_offset;
     const size_t     byte_count      = vertex_gpu_data.size_bytes() - m_vertex_writer.write_offset;
     const size_t     word_count      = byte_count / sizeof(float);
-    m_gpu_float_data = gsl::span<float>   {reinterpret_cast<float*   >(start), word_count};
-    m_gpu_uint_data  = gsl::span<uint32_t>{reinterpret_cast<uint32_t*>(start), word_count};
+    m_gpu_float_data = std::span<float>   {reinterpret_cast<float*   >(start), word_count};
+    m_gpu_uint_data  = std::span<uint32_t>{reinterpret_cast<uint32_t*>(start), word_count};
     m_word_offset    = 0;
 
     m_can_blit = true;
 }
 
-auto Tile_renderer::tileset_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
+auto Tile_renderer::tileset_texture() const -> const std::shared_ptr<igl::ITexture>&
 {
     return m_tileset_texture;
 }
@@ -779,8 +779,8 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     std::byte* const          start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
     const size_t              byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
     const size_t              word_count          = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const glm::mat4 clip_from_window = erhe::math::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
@@ -799,7 +799,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
         static_cast<uint32_t>((handle & 0xffffffffu)),
         static_cast<uint32_t>(handle >> 32u)
     };
-    const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+    const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
     write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
     m_projection_writer.write_offset += m_u_texture_size;
 

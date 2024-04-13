@@ -4,6 +4,8 @@
 #include "erhe_xr/xr_swapchain_image.hpp"
 #include <openxr/openxr.h>
 
+#include "igl/TextureFormat.h"
+
 #include <functional>
 #include <vector>
 
@@ -78,10 +80,10 @@ private:
     };
 
     Xr_instance&                                  m_instance;
-    erhe::window::Context_window&                m_context_window;
+    erhe::window::Context_window&                 m_context_window;
     XrSession                                     m_xr_session;
-    gl::Internal_format                           m_swapchain_color_format;
-    gl::Internal_format                           m_swapchain_depth_format;
+    igl::TextureFormat                            m_swapchain_color_format;
+    igl::TextureFormat                            m_swapchain_depth_format;
     std::vector<Swapchains>                       m_view_swapchains;
     std::vector<XrView>                           m_xr_views;
     std::vector<XrCompositionLayerProjectionView> m_xr_composition_layer_projection_views;

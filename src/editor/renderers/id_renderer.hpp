@@ -53,7 +53,7 @@ public:
     };
 
     Id_renderer(
-        erhe::graphics::Instance&                graphics_instance,
+        igl::IDevice&                            device,
         erhe::scene_renderer::Program_interface& program_interface,
         Mesh_memory&                             mesh_memory,
         Programs&                                programs
@@ -65,8 +65,8 @@ public:
     public:
         const erhe::math::Viewport& viewport;
         const erhe::scene::Camera&  camera;
-        const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
-        const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& tool_mesh_spans;
+        const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
+        const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& tool_mesh_spans;
         const int                    x;
         const int                    y;
     };
@@ -92,8 +92,8 @@ private:
         };
 
         Id_frame_resources(
-            erhe::graphics::Instance& graphics_instance,
-            const std::size_t         slot
+            igl::IDevice&     device
+            const std::size_t slot
         );
 
         Id_frame_resources(const Id_frame_resources& other) = delete;
@@ -130,9 +130,9 @@ private:
     erhe::graphics::Pipeline                      m_selective_depth_clear_pipeline;
     std::unique_ptr<erhe::graphics::Renderbuffer> m_color_renderbuffer;
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
-    std::unique_ptr<erhe::graphics::Texture>      m_color_texture;
-    std::unique_ptr<erhe::graphics::Texture>      m_depth_texture;
-    std::unique_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
+    std::unique_ptr<igl::ITexture>      m_color_texture;
+    std::unique_ptr<igl::ITexture>      m_depth_texture;
+    std::unique_ptr<igl::IFramebuffer>  m_framebuffer;
     std::vector<Id_frame_resources>               m_id_frame_resources;
     std::size_t                                   m_current_id_frame_resource_slot{0};
     erhe::graphics::Gpu_timer                     m_gpu_timer;
@@ -147,7 +147,7 @@ private:
     };
 
     void render(
-        const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
+        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
     );
 
     std::vector<Range> m_ranges;

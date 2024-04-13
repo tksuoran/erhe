@@ -1173,11 +1173,14 @@ auto Shader_resource::add(const Vertex_attribute& attribute) -> Shader_resource*
     return nullptr;
 }
 
+auto align(const std::size_t value, const std::size_t alignment) -> std::size_t
+{
+	return ((value + alignment - 1) / alignment) * alignment;
+}
+
 void Shader_resource::align_offset_to(const unsigned int alignment)
 {
-    while ((m_offset % alignment) != 0) {
-        ++m_offset;
-    }
+    m_offset = align(m_offset, alignment);
 }
 
 void Shader_resource::indent(std::stringstream& ss, const int indent_level) const

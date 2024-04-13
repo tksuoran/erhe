@@ -108,8 +108,8 @@ FetchContent_MakeAvailable_glslang()
 message("Fetching GSL")
 FetchContent_MakeAvailable(GSL)
 
-message("Fetching MathGeoLib")
-FetchContent_MakeAvailable(MathGeoLib)
+#message("Fetching MathGeoLib")
+#FetchContent_MakeAvailable(MathGeoLib)
 
 #message("Fetching meshoptimizer")
 #FetchContent_MakeAvailable(meshoptimizer)

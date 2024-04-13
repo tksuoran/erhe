@@ -1,7 +1,6 @@
 #if defined(ERHE_WINDOW_LIBRARY_GLFW)
 
 #include "erhe_window/glfw_window.hpp"
-#include "erhe_gl/dynamic_load.hpp"
 #include "erhe_window/window_log.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_time/sleep.hpp"
@@ -12,7 +11,6 @@
 
 #if defined(_WIN32)
 #   define GLFW_EXPOSE_NATIVE_WIN32 1
-#   define GLFW_EXPOSE_NATIVE_WGL 1
 #   include <GLFW/glfw3native.h>
 #endif
 
@@ -366,25 +364,6 @@ Context_window::Context_window(const Window_configuration& configuration)
     ERHE_VERIFY(ok);
 }
 
-Context_window::Context_window(Context_window* share)
-    : m_root_window_event_handler{this}
-{
-    Expects(share != nullptr);
-
-    const bool ok = open(
-        {
-            .fullscreen        = false,
-            .width             = 64,
-            .height            = 64,
-            .msaa_sample_count = 0,
-            .title             = "erhe share context",
-            .share             = share
-        }
-    );
-
-    ERHE_VERIFY(ok);
-}
-
 [[nodiscard]] auto get_monitor(const int x, const int y) -> GLFWmonitor*
 {
     int monitor_count{0};
@@ -424,38 +403,10 @@ auto Context_window::open(
         erhe::time::sleep_initialize();
     }
 
-    const bool primary = (configuration.share == nullptr);
-
-    glfwWindowHint(GLFW_CLIENT_API,       GLFW_OPENGL_API);
-    glfwWindowHint(GLFW_RED_BITS,         8);
-    glfwWindowHint(GLFW_GREEN_BITS,       8);
-    glfwWindowHint(GLFW_BLUE_BITS,        8);
-    glfwWindowHint(GLFW_ALPHA_BITS,       8);
-    //glfwWindowHint(GLFW_DEPTH_BITS,     24);
-    glfwWindowHint(GLFW_SRGB_CAPABLE,     GLFW_TRUE);
+    glfwWindowHint(GLFW_CLIENT_API,       GLFW_NO_API);
     glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
     glfwWindowHint(GLFW_CENTER_CURSOR,    GLFW_TRUE); // Fullscreen only
-    if (configuration.msaa_sample_count > 0) {
-        glfwWindowHint(GLFW_SAMPLES, configuration.msaa_sample_count);
-    }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, configuration.gl_major);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, configuration.gl_minor);
-    glfwWindowHint(GLFW_OPENGL_PROFILE,        GLFW_OPENGL_CORE_PROFILE);
-#if !defined(NDEBUG)
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT,  GLFW_TRUE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-    glfwWindowHint(GLFW_CONTEXT_NO_ERROR,      GLFW_FALSE);
-#else
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT,  GLFW_FALSE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
-    glfwWindowHint(GLFW_CONTEXT_NO_ERROR,      GLFW_TRUE);
-#endif
-    glfwWindowHint(GLFW_VISIBLE,               primary ? GLFW_TRUE : GLFW_FALSE);
-    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, configuration.framebuffer_transparency ? GLFW_TRUE : GLFW_FALSE);
-
-    GLFWwindow* const share_window = !primary
-        ? reinterpret_cast<GLFWwindow*>(configuration.share->get_glfw_window())
-        : nullptr;
+    glfwWindowHint(GLFW_VISIBLE,          GLFW_TRUE);
 
     GLFWmonitor* monitor = configuration.fullscreen ? glfwGetPrimaryMonitor() : nullptr;
 
@@ -471,7 +422,7 @@ auto Context_window::open(
             mode->height,
             configuration.title.data(),
             monitor,
-            share_window
+            nullptr
         );
     } else {
         ERHE_PROFILE_SCOPE("window");
@@ -481,12 +432,12 @@ auto Context_window::open(
             configuration.height,
             configuration.title.data(),
             monitor,
-            share_window
+            nullptr
         );
     }
 
     if (m_glfw_window == nullptr) {
-        log_window->error("Failed to open GLFW window for GL {}.{}.", configuration.gl_major, configuration.gl_minor);
+        log_window->error("Failed to open GLFW window");
         if (s_window_count == 0) {
             glfwTerminate();
         }
@@ -531,47 +482,36 @@ auto Context_window::open(
     glfwSetWindowFocusCallback  (window, window_focus_event_callback);
     glfwSetCursorEnterCallback  (window, window_cursor_enter_callback);
 
-    if (primary) {
-        GLFWerrorfun prev_error_callback = glfwSetErrorCallback(nullptr);
-        m_mouse_cursor[Mouse_cursor_Arrow     ] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
-        m_mouse_cursor[Mouse_cursor_TextInput ] = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
-        m_mouse_cursor[Mouse_cursor_ResizeNS  ] = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
-        m_mouse_cursor[Mouse_cursor_ResizeEW  ] = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
-        m_mouse_cursor[Mouse_cursor_Hand      ] = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
-        m_mouse_cursor[Mouse_cursor_Crosshair ] = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
+    GLFWerrorfun prev_error_callback = glfwSetErrorCallback(nullptr);
+    m_mouse_cursor[Mouse_cursor_Arrow     ] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+    m_mouse_cursor[Mouse_cursor_TextInput ] = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
+    m_mouse_cursor[Mouse_cursor_ResizeNS  ] = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+    m_mouse_cursor[Mouse_cursor_ResizeEW  ] = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+    m_mouse_cursor[Mouse_cursor_Hand      ] = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+    m_mouse_cursor[Mouse_cursor_Crosshair ] = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 #if GLFW_HAS_NEW_CURSORS
-        m_mouse_cursor[Mouse_cursor_ResizeAll ] = glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR);
-        m_mouse_cursor[Mouse_cursor_ResizeNESW] = glfwCreateStandardCursor(GLFW_RESIZE_NESW_CURSOR);
-        m_mouse_cursor[Mouse_cursor_ResizeNWSE] = glfwCreateStandardCursor(GLFW_RESIZE_NWSE_CURSOR);
-        m_mouse_cursor[Mouse_cursor_NotAllowed] = glfwCreateStandardCursor(GLFW_NOT_ALLOWED_CURSOR);
+    m_mouse_cursor[Mouse_cursor_ResizeAll ] = glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR);
+    m_mouse_cursor[Mouse_cursor_ResizeNESW] = glfwCreateStandardCursor(GLFW_RESIZE_NESW_CURSOR);
+    m_mouse_cursor[Mouse_cursor_ResizeNWSE] = glfwCreateStandardCursor(GLFW_RESIZE_NWSE_CURSOR);
+    m_mouse_cursor[Mouse_cursor_NotAllowed] = glfwCreateStandardCursor(GLFW_NOT_ALLOWED_CURSOR);
 #else
-        m_mouse_cursor[Mouse_cursor_ResizeAll ] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
-        m_mouse_cursor[Mouse_cursor_ResizeNESW] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
-        m_mouse_cursor[Mouse_cursor_ResizeNWSE] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
-        m_mouse_cursor[Mouse_cursor_NotAllowed] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+    m_mouse_cursor[Mouse_cursor_ResizeAll ] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+    m_mouse_cursor[Mouse_cursor_ResizeNESW] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+    m_mouse_cursor[Mouse_cursor_ResizeNWSE] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+    m_mouse_cursor[Mouse_cursor_NotAllowed] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
 #endif
-        glfwSetErrorCallback(prev_error_callback);
+    glfwSetErrorCallback(prev_error_callback);
 
-        glfwSetInputMode(window, GLFW_CURSOR,               GLFW_CURSOR_NORMAL);
-        glfwSetInputMode(window, GLFW_STICKY_KEYS,          GL_FALSE);
-        glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, GL_FALSE);
+    glfwSetInputMode(window, GLFW_CURSOR,               GLFW_CURSOR_NORMAL);
+    glfwSetInputMode(window, GLFW_STICKY_KEYS,          GL_FALSE);
+    glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, GL_FALSE);
 
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
-        if (configuration.show) {
-            glfwShowWindow(window);
-        }
-        glfwMakeContextCurrent(window);
-        log_window->info("Setting swap interval to {}", configuration.swap_interval);
-        glfwSwapInterval(configuration.swap_interval);
-        if (s_window_count == 1) {
-            get_extensions();
-        }
-    } else {
-        for (Mouse_cursor cursor_n = 0; cursor_n < Mouse_cursor_COUNT; cursor_n++) {
-            m_mouse_cursor[cursor_n] = nullptr;
-        }
+    if (configuration.show) {
+        glfwShowWindow(window);
     }
+    glfwMakeContextCurrent(window);
 
     m_configuration = configuration;
 
@@ -750,45 +690,6 @@ auto Context_window::get_height() const -> int
 auto Context_window::get_root_window_event_handler() -> Root_window_event_handler&
 {
     return m_root_window_event_handler;
-}
-
-void Context_window::get_extensions()
-{
-    gl::dynamic_load_init(glfwGetProcAddress);
-}
-
-void Context_window::make_current() const
-{
-    auto* window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr) {
-        const auto* const already_current_context = glfwGetCurrentContext();
-        if (already_current_context != nullptr) {
-            log_window->error("context is already current");
-        }
-        glfwMakeContextCurrent(window);
-    }
-}
-
-void Context_window::clear_current() const
-{
-    glfwMakeContextCurrent(nullptr);
-}
-
-void Context_window::swap_buffers() const
-{
-    auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr) {
-        glfwSwapBuffers(window);
-    }
-}
-
-auto Context_window::get_device_pointer() const -> void*
-{
-#if defined(_WIN32)
-    return glfwGetWGLContext(m_glfw_window);
-#else
-    return nullptr; // TODO
-#endif
 }
 
 auto Context_window::get_window_handle() const -> void*

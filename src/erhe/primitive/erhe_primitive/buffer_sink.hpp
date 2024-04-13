@@ -2,6 +2,11 @@
 
 #include "erhe_primitive/buffer_range.hpp"
 
+namespace igl {
+    class IBuffer;
+    class IDevice;
+}
+
 #include <vector>
 #include <cstdint>
 
@@ -44,14 +49,16 @@ public:
     virtual void buffer_ready       (Index_buffer_writer&  writer) const = 0;
 };
 
-class Gl_buffer_sink
+class Igl_buffer_sink
     : public Buffer_sink
 {
 public:
-    Gl_buffer_sink(
-        erhe::graphics::Buffer_transfer_queue& buffer_transfer_queue,
-        erhe::graphics::Buffer&                vertex_buffer,
-        erhe::graphics::Buffer&                index_buffer
+    Igl_buffer_sink(
+        igl::IDevice& device,
+        igl::IBuffer& vertex_buffer,
+        std::size_t   vertex_buffer_offset,
+        igl::IBuffer& index_buffer,
+        std::size_t   index_buffer_offset
     );
 
     [[nodiscard]] auto allocate_vertex_buffer(
@@ -64,15 +71,20 @@ public:
         std::size_t index_element_size
     ) -> Buffer_range override;
 
+    auto get_vertex_buffer_offset() const -> std::size_t { return m_vertex_buffer_offset; }
+    auto get_index_buffer_offset () const -> std::size_t { return m_index_buffer_offset; }
+
     void enqueue_index_data (std::size_t offset, std::vector<uint8_t>&& data) const override;
     void enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const override;
     void buffer_ready       (Vertex_buffer_writer& writer) const                    override;
     void buffer_ready       (Index_buffer_writer&  writer) const                    override;
 
 private:
-    erhe::graphics::Buffer_transfer_queue& m_buffer_transfer_queue;
-    erhe::graphics::Buffer&                m_vertex_buffer;
-    erhe::graphics::Buffer&                m_index_buffer;
+    igl::IDevice& m_device;
+    igl::IBuffer& m_vertex_buffer;
+    std::size_t   m_vertex_buffer_offset;
+    igl::IBuffer& m_index_buffer;
+    std::size_t   m_index_buffer_offset;
 };
 
 class Raytrace_buffer_sink

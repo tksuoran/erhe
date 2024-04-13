@@ -604,7 +604,7 @@ private:
     }
     auto load_image_file(
         const std::filesystem::path& path
-    ) -> std::shared_ptr<erhe::graphics::Texture>
+    ) -> std::shared_ptr<igl::ITexture>
     {
         const bool is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::load_image_file", path);
         if (!is_ok) {
@@ -635,7 +635,7 @@ private:
         if (generate_mipmap) {
             texture_create_info.level_count = mipmap_count;
         }
-        gsl::span<std::byte> span = slot.begin_span_for(
+        std::span<std::byte> span = slot.begin_span_for(
             image_info.width,
             image_info.height,
             texture_create_info.internal_format
@@ -648,7 +648,7 @@ private:
             return {};
         }
 
-        auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
+        auto texture = std::make_shared<igl::ITexture>(texture_create_info);
         texture->set_debug_label(path.string());
 
         gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
@@ -665,7 +665,7 @@ private:
     }
     auto load_png_buffer(
 	    const cgltf_buffer_view* buffer_view
-    ) -> std::shared_ptr<erhe::graphics::Texture>
+    ) -> std::shared_ptr<igl::ITexture>
     {
         const cgltf_size  buffer_view_index = buffer_view - m_data->buffer_views;
         const std::string name              = safe_resource_name(buffer_view->name, "buffer_view", buffer_view_index);
@@ -674,7 +674,7 @@ private:
 
         const uint8_t*   data_u8 = cgltf_buffer_view_data(buffer_view);
         const std::byte* data    = reinterpret_cast<const std::byte*>(data_u8);
-        gsl::span<const std::byte> png_encoded_buffer_view{
+        std::span<const std::byte> png_encoded_buffer_view{
             data,
             static_cast<std::size_t>(buffer_view->size)
         };
@@ -700,7 +700,7 @@ private:
         if (generate_mipmap) {
             texture_create_info.level_count = mipmap_count;
         }
-        gsl::span<std::byte> span = slot.begin_span_for(
+        std::span<std::byte> span = slot.begin_span_for(
             image_info.width,
             image_info.height,
             texture_create_info.internal_format
@@ -713,7 +713,7 @@ private:
             return {};
         }
 
-        auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
+        auto texture = std::make_shared<igl::ITexture>(texture_create_info);
         texture->set_debug_label(name);
 
         gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
@@ -734,7 +734,7 @@ private:
         const std::string image_name = safe_resource_name(image->name, "image", image_index);
         log_gltf->trace("Image: image index = {}, name = {}", image_index, image_name);
 
-        std::shared_ptr<erhe::graphics::Texture> erhe_texture;
+        std::shared_ptr<igl::ITexture> erhe_texture;
         if (image->uri != nullptr) {
             std::filesystem::path uri{image->uri};
             erhe_texture = load_image_file(m_context.path.replace_filename(uri));
@@ -1273,7 +1273,7 @@ private:
     std::vector<std::shared_ptr<erhe::scene::Camera>>       m_cameras;
     std::vector<std::shared_ptr<erhe::scene::Light>>        m_lights;
     std::vector<std::shared_ptr<erhe::scene::Skin>>         m_skins;
-    std::vector<std::shared_ptr<erhe::graphics::Texture>>   m_images;
+    std::vector<std::shared_ptr<igl::ITexture>>   m_images;
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   m_samplers;
     std::vector<std::shared_ptr<erhe::scene::Node>>         m_nodes;
 };

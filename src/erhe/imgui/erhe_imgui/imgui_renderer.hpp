@@ -144,7 +144,7 @@ public:
     void on_font_config_changed(Imgui_settings& settings);
 
     auto image(
-        const std::shared_ptr<erhe::graphics::Texture>& texture,
+        const std::shared_ptr<igl::ITexture>& texture,
         int                                             width,
         int                                             height,
         glm::vec2                                       uv0        = {0.0f, 1.0f},
@@ -155,7 +155,7 @@ public:
 
     auto image_button(
         uint32_t                                        id,
-        const std::shared_ptr<erhe::graphics::Texture>& texture,
+        const std::shared_ptr<igl::ITexture>& texture,
         int                                             width,
         int                                             height,
         glm::vec2                                       uv0              = {0.0f, 1.0f},
@@ -166,7 +166,7 @@ public:
     ) -> bool;
 
     void use(
-        const std::shared_ptr<erhe::graphics::Texture>& texture,
+        const std::shared_ptr<igl::ITexture>& texture,
         const uint64_t                                  handle
     );
     void render_draw_data();
@@ -196,8 +196,8 @@ private:
     ImFont*                                  m_mono_font      {nullptr};
     ImFont*                                  m_vr_primary_font{nullptr};
     ImFont*                                  m_vr_mono_font   {nullptr};
-    std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
-    std::shared_ptr<erhe::graphics::Texture> m_font_texture;
+    std::shared_ptr<igl::ITexture> m_dummy_texture;
+    std::shared_ptr<igl::ITexture> m_font_texture;
     erhe::graphics::Sampler                  m_nearest_sampler;
     erhe::graphics::Sampler                  m_linear_sampler;
     erhe::graphics::Sampler                  m_linear_mipmap_linear_sampler;
@@ -207,7 +207,7 @@ private:
     std::vector<Imgui_viewport*>             m_imgui_viewports;
     const Imgui_viewport*                    m_current_viewport{nullptr}; // current context
 
-    std::set<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
+    std::set<std::shared_ptr<igl::ITexture>> m_used_textures;
     std::set<uint64_t>                                 m_used_texture_handles;
 
     std::vector<std::function<void()>> m_at_end_of_frame;

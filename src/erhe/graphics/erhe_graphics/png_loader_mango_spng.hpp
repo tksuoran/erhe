@@ -1,6 +1,6 @@
 #pragma once
 
-#include <gsl/span>
+#include <span>
 
 #include <filesystem>
 #include <memory>
@@ -28,11 +28,11 @@ enum class Image_format : int {
 class Image_info
 {
 public:
-    int          width      {0};
-    int          height     {0};
-    int          depth      {0};
-    int          level_count{0};
-    int          row_stride {0};
+    std::size_t  width      {1};
+    std::size_t  height     {1};
+    std::size_t  depth      {1};
+    std::size_t  level_count{1};
+    std::size_t  row_stride {0};
     Image_format format     {Image_format::srgb8_alpha8};
 };
 
@@ -52,11 +52,11 @@ public:
     ) -> bool;
 
     [[nodiscard]] auto open(
-        const gsl::span<const std::byte>& png_encoded_buffer_view,
+        const std::span<const std::byte>& png_encoded_buffer_view,
         Image_info&                       image_info
     ) -> bool;
 
-    [[nodiscard]] auto load(gsl::span<std::byte> transfer_buffer) -> bool;
+    [[nodiscard]] auto load(std::span<std::byte> transfer_buffer) -> bool;
 
     void close();
 
@@ -79,7 +79,7 @@ public:
     [[nodiscard]] auto write(
         const std::filesystem::path& path,
         const Image_info&            info,
-        gsl::span<std::byte>         data
+        std::span<std::byte>         data
     ) -> bool;
 
     auto stream_op(void* dst_src, std::size_t length) -> int;

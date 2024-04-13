@@ -162,7 +162,7 @@ public:
             lights,
             m_camera.get(),
             erhe::math::Viewport{},
-            std::shared_ptr<erhe::graphics::Texture>{},
+            std::shared_ptr<igl::ITexture>{},
             0
         };
 

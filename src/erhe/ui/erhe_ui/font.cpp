@@ -1,7 +1,6 @@
 #include "erhe_ui/font.hpp"
 #include "erhe_ui/glyph.hpp"
 #include "erhe_ui/ui_log.hpp"
-#include "erhe_graphics/instance.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <fmt/printf.h>
@@ -18,6 +17,9 @@
 #   include <hb-ft.h>
 #endif
 
+#include "igl/Device.h"
+#include "igl/Texture.h"
+
 #include <SkylineBinPack.h> // RectangleBinPack
 
 #include <stdexcept>
@@ -26,7 +28,6 @@
 namespace erhe::ui
 {
 
-using erhe::graphics::Texture;
 using std::map;
 using std::shared_ptr;
 using std::unique_ptr;
@@ -50,12 +51,12 @@ Font::~Font() noexcept
 
 #if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE) && defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 Font::Font(
-    erhe::graphics::Instance&    graphics_instance,
+    igl::IDevice&                device,
     const std::filesystem::path& path,
     const unsigned int           size,
     const float                  outline_thickness
 )
-    : m_graphics_instance{graphics_instance}
+    : m_device           {device}
     , m_path             {path}
     , m_bolding          {(size > 10) ? 0.5f : 0.0f}
     , m_outline_thickness{outline_thickness}
@@ -451,20 +452,42 @@ void Font::post_process()
     };
     m_bitmap->post_process(bm, m_gamma);
 
-    auto internal_format = gl::Internal_format::rg8;
-
-    const Texture::Create_info create_info{
-        .instance        = m_graphics_instance,
-        .target          = gl::Texture_target::texture_2d,
-        .internal_format = internal_format,
-        .use_mipmaps     = false,
-        .width           = m_texture_width,
-        .height          = m_texture_height
+    igl::TextureDesc texture_desc{
+        .width        = static_cast<size_t>(m_texture_width),
+        .height       = static_cast<size_t>(m_texture_height),
+        .depth        = 1,
+        .numLayers    = 1,
+        .numSamples   = 1,
+        .usage        = static_cast<igl::TextureDesc::TextureUsage>(igl::TextureDesc::TextureUsageBits::Sampled),
+        .numMipLevels = 1,
+        .type         = igl::TextureType::TwoD,
+        .format       = igl::TextureFormat::R_UNorm8,
+        .storage      = igl::ResourceStorage::Private
     };
 
-    m_texture = std::make_unique<Texture>(create_info);
-    m_texture->upload(create_info.internal_format, bm.as_span(), create_info.width, create_info.height);
-    m_texture->set_debug_label(m_path.filename().generic_string());
+    igl::Result result{};
+    m_texture = m_device.createTexture(texture_desc, &result);
+    if (!m_texture || !result.isOk()) {
+        abort(); // TODO
+    }
+    igl::TextureFormatProperties texture_format_properties = igl::TextureFormatProperties::fromTextureFormat(texture_desc.format);
+    igl::TextureRangeDesc range{
+        .x            = 0,
+        .y            = 0,
+        .z            = 0,
+        .width        = static_cast<size_t>(m_texture_width),
+        .height       = static_cast<size_t>(m_texture_height),
+        .depth        = 1,
+        .layer        = 0,
+        .numLayers    = 1,
+        .mipLevel     = 0,
+        .numMipLevels = 1,
+        .face         = 0,
+        .numFaces     = 1,
+    };
+    m_texture->upload(range, bm.data(), bm.width());
+    // IGL TODO set debug label to m_path.filename().generic_string()
+    // https://github.com/facebook/igl/issues/48
 }
 
 // https://en.wikipedia.org/wiki/List_of_typographic_features
@@ -493,8 +516,8 @@ void Font::post_process()
 
 #if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 auto Font::print(
-    gsl::span<float>    float_data,
-    gsl::span<uint32_t> uint_data,
+    std::span<float>    float_data,
+    std::span<uint32_t> uint_data,
     std::string_view    text,
     glm::vec3           text_position,
     const uint32_t      text_color,
@@ -690,8 +713,8 @@ auto Font::measure(const std::string_view text) const -> Rectangle
 }
 #else
 auto Font::print(
-    gsl::span<float>    ,
-    gsl::span<uint32_t> ,
+    std::span<float>    ,
+    std::span<uint32_t> ,
     std::string_view    ,
     glm::vec3           ,
     const uint32_t      ,

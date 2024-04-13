@@ -57,8 +57,8 @@ protected:
     erhe::graphics::Vertex_attribute_mappings    m_empty_attribute_mappings;
     erhe::graphics::Vertex_format                m_empty_vertex_format;
     erhe::graphics::Vertex_input_state           m_vertex_input;
-    std::shared_ptr<erhe::graphics::Texture>     m_texture;
-    std::unique_ptr<erhe::graphics::Framebuffer> m_framebuffer;
+    std::shared_ptr<igl::ITexture>     m_texture;
+    std::unique_ptr<igl::IFramebuffer> m_framebuffer;
 };
 
 } // namespace erhe::imgui

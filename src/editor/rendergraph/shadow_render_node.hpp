@@ -46,7 +46,7 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    ) const -> std::shared_ptr<igl::ITexture> override;
 
     [[nodiscard]] auto get_producer_output_viewport(
         erhe::rendergraph::Resource_routing resource_routing,
@@ -66,7 +66,7 @@ public:
     [[nodiscard]] auto get_scene_view       () -> Scene_view&;
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;
     [[nodiscard]] auto get_light_projections() -> erhe::scene_renderer::Light_projections&;
-    [[nodiscard]] auto get_texture          () const -> std::shared_ptr<erhe::graphics::Texture>;
+    [[nodiscard]] auto get_texture          () const -> std::shared_ptr<igl::ITexture>;
     [[nodiscard]] auto get_viewport         () const -> erhe::math::Viewport;
 
     static void handle_graphics_settings_changed();
@@ -74,8 +74,8 @@ public:
 private:
     Editor_context&                                           m_context;
     Scene_view&                                               m_scene_view;
-    std::shared_ptr<erhe::graphics::Texture>                  m_texture;
-    std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
+    std::shared_ptr<igl::ITexture>                  m_texture;
+    std::vector<std::unique_ptr<igl::IFramebuffer>> m_framebuffers;
     erhe::math::Viewport                                      m_viewport{0, 0, 0, 0, true};
     erhe::scene_renderer::Light_projections                   m_light_projections;
 };

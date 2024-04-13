@@ -3,6 +3,10 @@
 #include "erhe_renderer/multi_buffer.hpp"
 #include "erhe_primitive/enums.hpp"
 
+namespace igl {
+    class IDevice;
+}
+
 namespace erhe {
     class Item_filter;
 }
@@ -13,6 +17,25 @@ namespace erhe::scene {
 
 namespace erhe::renderer
 {
+
+class Draw_arrays_indirect_command
+{
+public:
+    uint32_t count;
+    uint32_t instance_count;
+    uint32_t first;
+    uint32_t base_instance;
+};
+
+class Draw_elements_indirect_command
+{
+public:
+    uint32_t index_count;
+    uint32_t instance_count;
+    uint32_t first_index;
+    uint32_t base_vertex;
+    uint32_t base_instance;
+};
 
 class Draw_indirect_buffer_range
 {
@@ -25,15 +48,13 @@ class Draw_indirect_buffer
     : public Multi_buffer
 {
 public:
-    explicit Draw_indirect_buffer(
-        erhe::graphics::Instance& graphics_instance
-    );
+    explicit Draw_indirect_buffer(igl::IDevice& device);
 
     // Can discard return value
     auto update(
-        const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
         erhe::primitive::Primitive_mode                            primitive_mode,
-        const erhe::Item_filter&                            filter
+        const erhe::Item_filter&                                   filter
     ) -> Draw_indirect_buffer_range;
 
     //// void debug_properties_window();

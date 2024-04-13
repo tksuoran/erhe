@@ -16,8 +16,8 @@
 namespace erhe::imgui
 {
 
-using erhe::graphics::Framebuffer;
-using erhe::graphics::Texture;
+using igl::IFramebuffer;
+using igl::ITexture;
 
 Window_imgui_viewport::Window_imgui_viewport(
     Imgui_renderer&                 imgui_renderer,

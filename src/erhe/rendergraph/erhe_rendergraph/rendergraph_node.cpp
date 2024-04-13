@@ -3,9 +3,10 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
-#include "erhe_gl/gl_helpers.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include "igl/Device.h"
+#include "igl/Texture.h"
 
 namespace erhe::rendergraph {
 
@@ -89,24 +90,24 @@ Rendergraph_node::~Rendergraph_node() noexcept
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     auto* producer = get_consumer_input_node(resource_routing, key, depth);
     return (producer != nullptr)
         ? producer->get_producer_output_texture(resource_routing, key, depth + 1)
-        : std::shared_ptr<erhe::graphics::Texture>{};
+        : std::shared_ptr<igl::ITexture>{};
 }
 
 [[nodiscard]] auto Rendergraph_node::get_consumer_input_framebuffer(
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+) const -> std::shared_ptr<igl::IFramebuffer>
 {
     auto* producer = get_consumer_input_node(resource_routing, key, depth);
     return (producer != nullptr)
         ? producer->get_producer_output_framebuffer(resource_routing, key, depth + 1)
-        : std::shared_ptr<erhe::graphics::Framebuffer>{};
+        : std::shared_ptr<igl::IFramebuffer>{};
 }
 
 auto Rendergraph_node::get_consumer_input_viewport(
@@ -185,24 +186,24 @@ auto Rendergraph_node::get_consumer_input_viewport(
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     auto* consumer = get_producer_output_node(resource_routing, key, depth);
     return (consumer != nullptr)
         ? consumer->get_consumer_input_texture(resource_routing, key, depth + 1)
-        : std::shared_ptr<erhe::graphics::Texture>{};
+        : std::shared_ptr<igl::ITexture>{};
 }
 
 [[nodiscard]] auto Rendergraph_node::get_producer_output_framebuffer(
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+) const -> std::shared_ptr<igl::IFramebuffer>
 {
     auto* consumer = get_producer_output_node(resource_routing, key, depth);
     return (consumer != nullptr)
         ? consumer->get_consumer_input_framebuffer(resource_routing, key, depth + 1)
-        : std::shared_ptr<erhe::graphics::Framebuffer>{};
+        : std::shared_ptr<igl::IFramebuffer>{};
 }
 
 auto Rendergraph_node::get_producer_output_viewport(
@@ -254,17 +255,21 @@ auto Rendergraph_node::get_producer_output_viewport(
             output.resource_routing,
             output.key
         );
+        igl::TextureFormatProperties texture_format_properties = igl::TextureFormatProperties::fromTextureFormat(texture->getFormat());
+        igl::Dimensions textureSize = texture->getDimensions();
+
         if (
             texture &&
-            (texture->target() == gl::Texture_target::texture_2d) &&
-            (texture->width () >= 1) &&
-            (texture->height() >= 1) &&
-            (gl_helpers::has_color(texture->internal_format()))
+            (texture->getType() == igl::TextureType::TwoD) &&
+            (textureSize.width >= 1) &&
+            (textureSize.height >= 1) 
+            // TODO Check this logic
+            //(gl_helpers::has_color(texture->internal_format()))
         ) {
             if (!size.has_value()) {
-                size = glm::vec2{texture->width(), texture->height()};
+                size = glm::vec2{textureSize.width, textureSize.height};
             } else {
-                size = glm::max(size.value(), glm::vec2{texture->width(), texture->height()});
+                size = glm::max(size.value(), glm::vec2{textureSize.width, textureSize.height});
             }
         }
     }

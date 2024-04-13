@@ -13,7 +13,7 @@
 namespace editor {
 
 Icon_rasterization::Icon_rasterization(
-    erhe::graphics::Instance&    graphics_instance,
+    igl::IDevice&                device,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     Programs&                    programs,
     const int                    size,
@@ -26,7 +26,7 @@ Icon_rasterization::Icon_rasterization(
     , m_icon_uv_width {static_cast<float>(1.0) / static_cast<float>(column_count)}
     , m_icon_uv_height{static_cast<float>(1.0) / static_cast<float>(row_count)}
 {
-    m_texture = std::make_shared<erhe::graphics::Texture>(
+    m_texture = std::make_shared<igl::ITexture>(
         erhe::graphics::Texture_create_info{
             .instance        = graphics_instance,
             .target          = gl::Texture_target::texture_2d,
@@ -87,7 +87,7 @@ void Icon_rasterization::rasterize(
     const int x_offset = column * m_icon_width;
     const int y_offset = row    * m_icon_height;
 
-    const auto span = gsl::span<std::byte>{
+    const auto span = std::span<std::byte>{
         reinterpret_cast<std::byte*>(bitmap.data()),
         static_cast<size_t>(bitmap.stride()) * static_cast<size_t>(bitmap.height())
     };

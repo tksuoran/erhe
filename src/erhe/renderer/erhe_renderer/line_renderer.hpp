@@ -1,16 +1,8 @@
 #pragma once
 
 #include "erhe_renderer/buffer_writer.hpp"
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/pipeline.hpp"
-#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_graphics/state/color_blend_state.hpp"
-#include "erhe_graphics/state/depth_stencil_state.hpp"
-#include "erhe_graphics/state/input_assembly_state.hpp"
-#include "erhe_graphics/state/rasterization_state.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_math/viewport.hpp"
@@ -26,14 +18,12 @@
 #include <memory>
 #include <vector>
 
-namespace erhe::graphics
-{
-    class Buffer;
-    class Shader_stages;
+namespace igl {
+    class IBuffer;
+    class IShaderStages;
 }
 
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Camera;
     class Transform;
 }
@@ -58,7 +48,7 @@ public:
 class Line_renderer_pipeline
 {
 public:
-    explicit Line_renderer_pipeline(erhe::graphics::Instance& graphics_instance);
+    explicit Line_renderer_pipeline(igl::IDevice& device);
 
     bool                                             reverse_depth{false};
     erhe::graphics::Fragment_outputs                 fragment_outputs;
@@ -70,8 +60,8 @@ public:
     std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_struct;
     std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_buffer_block;
     std::unique_ptr<erhe::graphics::Shader_resource> view_block;
-    std::unique_ptr<erhe::graphics::Shader_stages>   compute_shader_stages;
-    std::unique_ptr<erhe::graphics::Shader_stages>   graphics_shader_stages;
+    std::unique_ptr<igl::IShaderStages>              compute_shader_stages;
+    std::unique_ptr<igl::IShaderStages>              graphics_shader_stages;
     std::size_t                                      clip_from_world_offset       {0};
     std::size_t                                      view_position_in_world_offset{0};
     std::size_t                                      viewport_offset              {0};
@@ -212,18 +202,18 @@ private:
     {
     public:
         Frame_resources(
-            erhe::graphics::Instance&                 graphics_instance,
-            unsigned int                              stencil_reference,
-            bool                                      reverse_depth,
-            std::size_t                               view_stride,
-            std::size_t                               view_count,
-            std::size_t                               line_count,
-            erhe::graphics::Shader_stages*            shader_stages,
-            erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-            erhe::graphics::Vertex_format&            line_vertex_format,
-            erhe::graphics::Vertex_format&            triangle_vertex_format,
-            const std::string&                        style_name,
-            std::size_t                               slot
+            erhe::graphics::Instance&                  graphics_instance,
+            unsigned int                               stencil_reference,
+            bool                                       reverse_depth,
+            std::size_t                                view_stride,
+            std::size_t                                view_count,
+            std::size_t                                line_count,
+            const std::shared_ptr<igl::IShaderStages>& shader_stages,
+            erhe::graphics::Vertex_attribute_mappings  attribute_mappings,
+            erhe::graphics::Vertex_format&             line_vertex_format,
+            erhe::graphics::Vertex_format&             triangle_vertex_format,
+            const std::string&                         style_name,
+            std::size_t                                slot
         );
 
         Frame_resources(const Frame_resources&) = delete;
@@ -231,21 +221,21 @@ private:
         Frame_resources(Frame_resources&&)      = delete;
         void operator= (Frame_resources&&)      = delete;
 
-        erhe::graphics::Shader_stages*     compute_shader_stages{nullptr};
-        erhe::graphics::Buffer             line_vertex_buffer;
-        erhe::graphics::Buffer             triangle_vertex_buffer;
-        erhe::graphics::Buffer             view_buffer;
-        erhe::graphics::Vertex_input_state vertex_input;
-        erhe::graphics::Pipeline           compute;
-        erhe::graphics::Pipeline           pipeline_visible;
-        erhe::graphics::Pipeline           pipeline_hidden;
+        std::shared_ptr<igl::IShaderStages>        compute_shader_stages;
+        std::shared_ptr<igl::IBuffer>              line_vertex_buffer;
+        std::shared_ptr<igl::IBuffer>              triangle_vertex_buffer;
+        std::shared_ptr<igl::IBuffer>              view_buffer;
+        std::shared_ptr<igl::IVertexInputState>    vertex_input;
+        std::shared_ptr<igl::IRenderPipelineState> compute;
+        std::shared_ptr<igl::IRenderPipelineState> pipeline_visible;
+        std::shared_ptr<igl::IRenderPipelineState> pipeline_hidden;
 
         [[nodiscard]] auto make_pipeline(
-            bool                           reverse_depth,
-            erhe::graphics::Shader_stages* shader_stages,
-            bool                           visible,
-            unsigned int                   stencil_reference
-        ) -> erhe::graphics::Pipeline;
+            bool                                reverse_depth,
+            std::shared_ptr<igl::IShaderStages> shader_stages,
+            bool                                visible,
+            unsigned int                        stencil_reference
+        ) -> std::shared_ptr<igl::IRenderPipelineState>;
     };
 
     class Buffer_range
@@ -261,7 +251,7 @@ private:
         const glm::vec3&        point,
         float                   thickness,
         const glm::vec4&        color,
-        const gsl::span<float>& gpu_float_data,
+        const std::span<float>& gpu_float_data,
         std::size_t&            word_offset
     );
 

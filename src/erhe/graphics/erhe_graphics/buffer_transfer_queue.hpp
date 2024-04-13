@@ -1,3 +1,4 @@
+#if 0
 #pragma once
 
 #include <mutex>
@@ -63,3 +64,4 @@ private:
 
 
 } // namespace erhe::graphics
+#endif

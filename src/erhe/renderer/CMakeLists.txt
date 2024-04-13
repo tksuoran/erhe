@@ -30,6 +30,7 @@ target_link_libraries(
         erhe::ui
         Microsoft.GSL::GSL
     PRIVATE
+        erhe::bit
         erhe::concurrency
         #erhe::gl
         erhe::log

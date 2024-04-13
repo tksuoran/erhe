@@ -16,8 +16,8 @@
 namespace editor
 {
 
-using erhe::graphics::Framebuffer;
-using erhe::graphics::Texture;
+using igl::IFramebuffer;
+using igl::ITexture;
 
 [[nodiscard]] auto choose_depth_stencil_format() 
 {

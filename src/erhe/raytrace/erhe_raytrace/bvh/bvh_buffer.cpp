@@ -30,7 +30,7 @@ Bvh_buffer::Bvh_buffer(const std::string_view debug_label, const std::size_t cap
 {
     Expects(capacity_bytes_count > 0);
     m_buffer.resize(capacity_bytes_count);
-    m_span = gsl::span<std::byte>(m_buffer.data(), m_buffer.size());
+    m_span = std::span<std::byte>(m_buffer.data(), m_buffer.size());
 }
 
 Bvh_buffer::Bvh_buffer(Bvh_buffer&& other) noexcept
@@ -46,7 +46,7 @@ Bvh_buffer& Bvh_buffer::operator=(Bvh_buffer&& other) noexcept
     m_capacity_byte_count = other.m_capacity_byte_count;
     m_next_free_byte      = other.m_next_free_byte;
     m_buffer              = std::move(other.m_buffer);
-    m_span                = gsl::span<std::byte>(m_buffer.data(), m_buffer.size());
+    m_span                = std::span<std::byte>(m_buffer.data(), m_buffer.size());
     return *this;
 }
 
@@ -77,7 +77,7 @@ auto Bvh_buffer::allocate_bytes(
     return offset;
 }
 
-auto Bvh_buffer::span() noexcept -> gsl::span<std::byte>
+auto Bvh_buffer::span() noexcept -> std::span<std::byte>
 {
     return m_span;
 }

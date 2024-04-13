@@ -52,7 +52,7 @@ target_link_libraries(${_target}
         erhe::profile
         erhe::verify
         fmt::fmt
-        MathGeoLib
+        #MathGeoLib
         Microsoft.GSL::GSL
 )
 erhe_target_settings(${_target})

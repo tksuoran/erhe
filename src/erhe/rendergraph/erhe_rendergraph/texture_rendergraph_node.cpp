@@ -2,14 +2,12 @@
 
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/gl_helpers.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/framebuffer.hpp"
-#include "erhe_graphics/renderbuffer.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+
+#include "igl/Device.h"
+#include "igl/Framebuffer.h"
+#include "igl/Texture.h"
 
 #include <algorithm>
 
@@ -22,6 +20,8 @@ Texture_rendergraph_node::Texture_rendergraph_node(
     : Rendergraph_node      {create_info.rendergraph, create_info.name}
     , m_input_key           {create_info.input_key}
     , m_output_key          {create_info.output_key}
+    , m_label               {create_info.label}
+    , m_sample_count        {create_info.sample_count}
     , m_color_format        {create_info.color_format}
     , m_depth_stencil_format{create_info.depth_stencil_format}
 {
@@ -33,6 +33,8 @@ Texture_rendergraph_node::Texture_rendergraph_node(
     : Rendergraph_node      {create_info.rendergraph, create_info.name}
     , m_input_key           {create_info.input_key}
     , m_output_key          {create_info.output_key}
+    , m_label               {create_info.label}
+    , m_sample_count        {create_info.sample_count}
     , m_color_format        {create_info.color_format}
     , m_depth_stencil_format{create_info.depth_stencil_format}
 {
@@ -44,7 +46,7 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
     if (key != m_input_key) {
@@ -55,7 +57,7 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
             depth,
             m_input_key
         );
-        return std::shared_ptr<erhe::graphics::Texture>{};
+        return std::shared_ptr<igl::ITexture>{};
     }
 
     if (m_enabled) {
@@ -69,7 +71,7 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+) const -> std::shared_ptr<igl::IFramebuffer>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
     if (key != m_input_key) {
@@ -80,7 +82,7 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
             depth,
             m_input_key
         );
-        return std::shared_ptr<erhe::graphics::Framebuffer>{};
+        return std::shared_ptr<igl::IFramebuffer>{};
     }
 
     if (m_enabled) {
@@ -94,7 +96,7 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     static_cast<void>(resource_routing);
     static_cast<void>(key);
@@ -106,7 +108,7 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+) const -> std::shared_ptr<igl::IFramebuffer>
 {
     static_cast<void>(resource_routing);
     static_cast<void>(key);
@@ -116,8 +118,8 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
 
 void Texture_rendergraph_node::execute_rendergraph_node()
 {
-    using erhe::graphics::Framebuffer;
-    using erhe::graphics::Texture;
+    using igl::IFramebuffer;
+    using igl::ITexture;
 
     // TODO Figure out exactly what to do here.
     const auto& output_viewport = get_producer_output_viewport(
@@ -133,10 +135,11 @@ void Texture_rendergraph_node::execute_rendergraph_node()
     }
 
     // Resize framebuffer if necessary
+    igl::Dimensions color_texture_size = m_color_texture ? m_color_texture->getDimensions() : igl::Dimensions{};
     if (
         !m_color_texture ||
-        (m_color_texture->width () != output_viewport.width ) ||
-        (m_color_texture->height() != output_viewport.height)
+        (color_texture_size.width != output_viewport.width ) ||
+        (color_texture_size.height != output_viewport.height)
     ) {
         log_tail->trace(
             "Resizing Texture_rendergraph_node '{}' to {} x {}",
@@ -149,89 +152,106 @@ void Texture_rendergraph_node::execute_rendergraph_node()
         ////    .internal_format = m_configuration->graphics.low_hdr
         ////        ? gl::Internal_format::r11f_g11f_b10f
         ////        : gl::Internal_format::rgba16f,
-        erhe::graphics::Instance& graphics_instance = m_rendergraph.get_graphics_instance();
-
-        m_color_texture = std::make_shared<Texture>(
-            Texture::Create_info{
-                .instance        = graphics_instance,
-                .target          = gl::Texture_target::texture_2d,
-                .internal_format = m_color_format,
-                .width           = output_viewport.width,
-                .height          = output_viewport.height
-            }
-        );
-        m_color_texture->set_debug_label(
-            fmt::format("{} Texture_rendergraph_node color texture", get_name())
-        );
-        const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
-        if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-            gl::clear_tex_image(
-                m_color_texture->gl_name(),
-                0,
-                gl::Pixel_format::rgba,
-                gl::Pixel_type::float_,
-                &clear_value[0]
+        igl::IDevice& device = m_rendergraph.get_device();
+        m_color_texture_multisample.reset();
+        m_color_texture.reset();
+        if (m_sample_count > 1) {
+            igl::Result color_texture_result{};
+            m_color_texture_multisample = device.createTexture(
+                igl::TextureDesc{
+                    .width      = static_cast<std::size_t>(output_viewport.width),
+                    .height     = static_cast<std::size_t>(output_viewport.height),
+                    .numSamples = static_cast<uint32_t>(m_sample_count),
+                    .usage      = static_cast<igl::TextureDesc::TextureUsage>(igl::TextureDesc::TextureUsageBits::Attachment | igl::TextureDesc::TextureUsageBits::Sampled),
+                    .type       = igl::TextureType::TwoD,
+                    .format     = m_color_format,
+                    .storage    = igl::ResourceStorage::Memoryless
+                },
+                &color_texture_result
             );
-        } else {
-            // TODO
+            assert(color_texture_result.isOk()); // TODO
+            assert(m_color_texture_multisample);
         }
+        igl::Result color_texture_result{};
+        m_color_texture = device.createTexture(
+            igl::TextureDesc{
+                .width      = static_cast<std::size_t>(output_viewport.width),
+                .height     = static_cast<std::size_t>(output_viewport.height),
+                .numSamples = 1,
+                .usage      = static_cast<igl::TextureDesc::TextureUsage>(igl::TextureDesc::TextureUsageBits::Attachment | igl::TextureDesc::TextureUsageBits::Sampled),
+                .type       = igl::TextureType::TwoD,
+                .format     = m_color_format,
+                .storage    = igl::ResourceStorage::Private
+            },
+            &color_texture_result
+        );
+        assert(color_texture_result.isOk()); // TODO
+        assert(m_color_texture);
+        // TODO
+        //m_color_texture->set_debug_label(
+        //    fmt::format("{} Texture_rendergraph_node color texture", get_name())
+        //);
+        const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
+        
+        // TODO clear texture with clear vlue
 
-        if (m_depth_stencil_format == gl::Internal_format{0}) {
-            m_depth_stencil_renderbuffer.reset();
-        } else {
-            m_depth_stencil_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
-                graphics_instance,
-                m_depth_stencil_format,
-                output_viewport.width,
-                output_viewport.height
+        m_depth_stencil_texture.reset();
+        if (m_depth_stencil_format != igl::TextureFormat::Invalid) {
+            if (m_sample_count > 1) {
+                igl::Result depth_texture_result{};
+                m_depth_stencil_texture = device.createTexture(
+                    igl::TextureDesc{
+                        .width      = static_cast<std::size_t>(output_viewport.width),
+                        .height     = static_cast<std::size_t>(output_viewport.height),
+                        .numSamples = static_cast<uint32_t>(m_sample_count),
+                        .usage      = static_cast<igl::TextureDesc::TextureUsage>(igl::TextureDesc::TextureUsageBits::Attachment),
+                        .type       = igl::TextureType::TwoD,
+                        .format     = m_depth_stencil_format,
+                        .storage    = igl::ResourceStorage::Memoryless,
+                        .debugName  = fmt::format("{} Texture_rendergraph_node depth-stencil renderbuffer", get_name())
+                    },
+                    &depth_texture_result
+                );
+                assert(depth_texture_result.isOk()); // TODO
+                assert(m_depth_stencil_texture);
+            }
+            igl::Result depth_texture_result{};
+            m_depth_stencil_texture = device.createTexture(
+                igl::TextureDesc{
+                    .width      = static_cast<std::size_t>(output_viewport.width),
+                    .height     = static_cast<std::size_t>(output_viewport.height),
+                    .numSamples = 1,
+                    .usage      = static_cast<igl::TextureDesc::TextureUsage>(igl::TextureDesc::TextureUsageBits::Attachment),
+                    .type       = igl::TextureType::TwoD,
+                    .format     = m_depth_stencil_format,
+                    .storage    = igl::ResourceStorage::Memoryless,
+                    .debugName  = fmt::format("{} Texture_rendergraph_node depth-stencil renderbuffer", get_name())
+                },
+                &depth_texture_result
             );
-
-            m_depth_stencil_renderbuffer->set_debug_label(
-                fmt::format("{} Texture_rendergraph_node depth-stencil renderbuffer", get_name())
-            );
+            assert(depth_texture_result.isOk()); // TODO
+            assert(m_depth_stencil_texture);
         }
 
         {
-            Framebuffer::Create_info create_info;
-            create_info.attach(
-                gl::Framebuffer_attachment::color_attachment0,
-                m_color_texture.get()
-            );
+            igl::FramebufferDesc framebuffer_desc;
+            framebuffer_desc.debugName = fmt::format("{} Texture_rendergraph_node framebuffer", get_name());
+            framebuffer_desc.colorAttachments.insert({0, igl::FramebufferDesc::AttachmentDesc{m_color_texture, {}}});
 
-            if (m_depth_stencil_renderbuffer) {
-                if (gl_helpers::has_depth(m_depth_stencil_format)) {
-                    create_info.attach(
-                        gl::Framebuffer_attachment::depth_attachment,
-                        m_depth_stencil_renderbuffer.get()
-                    );
+            if (m_depth_stencil_texture) {
+                using namespace erhe::bit;
+                igl::TextureFormatProperties depth_stencil_format_properties = igl::TextureFormatProperties::fromTextureFormat(m_depth_stencil_format);
+                if (test_all_rhs_bits_set(depth_stencil_format_properties.flags, static_cast<uint8_t>(igl::TextureFormatProperties::Flags::Depth))) {
+                    framebuffer_desc.depthAttachment = igl::FramebufferDesc::AttachmentDesc{m_depth_stencil_texture, {}};
                 }
-                if (gl_helpers::has_stencil(m_depth_stencil_format)) {
-                    create_info.attach(
-                        gl::Framebuffer_attachment::stencil_attachment,
-                        m_depth_stencil_renderbuffer.get()
-                    );
+                if (test_all_rhs_bits_set(depth_stencil_format_properties.flags, static_cast<uint8_t>(igl::TextureFormatProperties::Flags::Stencil))) {
+                    framebuffer_desc.stencilAttachment = igl::FramebufferDesc::AttachmentDesc{m_depth_stencil_texture, {}};
                 }
             }
-            m_framebuffer = std::make_unique<Framebuffer>(create_info);
-            m_framebuffer->set_debug_label(
-                fmt::format("{} Texture_rendergraph_node framebuffer", get_name())
-            );
-
-            gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
-            gl::named_framebuffer_draw_buffers(
-                m_framebuffer->gl_name(),
-                1,
-                &draw_buffers[0]
-            );
-            gl::named_framebuffer_read_buffer(
-                m_framebuffer->gl_name(),
-                gl::Color_buffer::color_attachment0
-            );
-
-            if (!m_framebuffer->check_status()) {
-                log_tail->error("{} Texture_rendergraph_node framebuffer not complete", get_name());
-                m_framebuffer.reset();
-            }
+            igl::Result framebuffer_result{};
+            m_framebuffer = device.createFramebuffer(framebuffer_desc, &framebuffer_result);
+            assert(framebuffer_result.isOk());
+            assert(m_framebuffer);
         }
 
         // TODO initial clear?

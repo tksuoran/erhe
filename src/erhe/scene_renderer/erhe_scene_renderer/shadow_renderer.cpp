@@ -22,8 +22,8 @@
 namespace erhe::scene_renderer
 {
 
-using erhe::graphics::Framebuffer;
-using erhe::graphics::Texture;
+using igl::IFramebuffer;
+using igl::ITexture;
 
 using erhe::graphics::Vertex_input_state;
 using erhe::graphics::Input_assembly_state;

@@ -7,7 +7,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/packing.hpp>
-#include <gsl/span>
+#include <span>
 
 namespace erhe::primitive
 {
@@ -16,28 +16,21 @@ namespace
 {
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const gl::Draw_elements_type  type,
+    const std::span<std::uint8_t> destination,
+    const igl::IndexFormat        index_type,
     const std::size_t             value
 )
 {
-    switch (type) {
+    switch (index_type) {
         //using enum gl::Draw_elements_type;
-        case gl::Draw_elements_type::unsigned_byte: {
-            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            Expects(value <= 0xffU);
-            ptr[0] = value & 0xffU;
-            break;
-        }
-
-        case gl::Draw_elements_type::unsigned_short: {
+        case igl::IndexFormat::UInt16: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value <= 0xffffU);
             ptr[0] = value & 0xffffU;
             break;
         }
 
-        case gl::Draw_elements_type::unsigned_int: {
+        case igl::IndexFormat::UInt32: {
             auto* const ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value & 0xffffffffu;
             break;
@@ -50,28 +43,40 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const igl::VertexAttributeFormat  type,
-    const unsigned int            value
+    const std::span<std::uint8_t>    destination,
+    const igl::VertexAttributeFormat type,
+    const unsigned int               value
 )
 {
     switch (type) {
         //using enum igl::VertexAttributeFormat;
-        case igl::VertexAttributeFormat::unsigned_byte: {
+        case igl::VertexAttributeFormat::UByte1:
+        case igl::VertexAttributeFormat::UByte2:
+        case igl::VertexAttributeFormat::UByte3:
+        case igl::VertexAttributeFormat::UByte4:
+        {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             Expects(value <= 0xffU);
             ptr[0] = value & 0xffU;
             break;
         }
 
-        case igl::VertexAttributeFormat::unsigned_short: {
+        case igl::VertexAttributeFormat::UShort1:
+        case igl::VertexAttributeFormat::UShort2:
+        case igl::VertexAttributeFormat::UShort3:
+        case igl::VertexAttributeFormat::UShort4:
+        {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value <= 0xffffU);
             ptr[0] = value & 0xffffU;
             break;
         }
 
-        case igl::VertexAttributeFormat::unsigned_int: {
+        case igl::VertexAttributeFormat::UInt1:
+        case igl::VertexAttributeFormat::UInt2:
+        case igl::VertexAttributeFormat::UInt3:
+        case igl::VertexAttributeFormat::UInt4:
+        {
             auto* ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value;
             break;
@@ -84,19 +89,19 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const igl::VertexAttributeFormat  type,
-    const glm::vec2               value
+    const std::span<std::uint8_t>    destination,
+    const igl::VertexAttributeFormat type,
+    const glm::vec2                  value
 )
 {
     switch (type) {
-        case igl::VertexAttributeFormat::float_: {
+    case igl::VertexAttributeFormat::Float2: {
             auto* const ptr = reinterpret_cast<float*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
             break;
         }
-        case igl::VertexAttributeFormat::half_float: {
+        case igl::VertexAttributeFormat::HalfFloat2: {
             // TODO(tksuoran@gmail.com): Would this be safe even if we are not aligned?
             // uint* ptr = reinterpret_cast<uint*>(data_ptr);
             // *ptr = glm::packHalf2x16(value);
@@ -105,7 +110,7 @@ inline void write_low(
             ptr[1] = glm::packHalf1x16(value.y);
             break;
         }
-        case igl::VertexAttributeFormat::unsigned_byte: {
+        case igl::VertexAttributeFormat::Byte2Norm: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
             float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
@@ -123,39 +128,39 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const igl::VertexAttributeFormat  type,
-    const glm::vec3               value
+    const std::span<std::uint8_t>    destination,
+    const igl::VertexAttributeFormat type,
+    const glm::vec3                  value
 )
 {
     switch (type) {
-        case igl::VertexAttributeFormat::float_: {
+        case igl::VertexAttributeFormat::Float3: {
             auto* const ptr = reinterpret_cast<float*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
             ptr[2] = value.z;
             break;
         }
-        case igl::VertexAttributeFormat::half_float: {
+        case igl::VertexAttributeFormat::HalfFloat3: {
             auto* const ptr = reinterpret_cast<glm::uint16 *>(destination.data());
             ptr[0] = glm::packHalf1x16(value.x);
             ptr[1] = glm::packHalf1x16(value.y);
             ptr[2] = glm::packHalf1x16(value.z);
             break;
         }
-        case igl::VertexAttributeFormat::unsigned_byte: {
-            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
-            float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
-            float scaled_z = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
-            Expects(scaled_x <= 0xffU);
-            Expects(scaled_y <= 0xffU);
-            Expects(scaled_z <= 0xffU);
-            ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
-            ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
-            ptr[2] = static_cast<uint8_t>(scaled_z) & 0xffU;
-            break;
-        }
+        //case igl::VertexAttributeFormat::UByte3Norm: {
+        //    auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
+        //    float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
+        //    float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
+        //    float scaled_z = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
+        //    Expects(scaled_x <= 0xffU);
+        //    Expects(scaled_y <= 0xffU);
+        //    Expects(scaled_z <= 0xffU);
+        //    ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
+        //    ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
+        //    ptr[2] = static_cast<uint8_t>(scaled_z) & 0xffU;
+        //    break;
+        //}
         default: {
             ERHE_FATAL("unsupported attribute type");
             break;
@@ -164,13 +169,13 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const igl::VertexAttributeFormat  type,
-    const glm::vec4               value
+    const std::span<std::uint8_t>    destination,
+    const igl::VertexAttributeFormat type,
+    const glm::vec4                  value
 )
 {
     switch (type) {
-        case igl::VertexAttributeFormat::float_: {
+        case igl::VertexAttributeFormat::Float4: {
             auto* const ptr = reinterpret_cast<float*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
@@ -178,7 +183,7 @@ inline void write_low(
             ptr[3] = value.w;
             break;
         }
-        case igl::VertexAttributeFormat::half_float: { 
+        case igl::VertexAttributeFormat::HalfFloat4: { 
             auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
             // TODO(tksuoran@gmail.com): glm::packHalf4x16() - but what if we are not aligned?
             ptr[0] = glm::packHalf1x16(value.x);
@@ -187,7 +192,7 @@ inline void write_low(
             ptr[3] = glm::packHalf1x16(value.w);
             break;
         }
-        case igl::VertexAttributeFormat::unsigned_byte: {
+        case igl::VertexAttributeFormat::UByte4Norm: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
             float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
@@ -211,14 +216,14 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const igl::VertexAttributeFormat  type,
-    const glm::uvec4              value
+    const std::span<std::uint8_t>    destination,
+    const igl::VertexAttributeFormat type,
+    const glm::uvec4                 value
 )
 {
     switch (type) {
         //using enum igl::VertexAttributeFormat;
-        case igl::VertexAttributeFormat::unsigned_byte: {
+        case igl::VertexAttributeFormat::UByte4: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             Expects(value.x <= 0xffU);
             Expects(value.y <= 0xffU);
@@ -231,7 +236,7 @@ inline void write_low(
             break;
         }
 
-        case igl::VertexAttributeFormat::unsigned_short: {
+        case igl::VertexAttributeFormat::UShort4: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value.x <= 0xffffU);
             Expects(value.y <= 0xffffU);
@@ -244,7 +249,7 @@ inline void write_low(
             break;
         }
 
-        case igl::VertexAttributeFormat::unsigned_int: {
+        case igl::VertexAttributeFormat::UInt4: {
             auto* ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
@@ -271,7 +276,7 @@ Vertex_buffer_writer::Vertex_buffer_writer(
     Expects(build_context.root.geometry_mesh != nullptr);
     const auto& vertex_buffer_range = build_context.root.geometry_mesh->vertex_buffer_range;
     vertex_data.resize(vertex_buffer_range.count * vertex_buffer_range.element_size);
-    vertex_data_span = gsl::make_span(vertex_data);
+    vertex_data_span = std::span<std::uint8_t>{vertex_data};
 }
 
 Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
@@ -298,7 +303,7 @@ Index_buffer_writer::Index_buffer_writer(
     const auto& index_buffer_range = geometry_mesh.index_buffer_range;
     const auto& mesh_info          = build_context.root.mesh_info;
     index_data.resize(index_buffer_range.count * index_type_size);
-    index_data_span = gsl::make_span(index_data);
+    index_data_span = std::span<std::uint8_t>{index_data};
 
     const auto& primitive_types = build_context.root.build_info.primitive_types;
 

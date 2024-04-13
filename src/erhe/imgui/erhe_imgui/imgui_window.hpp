@@ -46,7 +46,7 @@ public:
     void hide             ();
     void toggle_visibility();
     void image(
-        const std::shared_ptr<erhe::graphics::Texture>& texture,
+        const std::shared_ptr<igl::ITexture>& texture,
         const int                                       width,
         const int                                       height
     );

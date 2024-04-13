@@ -3,13 +3,8 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/scoped_buffer_mapping.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/instance.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
@@ -27,82 +22,63 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
-namespace {
-
-static constexpr gl::Buffer_storage_mask storage_mask_persistent{
-    gl::Buffer_storage_mask::map_coherent_bit   |
-    gl::Buffer_storage_mask::map_persistent_bit |
-    gl::Buffer_storage_mask::map_write_bit
-};
-static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
-    gl::Buffer_storage_mask::map_write_bit
-};
-inline auto storage_mask(erhe::graphics::Instance& graphics_instance) -> gl::Buffer_storage_mask
-{
-    return graphics_instance.info.use_persistent_buffers
-        ? storage_mask_persistent
-        : storage_mask_not_persistent;
-}
-
-static constexpr gl::Map_buffer_access_mask access_mask_persistent{
-    gl::Map_buffer_access_mask::map_coherent_bit   |
-    gl::Map_buffer_access_mask::map_persistent_bit |
-    gl::Map_buffer_access_mask::map_write_bit
-};
-static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
-    gl::Map_buffer_access_mask::map_write_bit
-};
-inline auto access_mask(erhe::graphics::Instance& graphics_instance) -> gl::Map_buffer_access_mask
-{
-    return graphics_instance.info.use_persistent_buffers
-        ? access_mask_persistent
-        : access_mask_not_persistent;
-}
-
-}
 
 Text_renderer::Frame_resources::Frame_resources(
-    erhe::graphics::Instance&                  graphics_instance,
+    igl::IDevice&                              device,
     const bool                                 reverse_depth,
     const std::size_t                          vertex_count,
-    erhe::graphics::Shader_stages*             shader_stages,
+    const std::shared_ptr<igl::IShaderStages>& shader_stages,
     erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
     erhe::graphics::Vertex_format&             vertex_format,
-    erhe::graphics::Buffer&                    index_buffer,
+    const std::shared_ptr<igl::IBuffer>&       index_buffer,
     const std::size_t                          slot
 )
     : vertex_buffer{
-        graphics_instance,
-        gl::Buffer_target::array_buffer,
-        vertex_format.stride() * vertex_count,
-        storage_mask(graphics_instance),
-        access_mask(graphics_instance)
-    }
-    , projection_buffer{
-        graphics_instance,
-        gl::Buffer_target::uniform_buffer,
-        1024, // TODO
-        storage_mask(graphics_instance),
-        access_mask(graphics_instance)
-    }
-    , vertex_input{
-        erhe::graphics::Vertex_input_state_data::make(
-            attribute_mappings,
-            vertex_format,
-            &vertex_buffer,
-            &index_buffer
+        device.createBuffer(
+            igl::BufferDesc(
+                static_cast<igl::BufferDesc::BufferType>(igl::BufferDesc::BufferTypeBits::Vertex),
+                nullptr,
+                vertex_count * vertex_format.stride(),
+                igl::ResourceStorage::Shared,
+                0,
+                fmt::format("Text Renderer Vertex {}", slot)
+            ),
+            nullptr
         )
     }
+    , projection_buffer{
+        device.createBuffer(
+            igl::BufferDesc(
+                static_cast<igl::BufferDesc::BufferType>(igl::BufferDesc::BufferTypeBits::Uniform),
+                nullptr,
+                1024, // TODO
+                igl::ResourceStorage::Shared,
+                0,
+                fmt::format("Text Renderer Vertex {}", slot)
+            ),
+            nullptr
+        )
+    }
+    , vertex_input{
+        vertex_format.make_vertex_input_state(device, attribute_mappings, vertex_buffer.get())
+    }
     , pipeline{
-        {
-            .name           = "Text renderer",
-            .shader_stages  = shader_stages,
-            .vertex_input   = &vertex_input,
-            .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
-            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
-        }
+        device.createRenderPipeline(
+            igl::RenderPipelineDesc{
+                .
+                .debugName = "Text renderer",
+            },
+            nullptr
+        )
+        //{
+        //    .name           = "Text renderer",
+        //    .shader_stages  = shader_stages,
+        //    .vertex_input   = &vertex_input,
+        //    .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+        //    .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+        //    .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+        //    .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
+        //}
     }
 {
     vertex_buffer    .set_debug_label(fmt::format("Text Renderer Vertex {}", slot));
@@ -301,8 +277,8 @@ void Text_renderer::print(
     std::byte* const          start             = vertex_gpu_data.data();
     const std::size_t         byte_count        = vertex_gpu_data.size_bytes();
     const std::size_t         word_count        = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     erhe::ui::Rectangle bounding_box;
     const vec3          snapped_position{
@@ -362,8 +338,8 @@ void Text_renderer::render(
     std::byte* const          start               = projection_gpu_data.data();
     const std::size_t         byte_count          = projection_gpu_data.size_bytes();
     const std::size_t         word_count          = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const mat4 clip_from_window = erhe::math::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
@@ -382,7 +358,7 @@ void Text_renderer::render(
         static_cast<uint32_t>((handle & 0xffffffffu)),
         static_cast<uint32_t>(handle >> 32u)
     };
-    const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+    const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
     write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
     m_projection_writer.write_offset += m_u_texture_size;
 

@@ -7,8 +7,6 @@ erhe_target_sources_grouped(
     erhe_gltf/gltf.hpp
     erhe_gltf/gltf_log.cpp
     erhe_gltf/gltf_log.hpp
-    erhe_gltf/image_transfer.cpp
-    erhe_gltf/image_transfer.hpp
 )
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})

@@ -67,8 +67,8 @@ void Rendertarget_mesh::resize_rendertarget(
         return;
     }
 
-    using Texture     = erhe::graphics::Texture;
-    using Framebuffer = erhe::graphics::Framebuffer;
+    using Texture     = igl::ITexture;
+    using Framebuffer = igl::IFramebuffer;
 
     m_texture = std::make_shared<Texture>(
         Texture::Create_info{
@@ -154,12 +154,12 @@ void Rendertarget_mesh::resize_rendertarget(
     );
 }
 
-auto Rendertarget_mesh::texture() const -> std::shared_ptr<erhe::graphics::Texture>
+auto Rendertarget_mesh::texture() const -> std::shared_ptr<igl::ITexture>
 {
     return m_texture;
 }
 
-auto Rendertarget_mesh::framebuffer() const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Rendertarget_mesh::framebuffer() const -> std::shared_ptr<igl::IFramebuffer>
 {
     return m_framebuffer;
 }

@@ -2,12 +2,8 @@
 
 #include "erhe_renderer/buffer_writer.hpp"
 
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/pipeline.hpp"
-#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_ui/font.hpp"
@@ -21,18 +17,18 @@
 #include <memory>
 #include <string_view>
 
-namespace erhe::graphics
-{
-    class Gl_context_provider;
-    class Instance;
-    class OpenGL_state_tracker;
-    class Sampler;
+namespace erhe::graphics {
     class Shader_monitor;
-    class Shader_stages;
 }
-namespace erhe::ui
-{
+namespace erhe::ui {
     class Font;
+}
+namespace igl {
+    class IBuffer;
+    class IDevice;
+    class IRenderPipelineState;
+    class IShaderStages;
+    class IVertexInputState;
 }
 
 namespace erhe::renderer
@@ -57,11 +53,7 @@ public:
     void operator=(Text_renderer&&)      = delete;
 
     // Public API
-    void print(
-        const glm::vec3        text_position,
-        uint32_t               text_color,
-        const std::string_view text
-    );
+    void print(const glm::vec3 text_position, uint32_t text_color, const std::string_view text);
     [[nodiscard]] auto font_size() -> float;
     [[nodiscard]] auto measure  (const std::string_view text) const -> erhe::ui::Rectangle;
 
@@ -75,13 +67,13 @@ private:
     {
     public:
         Frame_resources(
-            erhe::graphics::Instance&                  graphics_instance,
+            igl::IDevice&                              device,
             bool                                       reverse_depth,
             std::size_t                                vertex_count,
-            erhe::graphics::Shader_stages*             shader_stages,
+            const std::shared_ptr<igl::IShaderStages>& shader_stages,
             erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
             erhe::graphics::Vertex_format&             vertex_format,
-            erhe::graphics::Buffer&                    index_buffer,
+            const std::shared_ptr<igl::IBuffer>&       index_buffer,
             std::size_t                                slot
         );
 
@@ -90,10 +82,10 @@ private:
         Frame_resources(Frame_resources&&) = delete;
         auto operator= (Frame_resources&&) = delete;
 
-        erhe::graphics::Buffer             vertex_buffer;
-        erhe::graphics::Buffer             projection_buffer;
-        erhe::graphics::Vertex_input_state vertex_input;
-        erhe::graphics::Pipeline           pipeline;
+        std::shared_ptr<igl::IBuffer>              vertex_buffer;
+        std::shared_ptr<igl::IBuffer>              projection_buffer;
+        std::shared_ptr<igl::IVertexInputState>    vertex_input;
+        std::shared_ptr<igl::IRenderPipelineState> pipeline;
     };
 
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
@@ -107,7 +99,7 @@ private:
     static constexpr std::size_t index_count             {uint16_max * per_quad_index_count};
     static constexpr std::size_t index_stride            {2};
 
-    erhe::graphics::Instance&                 m_graphics_instance;
+    igl::IDevice&                             m_device;
     erhe::graphics::Shader_resource           m_default_uniform_block; // containing sampler uniforms for non bindless textures
     erhe::graphics::Shader_resource           m_projection_block;
     erhe::graphics::Shader_resource*          m_clip_from_window_resource;
@@ -119,18 +111,18 @@ private:
     erhe::graphics::Fragment_outputs          m_fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings m_attribute_mappings;
     erhe::graphics::Vertex_format             m_vertex_format;
-    erhe::graphics::Buffer                    m_index_buffer;
-    erhe::graphics::Sampler                   m_nearest_sampler;
+    std::shared_ptr<igl::IBuffer>             m_index_buffer;
+    std::shared_ptr<igl::ISamplerState>       m_nearest_sampler;
     Buffer_writer                             m_vertex_writer;
     Buffer_writer                             m_projection_writer;
 
-    std::unique_ptr<erhe::graphics::Shader_stages> m_shader_stages;
-    std::unique_ptr<erhe::ui::Font>                m_font;
-    std::deque<Frame_resources>                    m_frame_resources;
-    std::size_t                                    m_current_frame_resource_slot{0};
+    std::shared_ptr<igl::IShaderStages> m_shader_stages;
+    std::unique_ptr<erhe::ui::Font>     m_font;
+    std::deque<Frame_resources>         m_frame_resources;
+    std::size_t                         m_current_frame_resource_slot{0};
 
-    std::size_t   m_index_range_first{0};
-    std::size_t   m_index_count      {0};
+    std::size_t m_index_range_first{0};
+    std::size_t m_index_count      {0};
 };
 
 } // namespace erhe::renderer

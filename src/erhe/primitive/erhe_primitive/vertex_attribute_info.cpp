@@ -1,5 +1,4 @@
 #include "erhe_primitive/vertex_attribute_info.hpp"
-#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 
 #include <cstddef>
@@ -17,7 +16,7 @@ Vertex_attribute_info::Vertex_attribute_info(
 {
     attribute = vertex_format.find_attribute_maybe(semantic, semantic_index);
     if (attribute != nullptr) {
-        data_type = attribute->data_type.type;
+        data_type = attribute->data_type;
         offset    = attribute->offset;
         size      = attribute->size();
     }

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 
 namespace erhe::graphics
@@ -31,18 +30,18 @@ public:
 class Attribute_types
 {
 public:
-    igl::VertexAttributeFormat position     {igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat normal       {igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat normal_flat  {igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat normal_smooth{igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat tangent      {igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat bitangent    {igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat color        {igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat texcoord     {igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat id_vec3      {igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat id_uint      {igl::VertexAttributeFormat::float_};
-    igl::VertexAttributeFormat joint_indices{igl::VertexAttributeFormat::unsigned_byte};
-    igl::VertexAttributeFormat joint_weights{igl::VertexAttributeFormat::float_};
+    igl::VertexAttributeFormat position     {igl::VertexAttributeFormat::Float3};
+    igl::VertexAttributeFormat normal       {igl::VertexAttributeFormat::Float3};
+    igl::VertexAttributeFormat normal_flat  {igl::VertexAttributeFormat::Float3};
+    igl::VertexAttributeFormat normal_smooth{igl::VertexAttributeFormat::Float3};
+    igl::VertexAttributeFormat tangent      {igl::VertexAttributeFormat::Float4};
+    igl::VertexAttributeFormat bitangent    {igl::VertexAttributeFormat::Float3};
+    igl::VertexAttributeFormat color        {igl::VertexAttributeFormat::Float4};
+    igl::VertexAttributeFormat texcoord     {igl::VertexAttributeFormat::Float2};
+    igl::VertexAttributeFormat id_vec3      {igl::VertexAttributeFormat::Float3};
+    igl::VertexAttributeFormat id_uint      {igl::VertexAttributeFormat::UInt1};
+    igl::VertexAttributeFormat joint_indices{igl::VertexAttributeFormat::UByte4};
+    igl::VertexAttributeFormat joint_weights{igl::VertexAttributeFormat::UByte4Norm};
 };
 
 [[nodiscard]] auto prepare_vertex_format(

@@ -66,7 +66,7 @@ auto Capture_frame_command::try_call() -> bool
 
 Editor_rendering::Editor_rendering(
     erhe::commands::Commands& commands,
-    erhe::graphics::Instance& graphics_instance,
+    igl::IDevice&             device,
     Editor_context&           editor_context,
     Editor_message_bus&       editor_message_bus,
     Mesh_memory&              mesh_memory,
@@ -283,7 +283,7 @@ Editor_rendering::Editor_rendering(
 }
 
 auto Editor_rendering::create_shadow_node_for_scene_view(
-    erhe::graphics::Instance&       graphics_instance,
+    igl::IDevice&                   device,
     erhe::rendergraph::Rendergraph& rendergraph,
     Editor_settings&                editor_settings,
     Scene_view&                     scene_view
@@ -381,9 +381,9 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Pipeline_renderpasses::Pipeline_renderpasses(
-    erhe::graphics::Instance& graphics_instance,
-    Mesh_memory&              mesh_memory,
-    Programs&                 programs
+    igl::IDevice& device,
+    Mesh_memory&  mesh_memory,
+    Programs&     programs
 )
     //const bool reverse_depth = graphics_instance.configuration.reverse_depth;
 

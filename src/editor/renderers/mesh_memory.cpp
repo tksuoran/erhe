@@ -24,7 +24,7 @@ auto Mesh_memory::get_index_buffer_size() const -> std::size_t
 }
 
 Mesh_memory::Mesh_memory(
-    erhe::graphics::Instance&                graphics_instance,
+    igl::IDevice&                            device,
     erhe::scene_renderer::Program_interface& program_interface
 )
     : graphics_instance{graphics_instance}

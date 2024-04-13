@@ -1,6 +1,5 @@
+#if 0
 #pragma once
-
-#include "erhe_graphics/gl_objects.hpp"
 
 #include <gsl/span>
 
@@ -62,3 +61,5 @@ private:
 };
 
 } // namespace erhe::gltf
+
+#endif

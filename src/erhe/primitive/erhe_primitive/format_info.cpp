@@ -15,11 +15,8 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage       = { Vertex_attribute::Usage_type::position },
-                .shader_type = gl::Attribute_type::float_vec3,
-                .data_type   = {
-                    .type      = attribute_types.position,
-                    .dimension = 3
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec3,
+                .data_type   = attribute_types.position
             }
         );
     }
@@ -28,13 +25,10 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::normal
+                    .type    = Vertex_attribute::Usage_type::normal
                 },
-                .shader_type   = gl::Attribute_type::float_vec3,
-                .data_type = {
-                    .type      = attribute_types.normal,
-                    .dimension = 3
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec3,
+                .data_type   = attribute_types.normal
             }
         );
     }
@@ -43,14 +37,11 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::normal,
-                    .index     = 1
+                    .type    = Vertex_attribute::Usage_type::normal,
+                    .index   = 1
                 },
-                .shader_type   = gl::Attribute_type::float_vec3,
-                .data_type = {
-                    .type      = attribute_types.normal_flat,
-                    .dimension = 3
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec3,
+                .data_type   = attribute_types.normal_flat
             }
         );
     }
@@ -59,14 +50,11 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::normal,
-                    .index     = 2
+                    .type    = Vertex_attribute::Usage_type::normal,
+                    .index   = 2
                 },
-                .shader_type   = gl::Attribute_type::float_vec3,
-                .data_type = {
-                    .type      = attribute_types.normal_smooth,
-                    .dimension = 3
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec3,
+                .data_type   = attribute_types.normal_smooth
             }
         );
     }
@@ -75,13 +63,10 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::tangent
+                    .type    = Vertex_attribute::Usage_type::tangent
                 },
-                .shader_type   = gl::Attribute_type::float_vec4,
-                .data_type = {
-                    .type      = attribute_types.tangent,
-                    .dimension = 4
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec4,
+                .data_type   = attribute_types.tangent
             }
         );
     }
@@ -90,13 +75,10 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::bitangent
+                    .type    = Vertex_attribute::Usage_type::bitangent
                 },
-                .shader_type   = gl::Attribute_type::float_vec4,
-                .data_type = {
-                    .type      = attribute_types.bitangent,
-                    .dimension = 4
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec3,
+                .data_type   = attribute_types.bitangent
             }
         );
     }
@@ -105,13 +87,10 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::color
+                    .type    = Vertex_attribute::Usage_type::color
                 },
-                .shader_type   = gl::Attribute_type::float_vec4,
-                .data_type = {
-                    .type      = attribute_types.color,
-                    .dimension = 4
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec4,
+                .data_type   = attribute_types.color
             }
         );
     }
@@ -120,13 +99,10 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::id
+                    .type    = Vertex_attribute::Usage_type::id
                 },
-                .shader_type   = gl::Attribute_type::float_vec3,
-                .data_type = {
-                    .type      = attribute_types.id_vec3,
-                    .dimension = 3
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec3,
+                .data_type   = attribute_types.id_vec3,
             }
         );
 
@@ -151,13 +127,10 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::tex_coord
+                    .type    = Vertex_attribute::Usage_type::tex_coord
                 },
-                .shader_type   = gl::Attribute_type::float_vec2,
-                .data_type = {
-                    .type      = attribute_types.texcoord,
-                    .dimension = 2
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec2,
+                .data_type   = attribute_types.texcoord
             }
         );
     }
@@ -166,13 +139,10 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::joint_indices
+                    .type    = Vertex_attribute::Usage_type::joint_indices
                 },
-                .shader_type   = gl::Attribute_type::unsigned_int_vec4,
-                .data_type = {
-                    .type      = attribute_types.joint_indices,
-                    .dimension = 4
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::unsigned_int_vec4,
+                .data_type   = attribute_types.joint_indices
             }
         );
     }
@@ -181,13 +151,10 @@ auto prepare_vertex_format(
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
                 .usage = {
-                    .type      = Vertex_attribute::Usage_type::joint_weights
+                    .type    = Vertex_attribute::Usage_type::joint_weights
                 },
-                .shader_type   = gl::Attribute_type::float_vec4,
-                .data_type = {
-                    .type      = attribute_types.joint_weights,
-                    .dimension = 4
-                }
+                .shader_type = erhe::graphics::Glsl_attribute_type::float_vec4,
+                .data_type   = attribute_types.joint_weights
             }
         );
     }

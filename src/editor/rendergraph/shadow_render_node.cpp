@@ -21,8 +21,8 @@
 namespace editor
 {
 
-using erhe::graphics::Framebuffer;
-using erhe::graphics::Texture;
+using igl::IFramebuffer;
+using igl::ITexture;
 
 
 Shadow_render_node::Shadow_render_node(
@@ -150,7 +150,7 @@ void Shadow_render_node::execute_rendergraph_node()
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     int                                       depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     static_cast<void>(resource_routing);
     static_cast<void>(key);
@@ -185,7 +185,7 @@ void Shadow_render_node::execute_rendergraph_node()
     return m_light_projections;
 }
 
-auto Shadow_render_node::get_texture() const -> std::shared_ptr<erhe::graphics::Texture>
+auto Shadow_render_node::get_texture() const -> std::shared_ptr<igl::ITexture>
 {
     return m_texture;
 }

@@ -31,7 +31,7 @@ public:
 class Frustum_tiler
 {
 public:
-    const erhe::graphics::Texture&  m_texture;
+    const igl::ITexture&  m_texture;
     const erhe::graphics::Tile_size m_tile_size;
     const int                       m_tile_count_x;
     const int                       m_tile_count_y;
@@ -40,7 +40,7 @@ public:
     glm::vec2                       m_frustum_hull_center;
 
     explicit Frustum_tiler(
-        const erhe::graphics::Texture& texture
+        const igl::ITexture& texture
     );
 
     auto point_to_tile(glm::vec2 p) const -> Tile;

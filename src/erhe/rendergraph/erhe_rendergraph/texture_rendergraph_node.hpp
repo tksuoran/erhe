@@ -1,10 +1,17 @@
 #pragma once
 
 #include "erhe_rendergraph/rendergraph_node.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
+
+#include "igl/TextureFormat.h"
+
 #include <memory>
 #include <mutex>
 #include <string_view>
+
+namespace igl {
+    class IFramebuffer;
+    class ITexture;
+};
 
 namespace erhe::graphics {
     class Framebuffer;
@@ -19,12 +26,14 @@ namespace erhe::rendergraph
 class Texture_rendergraph_node_create_info
 {
 public:
-    Rendergraph&        rendergraph;
-    std::string         name;
-    int                 input_key           {Rendergraph_node_key::none};
-    int                 output_key          {Rendergraph_node_key::none};
-    gl::Internal_format color_format        {0};
-    gl::Internal_format depth_stencil_format{0};
+    Rendergraph&       rendergraph;
+    std::string        name;
+    int                sample_count        {1};
+    std::string_view   label;
+    int                input_key           {Rendergraph_node_key::none};
+    int                output_key          {Rendergraph_node_key::none};
+    igl::TextureFormat color_format        {0};
+    igl::TextureFormat depth_stencil_format{0};
 };
 
 /// <summary>
@@ -56,36 +65,40 @@ public:
         Resource_routing resource_routing,
         int              key,
         int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    ) const -> std::shared_ptr<igl::ITexture> override;
 
     [[nodiscard]] auto get_consumer_input_framebuffer(
         Resource_routing resource_routing,
         int              key,
         int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    ) const -> std::shared_ptr<igl::IFramebuffer> override;
 
     [[nodiscard]] auto get_producer_output_texture(
         Resource_routing resource_routing,
         int              key,
         int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    ) const -> std::shared_ptr<igl::ITexture> override;
 
     [[nodiscard]] auto get_producer_output_framebuffer(
         Resource_routing resource_routing,
         int              key,
         int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    ) const -> std::shared_ptr<igl::IFramebuffer> override;
 
     void execute_rendergraph_node() override;
 
 protected:
-    int                                           m_input_key;
-    int                                           m_output_key;
-    gl::Internal_format                           m_color_format;
-    gl::Internal_format                           m_depth_stencil_format;
-    std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
-    std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_stencil_renderbuffer;
-    std::shared_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
+    int                                 m_input_key;
+    int                                 m_output_key;
+    std::string                         m_label;
+    int                                 m_sample_count{1};
+    igl::TextureFormat                  m_color_format;
+    igl::TextureFormat                  m_depth_stencil_format;
+    std::shared_ptr<igl::ITexture>      m_color_texture_multisample;
+    std::shared_ptr<igl::ITexture>      m_depth_stencil_texture_multisample;
+    std::shared_ptr<igl::ITexture>      m_color_texture;
+    std::shared_ptr<igl::ITexture>      m_depth_stencil_texture;
+    std::shared_ptr<igl::IFramebuffer>  m_framebuffer;
 };
 
 } // namespace erhe::rendergraph

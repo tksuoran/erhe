@@ -4,14 +4,14 @@ namespace erhe::renderer
 {
 
 Pipeline_renderpass::Pipeline_renderpass(
-    erhe::graphics::Pipeline&& pipeline
+    const std::shared_ptr<igl::IRenderPipelineState>& pipeline
 )
     : pipeline{pipeline}
 {
 }
 
 Pipeline_renderpass::Pipeline_renderpass(
-    erhe::graphics::Pipeline&& pipeline,
+    const std::shared_ptr<igl::IRenderPipelineState>& pipeline,
     std::function<void()>      begin,
     std::function<void()>      end
 )

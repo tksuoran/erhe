@@ -1,6 +1,7 @@
 #pragma once
 
-#include "erhe_graphics/pipeline.hpp"
+#include "igl/RenderPipelineState.h"
+//#include "erhe_graphics/pipeline.hpp"
 
 #include <functional>
 
@@ -12,18 +13,16 @@ class Pipeline_renderpass
 public:
     void reset();
 
-    explicit Pipeline_renderpass(
-        erhe::graphics::Pipeline&& pipeline
-    );
+    explicit Pipeline_renderpass(const std::shared_ptr<igl::IRenderPipelineState>& pipeline);
     Pipeline_renderpass(
-        erhe::graphics::Pipeline&& pipeline,
-        std::function<void()>      begin,
-        std::function<void()>      end
+        const std::shared_ptr<igl::IRenderPipelineState>& pipeline,
+        std::function<void()>                             begin,
+        std::function<void()>                             end
     );
 
-    erhe::graphics::Pipeline pipeline;
-    std::function<void()>    begin;
-    std::function<void()>    end;
+    std::shared_ptr<igl::IRenderPipelineState> pipeline;
+    std::function<void()>                      begin;
+    std::function<void()>                      end;
 };
 
 } // namespace erhe::renderer

@@ -1,16 +1,14 @@
+#if 0
 #include "erhe_rendergraph/multisample_resolve.hpp"
 
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/framebuffer.hpp"
-#include "erhe_graphics/renderbuffer.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include "igl/Device.h"
+#include "igl/Framebuffer.h"
+#include "igl/Texture.h"
 
 #include <algorithm>
 
@@ -43,7 +41,7 @@ void Multisample_resolve_node::reconfigure(const int sample_count)
 
     m_sample_count = sample_count;
     m_color_texture.reset();
-    m_depth_stencil_renderbuffer.reset();
+    m_depth_stencil_texture.reset();
     m_framebuffer.reset();
 }
 
@@ -51,7 +49,7 @@ void Multisample_resolve_node::reconfigure(const int sample_count)
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+) const -> std::shared_ptr<igl::ITexture>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
 
@@ -70,7 +68,7 @@ void Multisample_resolve_node::reconfigure(const int sample_count)
     const Resource_routing resource_routing,
     const int              key,
     const int              depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+) const -> std::shared_ptr<igl::IFramebuffer>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
 
@@ -98,8 +96,8 @@ void Multisample_resolve_node::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION();
 
-    using erhe::graphics::Framebuffer;
-    using erhe::graphics::Texture;
+    using igl::IFramebuffer;
+    using igl::ITexture;
 
     const auto& output_viewport = get_producer_output_viewport(
         Resource_routing::Resource_provided_by_consumer,
@@ -114,10 +112,11 @@ void Multisample_resolve_node::execute_rendergraph_node()
     }
 
     // Resize framebuffer if necessary
+    const igl::Dimensions color_texture_size = m_color_texture->getDimensions();
     if (
         !m_color_texture ||
-        (m_color_texture->width () != output_viewport.width ) ||
-        (m_color_texture->height() != output_viewport.height)
+        (color_texture_size.width  != output_viewport.width ) ||
+        (color_texture_size.height != output_viewport.height)
     ) {
         log_tail->trace(
             "Resizing Multisample_resolve_node '{}' to {} x {}",
@@ -128,47 +127,55 @@ void Multisample_resolve_node::execute_rendergraph_node()
 
         //// TODO Mirror framebuffer from output rendergraph node:
         ////      Get attachments and their formats from output rendergraph node
-        erhe::graphics::Instance& graphics_instance = m_rendergraph.get_graphics_instance();
+        igl::IDevice& device = m_rendergraph.get_device();
 
-        m_color_texture = std::make_shared<Texture>(
-            Texture::Create_info{
-                .instance        = graphics_instance,
-                .target          = gl::Texture_target::texture_2d_multisample,
-                .internal_format = gl::Internal_format::rgba16f, // TODO other formats
-                .sample_count    = m_sample_count,
-                .width           = output_viewport.width,
-                .height          = output_viewport.height
+        igl::Result color_texture_result{};
+        m_color_texture = device.createTexture(
+            igl::TextureDesc{
+                .width      = static_cast<size_t>(output_viewport.width),
+                .height     = static_cast<size_t>(output_viewport.height),
+                .numSamples = static_cast<uint32_t>(m_sample_count),
+                .usage      = 
+                    static_cast<igl::TextureDesc::TextureUsage>(igl::TextureDesc::TextureUsageBits::Attachment) |
+                    static_cast<igl::TextureDesc::TextureUsage>(igl::TextureDesc::TextureUsageBits::Sampled),
+                .type       = igl::TextureType::TwoD,
+                .format     = igl::TextureFormat::RGBA_F16,
+                .debugName  = fmt::format("{} Multisample_resolve_node color texture", get_name())
+            },
+            &color_texture_result
+        );
+        assert(color_texture_result.isOk());
+        assert(m_color_texture);
+        // TODO clear
+        //const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
+        //if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
+        //    gl::clear_tex_image(
+        //        m_color_texture->gl_name(),
+        //        0,
+        //        gl::Pixel_format::rgba,
+        //        gl::Pixel_type::float_,
+        //        &clear_value[0]
+        //    );
+        //} else {
+        //    // TODO
+        //}
+
+        m_depth_stencil_texture = device.createTexture(
+            igl::TextureDesc{
+                .width      = static_cast<size_t>(output_viewport.width),
+                .height     = static_cast<size_t>(output_viewport.height),
+                .numSamples = static_cast<uint32_t>(m_sample_count),
+                .usage      = 
+                    static_cast<igl::TextureDesc::TextureUsage>(igl::TextureDesc::TextureUsageBits::Attachment) |
+                    static_cast<igl::TextureDesc::TextureUsage>(igl::TextureDesc::TextureUsageBits::Sampled),
+                .type       = igl::TextureType::TwoD,
+                .format     = igl::TextureFormat::S8_UInt_Z24_UNorm,
+                .debugName  = fmt::format("{} Multisample_resolve_node depth-stencil texture", get_name())
             }
         );
-        m_color_texture->set_debug_label(
-            fmt::format("{} Multisample_resolve_node color texture", get_name())
-        );
-        const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
-        if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-            gl::clear_tex_image(
-                m_color_texture->gl_name(),
-                0,
-                gl::Pixel_format::rgba,
-                gl::Pixel_type::float_,
-                &clear_value[0]
-            );
-        } else {
-            // TODO
-        }
-
-        m_depth_stencil_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
-            graphics_instance,
-            gl::Internal_format::depth24_stencil8,
-            m_sample_count,
-            output_viewport.width,
-            output_viewport.height
-        );
-
-        m_depth_stencil_renderbuffer->set_debug_label(
-            fmt::format("'{}' Multisample_resolve_node depth-stencil renderbuffer", get_name())
-        );
-
         {
+            igl::FramebufferDesc framebuffer_desc;
+
             Framebuffer::Create_info create_info;
             create_info.attach(gl::Framebuffer_attachment::color_attachment0,  m_color_texture.get());
             create_info.attach(gl::Framebuffer_attachment::depth_attachment,   m_depth_stencil_renderbuffer.get());
@@ -200,7 +207,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
         //    &clear_value[0]
         //);
 
-        erhe::graphics::Framebuffer::Create_info create_info;
+        igl::IFramebuffer::Create_info create_info;
         create_info.attach(gl::Framebuffer_attachment::color_attachment0,  m_color_texture.get());
         create_info.attach(gl::Framebuffer_attachment::depth_attachment,   m_depth_stencil_renderbuffer.get());
         create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_renderbuffer.get());
@@ -286,3 +293,4 @@ void Multisample_resolve_node::execute_rendergraph_node()
 }
 
 } // namespace erhe::rendergraph
+#endif

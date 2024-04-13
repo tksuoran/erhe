@@ -4,7 +4,7 @@
 
 #include <fmt/format.h>
 
-#include <gsl/span>
+#include <span>
 
 #include <cassert>
 #include <cmath>
@@ -234,7 +234,7 @@ public:
         }
     }
 
-    void load_data(gsl::span<value_t> source)
+    void load_data(std::span<value_t> source)
     {
         std::size_t read_offset{0};
         for (component_t c = 0; c < m_components; ++c) {
@@ -449,12 +449,17 @@ public:
         // fmt::print("\nend of blit\n");
     }
 
-    [[nodiscard]] auto as_span() -> gsl::span<std::byte>
+    [[nodiscard]] auto as_span() -> std::span<std::byte>
     {
-        return gsl::span<std::byte>(
+        return std::span<std::byte>(
             reinterpret_cast<std::byte*>(&m_data[0]),
             m_data.size() * sizeof(value_t)
         );
+    }
+
+    [[nodiscard]] auto data() -> const value_t*
+    {
+        return m_data.data();
     }
 
 private:

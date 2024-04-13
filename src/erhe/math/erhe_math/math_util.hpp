@@ -1060,4 +1060,10 @@ static inline auto compute_cofactor(glm::mat4 const& m) -> glm::mat4
     glm::vec3 skew
 ) -> glm::mat4;
 
+template <typename T>
+[[nodiscard]] auto align(const T value, const T alignment) -> T
+{
+	return ((value + alignment - 1) / alignment) * alignment;
+}
+
 }

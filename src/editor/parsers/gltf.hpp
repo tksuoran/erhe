@@ -20,7 +20,7 @@ class Materials;
 class Scene_root;
 
 void import_gltf(
-    erhe::graphics::Instance&    graphics_instance,
+    igl::IDevice&                device,
     erhe::primitive::Build_info  build_info,
     Scene_root&                  scene_root,
     const std::filesystem::path& path,

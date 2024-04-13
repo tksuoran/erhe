@@ -33,7 +33,7 @@ Imgui_window::~Imgui_window() noexcept
 }
 
 void Imgui_window::image(
-    const std::shared_ptr<erhe::graphics::Texture>& texture,
+    const std::shared_ptr<igl::ITexture>& texture,
     const int                                       width,
     const int                                       height
 )

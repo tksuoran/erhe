@@ -10,10 +10,10 @@
 #include <string>
 #include <string_view>
 
-namespace erhe::graphics
+namespace igl
 {
-    class Sampler;
-    class Texture;
+    class ISamplerState;
+    class ITexture;
 }
 
 namespace erhe::primitive
@@ -41,18 +41,18 @@ public:
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
-    uint32_t                                 material_buffer_index{0}; // updated by Material_buffer::update()
-    glm::vec4                                base_color  {1.0f, 1.0f, 1.0f, 1.0f};
-    glm::vec2                                roughness   {0.5f, 0.5f};
-    float                                    metallic    {0.0f};
-    float                                    reflectance {0.5f};
-    glm::vec4                                emissive    {0.0f, 0.0f, 0.0f, 0.0f};
-    float                                    opacity     {1.0f};
-    std::shared_ptr<erhe::graphics::Texture> base_color_texture;
-    std::shared_ptr<erhe::graphics::Texture> metallic_roughness_texture;
-    std::shared_ptr<erhe::graphics::Sampler> base_color_sampler;
-    std::shared_ptr<erhe::graphics::Sampler> metallic_roughness_sampler;
-    std::optional<uint32_t>                  preview_slot;
+    uint32_t                            material_buffer_index{0}; // updated by Material_buffer::update()
+    glm::vec4                           base_color  {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec2                           roughness   {0.5f, 0.5f};
+    float                               metallic    {0.0f};
+    float                               reflectance {0.5f};
+    glm::vec4                           emissive    {0.0f, 0.0f, 0.0f, 0.0f};
+    float                               opacity     {1.0f};
+    std::shared_ptr<igl::ITexture>      base_color_texture;
+    std::shared_ptr<igl::ITexture>      metallic_roughness_texture;
+    std::shared_ptr<igl::ISamplerState> base_color_sampler;
+    std::shared_ptr<igl::ISamplerState> metallic_roughness_sampler;
+    std::optional<uint32_t>             preview_slot;
 };
 
 } // namespace erhe::primitive

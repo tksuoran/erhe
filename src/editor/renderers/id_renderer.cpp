@@ -20,9 +20,9 @@
 namespace editor
 {
 
-using erhe::graphics::Framebuffer;
+using igl::IFramebuffer;
 using erhe::graphics::Renderbuffer;
-using erhe::graphics::Texture;
+using igl::ITexture;
 using erhe::graphics::Input_assembly_state;
 using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
@@ -48,11 +48,11 @@ constexpr gl::Map_buffer_access_mask access_mask{
 }
 
 Id_renderer::Id_frame_resources::Id_frame_resources(
-    erhe::graphics::Instance& graphics_instance,
-    const std::size_t         slot
+    igl::IDevice&     device,
+    const std::size_t slot
 )
     : pixel_pack_buffer{
-        graphics_instance,
+        device,
         gl::Buffer_target::pixel_pack_buffer,
         s_id_buffer_size,
         storage_mask,
@@ -85,12 +85,12 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Id_renderer::Id_renderer(
-    erhe::graphics::Instance&                graphics_instance,
+    igl::IDevice&                            device,
     erhe::scene_renderer::Program_interface& program_interface,
     Mesh_memory&                             mesh_memory,
     Programs&                                programs
 )
-    : m_graphics_instance    {graphics_instance}
+    : m_device               {device}
     , m_mesh_memory          {mesh_memory}
     , m_camera_buffers       {graphics_instance, program_interface.camera_interface}
     , m_draw_indirect_buffers{graphics_instance}
@@ -244,7 +244,7 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
 }
 
 void Id_renderer::render(
-    const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
 )
 {
     ERHE_PROFILE_FUNCTION();

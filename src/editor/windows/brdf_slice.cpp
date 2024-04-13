@@ -114,7 +114,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
             .index_type         = gl::Draw_elements_type::unsigned_int, // Note: This indices are not used by render_fullscreen()
             .light_projections  = &light_projections,
             .lights             = {},
-            .materials          = gsl::span<const std::shared_ptr<erhe::primitive::Material>>(&m_material, 1),
+            .materials          = std::span<const std::shared_ptr<erhe::primitive::Material>>(&m_material, 1),
             .mesh_spans         = {},
             .passes             = { &m_renderpass },
             .shadow_texture     = nullptr,
