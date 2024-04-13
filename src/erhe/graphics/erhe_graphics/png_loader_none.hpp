@@ -1,9 +1,8 @@
 #pragma once
 
-#include "erhe_graphics/texture.hpp"
-
 #include <filesystem>
 #include <memory>
+#include <span>
 
 namespace erhe::graphics
 {
@@ -37,11 +36,16 @@ public:
 
     [[nodiscard]] auto open(
         const std::filesystem::path& path,
-        Image_info&     image_info
+        Image_info&                  image_info
+    ) -> bool;
+
+    [[nodiscard]] auto open(
+        const std::span<const std::byte>& png_encoded_buffer_view,
+        Image_info&                       image_info
     ) -> bool;
 
     [[nodiscard]] auto load(
-        gsl::span<std::byte> transfer_buffer
+        std::span<std::byte> transfer_buffer
     ) -> bool;
 
     void close();
