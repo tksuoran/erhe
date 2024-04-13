@@ -172,6 +172,7 @@ public:
 
     // Constructor for creating samplers
     explicit Shader_resource(igl::IDevice& device);
+
     ~Shader_resource() noexcept;
     Shader_resource(const Shader_resource& other) = delete;
     Shader_resource(Shader_resource&& other) = default;

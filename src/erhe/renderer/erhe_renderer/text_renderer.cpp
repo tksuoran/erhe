@@ -26,9 +26,8 @@ using glm::vec4;
 
 Text_renderer::Frame_resources::Frame_resources(
     igl::IDevice&                              device,
-    igl::RenderPipelineDesc::TargetDesc&       target,
     const std::size_t                          vertex_count,
-    const std::shared_ptr<igl::IShaderStages>& shader_stages,
+    //const std::shared_ptr<igl::IShaderStages>& shader_stages,
     erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
     erhe::graphics::Vertex_format&             vertex_format,
     const std::size_t                          slot
@@ -62,21 +61,6 @@ Text_renderer::Frame_resources::Frame_resources(
     , vertex_input{
         vertex_format.make_vertex_input_state(device, attribute_mappings, vertex_buffer.get())
     }
-    , pipeline{
-        device.createRenderPipeline(
-            igl::RenderPipelineDesc{
-                .vertexInputState   = vertex_input,
-                .shaderStages       = shader_stages,
-                .targetDesc         = target,
-                .cullMode           = igl::CullMode::Disabled,
-                .frontFaceWinding   = igl::WindingMode::CounterClockwise,
-                .polygonFillMode    = igl::PolygonFillMode::Fill,
-                .sampleCount        = 1,
-                .debugName          = igl::genNameHandle("Text renderer")
-            },
-            nullptr
-        )
-    }
 {
 }
 
@@ -84,6 +68,7 @@ static constexpr std::string_view c_text_renderer_initialize_component{"Text_ren
 
 Text_renderer::Text_renderer(igl::IDevice& device)
     : m_device{device}
+   ,  m_samplers{device}
    ,  m_projection_block{
         device,
         "projection",
@@ -189,6 +174,12 @@ Text_renderer::Text_renderer(igl::IDevice& device)
         0.0f // TODO reimplement outline better 1.0f
     );
 
+    m_samplers.add_sampler(
+        "s_texture",
+        erhe::graphics::Glsl_type::sampler_2d,
+        0
+    );
+
     {
         ERHE_PROFILE_SCOPE("shader");
 
@@ -200,30 +191,12 @@ Text_renderer::Text_renderer(igl::IDevice& device)
             .interface_blocks          = { &m_projection_block },
             .vertex_attribute_mappings = &m_attribute_mappings,
             .fragment_outputs          = &m_fragment_outputs,
+            .samplers                  = &m_samplers,
             .shaders = {
                 { igl::ShaderStage::Vertex,   vs_path },
                 { igl::ShaderStage::Fragment, fs_path }
             }
         };
-
-        create_info.samplers.add_sampler(
-            "s_texture",
-            erhe::graphics::Glsl_type::sampler_2d,
-            0
-        );
-
-        //if (graphics_instance.info.use_bindless_texture) {
-        //    create_info.extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_bindless_texture"});
-        //    create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-        //} else 
-        //{
-        //    m_default_uniform_block.add_sampler(
-        //        "s_texture",
-        //        igl::UniformType::sampler_2d,
-        //        0
-        //    );
-        //    create_info.default_uniform_block = &m_default_uniform_block;
-        //}
 
         erhe::graphics::Shader_stages_prototype prototype{device, create_info};
         if (!prototype.is_valid()) {
@@ -249,7 +222,7 @@ void Text_renderer::create_frame_resources()
         m_frame_resources.emplace_back(
             m_device,
             vertex_count,
-            m_shader_stages.get(),
+            //m_shader_stages.get(),
             m_attribute_mappings,
             m_vertex_format,
             slot
@@ -271,10 +244,32 @@ void Text_renderer::next_frame()
     m_index_count       = 0;
 }
 
+auto Text_renderer::get_pipeline(igl::RenderPipelineDesc::TargetDesc* target)
+-> std::shared_ptr<igl::IRenderPipelineState>
+{
+    const auto& frame_resources = current_frame_resources();
+
+    //m_device.createShaderStages(igl::ShaderStagesDesc
+    m_device.createRenderPipeline(
+        igl::RenderPipelineDesc{
+            .vertexInputState   = frame_resources.vertex_input,
+            .shaderStages       = m_shader_stages->,
+            .targetDesc         = *target,
+            .cullMode           = igl::CullMode::Disabled,
+            .frontFaceWinding   = igl::WindingMode::CounterClockwise,
+            .polygonFillMode    = igl::PolygonFillMode::Fill,
+            .sampleCount        = 1,
+            .debugName          = igl::genNameHandle("Text renderer")
+        },
+        nullptr
+    )
+}
+
 void Text_renderer::print(
-    const glm::vec3        text_position,
-    const uint32_t         text_color,
-    const std::string_view text
+    igl::RenderPipelineDesc::TargetDesc* target,
+    const glm::vec3                      text_position,
+    const uint32_t                       text_color,
+    const std::string_view               text
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -293,12 +288,12 @@ void Text_renderer::print(
     const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
-    erhe::ui::Rectangle bounding_box;
-    const vec3          snapped_position{
+    const vec3 snapped_position{
         std::floor(text_position.x + 0.5f),
         std::floor(text_position.y + 0.5f),
         text_position.z
     };
+    erhe::ui::Rectangle bounding_box;
     const std::size_t quad_count2 = m_font->print(
         gpu_float_data,
         gpu_uint_data,
@@ -371,7 +366,7 @@ void Text_renderer::render(
     m_projection_writer.end();
 
     const auto& frame_resources = current_frame_resources();
-    const auto& pipeline = frame_resources.pipeline;
+    //const auto& pipeline = frame_resources.pipeline;
     renderEncoder.bindRenderPipelineState(pipeline);
     renderEncoder.bindBuffer(
         m_projection_block.binding_point(),

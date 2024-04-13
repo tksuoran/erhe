@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace glslang {
@@ -47,7 +48,6 @@ public:
 class Shader_stages_create_info
 {
 public:
-    Shader_stages_create_info(igl::Device& device);
     // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
     // and source (possibly read from file).
     [[nodiscard]] auto final_source           (const Shader_stage& shader) const -> std::string;
@@ -105,10 +105,15 @@ private:
 
     igl::IDevice&                                  m_device;
     Shader_stages_create_info                      m_create_info;
-    std::shared_ptr<igl::IShaderModule>            m_handle;
+    std::unique_ptr<igl::IShaderStages>            m_shader_stages;
     std::vector<std::shared_ptr<glslang::TShader>> m_compiled_shaders_pre_link;
-    std::unordered_set<unsigned int>               m_used_stages;
     int                                            m_state{state_init};
+    std::unordered_set<igl::ShaderStage>           m_used_stages;
+    struct Shader_module_entry{
+        igl::ShaderStage stage;
+        std::shared_ptr<igl::IShaderModule> module;
+    };
+    std::vector<Shader_module_entry> m_shader_modules;
     std::map<std::string, Shader_resource, std::less<>> m_resources;
 };
 
@@ -122,11 +127,12 @@ public:
     void invalidate();
 
     [[nodiscard]] auto name    () const -> const std::string&;
+    [[nodiscard]] auto get     () const -> std::shared_ptr<igl::IShaderStages>;
     [[nodiscard]] auto is_valid() const -> bool;
 
 private:
     std::string                         m_name;
-    std::shared_ptr<igl::IShaderModule> m_handle;
+    std::shared_ptr<igl::IShaderStages> m_shader_stages;
     bool                                m_is_valid{false};
 };
 

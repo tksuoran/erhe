@@ -1,8 +1,12 @@
 #include "erhe_graphics/shader_stages.hpp"
 
+#include "glslang/Public/ShaderLang.h"
+
 #include <igl/Device.h>
 
 #include <fmt/format.h>
+
+#include <cassert>
 
 namespace erhe::graphics
 {
@@ -62,9 +66,16 @@ auto Shader_stages::name() const -> const std::string&
     return m_name;
 }
 
+auto Shader_stages::get() const -> std::shared_ptr<igl::IShaderStages>
+{
+    return m_shader_stages;
+}
+
 Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
 {
-    m_handle   = std::move(prototype.m_handle);
+    std::vector<std::shared_ptr<igl::IShaderModule>> modules;
+
+    m_shader_stages = prototype.m_device.createShaderStages();
     m_is_valid = true;
 
     std::string label = fmt::format(
@@ -91,7 +102,7 @@ void Shader_stages::reload(Shader_stages_prototype&& prototype)
         return;
     }
 
-    m_handle   = std::move(prototype.m_handle);
+    m_shader_stages = std::move(prototype.m_shader_stages);
     m_is_valid = true;
 }
 

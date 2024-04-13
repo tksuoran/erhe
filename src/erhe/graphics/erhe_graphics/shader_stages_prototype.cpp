@@ -15,6 +15,28 @@ namespace erhe::graphics
 namespace
 {
 
+[[nodiscard]] auto to_igl(const ::EShLanguage glslang_stage) -> igl::ShaderStage
+{
+    switch (glslang_stage) {
+        case EShLangVertex:   return igl::ShaderStage::Vertex;
+        case EShLangFragment: return igl::ShaderStage::Fragment;
+        case EShLangCompute:  return igl::ShaderStage::Compute;
+        default:              ERHE_FATAL("TODO");
+    }
+}
+
+[[nodiscard]] auto to_glslang(igl::ShaderStage igl_stage) -> ::EShLanguage
+{
+    switch (igl_stage) {
+        case igl::ShaderStage::Vertex:   return EShLanguage::EShLangVertex;
+        case igl::ShaderStage::Fragment: return EShLanguage::EShLangFragment;
+        case igl::ShaderStage::Compute:  return EShLanguage::EShLangCompute;
+        default: {
+            ERHE_FATAL("TODO");
+        }
+    }
+}
+
 [[nodiscard]] auto format_source(const std::string& source) -> std::string
 {
     int         line{1};
@@ -47,15 +69,7 @@ namespace
 
 [[nodiscard]] auto Shader_stages_prototype::compile(const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>
 {
-    EShLanguage language = [](igl::ShaderStage gl_shader_type) -> EShLanguage {
-        switch (gl_shader_type) {
-            case igl::ShaderStage::Vertex:   return EShLanguage::EShLangVertex;
-            case igl::ShaderStage::Fragment: return EShLanguage::EShLangFragment;
-            case igl::ShaderStage::Compute:  return EShLanguage::EShLangCompute;
-            default:
-                ERHE_FATAL("TODO");
-        }
-    }(shader.type);
+    EShLanguage language = to_glslang(shader.type);
 
     std::shared_ptr<glslang::TShader> glslang_shader = std::make_shared<glslang::TShader>(language);
 
@@ -240,8 +254,9 @@ void Shader_stages_prototype::compile_shaders()
             break;
         }
         m_compiled_shaders_pre_link.push_back(glslang_shader);
-        unsigned int stage = static_cast<unsigned int>(glslang_shader->getStage());
-        m_used_stages.insert(stage);
+        EShLanguage glslang_stage = glslang_shader->getStage();
+        igl::ShaderStage igl_stage = to_igl(glslang_stage);
+        m_used_stages.insert(igl_stage);
     }
 }
 
@@ -275,7 +290,7 @@ auto Shader_stages_prototype::link_program() -> bool
     messages = messages | EShMsgEnhanced;           // enhanced message readability
     
 
-    const bool link_ok = glslang_program->link(static_cast<const EShMessages>(messages));
+    bool link_ok = glslang_program->link(static_cast<const EShMessages>(messages));
     if (!link_ok) {
         log_program->error("glslang program link failed");
     }
@@ -283,8 +298,7 @@ auto Shader_stages_prototype::link_program() -> bool
     const char* info_log = glslang_program->getInfoLog();
     log_program->info("glslang program link info log:\n{}\n", info_log);
 
-    glslang::SpvOptions spirv_options
-    {
+    glslang::SpvOptions spirv_options{
         .generateDebugInfo                = true,
         .stripDebugInfo                   = false,
         .disableOptimizer                 = true,
@@ -295,14 +309,33 @@ auto Shader_stages_prototype::link_program() -> bool
         .emitNonSemanticShaderDebugSource = true
     };
 
-    for (auto stage_i : m_used_stages) {
+    for (auto stage : m_used_stages) {
         spv::SpvBuildLogger logger;
-        const auto stage = static_cast<EShLanguage>(stage_i);
-        auto* intermediate = glslang_program->getIntermediate(stage);
+        ::EShLanguage glslang_stage = to_glslang(stage);
+        auto* intermediate = glslang_program->getIntermediate(glslang_stage);
         std::vector<uint32_t> spirv;
         GlslangToSpv(*intermediate, spirv, &logger, &spirv_options);
         std::string spv_messages = logger.getAllMessages();
         log_glsl->info("SPIR_V messages::\n{}\n", spv_messages);
+        //m_shader_module_spirv[stage] = std::move(spirv);
+        const igl::ShaderModuleDesc shader_module_desc{
+            .info = igl::ShaderModuleInfo{
+                .stage      = stage,
+                .entryPoint = "main"
+            },
+            .input = {
+                .data   = spirv.data(),
+                .length = sizeof(uint32_t) * spirv.size(),
+                .type   = igl::ShaderInputType::Binary
+            }
+        };
+        std::shared_ptr<igl::IShaderModule> shader_module = m_device.createShaderModule(shader_module_desc, nullptr);
+        if (shader_module.operator bool() == false) {
+            link_ok = false;
+            log_program->error("igl shader module create failed");
+        } else {
+            m_shader_modules.emplace_back(stage, shader_module);
+        }
     }
 
     if (!link_ok) {
@@ -313,22 +346,49 @@ auto Shader_stages_prototype::link_program() -> bool
             log_glsl->error("\n{}", f_source);
         }
         return false;
-    } else {
-        m_state = state_ready;
-        log_program->trace("Shader_stages linking succeeded:");
+    }
+
+    igl::ShaderStagesDesc desc;
+    for (const auto& entry : m_shader_modules) {
+        switch (entry.stage) {
+            case igl::ShaderStage::Vertex: {
+                desc.vertexModule = entry.module;
+                desc.type         = igl::ShaderStagesType::Render;
+                break;
+            }
+            case igl::ShaderStage::Fragment: {
+                desc.fragmentModule = entry.module;
+                desc.type           = igl::ShaderStagesType::Render;
+                break;
+            }
+            case igl::ShaderStage::Compute: {
+                desc.computeModule = entry.module;
+                desc.type          = igl::ShaderStagesType::Compute;
+                break;
+            }
+        }
+    }
+
+    m_shader_stages = m_device.createShaderStages(desc, nullptr);
+    if (m_shader_stages.operator bool() == false) {
+        m_state = state_fail;
+        log_program->error("igl shader stage create failed");
+        return false;
+    }
+
+    log_program->trace("Shader_stages linking succeeded:");
+    for (const auto& s : m_create_info.shaders) {
+        const std::string f_source = format_source(m_create_info.final_source(s));
+        log_glsl->trace("\n{}", f_source);
+    }
+    if (m_create_info.dump_interface) {
+        const std::string f_source = format_source(m_create_info.interface_source());
+        log_glsl->info("\n{}", f_source);
+    }
+    if (m_create_info.dump_final_source) {
         for (const auto& s : m_create_info.shaders) {
             const std::string f_source = format_source(m_create_info.final_source(s));
-            log_glsl->trace("\n{}", f_source);
-        }
-        if (m_create_info.dump_interface) {
-            const std::string f_source = format_source(m_create_info.interface_source());
             log_glsl->info("\n{}", f_source);
-        }
-        if (m_create_info.dump_final_source) {
-            for (const auto& s : m_create_info.shaders) {
-                const std::string f_source = format_source(m_create_info.final_source(s));
-                log_glsl->info("\n{}", f_source);
-            }
         }
     }
 
