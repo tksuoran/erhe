@@ -21,6 +21,7 @@ public:
     auto is_convex              () const -> bool                       override;
     auto get_center_of_mass     () const -> glm::vec3                  override;
     auto get_mass_properties    () const -> Mass_properties            override;
+    auto describe               () const->std::string                  override;
 
     //virtual void calculate_principal_axis_transform(
     //    const std::vector<float>& /*child_masses*/,

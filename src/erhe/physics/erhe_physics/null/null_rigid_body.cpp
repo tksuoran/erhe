@@ -2,7 +2,7 @@
 #include "erhe_physics/null/null_collision_shape.hpp"
 #include "erhe_physics/imotion_state.hpp"
 #include "erhe_physics/iworld.hpp"
-#include "erhe_scene/node.hpp"
+//// #include "erhe_scene/node.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -10,26 +10,7 @@
 namespace erhe::physics
 {
 
-auto IRigid_body::create_rigid_body(
-    const IRigid_body_create_info& create_info,
-    IMotion_state*                 motion_state
-) -> IRigid_body*
-{
-    return new Null_rigid_body(create_info, motion_state);
-}
-
-auto IRigid_body::create_rigid_body_shared(
-    const IRigid_body_create_info& create_info,
-    IMotion_state*                 motion_state
-) -> std::shared_ptr<IRigid_body>
-{
-    return std::make_shared<Null_rigid_body>(create_info, motion_state);
-}
-
-Null_rigid_body::Null_rigid_body(
-    const IRigid_body_create_info& create_info,
-    IMotion_state*                 /*motion_state*/
-)
+Null_rigid_body::Null_rigid_body(const IRigid_body_create_info& create_info)
     : m_collision_shape{create_info.collision_shape}
     , m_mass           {create_info.mass}
     , m_motion_mode{
@@ -85,7 +66,17 @@ auto Null_rigid_body::get_restitution() const -> float
 
 auto Null_rigid_body::get_world_transform() const -> glm::mat4
 {
-    return m_transform;
+    return {};
+}
+
+auto Null_rigid_body::is_active() const -> bool
+{
+    return false;
+}
+
+auto Null_rigid_body::get_allow_sleeping() const -> bool
+{
+    return false;
 }
 
 void Null_rigid_body::set_restitution(float restitution)
@@ -106,21 +97,23 @@ void Null_rigid_body::set_motion_mode(const Motion_mode motion_mode)
     m_motion_mode = motion_mode;
 }
 
-void Null_rigid_body::set_center_of_mass_transform(const Transform& transform)
-{
-    // TODO
-    static_cast<void>(transform);
-}
-
 void Null_rigid_body::set_world_transform(const Transform& transform)
 {
     m_transform = transform;
 }
 
-void Null_rigid_body::move_world_transform(const Transform& transform, const float delta_time)
+void Null_rigid_body::set_allow_sleeping(bool)
 {
-    static_cast<void>(delta_time);
-    m_transform = transform;
+}
+
+void Null_rigid_body::set_owner(void* owner)
+{
+    m_owner = owner;
+}
+
+auto Null_rigid_body::get_owner() const -> void*
+{
+    return m_owner;
 }
 
 void Null_rigid_body::set_linear_velocity(const glm::vec3& velocity)
@@ -167,6 +160,11 @@ auto Null_rigid_body::get_angular_velocity() const -> glm::vec3
 auto Null_rigid_body::get_local_inertia() const -> glm::mat4
 {
     return m_local_inertia;
+}
+
+auto Null_rigid_body::get_center_of_mass() const -> glm::vec3
+{
+    return {};
 }
 
 auto Null_rigid_body::get_center_of_mass_transform() const -> Transform

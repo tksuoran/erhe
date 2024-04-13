@@ -11,15 +11,13 @@ class Null_rigid_body
     : public IRigid_body
 {
 public:
-    Null_rigid_body(
-        const IRigid_body_create_info& create_info,
-        IMotion_state*                 motion_state
-    );
+    explicit Null_rigid_body(const IRigid_body_create_info& create_info);
     ~Null_rigid_body() noexcept override;
 
     // Implements IRigid_body
     auto get_angular_damping         () const -> float                             override;
     auto get_angular_velocity        () const -> glm::vec3                         override;
+    auto get_center_of_mass          () const -> glm::vec3                         override;
     auto get_center_of_mass_transform() const -> Transform                         override;
     auto get_collision_shape         () const -> std::shared_ptr<ICollision_shape> override;
     auto get_debug_label             () const -> const char*                       override;
@@ -31,13 +29,13 @@ public:
     auto get_mass                    () const -> float                             override;
     auto get_motion_mode             () const -> Motion_mode                       override;
     auto get_restitution             () const -> float                             override;
-    auto get_world_transform         () const -> Transform                         override;
+    auto get_world_transform         () const -> glm::mat4                         override;
+    auto is_active                   () const -> bool                              override;
+    auto get_allow_sleeping          () const -> bool                              override;
 
     void begin_move                  ()                                             override; // Disables deactivation
     void end_move                    ()                                             override; // Sets active, clears disable deactivation
-    void move_world_transform        (const Transform& transform, float delta_time) override;
     void set_angular_velocity        (const glm::vec3& velocity)                    override;
-    void set_center_of_mass_transform(const Transform& transform)                   override;
     void set_damping                 (float linear_damping, float angular_damping)  override;
     void set_friction                (float friction)                               override;
     void set_gravity_factor          (float gravity_factor)                         override;
@@ -46,6 +44,9 @@ public:
     void set_motion_mode             (Motion_mode motion_mode)                      override;
     void set_restitution             (float restitution)                            override;
     void set_world_transform         (const Transform& transform)                   override;
+    void set_allow_sleeping          (bool value)                                   override;
+    void set_owner                   (void* owner)                                  override;
+    auto get_owner                   () const -> void*                              override;
 
 private:
     std::shared_ptr<ICollision_shape> m_collision_shape;
@@ -61,6 +62,7 @@ private:
     float                             m_gravity_factor  {1.0f};
     float                             m_restitution     {0.5f};
     std::string                       m_debug_label;
+    void*                             m_owner           {nullptr};
 };
 
 } // namespace erhe::physics

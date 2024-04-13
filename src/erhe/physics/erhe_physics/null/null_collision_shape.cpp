@@ -116,4 +116,9 @@ auto Null_collision_shape::get_mass_properties() const -> Mass_properties
     };
 }
 
+auto Null_collision_shape::describe() const -> std::string
+{
+    return {};
+}
+
 } // namespace erhe::physics
