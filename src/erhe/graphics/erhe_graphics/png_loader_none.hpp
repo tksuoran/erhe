@@ -16,11 +16,11 @@ enum class Image_format : int
 class Image_info
 {
 public:
-    int          width      {0};
-    int          height     {0};
-    int          depth      {0};
-    int          level_count{0};
-    int          row_stride {0};
+    size_t       width      {0};
+    size_t       height     {0};
+    size_t       depth      {0};
+    size_t       level_count{0};
+    size_t       row_stride {0};
     Image_format format     {Image_format::srgb8_alpha8};
 };
 

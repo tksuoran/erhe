@@ -68,6 +68,7 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             },
             .shader_type = erhe::graphics::Glsl_attribute_type::float_vec4, // gl::Attribute_type::float_vec4,
             .data_type   = igl::VertexAttributeFormat::Float4
+        }
     }
 {
     // Line vertex buffer will contain vertex positions, width and colors.
@@ -120,7 +121,7 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             .name             = "compute_before_line",
             .struct_types     = { line_vertex_struct.get(), triangle_vertex_struct.get() },
             .interface_blocks = { line_vertex_buffer_block.get(), triangle_vertex_buffer_block.get(), view_block.get() },
-            .shaders = { { igl::ShaderStage::compute_shader, comp_path }, }
+            .shaders = { { igl::ShaderStage::Compute, comp_path }, }
         };
 
         erhe::graphics::Shader_stages_prototype prototype{device, create_info};
@@ -144,8 +145,8 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             .vertex_attribute_mappings = &attribute_mappings,
             .fragment_outputs          = &fragment_outputs,
             .shaders = {
-                { igl::ShaderStage::vertex_shader,   vert_path },
-                { igl::ShaderStage::fragment_shader, frag_path }
+                { igl::ShaderStage::Vertex,   vert_path },
+                { igl::ShaderStage::Fragment, frag_path }
             }
         };
 
@@ -166,14 +167,12 @@ Line_renderer_pipeline::Line_renderer_pipeline(
 static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer_set::initialize_component()"};
 
 Line_renderer_set::Line_renderer_set(
-    igl::IDevice& device
+    igl::IDevice&                        device,
+    igl::RenderPipelineDesc::TargetDesc& target
 )
-    : m_graphics_instance{graphics_instance}
-    , m_pipeline         {graphics_instance}
+    : m_device  {device}
+    , m_pipeline{device}
 {
-    ERHE_PROFILE_FUNCTION();
-    erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_initialize_component};
-
     for (unsigned int stencil_reference = 0; stencil_reference <= s_max_stencil_reference; ++stencil_reference) {
         visible.at(stencil_reference) = std::make_unique<Line_renderer>(graphics_instance, m_pipeline, "visible", 8u + stencil_reference);
         hidden .at(stencil_reference) = std::make_unique<Line_renderer>(graphics_instance, m_pipeline, "hidden",  8u + stencil_reference);

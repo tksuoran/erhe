@@ -1,3 +1,4 @@
+#if 0
 #pragma once
 
 #include "erhe_graphics/buffer.hpp"
@@ -47,3 +48,4 @@ private:
 };
 
 } // namespace erhe::graphics
+#endif

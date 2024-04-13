@@ -47,6 +47,7 @@ public:
 class Shader_stages_create_info
 {
 public:
+    Shader_stages_create_info(igl::Device& device);
     // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
     // and source (possibly read from file).
     [[nodiscard]] auto final_source           (const Shader_stage& shader) const -> std::string;
@@ -66,7 +67,7 @@ public:
     std::vector<const Shader_resource*>              interface_blocks         {};
     const Vertex_attribute_mappings*                 vertex_attribute_mappings{nullptr};
     const Fragment_outputs*                          fragment_outputs         {nullptr};
-    const Shader_resource*                           default_uniform_block    {nullptr}; // contains sampler uniforms
+    const Shader_resource*                           samplers                 {nullptr};
     std::vector<Shader_stage>                        shaders                  {};
     bool                                             dump_reflection          {false};
     bool                                             dump_interface           {false};

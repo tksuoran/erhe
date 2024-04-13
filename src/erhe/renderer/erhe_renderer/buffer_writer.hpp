@@ -30,7 +30,7 @@ public:
     std::size_t  write_offset{0};
     std::size_t  write_end   {0};
 
-    auto begin  (igl::IBuffer* buffer, std::size_t byte_count) -> std::span<std::byte>;
+    auto begin  (const igl::IBuffer* buffer, std::size_t byte_count) -> std::span<std::byte>;
     auto subspan(std::size_t byte_count) -> std::span<std::byte>;
     void end    ();
     void reset  ();
@@ -38,7 +38,7 @@ public:
 
 private:
     igl::IDevice&        m_device;
-    igl::IBuffer*        m_buffer{nullptr};
+    const igl::IBuffer*  m_buffer{nullptr};
     std::span<std::byte> m_range;
 };
 

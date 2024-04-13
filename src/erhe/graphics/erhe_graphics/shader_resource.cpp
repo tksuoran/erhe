@@ -353,7 +353,7 @@ auto Shader_resource::is_basic(const Type type) -> bool
         case Type::sampler              : return true;
         case Type::struct_type          : return false;
         case Type::struct_member        : return false;
-        case Type::default_uniform_block: return false;
+        case Type::samplers             : return false;
         case Type::uniform_block        : return false;
         case Type::shader_storage_block : return false;
         default: {
@@ -370,7 +370,7 @@ auto Shader_resource::is_aggregate(const Shader_resource::Type type) -> bool
         case Type::sampler              : return false;
         case Type::struct_type          : return true;
         case Type::struct_member        : return false;
-        case Type::default_uniform_block: return true;
+        case Type::samplers             : return true;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
         default: {
@@ -387,7 +387,7 @@ auto Shader_resource::should_emit_members(const Shader_resource::Type type) -> b
         case Type::sampler              : return false;
         case Type::struct_type          : return true;
         case Type::struct_member        : return false;
-        case Type::default_uniform_block: return true;
+        case Type::samplers             : return true;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
         default: {
@@ -404,7 +404,7 @@ auto Shader_resource::is_block(const Shader_resource::Type type) -> bool
         case Type::sampler              : return false;
         case Type::struct_type          : return false;
         case Type::struct_member        : return false;
-        case Type::default_uniform_block: return true;
+        case Type::samplers             : return false; //// This used to be true for OpenGL
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
         default: {
@@ -421,7 +421,7 @@ auto Shader_resource::uses_binding_points(const Shader_resource::Type type) -> b
         case Type::sampler              : return false;
         case Type::struct_type          : return false;
         case Type::struct_member        : return false;
-        case Type::default_uniform_block: return false;
+        case Type::samplers             : return false;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
         default: {
@@ -531,10 +531,9 @@ Shader_resource::Shader_resource(
     igl::IDevice&                    device,
     const std::string_view           sampler_name,
     gsl::not_null<Shader_resource*>  parent,
-    const int                        location,
-    const Glsl_type                  sampler_type,
-    const std::optional<std::size_t> array_size /* = {} */,
-    const std::optional<int>         dedicated_texture_unit /* = {} */
+    Glsl_type                        sampler_type,
+    int                              texture_unit,
+    const std::optional<std::size_t> array_size
 )
     : m_device       {device}
     , m_type         {Type::sampler}
@@ -542,19 +541,13 @@ Shader_resource::Shader_resource(
     , m_array_size   {array_size}
     , m_parent       {parent}
     , m_basic_type   {sampler_type}
-    , m_location     {location}
-    , m_binding_point{
-        dedicated_texture_unit.has_value()
-            ? dedicated_texture_unit.value()
-            : -1
-    }
+    , m_binding_point{texture_unit}
 {
 }
 
 // Constructor with no arguments creates default uniform block
 Shader_resource::Shader_resource(igl::IDevice& device)
-    : m_device  {device}
-    , m_location{0} // next location
+    : m_device{device}
 {
 }
 
@@ -587,16 +580,6 @@ auto Shader_resource::basic_type() const -> Glsl_type
     Expects(is_basic(m_type));
 
     return m_basic_type;
-}
-
-// Only? for uniforms in default uniform block
-// For default uniform block, this is the next available location.
-auto Shader_resource::location() const -> int
-{
-    Expects(m_parent != nullptr);
-    Expects(m_parent->type() == Type::default_uniform_block);
-
-    return m_location;
 }
 
 auto Shader_resource::index_in_parent() const -> std::size_t
@@ -720,9 +703,9 @@ auto Shader_resource::next_member_offset() const -> std::size_t
 
 auto Shader_resource::type_string() const -> std::string
 {
-    if ((m_parent != nullptr) && (m_parent->type() == Type::default_uniform_block))
+    if ((m_parent != nullptr) && (m_parent->type() == Type::samplers))
     {
-        Expects(m_type != Type::default_uniform_block);
+        Expects(m_type != Type::samplers);
         return "uniform ";
     }
 
@@ -740,7 +723,7 @@ auto Shader_resource::type_string() const -> std::string
             return m_struct_type->name() + " ";
         }
 
-        case Type::default_uniform_block: {
+        case Type::samplers: {
             Expects(m_parent == nullptr);
             return "";
         }
@@ -769,10 +752,7 @@ auto Shader_resource::type_string() const -> std::string
 
 auto Shader_resource::layout_string() const -> std::string
 {
-    if (
-        (m_location      == -1) &&
-        (m_binding_point == -1)
-    ) {
+    if (m_binding_point == -1) {
         return {};
     }
 
@@ -785,13 +765,6 @@ auto Shader_resource::layout_string() const -> std::string
         first = false;
     } else if (m_type == Type::shader_storage_block) {
         ss << "std430";
-        first = false;
-    }
-    if (m_location != -1) {
-        if (!first) {
-            ss << ", ";
-        }
-        ss << "location = " << m_location;
         first = false;
     }
     if ((m_parent != nullptr) && (m_parent->type() == Type::struct_type)) {
@@ -827,13 +800,13 @@ auto Shader_resource::source(
 
     indent(ss, indent_level);
 
-    if (m_type != Type::default_uniform_block) {
+    if (m_type != Type::samplers) {
         ss << layout_string();
         ss << type_string();
     }
 
     if (should_emit_members(m_type)) {
-        if (m_type != Type::default_uniform_block) {
+        if (m_type != Type::samplers) {
             ss << name();
             if (
                 (m_type == Type::uniform_block       ) ||
@@ -844,10 +817,10 @@ auto Shader_resource::source(
             ss << " {\n";
         }
         for (const auto& member : m_members) {
-            const int extra_indent = (m_type == Type::default_uniform_block) ? 0 : 1;
+            const int extra_indent = (m_type == Type::samplers) ? 0 : 1;
             ss << member->source(indent_level + extra_indent);
         }
-        if (m_type != Type::default_uniform_block) {
+        if (m_type != Type::samplers) {
             indent(ss, indent_level);
             ss << "}";
         }
@@ -858,7 +831,7 @@ auto Shader_resource::source(
     }
 
     if (
-        (m_type != Type::default_uniform_block) &&
+        (m_type != Type::samplers) &&
         (m_type != Type::struct_type)
     ) {
         ss << " " << name();
@@ -871,8 +844,8 @@ auto Shader_resource::source(
         }
     }
 
-    if (m_type != Type::default_uniform_block) {
-        // default uniform block only lists members
+    if (m_type != Type::samplers) {
+        // samplers only lists members
         ss << ";\n";
     }
 
@@ -901,12 +874,12 @@ auto Shader_resource::add_struct(
 
 auto Shader_resource::add_sampler(
     const std::string_view           name,
-    const Glsl_type                  sampler_type,
-    const std::optional<int>         dedicated_texture_unit, /* = {} */
-    const std::optional<std::size_t> array_size /* = {} */
+    Glsl_type                        sampler_type,
+    int                              texture_unit,
+    const std::optional<std::size_t> array_size
 ) -> Shader_resource*
 {
-    Expects(m_type == Type::default_uniform_block);
+    Expects(m_type == Type::samplers);
     Expects(!array_size.has_value() || array_size.value() > 0); // no unsized sampler arrays
 
     auto* const new_member = m_members.emplace_back(
@@ -914,16 +887,11 @@ auto Shader_resource::add_sampler(
             m_device,
             name,
             this,
-            dedicated_texture_unit.has_value() ? -1 : m_location,
             sampler_type,
-            array_size,
-            dedicated_texture_unit
+            texture_unit,
+            array_size
         )
     ).get();
-    const int count = array_size.has_value() ? static_cast<int>(array_size.value()) : 1;
-    if (!dedicated_texture_unit.has_value()) {
-        m_location += count;
-    }
     return new_member;
 }
 

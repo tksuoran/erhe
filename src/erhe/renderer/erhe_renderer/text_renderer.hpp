@@ -18,7 +18,7 @@
 #include <string_view>
 
 namespace erhe::graphics {
-    class Shader_monitor;
+    class Shader_stages;
 }
 namespace erhe::ui {
     class Font;
@@ -45,7 +45,7 @@ public:
     };
     Config config;
 
-    explicit Text_renderer(erhe::graphics::Instance& graphics_instance);
+    explicit Text_renderer(igl::IDevice& device);
 
     Text_renderer (const Text_renderer&) = delete;
     void operator=(const Text_renderer&) = delete;
@@ -57,7 +57,7 @@ public:
     [[nodiscard]] auto font_size() -> float;
     [[nodiscard]] auto measure  (const std::string_view text) const -> erhe::ui::Rectangle;
 
-    void render    (erhe::math::Viewport viewport);
+    void render    (igl::IRenderCommandEncoder& renderEncoder, erhe::math::Viewport viewport);
     void next_frame();
 
 private:
@@ -68,12 +68,11 @@ private:
     public:
         Frame_resources(
             igl::IDevice&                              device,
-            bool                                       reverse_depth,
+            igl::RenderPipelineDesc::TargetDesc&       target,
             std::size_t                                vertex_count,
             const std::shared_ptr<igl::IShaderStages>& shader_stages,
             erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
             erhe::graphics::Vertex_format&             vertex_format,
-            const std::shared_ptr<igl::IBuffer>&       index_buffer,
             std::size_t                                slot
         );
 
@@ -100,7 +99,7 @@ private:
     static constexpr std::size_t index_stride            {2};
 
     igl::IDevice&                             m_device;
-    erhe::graphics::Shader_resource           m_default_uniform_block; // containing sampler uniforms for non bindless textures
+    //erhe::graphics::Shader_resource           m_default_uniform_block; // containing sampler uniforms for non bindless textures
     erhe::graphics::Shader_resource           m_projection_block;
     erhe::graphics::Shader_resource*          m_clip_from_window_resource;
     erhe::graphics::Shader_resource*          m_texture_resource;
@@ -116,7 +115,7 @@ private:
     Buffer_writer                             m_vertex_writer;
     Buffer_writer                             m_projection_writer;
 
-    std::shared_ptr<igl::IShaderStages> m_shader_stages;
+    std::shared_ptr<erhe::graphics::Shader_stages> m_shader_stages;
     std::unique_ptr<erhe::ui::Font>     m_font;
     std::deque<Frame_resources>         m_frame_resources;
     std::size_t                         m_current_frame_resource_slot{0};

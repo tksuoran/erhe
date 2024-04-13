@@ -104,7 +104,7 @@ public:
         sampler               = 1,
         struct_type           = 2, // not really a resource, just type declaration
         struct_member         = 3,
-        default_uniform_block = 4,
+        samplers              = 4,
         uniform_block         = 5,
         shader_storage_block  = 6
     };
@@ -165,13 +165,12 @@ public:
         igl::IDevice&                    device,
         const std::string_view           sampler_name,
         gsl::not_null<Shader_resource*>  parent,
-        int                              location,
         Glsl_type                        sampler_type,
-        const std::optional<std::size_t> array_size = {},
-        const std::optional<int>         dedicated_texture_unit = {}
+        int                              texture_unit,
+        const std::optional<std::size_t> array_size = {}
     );
 
-    // Constructor for creating  default uniform block
+    // Constructor for creating samplers
     explicit Shader_resource(igl::IDevice& device);
     ~Shader_resource() noexcept;
     Shader_resource(const Shader_resource& other) = delete;
@@ -185,7 +184,7 @@ public:
 
     // Only? for uniforms in default uniform block
     // For default uniform block, this is the next available location.
-    [[nodiscard]] auto location          () const -> int;
+    //[[nodiscard]] auto location          () const -> int;
     [[nodiscard]] auto index_in_parent   () const -> std::size_t;
     [[nodiscard]] auto offset_in_parent  () const -> std::size_t;
     [[nodiscard]] auto parent            () const -> Shader_resource*;
@@ -220,7 +219,7 @@ public:
     auto add_sampler(
         const std::string_view           name,
         Glsl_type                        sampler_type,
-        const std::optional<int>         dedicated_texture_unit = {},
+        int                              texture_unit,
         const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
@@ -289,7 +288,7 @@ private:
     igl::IDevice&              m_device;
 
     // Any shader type declaration
-    Type                       m_type{Type::default_uniform_block};
+    Type                       m_type{Type::samplers};
     std::string                m_name;
     std::optional<std::size_t> m_array_size; // 0 means unsized
     Shader_resource*           m_parent          {nullptr};
@@ -300,9 +299,7 @@ private:
     //Precision              m_precision{Precision::highp};
     Glsl_type         m_basic_type{Glsl_type::bool_};
 
-    // Uniforms in default uniform block - TODO plus some others?
-    // For default uniform block, this is next available location (initialized to 0)
-    int               m_location{-1};
+    //int               m_location{-1};
 
     // Struct instance
     Shader_resource*  m_struct_type{nullptr};

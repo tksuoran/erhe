@@ -10,9 +10,6 @@ namespace erhe::graphics {
     class Vertex_format;
     class Vertex_input_state;
 }
-namespace erhe::primitive {
-    class Gl_buffer_sink;
-}
 namespace erhe::scene_renderer {
     class Program_interface;
 }
@@ -32,13 +29,13 @@ public:
         erhe::scene_renderer::Program_interface& program_interface
     );
 
-    igl::IDevice&                         device;
-    erhe::graphics::Vertex_format         vertex_format;
-    std::shared_ptr<igl::IBuffer>         vertex_buffer;
-    std::shared_ptr<igl::IBuffer>         index_buffer;
-    erhe::primitive::Gl_buffer_sink       buffer_sink;
-    erhe::primitive::Buffer_info          buffer_info;
-    erhe::graphics::Vertex_input_state    vertex_input;
+    igl::IDevice&                           device;
+    erhe::graphics::Vertex_format           vertex_format;
+    std::shared_ptr<igl::IBuffer>           vertex_buffer;
+    std::shared_ptr<igl::IBuffer>           index_buffer;
+    erhe::primitive::Igl_buffer_sink        buffer_sink;
+    erhe::primitive::Buffer_info            buffer_info;
+    std::shared_ptr<igl::IVertexInputState> vertex_input;
 
 private:
     [[nodiscard]] auto get_vertex_buffer_size() const -> std::size_t;

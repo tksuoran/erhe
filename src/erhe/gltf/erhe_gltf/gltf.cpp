@@ -777,8 +777,8 @@ private:
         }
 
         igl::TextureDesc texture_desc{
-            .width        = static_cast<size_t>(image_info.width),
-            .height       = static_cast<size_t>(image_info.height),
+            .width        = image_info.width,
+            .height       = image_info.height,
             .depth        = 1,
             .numLayers    = 1,
             .numSamples   = 1,
@@ -794,8 +794,8 @@ private:
             .x            = 0,
             .y            = 0,
             .z            = 0,
-            .width        = static_cast<size_t>(image_info.width),
-            .height       = static_cast<size_t>(image_info.height),
+            .width        = image_info.width,
+            .height       = image_info.height,
             .depth        = 1,
             .layer        = 0,
             .numLayers    = 1,
@@ -891,7 +891,7 @@ private:
             return {};
         }
         igl::Result create_result{};
-        std::shared_ptr<igl::ITexture> texture = m_device.createTexture(texture_desc, &create_result);
+        std::shared_ptr<igl::ITexture> texture = m_arguments.device.createTexture(texture_desc, &create_result);
         if (!texture || !create_result.isOk()) {
             return {};
         }
@@ -908,7 +908,7 @@ private:
         std::shared_ptr<igl::ITexture> texture;
         if (image->uri != nullptr) {
             std::filesystem::path uri{image->uri};
-            texture = load_image_file(image_name, m_path.replace_filename(uri));
+            texture = load_image_file(image_name, m_arguments.path.replace_filename(uri));
             if (!texture) {
                 texture = load_image_file(image_name, image->uri);
             }
@@ -949,7 +949,7 @@ private:
         };
 
         igl::Result result{};
-        std::shared_ptr<igl::ISamplerState> igl_sampler = m_device.createSamplerState(desc, &result);
+        std::shared_ptr<igl::ISamplerState> igl_sampler = m_arguments.device.createSamplerState(desc, &result);
         if (!igl_sampler || !result.isOk())
         {
             return;

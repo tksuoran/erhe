@@ -69,7 +69,7 @@ void Vertex_attribute_mappings::collect_attributes(
             }
 
             attributes.push_back(
-                {
+                Vertex_input_attribute{
                     .layout_location = mapping.layout_location,
                     .vertex_buffer   = vertex_buffer,
                     .stride          = static_cast<uint32_t>(vertex_format.stride()),

@@ -9,6 +9,7 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_graphics/vertex_format.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
@@ -25,12 +26,11 @@ using glm::vec4;
 
 Text_renderer::Frame_resources::Frame_resources(
     igl::IDevice&                              device,
-    const bool                                 reverse_depth,
+    igl::RenderPipelineDesc::TargetDesc&       target,
     const std::size_t                          vertex_count,
     const std::shared_ptr<igl::IShaderStages>& shader_stages,
     erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
     erhe::graphics::Vertex_format&             vertex_format,
-    const std::shared_ptr<igl::IBuffer>&       index_buffer,
     const std::size_t                          slot
 )
     : vertex_buffer{
@@ -41,7 +41,7 @@ Text_renderer::Frame_resources::Frame_resources(
                 vertex_count * vertex_format.stride(),
                 igl::ResourceStorage::Shared,
                 0,
-                fmt::format("Text Renderer Vertex {}", slot)
+                fmt::format("Text Renderer Vertex Buffer {}", slot)
             ),
             nullptr
         )
@@ -54,7 +54,7 @@ Text_renderer::Frame_resources::Frame_resources(
                 1024, // TODO
                 igl::ResourceStorage::Shared,
                 0,
-                fmt::format("Text Renderer Vertex {}", slot)
+                fmt::format("Text Renderer Projection Buffer {}", slot)
             ),
             nullptr
         )
@@ -65,35 +65,27 @@ Text_renderer::Frame_resources::Frame_resources(
     , pipeline{
         device.createRenderPipeline(
             igl::RenderPipelineDesc{
-                .
-                .debugName = "Text renderer",
+                .vertexInputState   = vertex_input,
+                .shaderStages       = shader_stages,
+                .targetDesc         = target,
+                .cullMode           = igl::CullMode::Disabled,
+                .frontFaceWinding   = igl::WindingMode::CounterClockwise,
+                .polygonFillMode    = igl::PolygonFillMode::Fill,
+                .sampleCount        = 1,
+                .debugName          = igl::genNameHandle("Text renderer")
             },
             nullptr
         )
-        //{
-        //    .name           = "Text renderer",
-        //    .shader_stages  = shader_stages,
-        //    .vertex_input   = &vertex_input,
-        //    .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
-        //    .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-        //    .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-        //    .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
-        //}
     }
 {
-    vertex_buffer    .set_debug_label(fmt::format("Text Renderer Vertex {}", slot));
-    projection_buffer.set_debug_label(fmt::format("Text Renderer Projection {}", slot));
 }
 
 static constexpr std::string_view c_text_renderer_initialize_component{"Text_renderer::initialize_component()"};
 
-Text_renderer::Text_renderer(
-    erhe::graphics::Instance& graphics_instance
-)
-    : m_graphics_instance{graphics_instance}
-    , m_default_uniform_block{graphics_instance}
+Text_renderer::Text_renderer(igl::IDevice& device)
+    : m_device{device}
    ,  m_projection_block{
-        graphics_instance,
+        device,
         "projection",
         0,
         erhe::graphics::Shader_resource::Type::uniform_block
@@ -107,12 +99,12 @@ Text_renderer::Text_renderer(
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
-            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .type     = erhe::graphics::Glsl_type::float_vec4,
             .location = 0
         }
     }
     , m_attribute_mappings{
-        graphics_instance,
+        device,
         { // initializer list
             erhe::graphics::Vertex_attribute_mapping::a_position_float_vec3(),
             erhe::graphics::Vertex_attribute_mapping::a_color_float_vec4(),
@@ -125,20 +117,39 @@ Text_renderer::Text_renderer(
         erhe::graphics::Vertex_attribute::texcoord0_float2()
     }
     , m_index_buffer{
-        graphics_instance,
-        gl::Buffer_target::element_array_buffer,
-        index_stride * index_count,
-        gl::Buffer_storage_mask::map_write_bit
+        device.createBuffer(
+            igl::BufferDesc(
+                static_cast<igl::BufferDesc::BufferType>(igl::BufferDesc::BufferTypeBits::Index),
+                nullptr,
+                index_stride * index_count,
+                igl::ResourceStorage::Private,
+                0,
+                "Text renderer index buffer"
+            ),
+            nullptr
+        )
     }
     , m_nearest_sampler{
-        erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest,
-            .mag_filter  = gl::Texture_mag_filter::nearest,
-            .debug_label = "Text_renderer"
-        }
+        m_device.createSamplerState(
+            igl::SamplerStateDesc{
+                .minFilter            = igl::SamplerMinMagFilter::Nearest,
+                .magFilter            = igl::SamplerMinMagFilter::Nearest,
+                .mipFilter            = igl::SamplerMipFilter::Disabled,
+                .addressModeU         = igl::SamplerAddressMode::Clamp,
+                .addressModeV         = igl::SamplerAddressMode::Clamp,
+                .addressModeW         = igl::SamplerAddressMode::Repeat,
+                .depthCompareFunction = igl::CompareFunction::LessEqual,
+                .mipLodMin            = 0,
+                .mipLodMax            = 15,
+                .maxAnisotropic       = 16,
+                .depthCompareEnabled  = false,
+                .debugName            = "Text Renderer Sampler"
+            },
+            nullptr
+        )
     }
-    , m_vertex_writer        {graphics_instance}
-    , m_projection_writer    {graphics_instance}
+    , m_vertex_writer    {device}
+    , m_projection_writer{device}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -153,14 +164,7 @@ Text_renderer::Text_renderer(
 
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_initialize_component};
 
-    erhe::graphics::Scoped_buffer_mapping<uint16_t> index_buffer_map{
-        m_index_buffer,
-        0,
-        index_count,
-        gl::Map_buffer_access_mask::map_write_bit
-    };
-
-    const auto& gpu_index_data = index_buffer_map.span();
+    std::vector<uint16_t> gpu_index_data(max_quad_count * 5);
     std::size_t offset      {0};
     uint16_t    vertex_index{0};
     for (unsigned int i = 0; i < max_quad_count; ++i) {
@@ -173,8 +177,13 @@ Text_renderer::Text_renderer(
         offset += 5;
     }
 
+    m_index_buffer->upload(
+        &gpu_index_data[0], 
+        igl::BufferRange(sizeof(uint16_t) * max_quad_count * 5, 0)
+    );
+
     m_font = std::make_unique<erhe::ui::Font>(
-        m_graphics_instance,
+        device,
         "res/fonts/SourceSansPro-Regular.otf",
         config.font_size,
         0.0f // TODO reimplement outline better 1.0f
@@ -192,24 +201,31 @@ Text_renderer::Text_renderer(
             .vertex_attribute_mappings = &m_attribute_mappings,
             .fragment_outputs          = &m_fragment_outputs,
             .shaders = {
-                { igl::ShaderStage::vertex_shader,   vs_path },
-                { igl::ShaderStage::fragment_shader, fs_path }
+                { igl::ShaderStage::Vertex,   vs_path },
+                { igl::ShaderStage::Fragment, fs_path }
             }
         };
 
-        if (graphics_instance.info.use_bindless_texture) {
-            create_info.extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_bindless_texture"});
-            create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-        } else {
-            m_default_uniform_block.add_sampler(
-                "s_texture",
-                igl::UniformType::sampler_2d,
-                0
-            );
-            create_info.default_uniform_block = &m_default_uniform_block;
-        }
+        create_info.samplers.add_sampler(
+            "s_texture",
+            erhe::graphics::Glsl_type::sampler_2d,
+            0
+        );
 
-        erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+        //if (graphics_instance.info.use_bindless_texture) {
+        //    create_info.extensions.push_back({igl::ShaderStage::fragment_shader, "GL_ARB_bindless_texture"});
+        //    create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
+        //} else 
+        //{
+        //    m_default_uniform_block.add_sampler(
+        //        "s_texture",
+        //        igl::UniformType::sampler_2d,
+        //        0
+        //    );
+        //    create_info.default_uniform_block = &m_default_uniform_block;
+        //}
+
+        erhe::graphics::Shader_stages_prototype prototype{device, create_info};
         if (!prototype.is_valid()) {
             log_startup->error("Text renderer shader compilation failed");
             config.enabled = false;
@@ -218,7 +234,7 @@ Text_renderer::Text_renderer(
         }
 
         m_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
-        graphics_instance.shader_monitor.add(create_info, m_shader_stages.get());
+        //// graphics_instance.shader_monitor.add(create_info, m_shader_stages.get());
     }
 
     create_frame_resources();
@@ -229,16 +245,13 @@ void Text_renderer::create_frame_resources()
     ERHE_PROFILE_FUNCTION();
 
     constexpr std::size_t vertex_count{65536 * 8};
-    const bool reverse_depth = m_graphics_instance.configuration.reverse_depth;
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         m_frame_resources.emplace_back(
-            m_graphics_instance,
-            reverse_depth,
+            m_device,
             vertex_count,
             m_shader_stages.get(),
             m_attribute_mappings,
             m_vertex_format,
-            m_index_buffer,
             slot
         );
     }
@@ -270,7 +283,7 @@ void Text_renderer::print(
         return;
     }
 
-    auto* const               vertex_buffer     = &current_frame_resources().vertex_buffer;
+    const igl::IBuffer*       vertex_buffer     = current_frame_resources().vertex_buffer.get();
     const std::size_t         quad_count        = m_font->get_glyph_count(text);
     const std::size_t         vertex_byte_count = quad_count * 4 * m_vertex_format.stride();
     const auto                vertex_gpu_data   = m_vertex_writer.begin(vertex_buffer, vertex_byte_count);
@@ -315,7 +328,8 @@ auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rect
 static constexpr std::string_view c_text_renderer_render{"Text_renderer::render()"};
 
 void Text_renderer::render(
-    erhe::math::Viewport viewport
+    igl::IRenderCommandEncoder& renderEncoder,
+    erhe::math::Viewport        viewport
 )
 {
     if (m_index_count == 0) {
@@ -326,18 +340,19 @@ void Text_renderer::render(
 
     //ERHE_PROFILE_GPU_SCOPE(c_text_renderer_render)
 
-    const auto handle = m_graphics_instance.get_handle(
-        *m_font->texture().get(),
-        m_nearest_sampler
-    );
+    //// const auto handle = m_graphics_instance.get_handle(
+    ////     *m_font->texture().get(),
+    ////     m_nearest_sampler
+    //// );
 
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 
-    auto* const               projection_buffer   = &current_frame_resources().projection_buffer;
-    const auto                projection_gpu_data = m_projection_writer.begin(projection_buffer, m_projection_block.size_bytes());
-    std::byte* const          start               = projection_gpu_data.data();
-    const std::size_t         byte_count          = projection_gpu_data.size_bytes();
-    const std::size_t         word_count          = byte_count / sizeof(float);
+    const auto&               projection_buffer_shared = current_frame_resources().projection_buffer;
+    const igl::IBuffer*       projection_buffer        = projection_buffer_shared.get();
+    const auto                projection_gpu_data      = m_projection_writer.begin(projection_buffer, m_projection_block.size_bytes());
+    std::byte* const          start                    = projection_gpu_data.data();
+    const std::size_t         byte_count               = projection_gpu_data.size_bytes();
+    const std::size_t         word_count               = byte_count / sizeof(float);
     const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
     const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
@@ -353,49 +368,29 @@ void Text_renderer::render(
     write(gpu_float_data, m_u_clip_from_window_offset, as_span(clip_from_window));
     m_projection_writer.write_offset += m_u_clip_from_window_size;
 
-    const uint32_t texture_handle[2] =
-    {
-        static_cast<uint32_t>((handle & 0xffffffffu)),
-        static_cast<uint32_t>(handle >> 32u)
-    };
-    const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
-    write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
-    m_projection_writer.write_offset += m_u_texture_size;
-
     m_projection_writer.end();
 
-    const auto& pipeline = current_frame_resources().pipeline;
-    gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
-    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_graphics_instance.opengl_state_tracker.execute(pipeline);
-
-    gl::bind_buffer_range(
-        projection_buffer->target(),
-        static_cast<GLuint>    (m_projection_block.binding_point()),
-        static_cast<GLuint>    (projection_buffer->gl_name()),
-        static_cast<GLintptr>  (m_projection_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(m_projection_writer.range.byte_count)
+    const auto& frame_resources = current_frame_resources();
+    const auto& pipeline = frame_resources.pipeline;
+    renderEncoder.bindRenderPipelineState(pipeline);
+    renderEncoder.bindBuffer(
+        m_projection_block.binding_point(),
+        igl::BindTarget::kAllGraphics,
+        projection_buffer_shared,
+        m_projection_writer.range.first_byte_offset
+        // , m_projection_writer.range.byte_count
     );
 
-    if (m_graphics_instance.info.use_bindless_texture) {
-        gl::make_texture_handle_resident_arb(handle);
-    } else {
-        gl::bind_texture_unit(0, m_font->texture()->gl_name());
-        gl::bind_sampler(0, m_nearest_sampler.gl_name());
-    }
+    renderEncoder.bindSamplerState(0, igl::BindTarget::kFragment, m_nearest_sampler.get());
+    renderEncoder.bindTexture(0, igl::BindTarget::kFragment, m_font->texture());
 
-    gl::draw_elements(
-        pipeline.data.input_assembly.primitive_topology,
-        static_cast<GLsizei>(m_index_count),
-        gl::Draw_elements_type::unsigned_short,
-        reinterpret_cast<const void*>(m_index_range_first * 2)
+    renderEncoder.drawIndexed(
+        igl::PrimitiveType::TriangleStrip,
+        m_index_count,
+        igl::IndexFormat::UInt16,
+        *m_index_buffer.get(),
+        0
     );
-
-    if (m_graphics_instance.info.use_bindless_texture) {
-        gl::make_texture_handle_non_resident_arb(handle);
-    }
-
-    gl::disable(gl::Enable_cap::primitive_restart_fixed_index);
 
     m_index_range_first += m_index_count;
     m_index_count = 0;

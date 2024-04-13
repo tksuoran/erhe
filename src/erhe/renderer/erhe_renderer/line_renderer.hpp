@@ -60,8 +60,8 @@ public:
     std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_struct;
     std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_buffer_block;
     std::unique_ptr<erhe::graphics::Shader_resource> view_block;
-    std::unique_ptr<igl::IShaderStages>              compute_shader_stages;
-    std::unique_ptr<igl::IShaderStages>              graphics_shader_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>   compute_shader_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>   graphics_shader_stages;
     std::size_t                                      clip_from_world_offset       {0};
     std::size_t                                      view_position_in_world_offset{0};
     std::size_t                                      viewport_offset              {0};
@@ -271,7 +271,10 @@ private:
 class Line_renderer_set
 {
 public:
-    explicit Line_renderer_set(erhe::graphics::Instance& graphics_instance);
+    Line_renderer_set(
+        erhe::graphics::Instance&            graphics_instance,
+        igl::RenderPipelineDesc::TargetDesc& target
+    );
     ~Line_renderer_set() noexcept;
 
     // Public API

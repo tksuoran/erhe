@@ -1,7 +1,7 @@
 #pragma once
 
 #include <glm/gtc/type_ptr.hpp>
-#include <gsl/gsl>
+#include <span>
 
 namespace erhe::graphics
 {
@@ -40,8 +40,8 @@ inline void write(
 )
 {
     //Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
-    auto source_bytes = gsl::as_bytes(source);
-    auto write_dst = gsl::as_writable_bytes(dst).data() + write_byte_offset;
+    auto source_bytes = std::as_bytes(source);
+    auto write_dst = std::as_writable_bytes(dst).data() + write_byte_offset;
     memcpy(write_dst, source_bytes.data(), source_bytes.size_bytes());
 }
 
@@ -53,8 +53,8 @@ inline void write(
 )
 {
     //Expects(dst.size_bytes() >= source.size_bytes() + write_byte_offset);
-    auto source_bytes = gsl::as_bytes(source);
-    auto write_dst    = gsl::as_writable_bytes(dst).data() + write_byte_offset;
+    auto source_bytes = std::as_bytes(source);
+    auto write_dst    = std::as_writable_bytes(dst).data() + write_byte_offset;
     memcpy(write_dst, source_bytes.data(), source_bytes.size_bytes());
 }
 

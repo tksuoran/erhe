@@ -5,7 +5,9 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/pca.hpp>
 
-#include "Geometry/Sphere.h"
+#if defined(ERHE_USE_MATHGEOLIB)
+# include "Geometry/Sphere.h"
+#endif
 
 #include <algorithm>
 
@@ -480,6 +482,7 @@ auto spherical_to_cartesian_iso(const float theta, const float phi) -> vec3
     };
 }
 
+#if defined(ERHE_USE_MATHGEOLIB)
 void calculate_bounding_volume(
     const Bounding_volume_source& source,
     Bounding_box&                 bounding_box,
@@ -541,6 +544,7 @@ void calculate_bounding_volume(
     bounding_sphere.radius = sphere.r;
     bounding_sphere.center = glm::vec3{sphere.pos.x, sphere.pos.y, sphere.pos.z};
 }
+#endif
 
 [[nodiscard]] auto transform(
     const glm::mat4&       m,

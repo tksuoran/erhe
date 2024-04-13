@@ -20,7 +20,7 @@ Buffer_writer::Buffer_writer(igl::IDevice& device)
 }
 
 auto Buffer_writer::begin(
-    igl::IBuffer* const buffer,
+    const igl::IBuffer* buffer,
     std::size_t         byte_count
 ) -> std::span<std::byte>
 {
@@ -52,7 +52,7 @@ auto Buffer_writer::begin(
     }
 
     // The whole buffer is always mapped - return subspan for requested range
-    auto* vk_buffer = static_cast<igl::vulkan::Buffer*>(buffer);
+    auto* vk_buffer = static_cast<const igl::vulkan::Buffer*>(buffer);
     const std::shared_ptr<igl::vulkan::VulkanBuffer>& vulkan_buffer = vk_buffer->currentVulkanBuffer();
     uint8_t* const map_ptr = vulkan_buffer->getMappedPtr();
     assert(vulkan_buffer->isCoherentMemory());
@@ -80,7 +80,7 @@ void Buffer_writer::dump()
         return;
     }
 
-    auto* vk_buffer = static_cast<igl::vulkan::Buffer*>(m_buffer);
+    const auto* vk_buffer = static_cast<const igl::vulkan::Buffer*>(m_buffer);
     const std::shared_ptr<igl::vulkan::VulkanBuffer>& vulkan_buffer = vk_buffer->currentVulkanBuffer();
     uint8_t* const map_ptr = vulkan_buffer->getMappedPtr();
     assert(vulkan_buffer->isCoherentMemory());
