@@ -9,6 +9,7 @@
 #include <gsl/pointers>
 #include <span>
 
+#include <array>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -34,8 +35,6 @@ public:
     );
 
     ~Font() noexcept;
-
-    void save() const;
 
     [[nodiscard]] auto line_height() const -> float
     {

@@ -436,8 +436,8 @@ void Font::trace_info() const
     log_font->trace("patents       {}", (FT_Face_CheckTrueTypePatents(face) == 1) ? "yes" : "no");
 }
 #else
-Font::Font(const std::filesystem::path&, const unsigned int, const float) {}
-void Font::render(){}
+Font::Font(igl::IDevice& device, const std::filesystem::path&, const unsigned int, const float) : m_device{device} {}
+auto Font::render() -> bool { return false; }
 void Font::trace_info() const {}
 #endif
 
