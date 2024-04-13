@@ -457,11 +457,25 @@ public:
     const cgltf_size null_index{std::numeric_limits<cgltf_size>::max()};
 
     Gltf_parser(
+<<<<<<< HEAD
         Gltf_data&                  gltf_data,
         const Gltf_parse_arguments& arguments
     )
         : m_data_out {gltf_data}
         , m_arguments{arguments}
+=======
+        Gltf_data&                                gltf_data,
+        igl::IDevice&                             device,
+        const std::shared_ptr<erhe::scene::Node>& root_node,
+        erhe::scene::Layer_id                     mesh_layer_id,
+        std::filesystem::path                     path
+    )
+        : m_data_out     {gltf_data}
+        , m_device       {device}
+        , m_root_node    {root_node}
+        , m_mesh_layer_id{mesh_layer_id}
+        , m_path         {path}
+>>>>>>> da13c97b (vulkan wip)
     {
         if (!open(arguments.path)) {
             return;
@@ -776,9 +790,23 @@ private:
             return {};
         }
 
+<<<<<<< HEAD
+        auto& slot = m_arguments.image_transfer.get_slot();
+
+        erhe::graphics::Texture_create_info texture_create_info{
+            .instance        = m_arguments.graphics_instance,
+            .internal_format = to_gl(image_info.format),
+            .use_mipmaps     = true, //(image_info.level_count > 1),
+            .width           = image_info.width,
+            .height          = image_info.height,
+            .depth           = image_info.depth,
+            .level_count     = image_info.level_count,
+            .row_stride      = image_info.row_stride,
+            .debug_label     = path.filename().string()
+=======
         igl::TextureDesc texture_desc{
-            .width        = static_cast<size_t>(image_info.width),
-            .height       = static_cast<size_t>(image_info.height),
+            .width        = image_info.width,
+            .height       = image_info.height,
             .depth        = 1,
             .numLayers    = 1,
             .numSamples   = 1,
@@ -788,14 +816,15 @@ private:
             .format       = to_igl(image_info.format),
             .storage      = igl::ResourceStorage::Private,
             .debugName    = fmt::format("{} from file {}", debug_label, erhe::file::to_string(path))
+>>>>>>> da13c97b (vulkan wip)
         };
         igl::TextureFormatProperties texture_format_properties = igl::TextureFormatProperties::fromTextureFormat(texture_desc.format);
         igl::TextureRangeDesc range{
             .x            = 0,
             .y            = 0,
             .z            = 0,
-            .width        = static_cast<size_t>(image_info.width),
-            .height       = static_cast<size_t>(image_info.height),
+            .width        = image_info.width,
+            .height       = image_info.height,
             .depth        = 1,
             .layer        = 0,
             .numLayers    = 1,
@@ -815,10 +844,26 @@ private:
             return {};
         }
 
+<<<<<<< HEAD
+        auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
+        texture->set_source_path(path);
+        texture->set_debug_label(erhe::file::to_string(path));
+
+        gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
+        gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
+        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
+        texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
+        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
+
+        slot.end();
+        if (generate_mipmap) {
+            gl::generate_texture_mipmap(texture->gl_name());
+=======
         igl::Result create_result{};
-        std::shared_ptr<igl::ITexture> texture = m_arguments.device.createTexture(texture_desc, &create_result);
+        std::shared_ptr<igl::ITexture> texture = m_device.createTexture(texture_desc, &create_result);
         if (!texture || !create_result.isOk()) {
             return {};
+>>>>>>> da13c97b (vulkan wip)
         }
 
         // TODO Generate mipmaps if needed
@@ -826,10 +871,14 @@ private:
         texture->upload(range, data.data(), bytes_per_row);
         return texture;
     }
+<<<<<<< HEAD
+    auto load_png_buffer(const cgltf_buffer_view* buffer_view, const cgltf_size image_index) -> std::shared_ptr<erhe::graphics::Texture>
+=======
     auto load_png_buffer(
         std::string_view         debug_label,
         const cgltf_buffer_view* buffer_view
     ) -> std::shared_ptr<igl::ITexture>
+>>>>>>> da13c97b (vulkan wip)
     {
         const cgltf_size  buffer_view_index = buffer_view - m_data->buffer_views;
         const std::string name              = safe_resource_name(buffer_view->name, "buffer_view", buffer_view_index);
@@ -847,6 +896,20 @@ private:
             return {};
         }
 
+<<<<<<< HEAD
+        auto& slot = m_arguments.image_transfer.get_slot();
+
+        erhe::graphics::Texture_create_info texture_create_info{
+            .instance        = m_arguments.graphics_instance,
+            .internal_format = to_gl(image_info.format),
+            .use_mipmaps     = true, //(image_info.level_count > 1),
+            .width           = image_info.width,
+            .height          = image_info.height,
+            .depth           = image_info.depth,
+            .level_count     = image_info.level_count,
+            .row_stride      = image_info.row_stride,
+            .debug_label     = fmt::format("{} image {}", m_arguments.path.filename().string(), image_index) 
+=======
         igl::TextureDesc texture_desc{
             .width        = image_info.width,
             .height       = image_info.height,
@@ -864,6 +927,7 @@ private:
                     buffer_view->buffer - m_data->buffers,
                     buffer_view->offset
                 )
+>>>>>>> da13c97b (vulkan wip)
         };
         igl::TextureFormatProperties texture_format_properties = igl::TextureFormatProperties::fromTextureFormat(texture_desc.format);
         igl::TextureRangeDesc range{
@@ -890,10 +954,27 @@ private:
         if (!ok) {
             return {};
         }
+<<<<<<< HEAD
+
+        auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
+        texture->set_source_path(m_arguments.path);
+        texture->set_debug_label(name);
+
+        gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
+        gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
+        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
+        texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
+        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
+
+        slot.end();
+        if (generate_mipmap) {
+            gl::generate_texture_mipmap(texture->gl_name());
+=======
         igl::Result create_result{};
         std::shared_ptr<igl::ITexture> texture = m_device.createTexture(texture_desc, &create_result);
         if (!texture || !create_result.isOk()) {
             return {};
+>>>>>>> da13c97b (vulkan wip)
         }
         // TODO Generate mipmaps if needed
         texture->upload(range, image_data.data(), bytes_per_row);
@@ -908,12 +989,21 @@ private:
         std::shared_ptr<igl::ITexture> texture;
         if (image->uri != nullptr) {
             std::filesystem::path uri{image->uri};
+<<<<<<< HEAD
+            erhe_texture = load_image_file(m_arguments.path.replace_filename(uri));
+            if (!erhe_texture) {
+                erhe_texture = load_image_file(image->uri);
+            }
+        } else if (image->buffer_view != nullptr) {
+            erhe_texture = load_png_buffer(image->buffer_view, image_index);
+=======
             texture = load_image_file(image_name, m_path.replace_filename(uri));
             if (!texture) {
                 texture = load_image_file(image_name, image->uri);
             }
         } else if (image->buffer_view != nullptr) {
             texture = load_png_buffer(image_name, image->buffer_view);
+>>>>>>> da13c97b (vulkan wip)
         }
         if (texture) {
             m_data_out.images.push_back(texture);
@@ -933,6 +1023,15 @@ private:
         const std::string sampler_name = safe_resource_name(sampler->name, "sampler", sampler_index);
         log_gltf->trace("Sampler: sampler index = {}, name = {}", sampler_index, sampler_name);
 
+<<<<<<< HEAD
+        erhe::graphics::Sampler_create_info create_info;
+        create_info.min_filter     = (sampler->min_filter != 0) ? static_cast<gl::Texture_min_filter>(sampler->min_filter) : gl::Texture_min_filter::nearest;
+        create_info.mag_filter     = (sampler->mag_filter != 0) ? static_cast<gl::Texture_mag_filter>(sampler->mag_filter) : gl::Texture_mag_filter::nearest;
+        create_info.wrap_mode[0]   = (sampler->wrap_s != 0) ? static_cast<gl::Texture_wrap_mode>(sampler->wrap_s) : gl::Texture_wrap_mode::repeat;
+        create_info.wrap_mode[1]   = (sampler->wrap_t != 0) ? static_cast<gl::Texture_wrap_mode>(sampler->wrap_t) : gl::Texture_wrap_mode::repeat;
+        create_info.max_anisotropy = m_arguments.graphics_instance.limits.max_texture_max_anisotropy;
+        create_info.debug_label    = sampler_name;
+=======
         igl::SamplerStateDesc desc{
             .minFilter            = gltf_to_igl_sampler_min_mag_filter(sampler->min_filter),
             .magFilter            = gltf_to_igl_sampler_min_mag_filter(sampler->mag_filter),
@@ -947,6 +1046,7 @@ private:
             .depthCompareEnabled  = false,
             .debugName            = fmt::format("Sampler {} '{}'", sampler_index, sampler_name)
         };
+>>>>>>> da13c97b (vulkan wip)
 
         igl::Result result{};
         std::shared_ptr<igl::ISamplerState> igl_sampler = m_device.createSamplerState(desc, &result);
@@ -969,7 +1069,7 @@ private:
         );
 
         auto new_material = std::make_shared<erhe::primitive::Material>(material_name);
-        // TODO new_material->set_source_path(m_path);
+        new_material->set_source_path(m_arguments.path);
         m_data_out.materials[material_index] = new_material;
         if (material->has_pbr_metallic_roughness) {
             const cgltf_pbr_metallic_roughness& pbr_metallic_roughness = material->pbr_metallic_roughness;
@@ -1834,9 +1934,9 @@ private:
         }
     }
 
+<<<<<<< HEAD
     Gltf_data&           m_data_out;
     Gltf_parse_arguments m_arguments;
-    ////igl::IDevice&        m_device;
     std::string          m_file_contents; // GLB needs file contents in memory
     cgltf_data*          m_data{nullptr};
 };
@@ -1845,11 +1945,30 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 {
     Gltf_data result;
     Gltf_parser parser{result, arguments};
+=======
+    Gltf_data&                         m_data_out;
+    igl::IDevice&                      m_device;
+    std::shared_ptr<erhe::scene::Node> m_root_node;
+    erhe::scene::Layer_id              m_mesh_layer_id;
+    std::filesystem::path              m_path;
+    cgltf_data*                        m_data{nullptr};
+};
+
+auto parse_gltf(
+    igl::IDevice&                             device,
+    const std::shared_ptr<erhe::scene::Node>& root_node,
+    erhe::scene::Layer_id                     mesh_layer_id,
+    std::filesystem::path                     path
+) -> Gltf_data
+{
+    Gltf_data result;
+    Gltf_parser parser{result, device, root_node, mesh_layer_id, path};
+>>>>>>> da13c97b (vulkan wip)
     parser.parse_and_build();
     return result;
 }
 
-auto scan_gltf(std::filesystem::path path) -> Gltf_scan
+auto scan_gltf(const std::filesystem::path path) -> Gltf_scan
 {
     std::optional<std::string> file_contents_opt = erhe::file::read("GLTF file", path);
     if (!file_contents_opt.has_value()) {

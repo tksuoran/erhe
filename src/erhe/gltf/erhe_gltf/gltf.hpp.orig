@@ -67,6 +67,7 @@ public:
     std::vector<std::string> scenes;
 };
 
+<<<<<<< HEAD
 enum class Coordinate_system : unsigned int {
     Y_up = 0,
     Z_up = 1
@@ -74,7 +75,7 @@ enum class Coordinate_system : unsigned int {
 
 struct Gltf_parse_arguments
 {
-    igl::IDevice&                             device;
+    erhe::graphics::Instance&                 graphics_instance;
     Image_transfer&                           image_transfer;
     const std::shared_ptr<erhe::scene::Node>& root_node;
     erhe::scene::Layer_id                     mesh_layer_id;
@@ -83,6 +84,15 @@ struct Gltf_parse_arguments
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;
+=======
+[[nodiscard]] auto parse_gltf(
+    igl::IDevice&                             device,
+    Image_transfer&                           image_transfer,
+    const std::shared_ptr<erhe::scene::Node>& root_node,
+    erhe::scene::Layer_id                     mesh_layer_id,
+    std::filesystem::path                     path
+) -> Gltf_data;
+>>>>>>> da13c97b (vulkan wip)
 
 [[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
 
