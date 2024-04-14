@@ -86,7 +86,7 @@ auto Shader_stages_create_info::interface_source() const -> std::string
     return sb.str();
 }
 
-auto Shader_stages_create_info::final_source(const Shader_stage& shader) const -> std::string
+auto Shader_stages_create_info::final_source(const Shader_stage_create_info& stage_create_info) const -> std::string
 {
     std::stringstream sb;
     sb << "#version 450 core\n\n";
@@ -99,19 +99,17 @@ auto Shader_stages_create_info::final_source(const Shader_stage& shader) const -
         sb << "\n";
     }
 
-    if (!extensions.empty()) {
+    if (!stage_create_info.extensions.empty()) {
         sb << "// Extensions\n";
-        for (const auto& i : extensions) {
-            if (i.shader_stage == shader.type) {
-                sb << "#extension " << i.extension << " : require\n";
-            }
+        for (const auto& extension : stage_create_info.extensions) {
+            sb << "#extension " << extension << " : require\n";
         }
         sb << "\n";
     }
 
-    if (shader.type == igl::ShaderStage::Vertex) {
+    if (stage_create_info.stage == igl::ShaderStage::Vertex) {
         sb << attributes_source();
-    } else if (shader.type == igl::ShaderStage::Fragment) {
+    } else if (stage_create_info.stage == igl::ShaderStage::Fragment) {
         sb << fragment_outputs_source();
     }
 
@@ -126,16 +124,16 @@ auto Shader_stages_create_info::final_source(const Shader_stage& shader) const -
     sb << struct_types_source();
     sb << interface_blocks_source();
 
-    if (default_uniform_block != nullptr) {
-        sb << "// Default uniform block\n";
-        sb << default_uniform_block->source();
+    if (samplers != nullptr) {
+        sb << "// Samplers\n";
+        sb << samplers->source();
         sb << "\n";
     }
 
-    if (!shader.source.empty()) {
-        sb << shader.source;
-    } else if (!shader.path.empty()) {
-        auto source = erhe::file::read("Shader_stages_create_info::final_source", shader.path);
+    if (!stage_create_info.source.empty()) {
+        sb << stage_create_info.source;
+    } else if (!stage_create_info.path.empty()) {
+        auto source = erhe::file::read("Shader_stages_create_info::final_source", stage_create_info.path);
         sb << (source.has_value() ? "\n// Loaded from: " : "\n// Source load failed from: ");
         sb << shader.path;
         sb << "\n\n";
