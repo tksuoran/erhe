@@ -7,8 +7,8 @@
 
 namespace igl {
     class IDevice;
-    class IShaderStages
-};
+    class IShaderStages;
+}
 
 namespace erhe::graphics
 {
@@ -23,12 +23,12 @@ public:
     void invalidate();
 
     [[nodiscard]] auto name    () const -> const std::string&;
-    [[nodiscard]] auto get     () const -> std::shared_ptr<igl::IShaderStages>;
+    [[nodiscard]] auto get     () const -> const igl::IShaderStages*;
     [[nodiscard]] auto is_valid() const -> bool;
 
 private:
     std::string                         m_name;
-    std::shared_ptr<igl::IShaderStages> m_shader_stages;
+    std::unique_ptr<igl::IShaderStages> m_shader_stages;
     bool                                m_is_valid{false};
 };
 

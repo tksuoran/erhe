@@ -10,6 +10,7 @@
 namespace erhe::graphics {
 
 class Shader_stages;
+class Reloadable_shader_stages;
 
 class Shader_monitor
 {

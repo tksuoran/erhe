@@ -135,7 +135,7 @@ auto Shader_stages_create_info::final_source(const Shader_stage_create_info& sta
     } else if (!stage_create_info.path.empty()) {
         auto source = erhe::file::read("Shader_stages_create_info::final_source", stage_create_info.path);
         sb << (source.has_value() ? "\n// Loaded from: " : "\n// Source load failed from: ");
-        sb << shader.path;
+        sb << stage_create_info.path;
         sb << "\n\n";
         if (source.has_value()) {
             sb << source.value();

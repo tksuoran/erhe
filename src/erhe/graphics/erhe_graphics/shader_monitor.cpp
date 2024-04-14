@@ -1,4 +1,5 @@
 #include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/reloadable_shader_stages.hpp"
 
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_configuration/configuration.hpp"
@@ -51,12 +52,12 @@ void Shader_monitor::add(
     gsl::not_null<erhe::graphics::Shader_stages*> shader_stages
 )
 {
-    for (const auto& shader : create_info.shaders) {
+    for (const auto& stage_create_info : create_info.stage_create_infos) {
         if (
-            shader.source.empty() &&
-            erhe::file::check_is_existing_non_empty_regular_file("Shader_monitor::add", shader.path)
+            stage_create_info.source.empty() &&
+            erhe::file::check_is_existing_non_empty_regular_file("Shader_monitor::add", stage_create_info.path)
         ) {
-            add(shader.path, create_info, shader_stages);
+            add(stage_create_info.path, create_info, shader_stages);
         }
     }
 }
@@ -139,10 +140,10 @@ void Shader_monitor::update_once_per_frame()
             erhe::graphics::Shader_stages_prototype prototype{m_device, create_info};
             if (prototype.is_valid()) {
                 entry.shader_stages->reload(std::move(prototype));
-                log_shader_monitor->info("Shader reload OK {}", entry.create_info.shaders.front().path.string());
+                log_shader_monitor->info("Shader reload OK {}", entry.create_info.stage_create_infos.front().path.string());
             } else {
                 entry.shader_stages->invalidate();
-                log_shader_monitor->warn("Shader reload FAIL {}", entry.create_info.shaders.front().path.string());
+                log_shader_monitor->warn("Shader reload FAIL {}", entry.create_info.stage_create_infos.front().path.string());
             }
         }
         std::error_code error_code;

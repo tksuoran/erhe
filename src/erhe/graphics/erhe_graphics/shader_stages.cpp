@@ -13,13 +13,13 @@ namespace erhe::graphics
 
 using std::string;
 
-Shader_stage::Shader_stage(igl::ShaderStage stage, const std::string_view source)
+Shader_stage_create_info::Shader_stage_create_info(igl::ShaderStage stage, const std::string_view source)
     : stage {stage}
     , source{source}
 {
 }
 
-Shader_stage::Shader_stage(igl::ShaderStage stage, const std::filesystem::path path)
+Shader_stage_create_info::Shader_stage_create_info(igl::ShaderStage stage, const std::filesystem::path path)
     : stage{stage}
     , path {path}
 {
@@ -30,16 +30,14 @@ auto Shader_stages::name() const -> const std::string&
     return m_name;
 }
 
-auto Shader_stages::get() const -> std::shared_ptr<igl::IShaderStages>
+auto Shader_stages::get() const -> const igl::IShaderStages*
 {
-    return m_shader_stages;
+    return m_shader_stages.get();
 }
 
 Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
 {
-    std::vector<std::shared_ptr<igl::IShaderModule>> modules;
-
-    m_shader_stages = prototype.m_device.createShaderStages();
+    m_shader_stages = std::move(prototype.m_shader_stages);
     m_is_valid = true;
 
     std::string label = fmt::format(
