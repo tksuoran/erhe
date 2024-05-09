@@ -92,7 +92,6 @@ target_include_directories(${_target}
 target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
-        Microsoft.GSL::GSL
         OpenGL::GL
     PRIVATE
         erhe::log

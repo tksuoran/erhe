@@ -65,8 +65,8 @@ public:
     public:
         const erhe::math::Viewport& viewport;
         const erhe::scene::Camera&  camera;
-        const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
-        const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& tool_mesh_spans;
+        const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
+        const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& tool_mesh_spans;
         const int                    x;
         const int                    y;
     };
@@ -147,7 +147,7 @@ private:
     };
 
     void render(
-        const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
+        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
     );
 
     std::vector<Range> m_ranges;

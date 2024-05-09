@@ -4,8 +4,6 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <gsl/assert>
-
 namespace erhe::geometry::operation
 {
 

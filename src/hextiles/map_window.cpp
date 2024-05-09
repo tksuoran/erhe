@@ -24,8 +24,6 @@
 
 #include <imgui/imgui.h>
 
-#include <gsl/assert>
-
 #include <algorithm>
 #include <functional>
 
@@ -398,7 +396,7 @@ void Map_window::set_map(Map* map)
 
 auto Map_window::tile_position(const Tile_coordinate absolute_tile) const -> glm::vec2
 {
-    Expects(m_texture);
+    ERHE_VERIFY(m_texture);
 
     const float extent_x       = static_cast<float>(m_texture->width ());
     const float extent_y       = static_cast<float>(m_texture->height());

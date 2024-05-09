@@ -50,7 +50,7 @@ small libraries, or git pulled from their repositories using CMake
     -   GCC-9 or newer are ok
     -   GCC-8 or older is not currently support
 -   python 3
--   packages such `xorg-dev`
+-   packages such `libwayland-dev libxkbcommon-dev xorg-dev`
 
 For IDE:
 

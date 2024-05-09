@@ -24,12 +24,12 @@ void Textures::connect()
     m_image_transfer = require<Image_transfer>();
     require<erhe::graphics::Gl_context_provider>();
 
-    Ensures(m_image_transfer);
+    ERHE_VERIFY(m_image_transfer);
 }
 
 void Textures::initialize_component()
 {
-    Expects(m_image_transfer);
+    ERHE_VERIFY(m_image_transfer);
 
     const Scoped_gl_context gl_context{Component::get<erhe::graphics::Gl_context_provider>()};
 
@@ -82,7 +82,7 @@ auto Textures::load(
         .level_count     = image_info.level_count,
         .row_stride      = image_info.row_stride,
     };
-    gsl::span<std::byte> span = slot.begin_span_for(
+    std::span<std::byte> span = slot.begin_span_for(
         image_info.width,
         image_info.height,
         texture_create_info.internal_format

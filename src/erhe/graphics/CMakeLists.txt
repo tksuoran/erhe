@@ -99,7 +99,6 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm-header-only
         #### glslang
-        Microsoft.GSL::GSL
     PRIVATE
         erhe::bit
         erhe::defer

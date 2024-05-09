@@ -53,11 +53,11 @@ public:
         const glm::vec3                                                    ambient_light    {0.0f};
         const erhe::scene::Camera*                                         camera           {nullptr};
         const Light_projections*                                           light_projections{nullptr};
-        const gsl::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
-        const gsl::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
-        const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
+        const std::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
+        const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
+        const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
         const std::vector<
-            gsl::span<const std::shared_ptr<erhe::scene::Mesh>>
+            std::span<const std::shared_ptr<erhe::scene::Mesh>>
         >&                                                                 mesh_spans;
         const std::vector<erhe::renderer::Pipeline_renderpass*>            passes;
         erhe::primitive::Primitive_mode                                    primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
@@ -68,7 +68,7 @@ public:
         const erhe::graphics::Shader_stages*                               override_shader_stages{nullptr};
         const erhe::graphics::Shader_stages*                               error_shader_stages{nullptr};
         const glm::uvec4&                                                  debug_joint_indices{0, 0, 0, 0};
-        const gsl::span<glm::vec4>&                                        debug_joint_colors{};
+        const std::span<glm::vec4>&                                        debug_joint_colors{};
     };
 
     void render(const Render_parameters& parameters);

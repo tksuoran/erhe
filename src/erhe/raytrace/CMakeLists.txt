@@ -71,7 +71,6 @@ target_link_libraries(${_target}
         erhe::time
         fmt::fmt
         glm::glm
-        Microsoft.GSL::GSL
 )
 if (DEFINED ERHE_RAYTRACE_TARGET)
     target_link_libraries(${_target} PUBLIC ${ERHE_RAYTRACE_TARGET})

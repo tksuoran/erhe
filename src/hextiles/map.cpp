@@ -3,8 +3,6 @@
 #include "hextiles.hpp"
 #include "tiles.hpp"
 
-#include <gsl/assert>
-
 namespace hextiles
 {
 
@@ -23,8 +21,8 @@ void Map::reset(
     const int height
 )
 {
-    Expects(width > 0);
-    Expects(height > 0);
+    ERHE_VERIFY(width > 0);
+    ERHE_VERIFY(height > 0);
     m_width  = std::min(std::numeric_limits<uint16_t>::max(), static_cast<uint16_t>(width));
     m_height = std::min(std::numeric_limits<uint16_t>::max(), static_cast<uint16_t>(height));
     m_map.resize(static_cast<size_t>(m_width) * static_cast<size_t>(m_height));
@@ -40,8 +38,8 @@ void Map::read(File_read_stream& stream)
 {
     stream.op(m_width);
     stream.op(m_height);
-    Expects(m_width > 0);
-    Expects(m_height > 0);
+    ERHE_VERIFY(m_width > 0);
+    ERHE_VERIFY(m_height > 0);
     m_map.resize(static_cast<size_t>(m_width) * static_cast<size_t>(m_height));
     //m_map.shrink_to_fit();
     for (auto& cell : m_map) {
@@ -66,10 +64,10 @@ void Map::write(File_write_stream& stream)
 
 auto Map::get_terrain_tile(Tile_coordinate tile_coordinate) const -> terrain_tile_t
 {
-    Expects(tile_coordinate.x >= coordinate_t{0});
-    Expects(tile_coordinate.y >= coordinate_t{0});
-    Expects(tile_coordinate.x < m_width);
-    Expects(tile_coordinate.y < m_height);
+    ERHE_VERIFY(tile_coordinate.x >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.y >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.x < m_width);
+    ERHE_VERIFY(tile_coordinate.y < m_height);
     const size_t index =
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
@@ -78,10 +76,10 @@ auto Map::get_terrain_tile(Tile_coordinate tile_coordinate) const -> terrain_til
 
 void Map::set_terrain_tile(Tile_coordinate tile_coordinate, terrain_tile_t terrain_tile)
 {
-    Expects(tile_coordinate.x >= coordinate_t{0});
-    Expects(tile_coordinate.y >= coordinate_t{0});
-    Expects(tile_coordinate.x < m_width);
-    Expects(tile_coordinate.y < m_height);
+    ERHE_VERIFY(tile_coordinate.x >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.y >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.x < m_width);
+    ERHE_VERIFY(tile_coordinate.y < m_height);
     const size_t index =
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
@@ -90,10 +88,10 @@ void Map::set_terrain_tile(Tile_coordinate tile_coordinate, terrain_tile_t terra
 
 auto Map::get_unit_tile(Tile_coordinate tile_coordinate) const -> unit_tile_t
 {
-    Expects(tile_coordinate.x >= coordinate_t{0});
-    Expects(tile_coordinate.y >= coordinate_t{0});
-    Expects(tile_coordinate.x < m_width);
-    Expects(tile_coordinate.y < m_height);
+    ERHE_VERIFY(tile_coordinate.x >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.y >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.x < m_width);
+    ERHE_VERIFY(tile_coordinate.y < m_height);
     const size_t index =
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
@@ -102,10 +100,10 @@ auto Map::get_unit_tile(Tile_coordinate tile_coordinate) const -> unit_tile_t
 
 void Map::set_unit_tile(Tile_coordinate tile_coordinate, unit_tile_t unit_tile)
 {
-    Expects(tile_coordinate.x >= coordinate_t{0});
-    Expects(tile_coordinate.y >= coordinate_t{0});
-    Expects(tile_coordinate.x < m_width);
-    Expects(tile_coordinate.y < m_height);
+    ERHE_VERIFY(tile_coordinate.x >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.y >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.x < m_width);
+    ERHE_VERIFY(tile_coordinate.y < m_height);
     const size_t index =
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
@@ -114,10 +112,10 @@ void Map::set_unit_tile(Tile_coordinate tile_coordinate, unit_tile_t unit_tile)
 
 void Map::set(Tile_coordinate tile_coordinate, terrain_tile_t terrain_tile, unit_tile_t unit_tile)
 {
-    Expects(tile_coordinate.x >= coordinate_t{0});
-    Expects(tile_coordinate.y >= coordinate_t{0});
-    Expects(tile_coordinate.x < m_width);
-    Expects(tile_coordinate.y < m_height);
+    ERHE_VERIFY(tile_coordinate.x >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.y >= coordinate_t{0});
+    ERHE_VERIFY(tile_coordinate.x < m_width);
+    ERHE_VERIFY(tile_coordinate.y < m_height);
     const size_t index =
         static_cast<size_t>(tile_coordinate.x) +
         static_cast<size_t>(tile_coordinate.y) * static_cast<size_t>(m_width);
@@ -141,10 +139,10 @@ auto Map::wrap(Tile_coordinate in) const -> Tile_coordinate
     while (ret.y < coordinate_t{0}) {
         ret.y += static_cast<coordinate_t>(m_height);
     }
-    Expects(ret.x >= coordinate_t{0});
-    Expects(ret.y >= coordinate_t{0});
-    Expects(ret.x < m_width);
-    Expects(ret.y < m_height);
+    ERHE_VERIFY(ret.x >= coordinate_t{0});
+    ERHE_VERIFY(ret.y >= coordinate_t{0});
+    ERHE_VERIFY(ret.x < m_width);
+    ERHE_VERIFY(ret.y < m_height);
 
     return ret;
 }
@@ -192,8 +190,8 @@ void Map::hex_circle(
     const std::function<void(const Tile_coordinate position)>& op
 )
 {
-    Expects(r0 >= 0);
-    Expects(r1 >= r0);
+    ERHE_VERIFY(r0 >= 0);
+    ERHE_VERIFY(r1 >= r0);
 
     if (r0 == 0) {
         op(center_position);

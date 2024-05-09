@@ -33,7 +33,6 @@ target_link_libraries(${_target}
         erhe::verify
         etl::etl
         fmt::fmt
-        Microsoft.GSL::GSL
         openxr_loader
 )
 erhe_target_settings(${_target})

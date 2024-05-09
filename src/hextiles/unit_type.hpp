@@ -16,7 +16,7 @@ constexpr int Category_city   = 5;
 
 [[nodiscard]] inline auto get_bit_position(const uint32_t value) -> uint32_t
 {
-    //Expects(std::popcount(value) <= 1);
+    //ERHE_VERIFY(std::popcount(value) <= 1);
     switch (value) {
         case     0u: return  0u;
         case     1u: return  0u;

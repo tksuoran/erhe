@@ -341,7 +341,7 @@ auto parse_obj_geometry(
                 case Command::Vertex_position: {
                     //ZoneScopedN("position");
                     if (float_args.size() >= 3) {
-                        Expects(geometry);
+                        ERHE_VERIFY(geometry);
                         if (float_args.size() >= 6) {
                             while (colors.size() < positions.size()) {
                                 colors.emplace_back(1.0f, 1.0f, 1.0f);
@@ -385,7 +385,7 @@ auto parse_obj_geometry(
                 }
                 case Command::Face: {
                     //ZoneScopedN("face");
-                    Expects(geometry);
+                    ERHE_VERIFY(geometry);
 
                     const Polygon_id polygon_id   = geometry->make_polygon();
                     const int        corner_count = static_cast<int>(face_vertex_position_indices.size());

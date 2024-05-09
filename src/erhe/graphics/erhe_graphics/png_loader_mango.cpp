@@ -97,7 +97,7 @@ auto PNG_loader::open(
     return true;
 }
 
-auto PNG_loader::load(gsl::span<std::byte> transfer_buffer) -> bool
+auto PNG_loader::load(std::span<std::byte> transfer_buffer) -> bool
 {
     const mango::image::ImageHeader header{m_image_decoder->header()};
     const std::size_t stride = static_cast<std::size_t>(header.width) * static_cast<std::size_t>(header.format.bytes());
@@ -120,7 +120,7 @@ PNG_writer::~PNG_writer() = default;
 auto PNG_writer::write(
     const std::filesystem::path&      path,
     const Image_info&    info,
-    gsl::span<std::byte> data
+    std::span<std::byte> data
 ) -> bool
 {
     m_image_encoder = std::make_unique<mango::image::ImageEncoder>(".png");

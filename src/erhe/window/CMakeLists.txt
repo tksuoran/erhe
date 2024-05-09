@@ -37,7 +37,6 @@ target_link_libraries(
         fmt::fmt
         glm::glm-header-only
         MathGeoLib
-        Microsoft.GSL::GSL
 )
 #target_link_libraries(${_target} PUBLIC hidapi)
 if (ERHE_TARGET_OS_WINDOWS)

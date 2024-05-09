@@ -91,7 +91,7 @@ Shader_stages::Shader_stages(const std::string& failed_name)
 
 Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
 {
-    Expects(prototype.m_handle.gl_name() != 0);
+    ERHE_VERIFY(prototype.m_handle.gl_name() != 0);
 
     m_name     = prototype.name();
     m_handle   = std::move(prototype.m_handle);

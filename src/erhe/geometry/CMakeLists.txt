@@ -83,7 +83,6 @@ target_link_libraries(${_target}
         erhe::math
         erhe::profile
         erhe::verify
-        Microsoft.GSL::GSL
 )
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

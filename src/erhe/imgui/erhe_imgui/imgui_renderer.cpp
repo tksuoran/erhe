@@ -549,7 +549,7 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
     }
 
     const auto pixel_data = get_font_atlas_pixel_data(m_font_atlas);
-    const gsl::span<const std::byte> image_data{
+    const std::span<const std::byte> image_data{
         reinterpret_cast<const std::byte*>(pixel_data.data()),
         pixel_data.size()
     };
@@ -934,7 +934,7 @@ void Imgui_renderer::render_draw_data()
     using erhe::graphics::write;
 
     // Write scale
-    const gsl::span<const float> scale_cpu_data{&scale[0], 2};
+    const std::span<const float> scale_cpu_data{&scale[0], 2};
     write(
         draw_parameter_gpu_data,
         draw_parameter_writer.write_offset + m_imgui_program_interface.block_offsets.scale,
@@ -942,7 +942,7 @@ void Imgui_renderer::render_draw_data()
     );
 
     // Write translate
-    const gsl::span<const float> translate_cpu_data{&translate[0], 2};
+    const std::span<const float> translate_cpu_data{&translate[0], 2};
     write(
         draw_parameter_gpu_data,
         draw_parameter_writer.write_offset + m_imgui_program_interface.block_offsets.translate,
@@ -968,7 +968,7 @@ void Imgui_renderer::render_draw_data()
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
 
         // Upload vertex buffer
-        const gsl::span<const uint8_t> vertex_cpu_data{
+        const std::span<const uint8_t> vertex_cpu_data{
             reinterpret_cast<const uint8_t*>(cmd_list->VtxBuffer.begin()),
             static_cast<size_t>(cmd_list->VtxBuffer.size_in_bytes())
         };
@@ -977,7 +977,7 @@ void Imgui_renderer::render_draw_data()
 
         // Upload index buffer
         static_assert(sizeof(uint16_t) == sizeof(ImDrawIdx));
-        const gsl::span<const uint16_t> index_cpu_data{
+        const std::span<const uint16_t> index_cpu_data{
             cmd_list->IdxBuffer.begin(),
             static_cast<size_t>(cmd_list->IdxBuffer.size())
         };
@@ -1007,7 +1007,7 @@ void Imgui_renderer::render_draw_data()
                     (clip_rect.w >= 0.0f)
                 ) {
                     // Write clip rectangle
-                    const gsl::span<const float> clip_rect_cpu_data{&clip_rect.x, 4};
+                    const std::span<const float> clip_rect_cpu_data{&clip_rect.x, 4};
                     write(
                         draw_parameter_gpu_data,
                         draw_parameter_writer.write_offset + draw_parameter_struct_offsets.clip_rect,
@@ -1022,7 +1022,7 @@ void Imgui_renderer::render_draw_data()
                             static_cast<uint32_t>((handle & 0xffffffffu)),
                             static_cast<uint32_t>(handle >> 32u)
                         };
-                        const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+                        const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
                         write(
                             draw_parameter_gpu_data,
@@ -1035,7 +1035,7 @@ void Imgui_renderer::render_draw_data()
                             0u,
                             0u
                         };
-                        const gsl::span<const uint32_t> extra_cpu_data{&extra[0], 2};
+                        const std::span<const uint32_t> extra_cpu_data{&extra[0], 2};
 
                         write(
                             draw_parameter_gpu_data,
@@ -1048,7 +1048,7 @@ void Imgui_renderer::render_draw_data()
                         if (texture_unit_opt.has_value()) {
                             const auto texture_unit = texture_unit_opt.value();
                             const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit), 0, 0, 0 };
-                            const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
+                            const std::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
 
                             write(
                                 draw_parameter_gpu_data,
@@ -1057,7 +1057,7 @@ void Imgui_renderer::render_draw_data()
                             );
                         } else {
                             const uint32_t texture_indices[4] = { 0, 0, 0, 0 };
-                            const gsl::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
+                            const std::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
                             write(
                                 draw_parameter_gpu_data,
                                 draw_parameter_writer.write_offset + draw_parameter_struct_offsets.texture_indices,

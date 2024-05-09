@@ -2,8 +2,6 @@
 
 #include "erhe_gl/wrapper_enums.hpp"
 
-#include <gsl/pointers>
-
 #include <deque>
 #include <optional>
 #include <sstream>
@@ -73,7 +71,7 @@ public:
     Shader_resource(
         Instance&                        instance,
         const std::string_view           struct_member_name,
-        gsl::not_null<Shader_resource*>  struct_type,
+        Shader_resource*                 struct_type,
         const std::optional<std::size_t> array_size = {},
         Shader_resource*                 parent = nullptr
     );
@@ -100,7 +98,7 @@ public:
     Shader_resource(
         Instance&                        instance,
         const std::string_view           sampler_name,
-        gsl::not_null<Shader_resource*>  parent,
+        Shader_resource*                 parent,
         int                              location,
         gl::Uniform_type                 sampler_type,
         const std::optional<std::size_t> array_size = {},
@@ -149,7 +147,7 @@ public:
 
     auto add_struct(
         const std::string_view           name,
-        gsl::not_null<Shader_resource*>  struct_type,
+        Shader_resource*                 struct_type,
         const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 

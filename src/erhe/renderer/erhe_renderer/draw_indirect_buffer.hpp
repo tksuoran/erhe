@@ -31,7 +31,7 @@ public:
 
     // Can discard return value
     auto update(
-        const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
         erhe::primitive::Primitive_mode                            primitive_mode,
         const erhe::Item_filter&                            filter
     ) -> Draw_indirect_buffer_range;

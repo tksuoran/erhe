@@ -361,9 +361,9 @@ Shader_resource::Shader_resource(
 
 // Struct member
 Shader_resource::Shader_resource(
-    Instance&              instance,
+    Instance&                        instance,
     const std::string_view           struct_member_name,
-    gsl::not_null<Shader_resource*>  struct_type,
+    Shader_resource*                 struct_type,
     const std::optional<std::size_t> array_size /* = {} */,
     Shader_resource*                 parent /* = nullptr */
 )
@@ -430,7 +430,7 @@ Shader_resource::Shader_resource(
 Shader_resource::Shader_resource(
     Instance&                        instance,
     const std::string_view           sampler_name,
-    gsl::not_null<Shader_resource*>  parent,
+    Shader_resource*                 parent,
     const int                        location,
     const gl::Uniform_type           sampler_type,
     const std::optional<std::size_t> array_size /* = {} */,
@@ -484,7 +484,7 @@ auto Shader_resource::array_size() const -> std::optional<std::size_t>
 
 auto Shader_resource::basic_type() const -> gl::Uniform_type
 {
-    Expects(is_basic(m_type));
+    ERHE_VERIFY(is_basic(m_type));
 
     return m_basic_type;
 }
@@ -493,24 +493,24 @@ auto Shader_resource::basic_type() const -> gl::Uniform_type
 // For default uniform block, this is the next available location.
 auto Shader_resource::location() const -> int
 {
-    Expects(m_parent != nullptr);
-    Expects(m_parent->type() == Type::default_uniform_block);
+    ERHE_VERIFY(m_parent != nullptr);
+    ERHE_VERIFY(m_parent->type() == Type::default_uniform_block);
 
     return m_location;
 }
 
 auto Shader_resource::index_in_parent() const -> std::size_t
 {
-    Expects(m_parent != nullptr);
-    Expects(is_aggregate(m_parent->type()));
+    ERHE_VERIFY(m_parent != nullptr);
+    ERHE_VERIFY(is_aggregate(m_parent->type()));
 
     return m_index_in_parent; // TODO
 }
 
 auto Shader_resource::offset_in_parent() const -> std::size_t
 {
-    Expects(m_parent != nullptr);
-    Expects(is_aggregate(m_parent->type()));
+    ERHE_VERIFY(m_parent != nullptr);
+    ERHE_VERIFY(is_aggregate(m_parent->type()));
 
     return m_offset_in_parent; // TODO
 }
@@ -522,7 +522,7 @@ auto Shader_resource::parent() const -> Shader_resource*
 
 auto Shader_resource::member_count() const -> std::size_t
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
 
     return m_members.size();
 }
@@ -540,8 +540,8 @@ auto Shader_resource::member(const std::string_view name) const -> Shader_resour
 
 auto Shader_resource::binding_point() const -> unsigned int
 {
-    Expects(uses_binding_points(m_type));
-    Expects(m_binding_point >= 0);
+    ERHE_VERIFY(uses_binding_points(m_type));
+    ERHE_VERIFY(m_binding_point >= 0);
     return static_cast<unsigned int>(m_binding_point);
 }
 
@@ -606,13 +606,13 @@ auto Shader_resource::size_bytes() const -> std::size_t
 
 auto Shader_resource::offset() const -> std::size_t
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     return m_offset;
 }
 
 auto Shader_resource::next_member_offset() const -> std::size_t
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     return m_offset;
 }
 
@@ -620,7 +620,7 @@ auto Shader_resource::type_string() const -> std::string
 {
     if ((m_parent != nullptr) && (m_parent->type() == Type::default_uniform_block))
     {
-        Expects(m_type != Type::default_uniform_block);
+        ERHE_VERIFY(m_type != Type::default_uniform_block);
         return "uniform ";
     }
 
@@ -639,17 +639,17 @@ auto Shader_resource::type_string() const -> std::string
         }
 
         case Type::default_uniform_block: {
-            Expects(m_parent == nullptr);
+            ERHE_VERIFY(m_parent == nullptr);
             return "";
         }
 
         case Type::uniform_block: {
-            Expects(m_parent == nullptr);
+            ERHE_VERIFY(m_parent == nullptr);
             return "uniform ";
         }
 
         case Type::shader_storage_block: {
-            Expects(m_parent == nullptr);
+            ERHE_VERIFY(m_parent == nullptr);
             return "buffer ";
         }
 
@@ -783,10 +783,11 @@ auto Shader_resource::source(
 
 auto Shader_resource::add_struct(
     const std::string_view           name,
-    gsl::not_null<Shader_resource*>  struct_type,
+    Shader_resource*                 struct_type,
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
+    ERHE_VERIFY(struct_type != nullptr);
     align_offset_to(4); // align by 4 bytes TODO do what spec says
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -808,8 +809,8 @@ auto Shader_resource::add_sampler(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(m_type == Type::default_uniform_block);
-    Expects(!array_size.has_value() || array_size.value() > 0); // no unsized sampler arrays
+    ERHE_VERIFY(m_type == Type::default_uniform_block);
+    ERHE_VERIFY(!array_size.has_value() || array_size.value() > 0); // no unsized sampler arrays
 
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -834,7 +835,7 @@ auto Shader_resource::add_float(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(4); // align by 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -854,7 +855,7 @@ auto Shader_resource::add_vec2(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(2 * 4); // align by 2 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -874,7 +875,7 @@ auto Shader_resource::add_vec3(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -894,7 +895,7 @@ auto Shader_resource::add_vec4(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -914,7 +915,7 @@ auto Shader_resource::add_mat4(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -934,7 +935,7 @@ auto Shader_resource::add_int(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(4); // align by 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -954,7 +955,7 @@ auto Shader_resource::add_uint(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(4); // align by 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -974,7 +975,7 @@ auto Shader_resource::add_uvec2(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(2 * 4); // align by 2 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -994,7 +995,7 @@ auto Shader_resource::add_uvec3(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -1014,7 +1015,7 @@ auto Shader_resource::add_uvec4(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -1034,7 +1035,7 @@ auto Shader_resource::add_uint64(
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
-    Expects(is_aggregate(m_type));
+    ERHE_VERIFY(is_aggregate(m_type));
     align_offset_to(8); // align by 8 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(

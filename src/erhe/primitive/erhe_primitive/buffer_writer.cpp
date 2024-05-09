@@ -7,7 +7,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/packing.hpp>
-#include <gsl/span>
+#include <span>
 
 namespace erhe::primitive
 {
@@ -16,7 +16,7 @@ namespace
 {
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
+    const std::span<std::uint8_t> destination,
     const gl::Draw_elements_type  type,
     const std::size_t             value
 )
@@ -25,14 +25,14 @@ inline void write_low(
         //using enum gl::Draw_elements_type;
         case gl::Draw_elements_type::unsigned_byte: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            Expects(value <= 0xffU);
+            ERHE_VERIFY(value <= 0xffU);
             ptr[0] = value & 0xffU;
             break;
         }
 
         case gl::Draw_elements_type::unsigned_short: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
-            Expects(value <= 0xffffU);
+            ERHE_VERIFY(value <= 0xffffU);
             ptr[0] = value & 0xffffU;
             break;
         }
@@ -50,7 +50,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
+    const std::span<std::uint8_t> destination,
     const gl::Vertex_attrib_type  type,
     const unsigned int            value
 )
@@ -59,14 +59,14 @@ inline void write_low(
         //using enum gl::Vertex_attrib_type;
         case gl::Vertex_attrib_type::unsigned_byte: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            Expects(value <= 0xffU);
+            ERHE_VERIFY(value <= 0xffU);
             ptr[0] = value & 0xffU;
             break;
         }
 
         case gl::Vertex_attrib_type::unsigned_short: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
-            Expects(value <= 0xffffU);
+            ERHE_VERIFY(value <= 0xffffU);
             ptr[0] = value & 0xffffU;
             break;
         }
@@ -84,7 +84,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
+    const std::span<std::uint8_t> destination,
     const gl::Vertex_attrib_type  type,
     const glm::vec2               value
 )
@@ -109,8 +109,8 @@ inline void write_low(
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
             float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
-            Expects(scaled_x <= 0xffU);
-            Expects(scaled_y <= 0xffU);
+            ERHE_VERIFY(scaled_x <= 0xffU);
+            ERHE_VERIFY(scaled_y <= 0xffU);
             ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
             ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
             break;
@@ -123,7 +123,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
+    const std::span<std::uint8_t> destination,
     const gl::Vertex_attrib_type  type,
     const glm::vec3               value
 )
@@ -148,9 +148,9 @@ inline void write_low(
             float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
             float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
             float scaled_z = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
-            Expects(scaled_x <= 0xffU);
-            Expects(scaled_y <= 0xffU);
-            Expects(scaled_z <= 0xffU);
+            ERHE_VERIFY(scaled_x <= 0xffU);
+            ERHE_VERIFY(scaled_y <= 0xffU);
+            ERHE_VERIFY(scaled_z <= 0xffU);
             ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
             ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
             ptr[2] = static_cast<uint8_t>(scaled_z) & 0xffU;
@@ -164,7 +164,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
+    const std::span<std::uint8_t> destination,
     const gl::Vertex_attrib_type  type,
     const glm::vec4               value
 )
@@ -193,10 +193,10 @@ inline void write_low(
             float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
             float scaled_z = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
             float scaled_w = std::max(0.0f, std::min(value.w * 255.0f, 255.0f));
-            Expects(scaled_x <= 0xffU);
-            Expects(scaled_y <= 0xffU);
-            Expects(scaled_z <= 0xffU);
-            Expects(scaled_w <= 0xffU);
+            ERHE_VERIFY(scaled_x <= 0xffU);
+            ERHE_VERIFY(scaled_y <= 0xffU);
+            ERHE_VERIFY(scaled_z <= 0xffU);
+            ERHE_VERIFY(scaled_w <= 0xffU);
             ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
             ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
             ptr[2] = static_cast<uint8_t>(scaled_z) & 0xffU;
@@ -211,7 +211,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
+    const std::span<std::uint8_t> destination,
     const gl::Vertex_attrib_type  type,
     const glm::uvec4              value
 )
@@ -220,10 +220,10 @@ inline void write_low(
         //using enum gl::Vertex_attrib_type;
         case gl::Vertex_attrib_type::unsigned_byte: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            Expects(value.x <= 0xffU);
-            Expects(value.y <= 0xffU);
-            Expects(value.z <= 0xffU);
-            Expects(value.w <= 0xffU);
+            ERHE_VERIFY(value.x <= 0xffU);
+            ERHE_VERIFY(value.y <= 0xffU);
+            ERHE_VERIFY(value.z <= 0xffU);
+            ERHE_VERIFY(value.w <= 0xffU);
             ptr[0] = value.x & 0xffU;
             ptr[1] = value.y & 0xffU;
             ptr[2] = value.z & 0xffU;
@@ -233,10 +233,10 @@ inline void write_low(
 
         case gl::Vertex_attrib_type::unsigned_short: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
-            Expects(value.x <= 0xffffU);
-            Expects(value.y <= 0xffffU);
-            Expects(value.z <= 0xffffU);
-            Expects(value.w <= 0xffffU);
+            ERHE_VERIFY(value.x <= 0xffffU);
+            ERHE_VERIFY(value.y <= 0xffffU);
+            ERHE_VERIFY(value.z <= 0xffffU);
+            ERHE_VERIFY(value.w <= 0xffffU);
             ptr[0] = value.x & 0xffffU;
             ptr[1] = value.y & 0xffffU;
             ptr[2] = value.z & 0xffffU;
@@ -268,10 +268,10 @@ Vertex_buffer_writer::Vertex_buffer_writer(
     : build_context{build_context}
     , buffer_sink  {buffer_sink}
 {
-    Expects(build_context.root.geometry_mesh != nullptr);
+    ERHE_VERIFY(build_context.root.geometry_mesh != nullptr);
     const auto& vertex_buffer_range = build_context.root.geometry_mesh->vertex_buffer_range;
     vertex_data.resize(vertex_buffer_range.count * vertex_buffer_range.element_size);
-    vertex_data_span = gsl::make_span(vertex_data);
+    vertex_data_span = std::span<std::uint8_t>{vertex_data};
 }
 
 Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
@@ -293,12 +293,12 @@ Index_buffer_writer::Index_buffer_writer(
     , index_type     {build_context.root.build_info.buffer_info.index_type}
     , index_type_size{build_context.root.geometry_mesh->index_buffer_range.element_size}
 {
-    Expects(build_context.root.geometry_mesh != nullptr);
+    ERHE_VERIFY(build_context.root.geometry_mesh != nullptr);
     const auto& geometry_mesh = *build_context.root.geometry_mesh;
     const auto& index_buffer_range = geometry_mesh.index_buffer_range;
     const auto& mesh_info          = build_context.root.mesh_info;
     index_data.resize(index_buffer_range.count * index_type_size);
-    index_data_span = gsl::make_span(index_data);
+    index_data_span = std::span<std::uint8_t>{index_data};
 
     const auto& primitive_types = build_context.root.build_info.primitive_types;
 

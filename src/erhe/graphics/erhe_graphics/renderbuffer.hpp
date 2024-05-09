@@ -2,8 +2,6 @@
 
 #include "erhe_graphics/gl_objects.hpp"
 
-#include <gsl/pointers>
-
 namespace erhe::graphics
 {
 

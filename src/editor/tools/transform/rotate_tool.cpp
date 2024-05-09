@@ -161,7 +161,7 @@ auto Rotate_tool::update_parallel(Scene_view* scene_view) -> bool
 
 void Rotate_tool::update_final()
 {
-    Expects(m_intersection.has_value());
+    ERHE_VERIFY(m_intersection.has_value());
 
     const vec3  q_                     = normalize                           (m_intersection.value() - m_center_of_rotation);
     const float angle                  = erhe::math::angle_of_rotation<float>(q_, m_normal, m_reference_direction);

@@ -249,7 +249,7 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
 }
 
 void Id_renderer::render(
-    const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
 )
 {
     ERHE_PROFILE_FUNCTION();

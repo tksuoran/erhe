@@ -8,8 +8,6 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 
-#include <gsl/gsl>
-
 namespace erhe::graphics {
     class Framebuffer;
     class Instance;

@@ -261,7 +261,7 @@ private:
         const glm::vec3&        point,
         float                   thickness,
         const glm::vec4&        color,
-        const gsl::span<float>& gpu_float_data,
+        const std::span<float>& gpu_float_data,
         std::size_t&            word_offset
     );
 

@@ -2,8 +2,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_profile/profile.hpp"
-
-#include <gsl/assert>
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::geometry::operation
 {
@@ -77,8 +76,8 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
 
             const float n_a = static_cast<float>(src_point_a.corner_count);
             const float n_b = static_cast<float>(src_point_b.corner_count);
-            Expects(n_a != 0.0f);
-            Expects(n_b != 0.0f);
+            ERHE_VERIFY(n_a != 0.0f);
+            ERHE_VERIFY(n_b != 0.0f);
             const float weight_a = 1.0f / n_a;
             const float weight_b = 1.0f / n_b;
             add_point_source(new_point_a_id, weight_a, i.edge.a);

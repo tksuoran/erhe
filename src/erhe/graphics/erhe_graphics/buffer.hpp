@@ -3,7 +3,7 @@
 #include "erhe_graphics/gl_objects.hpp"
 #include "erhe_graphics/span.hpp"
 
-#include <gsl/span>
+#include <span>
 
 #include <string_view>
 #include <mutex>
@@ -63,7 +63,7 @@ public:
     Buffer        (Buffer&& other) noexcept;
     auto operator=(Buffer&& other) noexcept -> Buffer&;
 
-    [[nodiscard]] auto map                () const          -> gsl::span<std::byte>;
+    [[nodiscard]] auto map                () const          -> std::span<std::byte>;
     [[nodiscard]] auto debug_label        () const noexcept -> const std::string&;
     [[nodiscard]] auto capacity_byte_count() const noexcept -> std::size_t;
     [[nodiscard]] auto allocate_bytes     (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::size_t;
@@ -76,7 +76,7 @@ public:
     void set_debug_label      (const std::string_view label) noexcept;
     void dump                 () const noexcept;
 
-    auto begin_write(std::size_t byte_offset, std::size_t byte_count) noexcept -> gsl::span<std::byte>;
+    auto begin_write(std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>;
     void end_write  (std::size_t byte_offset, std::size_t byte_count) noexcept;
 
     template <typename T>
@@ -85,12 +85,12 @@ public:
         const std::size_t                element_offset,
         const std::size_t                element_count,
         const gl::Map_buffer_access_mask access_mask
-    ) noexcept -> gsl::span<T>
+    ) noexcept -> std::span<T>
     {
         const std::size_t byte_offset = element_offset * sizeof(T);
         const std::size_t byte_count  = element_count * sizeof(T);
         auto raw_map = map_bytes(byte_offset, byte_count, access_mask);
-        return gsl::span(
+        return std::span(
             reinterpret_cast<T*>(raw_map.data()),
             raw_map.size_bytes() / sizeof(T)
         );
@@ -98,13 +98,13 @@ public:
 
     auto map_all_bytes(
         const gl::Map_buffer_access_mask access_mask
-    ) noexcept -> gsl::span<std::byte>;
+    ) noexcept -> std::span<std::byte>;
 
     auto map_bytes(
         const std::size_t                byte_offset,
         const std::size_t                byte_count,
         const gl::Map_buffer_access_mask access_mask
-    ) noexcept -> gsl::span<std::byte>;
+    ) noexcept -> std::span<std::byte>;
 
     friend class Vertex_input_state;
     friend class Texture;
@@ -125,7 +125,7 @@ private:
     std::mutex                 m_allocate_mutex;
 
     // Last MapBuffer
-    gsl::span<std::byte>       m_map;
+    std::span<std::byte>       m_map;
     std::size_t                m_map_byte_offset       {0};
     gl::Map_buffer_access_mask m_map_buffer_access_mask{0};
     //std::vector<uint8_t>       m_cpu_copy;

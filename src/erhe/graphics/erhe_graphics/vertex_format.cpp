@@ -3,8 +3,6 @@
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <gsl/assert>
-
 #include <algorithm>
 #include <cassert>
 
@@ -93,7 +91,7 @@ auto Vertex_format::find_attribute_maybe(
 auto Vertex_format::find_attribute(
     const Vertex_attribute::Usage_type usage_type,
     const unsigned int                 index
-) const -> gsl::not_null<const Vertex_attribute*>
+) const -> const Vertex_attribute*
 {
     for (const auto& i : m_attributes) {
         if ((i.usage.type == usage_type) && (i.usage.index == index)) {

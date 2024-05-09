@@ -301,8 +301,8 @@ void Text_renderer::print(
     std::byte* const          start             = vertex_gpu_data.data();
     const std::size_t         byte_count        = vertex_gpu_data.size_bytes();
     const std::size_t         word_count        = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     erhe::ui::Rectangle bounding_box;
     const vec3          snapped_position{
@@ -351,7 +351,7 @@ void Text_renderer::render(
     //ERHE_PROFILE_GPU_SCOPE(c_text_renderer_render)
 
     const auto handle = m_graphics_instance.get_handle(
-        *m_font->texture().get(),
+        *m_font->texture(),
         m_nearest_sampler
     );
 
@@ -362,8 +362,8 @@ void Text_renderer::render(
     std::byte* const          start               = projection_gpu_data.data();
     const std::size_t         byte_count          = projection_gpu_data.size_bytes();
     const std::size_t         word_count          = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const mat4 clip_from_window = erhe::math::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
@@ -382,7 +382,7 @@ void Text_renderer::render(
         static_cast<uint32_t>((handle & 0xffffffffu)),
         static_cast<uint32_t>(handle >> 32u)
     };
-    const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+    const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
     write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
     m_projection_writer.write_offset += m_u_texture_size;
 

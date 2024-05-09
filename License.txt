@@ -44,12 +44,6 @@ External dependencies:
         Contact:    Christophe Riccio <glm@g-truc.net>
         License:    MIT (copying.TXT)
 
- * Microsoft GSL (fetched by CMake)
-        Origin:     <https://github.com/Microsoft/GSL>
-        Git:        <https://github.com/microsoft/GSL.git>
-        Contact:    <https://github.com/Microsoft/GSL/issues>
-        License:    MIT (LICENSE)
-
   * RectangleBinPack (fetched by CMake)
         Origin:     <https://github.com/juj/RectangleBinPack>
         Git:        <https://github.com/juj/RectangleBinPack.git>

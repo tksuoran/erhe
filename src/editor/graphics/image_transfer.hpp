@@ -2,7 +2,7 @@
 
 #include "erhe_graphics/gl_objects.hpp"
 
-#include <gsl/span>
+#include <span>
 
 namespace erhe::graphics {
     class Instance;
@@ -24,7 +24,7 @@ public:
             const int                 width,
             const int                 height,
             const gl::Internal_format internal_format
-        ) -> gsl::span<std::byte>;
+        ) -> std::span<std::byte>;
 
         [[nodiscard]] auto gl_name() -> unsigned int
         {
@@ -44,7 +44,7 @@ public:
         gl::Buffer_storage_mask    m_storage_mask;
         gl::Map_buffer_access_mask m_access_mask;
 
-        gsl::span<std::byte>      m_span;
+        std::span<std::byte>      m_span;
         std::size_t               m_capacity{0};
         erhe::graphics::Gl_buffer m_pbo;
     };

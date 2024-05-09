@@ -211,7 +211,7 @@ struct OctreeParams
  * We decided to implement the Octree using a template for points and containers. The container must have an
  * operator[], which allows to access the points, and a size() member function, which allows to get the size of the
  * container. For the points, we used an access trait to access the coordinates inspired by boost.geometry.
- * The implementation already provides a general access trait, which expects to have public member variables x,y,z.
+ * The implementation already provides a general access trait, which ERHE_VERIFY to have public member variables x,y,z.
  *
  * f you use the implementation or ideas from the corresponding paper in your academic work, it would be nice if you
  * cite the corresponding paper:

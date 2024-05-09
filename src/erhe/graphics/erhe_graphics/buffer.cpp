@@ -81,8 +81,8 @@ void Buffer::allocate_storage()
     ////     m_cpu_copy.resize(m_capacity_byte_count);
     //// }
 
-    Ensures(gl_name() != 0);
-    Ensures(m_capacity_byte_count > 0);
+    ERHE_VERIFY(gl_name() != 0);
+    ERHE_VERIFY(m_capacity_byte_count > 0);
 }
 
 Buffer::Buffer(
@@ -244,7 +244,7 @@ auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
     return *this;
 }
 
-auto Buffer::map() const -> gsl::span<std::byte>
+auto Buffer::map() const -> std::span<std::byte>
 {
     return m_map;
 }
@@ -290,15 +290,15 @@ auto Buffer::allocate_bytes(
     return offset;
 }
 
-auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) noexcept -> gsl::span<std::byte>
+auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>
 {
-    Expects(gl_name() != 0);
+    ERHE_VERIFY(gl_name() != 0);
 
     if (!m_instance.info.use_persistent_buffers) {
-        Expects(m_map.empty());
+        ERHE_VERIFY(m_map.empty());
         //// ERHE_VERIFY(m_capacity_byte_count == m_cpu_copy.size());
         //auto* const map_pointer = static_cast<std::byte*>(m_cpu_copy.data());
-        //m_map = gsl::span<std::byte>(map_pointer, m_capacity_byte_count);
+        //m_map = std::span<std::byte>(map_pointer, m_capacity_byte_count);
         if (byte_count == 0) {
             byte_count = m_capacity_byte_count - byte_offset;
         } else {
@@ -328,9 +328,9 @@ auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) 
             debug_label()
         );
 
-        m_map = gsl::span<std::byte>(map_pointer, byte_count);
+        m_map = std::span<std::byte>(map_pointer, byte_count);
 
-        Ensures(!m_map.empty());
+        ERHE_VERIFY(!m_map.empty());
     }
 
     return m_map;
@@ -341,8 +341,8 @@ void Buffer::end_write(
     const std::size_t byte_count
 ) noexcept
 {
-    Expects(!m_map.empty());
-    Expects(gl_name() != 0);
+    ERHE_VERIFY(!m_map.empty());
+    ERHE_VERIFY(gl_name() != 0);
 
     if (!m_instance.info.use_persistent_buffers) {
         if (byte_count > 0) {
@@ -354,10 +354,10 @@ void Buffer::end_write(
 
 auto Buffer::map_all_bytes(
     const gl::Map_buffer_access_mask access_mask
-) noexcept -> gsl::span<std::byte>
+) noexcept -> std::span<std::byte>
 {
-    Expects(m_map.empty());
-    Expects(gl_name() != 0);
+    ERHE_VERIFY(m_map.empty());
+    ERHE_VERIFY(gl_name() != 0);
 
     log_buffer->trace(
         "Buffer::map_all_bytes(access_mask = {}) target = {}, name = {}",
@@ -389,9 +389,9 @@ auto Buffer::map_all_bytes(
         fmt::ptr(map_pointer)
     );
 
-    m_map = gsl::span<std::byte>(map_pointer, byte_count);
+    m_map = std::span<std::byte>(map_pointer, byte_count);
 
-    Ensures(!m_map.empty());
+    ERHE_VERIFY(!m_map.empty());
 
     return m_map;
 }
@@ -400,11 +400,11 @@ auto Buffer::map_bytes(
     const std::size_t                byte_offset,
     const std::size_t                byte_count,
     const gl::Map_buffer_access_mask access_mask
-) noexcept -> gsl::span<std::byte>
+) noexcept -> std::span<std::byte>
 {
     ERHE_VERIFY(byte_count > 0);
-    Expects(m_map.empty());
-    Expects(gl_name() != 0);
+    ERHE_VERIFY(m_map.empty());
+    ERHE_VERIFY(gl_name() != 0);
 
     log_buffer->trace(
         "Buffer::map_bytes(byte_offset = {}, byte_count = {}, access_mask = {}) target = {}, name = {}",
@@ -477,17 +477,17 @@ auto Buffer::map_bytes(
         fmt::ptr(map_pointer)
     );
 
-    m_map = gsl::span<std::byte>(map_pointer, byte_count);
+    m_map = std::span<std::byte>(map_pointer, byte_count);
 
-    Ensures(!m_map.empty());
+    ERHE_VERIFY(!m_map.empty());
 
     return m_map;
 }
 
 void Buffer::unmap() noexcept
 {
-    Expects(!m_map.empty());
-    Expects(gl_name() != 0);
+    ERHE_VERIFY(!m_map.empty());
+    ERHE_VERIFY(gl_name() != 0);
 
     log_buffer->trace(
         "Buffer::unmap() target = {}, byte_offset = {}, byte_count = {}, pointer = {}, name = {} {}",
@@ -506,9 +506,9 @@ void Buffer::unmap() noexcept
 
     m_map_byte_offset = std::numeric_limits<std::size_t>::max();
 
-    m_map = gsl::span<std::byte>();
+    m_map = std::span<std::byte>();
 
-    Ensures(m_map.empty());
+    ERHE_VERIFY(m_map.empty());
 }
 
 void Buffer::flush_bytes(
@@ -516,8 +516,8 @@ void Buffer::flush_bytes(
     const std::size_t byte_count
 ) noexcept
 {
-    Expects((m_map_buffer_access_mask & gl::Map_buffer_access_mask::map_flush_explicit_bit) == gl::Map_buffer_access_mask::map_flush_explicit_bit);
-    Expects(gl_name() != 0);
+    ERHE_VERIFY((m_map_buffer_access_mask & gl::Map_buffer_access_mask::map_flush_explicit_bit) == gl::Map_buffer_access_mask::map_flush_explicit_bit);
+    ERHE_VERIFY(gl_name() != 0);
 
     // unmap will do flush
     ERHE_VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
@@ -545,7 +545,7 @@ void Buffer::flush_bytes(
 
 void Buffer::dump() const noexcept
 {
-    Expects(gl_name() != 0);
+    ERHE_VERIFY(gl_name() != 0);
 
     const std::size_t byte_count{m_capacity_byte_count};
     const std::size_t word_count{byte_count / sizeof(uint32_t)};
@@ -600,7 +600,7 @@ void Buffer::dump() const noexcept
 
 void Buffer::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
 {
-    Expects(gl_name() != 0);
+    ERHE_VERIFY(gl_name() != 0);
 
     const bool flush_explicit =
         (m_map_buffer_access_mask & gl::Map_buffer_access_mask::map_flush_explicit_bit) == gl::Map_buffer_access_mask::map_flush_explicit_bit;

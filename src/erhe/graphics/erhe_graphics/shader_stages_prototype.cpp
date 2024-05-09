@@ -431,7 +431,7 @@ Shader_stages_prototype::Shader_stages_prototype(
     , m_create_info          {create_info}
     , m_default_uniform_block{graphics_instance}
 {
-    Expects(m_handle.gl_name() != 0);
+    ERHE_VERIFY(m_handle.gl_name() != 0);
     if (create_info.build) {
         post_link();
     }
@@ -445,7 +445,7 @@ Shader_stages_prototype::Shader_stages_prototype(
     , m_create_info          {create_info}
     , m_default_uniform_block{graphics_instance}
 {
-    Expects(m_handle.gl_name() != 0);
+    ERHE_VERIFY(m_handle.gl_name() != 0);
     if (create_info.build) {
         post_link();
     }

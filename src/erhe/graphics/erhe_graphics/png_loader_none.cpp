@@ -15,7 +15,7 @@ auto PNG_loader::open(const std::filesystem::path&, Image_info&) -> bool
     return false;
 }
 
-auto PNG_loader::load(gsl::span<std::byte>) -> bool
+auto PNG_loader::load(std::span<std::byte>) -> bool
 {
     return false;
 }

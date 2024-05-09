@@ -58,7 +58,6 @@ target_link_libraries(${_target}
         erhe::log
         erhe::ui
         mINI
-        Microsoft.GSL::GSL
     PRIVATE
         erhe::profile
         erhe::verify

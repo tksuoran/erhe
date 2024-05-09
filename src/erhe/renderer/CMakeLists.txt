@@ -27,7 +27,6 @@ target_link_libraries(
         erhe::primitive
         erhe::scene
         erhe::ui
-        Microsoft.GSL::GSL
     PRIVATE
         erhe::concurrency
         erhe::gl

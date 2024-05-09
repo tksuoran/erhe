@@ -60,7 +60,6 @@
         "atomic": "cpp",
         "strstream": "cpp",
         "span": "cpp",
-        "gsl_assert": "cpp",
         "csetjmp": "cpp",
         "codecvt": "cpp",
         "filesystem": "cpp",
@@ -80,7 +79,6 @@
         "bit": "cpp",
         "multi_span": "cpp",
         "string_span": "cpp",
-        "gsl_byte": "cpp",
         "span_ext": "cpp",
         "compare": "cpp",
         "concepts": "cpp",
@@ -120,7 +118,8 @@
         "resumable": "cpp",
         "ranges": "cpp",
         "execution": "cpp",
-        "scoped_allocator": "cpp"
+        "scoped_allocator": "cpp",
+        "text_encoding": "cpp"
     },
     "workbench.colorCustomizations": {
         "titleBar.activeBackground":   "#402292",

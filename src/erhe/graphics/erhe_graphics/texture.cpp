@@ -518,12 +518,12 @@ void Texture::upload(
     const int                 height,
     const int                 depth)
 {
-    Expects(internal_format == m_internal_format);
-    Expects(width  >= 1);
-    Expects(height >= 1);
-    Expects(width  <= m_width);
-    Expects(height <= m_height);
-    Expects(m_sample_count == 0);
+    ERHE_VERIFY(internal_format == m_internal_format);
+    ERHE_VERIFY(width  >= 1);
+    ERHE_VERIFY(height >= 1);
+    ERHE_VERIFY(width  <= m_width);
+    ERHE_VERIFY(height <= m_height);
+    ERHE_VERIFY(m_sample_count == 0);
 
     gl::Pixel_format format;
     gl::Pixel_type   type;
@@ -552,7 +552,7 @@ void Texture::upload(
 
 void Texture::upload(
     const gl::Internal_format        internal_format,
-    const gsl::span<const std::byte> data,
+    const std::span<const std::byte> data,
     const int                        width,
     const int                        height,
     const int                        depth,
@@ -562,11 +562,11 @@ void Texture::upload(
     const int                        z
 )
 {
-    Expects(internal_format == m_internal_format);
-    Expects(width  >= 1);
-    Expects(height >= 1);
-    Expects(width  <= m_width);
-    Expects(height <= m_height);
+    ERHE_VERIFY(internal_format == m_internal_format);
+    ERHE_VERIFY(width  >= 1);
+    ERHE_VERIFY(height >= 1);
+    ERHE_VERIFY(width  <= m_width);
+    ERHE_VERIFY(height <= m_height);
 
     gl::Pixel_format format;
     gl::Pixel_type   type;
@@ -574,7 +574,7 @@ void Texture::upload(
 
     const auto row_stride = width * get_upload_pixel_byte_count(internal_format);
     const auto byte_count = row_stride * height;
-    Expects(data.size_bytes() >= byte_count);
+    ERHE_VERIFY(data.size_bytes() >= byte_count);
     const auto* data_pointer = static_cast<const void*>(data.data());
 
     switch (storage_dimensions(m_target)) {
@@ -601,7 +601,7 @@ void Texture::upload(
 
 void Texture::upload_subimage(
     const gl::Internal_format        internal_format,
-    const gsl::span<const std::byte> data,
+    const std::span<const std::byte> data,
     const int                        src_row_length,
     const int                        src_x,
     const int                        src_y,
@@ -613,11 +613,11 @@ void Texture::upload_subimage(
     const int                        z
 )
 {
-    Expects(internal_format == m_internal_format);
-    Expects(width  >= 1);
-    Expects(height >= 1);
-    Expects(width  <= m_width);
-    Expects(height <= m_height);
+    ERHE_VERIFY(internal_format == m_internal_format);
+    ERHE_VERIFY(width  >= 1);
+    ERHE_VERIFY(height >= 1);
+    ERHE_VERIFY(width  <= m_width);
+    ERHE_VERIFY(height <= m_height);
 
     gl::Pixel_format format;
     gl::Pixel_type   type;
@@ -626,7 +626,7 @@ void Texture::upload_subimage(
     const auto pixel_stride = get_upload_pixel_byte_count(internal_format);;
     const auto row_stride   = src_row_length * pixel_stride;
     const auto byte_count   = row_stride * height;
-    Expects(data.size_bytes() >= byte_count);
+    ERHE_VERIFY(data.size_bytes() >= byte_count);
     const std::size_t src_x_offset = src_x * pixel_stride;
     const std::size_t src_y_offset = src_y * row_stride;
     const char* data_pointer =
@@ -740,8 +740,8 @@ auto Texture::sample_count() const -> int
 
 auto operator==(const Texture& lhs, const Texture& rhs) noexcept -> bool
 {
-    Expects(lhs.gl_name() != 0);
-    Expects(rhs.gl_name() != 0);
+    ERHE_VERIFY(lhs.gl_name() != 0);
+    ERHE_VERIFY(rhs.gl_name() != 0);
 
     return lhs.gl_name() == rhs.gl_name();
 }

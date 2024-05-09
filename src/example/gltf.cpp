@@ -35,7 +35,6 @@ extern "C" {
 }
 
 #include <glm/glm.hpp>
-#include <gsl/gsl>
 
 #include <algorithm>
 #include <cctype>
@@ -635,7 +634,7 @@ private:
         if (generate_mipmap) {
             texture_create_info.level_count = mipmap_count;
         }
-        gsl::span<std::byte> span = slot.begin_span_for(
+        std::span<std::byte> span = slot.begin_span_for(
             image_info.width,
             image_info.height,
             texture_create_info.internal_format
@@ -674,7 +673,7 @@ private:
 
         const uint8_t*   data_u8 = cgltf_buffer_view_data(buffer_view);
         const std::byte* data    = reinterpret_cast<const std::byte*>(data_u8);
-        gsl::span<const std::byte> png_encoded_buffer_view{
+        std::span<const std::byte> png_encoded_buffer_view{
             data,
             static_cast<std::size_t>(buffer_view->size)
         };
@@ -700,7 +699,7 @@ private:
         if (generate_mipmap) {
             texture_create_info.level_count = mipmap_count;
         }
-        gsl::span<std::byte> span = slot.begin_span_for(
+        std::span<std::byte> span = slot.begin_span_for(
             image_info.width,
             image_info.height,
             texture_create_info.internal_format

@@ -2,8 +2,6 @@
 
 #include "erhe_graphics/vertex_attribute.hpp"
 
-#include <gsl/gsl>
-
 #include <vector>
 
 namespace erhe::graphics
@@ -35,7 +33,7 @@ public:
     [[nodiscard]] auto find_attribute(
         Vertex_attribute::Usage_type usage_type,
         unsigned int                 index = 0
-    ) const -> gsl::not_null<const Vertex_attribute*>;
+    ) const -> const Vertex_attribute*;
 
     [[nodiscard]] auto stride() const -> size_t
     {

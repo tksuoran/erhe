@@ -32,7 +32,7 @@ auto Image_transfer::get_slot() -> Slot&
 Image_transfer::Slot::Slot(erhe::graphics::Instance& graphics_instance)
     : m_graphics_instance{graphics_instance}
 {
-    Expects(m_pbo.gl_name() != 0);
+    ERHE_VERIFY(m_pbo.gl_name() != 0);
 
     m_capacity = 8 * 1024 * 1024;
     m_storage_mask = gl::Buffer_storage_mask::map_write_bit;
@@ -69,7 +69,7 @@ void Image_transfer::Slot::map()
     );
     ERHE_VERIFY(map_pointer != nullptr);
 
-    m_span = gsl::span(
+    m_span = std::span(
         reinterpret_cast<std::byte*>(map_pointer),
         m_capacity
     );
@@ -78,7 +78,7 @@ void Image_transfer::Slot::map()
 void Image_transfer::Slot::unmap()
 {
     gl::unmap_named_buffer(m_pbo.gl_name());
-    m_span = gsl::span<std::byte>{};
+    m_span = std::span<std::byte>{};
 }
 
 void Image_transfer::Slot::end()
@@ -92,15 +92,15 @@ auto Image_transfer::Slot::begin_span_for(
     const int                 span_width,
     const int                 span_height,
     const gl::Internal_format internal_format
-) -> gsl::span<std::byte>
+) -> std::span<std::byte>
 {
-    Expects(span_width >= 1);
-    Expects(span_height >= 1);
+    ERHE_VERIFY(span_width >= 1);
+    ERHE_VERIFY(span_height >= 1);
 
     auto row_stride = span_width * erhe::graphics::get_upload_pixel_byte_count(internal_format);
     auto byte_count = row_stride * span_height;
-    Expects(byte_count >= 1);
-    Expects(byte_count <= m_capacity);
+    ERHE_VERIFY(byte_count >= 1);
+    ERHE_VERIFY(byte_count <= m_capacity);
     if (!m_graphics_instance.info.use_persistent_buffers) {
         map();
     }

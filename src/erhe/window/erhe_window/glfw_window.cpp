@@ -16,8 +16,6 @@
 #   include <GLFW/glfw3native.h>
 #endif
 
-#include <gsl/assert>
-
 #include <cstdlib>
 #include <stdexcept>
 #include <ctime>
@@ -369,7 +367,7 @@ Context_window::Context_window(const Window_configuration& configuration)
 Context_window::Context_window(Context_window* share)
     : m_root_window_event_handler{this}
 {
-    Expects(share != nullptr);
+    ERHE_VERIFY(share != nullptr);
 
     const bool ok = open(
         {

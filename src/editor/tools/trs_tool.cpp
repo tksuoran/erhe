@@ -1039,7 +1039,7 @@ auto Trs_tool::update_rotate_parallel(Scene_view* scene_view) -> bool
 
 void Trs_tool::update_rotate_final()
 {
-    Expects(m_rotation.intersection.has_value());
+    ERHE_VERIFY(m_rotation.intersection.has_value());
 
     const dvec3  q_                     = normalize                             (m_rotation.intersection.value() - m_rotation.center_of_rotation);
     const double angle                  = erhe::math::angle_of_rotation<double> (q_, m_rotation.normal, m_rotation.reference_direction);

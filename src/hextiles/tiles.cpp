@@ -7,9 +7,8 @@
 #include "tile_shape.hpp"
 #include "types.hpp"
 
+#include "erhe_verify/verify.hpp"
 
-#include <gsl/assert>
-#include <gsl/util>
 #include <nlohmann/json.hpp>
 
 #include <cassert>
@@ -31,13 +30,13 @@ using json = nlohmann::json;
 
 auto Tiles::get_terrain_type(terrain_t terrain) const -> const Terrain_type&
 {
-    Expects(terrain < m_terrain_types.size());
+    ERHE_VERIFY(terrain < m_terrain_types.size());
     return m_terrain_types[terrain];
 }
 
 auto Tiles::get_terrain_type(terrain_t terrain) -> Terrain_type&
 {
-    Expects(terrain < m_terrain_types.size());
+    ERHE_VERIFY(terrain < m_terrain_types.size());
     return m_terrain_types[terrain];
 }
 
@@ -63,13 +62,13 @@ auto Tiles::get_unit_type_count() const -> size_t
 
 auto Tiles::get_unit_type(unit_t unit) const -> const Unit_type&
 {
-    Expects(unit < m_unit_types.size());
+    ERHE_VERIFY(unit < m_unit_types.size());
     return m_unit_types[unit];
 }
 
 auto Tiles::get_unit_type(unit_t unit) -> Unit_type&
 {
-    Expects(unit < m_unit_types.size());
+    ERHE_VERIFY(unit < m_unit_types.size());
     return m_unit_types[unit];
 }
 
@@ -85,25 +84,25 @@ auto Tiles::get_city_unit_type(int city_size) const -> unit_t
 
 auto Tiles::get_terrain_group(size_t group) const -> const Terrain_group&
 {
-    Expects(group < m_terrain_groups.size());
+    ERHE_VERIFY(group < m_terrain_groups.size());
     return m_terrain_groups.at(group);
 }
 
 auto Tiles::get_terrain_group(size_t group) -> Terrain_group&
 {
-    Expects(group < m_terrain_groups.size());
+    ERHE_VERIFY(group < m_terrain_groups.size());
     return m_terrain_groups.at(group);
 }
 
 auto Tiles::get_terrain_replacement_rule(size_t replacement_rule) const -> const Terrain_replacement_rule&
 {
-    Expects(replacement_rule < m_terrain_replacement_rules.size());
+    ERHE_VERIFY(replacement_rule < m_terrain_replacement_rules.size());
     return m_terrain_replacement_rules.at(replacement_rule);
 }
 
 auto Tiles::get_terrain_replacement_rule(size_t replacement_rule) -> Terrain_replacement_rule&
 {
-    Expects(replacement_rule < m_terrain_replacement_rules.size());
+    ERHE_VERIFY(replacement_rule < m_terrain_replacement_rules.size());
     return m_terrain_replacement_rules.at(replacement_rule);
 }
 
@@ -114,8 +113,8 @@ auto Tiles::get_terrain_from_tile(terrain_tile_t terrain_tile) const -> terrain_
     }
 
     const int group_id = (terrain_tile - Base_tiles::count) / (Tile_group::width * Tile_group::height);
-    Expects(group_id < Tile_group::count);
-    Expects(group_id < m_terrain_groups.size());
+    ERHE_VERIFY(group_id < Tile_group::count);
+    ERHE_VERIFY(group_id < m_terrain_groups.size());
 
     const auto&     terrain_group      = gsl::at(m_terrain_groups, group_id);
     const terrain_t base_terrain       = terrain_group.base_terrain_type;
@@ -123,7 +122,7 @@ auto Tiles::get_terrain_from_tile(terrain_tile_t terrain_tile) const -> terrain_
     const int       base_terrain_group = base_terrain_type.group;
     if (base_terrain_group != group_id) {
         log_tiles->error("base terrain group != group");
-        //Expects(m_terrain_types[multishape.base_terrain_type].group == group);
+        //ERHE_VERIFY(m_terrain_types[multishape.base_terrain_type].group == group);
     }
     return terrain_group.base_terrain_type;
 }
@@ -135,9 +134,9 @@ auto Tiles::get_terrain_tile_from_terrain(terrain_t terrain) const -> terrain_ti
 
 auto Tiles::get_terrain_group_tile(int group, unsigned int neighbor_mask) const -> terrain_tile_t
 {
-    Expects(group < m_terrain_groups.size());
+    ERHE_VERIFY(group < m_terrain_groups.size());
     const auto shape_group = m_terrain_groups[group].shape_group;
-    Expects(shape_group < Tile_group::count);
+    ERHE_VERIFY(shape_group < Tile_group::count);
     return static_cast<terrain_tile_t>(
         Base_tiles::count +
         shape_group * Tile_group::width * Tile_group::height + neighbor_mask
@@ -253,7 +252,7 @@ void Tiles::update_terrain_groups()
     }
     for (int group_id = 0; group_id < m_terrain_groups.size(); ++group_id) {
         Terrain_group& group = m_terrain_groups[group_id];
-        Expects(group.base_terrain_type < Base_tiles::count);
+        ERHE_VERIFY(group.base_terrain_type < Base_tiles::count);
         m_terrain_types[group.base_terrain_type].group = group_id;
     }
 }
@@ -978,7 +977,7 @@ void update_group_terrain(
             }
         }
         promote = (neighbor_mask == direction_mask_all) && (terrain_group.promoted > 0);
-        Expects((promote && demote) == false);
+        ERHE_VERIFY((promote && demote) == false);
         if (promote) {
             group = terrain_group.promoted;
         } else if (demote) {

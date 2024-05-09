@@ -448,7 +448,7 @@ void Line_renderer::put(
     const vec3&             point,
     const float             thickness,
     const vec4&             color,
-    const gsl::span<float>& gpu_float_data,
+    const std::span<float>& gpu_float_data,
     std::size_t&            word_offset
 )
 {
@@ -475,7 +475,7 @@ void Line_renderer::add_lines(
     std::byte* const       start             = vertex_gpu_data.data();
     const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
     const std::size_t      word_count        = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
+    const std::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line& line : lines) {
@@ -500,7 +500,7 @@ void Line_renderer::add_lines(
     std::byte* const       start             = vertex_gpu_data.data();
     const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
     const std::size_t      word_count        = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
+    const std::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line4& line : lines) {
@@ -559,7 +559,7 @@ void Line_renderer::add_lines(
     std::byte* const       start             = vertex_gpu_data.data();
     const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
     const std::size_t      word_count        = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
+    const std::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line& line : lines) {
@@ -1384,8 +1384,8 @@ void Line_renderer::render(
     std::byte* const          start                  = view_gpu_data.data();
     const std::size_t         byte_count             = view_gpu_data.size_bytes();
     const std::size_t         word_count             = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const auto  projection_transforms  = camera.projection_transforms(viewport);
     const mat4  clip_from_world        = projection_transforms.clip_from_world.get_matrix();

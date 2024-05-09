@@ -143,13 +143,6 @@ FetchContent_Declare(
 #    GIT_PROGRESS   TRUE
 #)
 
-FetchContent_Declare(
-    GSL
-    GIT_REPOSITORY https://github.com/microsoft/GSL.git
-    GIT_TAG        origin/main
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
 
 FetchContent_Declare(
     harfbuzz

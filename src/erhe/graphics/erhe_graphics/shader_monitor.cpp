@@ -4,6 +4,7 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_file/file.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::graphics
 {
@@ -47,10 +48,11 @@ void Shader_monitor::set_enabled(const bool enabled)
 }
 
 void Shader_monitor::add(
-    erhe::graphics::Shader_stages_create_info     create_info,
-    gsl::not_null<erhe::graphics::Shader_stages*> shader_stages
+    erhe::graphics::Shader_stages_create_info create_info,
+    erhe::graphics::Shader_stages*            shader_stages
 )
 {
+    ERHE_VERIFY(shader_stages != nullptr);
     for (const auto& shader : create_info.shaders) {
         if (
             shader.source.empty() &&
@@ -69,9 +71,10 @@ void Shader_monitor::add(Reloadable_shader_stages& reloadable_shader_stages)
 void Shader_monitor::add(
     const std::filesystem::path&                     path,
     const erhe::graphics::Shader_stages_create_info& create_info,
-    gsl::not_null<erhe::graphics::Shader_stages*>    shader_stages
+    erhe::graphics::Shader_stages*                   shader_stages
 )
 {
+    ERHE_VERIFY(shader_stages != nullptr);
     const std::lock_guard<std::mutex> lock{m_mutex};
 
     auto i = m_files.find(path);
@@ -134,7 +137,7 @@ void Shader_monitor::update_once_per_frame()
     const std::lock_guard<std::mutex> lock{m_mutex};
 
     for (auto* f : m_reload_list) {
-        for (const auto& entry : f->reload_entries) {
+        for (auto& entry : f->reload_entries) {
             const auto& create_info = entry.create_info;
             erhe::graphics::Shader_stages_prototype prototype{m_graphics_instance, create_info};
             if (prototype.is_valid()) {

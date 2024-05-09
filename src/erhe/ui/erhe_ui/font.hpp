@@ -4,12 +4,10 @@
 #include "erhe_ui/bitmap.hpp"
 #include "erhe_ui/rectangle.hpp"
 
-#include <gsl/pointers>
-#include <gsl/span>
-
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -41,8 +39,8 @@ public:
     }
 
     auto print(
-        gsl::span<float>    float_data,
-        gsl::span<uint32_t> uint_data,
+        std::span<float>    float_data,
+        std::span<uint32_t> uint_data,
         std::string_view    text,
         glm::vec3           text_position,
         const uint32_t      text_color,
@@ -53,9 +51,9 @@ public:
 
     auto measure(const std::string_view text) const -> Rectangle;
 
-    [[nodiscard]] auto texture() const -> gsl::not_null<erhe::graphics::Texture*>
+    [[nodiscard]] auto texture() const -> erhe::graphics::Texture*
     {
-        Expects(m_texture);
+        ERHE_VERIFY(m_texture);
 
         return m_texture.get();
     }

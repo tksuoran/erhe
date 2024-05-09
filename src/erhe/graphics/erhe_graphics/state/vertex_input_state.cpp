@@ -8,8 +8,6 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <gsl/assert>
-
 #include <memory>
 #include <sstream>
 
@@ -136,7 +134,7 @@ void Vertex_input_state::reset()
     m_owner_thread = {};
     m_gl_vertex_array.reset();
 
-    Ensures(!m_gl_vertex_array.has_value());
+    ERHE_VERIFY(!m_gl_vertex_array.has_value());
 }
 
 void Vertex_input_state::create()
@@ -155,14 +153,14 @@ void Vertex_input_state::create()
 
     update();
 
-    Ensures(m_gl_vertex_array.has_value());
+    ERHE_VERIFY(m_gl_vertex_array.has_value());
 }
 
 void Vertex_input_state::update()
 {
     ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
-    Expects(m_gl_vertex_array.has_value());
-    Expects(gl_name() > 0);
+    ERHE_VERIFY(m_gl_vertex_array.has_value());
+    ERHE_VERIFY(gl_name() > 0);
 
     //// const unsigned int max_attribute_count = std::min(
     ////     MAX_ATTRIBUTE_COUNT,
@@ -280,7 +278,7 @@ void Vertex_input_state::update()
 
 auto Vertex_input_state::gl_name() const -> unsigned int
 {
-    Expects(m_owner_thread == std::this_thread::get_id());
+    ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
 
     return m_gl_vertex_array.has_value()
         ? m_gl_vertex_array.value().gl_name()

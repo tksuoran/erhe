@@ -143,7 +143,7 @@ void Renderpass::render(const Render_context& context) const
         );
     } else {
         erhe::scene::Scene* scene = scene_root->get_hosted_scene();
-        std::vector<gsl::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans;
+        std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans;
         for (const auto id : this->mesh_layers) {
             const auto mesh_layer = scene->get_mesh_layer_by_id(id);
             if (mesh_layer) {

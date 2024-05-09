@@ -87,7 +87,7 @@ void Icon_rasterization::rasterize(
     const int x_offset = column * m_icon_width;
     const int y_offset = row    * m_icon_height;
 
-    const auto span = gsl::span<std::byte>{
+    const auto span = std::span<std::byte>{
         reinterpret_cast<std::byte*>(bitmap.data()),
         static_cast<size_t>(bitmap.stride()) * static_cast<size_t>(bitmap.height())
     };

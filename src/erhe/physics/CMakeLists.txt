@@ -98,8 +98,6 @@ target_link_libraries(
         erhe::profile
         fmt::fmt
         glm::glm-header-only
-    PRIVATE
-        Microsoft.GSL::GSL
 )
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

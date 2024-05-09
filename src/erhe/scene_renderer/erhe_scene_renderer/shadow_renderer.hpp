@@ -61,12 +61,12 @@ public:
             std::unique_ptr<erhe::graphics::Framebuffer>
         >&                                                         framebuffers;
         const std::initializer_list<
-            const gsl::span<
+            const std::span<
                 const std::shared_ptr<erhe::scene::Mesh>
             >
         >&                                                         mesh_spans;
-        const gsl::span<const std::shared_ptr<erhe::scene::Light>> lights;
-        const gsl::span<const std::shared_ptr<erhe::scene::Skin>>& skins{};
+        const std::span<const std::shared_ptr<erhe::scene::Light>> lights;
+        const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins{};
         Light_projections&                                         light_projections;
     };
 

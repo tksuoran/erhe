@@ -319,9 +319,9 @@ void Debug_view_window::set_shadow_renderer_node(
 }
 
 template <typename T>
-[[nodiscard]] inline auto as_span(const T& value) -> gsl::span<const T>
+[[nodiscard]] inline auto as_span(const T& value) -> std::span<const T>
 {
-    return gsl::span<const T>(&value, 1);
+    return std::span<const T>(&value, 1);
 }
 
 void Debug_view_window::hidden()

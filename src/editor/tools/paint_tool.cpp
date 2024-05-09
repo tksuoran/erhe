@@ -256,10 +256,15 @@ void Paint_tool::paint_vertex(
     const glm::vec4                 color
 )
 {
+    using Vertex_attribute = erhe::graphics::Vertex_attribute;
     auto& mesh_memory = *m_context.mesh_memory;
-    const auto&       vertex_format = mesh_memory.buffer_info.vertex_format;
-    const auto        attribute     = vertex_format.find_attribute(erhe::graphics::Vertex_attribute::Usage_type::color, 0);
-    const std::size_t vertex_offset = vertex_id * vertex_format.stride() + attribute->offset;
+    const auto&             vertex_format = mesh_memory.buffer_info.vertex_format;
+    const Vertex_attribute* attribute     = vertex_format.find_attribute(erhe::graphics::Vertex_attribute::Usage_type::color, 0);
+    if (attribute == nullptr) {
+        return;
+    }
+
+    const std::size_t       vertex_offset = vertex_id * vertex_format.stride() + attribute->offset;
 
     std::vector<std::uint8_t> buffer;
 
@@ -272,7 +277,7 @@ void Paint_tool::paint_vertex(
             continue;
         }
         const std::size_t range_byte_offset = geometry_primitive->gl_geometry_mesh.vertex_buffer_range.byte_offset;
-        if (attribute.get()->data_type.type == gl::Vertex_attrib_type::float_) {
+        if (attribute->data_type.type == gl::Vertex_attrib_type::float_) {
             buffer.resize(sizeof(float) * 4);
             auto* const ptr = reinterpret_cast<float*>(buffer.data());
             ptr[0] = color.x;
@@ -284,7 +289,7 @@ void Paint_tool::paint_vertex(
                 range_byte_offset + vertex_offset,
                 std::move(buffer)
             );
-        } else if (attribute.get()->data_type.type == gl::Vertex_attrib_type::unsigned_byte) {
+        } else if (attribute->data_type.type == gl::Vertex_attrib_type::unsigned_byte) {
             buffer.resize(sizeof(uint8_t) * 4);
             auto* const ptr = reinterpret_cast<uint8_t*>(buffer.data());
             ptr[0] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.x, 255.0f)));

@@ -5,8 +5,6 @@
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <gsl/assert>
-
 namespace hextiles
 {
 
@@ -37,8 +35,8 @@ auto pixel_size(const erhe::graphics::Image_format format) -> size_t
 
 auto get_buffer_size(const erhe::graphics::Image_info& info) -> size_t
 {
-    Expects(info.width >= 1);
-    Expects(info.height >= 1);
+    ERHE_VERIFY(info.width >= 1);
+    ERHE_VERIFY(info.height >= 1);
 
     return static_cast<size_t>(info.width) * static_cast<size_t>(info.height) * pixel_size(info.format);
 }
@@ -47,8 +45,8 @@ auto get_buffer_size(const erhe::graphics::Image_info& info) -> size_t
 
 auto Image::get_pixel(size_t x, size_t y) const -> glm::vec4
 {
-    Expects(x < info.width);
-    Expects(y < info.height);
+    ERHE_VERIFY(x < info.width);
+    ERHE_VERIFY(y < info.height);
     const size_t       index = y * info.row_stride + x * 4;
     const std::uint8_t r_i   = static_cast<uint8_t>(data[index]);
     const std::uint8_t g_i   = static_cast<uint8_t>(data[index + 1]);
@@ -63,8 +61,8 @@ auto Image::get_pixel(size_t x, size_t y) const -> glm::vec4
 
 void Image::put_pixel(size_t x, size_t y, glm::vec4 color)
 {
-    Expects(x < info.width);
-    Expects(y < info.height);
+    ERHE_VERIFY(x < info.width);
+    ERHE_VERIFY(y < info.height);
     const size_t index = y * info.row_stride + x * 4;
     data[index    ] = static_cast<std::byte>(static_cast<uint8_t>(color.r * 255.0f));
     data[index + 1] = static_cast<std::byte>(static_cast<uint8_t>(color.g * 255.0f));

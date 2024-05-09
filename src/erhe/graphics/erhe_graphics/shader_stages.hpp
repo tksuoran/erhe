@@ -47,7 +47,7 @@ public:
     [[nodiscard]] auto interface_blocks_source() const -> std::string;
     [[nodiscard]] auto interface_source       () const -> std::string;
 
-    void add_interface_block(gsl::not_null<const Shader_resource*> uniform_block);
+    void add_interface_block(const Shader_resource* uniform_block);
 
     std::string                                      name;
     std::vector<std::string>                         pragmas                  {};

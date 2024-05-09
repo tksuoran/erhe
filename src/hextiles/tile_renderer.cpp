@@ -584,7 +584,7 @@ void Tile_renderer::compose_multiple_unit_tile
                     original_color.g * players_colors[player - 1].shades[3];
                 scratch.put_pixel(x, y, player_color);
                 ++contribution_count;
-                Expects(contribution_count < 2);
+                ERHE_VERIFY(contribution_count < 2);
             }
         }
     }
@@ -594,7 +594,7 @@ auto Tile_renderer::get_terrain_shape(
     const terrain_tile_t terrain_tile
 ) const -> Pixel_coordinate
 {
-    Expects(terrain_tile < m_terrain_shapes.size());
+    ERHE_VERIFY(terrain_tile < m_terrain_shapes.size());
     return m_terrain_shapes[terrain_tile];
 }
 
@@ -602,7 +602,7 @@ auto Tile_renderer::get_unit_shape(
     const unit_tile_t unit_tile
 ) const -> Pixel_coordinate
 {
-    Expects(unit_tile < m_unit_shapes.size());
+    ERHE_VERIFY(unit_tile < m_unit_shapes.size());
     return m_unit_shapes[unit_tile];
 }
 
@@ -618,7 +618,7 @@ auto Tile_renderer::get_unit_shapes() const -> const std::vector<Pixel_coordinat
 
 auto Tile_renderer::get_extra_shape(int extra) const -> Pixel_coordinate
 {
-    Expects(extra < m_extra_shapes.size());
+    ERHE_VERIFY(extra < m_extra_shapes.size());
     return m_extra_shapes.at(extra);
 }
 
@@ -661,7 +661,7 @@ auto Tile_renderer::current_frame_resources() -> Tile_renderer::Frame_resources&
 
 void Tile_renderer::next_frame()
 {
-    Expects(m_can_blit == false);
+    ERHE_VERIFY(m_can_blit == false);
 
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
     m_vertex_writer    .reset();
@@ -672,15 +672,15 @@ void Tile_renderer::next_frame()
 
 void Tile_renderer::begin()
 {
-    Expects(m_can_blit == false);
+    ERHE_VERIFY(m_can_blit == false);
 
     // TODO byte_count?
     const auto       vertex_gpu_data = m_vertex_writer.begin(&current_frame_resources().vertex_buffer, 0);
     std::byte* const start           = vertex_gpu_data.data()       + m_vertex_writer.write_offset;
     const size_t     byte_count      = vertex_gpu_data.size_bytes() - m_vertex_writer.write_offset;
     const size_t     word_count      = byte_count / sizeof(float);
-    m_gpu_float_data = gsl::span<float>   {reinterpret_cast<float*   >(start), word_count};
-    m_gpu_uint_data  = gsl::span<uint32_t>{reinterpret_cast<uint32_t*>(start), word_count};
+    m_gpu_float_data = std::span<float>   {reinterpret_cast<float*   >(start), word_count};
+    m_gpu_uint_data  = std::span<uint32_t>{reinterpret_cast<uint32_t*>(start), word_count};
     m_word_offset    = 0;
 
     m_can_blit = true;
@@ -708,7 +708,7 @@ void Tile_renderer::blit(
     uint32_t color
 )
 {
-    Expects(m_can_blit == true);
+    ERHE_VERIFY(m_can_blit == true);
 
     const float u0 = static_cast<float>(src_x         ) / static_cast<float>(m_tileset_texture->width());
     const float v0 = static_cast<float>(src_y         ) / static_cast<float>(m_tileset_texture->height());
@@ -749,7 +749,7 @@ void Tile_renderer::blit(
 
 void Tile_renderer::end()
 {
-    Expects(m_can_blit == true);
+    ERHE_VERIFY(m_can_blit == true);
 
     m_vertex_writer.write_offset += m_word_offset * 4;
     m_vertex_writer.end();
@@ -779,8 +779,8 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     std::byte* const          start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
     const size_t              byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
     const size_t              word_count          = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const glm::mat4 clip_from_window = erhe::math::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
@@ -799,7 +799,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
         static_cast<uint32_t>((handle & 0xffffffffu)),
         static_cast<uint32_t>(handle >> 32u)
     };
-    const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+    const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
     write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
     m_projection_writer.write_offset += m_u_texture_size;
 
@@ -996,7 +996,7 @@ void Tile_renderer::blit_tile(
     uint32_t color
 )
 {
-    Expects(m_can_blit == true);
+    ERHE_VERIFY(m_can_blit == true);
 
    //const uint32_t color = 0xffffffffu;
     const float& x0 = dst_x0;
