@@ -97,6 +97,7 @@ Programs::Programs(
     , debug_depth             {"debug_depth-not_loaded"}
     , debug_normal            {"debug_normal-not_loaded"}
     , debug_tangent           {"debug_tangent-not_loaded"}
+    , debug_vertex_tangent_w  {"debug_vertex_tangent_w-not_loaded"}
     , debug_bitangent         {"debug_bitangent-not_loaded"}
     , debug_texcoord          {"debug_texcoord-not_loaded"}
     , debug_base_color_texture{"debug_base_color_texture-not_loaded"}
@@ -161,6 +162,7 @@ Programs::Programs(
     add_shader(debug_depth             , CI{ .name = "visualize_depth", .default_uniform_block = &default_uniform_block } );
     add_shader(debug_normal            , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_NORMAL",             "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_tangent           , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_TANGENT",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_vertex_tangent_w  , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_TANGENT_W",          "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_bitangent         , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_BITANGENT",          "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_texcoord          , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_TEXCOORD",           "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_base_color_texture, CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_BASE_COLOR_TEXTURE", "1"}}, .default_uniform_block = &default_uniform_block } );

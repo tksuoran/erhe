@@ -109,6 +109,7 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
         case Shader_stages_variant::debug_depth:              return &programs.debug_depth.shader_stages;
         case Shader_stages_variant::debug_normal:             return &programs.debug_normal.shader_stages;
         case Shader_stages_variant::debug_tangent:            return &programs.debug_tangent.shader_stages;
+        case Shader_stages_variant::debug_vertex_tangent_w:   return &programs.debug_vertex_tangent_w.shader_stages;
         case Shader_stages_variant::debug_bitangent:          return &programs.debug_bitangent.shader_stages;
         case Shader_stages_variant::debug_texcoord:           return &programs.debug_texcoord.shader_stages;
         case Shader_stages_variant::debug_base_color_texture: return &programs.debug_base_color_texture.shader_stages;

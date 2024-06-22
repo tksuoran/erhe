@@ -133,6 +133,9 @@ void main()
 #if defined(ERHE_DEBUG_BITANGENT)
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B0);
 #endif
+#if defined(ERHE_DEBUG_TANGENT_W)
+    out_color.rgb = srgb_to_linear(vec3(0.5 + 0.5 * v_tangent_scale));
+#endif
 #if defined(ERHE_DEBUG_VDOTN)
     float V_dot_N = dot(V, N);
     out_color.rgb = srgb_to_linear(vec3(V_dot_N));

@@ -22,6 +22,7 @@ enum class Shader_stages_variant : int {
     debug_depth,
     debug_normal,
     debug_tangent,
+    debug_vertex_tangent_w,
     debug_bitangent,
     debug_texcoord,
     debug_base_color_texture,
@@ -50,6 +51,7 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Debug Depth",
     "Debug Normal",
     "Debug Tangent",
+    "Debug Vertex Tangent W",
     "Debug Bitangent",
     "Debug TexCoord",
     "Debug Base Color Texture",
@@ -109,6 +111,7 @@ public:
     erhe::graphics::Reloadable_shader_stages debug_depth;
     erhe::graphics::Reloadable_shader_stages debug_normal;
     erhe::graphics::Reloadable_shader_stages debug_tangent;
+    erhe::graphics::Reloadable_shader_stages debug_vertex_tangent_w;
     erhe::graphics::Reloadable_shader_stages debug_bitangent;
     erhe::graphics::Reloadable_shader_stages debug_texcoord;
     erhe::graphics::Reloadable_shader_stages debug_base_color_texture;
