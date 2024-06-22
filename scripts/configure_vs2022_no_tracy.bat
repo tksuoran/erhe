@@ -6,7 +6,7 @@ cmake ^
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
     -Wno-dev ^
     -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
-    -DERHE_GLTF_LIBRARY=cgltf ^
+    -DERHE_GLTF_LIBRARY=fastgltf ^
     -DERHE_GUI_LIBRARY=imgui ^
     -DERHE_PHYSICS_LIBRARY=jolt ^
     -DERHE_PNG_LIBRARY=mango ^

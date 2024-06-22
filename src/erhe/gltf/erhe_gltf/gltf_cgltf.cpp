@@ -567,7 +567,6 @@ private:
     }
     void parse_animation(const cgltf_size animation_index)
     {
-        // TODO: Handle Coordinate_system Z_up
         cgltf_animation* animation = &m_data->animations[animation_index];
         const std::string animation_name = safe_resource_name(animation->name, "animation", animation_index);
         log_gltf->trace(
@@ -955,13 +954,6 @@ private:
         const std::shared_ptr<erhe::scene::Node>& erhe_node
     )
     {
-        Coordinate_system coordinate_system;
-        if (node->skin == nullptr) {
-            coordinate_system = m_arguments.coordinate_system;
-        } else {
-            coordinate_system = Coordinate_system::Y_up;
-        }
-
         if (node->has_matrix) {
             const auto& m = node->matrix;
             const glm::mat4 matrix_yup{
@@ -970,54 +962,17 @@ private:
                 m[ 8], m[ 9], m[10], m[11],
                 m[12], m[13], m[14], m[15]
             };
-            switch (coordinate_system) {
-                case Coordinate_system::Y_up: {
-                    erhe_node->set_parent_from_node(matrix_yup);
-                    break;
-                }
-                case Coordinate_system::Z_up: {
-                    erhe_node->set_parent_from_node(mat4_yup_from_zup * matrix_yup);
-                    break;
-                }
-            }
+            erhe_node->set_parent_from_node(matrix_yup);
         } else {
             const auto& t = node->translation;
             const auto& r = node->rotation;
             const auto& s = node->scale;
 
-            switch (coordinate_system) {
-                case Coordinate_system::Y_up: {
-                    erhe_node->node_data.transforms.parent_from_node.set_trs(
-                        glm::vec3{t[0], t[1], t[2]},
-                        glm::quat{r[3], r[0], r[1], r[2]},
-                        glm::vec3{s[0], s[1], s[2]}
-                    );
-                    break;
-                }
-                case Coordinate_system::Z_up: {
-                    //glm::vec3 translation_in{t[0], t[1], t[2]};
-                    //glm::quat rotation_in   {r[3], r[0], r[1], r[2]};
-                    //glm::vec3 scale_in      {s[0], s[1], s[2]};
-                    //const erhe::scene::Trs_transform trs_transform_in{translation_in, rotation_in, scale_in};
-                    //const glm::mat4 m_in  = trs_transform_in.get_matrix();
-                    //const glm::mat4 m_out = mat4_yup_from_zup * m_in;
-                    //const erhe::scene::Trs_transform trs_transform_out{m_out};
-                    //glm::vec3 translation_out = trs_transform_out.get_translation();
-                    //glm::quat rotation_out    = trs_transform_out.get_rotation();
-                    //glm::vec3 scale_out       = trs_transform_out.get_scale();
-                    //erhe_node->node_data.transforms.parent_from_node.set_trs(
-                    //    translation_out,
-                    //    rotation_out,
-                    //    scale_out
-                    //);
-                    erhe_node->node_data.transforms.parent_from_node.set_trs(
-                        glm::vec3{t[0], t[2], -t[1]},
-                        glm::quat{r[3], r[0], r[2], -r[1]},
-                        glm::vec3{s[0], s[2], s[1]}
-                    );
-                    break;
-                }
-            }
+            erhe_node->node_data.transforms.parent_from_node.set_trs(
+                glm::vec3{t[0], t[1], t[2]},
+                glm::quat{r[3], r[0], r[1], r[2]},
+                glm::vec3{s[0], s[1], s[2]}
+            );
             erhe_node->update_world_from_node();
             erhe_node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
         }
@@ -1237,11 +1192,7 @@ private:
                     for (cgltf_size index : used_indices) {
                         cgltf_float v[3] = { 0.0f, 0.0f, 0.0f };
                         cgltf_accessor_read_float(accessor, index, &v[0], num_components);
-                        //const auto position_y_up = glm::vec3{v[0], v[1], v[2]};
-                        //const auto position_z_up = glm::vec3{v[0], v[2], v[1]};
-                        const auto position = (arguments.coordinate_system == Coordinate_system::Y_up)
-                            ? glm::vec3{v[0], v[1], v[2]}
-                            : glm::vec3{v[0], v[2], -v[1]};
+                        const auto position = glm::vec3{v[0], v[1], v[2]};
                         vertex_positions.at(index - min_index) = position;
                         min_corner = glm::min(min_corner, position);
                         max_corner = glm::max(max_corner, position);
@@ -1450,9 +1401,7 @@ private:
         {
             switch (attribute->type) {
                 case cgltf_attribute_type::cgltf_attribute_type_position: {
-                    glm::vec3 pos = (arguments.coordinate_system == Coordinate_system::Y_up) 
-                        ? glm::vec3{value[0], value[1], value[2]}
-                        : glm::vec3{value[0], value[2], -static_cast<float>(value[1])};
+                    glm::vec3 pos = glm::vec3{value[0], value[1], value[2]};
                     point_locations[attribute->index]->put(point_id, pos);
                     break;
                 }
@@ -1480,17 +1429,13 @@ private:
         {
             switch (attribute->type) {
                 case cgltf_attribute_type::cgltf_attribute_type_normal: {
-                    glm::vec3 n = (arguments.coordinate_system == Coordinate_system::Y_up) 
-                        ? glm::vec3{value[0], value[1], value[2]}
-                        : glm::vec3{value[0], value[2], -static_cast<float>(value[1])};
+                    glm::vec3 n = glm::vec3{value[0], value[1], value[2]};
                     corner_normals[attribute->index]->put(corner_id, n);
                     break; 
                 }
 
                 case cgltf_attribute_type::cgltf_attribute_type_tangent: {
-                    glm::vec4 t = (arguments.coordinate_system == Coordinate_system::Y_up) 
-                        ? glm::vec4{value[0], value[1], value[2], value[3]}
-                        : glm::vec4{value[0], value[2], -static_cast<float>(value[1]), value[3]};
+                    glm::vec4 t = glm::vec4{value[0], value[1], value[2], value[3]};
                     corner_tangents[attribute->index]->put(corner_id, t);
                     break;
                 }
@@ -1641,17 +1586,7 @@ private:
                     m[ 8], m[ 9], m[10], m[11],
                     m[12], m[13], m[14], m[15]
                 };
-                switch (m_arguments.coordinate_system) {
-                    case Coordinate_system::Y_up: {
-                        erhe_skin->skin_data.inverse_bind_matrices[i] = matrix;
-                        break;
-                    }
-                    case Coordinate_system::Z_up: {
-                        erhe_skin->skin_data.inverse_bind_matrices[i] = glm::inverse(glm::inverse(matrix) * mat4_yup_from_zup);
-                        break;
-                    }
-                }
-
+                erhe_skin->skin_data.inverse_bind_matrices[i] = matrix;
             } else {
                 log_gltf->warn("Skin {} joint {} inverse bind matrix missing", skin_index, i);
                 erhe_skin->skin_data.inverse_bind_matrices[i] = glm::inverse(glm::inverse(glm::mat4{1.0f}) * mat4_yup_from_zup);;
@@ -1847,4 +1782,4 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
     return result;
 }
 
-} // namespace example
+} // namespace erhe::gltf

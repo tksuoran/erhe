@@ -72,8 +72,7 @@ void import_gltf(
     erhe::graphics::Instance&    graphics_instance,
     erhe::primitive::Build_info  build_info,
     Scene_root&                  scene_root,
-    const std::filesystem::path& path,
-    bool                         y_up
+    const std::filesystem::path& path
 )
 {
     erhe::scene::Scene* scene = scene_root.get_hosted_scene();
@@ -95,7 +94,6 @@ void import_gltf(
         .root_node         = root_node,
         .mesh_layer_id     = scene_root.layers().content()->id,
         .path              = path,
-        .coordinate_system = y_up ? erhe::gltf::Coordinate_system::Y_up : erhe::gltf::Coordinate_system::Z_up
     };
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 

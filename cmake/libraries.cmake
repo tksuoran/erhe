@@ -59,11 +59,18 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
-
 FetchContent_Declare(
     etl
     GIT_REPOSITORY https://github.com/ETLCPP/etl.git
     GIT_TAG        20.38.10
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
+    fastgltf
+    GIT_REPOSITORY https://github.com/spnda/fastgltf.git
+    GIT_TAG        main # TODO v0.8.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -229,11 +236,18 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
-
 FetchContent_Declare(
     OpenXR-SDK
     GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git
     GIT_TAG        release-1.0.34
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
+    simdjson
+    GIT_REPOSITORY https://github.com/simdjson/simdjson.git
+    GIT_TAG        v3.9.4
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

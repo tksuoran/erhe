@@ -10,6 +10,8 @@ erhe_target_sources_grouped(
     frame_controller.cpp
     frame_controller.hpp
     image_transfer.cpp
+    gltf.cpp
+    gltf.hpp
     image_transfer.hpp
     main.cpp
     mesh_memory.cpp
@@ -23,19 +25,13 @@ erhe_target_sources_grouped(
     res/shaders/standard.frag
     erhe.ini
 )
-if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        gltf.cpp
-        gltf.hpp
-    )
-endif ()
 target_link_libraries(
     ${_target}
     PRIVATE
     erhe::bit
     erhe::file
     erhe::gl
+    erhe::gltf
     erhe::graphics
     erhe::log
     erhe::math
@@ -51,9 +47,6 @@ target_link_libraries(
 )
 if (DEFINED ERHE_PROFILE_TARGET)
     target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
-endif ()
-if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
-    target_link_libraries(${_target} PRIVATE cgltf)
 endif ()
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})

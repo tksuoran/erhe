@@ -30,10 +30,6 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-extern "C" {
-    #include "cgltf.h"
-}
-
 #include <glm/glm.hpp>
 #include <gsl/gsl>
 

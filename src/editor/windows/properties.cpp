@@ -667,8 +667,8 @@ void Properties::material_properties()
             Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material.get());
             if (scene_root != nullptr) {
                 const auto& content_library = scene_root->content_library();
-                content_library->textures->combo(m_context, "Base Color Texture",         selected_material->base_color_texture,         true);
-                content_library->textures->combo(m_context, "Metallic Roughness Texture", selected_material->metallic_roughness_texture, true);
+                content_library->textures->combo(m_context, "Base Color Texture",         selected_material->textures.base_color,         true);
+                content_library->textures->combo(m_context, "Metallic Roughness Texture", selected_material->textures.metallic_roughness, true);
             }
             ImGui::TreePop();
         }
