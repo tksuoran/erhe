@@ -464,13 +464,11 @@ public:
             return;
         }
 
-        //// TODO
-        ////
-        //// log_gltf->trace("parsing images");
-        //// m_data_out.images.resize(m_asset->images.size());
-        //// for (std::size_t i = 0, end = m_asset->images.size(); i < end; ++i) {
-        ////     parse_image(i);
-        //// }
+        log_gltf->trace("parsing images");
+        m_data_out.images.resize(m_asset->images.size());
+        for (std::size_t i = 0, end = m_asset->images.size(); i < end; ++i) {
+            parse_image(i);
+        }
 
         log_gltf->trace("parsing samplers");
         m_data_out.samplers.resize(m_asset->samplers.size());
@@ -756,12 +754,12 @@ private:
         }
         return texture;
     }
-#if 0
+
     auto load_png_buffer(const fastgltf::BufferView& buffer_view, const std::size_t image_index) -> std::shared_ptr<erhe::graphics::Texture>
     {
-        const std::size_t       buffer_view_index = &buffer_view - &m_asset->bufferViews.front();
-        const fastgltf::Buffer& buffer            = m_asset->buffers.at(buffer_view.bufferIndex);
-        const std::string name = safe_resource_name(buffer_view.name.c_str(), "buffer_view", buffer_view_index);
+        const std::size_t          buffer_view_index = &buffer_view - &m_asset->bufferViews.front();
+        const fastgltf::Buffer&    buffer            = m_asset->buffers.at(buffer_view.bufferIndex);
+        const std::string          name              = safe_resource_name(buffer_view.name.c_str(), "buffer_view", buffer_view_index);
         erhe::graphics::Image_info image_info;
         erhe::graphics::PNG_loader loader;
 
@@ -775,7 +773,8 @@ private:
 
         std::visit(
             fastgltf::visitor{
-                [&](fastgltf::sources::Array& data) {
+                [](auto& arg) { static_cast<void>(arg); },
+                [&](const fastgltf::sources::Array& data) {
                     gsl::span<const std::byte> png_encoded_buffer_view{
                         data.bytes.data() + buffer_view.byteOffset,
                         buffer_view.byteLength
@@ -838,29 +837,84 @@ private:
         }
         return texture;
     }
+
     void parse_image(const std::size_t image_index)
     {
-        const fastgltf::Image& image = m_asset->images[image_index];
-        const std::string image_name = safe_resource_name(image.name.c_str(), "image", image_index);
+        const fastgltf::Image& image      = m_asset->images[image_index];
+        const std::string      image_name = safe_resource_name(image.name.c_str(), "image", image_index);
         log_gltf->trace("Image: image index = {}, name = {}", image_index, image_name);
-
         std::shared_ptr<erhe::graphics::Texture> erhe_texture;
-        if (image.uri != nullptr) {
-            std::filesystem::path uri{image.uri};
-            erhe_texture = load_image_file(m_arguments.path.replace_filename(uri));
-            if (!erhe_texture) {
-                erhe_texture = load_image_file(image.uri);
-            }
-        } else if (image.buffer_view != nullptr) {
-            erhe_texture = load_png_buffer(image.buffer_view, image_index);
-        }
+        std::visit(
+            fastgltf::visitor {
+                [](auto& arg) { static_cast<void>(arg); },
+                [&](const fastgltf::sources::BufferView& buffer_view_source){
+                    const fastgltf::BufferView& buffer_view = m_asset->bufferViews[buffer_view_source.bufferViewIndex];
+                    erhe_texture = load_png_buffer(buffer_view, image_index);
+                },
+                [&](const fastgltf::sources::URI& uri){
+                    std::filesystem::path relative_path = uri.uri.fspath();
+                    erhe_texture = load_image_file(m_arguments.path.replace_filename(relative_path));
+                }
+            },
+            image.data
+        );
+
+        // FASTGLTF_EXPORT using DataSource = std::variant<
+        //      std::monostate,
+        //      sources::BufferView,
+        //      sources::URI,
+        //      sources::Array,
+        //      sources::Vector,
+        //      sources::CustomBuffer,
+        //      sources::ByteView,
+        //      sources::Fallback
+        // >;
+#if 0
+        std::visit(
+            fastgltf::visitor {
+                //[&](const fastgltf::sources::BufferView& buffer_view){
+                //    static_cast<void>(buffer_view);
+                //},
+                [&](const fastgltf::sources::URI& uri){
+                    std::filesystem::path relative_path = uri.uri.fspath();
+                    erhe_texture = load_image_file(m_arguments.path.replace_filename(relative_path));
+                }//,
+                //[&](const fastgltf::sources::Array& array_){
+                //    static_cast<void>(array_);
+                //},
+                //[&](const fastgltf::sources::Vector& vector_){
+                //    static_cast<void>(vector_);
+                //},
+                //[&](const fastgltf::sources::CustomBuffer& custom_buffer){
+                //    static_cast<void>(custom_buffer);
+                //},
+                //[&](const fastgltf::sources::ByteView& byte_view){
+                //    static_cast<void>(byte_view);
+                //},
+                //[&](const fastgltf::sources::Fallback& fallback){
+                //    static_cast<void>(fallback);
+                //}
+            },
+            image.data
+        );
+#endif
+        //if (image.uri != nullptr) {
+        //    std::filesystem::path uri{image.uri};
+        //    erhe_texture = load_image_file(m_arguments.path.replace_filename(uri));
+        //    if (!erhe_texture) {
+        //        erhe_texture = load_image_file(image.uri);
+        //    }
+        //} else if (image.buffer_view != nullptr) {
+        //    erhe_texture = load_png_buffer(image.buffer_view, image_index);
+        //}
+
         if (erhe_texture) {
             erhe_texture->set_debug_label(image_name);
             m_data_out.images.push_back(erhe_texture);
         }
         m_data_out.images[image_index] = erhe_texture;
     }
-#endif
+
     void parse_sampler(const std::size_t sampler_index)
     {
         const fastgltf::Sampler& sampler = m_asset->samplers[sampler_index];
