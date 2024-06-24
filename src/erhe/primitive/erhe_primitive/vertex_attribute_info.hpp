@@ -26,7 +26,7 @@ public:
     [[nodiscard]] auto is_valid() -> bool;
 
     const erhe::graphics::Vertex_attribute* attribute{nullptr};
-    gl::Vertex_attrib_type                  data_type{gl::Vertex_attrib_type::float_};
+    erhe::dataformat::Format                data_type{erhe::dataformat::Format::format_undefined};
     std::size_t                             offset   {std::numeric_limits<std::size_t>::max()};
     std::size_t                             size     {0};
 };

@@ -355,7 +355,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
         if (!geometry_primitive) {
             continue;
         }
-        const auto& geometry = geometry_primitive->source_geometry;
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = geometry_primitive->get_geometry();
 
         ++primitive_index;
         ImGui::PushID(primitive_index);
@@ -385,8 +385,9 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
                 ImGui::TreePop();
             }
             if (ImGui::TreeNodeEx("Debug")) {
-                float bbox_volume    = geometry_primitive->gl_geometry_mesh.bounding_box.volume();
-                float bsphere_volume = geometry_primitive->gl_geometry_mesh.bounding_sphere.volume();
+                erhe::primitive::Geometry_mesh& geometry_mesh = geometry_primitive->get_geometry_mesh();
+                float bbox_volume    = geometry_mesh.bounding_box.volume();
+                float bsphere_volume = geometry_mesh.bounding_sphere.volume();
                 ImGui::Indent(indent);
                 ImGui::InputFloat("BBox Volume",    &bbox_volume,    0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
                 ImGui::InputFloat("BSphere Volume", &bsphere_volume, 0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);

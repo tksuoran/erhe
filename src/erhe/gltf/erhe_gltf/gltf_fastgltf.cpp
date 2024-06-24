@@ -12,7 +12,9 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
+#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_raytrace/ibuffer.hpp"
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_scene/animation.hpp"
@@ -93,6 +95,65 @@ constexpr glm::mat4 mat4_yup_from_zup{
     }
 }
 
+void to_erhe_attribute(const fastgltf::Accessor& accessor, erhe::graphics::Glsl_type& type, erhe::dataformat::Format& format)
+{
+    switch (accessor.type) {
+        case fastgltf::AccessorType::Scalar: {
+            switch (accessor.componentType) {
+                case fastgltf::ComponentType::Byte         : type = erhe::graphics::Glsl_type::int_;         format = erhe::dataformat::Format::format_8_scalar_sint; return;
+                case fastgltf::ComponentType::UnsignedByte : type = erhe::graphics::Glsl_type::unsigned_int; format = erhe::dataformat::Format::format_8_scalar_uint; return;
+                case fastgltf::ComponentType::Short        : type = erhe::graphics::Glsl_type::int_;         format = erhe::dataformat::Format::format_16_scalar_sint; return;
+                case fastgltf::ComponentType::UnsignedShort: type = erhe::graphics::Glsl_type::unsigned_int; format = erhe::dataformat::Format::format_16_scalar_uint; return;
+                case fastgltf::ComponentType::Int          : type = erhe::graphics::Glsl_type::int_;         format = erhe::dataformat::Format::format_32_scalar_sint; return;
+                case fastgltf::ComponentType::UnsignedInt  : type = erhe::graphics::Glsl_type::unsigned_int; format = erhe::dataformat::Format::format_32_scalar_uint; return;
+                case fastgltf::ComponentType::Float        : type = erhe::graphics::Glsl_type::float_;       format = erhe::dataformat::Format::format_32_scalar_float; return;
+                default: break;
+            }
+        }
+        case fastgltf::AccessorType::Vec2: {
+            switch (accessor.componentType) {
+                case fastgltf::ComponentType::Byte         : type = erhe::graphics::Glsl_type::int_vec2;          format = erhe::dataformat::Format::format_8_vec2_sint; return;
+                case fastgltf::ComponentType::UnsignedByte : type = erhe::graphics::Glsl_type::unsigned_int_vec2; format = erhe::dataformat::Format::format_8_vec2_uint; return;
+                case fastgltf::ComponentType::Short        : type = erhe::graphics::Glsl_type::int_vec2;          format = erhe::dataformat::Format::format_16_vec2_sint; return;
+                case fastgltf::ComponentType::UnsignedShort: type = erhe::graphics::Glsl_type::unsigned_int_vec2; format = erhe::dataformat::Format::format_16_vec2_uint; return;
+                case fastgltf::ComponentType::Int          : type = erhe::graphics::Glsl_type::int_vec2;          format = erhe::dataformat::Format::format_32_vec2_sint; return;
+                case fastgltf::ComponentType::UnsignedInt  : type = erhe::graphics::Glsl_type::unsigned_int_vec2; format = erhe::dataformat::Format::format_32_vec2_uint; return;
+                case fastgltf::ComponentType::Float        : type = erhe::graphics::Glsl_type::float_vec2;        format = erhe::dataformat::Format::format_32_vec2_float; return;
+                default: break;
+            }
+        }
+        case fastgltf::AccessorType::Vec3:{
+            switch (accessor.componentType) {
+                case fastgltf::ComponentType::Byte         : type = erhe::graphics::Glsl_type::int_vec3;          format = erhe::dataformat::Format::format_8_vec3_sint; return;
+                case fastgltf::ComponentType::UnsignedByte : type = erhe::graphics::Glsl_type::unsigned_int_vec3; format = erhe::dataformat::Format::format_8_vec3_uint; return;
+                case fastgltf::ComponentType::Short        : type = erhe::graphics::Glsl_type::int_vec3;          format = erhe::dataformat::Format::format_16_vec3_sint; return;
+                case fastgltf::ComponentType::UnsignedShort: type = erhe::graphics::Glsl_type::unsigned_int_vec3; format = erhe::dataformat::Format::format_16_vec3_uint; return;
+                case fastgltf::ComponentType::Int          : type = erhe::graphics::Glsl_type::int_vec3;          format = erhe::dataformat::Format::format_32_vec3_sint; return;
+                case fastgltf::ComponentType::UnsignedInt  : type = erhe::graphics::Glsl_type::unsigned_int_vec3; format = erhe::dataformat::Format::format_32_vec3_uint; return;
+                case fastgltf::ComponentType::Float        : type = erhe::graphics::Glsl_type::float_vec3;        format = erhe::dataformat::Format::format_32_vec3_float; return;
+                default: break;
+            }
+        }
+        case fastgltf::AccessorType::Vec4: {
+            switch (accessor.componentType) {
+                case fastgltf::ComponentType::Byte         : type = erhe::graphics::Glsl_type::int_vec4;          format = erhe::dataformat::Format::format_8_vec4_sint; return;
+                case fastgltf::ComponentType::UnsignedByte : type = erhe::graphics::Glsl_type::unsigned_int_vec4; format = erhe::dataformat::Format::format_8_vec4_uint; return;
+                case fastgltf::ComponentType::Short        : type = erhe::graphics::Glsl_type::int_vec4;          format = erhe::dataformat::Format::format_16_vec4_sint; return;
+                case fastgltf::ComponentType::UnsignedShort: type = erhe::graphics::Glsl_type::unsigned_int_vec4; format = erhe::dataformat::Format::format_16_vec4_uint; return;
+                case fastgltf::ComponentType::Int          : type = erhe::graphics::Glsl_type::int_vec4;          format = erhe::dataformat::Format::format_32_vec4_sint; return;
+                case fastgltf::ComponentType::UnsignedInt  : type = erhe::graphics::Glsl_type::unsigned_int_vec4; format = erhe::dataformat::Format::format_32_vec4_uint; return;
+                case fastgltf::ComponentType::Float        : type = erhe::graphics::Glsl_type::float_vec4;        format = erhe::dataformat::Format::format_32_vec4_float; return;
+                default: break;
+            }
+        }
+        default: {
+            break;
+        }
+    }
+    ERHE_FATAL("Unsupported attribute type");
+}
+
+#if 0
 [[nodiscard]] auto is_per_point(erhe::graphics::Vertex_attribute::Usage_type value) -> bool
 {
     switch (value)
@@ -136,6 +197,7 @@ constexpr glm::mat4 mat4_yup_from_zup{
         default: return "?";
     }
 }
+#endif
 
 [[nodiscard]] auto c_str(const fastgltf::AnimationInterpolation value) -> const char*
 {
@@ -434,6 +496,27 @@ void accessor_read_u32s(
         default:
         {
         }
+    }
+}
+
+// Derived from fastgltf::copyComponentsFromAccessor()
+void copyComponentsFromAccessor(const fastgltf::Asset& asset, const fastgltf::Accessor& accessor, void* dest, std::size_t destStride)
+{
+    assert((!bool(accessor.sparse) || accessor.sparse->count == 0) && "copyComponentsFromAccessor currently does not support sparse accessors.");
+
+    auto* dstBytes = static_cast<std::byte*>(dest);
+
+    auto elemSize = getElementByteSize(accessor.type, accessor.componentType);
+    //auto componentCount = getNumComponents(accessor.type);
+
+    auto& view = asset.bufferViews[*accessor.bufferViewIndex];
+    auto srcStride = view.byteStride.value_or(elemSize);
+
+    const fastgltf::DefaultBufferDataAdapter adapter{};
+    auto srcBytes = adapter(asset, *accessor.bufferViewIndex).subspan(accessor.byteOffset);
+
+    for (std::size_t i = 0; i < accessor.count; ++i) {
+        std::memcpy(dstBytes + destStride * i, &srcBytes[srcStride * i], elemSize);
     }
 }
 
@@ -1097,501 +1180,110 @@ private:
         erhe_light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     }
 
-    class Primitive_to_geometry
+    class Primitive_entry
     {
     public:
-        Primitive_to_geometry(
-            const Gltf_parse_arguments& arguments,
-            const fastgltf::Asset&      asset,
-            const fastgltf::Primitive&  primitive)
-            : arguments{arguments}
-            , asset    {asset}
-            , primitive{primitive}
-            , geometry {std::make_shared<erhe::geometry::Geometry>()}
-        {
-            std::unordered_map<erhe::graphics::Vertex_attribute::Usage_type, std::size_t> attribute_max_index;
-            for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-                const fastgltf::Attribute& attribute = primitive.attributes[i];
-                erhe::graphics::Vertex_attribute::Usage_type attribute_usage = to_erhe(attribute.name);
-                std::size_t attribute_index = get_attribute_index(attribute.name);
-                auto j = attribute_max_index.find(attribute_usage);
-                if (j != attribute_max_index.end()) {
-                    j->second = std::max(j->second, attribute_index);
-                } else {
-                    attribute_max_index[attribute_usage] = attribute_index;
-                }
-            }
-            for (auto [attribute_usage, last_index] : attribute_max_index) {
-                switch (attribute_usage) {
-                    case erhe::graphics::Vertex_attribute::Usage_type::position:      point_locations    .resize(last_index + 1); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::normal:        corner_normals     .resize(last_index + 1); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::tangent:       corner_tangents    .resize(last_index + 1); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::tex_coord:     corner_texcoords   .resize(last_index + 1); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::color:         corner_colors      .resize(last_index + 1); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: point_joint_indices.resize(last_index + 1); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: point_joint_weights.resize(last_index + 1); break;
-                    default: continue;
-                }
-            }
-            for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-                const fastgltf::Attribute& attribute = primitive.attributes[i];
-                erhe::graphics::Vertex_attribute::Usage_type attribute_usage = to_erhe(attribute.name);
-                std::size_t attribute_index = get_attribute_index(attribute.name);
-                switch (attribute_usage) {
-                    case erhe::graphics::Vertex_attribute::Usage_type::position:      point_locations    [attribute_index] = geometry->point_attributes ().create<vec3 >(erhe::geometry::c_point_locations    ); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::normal:        corner_normals     [attribute_index] = geometry->corner_attributes().create<vec3 >(erhe::geometry::c_corner_normals     ); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::tangent:       corner_tangents    [attribute_index] = geometry->corner_attributes().create<vec4 >(erhe::geometry::c_corner_tangents    ); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::tex_coord:     corner_texcoords   [attribute_index] = geometry->corner_attributes().create<vec2 >(erhe::geometry::c_corner_texcoords   ); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::color:         corner_colors      [attribute_index] = geometry->corner_attributes().create<vec4 >(erhe::geometry::c_corner_colors      ); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: point_joint_indices[attribute_index] = geometry->point_attributes ().create<uvec4>(erhe::geometry::c_point_joint_indices); break;
-                    case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: point_joint_weights[attribute_index] = geometry->point_attributes ().create<vec4 >(erhe::geometry::c_point_joint_weights); break;
-                    default: continue;
-                }
-            }
-
-            get_used_indices();
-            make_points();
-            switch (primitive.type) {
-                case fastgltf::PrimitiveType::Triangles: {
-                    parse_triangles();
-                    break;
-                }
-                default: {
-                    log_gltf->warn("Unsupported glTF primitive type {}", c_str(primitive.type));
-                    break;
-                }
-            }
-            parse_vertex_data();
-            geometry->make_point_corners();
-            geometry->build_edges();
-        }
-        void get_used_indices()
-        {
-            if (!primitive.indicesAccessor.has_value()) {
-                return;
-            }
-            const fastgltf::Accessor& accessor = asset.accessors[primitive.indicesAccessor.value()];
-            if (!accessor.bufferViewIndex.has_value()) {
-                return;
-            }
-            const fastgltf::BufferView& buffer_view = asset.bufferViews[accessor.bufferViewIndex.value()];
-
-            log_gltf->trace(
-                "Index buffer component type = {}, type = {}, "
-                "count = {}, accessor offset = {}, buffer view_offset = {}",
-                c_str(accessor.componentType),
-                fastgltf::getAccessorTypeName(accessor.type),
-                accessor.count,
-                accessor.byteOffset,
-                buffer_view.byteOffset
-            );
-
-            used_indices.resize(accessor.count);
-            fastgltf::copyFromAccessor<std::uint32_t>(asset, accessor, &used_indices[0]);
-
-            // Remove duplicates
-            std::sort(used_indices.begin(), used_indices.end());
-            used_indices.erase(
-                std::unique(
-                    used_indices.begin(),
-                    used_indices.end()
-                ),
-                used_indices.end()
-            );
-
-            // First and last index
-            max_index = std::size_t{0};
-            min_index = std::numeric_limits<std::size_t>::max();
-            for (const std::size_t index : used_indices) {
-                min_index = std::min(index, min_index);
-                max_index = std::max(index, max_index);
-            }
-        }
-        void make_points()
-        {
-            const fastgltf::Attribute* position_attribute{nullptr};
-            std::size_t min_attribute_index = std::numeric_limits<std::size_t>::max();
-            for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-                const fastgltf::Attribute& attribute = primitive.attributes[i];
-                erhe::graphics::Vertex_attribute::Usage_type attribute_usage = to_erhe(attribute.name);
-                std::size_t attribute_index = get_attribute_index(attribute.name);
-                if (
-                    (attribute_usage == erhe::graphics::Vertex_attribute::Usage_type::position) &&
-                    (attribute_index < min_attribute_index)
-                ) {
-                    position_attribute = &attribute;
-                    min_attribute_index = attribute_index;
-                }
-            }
-            if (position_attribute == nullptr) {
-                log_gltf->warn("No vertex position attribute found");
-                return;
-            }
-
-            // Get vertex positions and calculate bounding box
-            vertex_positions.clear();
-            const fastgltf::Accessor& accessor = asset.accessors[position_attribute->accessorIndex];
-
-            const std::size_t num_components = std::min(
-                std::size_t{3},
-                fastgltf::getNumComponents(accessor.type)
-            );
-            vec3 min_corner{std::numeric_limits<float>::max(),    std::numeric_limits<float>::max(),    std::numeric_limits<float>::max()};
-            vec3 max_corner{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
-            const std::size_t vertex_count = max_index - min_index + 1;
-            vertex_positions.resize(vertex_count);
-            switch (accessor.type) {
-                case fastgltf::AccessorType::Scalar:
-                case fastgltf::AccessorType::Vec2:
-                case fastgltf::AccessorType::Vec3:
-                case fastgltf::AccessorType::Vec4: {
-                    for (std::size_t index : used_indices) {
-                        float v[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                        accessor_read_floats(asset, accessor, index, &v[0], num_components);
-                        const auto position = glm::vec3{v[0], v[1], v[2]};
-                        vertex_positions.at(index - min_index) = position;
-                        min_corner = glm::min(min_corner, position);
-                        max_corner = glm::max(max_corner, position);
-                    }
-                    break;
-                }
-                default: {
-                    log_gltf->warn("Unsupported glTF position attribute accessor type");
-                    return;
-                }
-            }
-
-            // Sort vertices
-            std::set<glm::vec3::length_type> available_axis = { 0, 1, 2 };
-            std::set<glm::vec3::length_type> used_axis;
-
-            const vec3 bounding_box_size0 = max_corner - min_corner;
-            const auto axis0 = erhe::math::max_axis_index<float>(bounding_box_size0);
-            available_axis.erase(axis0);
-            used_axis.insert(axis0);
-            vec3 bounding_box_size1 = bounding_box_size0;
-            bounding_box_size1[axis0] = 0.0f;
-
-            auto axis1 = erhe::math::max_axis_index<float>(bounding_box_size1);
-            if (used_axis.count(axis1) > 0) {
-                axis1 = *available_axis.begin();
-            }
-            available_axis.erase(axis1);
-            used_axis.insert(axis1);
-
-            vec3 bounding_box_size2 = bounding_box_size1;
-            bounding_box_size2[axis1] = 0.0f;
-            auto axis2 = erhe::math::max_axis_index<float>(bounding_box_size2);
-            if (used_axis.count(axis2) > 0) {
-                axis2 = * available_axis.begin();
-            }
-            available_axis.erase(axis2);
-            used_axis.insert(axis2);
-
-            log_gltf->trace("Bounding box   = {}", bounding_box_size0);
-            log_gltf->trace("Primary   axis = {}", "XYZ"[axis0]);
-            log_gltf->trace("Secondary axis = {}", "XYZ"[axis1]);
-            log_gltf->trace("Tertiary  axis = {}", "XYZ"[axis2]);
-
-            sorted_vertex_indices    .resize(vertex_count);
-            point_id_from_gltf_index .resize(vertex_count);
-
-            std::fill(
-                sorted_vertex_indices.begin(),
-                sorted_vertex_indices.end(),
-                std::numeric_limits<std::size_t>::max()
-            );
-            std::fill(
-                point_id_from_gltf_index.begin(),
-                point_id_from_gltf_index.end(),
-                std::numeric_limits<Point_id>::max()
-            );
-            for (std::size_t index : used_indices) {
-                sorted_vertex_indices[index - min_index] = index;
-            }
-
-            std::sort(
-                sorted_vertex_indices.begin(),
-                sorted_vertex_indices.end(),
-                [this, axis0, axis1, axis2](const std::size_t lhs_index, const std::size_t rhs_index) {
-                    if (rhs_index == std::numeric_limits<std::size_t>::max()) {
-                        return true;
-                    }
-                    const vec3 position_lhs = vertex_positions[lhs_index - min_index];
-                    const vec3 position_rhs = vertex_positions[rhs_index - min_index];
-                    if (position_lhs[axis0] != position_rhs[axis0]) {
-                        return position_lhs[axis0] < position_rhs[axis0];
-                    }
-                    if (position_lhs[axis1] != position_rhs[axis1]) {
-                        return position_lhs[axis1] < position_rhs[axis1];
-                    }
-                    return position_lhs[axis2] < position_rhs[axis2];
-                }
-            );
-
-            // Create points for each unique vertex
-            vec3 previous_position{
-                std::numeric_limits<float>::lowest(),
-                std::numeric_limits<float>::lowest(),
-                std::numeric_limits<float>::lowest()
-            };
-            erhe::geometry::Point_id point_id{0};
-            std::size_t point_share_count{0};
-            for (std::size_t index : sorted_vertex_indices) {
-                if (index == std::numeric_limits<std::size_t>::max()) {
-                    continue;
-                }
-                const vec3 position = vertex_positions[index - min_index];
-                if (position != previous_position) {
-                    point_id = geometry->make_point();
-                    previous_position = position;
-                } else {
-                    ++point_share_count;
-                }
-                point_id_from_gltf_index[index - min_index] = point_id;
-            }
-            log_gltf->trace(
-                "point count = {}, point share count = {}",
-                geometry->get_point_count(),
-                point_share_count
-            );
-        }
-        void parse_triangles()
-        {
-            if (!primitive.indicesAccessor.has_value()) {
-                return;
-            }
-            const fastgltf::Accessor& accessor = asset.accessors[primitive.indicesAccessor.value()];
-            const std::size_t triangle_count = accessor.count / 3;
-
-            log_gltf->trace(
-                "index count = {}, unique vertex count = {}, triangle count = {}",
-                accessor.count,
-                used_indices.size(),
-                triangle_count
-            );
-
-            geometry->reserve_polygons(triangle_count);
-            corner_id_start = geometry->m_next_corner_id;
-            gltf_index_from_corner_id.resize(3 * accessor.count);
-            for (std::size_t i = 0; i < accessor.count;) {
-                const std::size_t v0        = fastgltf::getAccessorElement<uint32_t>(asset, accessor, i++);
-                const std::size_t v1        = fastgltf::getAccessorElement<uint32_t>(asset, accessor, i++);
-                const std::size_t v2        = fastgltf::getAccessorElement<uint32_t>(asset, accessor, i++);
-                const Point_id   p0         = point_id_from_gltf_index.at(v0 - min_index);
-                const Point_id   p1         = point_id_from_gltf_index.at(v1 - min_index);
-                const Point_id   p2         = point_id_from_gltf_index.at(v2 - min_index);
-                const Polygon_id polygon_id = geometry->make_polygon();
-                const Corner_id  c0         = geometry->make_polygon_corner(polygon_id, p0);
-                const Corner_id  c1         = geometry->make_polygon_corner(polygon_id, p1);
-                const Corner_id  c2         = geometry->make_polygon_corner(polygon_id, p2);
-                gltf_index_from_corner_id[c0 - corner_id_start] = v0;
-                gltf_index_from_corner_id[c1 - corner_id_start] = v1;
-                gltf_index_from_corner_id[c2 - corner_id_start] = v2;
-                SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v0, c0, polygon_id);
-                SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v1, c1, polygon_id);
-                SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v2, c2, polygon_id);
-            }
-            corner_id_end = geometry->m_next_corner_id;
-        }
-        void parse_vertex_data()
-        {
-            for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-                const fastgltf::Attribute& attribute = primitive.attributes[i];
-                erhe::graphics::Vertex_attribute::Usage_type attribute_usage = to_erhe(attribute.name);
-                std::size_t attribute_index = get_attribute_index(attribute.name);
-                const fastgltf::Accessor& accessor = asset.accessors[attribute.accessorIndex];
-
-                log_gltf->trace(
-                    "Primitive attribute[{}]: name = {}, attribute type = {}[{}], "
-                    "component type = {}, accessor type = {}, normalized = {}, count = {}, "
-                    "accessor offset = {}",
-                    i,
-                    attribute.name.c_str(),
-                    c_str(attribute_usage), // semantics
-                    attribute_index,
-                    c_str(accessor.componentType),
-                    fastgltf::getAccessorTypeName(accessor.type),
-                    accessor.normalized != 0,
-                    accessor.count,
-                    accessor.byteOffset
-                );
-
-                const std::size_t component_count = fastgltf::getNumComponents(accessor.type);
-                if (is_per_point(attribute_usage)) {
-                    for (std::size_t j = 0; j < accessor.count; ++j) {
-                        const auto point_id = point_id_from_gltf_index.at(j - min_index);
-                        if (point_id == std::numeric_limits<Point_id>::max()) {
-                            continue;
-                        }
-
-                        if (is_float(accessor)) {
-                            float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                            accessor_read_floats(asset, accessor, j, &value[0], component_count);
-                            put_point_attribute<float>(attribute, point_id, value);
-                        } else {
-                            uint32_t value[4] = { 0, 0, 0, 0 };
-                            accessor_read_u32s(asset, accessor, j, &value[0], component_count);
-                            put_point_attribute<uint32_t>(attribute, point_id, value);
-                        }
-                    }
-                } else {
-                    for (erhe::geometry::Corner_id corner_id = corner_id_start; corner_id != corner_id_end; ++corner_id) {
-                        const std::size_t j = gltf_index_from_corner_id.at(corner_id - corner_id_start);
-                        if (is_float(accessor)) {
-                            float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                            accessor_read_floats(asset, accessor, j, &value[0], component_count);
-                            put_corner_attribute<float>(attribute, corner_id, value);
-                        } else {
-                            uint32_t value[4] = { 0, 0, 0, 0 };
-                            accessor_read_u32s(asset, accessor, j, &value[0], component_count);
-                            put_corner_attribute<uint32_t>(attribute, corner_id, value);
-                        }
-                    }
-                }
-            }
-        }
-
-        template <typename T>
-        void put_point_attribute(
-            const fastgltf::Attribute& attribute,
-            erhe::geometry::Point_id   point_id,
-            T                          value[4]
-        )
-        {
-            erhe::graphics::Vertex_attribute::Usage_type attribute_usage = to_erhe(attribute.name);
-            std::size_t attribute_index = get_attribute_index(attribute.name);
-
-            switch (attribute_usage) {
-                case erhe::graphics::Vertex_attribute::Usage_type::position: {
-                    glm::vec3 pos = glm::vec3{value[0], value[1], value[2]};
-                    point_locations[attribute_index]->put(point_id, pos);
-                    break;
-                }
-                case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: {
-                    point_joint_indices[attribute_index]->put(point_id, glm::uvec4{value[0], value[1], value[2], value[3]});
-                    break;
-                }
-                case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: {
-                    point_joint_weights[attribute_index]->put(point_id, glm::vec4{value[0], value[1], value[2], value[3]});
-                    break;
-                }
-                default: {
-                    log_gltf->warn("Unsupported glTF attribute {}", attribute.name);
-                    break;
-                }
-            }
-        }
-
-        template <typename T>
-        void put_corner_attribute(
-            const fastgltf::Attribute& attribute,
-            erhe::geometry::Corner_id  corner_id,
-            T                          value[4]
-        )
-        {
-            erhe::graphics::Vertex_attribute::Usage_type attribute_usage = to_erhe(attribute.name);
-            std::size_t attribute_index = get_attribute_index(attribute.name);
-
-            switch (attribute_usage) {
-                case erhe::graphics::Vertex_attribute::Usage_type::normal: {
-                    glm::vec3 n = glm::vec3{value[0], value[1], value[2]};
-                    corner_normals[attribute_index]->put(corner_id, n);
-                    break; 
-                }
-
-                case erhe::graphics::Vertex_attribute::Usage_type::tangent: {
-                    glm::vec4 t = glm::vec4{value[0], value[1], value[2], value[3]};
-                    corner_tangents[attribute_index]->put(corner_id, t);
-                    break;
-                }
-
-                case erhe::graphics::Vertex_attribute::Usage_type::tex_coord: {
-                    corner_texcoords[attribute_index]->put(corner_id, glm::vec2{value[0], value[1]}); break;
-                    break;
-                }
-                case erhe::graphics::Vertex_attribute::Usage_type::color: {
-                    corner_colors[attribute_index]->put(corner_id, glm::vec4{value[0], value[1], value[2], value[3]});
-                    break;
-                }
-                default: {
-                    log_gltf->warn("Unsupported glTF attribute usage {}", c_str(attribute_usage));
-                    break;
-                }
-            }
-        }
-
-        const Gltf_parse_arguments&               arguments;
-        const fastgltf::Asset&                    asset;
-        const fastgltf::Primitive&                primitive;
-        std::shared_ptr<erhe::geometry::Geometry> geometry                 {};
-        std::size_t                               min_index                {0};
-        std::size_t                               max_index                {0};
-        std::vector<uint32_t>                     used_indices             {};
-        std::vector<glm::vec3>                    vertex_positions         {};
-        std::vector<std::size_t>                  sorted_vertex_indices    {};
-        std::vector<erhe::geometry::Point_id>     point_id_from_gltf_index {};
-        erhe::geometry::Corner_id                 corner_id_start          {};
-        erhe::geometry::Corner_id                 corner_id_end            {};
-        std::vector<std::size_t>                  gltf_index_from_corner_id{};
-
-        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec3>*> corner_normals     ;
-        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec4>*> corner_tangents    ;
-        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec4>*> corner_bitangents  ;
-        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec2>*> corner_texcoords   ;
-        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec4>*> corner_colors      ;
-        std::vector<Property_map<erhe::geometry::Corner_id, uint32_t>* > corner_indices     ;
-        std::vector<Property_map<erhe::geometry::Point_id, glm::vec3>* > point_locations    ;
-        std::vector<Property_map<erhe::geometry::Point_id, glm::uvec4>*> point_joint_indices;
-        std::vector<Property_map<erhe::geometry::Point_id, glm::vec4>* > point_joint_weights;
+        std::size_t                    index_accessor;
+        std::vector<std::size_t>       attribute_accessors;
+        erhe::primitive::Triangle_soup triangle_soup;
     };
+    std::vector<Primitive_entry> m_primitive_entries;
 
-    class Geometry_entry
+    void load_new_primitive_geometry(
+        const fastgltf::Primitive& primitive,
+        Primitive_entry&           primitive_entry
+    )
     {
-    public:
-        std::size_t                                          index_accessor;
-        std::vector<std::size_t>                             attribute_accessors;
-        std::shared_ptr<erhe::geometry::Geometry>            geometry;
-        std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;
-    };
-    std::vector<Geometry_entry> m_geometries;
-    void load_new_primitive_geometry(const fastgltf::Primitive& primitive, Geometry_entry& geometry_entry)
-    {
-        Primitive_to_geometry primitive_to_geometry{m_arguments, m_asset.get(), primitive};
-        geometry_entry.geometry = primitive_to_geometry.geometry;
-        if (primitive_to_geometry.corner_tangents.empty()) {
-            if (primitive_to_geometry.corner_texcoords.empty()) {
-                primitive_to_geometry.geometry->generate_polygon_texture_coordinates();
-            }
-            primitive_to_geometry.geometry->compute_tangents();
-        }
-        geometry_entry.geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-            geometry_entry.geometry
-        );
-        m_data_out.geometries.push_back(primitive_to_geometry.geometry);
-        m_data_out.geometry_primitives.push_back(geometry_entry.geometry_primitive);
-    }
-    auto get_primitive_geometry(const fastgltf::Primitive& primitive, Geometry_entry& geometry_entry)
-    {
-        geometry_entry.index_accessor = primitive.indicesAccessor.value();
-        geometry_entry.attribute_accessors.clear();
-        for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-            const fastgltf::Attribute& attribute = primitive.attributes[i];
-            geometry_entry.attribute_accessors.push_back(attribute.accessorIndex);
-        }
+        erhe::primitive::Triangle_soup& triangle_soup = primitive_entry.triangle_soup;
 
-        for (const auto& entry : m_geometries) {
-            if (entry.index_accessor != geometry_entry.index_accessor) continue;
-            if (entry.attribute_accessors.size() != geometry_entry.attribute_accessors.size()) continue;
-            for (std::size_t i = 0, end = entry.attribute_accessors.size(); i < end; ++i) {
-                if (entry.attribute_accessors[i] != geometry_entry.attribute_accessors[i]) continue;
-            }
-            // Found existing entry
-            geometry_entry = entry;
+        if (!primitive.indicesAccessor.has_value()) {
             return;
         }
 
-        load_new_primitive_geometry(primitive, geometry_entry);
+        // Copy indices
+        const fastgltf::Accessor& indices_accessor = m_asset->accessors[primitive.indicesAccessor.value()];
+        log_gltf->trace("index count = {}", indices_accessor.count);
+        triangle_soup.index_data.resize(indices_accessor.count);
+        fastgltf::iterateAccessorWithIndex<uint32_t>(
+            m_asset.get(),
+            indices_accessor,
+            [&](uint32_t index_value, std::size_t index) {
+                triangle_soup.index_data[index] = index_value;
+            }
+        );
+
+        // Gather attributes
+        std::size_t vertex_count = std::numeric_limits<std::size_t>::max();
+        for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
+            const fastgltf::Attribute& attribute = primitive.attributes[i];
+            erhe::graphics::Vertex_attribute::Usage_type attribute_usage_type = to_erhe(attribute.name);
+            std::size_t attribute_usage_index = get_attribute_index(attribute.name);
+            const fastgltf::Accessor& accessor = m_asset->accessors[attribute.accessorIndex];
+            vertex_count = std::min(accessor.count, vertex_count);
+            erhe::graphics::Glsl_type type{erhe::graphics::Glsl_type::invalid};
+            erhe::dataformat::Format format{erhe::dataformat::Format::format_undefined};
+            to_erhe_attribute(accessor, type, format);
+            triangle_soup.vertex_format.add_attribute(
+                erhe::graphics::Vertex_attribute{
+                    .name        = std::string{attribute.name},
+                    .usage       = { attribute_usage_type, attribute_usage_index },
+                    .shader_type = type,
+                    .data_type   = format
+                }
+            );
+        }
+        std::size_t vertex_stride = triangle_soup.vertex_format.stride();
+        triangle_soup.vertex_data.resize(vertex_count * vertex_stride);
+        const std::vector<erhe::graphics::Vertex_attribute>& erhe_attributes = triangle_soup.vertex_format.get_attributes();
+
+        // Gather vertex data
+        for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
+            const fastgltf::Attribute& attribute = primitive.attributes[i];
+            erhe::graphics::Vertex_attribute::Usage_type attribute_usage = to_erhe(attribute.name);
+            std::size_t attribute_index = get_attribute_index(attribute.name);
+            const fastgltf::Accessor& accessor = m_asset->accessors[attribute.accessorIndex];
+            const erhe::graphics::Vertex_attribute& erhe_attribute = erhe_attributes[i];
+            copyComponentsFromAccessor(
+                m_asset.get(),
+                accessor,
+                triangle_soup.vertex_data.data() + erhe_attribute.offset,
+                triangle_soup.vertex_format.stride()
+            );
+
+            log_gltf->trace(
+                "Primitive attribute[{}]: name = {}, attribute type = {}[{}], "
+                "component type = {}, accessor type = {}, normalized = {}, count = {}, "
+                "accessor offset = {}",
+                i,
+                attribute.name.c_str(),
+                c_str(attribute_usage), // semantics
+                attribute_index,
+                c_str(accessor.componentType),
+                fastgltf::getAccessorTypeName(accessor.type),
+                accessor.normalized != 0,
+                accessor.count,
+                accessor.byteOffset
+            );
+        }
+    }
+    auto get_primitive_geometry(const fastgltf::Primitive& primitive, Primitive_entry& primitive_entry)
+    {
+        primitive_entry.index_accessor = primitive.indicesAccessor.value();
+        primitive_entry.attribute_accessors.clear();
+        for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
+            const fastgltf::Attribute& attribute = primitive.attributes[i];
+            primitive_entry.attribute_accessors.push_back(attribute.accessorIndex);
+        }
+
+        for (const auto& old_entry : m_primitive_entries) {
+            if (old_entry.index_accessor != primitive_entry.index_accessor) continue;
+            if (old_entry.attribute_accessors != primitive_entry.attribute_accessors) continue;
+            // Found existing entry
+            primitive_entry = old_entry;
+            return;
+        }
+
+        load_new_primitive_geometry(primitive, primitive_entry);
     }
 
     void parse_primitive(
@@ -1603,15 +1295,15 @@ private:
         const fastgltf::Primitive& primitive = mesh.primitives[primitive_index];
         std::string name = fmt::format("{}[{}]", mesh.name.c_str(), primitive_index);
 
-        Geometry_entry geometry_entry;
-        get_primitive_geometry(primitive, geometry_entry);
+        Primitive_entry primitive_entry;
+        get_primitive_geometry(primitive, primitive_entry);
 
         erhe_mesh->add_primitive(
             erhe::primitive::Primitive{
                 .material = primitive.materialIndex.has_value()
                     ? m_data_out.materials.at(primitive.materialIndex.value())
                     : std::shared_ptr<erhe::primitive::Material>{},
-                .geometry_primitive = geometry_entry.geometry_primitive
+                .triangle_soup = std::make_shared<erhe::primitive::Triangle_soup>(primitive_entry.triangle_soup)
             }
         );
     }

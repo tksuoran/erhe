@@ -93,6 +93,7 @@ target_link_libraries(${_target}
     PUBLIC
         concurrentqueue
         erhe::configuration
+        erhe::dataformat
         erhe::gl
         erhe::item
         erhe::window

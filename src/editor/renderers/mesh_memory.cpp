@@ -57,7 +57,7 @@ Mesh_memory::Mesh_memory(
         gl_index_buffer
     }
     , buffer_info{
-        .index_type    = gl::Draw_elements_type::unsigned_int,
+        .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
         .vertex_format = vertex_format,
         .buffer_sink   = gl_buffer_sink
     }

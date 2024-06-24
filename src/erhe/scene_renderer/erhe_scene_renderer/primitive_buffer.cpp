@@ -147,7 +147,7 @@ auto Primitive_buffer::update(
             ////     m_writer.write_offset
             //// );
 
-            const auto&    geometry_mesh = primitive.geometry_primitive->gl_geometry_mesh;
+            const erhe::primitive::Geometry_mesh& geometry_mesh = primitive.geometry_primitive->get_geometry_mesh();
             const uint32_t count         = static_cast<uint32_t>(geometry_mesh.triangle_fill_indices.index_count);
             const uint32_t power_of_two  = erhe::math::next_power_of_two(count);
             const uint32_t mask          = power_of_two - 1;

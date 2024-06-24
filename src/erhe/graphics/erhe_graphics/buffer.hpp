@@ -3,6 +3,8 @@
 #include "erhe_graphics/gl_objects.hpp"
 #include "erhe_graphics/span.hpp"
 
+#include "erhe_dataformat/dataformat.hpp"
+
 #include <gsl/span>
 
 #include <string_view>
@@ -96,9 +98,7 @@ public:
         );
     }
 
-    auto map_all_bytes(
-        const gl::Map_buffer_access_mask access_mask
-    ) noexcept -> gsl::span<std::byte>;
+    auto map_all_bytes(const gl::Map_buffer_access_mask access_mask) noexcept -> gsl::span<std::byte>;
 
     auto map_bytes(
         const std::size_t                byte_offset,
@@ -141,14 +141,8 @@ public:
     }
 };
 
-[[nodiscard]] auto operator==(
-    const Buffer& lhs,
-    const Buffer& rhs
-) noexcept -> bool;
-
-[[nodiscard]] auto operator!=(
-    const Buffer& lhs,
-    const Buffer& rhs
-) noexcept -> bool;
+[[nodiscard]] auto operator==(const Buffer& lhs, const Buffer& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(const Buffer& lhs, const Buffer& rhs) noexcept -> bool;
+[[nodiscard]] auto to_gl_index_type(erhe::dataformat::Format format) -> gl::Draw_elements_type;
 
 } // namespace erhe::graphics

@@ -10,8 +10,6 @@ erhe_target_sources_grouped(
     frame_controller.cpp
     frame_controller.hpp
     image_transfer.cpp
-    gltf.cpp
-    gltf.hpp
     image_transfer.hpp
     main.cpp
     mesh_memory.cpp

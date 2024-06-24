@@ -32,110 +32,85 @@ Program_interface::Program_interface(
         {
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 0,
-                .shader_type     = gl::Attribute_type::float_vec4,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_position_texcoord",
                 .src_usage       = {
-                    .type = Vertex_attribute::Usage_type::position | Vertex_attribute::Usage_type::tex_coord
+                    .type = 
+                        Vertex_attribute::Usage_type::position |
+                        Vertex_attribute::Usage_type::tex_coord
                 }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 0,
-                .shader_type     = gl::Attribute_type::float_vec3,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
                 .name            = "a_position",
-                .src_usage       = {
-                    .type = Vertex_attribute::Usage_type::position
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::position }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 1,
-                .shader_type     = gl::Attribute_type::float_vec3,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
                 .name            = "a_normal",
-                .src_usage       = {
-                    .type = Vertex_attribute::Usage_type::normal
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::normal }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 3,
-                .shader_type     = gl::Attribute_type::float_vec3,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
                 .name            = "a_normal_smooth",
-                .src_usage       = {
-                    .type  = Vertex_attribute::Usage_type::normal,
-                    .index = 1
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::normal, 1 }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 2,
-                .shader_type     = gl::Attribute_type::float_vec3,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
                 .name            = "a_normal_flat",
-                .src_usage       = {
-                    .type  = Vertex_attribute::Usage_type::normal,
-                    .index = 2
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::normal, 2 }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 4,
-                .shader_type     = gl::Attribute_type::float_vec4,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_tangent",
-                .src_usage       = {
-                    .type  = Vertex_attribute::Usage_type::tangent,
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::tangent }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 5,
-                .shader_type     = gl::Attribute_type::float_vec4,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_bitangent",
-                .src_usage       = {
-                    .type  = Vertex_attribute::Usage_type::bitangent,
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::bitangent }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 6,
-                .shader_type     = gl::Attribute_type::float_vec4,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_color",
-                .src_usage       = {
-                    .type  = Vertex_attribute::Usage_type::color,
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::color }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 7,
-                .shader_type     = gl::Attribute_type::float_vec2,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec2,
                 .name            = "a_aniso_control",
-                .src_usage       = {
-                    .type  = Vertex_attribute::Usage_type::aniso_control,
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::aniso_control }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 8,
-                .shader_type     = gl::Attribute_type::float_vec2,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec2,
                 .name            = "a_texcoord",
-                .src_usage       = {
-                    .type  = Vertex_attribute::Usage_type::tex_coord,
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::tex_coord }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 9,
-                .shader_type     = gl::Attribute_type::float_vec4,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_id",
-                .src_usage       = {
-                    .type  = Vertex_attribute::Usage_type::id,
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::id }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 10,
-                .shader_type     = gl::Attribute_type::unsigned_int_vec4,
+                .shader_type     = erhe::graphics::Glsl_type::unsigned_int_vec4,
                 .name            = "a_joints",
-                .src_usage       =
-                {
-                    .type  = Vertex_attribute::Usage_type::joint_indices,
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::joint_indices }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 11,
-                .shader_type     = gl::Attribute_type::float_vec4,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_weights",
-                .src_usage       = {
-                    .type  = Vertex_attribute::Usage_type::joint_weights,
-                }
+                .src_usage       = { Vertex_attribute::Usage_type::joint_weights }
             }
         }
     }

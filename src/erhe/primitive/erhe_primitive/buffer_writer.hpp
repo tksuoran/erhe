@@ -2,6 +2,7 @@
 
 #include "erhe_primitive/buffer_range.hpp"
 #include "erhe_primitive/vertex_attribute_info.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 
 #include <glm/glm.hpp>
 #include <gsl/span>
@@ -70,17 +71,17 @@ public:
 
     [[nodiscard]] auto start_offset  () -> std::size_t;
 
-    Build_context&               build_context;
-    Buffer_sink&                 buffer_sink;
-    Buffer_range                 buffer_range;
-    const gl::Draw_elements_type index_type;
-    const std::size_t            index_type_size{0};
-    std::vector<std::uint8_t>    index_data;
-    gsl::span<std::uint8_t>      index_data_span;
-    gsl::span<std::uint8_t>      corner_point_index_data_span;
-    gsl::span<std::uint8_t>      triangle_fill_index_data_span;
-    gsl::span<std::uint8_t>      edge_line_index_data_span;
-    gsl::span<std::uint8_t>      polygon_centroid_index_data_span;
+    Build_context&                 build_context;
+    Buffer_sink&                   buffer_sink;
+    Buffer_range                   buffer_range;
+    const erhe::dataformat::Format index_type;
+    const std::size_t             index_type_size{0};
+    std::vector<std::uint8_t>     index_data;
+    gsl::span<std::uint8_t>       index_data_span;
+    gsl::span<std::uint8_t>       corner_point_index_data_span;
+    gsl::span<std::uint8_t>       triangle_fill_index_data_span;
+    gsl::span<std::uint8_t>       edge_line_index_data_span;
+    gsl::span<std::uint8_t>       polygon_centroid_index_data_span;
 
     std::size_t corner_point_indices_written    {0};
     std::size_t triangle_indices_written        {0};

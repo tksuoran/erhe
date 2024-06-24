@@ -2,6 +2,7 @@
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/build_info.hpp"
+#include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_raytrace/ibuffer.hpp"
 #include "erhe_raytrace/igeometry.hpp"
@@ -43,9 +44,7 @@ auto c_str(const Normal_style normal_style) -> const char*
 
 Geometry_raytrace::Geometry_raytrace() = default;
 
-Geometry_raytrace::Geometry_raytrace(
-    erhe::geometry::Geometry& geometry
-)
+Geometry_raytrace::Geometry_raytrace(erhe::geometry::Geometry& geometry)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -70,7 +69,7 @@ Geometry_raytrace::Geometry_raytrace(
         },
         .buffer_info = {
             .normal_style  = erhe::primitive::Normal_style::corner_normals,
-            .index_type    = gl::Draw_elements_type::unsigned_int,
+            .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
             .vertex_format = vertex_format,
             .buffer_sink   = buffer_sink
         }
@@ -152,18 +151,14 @@ Geometry_raytrace& Geometry_raytrace::operator=(Geometry_raytrace&& other) = def
 
 Geometry_raytrace::~Geometry_raytrace() noexcept = default;
 
-Geometry_primitive::Geometry_primitive(
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry
-)
-    : source_geometry{geometry}
+Geometry_primitive::Geometry_primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry)
+    : m_geometry{geometry}
 {
 }
 
-Geometry_primitive::Geometry_primitive(
-    Geometry_mesh&& gl_geometry_mesh
-)
-    : normal_style    {erhe::primitive::Normal_style::corner_normals}
-    , gl_geometry_mesh{gl_geometry_mesh}
+Geometry_primitive::Geometry_primitive(Geometry_mesh&& gl_geometry_mesh)
+    : m_normal_style {erhe::primitive::Normal_style::corner_normals}
+    , m_geometry_mesh{gl_geometry_mesh}
 {
 }
 
@@ -172,10 +167,10 @@ Geometry_primitive::Geometry_primitive(
     const Build_info&                                build_info,
     const Normal_style                               normal_style
 )
-    : source_geometry {geometry}
-    , normal_style    {normal_style}
-    , gl_geometry_mesh{make_geometry_mesh(*geometry.get(), build_info, normal_style)}
-    , raytrace        {*geometry.get()}
+    : m_geometry     {geometry}
+    , m_normal_style {normal_style}
+    , m_geometry_mesh{make_geometry_mesh(*geometry.get(), build_info, normal_style)}
+    , m_raytrace     {*geometry.get()}
 {
 }
 
@@ -185,24 +180,68 @@ Geometry_primitive::Geometry_primitive(
     const Build_info&                                build_info,
     const Normal_style                               normal_style
 )
-    : source_geometry {render_geometry}
-    , normal_style    {normal_style}
-    , gl_geometry_mesh{make_geometry_mesh(*render_geometry.get(), build_info, normal_style)}
-    , raytrace        {*collision_geometry.get()}
+    : m_geometry     {render_geometry}
+    , m_normal_style {normal_style}
+    , m_geometry_mesh{make_geometry_mesh(*render_geometry.get(), build_info, normal_style)}
+    , m_raytrace     {*collision_geometry.get()}
 {
+}
+
+Geometry_primitive::Geometry_primitive(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info)
+{
+    // TODO Use index_type from buffer_info
+    const std::size_t sink_vertex_stride   = buffer_info.vertex_format.stride();
+    const std::size_t source_vertex_stride = triangle_soup.vertex_format.stride();
+    const std::size_t vertex_count         = triangle_soup.vertex_data.size() / source_vertex_stride;
+    const std::size_t index_count          = triangle_soup.vertex_data.size();
+
+    const Buffer_range index_range  = buffer_info.buffer_sink.allocate_index_buffer(index_count, 4);
+    const Buffer_range vertex_range = buffer_info.buffer_sink.allocate_vertex_buffer(vertex_count, sink_vertex_stride);
+
+    m_geometry_mesh.triangle_fill_indices.primitive_type = gl::Primitive_type::triangles;
+    m_geometry_mesh.triangle_fill_indices.first_index = index_range.byte_offset / index_range.element_size;
+    m_geometry_mesh.triangle_fill_indices.index_count = index_count;
+    m_geometry_mesh.index_buffer_range  = index_range;
+    m_geometry_mesh.vertex_buffer_range = vertex_range;
+
+    // Copy indices to buffer
+    std::vector<uint8_t> sink_index_data(index_count * index_range.element_size);
+    memcpy(sink_index_data.data(), triangle_soup.index_data.data(), index_count * index_range.element_size);
+    buffer_info.buffer_sink.enqueue_index_data(index_range.byte_offset, std::move(sink_index_data));
+
+    // Copy and convert vertices to buffer
+    std::vector<uint8_t> sink_vertex_data(vertex_count * vertex_range.element_size);
+    const std::vector<erhe::graphics::Vertex_attribute>& attributes = buffer_info.vertex_format.get_attributes();
+    uint8_t* sink_vertex_data_base = sink_vertex_data.data();
+    const uint8_t* src_vertex_data_base = triangle_soup.vertex_data.data();
+    for (std::size_t attribute_index = 0, end = attributes.size(); attribute_index < end; ++attribute_index) {
+        const erhe::graphics::Vertex_attribute& sink_attribute = attributes[attribute_index];
+        const erhe::graphics::Vertex_attribute* src_attribute = triangle_soup.vertex_format.find_attribute_maybe(
+            sink_attribute.usage.type,
+            static_cast<unsigned int>(sink_attribute.usage.index)
+        );
+        if (src_attribute == nullptr) {
+            continue;
+        }
+        uint8_t* sink_attribute_base = sink_vertex_data_base + sink_attribute.offset;
+        const uint8_t* src_attribute_base = src_vertex_data_base + src_attribute->offset;
+        for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
+            uint8_t* sink = sink_attribute_base + vertex_index * sink_vertex_stride;
+            const uint8_t* src = src_attribute_base + vertex_index * source_vertex_stride;
+            erhe::dataformat::convert(src, src_attribute->data_type, sink, sink_attribute.data_type, 1.0f);
+        }
+    }
+
+    buffer_info.buffer_sink.enqueue_vertex_data(vertex_range.byte_offset, std::move(sink_vertex_data));
 }
 
 Geometry_primitive::~Geometry_primitive() noexcept = default;
 
-void Geometry_primitive::build_from_geometry(
-    const Build_info&  build_info,
-    const Normal_style normal_style_in
-)
+void Geometry_primitive::build_from_geometry(const Build_info& build_info, const Normal_style normal_style_in)
 {
-    normal_style     = normal_style_in;
-    gl_geometry_mesh = make_geometry_mesh(*source_geometry.get(), build_info, normal_style);
-    raytrace         = Geometry_raytrace{*source_geometry.get()};
+    m_normal_style  = normal_style_in;
+    m_geometry_mesh = make_geometry_mesh(*m_geometry.get(), build_info, m_normal_style);
+    m_raytrace      = Geometry_raytrace{*m_geometry.get()};
 }
-
 
 } // namespace erhe::primitive
