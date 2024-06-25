@@ -8,24 +8,27 @@
 namespace erhe::graphics
 {
 
-auto glsl_token(gl::Attribute_type type) -> const char*
+auto glsl_token(Glsl_type attribute_type) -> const char*
 {
-    switch (type) {
+    switch (attribute_type) {
         //using enum gl::Attribute_type;
-        case gl::Attribute_type::int_:              return "int      ";
-        case gl::Attribute_type::int_vec2:          return "ivec2    ";
-        case gl::Attribute_type::int_vec3:          return "ivec3    ";
-        case gl::Attribute_type::int_vec4:          return "ivec4    ";
-        case gl::Attribute_type::unsigned_int:      return "uint     ";
-        case gl::Attribute_type::unsigned_int_vec2: return "uvec2    ";
-        case gl::Attribute_type::unsigned_int_vec3: return "uvec3    ";
-        case gl::Attribute_type::unsigned_int_vec4: return "uvec4    ";
-        case gl::Attribute_type::unsigned_int64_arb:return "uint64_t ";
-        case gl::Attribute_type::float_:            return "float    ";
-        case gl::Attribute_type::float_vec2:        return "vec2     ";
-        case gl::Attribute_type::float_vec3:        return "vec3     ";
-        case gl::Attribute_type::float_vec4:        return "vec4     ";
-        case gl::Attribute_type::float_mat4:        return "mat4     ";
+        case Glsl_type::float_:            return "float    ";
+        case Glsl_type::float_vec2:        return "vec2     ";
+        case Glsl_type::float_vec3:        return "vec3     ";
+        case Glsl_type::float_vec4:        return "vec4     ";
+        case Glsl_type::bool_:             return "bool     ";
+        case Glsl_type::int_:              return "int      ";
+        case Glsl_type::int_vec2:          return "ivec2    ";
+        case Glsl_type::int_vec3:          return "ivec3    ";
+        case Glsl_type::int_vec4:          return "ivec4    ";
+        case Glsl_type::unsigned_int:      return "uint     ";
+        case Glsl_type::unsigned_int_vec2: return "uvec2    ";
+        case Glsl_type::unsigned_int_vec3: return "uvec3    ";
+        case Glsl_type::unsigned_int_vec4: return "uvec4    ";
+        case Glsl_type::unsigned_int64_arb:return "uint64_t ";
+        case Glsl_type::float_mat_2x2:     return "mat2     ";
+        case Glsl_type::float_mat_3x3:     return "mat3     ";
+        case Glsl_type::float_mat_4x4:     return "mat4     ";
         default: {
             ERHE_FATAL("TODO");
         }

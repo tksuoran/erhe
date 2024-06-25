@@ -439,7 +439,8 @@ auto Brush::make_instance(
             data.normal_style
         );
     }
-    return geometry_primitive->gl_geometry_mesh.bounding_box;
+    erhe::primitive::Geometry_mesh& geometry_mesh = geometry_primitive->get_geometry_mesh();
+    return geometry_mesh.bounding_box;
 }
 
 }

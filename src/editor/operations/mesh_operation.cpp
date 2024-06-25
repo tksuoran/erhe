@@ -130,11 +130,12 @@ void Mesh_operation::make_entries(
         };
 
         for (auto& primitive : mesh->get_primitives()) {
-            if (!primitive.geometry_primitive->source_geometry) {
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.geometry_primitive->get_geometry();
+            if (!geometry) {
                 continue;
             }
             auto after_geometry = std::make_shared<erhe::geometry::Geometry>(
-                operation(*primitive.geometry_primitive->source_geometry.get())
+                operation(*geometry.get())
             );
             entry.after.primitives.push_back(
                 erhe::primitive::Primitive{
@@ -142,7 +143,7 @@ void Mesh_operation::make_entries(
                     std::make_shared<erhe::primitive::Geometry_primitive>(
                         after_geometry,
                         m_parameters.build_info,
-                        primitive.geometry_primitive->normal_style
+                        primitive.geometry_primitive->get_normal_style()
                     )
                 }
             );

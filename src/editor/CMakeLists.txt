@@ -54,6 +54,8 @@ erhe_target_sources_grouped(
     operations/node_transform_operation.hpp
     operations/operation_stack.cpp
     operations/operation_stack.hpp
+    parsers/gltf.cpp
+    parsers/gltf.hpp
     parsers/json_polyhedron.cpp
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
@@ -276,13 +278,6 @@ erhe_target_sources_grouped(
     windows/viewport_config_window.cpp
     windows/viewport_config_window.hpp
 )
-if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        parsers/gltf.cpp
-        parsers/gltf.hpp
-    )
-endif ()
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
 endif ()
@@ -351,9 +346,6 @@ if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
 endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
-endif ()
-if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
-    target_link_libraries(${_target} PRIVATE cgltf)
 endif ()
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 set_target_properties(

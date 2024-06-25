@@ -16,28 +16,27 @@ namespace
 {
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const gl::Draw_elements_type  type,
-    const std::size_t             value
+    const gsl::span<std::uint8_t>  destination,
+    const erhe::dataformat::Format format,
+    const std::size_t              value
 )
 {
-    switch (type) {
-        //using enum gl::Draw_elements_type;
-        case gl::Draw_elements_type::unsigned_byte: {
+    switch (format) {
+        case erhe::dataformat::Format::format_8_scalar_uint: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
             Expects(value <= 0xffU);
             ptr[0] = value & 0xffU;
             break;
         }
 
-        case gl::Draw_elements_type::unsigned_short: {
+        case erhe::dataformat::Format::format_16_scalar_uint: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
             Expects(value <= 0xffffU);
             ptr[0] = value & 0xffffU;
             break;
         }
 
-        case gl::Draw_elements_type::unsigned_int: {
+        case erhe::dataformat::Format::format_32_scalar_uint: {
             auto* const ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value & 0xffffffffu;
             break;
@@ -50,69 +49,49 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
-    const unsigned int            value
+    const gsl::span<std::uint8_t>  destination,
+    const erhe::dataformat::Format format,
+    const unsigned int             value
 )
 {
-    switch (type) {
-        //using enum gl::Vertex_attrib_type;
-        case gl::Vertex_attrib_type::unsigned_byte: {
-            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            Expects(value <= 0xffU);
-            ptr[0] = value & 0xffU;
-            break;
-        }
-
-        case gl::Vertex_attrib_type::unsigned_short: {
-            auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
-            Expects(value <= 0xffffU);
-            ptr[0] = value & 0xffffU;
-            break;
-        }
-
-        case gl::Vertex_attrib_type::unsigned_int: {
-            auto* ptr = reinterpret_cast<uint32_t*>(destination.data());
-            ptr[0] = value;
-            break;
-        }
-
-        default: {
-            ERHE_FATAL("bad index type");
-        }
-    }
+    write_low(destination, format, static_cast<std::size_t>(value));
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
-    const glm::vec2               value
+    const gsl::span<std::uint8_t>  destination,
+    const erhe::dataformat::Format format,
+    const glm::vec2                value
 )
 {
-    switch (type) {
-        case gl::Vertex_attrib_type::float_: {
+    switch (format) {
+        case erhe::dataformat::Format::format_32_vec2_float: {
             auto* const ptr = reinterpret_cast<float*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
             break;
         }
-        case gl::Vertex_attrib_type::half_float: {
-            // TODO(tksuoran@gmail.com): Would this be safe even if we are not aligned?
-            // uint* ptr = reinterpret_cast<uint*>(data_ptr);
-            // *ptr = glm::packHalf2x16(value);
-            auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
-            ptr[0] = glm::packHalf1x16(value.x);
-            ptr[1] = glm::packHalf1x16(value.y);
+        case erhe::dataformat::Format::format_8_vec2_unorm: {
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
+            ptr[0] = erhe::dataformat::float_to_unorm8(value.x);
+            ptr[1] = erhe::dataformat::float_to_unorm8(value.y);
             break;
         }
-        case gl::Vertex_attrib_type::unsigned_byte: {
+        case erhe::dataformat::Format::format_8_vec2_snorm: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
-            float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
-            Expects(scaled_x <= 0xffU);
-            Expects(scaled_y <= 0xffU);
-            ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
-            ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
+            ptr[0] = erhe::dataformat::float_to_snorm8(value.x);
+            ptr[1] = erhe::dataformat::float_to_snorm8(value.y);
+            break;
+        }
+        case erhe::dataformat::Format::format_16_vec2_unorm: {
+            auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
+            ptr[0] = erhe::dataformat::float_to_unorm16(value.x);
+            ptr[1] = erhe::dataformat::float_to_unorm16(value.y);
+            break;
+        }
+        case erhe::dataformat::Format::format_16_vec2_snorm: {
+            auto* const ptr = reinterpret_cast<int16_t*>(destination.data());
+            ptr[0] = erhe::dataformat::float_to_snorm16(value.x);
+            ptr[1] = erhe::dataformat::float_to_snorm16(value.y);
             break;
         }
         default: {
@@ -123,37 +102,45 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
-    const glm::vec3               value
+    const gsl::span<std::uint8_t>  destination,
+    const erhe::dataformat::Format format,
+    const glm::vec3                value
 )
 {
-    switch (type) {
-        case gl::Vertex_attrib_type::float_: {
+    switch (format) {
+        case erhe::dataformat::Format::format_32_vec3_float: {
             auto* const ptr = reinterpret_cast<float*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
             ptr[2] = value.z;
             break;
         }
-        case gl::Vertex_attrib_type::half_float: {
-            auto* const ptr = reinterpret_cast<glm::uint16 *>(destination.data());
-            ptr[0] = glm::packHalf1x16(value.x);
-            ptr[1] = glm::packHalf1x16(value.y);
-            ptr[2] = glm::packHalf1x16(value.z);
+        case erhe::dataformat::Format::format_8_vec3_unorm: {
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
+            ptr[0] = erhe::dataformat::float_to_unorm8(value.x);
+            ptr[1] = erhe::dataformat::float_to_unorm8(value.y);
+            ptr[2] = erhe::dataformat::float_to_unorm8(value.z);
             break;
         }
-        case gl::Vertex_attrib_type::unsigned_byte: {
+        case erhe::dataformat::Format::format_8_vec3_snorm: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
-            float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
-            float scaled_z = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
-            Expects(scaled_x <= 0xffU);
-            Expects(scaled_y <= 0xffU);
-            Expects(scaled_z <= 0xffU);
-            ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
-            ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
-            ptr[2] = static_cast<uint8_t>(scaled_z) & 0xffU;
+            ptr[0] = erhe::dataformat::float_to_snorm8(value.x);
+            ptr[1] = erhe::dataformat::float_to_snorm8(value.y);
+            ptr[2] = erhe::dataformat::float_to_snorm8(value.z);
+            break;
+        }
+        case erhe::dataformat::Format::format_16_vec3_unorm: {
+            auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
+            ptr[0] = erhe::dataformat::float_to_unorm16(value.x);
+            ptr[1] = erhe::dataformat::float_to_unorm16(value.y);
+            ptr[2] = erhe::dataformat::float_to_unorm16(value.z);
+            break;
+        }
+        case erhe::dataformat::Format::format_16_vec3_snorm: {
+            auto* const ptr = reinterpret_cast<int16_t*>(destination.data());
+            ptr[0] = erhe::dataformat::float_to_snorm16(value.x);
+            ptr[1] = erhe::dataformat::float_to_snorm16(value.y);
+            ptr[2] = erhe::dataformat::float_to_snorm16(value.z);
             break;
         }
         default: {
@@ -164,13 +151,13 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
-    const glm::vec4               value
+    const gsl::span<std::uint8_t>  destination,
+    const erhe::dataformat::Format format,
+    const glm::vec4                value
 )
 {
-    switch (type) {
-        case gl::Vertex_attrib_type::float_: {
+    switch (format) {
+        case erhe::dataformat::Format::format_32_vec4_float: {
             auto* const ptr = reinterpret_cast<float*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
@@ -178,29 +165,36 @@ inline void write_low(
             ptr[3] = value.w;
             break;
         }
-        case gl::Vertex_attrib_type::half_float: { 
-            auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
-            // TODO(tksuoran@gmail.com): glm::packHalf4x16() - but what if we are not aligned?
-            ptr[0] = glm::packHalf1x16(value.x);
-            ptr[1] = glm::packHalf1x16(value.y);
-            ptr[2] = glm::packHalf1x16(value.z);
-            ptr[3] = glm::packHalf1x16(value.w);
+        case erhe::dataformat::Format::format_8_vec4_unorm: {
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
+            ptr[0] = erhe::dataformat::float_to_unorm8(value.x);
+            ptr[1] = erhe::dataformat::float_to_unorm8(value.y);
+            ptr[2] = erhe::dataformat::float_to_unorm8(value.z);
+            ptr[3] = erhe::dataformat::float_to_unorm8(value.w);
             break;
         }
-        case gl::Vertex_attrib_type::unsigned_byte: {
+        case erhe::dataformat::Format::format_8_vec4_snorm: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
-            float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
-            float scaled_z = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
-            float scaled_w = std::max(0.0f, std::min(value.w * 255.0f, 255.0f));
-            Expects(scaled_x <= 0xffU);
-            Expects(scaled_y <= 0xffU);
-            Expects(scaled_z <= 0xffU);
-            Expects(scaled_w <= 0xffU);
-            ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
-            ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
-            ptr[2] = static_cast<uint8_t>(scaled_z) & 0xffU;
-            ptr[3] = static_cast<uint8_t>(scaled_w) & 0xffU;
+            ptr[0] = erhe::dataformat::float_to_snorm8(value.x);
+            ptr[1] = erhe::dataformat::float_to_snorm8(value.y);
+            ptr[2] = erhe::dataformat::float_to_snorm8(value.z);
+            ptr[3] = erhe::dataformat::float_to_snorm8(value.w);
+            break;
+        }
+        case erhe::dataformat::Format::format_16_vec4_unorm: {
+            auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
+            ptr[0] = erhe::dataformat::float_to_unorm16(value.x);
+            ptr[1] = erhe::dataformat::float_to_unorm16(value.y);
+            ptr[2] = erhe::dataformat::float_to_unorm16(value.z);
+            ptr[3] = erhe::dataformat::float_to_unorm16(value.w);
+            break;
+        }
+        case erhe::dataformat::Format::format_16_vec4_snorm: {
+            auto* const ptr = reinterpret_cast<int16_t*>(destination.data());
+            ptr[0] = erhe::dataformat::float_to_snorm16(value.x);
+            ptr[1] = erhe::dataformat::float_to_snorm16(value.y);
+            ptr[2] = erhe::dataformat::float_to_snorm16(value.z);
+            ptr[3] = erhe::dataformat::float_to_snorm16(value.w);
             break;
         }
         default: {
@@ -211,60 +205,54 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t> destination,
-    const gl::Vertex_attrib_type  type,
-    const glm::uvec4              value
+    const gsl::span<std::uint8_t>  destination,
+    const erhe::dataformat::Format format,
+    const glm::uvec4               value
 )
 {
-    switch (type) {
-        //using enum gl::Vertex_attrib_type;
-        case gl::Vertex_attrib_type::unsigned_byte: {
+    switch (format) {
+        case erhe::dataformat::Format::format_8_vec4_uint: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            Expects(value.x <= 0xffU);
-            Expects(value.y <= 0xffU);
-            Expects(value.z <= 0xffU);
-            Expects(value.w <= 0xffU);
-            ptr[0] = value.x & 0xffU;
-            ptr[1] = value.y & 0xffU;
-            ptr[2] = value.z & 0xffU;
-            ptr[3] = value.w & 0xffU;
+            ERHE_VERIFY(value.x <= std::numeric_limits<uint8_t>::max());
+            ERHE_VERIFY(value.y <= std::numeric_limits<uint8_t>::max());
+            ERHE_VERIFY(value.z <= std::numeric_limits<uint8_t>::max());
+            ERHE_VERIFY(value.w <= std::numeric_limits<uint8_t>::max());
+            ptr[0] = static_cast<uint8_t>(value.x & 0xffu);
+            ptr[1] = static_cast<uint8_t>(value.y & 0xffu);
+            ptr[2] = static_cast<uint8_t>(value.z & 0xffu);
+            ptr[3] = static_cast<uint8_t>(value.w & 0xffu);
             break;
         }
-
-        case gl::Vertex_attrib_type::unsigned_short: {
+        case erhe::dataformat::Format::format_16_vec4_uint: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
-            Expects(value.x <= 0xffffU);
-            Expects(value.y <= 0xffffU);
-            Expects(value.z <= 0xffffU);
-            Expects(value.w <= 0xffffU);
-            ptr[0] = value.x & 0xffffU;
-            ptr[1] = value.y & 0xffffU;
-            ptr[2] = value.z & 0xffffU;
-            ptr[3] = value.w & 0xffffU;
+            ERHE_VERIFY(value.x <= std::numeric_limits<uint16_t>::max());
+            ERHE_VERIFY(value.y <= std::numeric_limits<uint16_t>::max());
+            ERHE_VERIFY(value.z <= std::numeric_limits<uint16_t>::max());
+            ERHE_VERIFY(value.w <= std::numeric_limits<uint16_t>::max());
+            ptr[0] = static_cast<uint16_t>(value.x & 0xffffu);
+            ptr[1] = static_cast<uint16_t>(value.y & 0xffffu);
+            ptr[2] = static_cast<uint16_t>(value.z & 0xffffu);
+            ptr[3] = static_cast<uint16_t>(value.w & 0xffffu);
             break;
         }
-
-        case gl::Vertex_attrib_type::unsigned_int: {
-            auto* ptr = reinterpret_cast<uint32_t*>(destination.data());
+        case erhe::dataformat::Format::format_32_vec4_uint: {
+            auto* const ptr = reinterpret_cast<uint32_t*>(destination.data());
             ptr[0] = value.x;
             ptr[1] = value.y;
             ptr[2] = value.z;
             ptr[3] = value.w;
             break;
         }
-
         default: {
-            ERHE_FATAL("bad index type");
+            ERHE_FATAL("unsupported attribute type");
+            break;
         }
     }
 }
 
 } // namespace
 
-Vertex_buffer_writer::Vertex_buffer_writer(
-    Build_context& build_context,
-    Buffer_sink&   buffer_sink
-)
+Vertex_buffer_writer::Vertex_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink)
     : build_context{build_context}
     , buffer_sink  {buffer_sink}
 {
@@ -284,10 +272,7 @@ auto Vertex_buffer_writer::start_offset() -> std::size_t
     return build_context.root.geometry_mesh->vertex_buffer_range.byte_offset;
 }
 
-Index_buffer_writer::Index_buffer_writer(
-    Build_context& build_context,
-    Buffer_sink&   buffer_sink
-)
+Index_buffer_writer::Index_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink)
     : build_context  {build_context}
     , buffer_sink    {buffer_sink}
     , index_type     {build_context.root.build_info.buffer_info.index_type}
@@ -338,9 +323,31 @@ auto Index_buffer_writer::start_offset() -> std::size_t
     return build_context.root.geometry_mesh->index_buffer_range.byte_offset;
 }
 
-void Vertex_buffer_writer::write(
-    const Vertex_attribute_info& attribute,
-    const glm::vec2              value
+void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec2 value)
+{
+    write_low(
+        vertex_data_span.subspan(
+            vertex_write_offset + attribute.offset,
+            attribute.size
+        ),
+        attribute.data_type,
+        value
+    );
+}
+
+void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec3 value)
+{
+    write_low(
+        vertex_data_span.subspan(
+            vertex_write_offset + attribute.offset,
+            attribute.size
+        ),
+        attribute.data_type,
+        value
+    );
+}
+
+void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec4 value
 )
 {
     write_low(
@@ -353,10 +360,7 @@ void Vertex_buffer_writer::write(
     );
 }
 
-void Vertex_buffer_writer::write(
-    const Vertex_attribute_info& attribute,
-    const glm::vec3              value
-)
+void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const uint32_t value)
 {
     write_low(
         vertex_data_span.subspan(
@@ -368,40 +372,7 @@ void Vertex_buffer_writer::write(
     );
 }
 
-void Vertex_buffer_writer::write(
-    const Vertex_attribute_info& attribute,
-    const glm::vec4              value
-)
-{
-    write_low(
-        vertex_data_span.subspan(
-            vertex_write_offset + attribute.offset,
-            attribute.size
-        ),
-        attribute.data_type,
-        value
-    );
-}
-
-void Vertex_buffer_writer::write(
-    const Vertex_attribute_info& attribute,
-    const uint32_t               value
-)
-{
-    write_low(
-        vertex_data_span.subspan(
-            vertex_write_offset + attribute.offset,
-            attribute.size
-        ),
-        attribute.data_type,
-        value
-    );
-}
-
-void Vertex_buffer_writer::write(
-    const Vertex_attribute_info& attribute,
-    const glm::uvec4             value
-)
+void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::uvec4 value)
 {
     write_low(
         vertex_data_span.subspan(

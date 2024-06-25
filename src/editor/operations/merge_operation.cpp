@@ -133,11 +133,11 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         for (auto& primitive : mesh->get_primitives()) {
-            const auto& render_geometry = primitive.geometry_primitive->source_geometry;
+            const std::shared_ptr<erhe::geometry::Geometry>& render_geometry = primitive.geometry_primitive->get_geometry();
             if (render_geometry) {
                 combined_render_geometry.merge(*render_geometry, transform);
                 if (normal_style == Normal_style::none) {
-                    normal_style = primitive.geometry_primitive->normal_style;
+                    normal_style = primitive.geometry_primitive->get_normal_style();
                 }
                 if (!material) {
                     material = primitive.material;

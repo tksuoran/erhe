@@ -83,13 +83,9 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             erhe::graphics::Vertex_attribute_mapping::a_color_float_vec4(),
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 2,
-                .shader_type     = gl::Attribute_type::float_vec4,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_line_start_end",
-                .src_usage =
-                {
-                    .type        = erhe::graphics::Vertex_attribute::Usage_type::custom,
-                    .index       = 0
-                }
+                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::custom }
             }
         }
     }
@@ -102,15 +98,9 @@ Line_renderer_pipeline::Line_renderer_pipeline(
         erhe::graphics::Vertex_attribute::color_float4(),     // color
         erhe::graphics::Vertex_attribute                      // clipped line start (xy) and end (zw)
         {
-            .usage = {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::custom,
-                .index     = 0
-            },
-            .shader_type   = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 4
-            }
+            .usage       = { erhe::graphics::Vertex_attribute::Usage_type::custom },
+            .shader_type = erhe::graphics::Glsl_type::float_vec4,
+            .data_type   = erhe::dataformat::Format::format_32_vec4_float
         }
     }
 {

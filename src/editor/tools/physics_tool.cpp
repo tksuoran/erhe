@@ -449,7 +449,7 @@ auto Physics_tool::on_drag() -> bool
             }
             max_radius = std::max(
                 max_radius,
-                primitive.geometry_primitive->gl_geometry_mesh.bounding_sphere.radius
+                primitive.geometry_primitive->get_geometry_mesh().bounding_sphere.radius
             );
         }
         m_target_mesh_size   = max_radius;

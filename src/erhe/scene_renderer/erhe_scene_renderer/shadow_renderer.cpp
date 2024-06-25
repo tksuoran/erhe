@@ -5,6 +5,7 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
@@ -235,7 +236,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
                 gl::multi_draw_elements_indirect(
                     pipeline.data.input_assembly.primitive_topology,
-                    parameters.index_type,
+                    erhe::graphics::to_gl_index_type(parameters.index_type),
                     reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                     static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))

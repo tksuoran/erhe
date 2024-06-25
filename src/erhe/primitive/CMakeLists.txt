@@ -30,6 +30,8 @@ erhe_target_sources_grouped(
     erhe_primitive/primitive.hpp
     erhe_primitive/property_maps.cpp
     erhe_primitive/property_maps.hpp
+    erhe_primitive/triangle_soup.cpp
+    erhe_primitive/triangle_soup.hpp
     erhe_primitive/vertex_attribute_info.cpp
     erhe_primitive/vertex_attribute_info.hpp
 )

@@ -125,8 +125,8 @@ private:
     auto make_node    (const std::filesystem::path& path, Asset_node* parent) -> std::shared_ptr<Asset_node>;
     auto item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
-    auto try_import(const std::shared_ptr<Asset_file_gltf>& gltf, bool u_up) -> bool;
-    auto try_open  (const std::shared_ptr<Asset_file_gltf>& gltf, bool u_up) -> bool;
+    auto try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
+    auto try_open  (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
 
     Editor_context& m_context;
     Asset_node*     m_popup_node{nullptr};

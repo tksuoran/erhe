@@ -18,7 +18,9 @@ namespace erhe::primitive
 {
 
 class Build_info;
+class Buffer_info;
 class Material;
+class Triangle_soup;
 
 class Geometry_raytrace
 {
@@ -37,9 +39,7 @@ public:
 class Geometry_primitive
 {
 public:
-    explicit Geometry_primitive(
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry
-    );
+    explicit Geometry_primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
     explicit Geometry_primitive(Geometry_mesh&& gl_geometry_mesh);
     Geometry_primitive(
         const std::shared_ptr<erhe::geometry::Geometry>& geometry,
@@ -52,24 +52,32 @@ public:
         const Build_info&                                build_info,
         const Normal_style                               normal_style = Normal_style::corner_normals
     );
+    Geometry_primitive(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info);
     ~Geometry_primitive() noexcept;
 
-    void build_from_geometry(
-        const Build_info&  build_info,
-        const Normal_style normal_style
-    );
+    void build_from_geometry(const Build_info& build_info, Normal_style normal_style);
 
-    std::shared_ptr<erhe::geometry::Geometry> source_geometry {};
-    Normal_style                              normal_style    {Normal_style::none};
-    Geometry_mesh                             gl_geometry_mesh{};
-    Geometry_raytrace                         raytrace;
+    auto get_geometry() const -> const std::shared_ptr<erhe::geometry::Geometry>& { return m_geometry; }
+    auto get_normal_style() const -> Normal_style { return m_normal_style; }
+    auto get_geometry_mesh() -> Geometry_mesh& { return m_geometry_mesh; }
+    auto get_geometry_mesh() const -> const Geometry_mesh& { return m_geometry_mesh; }
+    auto get_geometry_raytrace() -> Geometry_raytrace& { return m_raytrace; }
+
+private:
+    std::shared_ptr<erhe::geometry::Geometry> m_geometry     {};
+    Normal_style                              m_normal_style {Normal_style::none};
+    Geometry_mesh                             m_geometry_mesh{};
+    Geometry_raytrace                         m_raytrace;
 };
+
+class Triangle_soup;
 
 class Primitive
 {
 public:
     std::shared_ptr<Material>           material;
     std::shared_ptr<Geometry_primitive> geometry_primitive;
+    std::shared_ptr<Triangle_soup>      triangle_soup;
 };
 
 [[nodiscard]] auto primitive_type(Primitive_mode primitive_mode) -> std::optional<gl::Primitive_type>;

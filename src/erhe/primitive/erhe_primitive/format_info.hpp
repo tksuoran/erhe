@@ -31,18 +31,18 @@ public:
 class Attribute_types
 {
 public:
-    gl::Vertex_attrib_type position     {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type normal       {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type normal_flat  {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type normal_smooth{gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type tangent      {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type bitangent    {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type color        {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type texcoord     {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type id_vec3      {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type id_uint      {gl::Vertex_attrib_type::float_};
-    gl::Vertex_attrib_type joint_indices{gl::Vertex_attrib_type::unsigned_byte};
-    gl::Vertex_attrib_type joint_weights{gl::Vertex_attrib_type::float_};
+    erhe::dataformat::Format position     {erhe::dataformat::Format::format_32_vec3_float};
+    erhe::dataformat::Format normal       {erhe::dataformat::Format::format_32_vec3_float};
+    erhe::dataformat::Format normal_flat  {erhe::dataformat::Format::format_32_vec3_float};
+    erhe::dataformat::Format normal_smooth{erhe::dataformat::Format::format_32_vec3_float};
+    erhe::dataformat::Format tangent      {erhe::dataformat::Format::format_32_vec3_float};
+    erhe::dataformat::Format bitangent    {erhe::dataformat::Format::format_32_vec3_float};
+    erhe::dataformat::Format color        {erhe::dataformat::Format::format_32_vec4_float};
+    erhe::dataformat::Format texcoord     {erhe::dataformat::Format::format_32_vec2_float};
+    erhe::dataformat::Format id_vec3      {erhe::dataformat::Format::format_32_vec3_float};
+    erhe::dataformat::Format id_uint      {erhe::dataformat::Format::format_32_scalar_uint};
+    erhe::dataformat::Format joint_indices{erhe::dataformat::Format::format_8_vec4_uint};
+    erhe::dataformat::Format joint_weights{erhe::dataformat::Format::format_32_vec4_float};
 };
 
 [[nodiscard]] auto prepare_vertex_format(

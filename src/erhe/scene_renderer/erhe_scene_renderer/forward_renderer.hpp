@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_renderer/draw_indirect_buffer.hpp"
@@ -48,7 +49,7 @@ public:
     class Render_parameters
     {
     public:
-        gl::Draw_elements_type                                             index_type       {gl::Draw_elements_type::unsigned_int};
+        erhe::dataformat::Format                                           index_type       {erhe::dataformat::Format::format_32_scalar_uint};
 
         const glm::vec3                                                    ambient_light    {0.0f};
         const erhe::scene::Camera*                                         camera           {nullptr};

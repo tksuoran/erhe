@@ -91,7 +91,7 @@ auto intersect(
 
     for (auto& primitive : mesh.get_primitives()) {
         const auto& geometry_primitive = primitive.geometry_primitive;
-        auto* geometry = geometry_primitive->source_geometry.get();
+        erhe::geometry::Geometry* geometry = geometry_primitive->get_geometry().get();
         if (geometry == nullptr) {
             continue;
         }

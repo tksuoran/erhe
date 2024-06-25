@@ -1,12 +1,38 @@
 #pragma once
 
 #include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 
 #include <cstddef>
+#include <string>
 #include <type_traits>
 
 namespace erhe::graphics
 {
+
+enum class Glsl_type
+{
+    invalid = 0,
+    float_,
+    float_vec2,
+    float_vec3,
+    float_vec4,
+    bool_,
+    int_,
+    int_vec2,
+    int_vec3,
+    int_vec4,
+    unsigned_int,
+    unsigned_int_vec2,
+    unsigned_int_vec3,
+    unsigned_int_vec4,
+    unsigned_int64_arb,
+    float_mat_2x2,
+    float_mat_3x3,
+    float_mat_4x4,
+};
+
+[[nodiscard]] auto c_str(Glsl_type value) -> const char*;
 
 class Vertex_attribute
 {
@@ -39,263 +65,153 @@ public:
         std::size_t index{0};
     };
 
-    // type, normalized, dimension -> dvec3 for example is double, false, 3
-    class Data_type
-    {
-    public:
-        [[nodiscard]] auto operator==(const Data_type& other) const -> bool;
-        [[nodiscard]] auto operator!=(const Data_type& other) const -> bool;
-
-        gl::Vertex_attrib_type type      {gl::Vertex_attrib_type::float_};
-        bool                   normalized{false};
-        std::size_t            dimension {0};
-    };
-
     [[nodiscard]] static auto desc(Usage_type usage) -> const char*;
 
     [[nodiscard]] auto size      () const -> std::size_t;
     [[nodiscard]] auto operator==(const Vertex_attribute& other) const -> bool;
     [[nodiscard]] auto operator!=(const Vertex_attribute& other) const -> bool;
 
-    Usage              usage      {};
-    gl::Attribute_type shader_type{gl::Attribute_type::float_};
-    Data_type          data_type  {};
-    std::size_t        offset     {0};
-    unsigned int       divisor    {0};
+    std::string              name       {};
+    Usage                    usage      {};
+    Glsl_type                shader_type{Glsl_type::invalid};
+    erhe::dataformat::Format data_type  {erhe::dataformat::Format::format_undefined};
+    std::size_t              offset     {0};
+    unsigned int             divisor    {0};
 
     [[nodiscard]] static auto position_float2() -> erhe::graphics::Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::position
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
+            .usage       = { Usage_type::position },
+            .shader_type = Glsl_type::float_vec2,
+            .data_type   = erhe::dataformat::Format::format_32_vec2_float
         };
     }
     [[nodiscard]] static auto position_float3() -> erhe::graphics::Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::position
-            },
-            .shader_type   = gl::Attribute_type::float_vec3,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 3
-            }
+            .usage       = { Usage_type::position },
+            .shader_type = Glsl_type::float_vec3,
+            .data_type   = erhe::dataformat::Format::format_32_vec3_float
         };
     }
     [[nodiscard]] static auto position0_float4() -> erhe::graphics::Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::position,
-                .index     = 0
-            },
-            .shader_type   = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 4
-            }
+            .usage       = { Usage_type::position },
+            .shader_type = Glsl_type::float_vec4,
+            .data_type   = erhe::dataformat::Format::format_32_vec4_float
         };
     }
     [[nodiscard]] static auto position1_float4() -> erhe::graphics::Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::position,
-                .index     = 1
-            },
-            .shader_type   = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 4
-            }
+            .usage       = { Usage_type::position, 1 },
+            .shader_type = Glsl_type::float_vec4,
+            .data_type   = erhe::dataformat::Format::format_32_vec4_float
         };
     }
     [[nodiscard]] static auto position2_float4() -> erhe::graphics::Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::position,
-                .index     = 2
-            },
-            .shader_type   = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 4
-            }
+            .usage       = { Usage_type::position, 2 },
+            .shader_type = Glsl_type::float_vec4,
+            .data_type   = erhe::dataformat::Format::format_32_vec4_float
         };
     }
     [[nodiscard]] static auto normal0_float3() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::normal,
-                .index     = 0
-            },
-            .shader_type   = gl::Attribute_type::float_vec3,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 3
-            }
+            .usage       = {Usage_type::normal },
+            .shader_type = Glsl_type::float_vec3,
+            .data_type   = erhe::dataformat::Format::format_32_vec3_float
         };
     }
     [[nodiscard]] static auto normal1_float3() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::normal,
-                .index     = 1
-            },
-            .shader_type   = gl::Attribute_type::float_vec3,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 3
-            }
+            .usage       = { Usage_type::normal },
+            .shader_type = Glsl_type::float_vec3,
+            .data_type   = erhe::dataformat::Format::format_32_vec3_float
         };
     }
     [[nodiscard]] static auto tangent_float3() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::tangent
-            },
-            .shader_type   = gl::Attribute_type::float_vec3,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 3
-            }
+            .usage       = { Usage_type::tangent },
+            .shader_type = Glsl_type::float_vec3,
+            .data_type   = erhe::dataformat::Format::format_32_vec3_float
         };
     }
     [[nodiscard]] static auto tangent_float4() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::tangent
-            },
-            .shader_type   = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 4
-            }
+            .usage       = { Usage_type::tangent },
+            .shader_type = Glsl_type::float_vec4,
+            .data_type   = erhe::dataformat::Format::format_32_vec4_float
         };
     }
     [[nodiscard]] static auto bitangent_float3() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::bitangent
-            },
-            .shader_type   = gl::Attribute_type::float_vec3,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 3
-            }
+            .usage       = { Usage_type::bitangent },
+            .shader_type = Glsl_type::float_vec3,
+            .data_type   = erhe::dataformat::Format::format_32_vec3_float
         };
     }
     [[nodiscard]] static auto texcoord0_float2() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::tex_coord,
-                .index     = 0
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
+            .usage       = { Usage_type::tex_coord },
+            .shader_type = Glsl_type::float_vec2,
+            .data_type   = erhe::dataformat::Format::format_32_vec2_float
         };
     }
     [[nodiscard]] static auto texcoord1_float2() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type      = Usage_type::tex_coord,
-                .index     = 1
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
+            .usage       = { Usage_type::tex_coord, 1 },
+            .shader_type = Glsl_type::float_vec2,
+            .data_type   = erhe::dataformat::Format::format_32_vec2_float
         };
     }
     [[nodiscard]] static auto color_ubyte4() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type       = Usage_type::color
-            },
-            .shader_type    = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
-                .normalized = true,
-                .dimension  = 4
-            }
+            .usage       = { Usage_type::color },
+            .shader_type = Glsl_type::float_vec4,
+            .data_type   = erhe::dataformat::Format::format_8_vec4_unorm
         };
     }
     [[nodiscard]] static auto color_float4() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type       = Usage_type::color
-            },
-            .shader_type    = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type       = gl::Vertex_attrib_type::float_,
-                .dimension  = 4
-            }
+            .usage       = { Usage_type::color },
+            .shader_type = Glsl_type::float_vec4,
+            .data_type   = erhe::dataformat::Format::format_32_vec4_float
         };
     }
     [[nodiscard]] static auto aniso_control_ubyte2() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type       = Usage_type::aniso_control
-            },
-            .shader_type    = gl::Attribute_type::float_vec2,
-            .data_type = {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
-                .normalized = true,
-                .dimension  = 2
-            }
+            .usage       = { Usage_type::aniso_control },
+            .shader_type = Glsl_type::float_vec2,
+            .data_type   = erhe::dataformat::Format::format_8_vec2_unorm
         };
     }
     [[nodiscard]] static auto joint_indices0_ubyte4() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type       = Usage_type::joint_indices,
-                .index      = 0
-
-            },
-            .shader_type    = gl::Attribute_type::unsigned_int_vec4,
-            .data_type = {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
-                .normalized = true,
-                .dimension  = 4
-            }
+            .usage       = { Usage_type::joint_indices },
+            .shader_type = Glsl_type::int_vec4,
+            .data_type   = erhe::dataformat::Format::format_8_vec4_uint
         };
     }
     [[nodiscard]] static auto joint_weights0_float4() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage = {
-                .type       = Usage_type::joint_weights,
-                .index      = 0
-
-            },
-            .shader_type    = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type       = gl::Vertex_attrib_type::float_,
-                .dimension  = 4
-            }
+            .usage       = { Usage_type::joint_weights },
+            .shader_type = Glsl_type::float_vec4,
+            .data_type   = erhe::dataformat::Format::format_32_vec4_float
         };
     }
 };

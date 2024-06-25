@@ -169,7 +169,7 @@ void Debug_visualizations::mesh_visualization(
         if (!primitive.geometry_primitive) {
             continue;
         }
-        const auto& geometry_mesh = primitive.geometry_primitive->gl_geometry_mesh;
+        const erhe::primitive::Geometry_mesh& geometry_mesh = primitive.geometry_primitive->get_geometry_mesh();
 
         const float box_volume    = geometry_mesh.bounding_box.volume();
         const float sphere_volume = geometry_mesh.bounding_sphere.volume();
@@ -974,7 +974,7 @@ void Debug_visualizations::mesh_labels(
         if (!geometry_primitive) {
             continue;
         }
-        const auto& geometry = geometry_primitive->source_geometry;
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = geometry_primitive->get_geometry();
         if (!geometry) {
             continue;
         }

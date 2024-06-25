@@ -110,21 +110,21 @@ auto Material_buffer::update(
         using erhe::graphics::as_span;
         using erhe::graphics::write;
 
-        const uint64_t base_color_handle = material->base_color_texture
+        const uint64_t base_color_handle = material->textures.base_color
             ?
                 m_graphics_instance.get_handle(
-                    *material->base_color_texture.get(),
-                    material->base_color_sampler
-                        ? *material->base_color_sampler.get()
+                    *material->textures.base_color.get(),
+                    material->samplers.base_color
+                        ? *material->samplers.base_color.get()
                         : *m_linear_sampler.get()
                 )
             : c_texture_unused_64;
-        const uint64_t metallic_roughness_handle = material->metallic_roughness_texture
+        const uint64_t metallic_roughness_handle = material->textures.metallic_roughness
             ?
                 m_graphics_instance.get_handle(
-                    *material->metallic_roughness_texture.get(),
-                    material->metallic_roughness_sampler
-                        ? *material->metallic_roughness_sampler.get()
+                    *material->textures.metallic_roughness.get(),
+                    material->samplers.metallic_roughness
+                        ? *material->samplers.metallic_roughness.get()
                         : *m_linear_sampler.get()
                 )
             : c_texture_unused_64;
@@ -150,7 +150,7 @@ auto Material_buffer::update(
             write(gpu_data, m_writer.write_offset + offsets.metallic_roughness_texture, as_span(metallic_roughness_handle));
         } else {
             {
-                std::optional<std::size_t> opt_texture_unit = material->base_color_texture
+                std::optional<std::size_t> opt_texture_unit = material->textures.base_color
                     ? m_graphics_instance.texture_unit_cache_allocate(base_color_handle)
                     : std::nullopt;
                 const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : c_texture_unused_32);
@@ -159,7 +159,7 @@ auto Material_buffer::update(
                 write(gpu_data, m_writer.write_offset + offsets.base_color_texture, as_span(value));
             }
             {
-                std::optional<std::size_t> opt_texture_unit = material->metallic_roughness_texture
+                std::optional<std::size_t> opt_texture_unit = material->textures.metallic_roughness
                     ? m_graphics_instance.texture_unit_cache_allocate(metallic_roughness_handle)
                     : std::nullopt;
                 const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : c_texture_unused_32);

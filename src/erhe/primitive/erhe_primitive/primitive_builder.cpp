@@ -163,8 +163,8 @@ void Build_context_root::allocate_index_buffer()
 
     Expects(total_index_count > 0);
 
-    const gl::Draw_elements_type index_type     {build_info.buffer_info.index_type};
-    const std::size_t            index_type_size{size_of_type(index_type)};
+    const erhe::dataformat::Format index_type     {build_info.buffer_info.index_type};
+    const std::size_t              index_type_size{erhe::dataformat::get_format_size(index_type)};
 
     log_primitive_builder->trace(
         "allocating index buffer "
