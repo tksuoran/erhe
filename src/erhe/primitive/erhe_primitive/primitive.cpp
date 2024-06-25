@@ -221,15 +221,20 @@ Geometry_primitive::Geometry_primitive(const Triangle_soup& triangle_soup, const
             sink_attribute.usage.type,
             static_cast<unsigned int>(sink_attribute.usage.index)
         );
-        if (src_attribute == nullptr) {
-            continue;
-        }
         uint8_t* sink_attribute_base = sink_vertex_data_base + sink_attribute.offset;
-        const uint8_t* src_attribute_base = src_vertex_data_base + src_attribute->offset;
-        for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
-            uint8_t* sink = sink_attribute_base + vertex_index * sink_vertex_stride;
-            const uint8_t* src = src_attribute_base + vertex_index * source_vertex_stride;
-            erhe::dataformat::convert(src, src_attribute->data_type, sink, sink_attribute.data_type, 1.0f);
+        if (src_attribute != nullptr) {
+            const uint8_t* src_attribute_base = src_vertex_data_base + src_attribute->offset;
+            for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
+                uint8_t* sink = sink_attribute_base + vertex_index * sink_vertex_stride;
+                const uint8_t* src = src_attribute_base + vertex_index * source_vertex_stride;
+                erhe::dataformat::convert(src, src_attribute->data_type, sink, sink_attribute.data_type, 1.0f);
+            }
+        } else {
+            const uint8_t* src = reinterpret_cast<const uint8_t*>(&sink_attribute.default_value[0]);
+            for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
+                uint8_t* sink = sink_attribute_base + vertex_index * sink_vertex_stride;
+                erhe::dataformat::convert(src, erhe::dataformat::Format::format_32_vec4_float, sink, sink_attribute.data_type, 1.0f);
+            }
         }
     }
 

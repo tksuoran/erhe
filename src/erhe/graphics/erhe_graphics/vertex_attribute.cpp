@@ -29,6 +29,7 @@ auto Vertex_attribute::operator==(const Vertex_attribute& other) const -> bool
         (shader_type == other.shader_type) &&
         (offset      == other.offset     ) &&
         (divisor     == other.divisor);
+    // TODO consider default_value?
 }
 
 auto Vertex_attribute::operator!=(const Vertex_attribute& other

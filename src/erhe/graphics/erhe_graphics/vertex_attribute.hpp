@@ -3,6 +3,8 @@
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 
+#include <glm/glm.hpp>
+
 #include <cstddef>
 #include <string>
 #include <type_traits>
@@ -71,12 +73,13 @@ public:
     [[nodiscard]] auto operator==(const Vertex_attribute& other) const -> bool;
     [[nodiscard]] auto operator!=(const Vertex_attribute& other) const -> bool;
 
-    std::string              name       {};
-    Usage                    usage      {};
-    Glsl_type                shader_type{Glsl_type::invalid};
-    erhe::dataformat::Format data_type  {erhe::dataformat::Format::format_undefined};
-    std::size_t              offset     {0};
-    unsigned int             divisor    {0};
+    std::string              name         {};
+    Usage                    usage        {};
+    Glsl_type                shader_type  {Glsl_type::invalid};
+    erhe::dataformat::Format data_type    {erhe::dataformat::Format::format_undefined};
+    std::size_t              offset       {0};
+    unsigned int             divisor      {0};
+    glm::vec4                default_value{0.0f, 0.0f, 0.0f, 0.0f};
 
     [[nodiscard]] static auto position_float2() -> erhe::graphics::Vertex_attribute
     {
@@ -121,9 +124,10 @@ public:
     [[nodiscard]] static auto normal0_float3() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage       = {Usage_type::normal },
-            .shader_type = Glsl_type::float_vec3,
-            .data_type   = erhe::dataformat::Format::format_32_vec3_float
+            .usage         = {Usage_type::normal },
+            .shader_type   = Glsl_type::float_vec3,
+            .data_type     = erhe::dataformat::Format::format_32_vec3_float,
+            .default_value = glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}
         };
     }
     [[nodiscard]] static auto normal1_float3() -> Vertex_attribute
@@ -131,31 +135,35 @@ public:
         return Vertex_attribute{
             .usage       = { Usage_type::normal },
             .shader_type = Glsl_type::float_vec3,
-            .data_type   = erhe::dataformat::Format::format_32_vec3_float
+            .data_type   = erhe::dataformat::Format::format_32_vec3_float,
+            .default_value = glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}
         };
     }
     [[nodiscard]] static auto tangent_float3() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage       = { Usage_type::tangent },
-            .shader_type = Glsl_type::float_vec3,
-            .data_type   = erhe::dataformat::Format::format_32_vec3_float
+            .usage         = { Usage_type::tangent },
+            .shader_type   = Glsl_type::float_vec3,
+            .data_type     = erhe::dataformat::Format::format_32_vec3_float,
+            .default_value = glm::vec4{1.0f, 0.0f, 0.0f, 1.0f}
         };
     }
     [[nodiscard]] static auto tangent_float4() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage       = { Usage_type::tangent },
-            .shader_type = Glsl_type::float_vec4,
-            .data_type   = erhe::dataformat::Format::format_32_vec4_float
+            .usage         = { Usage_type::tangent },
+            .shader_type   = Glsl_type::float_vec4,
+            .data_type     = erhe::dataformat::Format::format_32_vec4_float,
+            .default_value = glm::vec4{1.0f, 0.0f, 0.0f, 1.0f}
         };
     }
     [[nodiscard]] static auto bitangent_float3() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage       = { Usage_type::bitangent },
-            .shader_type = Glsl_type::float_vec3,
-            .data_type   = erhe::dataformat::Format::format_32_vec3_float
+            .usage         = { Usage_type::bitangent },
+            .shader_type   = Glsl_type::float_vec3,
+            .data_type     = erhe::dataformat::Format::format_32_vec3_float,
+            .default_value = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f}
         };
     }
     [[nodiscard]] static auto texcoord0_float2() -> Vertex_attribute
@@ -177,17 +185,19 @@ public:
     [[nodiscard]] static auto color_ubyte4() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage       = { Usage_type::color },
-            .shader_type = Glsl_type::float_vec4,
-            .data_type   = erhe::dataformat::Format::format_8_vec4_unorm
+            .usage         = { Usage_type::color },
+            .shader_type   = Glsl_type::float_vec4,
+            .data_type     = erhe::dataformat::Format::format_8_vec4_unorm,
+            .default_value = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
         };
     }
     [[nodiscard]] static auto color_float4() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage       = { Usage_type::color },
-            .shader_type = Glsl_type::float_vec4,
-            .data_type   = erhe::dataformat::Format::format_32_vec4_float
+            .usage         = { Usage_type::color },
+            .shader_type   = Glsl_type::float_vec4,
+            .data_type     = erhe::dataformat::Format::format_32_vec4_float,
+            .default_value = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
         };
     }
     [[nodiscard]] static auto aniso_control_ubyte2() -> Vertex_attribute

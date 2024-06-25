@@ -83,6 +83,7 @@ public:
 
 private:
     erhe::graphics::Instance& m_graphics_instance;
+    Program_interface&        m_program_interface;
 
     int                                      m_base_texture_unit{0};
     Camera_buffer                            m_camera_buffers;

@@ -270,7 +270,7 @@ Imgui_program_interface::Imgui_program_interface(
                 .layout_location = 2,
                 .shader_type     =  erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_color",
-                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::color }
+                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::color },
             }
         }
     }

@@ -31,6 +31,7 @@ Forward_renderer::Forward_renderer(
     Program_interface&        program_interface
 )
     : m_graphics_instance    {graphics_instance}
+    , m_program_interface    {program_interface}
     , m_camera_buffers       {graphics_instance, program_interface.camera_interface}
     , m_draw_indirect_buffers{graphics_instance}
     , m_joint_buffers        {graphics_instance, program_interface.joint_interface}
@@ -77,6 +78,9 @@ const char* safe_str(const char* str)
 void Forward_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION();
+
+    // TODO This is not needed, Mesh_memory should have all needed attributes
+    // m_program_interface.apply_default_attribute_values();
 
     const auto& viewport       = parameters.viewport;
     const auto* camera         = parameters.camera;

@@ -1,6 +1,7 @@
 #include "erhe_scene_renderer/program_interface.hpp"
 
 #include "erhe_gl/command_info.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_file/file.hpp"
@@ -214,6 +215,24 @@ auto Program_interface::make_program(
     }
 
     return erhe::graphics::Shader_stages{std::move(prototype)};
+}
+
+void Program_interface::apply_default_attribute_values() const
+{
+    for (const erhe::graphics::Vertex_attribute_mapping& mapping : attribute_mappings.mappings) {
+        GLuint i = static_cast<GLuint>(mapping.layout_location);
+        Vertex_attribute::Usage_type usage_type = (mapping.dst_usage_type == Vertex_attribute::Usage_type::automatic)
+            ? mapping.src_usage.type 
+            : mapping.dst_usage_type;
+        
+        switch (usage_type) {
+            case erhe::graphics::Vertex_attribute::Usage_type::normal:    gl::vertex_attrib_4f(i, 0.0f, 1.0f, 0.0f, 0.0f); break;
+            case erhe::graphics::Vertex_attribute::Usage_type::tangent:   gl::vertex_attrib_4f(i, 1.0f, 0.0f, 0.0f, 1.0f); break;
+            case erhe::graphics::Vertex_attribute::Usage_type::bitangent: gl::vertex_attrib_4f(i, 0.0f, 0.0f, 1.0f, 0.0f); break;
+            case erhe::graphics::Vertex_attribute::Usage_type::color:     gl::vertex_attrib_4f(i, 1.0f, 1.0f, 1.0f, 1.0f); break;
+            default: break;
+        }
+    }
 }
 
 } // namespace erhe::scene_renderer

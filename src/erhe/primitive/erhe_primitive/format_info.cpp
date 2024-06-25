@@ -24,9 +24,10 @@ auto prepare_vertex_format(
     if (attributes.normal) {
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
-                .usage       = { Vertex_attribute::Usage_type::normal },
-                .shader_type = erhe::graphics::Glsl_type::float_vec3,
-                .data_type   = attribute_types.normal
+                .usage         = { Vertex_attribute::Usage_type::normal },
+                .shader_type   = erhe::graphics::Glsl_type::float_vec3,
+                .data_type     = attribute_types.normal,
+                .default_value = glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}
             }
         );
     }
@@ -34,9 +35,10 @@ auto prepare_vertex_format(
     if (attributes.normal_flat) {
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
-                .usage = { Vertex_attribute::Usage_type::normal, 1 },
-                .shader_type = erhe::graphics::Glsl_type::float_vec3,
-                .data_type   = attribute_types.normal_flat
+                .usage         = { Vertex_attribute::Usage_type::normal, 1 },
+                .shader_type   = erhe::graphics::Glsl_type::float_vec3,
+                .data_type     = attribute_types.normal_flat,
+                .default_value = glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}
             }
         );
     }
@@ -44,9 +46,10 @@ auto prepare_vertex_format(
     if (attributes.normal_smooth) {
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
-                .usage       = { Vertex_attribute::Usage_type::normal, 2 },
-                .shader_type = erhe::graphics::Glsl_type::float_vec3,
-                .data_type   = attribute_types.normal_smooth
+                .usage         = { Vertex_attribute::Usage_type::normal, 2 },
+                .shader_type   = erhe::graphics::Glsl_type::float_vec3,
+                .data_type     = attribute_types.normal_smooth,
+                .default_value = glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}
             }
         );
     }
@@ -54,9 +57,10 @@ auto prepare_vertex_format(
     if (attributes.tangent) {
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
-                .usage       = { Vertex_attribute::Usage_type::tangent },
-                .shader_type = erhe::graphics::Glsl_type::float_vec4, // TODO Is this really always vec4? Maybe check
-                .data_type   = attribute_types.tangent
+                .usage         = { Vertex_attribute::Usage_type::tangent },
+                .shader_type   = erhe::graphics::Glsl_type::float_vec4, // TODO Is this really always vec4? Maybe check
+                .data_type     = attribute_types.tangent,
+                .default_value = glm::vec4{1.0f, 0.0f, 0.0f, 1.0f}
             }
         );
     }
@@ -64,9 +68,10 @@ auto prepare_vertex_format(
     if (attributes.bitangent) {
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
-                .usage       = { Vertex_attribute::Usage_type::bitangent },
-                .shader_type = erhe::graphics::Glsl_type::float_vec4, // TODO vec4, really? Shouldn't this be vec3
-                .data_type   = attribute_types.tangent
+                .usage         = { Vertex_attribute::Usage_type::bitangent },
+                .shader_type   = erhe::graphics::Glsl_type::float_vec4, // TODO vec4, really? Shouldn't this be vec3
+                .data_type     = attribute_types.bitangent,
+                .default_value = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f}
             }
         );
     }
@@ -74,9 +79,10 @@ auto prepare_vertex_format(
     if (attributes.color) {
         vertex_format.add_attribute(
             erhe::graphics::Vertex_attribute{
-                .usage       = { Vertex_attribute::Usage_type::color },
-                .shader_type = erhe::graphics::Glsl_type::float_vec4,
-                .data_type   = attribute_types.color,
+                .usage         = { Vertex_attribute::Usage_type::color },
+                .shader_type   = erhe::graphics::Glsl_type::float_vec4,
+                .data_type     = attribute_types.color,
+                .default_value = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
             }
         );
     }
