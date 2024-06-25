@@ -96,8 +96,10 @@ auto vertex_id_from_corner_id(
     for (const auto& primitive : mesh.get_primitives()) {
         const auto& geometry_primitive = primitive.geometry_primitive;
         if (geometry_primitive) {
-            if (geometry_primitive->source_geometry.get() == &geometry) {
-                return geometry_primitive->gl_geometry_mesh.corner_to_vertex_id.at(corner_id);
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_primitive = geometry_primitive->get_geometry();
+            if (geometry_in_primitive.get() == &geometry) {
+                erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
+                return renderable_mesh.corner_to_vertex_id.at(corner_id);
             }
         }
     }
@@ -257,9 +259,12 @@ void Paint_tool::paint_vertex(
 )
 {
     auto& mesh_memory = *m_context.mesh_memory;
-    const auto&       vertex_format = mesh_memory.buffer_info.vertex_format;
-    const auto        attribute     = vertex_format.find_attribute(erhe::graphics::Vertex_attribute::Usage_type::color, 0);
-    const std::size_t vertex_offset = vertex_id * vertex_format.stride() + attribute->offset;
+    const erhe::graphics::Vertex_format&    vertex_format = mesh_memory.buffer_info.vertex_format;
+    const erhe::graphics::Vertex_attribute* attribute     = vertex_format.find_attribute(erhe::graphics::Vertex_attribute::Usage_type::color, 0);
+    const std::size_t                       vertex_offset = vertex_id * vertex_format.stride() + attribute->offset;
+    if (attribute == nullptr) {
+        return;
+    }
 
     std::vector<std::uint8_t> buffer;
 
@@ -268,11 +273,13 @@ void Paint_tool::paint_vertex(
         if (!geometry_primitive) {
             continue;
         }
-        if (geometry_primitive->source_geometry.get() != &geometry) {
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_mesh = geometry_primitive->get_geometry();
+        if (geometry_in_mesh.get() != &geometry) {
             continue;
         }
-        const std::size_t range_byte_offset = geometry_primitive->gl_geometry_mesh.vertex_buffer_range.byte_offset;
-        if (attribute.get()->data_type.type == gl::Vertex_attrib_type::float_) {
+        erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
+        const std::size_t range_byte_offset = renderable_mesh.vertex_buffer_range.byte_offset;
+        if (attribute->data_type == erhe::dataformat::Format::format_32_vec4_float) {
             buffer.resize(sizeof(float) * 4);
             auto* const ptr = reinterpret_cast<float*>(buffer.data());
             ptr[0] = color.x;
@@ -284,13 +291,13 @@ void Paint_tool::paint_vertex(
                 range_byte_offset + vertex_offset,
                 std::move(buffer)
             );
-        } else if (attribute.get()->data_type.type == gl::Vertex_attrib_type::unsigned_byte) {
+        } else if (attribute->data_type == erhe::dataformat::Format::format_8_vec4_unorm) {
             buffer.resize(sizeof(uint8_t) * 4);
             auto* const ptr = reinterpret_cast<uint8_t*>(buffer.data());
-            ptr[0] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.x, 255.0f)));
-            ptr[1] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.y, 255.0f)));
-            ptr[2] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.z, 255.0f)));
-            ptr[3] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.w, 255.0f)));
+            ptr[0] = erhe::dataformat::float_to_unorm8(color.x);
+            ptr[1] = erhe::dataformat::float_to_unorm8(color.y);
+            ptr[2] = erhe::dataformat::float_to_unorm8(color.z);
+            ptr[3] = erhe::dataformat::float_to_unorm8(color.w);
             mesh_memory.gl_buffer_transfer_queue.enqueue(
                 mesh_memory.gl_vertex_buffer,
                 range_byte_offset + vertex_offset,
@@ -446,7 +453,7 @@ void Paint_tool::imgui()
                 if (!geometry_primitive) {
                     continue;
                 }
-                const auto& geometry = geometry_primitive->source_geometry;
+                const std::shared_ptr<erhe::geometry::Geometry>& geometry = geometry_primitive->get_geometry();
                 if (!geometry) {
                     continue;
                 }

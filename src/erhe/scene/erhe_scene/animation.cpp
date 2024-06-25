@@ -160,10 +160,7 @@ void Animation_sampler::seek(Animation_channel& channel, const float time) const
     }
 }
 
-auto Animation_sampler::evaluate(
-    Animation_channel& channel,
-    const float        time_current
-) const -> glm::vec4
+auto Animation_sampler::evaluate(Animation_channel& channel, float time_current) const -> glm::vec4
 {
     seek(channel, time_current);
 

@@ -41,7 +41,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
-        .rasterization           = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization           = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
@@ -76,7 +76,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = erhe::graphics::Input_assembly_state::triangles,
-        .rasterization           = erhe::graphics::Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization           = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
@@ -113,7 +113,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
                 .shader_stages  = &programs.tool.shader_stages,
                 .vertex_input   = &mesh_memory.vertex_input,
                 .input_assembly = Input_assembly_state::triangles,
-                .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+                .rasterization  = Rasterization_state::cull_mode_back_ccw,
                 .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
                 .color_blend    = Color_blend_state::color_writes_disabled
             }
@@ -129,7 +129,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
         .shader_stages  = &programs.tool.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_writes_disabled
     }}}
@@ -141,7 +141,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
-        .rasterization           = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization           = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
@@ -176,7 +176,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
         .shader_stages              = &programs.tool.shader_stages,
         .vertex_input               = &mesh_memory.vertex_input,
         .input_assembly             = Input_assembly_state::triangles,
-        .rasterization              = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization              = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable      = true,
             .depth_write_enable     = true,

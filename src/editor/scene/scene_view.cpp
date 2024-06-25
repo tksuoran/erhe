@@ -344,12 +344,12 @@ void Scene_view::update_hover_with_raytrace()
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: RT instance {}", Hover_entry::slot_names[slot], raytrace_primitive->rt_instance->is_enabled());
             const auto& geometry_primitive = primitive.geometry_primitive;
             ERHE_VERIFY(geometry_primitive);
-            entry.geometry = geometry_primitive->source_geometry;
+            entry.geometry = geometry_primitive->get_geometry();
             if (entry.geometry) {
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit geometry: {}", Hover_entry::slot_names[slot], entry.geometry->name);
-                const auto& geometry_mesh = geometry_primitive->gl_geometry_mesh;
-                ERHE_VERIFY(hit.triangle_id < geometry_mesh.primitive_id_to_polygon_id.size());
-                const auto polygon_id = geometry_mesh.primitive_id_to_polygon_id[hit.triangle_id];
+                const erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
+                ERHE_VERIFY(hit.triangle_id < renderable_mesh.primitive_id_to_polygon_id.size());
+                const auto polygon_id = renderable_mesh.primitive_id_to_polygon_id[hit.triangle_id];
                 ERHE_VERIFY(polygon_id < entry.geometry->get_polygon_count());
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit polygon: {}", Hover_entry::slot_names[slot], polygon_id);
                 entry.polygon_id = polygon_id;

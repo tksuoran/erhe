@@ -75,8 +75,13 @@ auto Draw_indirect_buffer::update(
         }
 
         for (auto& primitive : mesh->get_primitives()) {
-            const auto& geometry_mesh = primitive.geometry_primitive->gl_geometry_mesh;
-            const auto  index_range   = geometry_mesh.index_range(primitive_mode);
+            if (!primitive.geometry_primitive && primitive.triangle_soup) {
+                ERHE_FATAL("Create Geometry_primitive from Triangle_soup before rendering");
+                //erhe::primitive::Renderable_mesh renderable_mesh;
+                //primitive.geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>();
+            }
+            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.geometry_primitive->get_geometry_mesh();
+            const erhe::primitive::Index_range      index_range     = renderable_mesh.index_range(primitive_mode);
             if (index_range.index_count == 0) {
                 continue;
             }
@@ -92,9 +97,9 @@ auto Draw_indirect_buffer::update(
                 index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
             }
 
-            const uint32_t base_index  = geometry_mesh.base_index();
+            const uint32_t base_index  = renderable_mesh.base_index();
             const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
-            const uint32_t base_vertex = geometry_mesh.base_vertex();
+            const uint32_t base_vertex = renderable_mesh.base_vertex();
 
             const gl::Draw_elements_indirect_command draw_command{
                 index_count,

@@ -7,6 +7,7 @@ in float     v_tangent_scale;
 
 const float m_pi   = 3.1415926535897932384626434;
 const float m_i_pi = 0.3183098861837906715377675;
+const uint  max_u32 = 4294967295u;
 
 float srgb_to_linear(float x)
 {
@@ -28,6 +29,9 @@ vec3 srgb_to_linear(vec3 V)
 
 vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
 {
+    if (texture_handle.x == max_u32) {
+        return vec4(1.0, 1.0, 1.0, 1.0);
+    }
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(texture_handle);
     return texture(s_texture, v_texcoord);
@@ -36,8 +40,12 @@ vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
 #endif
 }
 
+
 vec4 sample_texture_lod_bias(uvec2 texture_handle, vec2 texcoord, float lod_bias)
 {
+    if (texture_handle.x == max_u32) {
+        return vec4(1.0, 1.0, 1.0, 1.0);
+    }
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(texture_handle);
     return texture(s_texture, texcoord, lod_bias);
@@ -48,6 +56,9 @@ vec4 sample_texture_lod_bias(uvec2 texture_handle, vec2 texcoord, float lod_bias
 
 vec2 get_texture_size(uvec2 texture_handle)
 {
+    if (texture_handle.x == max_u32) {
+        return vec2(1.0, 1.0);
+    }
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(texture_handle);
     return textureSize(s_texture, 0);

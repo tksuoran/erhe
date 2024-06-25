@@ -110,7 +110,7 @@ Id_renderer::Id_renderer(
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
@@ -120,7 +120,7 @@ Id_renderer::Id_renderer(
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
         .color_blend    = Color_blend_state::color_writes_disabled,
     }}
@@ -285,7 +285,7 @@ void Id_renderer::render(
         //ERHE_PROFILE_GPU_SCOPE(c_draw)
         gl::multi_draw_elements_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
-            m_mesh_memory.buffer_info.index_type,
+            erhe::graphics::to_gl_index_type(m_mesh_memory.buffer_info.index_type),
             reinterpret_cast<const void*>(draw_indirect_buffer_range.range.first_byte_offset),
             static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))

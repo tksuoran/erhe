@@ -636,4 +636,16 @@ auto operator!=(const Buffer& lhs, const Buffer& rhs) noexcept -> bool
     return !(lhs == rhs);
 }
 
+[[nodiscard]] auto to_gl_index_type(erhe::dataformat::Format format) -> gl::Draw_elements_type
+{
+    switch (format) {
+        case erhe::dataformat::Format::format_8_scalar_uint:  return gl::Draw_elements_type::unsigned_byte;
+        case erhe::dataformat::Format::format_16_scalar_uint: return gl::Draw_elements_type::unsigned_short;
+        case erhe::dataformat::Format::format_32_scalar_uint: return gl::Draw_elements_type::unsigned_int;
+        default: {
+            ERHE_FATAL("Bad index format");
+        }
+    }
+}
+
 } // namespace erhe::graphics

@@ -5,6 +5,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_renderer/draw_indirect_buffer.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
@@ -51,8 +52,7 @@ public:
     {
     public:
         const erhe::graphics::Vertex_input_state*                  vertex_input_state;
-        gl::Draw_elements_type                                     index_type;
-
+        erhe::dataformat::Format                                   index_type{erhe::dataformat::Format::format_undefined};
         const erhe::scene::Camera*                                 view_camera;
         const erhe::math::Viewport                                 view_camera_viewport;
         const erhe::math::Viewport                                 light_camera_viewport;

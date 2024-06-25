@@ -21,8 +21,7 @@
 #include <memory>
 #include <string_view>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Gl_context_provider;
     class Instance;
     class OpenGL_state_tracker;
@@ -30,13 +29,11 @@ namespace erhe::graphics
     class Shader_monitor;
     class Shader_stages;
 }
-namespace erhe::ui
-{
+namespace erhe::ui {
     class Font;
 }
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 class Text_renderer
 {

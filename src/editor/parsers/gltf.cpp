@@ -11,6 +11,8 @@
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -72,8 +74,7 @@ void import_gltf(
     erhe::graphics::Instance&    graphics_instance,
     erhe::primitive::Build_info  build_info,
     Scene_root&                  scene_root,
-    const std::filesystem::path& path,
-    bool                         y_up
+    const std::filesystem::path& path
 )
 {
     erhe::scene::Scene* scene = scene_root.get_hosted_scene();
@@ -95,7 +96,6 @@ void import_gltf(
         .root_node         = root_node,
         .mesh_layer_id     = scene_root.layers().content()->id,
         .path              = path,
-        .coordinate_system = y_up ? erhe::gltf::Coordinate_system::Y_up : erhe::gltf::Coordinate_system::Z_up
     };
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 
@@ -156,15 +156,25 @@ void import_gltf(
             add_default_light = false;
         }
 
-        //auto mesh = erhe::scene::get_mesh(node.get());
-        //if (mesh) {
-        //    content_library->meshes.add(mesh);
-        //}
+        auto mesh = erhe::scene::get_mesh(node.get());
+        if (mesh) {
+            //content_library->meshes.add(mesh);
+            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
+            for (erhe::primitive::Primitive& primitive : primitives) {
+                if (!primitive.geometry_primitive && primitive.triangle_soup) {
+                    primitive.geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+                        *primitive.triangle_soup.get(),
+                        build_info.buffer_info
+                    );
+                }
+            }
+        }
 
         if (node->get_parent_node() == root_node) {
             color_graph(node.get(), node_colors, available_colors);
         }
     }
+
     if (!scene->get_cameras().empty()) {
         add_default_camera = false;
     }

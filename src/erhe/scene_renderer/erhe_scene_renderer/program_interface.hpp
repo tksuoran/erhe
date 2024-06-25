@@ -45,6 +45,8 @@ public:
         erhe::graphics::Shader_stages_prototype&& prototype
     ) -> erhe::graphics::Shader_stages;
 
+    void apply_default_attribute_values() const;
+
     erhe::graphics::Fragment_outputs          fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings attribute_mappings;
 

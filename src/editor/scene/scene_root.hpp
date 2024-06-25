@@ -40,7 +40,7 @@ namespace erhe::physics {
 }
 namespace erhe::primitive {
     class Material;
-    class Geometry_mesh;
+    class Renderable_mesh;
     class Primitive;
 }
 namespace erhe::raytrace {

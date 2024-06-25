@@ -53,7 +53,7 @@ Camera_buffer::Camera_buffer(
         gl::Buffer_target::uniform_buffer,
         m_camera_interface.camera_block.binding_point(),
         // TODO
-        20 * m_camera_interface.camera_struct.size_bytes()
+        100 * m_camera_interface.camera_struct.size_bytes()
     );
 }
 

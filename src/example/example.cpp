@@ -2,14 +2,16 @@
 
 #include "example_log.hpp"
 #include "frame_controller.hpp"
-#include "gltf.hpp"
-#include "image_transfer.hpp"
 #include "mesh_memory.hpp"
 #include "programs.hpp"
 
+#include "erhe_dataformat/dataformat_log.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/gl_log.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_gltf/gltf.hpp"
+#include "erhe_gltf/gltf_log.hpp"
+#include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/instance.hpp"
@@ -48,7 +50,7 @@ public:
         erhe::scene::Scene&                     scene,
         erhe::graphics::Instance&               graphics_instance,
         erhe::scene_renderer::Forward_renderer& forward_renderer,
-        Parse_context&                          parse_context,
+        erhe::gltf::Gltf_data&                  gltf_data,
         Mesh_memory&                            mesh_memory,
         Programs&                               programs
     )
@@ -56,7 +58,7 @@ public:
         , m_scene            {scene}
         , m_graphics_instance{graphics_instance}
         , m_forward_renderer {forward_renderer}
-        , m_parse_context    {parse_context}
+        , m_gltf_data        {gltf_data}
         , m_mesh_memory      {mesh_memory}
         , m_programs         {programs}
     {
@@ -135,7 +137,7 @@ public:
                     .shader_stages  = &m_programs.standard,
                     .vertex_input   = &m_mesh_memory.vertex_input,
                     .input_assembly = erhe::graphics::Input_assembly_state::triangles,
-                    .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_cw(reverse_depth),
+                    .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
                     .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
                     .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
                 }
@@ -153,7 +155,7 @@ public:
         };
 
         std::vector<std::shared_ptr<erhe::scene::Light>> lights;
-        for (const auto& light : m_parse_context.lights) {
+        for (const auto& light : m_gltf_data.lights) {
             lights.push_back(light);
         }
         lights.push_back(m_light);
@@ -168,14 +170,14 @@ public:
 
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .index_type             = gl::Draw_elements_type::unsigned_int,
+                .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
                 .ambient_light          = glm::vec3{0.1f, 0.1f, 0.1f},
                 .camera                 = m_camera.get(),
                 .light_projections      = &light_projections,
                 .lights                 = lights,
-                .skins                  = m_parse_context.skins,
-                .materials              = m_parse_context.materials,
-                .mesh_spans             = { m_parse_context.meshes },
+                .skins                  = m_gltf_data.skins,
+                .materials              = m_gltf_data.materials,
+                .mesh_spans             = { m_gltf_data.meshes },
                 .passes                 = passes,
                 .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
                 .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
@@ -343,7 +345,7 @@ private:
     erhe::scene::Scene&                     m_scene;
     erhe::graphics::Instance&               m_graphics_instance;
     erhe::scene_renderer::Forward_renderer& m_forward_renderer;
-    Parse_context&                          m_parse_context;
+    erhe::gltf::Gltf_data&                  m_gltf_data;
     Mesh_memory&                            m_mesh_memory;
     Programs&                               m_programs;
 
@@ -364,8 +366,12 @@ private:
 void run_example()
 {
     erhe::log::initialize_log_sinks();
+
+    example::initialize_logging();
     gl::initialize_logging();
+    erhe::dataformat::initialize_logging();
     erhe::item::initialize_logging();
+    erhe::gltf::initialize_logging();
     erhe::graphics::initialize_logging();
     erhe::primitive::initialize_logging();
     erhe::renderer::initialize_logging();
@@ -373,7 +379,6 @@ void run_example()
     erhe::scene_renderer::initialize_logging();
     erhe::window::initialize_logging();
     erhe::ui::initialize_logging();
-    example::initialize_logging();
     erhe::window::initialize_frame_capture();
 
     erhe::window::Context_window window{
@@ -387,28 +392,52 @@ void run_example()
         }
     };
 
+    erhe::scene::Scene_message_bus          scene_message_bus{};
+    erhe::scene::Scene                      scene            {scene_message_bus, "example scene", nullptr};
     erhe::graphics::Instance                graphics_instance{window};
+    erhe::gltf::Image_transfer              image_transfer   {graphics_instance};
     erhe::scene_renderer::Program_interface program_interface{graphics_instance};
     erhe::scene_renderer::Forward_renderer  forward_renderer {graphics_instance, program_interface};
-    erhe::scene::Scene_message_bus    scene_message_bus;
-    erhe::scene::Scene                scene         {scene_message_bus, "example scene", nullptr};
-    Mesh_memory                       mesh_memory   {graphics_instance, program_interface};
-    Programs                          programs      {graphics_instance, program_interface};
-    Image_transfer                    image_transfer{graphics_instance};
-    Parse_context parse_context{
-        .graphics_instance = graphics_instance,
-        .buffer_sink       = mesh_memory.gl_buffer_sink,
-        .vertex_format     = mesh_memory.vertex_format,
-        .scene             = scene,
-        .image_transfer    = image_transfer,
-        .path              = "res/models/Box.gltf"
+    Mesh_memory                             mesh_memory      {graphics_instance, program_interface};
+    Programs                                programs         {graphics_instance, program_interface};
+
+    erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(
+        erhe::gltf::Gltf_parse_arguments{
+            .graphics_instance = graphics_instance,
+            .image_transfer    = image_transfer,
+            .root_node         = scene.get_root_node(),
+            .path              = "res/models/Box.gltf"
+        }
+    );
+
+    // Convert triangle soup vertex and index data to GL buffers
+    erhe::primitive::Buffer_info buffer_info{
+        .usage         = gl::Buffer_usage::static_draw,
+        .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
+        .vertex_format = mesh_memory.vertex_format,
+        .buffer_sink   = mesh_memory.gl_buffer_sink
     };
-    parse_gltf(parse_context);
+
+    for (const auto& node : gltf_data.nodes) {
+        auto mesh = erhe::scene::get_mesh(node.get());
+        if (mesh) {
+            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
+            for (erhe::primitive::Primitive& primitive : primitives) {
+                if (!primitive.geometry_primitive && primitive.triangle_soup) {
+                    primitive.geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+                        *primitive.triangle_soup.get(),
+                        buffer_info
+                    );
+                }
+            }
+        }
+    }
+
     mesh_memory.gl_buffer_transfer_queue.flush();
     gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
     gl::enable      (gl::Enable_cap::framebuffer_srgb);
 
-    Example example{window, scene, graphics_instance, forward_renderer, parse_context, mesh_memory, programs};
+    Example example{window, scene, graphics_instance, forward_renderer, gltf_data, mesh_memory, programs};
     example.run();
 }
 

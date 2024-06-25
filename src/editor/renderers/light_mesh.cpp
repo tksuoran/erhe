@@ -144,7 +144,7 @@ auto Light_mesh::point_in_light(
 
 auto Light_mesh::get_light_mesh(
     const erhe::scene::Light& light
-) -> erhe::primitive::Geometry_mesh*
+) -> erhe::primitive::Renderable_mesh*
 {
     switch (light.type) {
         //using enum erhe::scene::Light_type;

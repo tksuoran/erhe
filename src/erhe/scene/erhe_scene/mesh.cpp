@@ -33,7 +33,8 @@ void Mesh::add_primitive(erhe::primitive::Primitive primitive)
         return;
     }
 
-    const auto& rt_geometry = geometry_primitive->raytrace.rt_geometry;
+    erhe::primitive::Geometry_raytrace& geometry_raytrace = geometry_primitive->get_geometry_raytrace();
+    const auto& rt_geometry = geometry_raytrace.rt_geometry;
     if (rt_geometry) {
         m_rt_primitives.emplace_back(this, primitive_index, rt_geometry.get());
     }
@@ -49,7 +50,8 @@ void Mesh::set_primitives(const std::vector<erhe::primitive::Primitive>& primiti
             return;
         }
 
-        const auto& rt_geometry = geometry_primitive->raytrace.rt_geometry;
+        erhe::primitive::Geometry_raytrace& geometry_raytrace = geometry_primitive->get_geometry_raytrace();
+        const auto& rt_geometry = geometry_raytrace.rt_geometry;
         if (rt_geometry) {
             m_rt_primitives.emplace_back(this, i, rt_geometry.get());
         }

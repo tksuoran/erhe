@@ -9,8 +9,7 @@
 
 #include <algorithm>
 
-namespace erhe::math
-{
+namespace erhe::math {
 
 using glm::mat4;
 using glm::vec2;
@@ -21,8 +20,7 @@ using glm::dvec2;
 using glm::dvec3;
 using glm::dvec4;
 
-namespace
-{
+namespace {
     constexpr float epsilon         {1e-6f};
     constexpr float pi_minus_epsilon{glm::pi<float>() - epsilon};
 }
@@ -668,6 +666,40 @@ void calculate_bounding_volume(
     return glm::inverse(
         compose(scale, rotation, translation, skew)
     );
+}
+
+Point_vector_bounding_volume_source::Point_vector_bounding_volume_source()
+{
+}
+
+Point_vector_bounding_volume_source::Point_vector_bounding_volume_source(std::size_t capacity)
+{
+    m_points.reserve(capacity);
+}
+
+void Point_vector_bounding_volume_source::add(const float x, const float y, const float z)
+{
+    m_points.emplace_back(x, y, z);
+}
+
+void Point_vector_bounding_volume_source::add(glm::vec3 point)
+{
+    m_points.push_back(point);
+}
+
+auto Point_vector_bounding_volume_source::get_element_count() const -> std::size_t
+{
+    return m_points.size();
+}
+
+auto Point_vector_bounding_volume_source::get_element_point_count(std::size_t) const -> std::size_t
+{
+    return 1;
+}
+
+auto Point_vector_bounding_volume_source::get_point(std::size_t element_index, std::size_t) const -> std::optional<glm::vec3>
+{
+    return m_points[element_index];
 }
 
 }

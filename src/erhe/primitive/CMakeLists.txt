@@ -16,8 +16,8 @@ erhe_target_sources_grouped(
     erhe_primitive/enums.hpp
     erhe_primitive/format_info.cpp
     erhe_primitive/format_info.hpp
-    erhe_primitive/geometry_mesh.cpp
-    erhe_primitive/geometry_mesh.hpp
+    erhe_primitive/renderable_mesh.cpp
+    erhe_primitive/renderable_mesh.hpp
     erhe_primitive/index_range.cpp
     erhe_primitive/index_range.hpp
     erhe_primitive/material.cpp
@@ -30,6 +30,8 @@ erhe_target_sources_grouped(
     erhe_primitive/primitive.hpp
     erhe_primitive/property_maps.cpp
     erhe_primitive/property_maps.hpp
+    erhe_primitive/triangle_soup.cpp
+    erhe_primitive/triangle_soup.hpp
     erhe_primitive/vertex_attribute_info.cpp
     erhe_primitive/vertex_attribute_info.hpp
 )

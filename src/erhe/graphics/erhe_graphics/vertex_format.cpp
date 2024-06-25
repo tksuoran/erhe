@@ -31,16 +31,9 @@ void Vertex_format::align_to(const std::size_t alignment)
     }
 }
 
-void Vertex_format::add_attribute(
-    const Vertex_attribute& attribute
-)
+void Vertex_format::add_attribute(const Vertex_attribute& attribute)
 {
-    ERHE_VERIFY(
-        (attribute.data_type.dimension >= 1) &&
-        (attribute.data_type.dimension <= 4)
-    );
-
-    const std::size_t attribute_stride = attribute.data_type.dimension * gl_helpers::size_of_type(attribute.data_type.type);
+    const std::size_t attribute_stride = erhe::dataformat::get_format_size(attribute.data_type);
     // Note: Vertex attributes have no alignment requirements - do *not* align attribute offsets
     auto& new_attribute = m_attributes.emplace_back(attribute);
     new_attribute.offset = m_stride;
@@ -62,10 +55,7 @@ auto Vertex_format::match(const Vertex_format& other) const -> bool
     return true;
 }
 
-auto Vertex_format::has_attribute(
-    const Vertex_attribute::Usage_type usage_type,
-    const unsigned int                 index
-) const -> bool
+auto Vertex_format::has_attribute(Vertex_attribute::Usage_type usage_type, unsigned int index) const -> bool
 {
     for (const auto& i : m_attributes) {
         if ((i.usage.type == usage_type) && (i.usage.index == index)) {
@@ -76,10 +66,8 @@ auto Vertex_format::has_attribute(
     return false;
 }
 
-auto Vertex_format::find_attribute_maybe(
-    const Vertex_attribute::Usage_type usage_type,
-    const unsigned int                 index
-) const -> const Vertex_attribute*
+auto Vertex_format::find_attribute_maybe(Vertex_attribute::Usage_type usage_type, unsigned int index) const
+-> const Vertex_attribute*
 {
     for (const auto& i : m_attributes) {
         if ((i.usage.type == usage_type) && (i.usage.index== index)) {
@@ -90,10 +78,8 @@ auto Vertex_format::find_attribute_maybe(
     return nullptr;
 }
 
-auto Vertex_format::find_attribute(
-    const Vertex_attribute::Usage_type usage_type,
-    const unsigned int                 index
-) const -> gsl::not_null<const Vertex_attribute*>
+auto Vertex_format::find_attribute(Vertex_attribute::Usage_type usage_type, unsigned int index) const
+-> const Vertex_attribute*
 {
     for (const auto& i : m_attributes) {
         if ((i.usage.type == usage_type) && (i.usage.index == index)) {
@@ -104,10 +90,7 @@ auto Vertex_format::find_attribute(
     ERHE_FATAL("vertex_attribute not found");
 }
 
-void Vertex_format::add_to(
-    Shader_resource& vertex_struct,
-    Shader_resource& vertices_block
-)
+void Vertex_format::add_to(Shader_resource& vertex_struct, Shader_resource& vertices_block)
 {
     for (const auto& attribute : m_attributes) {
         vertex_struct.add(attribute);

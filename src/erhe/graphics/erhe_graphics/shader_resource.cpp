@@ -1077,37 +1077,19 @@ auto Shader_resource::add(const Vertex_attribute& attribute) -> Shader_resource*
         attribute.usage.index
     );
 
-    switch (attribute.data_type.type) {
-        case gl::Vertex_attrib_type::int_: {
-            switch (attribute.data_type.dimension) {
-                case 1: return add_int(name);
-                //case 2: return add_ivec2(name);
-                //case 3: return add_ivec3(name);
-                //case 4: return add_ivec4(name);
-                default: break;
-            }
-            break;
-        }
-        case gl::Vertex_attrib_type::unsigned_int: {
-            switch (attribute.data_type.dimension) {
-                case 1: return add_uint(name);
-                case 2: return add_uvec2(name);
-                case 3: return add_uvec3(name);
-                case 4: return add_uvec4(name);
-                default: break;
-            }
-            break;
-        }
-        case gl::Vertex_attrib_type::float_: {
-            switch (attribute.data_type.dimension) {
-                case 1: return add_float(name);
-                case 2: return add_vec2(name);
-                case 3: return add_vec3(name);
-                case 4: return add_vec4(name);
-                default: break;
-            }
-            break;
-        }
+    switch (attribute.data_type) {
+        case erhe::dataformat::Format::format_32_scalar_sint:  return add_int(name);
+        //case erhe::dataformat::Format::format_32_vec2_sint:  return add_ivec2(name);
+        //case erhe::dataformat::Format::format_32_vec3_sint:  return add_ivec3(name);
+        //case erhe::dataformat::Format::format_32_vec4_sint:  return add_ivec4(name);
+        case erhe::dataformat::Format::format_32_scalar_uint:  return add_uint(name);
+        case erhe::dataformat::Format::format_32_vec2_uint:    return add_uvec2(name);
+        case erhe::dataformat::Format::format_32_vec3_uint:    return add_uvec3(name);
+        case erhe::dataformat::Format::format_32_vec4_uint:    return add_uvec4(name);
+        case erhe::dataformat::Format::format_32_scalar_float: return add_float(name);
+        case erhe::dataformat::Format::format_32_vec2_float:   return add_vec2(name);
+        case erhe::dataformat::Format::format_32_vec3_float:   return add_vec3(name);
+        case erhe::dataformat::Format::format_32_vec4_float:   return add_vec4(name);
         default: {
             ERHE_FATAL("Attribute type not supported");
         }

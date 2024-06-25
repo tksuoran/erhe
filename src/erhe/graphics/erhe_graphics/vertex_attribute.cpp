@@ -16,22 +16,9 @@ auto Vertex_attribute::Usage::operator!=(const Usage& other) const -> bool
     return !(*this == other);
 }
 
-auto Vertex_attribute::Data_type::operator==(const Data_type& other) const -> bool
-{
-    return
-        (type       == other.type)       &&
-        (normalized == other.normalized) &&
-        (dimension  == other.dimension);
-}
-
-auto Vertex_attribute::Data_type::operator!=(const Data_type& other) const -> bool
-{
-    return !(*this == other);
-}
-
 auto Vertex_attribute::size() const -> size_t
 {
-    return data_type.dimension * gl_helpers::size_of_type(data_type.type);
+    return erhe::dataformat::get_format_size(data_type);
 }
 
 auto Vertex_attribute::operator==(const Vertex_attribute& other) const -> bool
@@ -42,6 +29,7 @@ auto Vertex_attribute::operator==(const Vertex_attribute& other) const -> bool
         (shader_type == other.shader_type) &&
         (offset      == other.offset     ) &&
         (divisor     == other.divisor);
+    // TODO consider default_value?
 }
 
 auto Vertex_attribute::operator!=(const Vertex_attribute& other
@@ -72,6 +60,31 @@ auto Vertex_attribute::desc(const Usage_type usage) -> const char*
         case Usage_type::aniso_control: return "aniso_control";
         case Usage_type::custom:        return "custom";
         default:                        return "?";
+    }
+}
+
+[[nodiscard]] auto c_str(Glsl_type value) -> const char*
+{
+    switch (value) {
+        case Glsl_type::invalid:            return "invalid";
+        case Glsl_type::float_:             return "float";
+        case Glsl_type::float_vec2:         return "float_vec2";
+        case Glsl_type::float_vec3:         return "float_vec3";
+        case Glsl_type::float_vec4:         return "float_vec4";
+        case Glsl_type::bool_:              return "bool_";
+        case Glsl_type::int_:               return "int_";
+        case Glsl_type::int_vec2:           return "int_vec2";
+        case Glsl_type::int_vec3:           return "int_vec3";
+        case Glsl_type::int_vec4:           return "int_vec4";
+        case Glsl_type::unsigned_int:       return "unsigned_int";
+        case Glsl_type::unsigned_int_vec2:  return "unsigned_int_vec2";
+        case Glsl_type::unsigned_int_vec3:  return "unsigned_int_vec3";
+        case Glsl_type::unsigned_int_vec4:  return "unsigned_int_vec4";
+        case Glsl_type::unsigned_int64_arb: return "unsigned_int64_arb";
+        case Glsl_type::float_mat_2x2:      return "float_mat_2x2";
+        case Glsl_type::float_mat_3x3:      return "float_mat_3x3";
+        case Glsl_type::float_mat_4x4:      return "float_mat_4x4";
+        default:                            return "?";
     }
 }
 

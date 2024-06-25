@@ -20,7 +20,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_primitive/renderable_mesh.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/iinstance.hpp"
@@ -355,7 +355,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
         if (!geometry_primitive) {
             continue;
         }
-        const auto& geometry = geometry_primitive->source_geometry;
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = geometry_primitive->get_geometry();
 
         ++primitive_index;
         ImGui::PushID(primitive_index);
@@ -385,8 +385,9 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
                 ImGui::TreePop();
             }
             if (ImGui::TreeNodeEx("Debug")) {
-                float bbox_volume    = geometry_primitive->gl_geometry_mesh.bounding_box.volume();
-                float bsphere_volume = geometry_primitive->gl_geometry_mesh.bounding_sphere.volume();
+                erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
+                float bbox_volume    = renderable_mesh.bounding_box.volume();
+                float bsphere_volume = renderable_mesh.bounding_sphere.volume();
                 ImGui::Indent(indent);
                 ImGui::InputFloat("BBox Volume",    &bbox_volume,    0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
                 ImGui::InputFloat("BSphere Volume", &bsphere_volume, 0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
@@ -667,8 +668,8 @@ void Properties::material_properties()
             Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material.get());
             if (scene_root != nullptr) {
                 const auto& content_library = scene_root->content_library();
-                content_library->textures->combo(m_context, "Base Color Texture",         selected_material->base_color_texture,         true);
-                content_library->textures->combo(m_context, "Metallic Roughness Texture", selected_material->metallic_roughness_texture, true);
+                content_library->textures->combo(m_context, "Base Color Texture",         selected_material->textures.base_color,         true);
+                content_library->textures->combo(m_context, "Metallic Roughness Texture", selected_material->textures.metallic_roughness, true);
             }
             ImGui::TreePop();
         }

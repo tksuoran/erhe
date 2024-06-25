@@ -41,17 +41,9 @@ public:
     explicit Animation_sampler(Animation_interpolation_mode interpolation_mode);
     ~Animation_sampler() noexcept;
 
-    void set(
-        std::vector<float>&& timestamps_in,
-        std::vector<float>&& values_in
-    );
+    void set(std::vector<float>&& timestamps_in, std::vector<float>&& values_in);
 
-    [[nodiscard]] auto evaluate(
-        Animation_channel& channel,
-        const float        time_current
-    ) const -> glm::vec4;
-
-    [[nodiscard]] auto evaluate(Animation_channel& channel, float time_current, std::size_t component) const -> float;
+    [[nodiscard]] auto evaluate(Animation_channel& channel, float time_current) const -> glm::vec4;
 
     void apply(Animation_channel& channel, float time_current) const;
     void seek (Animation_channel& channel, float time_current) const;

@@ -256,7 +256,7 @@ void Hotbar::init_radial_menu(
     );
 
     auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-        erhe::primitive::make_geometry_mesh(
+        erhe::primitive::make_renderable_mesh(
             *disc_geometry_shared.get(),
             erhe::primitive::Build_info{
                 .primitive_types = { .fill_triangles = true },

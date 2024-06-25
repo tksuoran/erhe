@@ -4,14 +4,12 @@
 
 #include <cstddef>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Buffer;
     class Instance;
 }
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 class Buffer_range
 {

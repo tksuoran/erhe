@@ -803,6 +803,22 @@ public:
     virtual auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> = 0;
 };
 
+class Point_vector_bounding_volume_source : public Bounding_volume_source
+{
+public:
+    Point_vector_bounding_volume_source();
+    explicit Point_vector_bounding_volume_source(std::size_t capacity);
+
+    void add                    (float x, float y, float z);
+    void add                    (glm::vec3 point);
+    auto get_element_count      () const -> std::size_t override;
+    auto get_element_point_count(std::size_t element_index) const -> std::size_t override;
+    auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> override;
+
+private:
+    std::vector<glm::vec3> m_points;
+};
+
 void calculate_bounding_volume(
     const Bounding_volume_source& source,
     Bounding_box&                 bounding_box,

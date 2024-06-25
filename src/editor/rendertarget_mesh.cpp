@@ -115,8 +115,8 @@ void Rendertarget_mesh::resize_rendertarget(
         "Rendertarget Node",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
-    m_material->base_color_texture = m_texture;
-    m_material->base_color_sampler = m_sampler;
+    m_material->textures.base_color = m_texture;
+    m_material->samplers.base_color = m_sampler;
 
     m_local_width  = static_cast<float>(m_texture->width ()) / m_pixels_per_meter;
     m_local_height = static_cast<float>(m_texture->height()) / m_pixels_per_meter;
@@ -361,7 +361,7 @@ void Rendertarget_mesh::render_done(Editor_context& context)
                 .debug_label = "Rendertarget_mesh"
             }
         );
-        m_material->base_color_sampler = m_sampler;
+        m_material->samplers.base_color = m_sampler;
     }
 }
 

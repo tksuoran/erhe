@@ -25,6 +25,7 @@ erhe_target_sources_grouped(
 target_link_libraries(
     ${_target}
     PUBLIC
+        erhe::dataformat
         erhe::graphics
         erhe::math
         erhe::primitive

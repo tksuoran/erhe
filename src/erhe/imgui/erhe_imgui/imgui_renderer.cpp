@@ -256,61 +256,39 @@ Imgui_program_interface::Imgui_program_interface(
         {
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 0,
-                .shader_type     = gl::Attribute_type::float_vec2,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec2,
                 .name            = "a_position",
-                .src_usage = {
-                    .type        = erhe::graphics::Vertex_attribute::Usage_type::position,
-                }
+                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::position }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 1,
-                .shader_type     = gl::Attribute_type::float_vec2,
+                .shader_type     =  erhe::graphics::Glsl_type::float_vec2,
                 .name            = "a_texcoord",
-                .src_usage = {
-                    .type        = erhe::graphics::Vertex_attribute::Usage_type::tex_coord,
-                }
+                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::tex_coord }
             },
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 2,
-                .shader_type     = gl::Attribute_type::float_vec4,
+                .shader_type     =  erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_color",
-                .src_usage = {
-                    .type        = erhe::graphics::Vertex_attribute::Usage_type::color,
-                }
+                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::color },
             }
         }
     }
     , vertex_format{
         erhe::graphics::Vertex_attribute{
-            .usage = {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::position
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
+            .usage       = { erhe::graphics::Vertex_attribute::Usage_type::position },
+            .shader_type = erhe::graphics::Glsl_type::float_vec2,
+            .data_type   = erhe::dataformat::Format::format_32_vec2_float
         },
         erhe::graphics::Vertex_attribute{
-            .usage = {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type = {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
+            .usage       = { erhe::graphics::Vertex_attribute::Usage_type::tex_coord },
+            .shader_type = erhe::graphics::Glsl_type::float_vec2,
+            .data_type   = erhe::dataformat::Format::format_32_vec2_float
         },
         erhe::graphics::Vertex_attribute{
-            .usage = {
-                .type       = erhe::graphics::Vertex_attribute::Usage_type::color
-            },
-            .shader_type    = gl::Attribute_type::float_vec4,
-            .data_type = {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
-                .normalized = true,
-                .dimension  = 4
-            }
+            .usage       = { erhe::graphics::Vertex_attribute::Usage_type::color },
+            .shader_type = erhe::graphics::Glsl_type::float_vec4,
+            .data_type   = erhe::dataformat::Format::format_8_vec4_unorm
         }
     }
     , default_uniform_block{get_shader_default_uniform_block(graphics_instance, s_texture_unit_count)}
