@@ -110,7 +110,7 @@ Id_renderer::Id_renderer(
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
@@ -120,7 +120,7 @@ Id_renderer::Id_renderer(
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
         .color_blend    = Color_blend_state::color_writes_disabled,
     }}

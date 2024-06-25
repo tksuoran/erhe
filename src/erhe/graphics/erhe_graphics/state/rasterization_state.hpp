@@ -21,16 +21,11 @@ public:
     gl::Polygon_mode         polygon_mode        {gl::Polygon_mode::fill};
     // not implementing separate front and back polygon modes for now
 
-    static auto cull_mode_front_cw (const bool reverse_depth) -> const Rasterization_state&;
-    static auto cull_mode_front_ccw(const bool reverse_depth) -> const Rasterization_state&;
-    static auto cull_mode_back_cw  (const bool reverse_depth) -> const Rasterization_state&;
-    static auto cull_mode_back_ccw (const bool reverse_depth) -> const Rasterization_state&;
-
     static Rasterization_state cull_mode_none;
-    static Rasterization_state s_cull_mode_front_cw;
-    static Rasterization_state s_cull_mode_front_ccw;
-    static Rasterization_state s_cull_mode_back_cw;
-    static Rasterization_state s_cull_mode_back_ccw;
+    static Rasterization_state cull_mode_front_cw;
+    static Rasterization_state cull_mode_front_ccw;
+    static Rasterization_state cull_mode_back_cw;
+    static Rasterization_state cull_mode_back_ccw;
     static Rasterization_state cull_mode_front_and_back;
 };
 

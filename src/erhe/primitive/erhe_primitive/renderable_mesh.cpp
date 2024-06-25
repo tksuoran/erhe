@@ -1,20 +1,20 @@
-#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_primitive/renderable_mesh.hpp"
 
 namespace erhe::primitive
 {
 
-auto Geometry_mesh::base_vertex() const -> uint32_t
+auto Renderable_mesh::base_vertex() const -> uint32_t
 {
     return static_cast<uint32_t>(vertex_buffer_range.byte_offset / vertex_buffer_range.element_size);
 }
 
 // Value that should be added in index range first index
-auto Geometry_mesh::base_index() const -> uint32_t
+auto Renderable_mesh::base_index() const -> uint32_t
 {
     return static_cast<uint32_t>(index_buffer_range.byte_offset / index_buffer_range.element_size);
 }
 
-auto Geometry_mesh::index_range(const Primitive_mode primitive_mode) const -> Index_range
+auto Renderable_mesh::index_range(const Primitive_mode primitive_mode) const -> Index_range
 {
     switch (primitive_mode) {
         //using enum Primitive_mode;

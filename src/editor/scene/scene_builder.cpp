@@ -1072,7 +1072,7 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
         "cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f
     );
     auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-        make_geometry_mesh(
+        make_renderable_mesh(
             make_cube(0.1f),
             build_info(mesh_memory),
             Normal_style::polygon_normals

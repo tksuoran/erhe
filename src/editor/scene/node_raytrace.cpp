@@ -100,8 +100,8 @@ auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
 
     using namespace erhe::primitive;
     const Geometry_primitive& geometry_primitive        = *primitive.geometry_primitive.get();
-    const Geometry_mesh&      geometry_mesh             = geometry_primitive.get_geometry_mesh();
-    const auto&               triangle_id_to_polygon_id = geometry_mesh.primitive_id_to_polygon_id;
+    const Renderable_mesh&    renderable_mesh           = geometry_primitive.get_geometry_mesh();
+    const auto&               triangle_id_to_polygon_id = renderable_mesh.primitive_id_to_polygon_id;
     if (hit.triangle_id >= triangle_id_to_polygon_id.size()) {
         log_raytrace->error("This should not happen");
         return {};

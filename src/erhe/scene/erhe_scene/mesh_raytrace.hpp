@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_primitive/renderable_mesh.hpp"
 #include "erhe_scene/node_attachment.hpp"
 
 #include <functional>

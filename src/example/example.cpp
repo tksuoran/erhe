@@ -137,7 +137,7 @@ public:
                     .shader_stages  = &m_programs.standard,
                     .vertex_input   = &m_mesh_memory.vertex_input,
                     .input_assembly = erhe::graphics::Input_assembly_state::triangles,
-                    .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_cw(reverse_depth),
+                    .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_cw,
                     .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
                     .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
                 }

@@ -7,7 +7,7 @@
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/index_range.hpp"
-#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_primitive/renderable_mesh.hpp"
 #include "erhe_primitive/property_maps.hpp"
 #include "erhe_primitive/vertex_attribute_info.hpp"
 
@@ -51,7 +51,7 @@ public:
     Build_context_root(
         const erhe::geometry::Geometry& geometry,
         const Build_info&               build_info,
-        Geometry_mesh*                  geometry_mesh
+        Renderable_mesh*                renderable_mesh
     );
 
     void get_mesh_info            ();
@@ -67,7 +67,7 @@ public:
 
     const erhe::geometry::Geometry&      geometry;
     const Build_info&                    build_info;
-    Geometry_mesh*                       geometry_mesh{nullptr};
+    Renderable_mesh*                     renderable_mesh{nullptr};
     std::size_t                          next_index_range_start{0};
     Vertex_attributes                    attributes;
     erhe::geometry::Mesh_info            mesh_info;
@@ -84,7 +84,7 @@ public:
         const erhe::geometry::Geometry& geometry,
         const Build_info&               build_info,
         const Normal_style              normal_style,
-        Geometry_mesh*                  geometry_mesh
+        Renderable_mesh*                renderable_mesh
     );
     ~Build_context() noexcept;
 
@@ -144,19 +144,19 @@ public:
         const Normal_style              normal_style
     );
 
-    [[nodiscard]] auto build() -> Geometry_mesh;
+    [[nodiscard]] auto build() -> Renderable_mesh;
 
-    void build(Geometry_mesh* geometry_mesh);
+    void build(Renderable_mesh* renderable_mesh);
 
     const erhe::geometry::Geometry& m_geometry;
     const Build_info&               m_build_info;
     const Normal_style              m_normal_style;
 };
 
-[[nodiscard]] auto make_geometry_mesh(
+[[nodiscard]] auto make_renderable_mesh(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
     const Normal_style              normal_style = Normal_style::corner_normals
-) -> Geometry_mesh;
+) -> Renderable_mesh;
 
 } // namespace erhe::primitive

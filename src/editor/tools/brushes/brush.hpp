@@ -18,7 +18,7 @@ namespace erhe::physics {
 }
 namespace erhe::primitive {
     class Material;
-    class Geometry_mesh;
+    class Renderable_mesh;
     class Geometry_primitive;
 }
 namespace erhe::scene {

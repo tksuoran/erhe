@@ -50,7 +50,7 @@ Material_preview::Material_preview(
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
@@ -191,7 +191,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     m_mesh->add_primitive(
         erhe::primitive::Primitive{
             .geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-                erhe::primitive::make_geometry_mesh(
+                erhe::primitive::make_renderable_mesh(
                     erhe::geometry::shapes::make_sphere(
                         m_radius,
                         std::max(1, m_slice_count),

@@ -174,6 +174,7 @@ void import_gltf(
             color_graph(node.get(), node_colors, available_colors);
         }
     }
+
     if (!scene->get_cameras().empty()) {
         add_default_camera = false;
     }

@@ -17,7 +17,7 @@ void parse_primitive(
     //       and index buffer sections for each.
     //       Parser in erhe::gltf does better job, but it goes
     //       through erhe::geometry::Geometry.
-    erhe::primitive::Geometry_mesh erhe_gl_primitive;
+    erhe::primitive::Renderable_mesh erhe_gl_primitive;
 
     // Index buffer
     {

@@ -63,6 +63,7 @@ auto make_box(
             geometry.make_polygon({0, 1, 5, 3}); // y-
             geometry.make_polygon({0, 2, 4, 1}); // z-
 
+            geometry.reverse_polygons(); // TODO reverse the code above and remove this
             geometry.make_point_corners();
             geometry.build_edges();
             geometry.compute_polygon_corner_texcoords(corner_texcoords);
@@ -103,6 +104,7 @@ auto make_box(
             geometry.make_polygon({0, 1, 5, 3}); // y-
             geometry.make_polygon({0, 2, 4, 1}); // z-
 
+            geometry.reverse_polygons(); // TODO reverse the code above and remove this
             geometry.make_point_corners();
             geometry.build_edges();
             geometry.compute_polygon_corner_texcoords(corner_texcoords);
@@ -372,6 +374,7 @@ public:
             }
         }
 
+        geometry.reverse_polygons(); // TODO reverse the code above and remove this
         geometry.make_point_corners();
         geometry.build_edges();
         geometry.compute_polygon_normals();

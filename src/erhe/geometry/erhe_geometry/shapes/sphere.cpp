@@ -389,6 +389,7 @@ public:
             polygon_aniso_control->put(polygon_id, anisotropic_no_texcoord);
         }
 
+        geometry.reverse_polygons(); // TODO reverse the code above and remove this
         geometry.make_point_corners();
         geometry.build_edges();
         geometry.promise_has_polygon_normals();

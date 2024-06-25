@@ -18,47 +18,11 @@ auto Rasterization_state_hash::operator()(
         (gl::base_zero(rasterization_state.polygon_mode        ) << 4u);  // 2 bits
 }
 
-Rasterization_state Rasterization_state::cull_mode_none       {false, gl::Cull_face_mode::back,  gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::s_cull_mode_front_cw {true,  gl::Cull_face_mode::front, gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::s_cull_mode_front_ccw{true,  gl::Cull_face_mode::front, gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::s_cull_mode_back_cw  {true,  gl::Cull_face_mode::back,  gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::s_cull_mode_back_ccw {true,  gl::Cull_face_mode::back,  gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-
-auto Rasterization_state::cull_mode_front_cw(
-    const bool reverse_depth
-) -> const Rasterization_state&
-{
-    return reverse_depth
-        ? s_cull_mode_front_ccw
-        : s_cull_mode_front_cw;
-}
-
-auto Rasterization_state::cull_mode_front_ccw(
-    const bool reverse_depth
-) -> const Rasterization_state&
-{
-    return reverse_depth
-        ? s_cull_mode_front_cw
-        : s_cull_mode_front_ccw;
-}
-
-auto Rasterization_state::cull_mode_back_cw(
-    const bool reverse_depth
-) -> const Rasterization_state&
-{
-    return reverse_depth
-        ? s_cull_mode_back_ccw
-        : s_cull_mode_back_cw;
-}
-
-auto Rasterization_state::cull_mode_back_ccw(
-    const bool reverse_depth
-) -> const Rasterization_state&
-{
-    return reverse_depth
-        ? s_cull_mode_back_cw
-        : s_cull_mode_back_ccw;
-}
+Rasterization_state Rasterization_state::cull_mode_none     {false, gl::Cull_face_mode::back,  gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_front_cw {true,  gl::Cull_face_mode::front, gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_front_ccw{true,  gl::Cull_face_mode::front, gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_back_cw  {true,  gl::Cull_face_mode::back,  gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_back_ccw {true,  gl::Cull_face_mode::back,  gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
 
 void Rasterization_state_tracker::reset()
 {

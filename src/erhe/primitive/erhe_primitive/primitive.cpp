@@ -76,7 +76,7 @@ Geometry_raytrace::Geometry_raytrace(erhe::geometry::Geometry& geometry)
         }
     };
 
-    rt_geometry_mesh = make_geometry_mesh(
+    rt_geometry_mesh = make_renderable_mesh(
         geometry,
         build_info,
         erhe::primitive::Normal_style::none
@@ -157,9 +157,9 @@ Geometry_primitive::Geometry_primitive(const std::shared_ptr<erhe::geometry::Geo
 {
 }
 
-Geometry_primitive::Geometry_primitive(Geometry_mesh&& gl_geometry_mesh)
-    : m_normal_style {erhe::primitive::Normal_style::corner_normals}
-    , m_geometry_mesh{gl_geometry_mesh}
+Geometry_primitive::Geometry_primitive(Renderable_mesh&& renderable_mesh)
+    : m_normal_style   {erhe::primitive::Normal_style::corner_normals}
+    , m_renderable_mesh{renderable_mesh}
 {
 }
 
@@ -168,10 +168,10 @@ Geometry_primitive::Geometry_primitive(
     const Build_info&                                build_info,
     const Normal_style                               normal_style
 )
-    : m_geometry     {geometry}
-    , m_normal_style {normal_style}
-    , m_geometry_mesh{make_geometry_mesh(*geometry.get(), build_info, normal_style)}
-    , m_raytrace     {*geometry.get()}
+    : m_geometry       {geometry}
+    , m_normal_style   {normal_style}
+    , m_renderable_mesh{make_renderable_mesh(*geometry.get(), build_info, normal_style)}
+    , m_raytrace       {*geometry.get()}
 {
 }
 
@@ -181,10 +181,10 @@ Geometry_primitive::Geometry_primitive(
     const Build_info&                                build_info,
     const Normal_style                               normal_style
 )
-    : m_geometry     {render_geometry}
-    , m_normal_style {normal_style}
-    , m_geometry_mesh{make_geometry_mesh(*render_geometry.get(), build_info, normal_style)}
-    , m_raytrace     {*collision_geometry.get()}
+    : m_geometry       {render_geometry}
+    , m_normal_style   {normal_style}
+    , m_renderable_mesh{make_renderable_mesh(*render_geometry.get(), build_info, normal_style)}
+    , m_raytrace       {*collision_geometry.get()}
 {
 }
 
@@ -194,16 +194,16 @@ Geometry_primitive::Geometry_primitive(const Triangle_soup& triangle_soup, const
     const std::size_t sink_vertex_stride   = buffer_info.vertex_format.stride();
     const std::size_t source_vertex_stride = triangle_soup.vertex_format.stride();
     const std::size_t vertex_count         = triangle_soup.vertex_data.size() / source_vertex_stride;
-    const std::size_t index_count          = triangle_soup.vertex_data.size();
+    const std::size_t index_count          = triangle_soup.index_data.size();
 
     const Buffer_range index_range  = buffer_info.buffer_sink.allocate_index_buffer(index_count, 4);
     const Buffer_range vertex_range = buffer_info.buffer_sink.allocate_vertex_buffer(vertex_count, sink_vertex_stride);
 
-    m_geometry_mesh.triangle_fill_indices.primitive_type = gl::Primitive_type::triangles;
-    m_geometry_mesh.triangle_fill_indices.first_index = index_range.byte_offset / index_range.element_size;
-    m_geometry_mesh.triangle_fill_indices.index_count = index_count;
-    m_geometry_mesh.index_buffer_range  = index_range;
-    m_geometry_mesh.vertex_buffer_range = vertex_range;
+    m_renderable_mesh.triangle_fill_indices.primitive_type = gl::Primitive_type::triangles;
+    m_renderable_mesh.triangle_fill_indices.first_index = 0;
+    m_renderable_mesh.triangle_fill_indices.index_count = index_count;
+    m_renderable_mesh.index_buffer_range  = index_range;
+    m_renderable_mesh.vertex_buffer_range = vertex_range;
 
     // Copy indices to buffer
     std::vector<uint8_t> sink_index_data(index_count * index_range.element_size);
@@ -247,8 +247,8 @@ Geometry_primitive::Geometry_primitive(const Triangle_soup& triangle_soup, const
     }
     erhe::math::calculate_bounding_volume(
         positions,
-        m_geometry_mesh.bounding_box,
-        m_geometry_mesh.bounding_sphere
+        m_renderable_mesh.bounding_box,
+        m_renderable_mesh.bounding_sphere
     );
 }
 
@@ -256,9 +256,9 @@ Geometry_primitive::~Geometry_primitive() noexcept = default;
 
 void Geometry_primitive::build_from_geometry(const Build_info& build_info, const Normal_style normal_style_in)
 {
-    m_normal_style  = normal_style_in;
-    m_geometry_mesh = make_geometry_mesh(*m_geometry.get(), build_info, m_normal_style);
-    m_raytrace      = Geometry_raytrace{*m_geometry.get()};
+    m_normal_style    = normal_style_in;
+    m_renderable_mesh = make_renderable_mesh(*m_geometry.get(), build_info, m_normal_style);
+    m_raytrace        = Geometry_raytrace{*m_geometry.get()};
 }
 
 } // namespace erhe::primitive

@@ -6,7 +6,7 @@
 #include "erhe_primitive/buffer_writer.hpp"
 #include "erhe_primitive/index_range.hpp"
 #include "erhe_primitive/primitive_log.hpp"
-#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_primitive/renderable_mesh.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/property_map.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
@@ -46,13 +46,13 @@ using mat4 = glm::mat4;
 Build_context_root::Build_context_root(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
-    Geometry_mesh*                  geometry_mesh
+    Renderable_mesh*                renderable_mesh
 )
-    : geometry          {geometry}
-    , build_info        {build_info}
-    , geometry_mesh{geometry_mesh}
-    , vertex_format     {build_info.buffer_info.vertex_format}
-    , vertex_stride     {vertex_format.stride()}
+    : geometry       {geometry}
+    , build_info     {build_info}
+    , renderable_mesh{renderable_mesh}
+    , vertex_format  {build_info.buffer_info.vertex_format}
+    , vertex_stride  {vertex_format.stride()}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -86,10 +86,10 @@ void Build_context_root::get_mesh_info()
         allocate_index_range(
             gl::Primitive_type::triangles,
             mi.index_count_fill_triangles,
-            geometry_mesh->triangle_fill_indices
+            renderable_mesh->triangle_fill_indices
         );
         const std::size_t primitive_count = mi.index_count_fill_triangles;
-        geometry_mesh->primitive_id_to_polygon_id.resize(primitive_count);
+        renderable_mesh->primitive_id_to_polygon_id.resize(primitive_count);
     }
 
     if (primitive_types.edge_lines) {
@@ -98,7 +98,7 @@ void Build_context_root::get_mesh_info()
         allocate_index_range(
             gl::Primitive_type::lines,
             mi.index_count_edge_lines,
-            geometry_mesh->edge_line_indices
+            renderable_mesh->edge_line_indices
         );
     }
 
@@ -108,7 +108,7 @@ void Build_context_root::get_mesh_info()
         allocate_index_range(
             gl::Primitive_type::points,
             mi.index_count_corner_points,
-            geometry_mesh->corner_point_indices
+            renderable_mesh->corner_point_indices
         );
     }
 
@@ -118,7 +118,7 @@ void Build_context_root::get_mesh_info()
         allocate_index_range(
             gl::Primitive_type::points,
             mi.polygon_count,
-            geometry_mesh->polygon_centroid_indices
+            renderable_mesh->polygon_centroid_indices
         );
     }
 
@@ -152,7 +152,7 @@ void Build_context_root::allocate_vertex_buffer()
 {
     Expects(total_vertex_count > 0);
 
-    geometry_mesh->vertex_buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(
+    renderable_mesh->vertex_buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(
         total_vertex_count, vertex_stride
     );
 }
@@ -173,7 +173,7 @@ void Build_context_root::allocate_index_buffer()
         index_type_size
     );
 
-    geometry_mesh->index_buffer_range = build_info.buffer_info.buffer_sink.allocate_index_buffer(
+    renderable_mesh->index_buffer_range = build_info.buffer_info.buffer_sink.allocate_index_buffer(
         total_index_count,
         index_type_size
     );
@@ -230,14 +230,14 @@ void Build_context_root::calculate_bounding_volume(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(geometry_mesh != nullptr);
+    Expects(renderable_mesh != nullptr);
 
     const Geometry_point_source point_source{geometry, point_locations};
 
     erhe::math::calculate_bounding_volume(
         point_source,
-        geometry_mesh->bounding_box,
-        geometry_mesh->bounding_sphere
+        renderable_mesh->bounding_box,
+        renderable_mesh->bounding_sphere
     );
 }
 
@@ -252,18 +252,18 @@ Primitive_builder::Primitive_builder(
 {
 }
 
-auto Primitive_builder::build() -> Geometry_mesh
+auto Primitive_builder::build() -> Renderable_mesh
 {
-    Geometry_mesh geometry_mesh;
-    build(&geometry_mesh);
-    return geometry_mesh;
+    Renderable_mesh renderable_mesh;
+    build(&renderable_mesh);
+    return renderable_mesh;
 }
 
-void Primitive_builder::build(Geometry_mesh* geometry_mesh)
+void Primitive_builder::build(Renderable_mesh* renderable_mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(geometry_mesh != nullptr);
+    Expects(renderable_mesh != nullptr);
 
     SPDLOG_LOGGER_INFO(
         log_primitive_builder,
@@ -277,7 +277,7 @@ void Primitive_builder::build(Geometry_mesh* geometry_mesh)
         m_geometry,
         m_build_info,
         m_normal_style,
-        geometry_mesh
+        renderable_mesh
     };
 
     const Primitive_types& primitive_types = m_build_info.primitive_types;
@@ -298,9 +298,9 @@ Build_context::Build_context(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
     const Normal_style              normal_style,
-    Geometry_mesh*                  geometry_mesh
+    Renderable_mesh*                renderable_mesh
 )
-    : root         {geometry, build_info, geometry_mesh}
+    : root         {geometry, build_info, renderable_mesh}
     , normal_style {normal_style}
     , vertex_writer{*this, build_info.buffer_info.buffer_sink}
     , index_writer {*this, build_info.buffer_info.buffer_sink}
@@ -752,7 +752,7 @@ void Build_context::build_triangle_fill_index()
     if (root.build_info.primitive_types.fill_triangles) {
         if (previous_index != first_index) {
             index_writer.write_triangle(first_index, vertex_index, previous_index);
-            root.geometry_mesh->primitive_id_to_polygon_id[primitive_index] = polygon_id;
+            root.renderable_mesh->primitive_id_to_polygon_id[primitive_index] = polygon_id;
             ++primitive_index;
         }
     }
@@ -778,7 +778,7 @@ void Build_context::build_polygon_fill()
     //    root.build_info.format.features.normal_smooth;
 
     const Polygon_id polygon_id_end = root.geometry.get_polygon_count();
-    root.geometry_mesh->corner_to_vertex_id.resize(root.geometry.get_corner_count());
+    root.renderable_mesh->corner_to_vertex_id.resize(root.geometry.get_corner_count());
     for (polygon_id = 0; polygon_id < polygon_id_end; ++polygon_id) {
         const Polygon& polygon = root.geometry.polygons[polygon_id];
         first_index    = vertex_index;
@@ -802,7 +802,7 @@ void Build_context::build_polygon_fill()
             const Corner& corner = root.geometry.corners[corner_id];
             point_id             = corner.point_id;
 
-            root.geometry_mesh->corner_to_vertex_id[corner_id] = vertex_index;
+            root.renderable_mesh->corner_to_vertex_id[corner_id] = vertex_index;
 
             build_polygon_id          ();
             build_vertex_position     ();
@@ -919,16 +919,16 @@ void Build_context_root::allocate_index_range(
 
     // If index buffer has not yet been allocated, no check for enough room for index range
     ERHE_VERIFY(
-        (geometry_mesh->index_buffer_range.count == 0) ||
-        (next_index_range_start <= geometry_mesh->index_buffer_range.count)
+        (renderable_mesh->index_buffer_range.count == 0) ||
+        (next_index_range_start <= renderable_mesh->index_buffer_range.count)
     );
 }
 
-auto make_geometry_mesh(
+auto make_renderable_mesh(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
     const Normal_style              normal_style
-) -> Geometry_mesh
+) -> Renderable_mesh
 {
     ERHE_PROFILE_FUNCTION();
 

@@ -16,8 +16,8 @@ erhe_target_sources_grouped(
     erhe_primitive/enums.hpp
     erhe_primitive/format_info.cpp
     erhe_primitive/format_info.hpp
-    erhe_primitive/geometry_mesh.cpp
-    erhe_primitive/geometry_mesh.hpp
+    erhe_primitive/renderable_mesh.cpp
+    erhe_primitive/renderable_mesh.hpp
     erhe_primitive/index_range.cpp
     erhe_primitive/index_range.hpp
     erhe_primitive/material.cpp

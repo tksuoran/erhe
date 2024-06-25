@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_primitive/renderable_mesh.hpp"
 #include "erhe_primitive/enums.hpp"
 
 #include <memory>
@@ -22,7 +22,7 @@ class Buffer_info;
 class Material;
 class Triangle_soup;
 
-class Geometry_raytrace
+class Geometry_raytrace // TODO Rename Raytrace_accelerator
 {
 public:
     Geometry_raytrace();
@@ -30,17 +30,17 @@ public:
     ~Geometry_raytrace() noexcept;
     Geometry_raytrace& operator=(Geometry_raytrace&& other);
 
-    Geometry_mesh                              rt_geometry_mesh;
+    Renderable_mesh                            rt_geometry_mesh;
     std::shared_ptr<erhe::raytrace::IBuffer>   rt_vertex_buffer{};
     std::shared_ptr<erhe::raytrace::IBuffer>   rt_index_buffer {};
     std::unique_ptr<erhe::raytrace::IGeometry> rt_geometry     {};
 };
 
-class Geometry_primitive
+class Geometry_primitive // TODO merge into Primitive
 {
 public:
     explicit Geometry_primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
-    explicit Geometry_primitive(Geometry_mesh&& gl_geometry_mesh);
+    explicit Geometry_primitive(Renderable_mesh&& renderable_mesh);
     Geometry_primitive(
         const std::shared_ptr<erhe::geometry::Geometry>& geometry,
         const Build_info&                                build_info,
@@ -57,16 +57,16 @@ public:
 
     void build_from_geometry(const Build_info& build_info, Normal_style normal_style);
 
-    auto get_geometry() const -> const std::shared_ptr<erhe::geometry::Geometry>& { return m_geometry; }
-    auto get_normal_style() const -> Normal_style { return m_normal_style; }
-    auto get_geometry_mesh() -> Geometry_mesh& { return m_geometry_mesh; }
-    auto get_geometry_mesh() const -> const Geometry_mesh& { return m_geometry_mesh; }
+    auto get_geometry         () const -> const std::shared_ptr<erhe::geometry::Geometry>& { return m_geometry; }
+    auto get_normal_style     () const -> Normal_style { return m_normal_style; }
+    auto get_geometry_mesh    () -> Renderable_mesh& { return m_renderable_mesh; }
+    auto get_geometry_mesh    () const -> const Renderable_mesh& { return m_renderable_mesh; }
     auto get_geometry_raytrace() -> Geometry_raytrace& { return m_raytrace; }
 
 private:
-    std::shared_ptr<erhe::geometry::Geometry> m_geometry     {};
-    Normal_style                              m_normal_style {Normal_style::none};
-    Geometry_mesh                             m_geometry_mesh{};
+    std::shared_ptr<erhe::geometry::Geometry> m_geometry       {};
+    Normal_style                              m_normal_style   {Normal_style::none};
+    Renderable_mesh                           m_renderable_mesh{};
     Geometry_raytrace                         m_raytrace;
 };
 

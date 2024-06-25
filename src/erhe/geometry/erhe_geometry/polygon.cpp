@@ -39,7 +39,7 @@ auto Polygon::compute_normal(
     );
 
     newell_normal = glm::normalize(newell_normal);
-    return newell_normal;
+    return -newell_normal; // TODO Is this correct
 }
 
 void Polygon::compute_normal(

@@ -98,8 +98,8 @@ auto vertex_id_from_corner_id(
         if (geometry_primitive) {
             const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_primitive = geometry_primitive->get_geometry();
             if (geometry_in_primitive.get() == &geometry) {
-                erhe::primitive::Geometry_mesh& geometry_mesh = geometry_primitive->get_geometry_mesh();
-                return geometry_mesh.corner_to_vertex_id.at(corner_id);
+                erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
+                return renderable_mesh.corner_to_vertex_id.at(corner_id);
             }
         }
     }
@@ -277,8 +277,8 @@ void Paint_tool::paint_vertex(
         if (geometry_in_mesh.get() != &geometry) {
             continue;
         }
-        erhe::primitive::Geometry_mesh& geometry_mesh = geometry_primitive->get_geometry_mesh();
-        const std::size_t range_byte_offset = geometry_mesh.vertex_buffer_range.byte_offset;
+        erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
+        const std::size_t range_byte_offset = renderable_mesh.vertex_buffer_range.byte_offset;
         if (attribute->data_type == erhe::dataformat::Format::format_32_vec4_float) {
             buffer.resize(sizeof(float) * 4);
             auto* const ptr = reinterpret_cast<float*>(buffer.data());
