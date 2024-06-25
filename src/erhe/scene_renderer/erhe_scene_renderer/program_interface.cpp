@@ -219,6 +219,7 @@ auto Program_interface::make_program(
 
 void Program_interface::apply_default_attribute_values() const
 {
+    // TODO This is experimental and not used. Mesh_memory should have all the used attributes.
     for (const erhe::graphics::Vertex_attribute_mapping& mapping : attribute_mappings.mappings) {
         GLuint i = static_cast<GLuint>(mapping.layout_location);
         Vertex_attribute::Usage_type usage_type = (mapping.dst_usage_type == Vertex_attribute::Usage_type::automatic)
