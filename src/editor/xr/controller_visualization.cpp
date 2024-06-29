@@ -33,10 +33,10 @@ Controller_visualization::Controller_visualization(
     //constexpr float radius = 0.02f;
     auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 40, 14);
     controller_geometry.transform(erhe::math::mat4_swap_yz);
-    //// controller_geometry.reverse_polygons();
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
-    auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+
+    erhe::primitive::Primitive primitive{
         erhe::primitive::make_renderable_mesh(
             controller_geometry,
             erhe::primitive::Build_info{
@@ -44,12 +44,8 @@ Controller_visualization::Controller_visualization(
                 .buffer_info = mesh_memory.buffer_info
             },
             erhe::primitive::Normal_style::corner_normals
-        )
-    );
-
-    erhe::primitive::Primitive primitive{
-        .material           = controller_material,
-        .geometry_primitive = geometry_primitive
+        ),
+        controller_material
     };
 
     m_controller_node = std::make_shared<erhe::scene::Node>("Controller node");

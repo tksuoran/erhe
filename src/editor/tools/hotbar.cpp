@@ -255,26 +255,22 @@ void Hotbar::init_radial_menu(
         )
     );
 
-    auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-        erhe::primitive::make_renderable_mesh(
-            *disc_geometry_shared.get(),
-            erhe::primitive::Build_info{
-                .primitive_types = { .fill_triangles = true },
-                .buffer_info     = mesh_memory.buffer_info
-            }
-        )
-    );
-
     m_radial_menu_background_mesh = std::make_shared<erhe::scene::Mesh>(
         "Radiaul Menu Mesh",
         erhe::primitive::Primitive{
-            .material           = disc_material,
-            .geometry_primitive = geometry_primitive
+            erhe::primitive::make_renderable_mesh(
+                *disc_geometry_shared.get(),
+                erhe::primitive::Build_info{
+                    .primitive_types = { .fill_triangles = true },
+                    .buffer_info     = mesh_memory.buffer_info
+                }
+            ),
+            disc_material
         }
     );
 
-    auto*       scene      = scene_root.get_hosted_scene();
-    const auto  root_node  = scene->get_root_node();
+    erhe::scene::Scene* scene     = scene_root.get_hosted_scene();
+    const auto          root_node = scene->get_root_node();
     ERHE_VERIFY(scene != nullptr);
     ERHE_VERIFY(root_node);
     m_radial_menu_background_mesh->layer_id = scene_root.layers().content()->id;

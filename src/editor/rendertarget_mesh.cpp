@@ -135,14 +135,12 @@ void Rendertarget_mesh::resize_rendertarget(
     clear_primitives();
     add_primitive(
         erhe::primitive::Primitive{
-            .material           = m_material,
-            .geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-                shared_geometry,
-                erhe::primitive::Build_info{
-                    .primitive_types{ .fill_triangles = true },
-                    .buffer_info = mesh_memory.buffer_info
-                }
-            )
+            shared_geometry,
+            m_material,
+            erhe::primitive::Build_info{
+                .primitive_types{ .fill_triangles = true },
+                .buffer_info = mesh_memory.buffer_info
+            }
         }
     );
 

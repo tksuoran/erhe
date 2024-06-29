@@ -442,14 +442,10 @@ auto Physics_tool::on_drag() -> bool
         m_grab_position_world = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_grab_position_in_node, 1.0f}};
 
         float max_radius = 0.0f;
-        for (const auto& primitive : m_target_mesh->get_primitives()) {
-            const auto& geometry_primitive = primitive.geometry_primitive;
-            if (!geometry_primitive) {
-                continue;
-            }
+        for (const erhe::primitive::Primitive& primitive : m_target_mesh->get_primitives()) {
             max_radius = std::max(
                 max_radius,
-                primitive.geometry_primitive->get_geometry_mesh().bounding_sphere.radius
+                primitive.get_renderable_mesh().bounding_sphere.radius
             );
         }
         m_target_mesh_size   = max_radius;

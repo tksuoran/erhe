@@ -407,13 +407,11 @@ void Viewport_window::update_hover_with_id_render()
     if (entry.mesh != nullptr) {
         const erhe::scene::Node* node = entry.mesh->get_node();
         ERHE_VERIFY(node != nullptr);
-        const auto& primitive          = entry.mesh->get_primitives()[entry.primitive_index];
-        const auto& geometry_primitive = primitive.geometry_primitive;
-        ERHE_VERIFY(geometry_primitive);
-        entry.geometry = geometry_primitive->get_geometry();
+        const erhe::primitive::Primitive& primitive = entry.mesh->get_primitives()[entry.primitive_index];
+        entry.geometry = primitive.get_geometry();
         if (entry.geometry) {
             const auto triangle_id = static_cast<erhe::geometry::Polygon_id>(entry.triangle_id);
-            const auto polygon_id  = geometry_primitive->get_geometry_mesh().primitive_id_to_polygon_id[triangle_id];
+            const auto polygon_id  = primitive.get_renderable_mesh().primitive_id_to_polygon_id[triangle_id];
             ERHE_VERIFY(polygon_id < entry.geometry->get_polygon_count());
             SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
             auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);

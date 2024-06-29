@@ -15,7 +15,7 @@ namespace erhe::graphics {
 }
 namespace erhe::primitive {
     class Buffer_sink;
-    class Geometry_primitive;
+    class Primitive;
     class Material;
 }
 namespace erhe::scene {
@@ -36,17 +36,17 @@ class Image_transfer;
 class Gltf_data
 {
 public:
-    std::vector<std::shared_ptr<erhe::scene::Animation>>              animations;
-    std::vector<std::shared_ptr<erhe::scene::Camera>>                 cameras;
-    std::vector<std::shared_ptr<erhe::scene::Light>>                  lights;
-    std::vector<std::shared_ptr<erhe::scene::Mesh>>                   meshes;
-    std::vector<std::shared_ptr<erhe::scene::Skin>>                   skins;
-    std::vector<std::shared_ptr<erhe::scene::Node>>                   nodes;
-    std::vector<std::shared_ptr<erhe::geometry::Geometry>>            geometries;
-    std::vector<std::shared_ptr<erhe::primitive::Geometry_primitive>> geometry_primitives;
-    std::vector<std::shared_ptr<erhe::primitive::Material>>           materials;
-    std::vector<std::shared_ptr<erhe::graphics::Texture>>             images;
-    std::vector<std::shared_ptr<erhe::graphics::Sampler>>             samplers;
+    std::vector<std::shared_ptr<erhe::scene::Animation>>     animations;
+    std::vector<std::shared_ptr<erhe::scene::Camera>>        cameras;
+    std::vector<std::shared_ptr<erhe::scene::Light>>         lights;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>>          meshes;
+    std::vector<std::shared_ptr<erhe::scene::Skin>>          skins;
+    std::vector<std::shared_ptr<erhe::scene::Node>>          nodes;
+    std::vector<std::shared_ptr<erhe::geometry::Geometry>>   geometries;
+    std::vector<std::shared_ptr<erhe::primitive::Primitive>> primitives;
+    std::vector<std::shared_ptr<erhe::primitive::Material>>  materials;
+    std::vector<std::shared_ptr<erhe::graphics::Texture>>    images;
+    std::vector<std::shared_ptr<erhe::graphics::Sampler>>    samplers;
 };
 
 class Gltf_scan

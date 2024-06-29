@@ -423,9 +423,10 @@ void run_example()
         if (mesh) {
             std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
             for (erhe::primitive::Primitive& primitive : primitives) {
-                if (!primitive.geometry_primitive && primitive.triangle_soup) {
-                    primitive.geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-                        *primitive.triangle_soup.get(),
+                if (!primitive.has_renderable_triangles() && primitive.get_triangle_soup()) {
+                    // TODO This looks a bit awkward
+                    primitive.get_renderable_mesh() = erhe::primitive::build_renderable_mesh_from_triangle_soup(
+                        *primitive.get_triangle_soup().get(),
                         buffer_info
                     );
                 }

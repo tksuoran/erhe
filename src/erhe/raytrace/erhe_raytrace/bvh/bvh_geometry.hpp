@@ -49,9 +49,9 @@ public:
         std::size_t  byte_stride,
         std::size_t  item_count
     ) override;
-    void set_user_data(void* ptr) override;
+    void set_user_data(const void* ptr) override;
     [[nodiscard]] auto get_mask     () const -> uint32_t         override;
-    [[nodiscard]] auto get_user_data() const -> void*            override;
+    [[nodiscard]] auto get_user_data() const -> const void*      override;
     [[nodiscard]] auto is_enabled   () const -> bool             override;
     [[nodiscard]] auto debug_label  () const -> std::string_view override;
 
@@ -73,7 +73,7 @@ private:
 
     glm::mat4    m_transform  {1.0f};
     uint32_t     m_mask       {0xfffffffu};
-    void*        m_user_data  {nullptr};
+    const void*  m_user_data  {nullptr};
     std::string  m_debug_label;
     bool         m_enabled    {true};
     unsigned int m_vertex_attribute_count{0};

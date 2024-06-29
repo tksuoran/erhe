@@ -351,11 +351,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 
     int primitive_index = 0;
     for (auto& primitive : mesh.get_mutable_primitives()) {
-        const auto& geometry_primitive = primitive.geometry_primitive;
-        if (!geometry_primitive) {
-            continue;
-        }
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry = geometry_primitive->get_geometry();
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.get_geometry();
 
         ++primitive_index;
         ImGui::PushID(primitive_index);
@@ -365,9 +361,10 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 
         if (ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Indent(indent);
-            material_library->combo(m_context, "Material", primitive.material, false);
-            if (primitive.material) {
-                ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
+            std::shared_ptr<erhe::primitive::Material>& material = primitive.get_mutable_material();
+            material_library->combo(m_context, "Material", material, false);
+            if (material) {
+                ImGui::Text("Material Buffer Index: %u", material->material_buffer_index);
             } else {
                 ImGui::Text("Null material");
             }
@@ -385,7 +382,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
                 ImGui::TreePop();
             }
             if (ImGui::TreeNodeEx("Debug")) {
-                erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
+                erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
                 float bbox_volume    = renderable_mesh.bounding_box.volume();
                 float bsphere_volume = renderable_mesh.bounding_sphere.volume();
                 ImGui::Indent(indent);

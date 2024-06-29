@@ -90,8 +90,7 @@ auto intersect(
     out_t = std::numeric_limits<float>::max();
 
     for (auto& primitive : mesh.get_primitives()) {
-        const auto& geometry_primitive = primitive.geometry_primitive;
-        erhe::geometry::Geometry* geometry = geometry_primitive->get_geometry().get();
+        erhe::geometry::Geometry* geometry = primitive.get_geometry().get();
         if (geometry == nullptr) {
             continue;
         }

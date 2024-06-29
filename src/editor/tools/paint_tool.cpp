@@ -94,13 +94,10 @@ auto vertex_id_from_corner_id(
 ) -> std::optional<uint32_t>
 {
     for (const auto& primitive : mesh.get_primitives()) {
-        const auto& geometry_primitive = primitive.geometry_primitive;
-        if (geometry_primitive) {
-            const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_primitive = geometry_primitive->get_geometry();
-            if (geometry_in_primitive.get() == &geometry) {
-                erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
-                return renderable_mesh.corner_to_vertex_id.at(corner_id);
-            }
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_primitive = primitive.get_geometry();
+        if (geometry_in_primitive.get() == &geometry) {
+            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
+            return renderable_mesh.corner_to_vertex_id.at(corner_id);
         }
     }
     return std::nullopt;
@@ -270,16 +267,12 @@ void Paint_tool::paint_vertex(
 
     std::vector<std::uint8_t> buffer;
 
-    for (const auto& primitive : mesh.get_primitives()) {
-        const auto& geometry_primitive = primitive.geometry_primitive;
-        if (!geometry_primitive) {
-            continue;
-        }
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_mesh = geometry_primitive->get_geometry();
+    for (const erhe::primitive::Primitive& primitive : mesh.get_primitives()) {
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_mesh = primitive.get_geometry();
         if (geometry_in_mesh.get() != &geometry) {
             continue;
         }
-        erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
+        const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
         const std::size_t range_byte_offset = renderable_mesh.vertex_buffer_range.byte_offset;
         if (attribute->data_type == erhe::dataformat::Format::format_32_vec4_float) {
             buffer.resize(sizeof(float) * 4);
@@ -450,12 +443,8 @@ void Paint_tool::imgui()
                     continue;
                 }
             }
-            for (const auto& primitive : mesh->get_primitives()) {
-                const auto& geometry_primitive = primitive.geometry_primitive;
-                if (!geometry_primitive) {
-                    continue;
-                }
-                const std::shared_ptr<erhe::geometry::Geometry>& geometry = geometry_primitive->get_geometry();
+            for (const erhe::primitive::Primitive& primitive : mesh->get_primitives()) {
+                const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.get_geometry();
                 if (!geometry) {
                     continue;
                 }

@@ -70,55 +70,25 @@ auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
 
     void* const user_data          = hit.instance->get_user_data();
     auto* const raytrace_primitive = static_cast<erhe::scene::Raytrace_primitive*>(user_data);
-    if (raytrace_primitive == nullptr) {
-        log_raytrace->error("This should not happen");
-        return {};
-    }
+    ERHE_VERIFY(raytrace_primitive != nullptr);
     auto* mesh = raytrace_primitive->mesh;
-    if (mesh == nullptr) {
-        log_raytrace->error("This should not happen");
-        return {};
-    }
+    ERHE_VERIFY(mesh != nullptr);
     auto* node = mesh->get_node();
-    if (node == nullptr) {
-        log_raytrace->error("This should not happen");
-        return {};
-    }
-
+    ERHE_VERIFY(node != nullptr);
     const auto& mesh_primitives = mesh->get_primitives();
-
-    if (raytrace_primitive->primitive_index >= mesh_primitives.size()) {
-        log_raytrace->error("This should not happen");
-        return {};
-    }
-
-    const auto& primitive = mesh_primitives[raytrace_primitive->primitive_index];
-    if (!primitive.geometry_primitive) {
-        log_raytrace->error("This should not happen");
-        return {};
-    }
+    ERHE_VERIFY(raytrace_primitive->primitive_index < mesh_primitives.size());
+    const erhe::primitive::Primitive& primitive = mesh_primitives[raytrace_primitive->primitive_index];
 
     using namespace erhe::primitive;
-    const Geometry_primitive& geometry_primitive        = *primitive.geometry_primitive.get();
-    const Renderable_mesh&    renderable_mesh           = geometry_primitive.get_geometry_mesh();
-    const auto&               triangle_id_to_polygon_id = renderable_mesh.primitive_id_to_polygon_id;
-    if (hit.triangle_id >= triangle_id_to_polygon_id.size()) {
-        log_raytrace->error("This should not happen");
-        return {};
-    }
+    const Renderable_mesh& renderable_mesh           = primitive.get_renderable_mesh();
+    const auto&            triangle_id_to_polygon_id = renderable_mesh.primitive_id_to_polygon_id;
+    ERHE_VERIFY(hit.triangle_id < triangle_id_to_polygon_id.size());
     const auto polygon_id = triangle_id_to_polygon_id[hit.triangle_id];
-
-    using namespace erhe::geometry;
-    const auto& geometry = geometry_primitive.get_geometry();
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.get_geometry();
     if (!geometry) {
         return {};
     }
-
-    if (polygon_id >= geometry->get_polygon_count()) {
-        log_raytrace->error("This should not happen");
-        return {};
-    }
-
+    ERHE_VERIFY(polygon_id < geometry->get_polygon_count());
     auto* const polygon_normals = geometry->polygon_attributes().find<glm::vec3>(
         erhe::geometry::c_polygon_normals
     );

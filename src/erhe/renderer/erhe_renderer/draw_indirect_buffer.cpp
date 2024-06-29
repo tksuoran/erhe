@@ -75,12 +75,7 @@ auto Draw_indirect_buffer::update(
         }
 
         for (auto& primitive : mesh->get_primitives()) {
-            if (!primitive.geometry_primitive && primitive.triangle_soup) {
-                ERHE_FATAL("Create Geometry_primitive from Triangle_soup before rendering");
-                //erhe::primitive::Renderable_mesh renderable_mesh;
-                //primitive.geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>();
-            }
-            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.geometry_primitive->get_geometry_mesh();
+            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
             const erhe::primitive::Index_range      index_range     = renderable_mesh.index_range(primitive_mode);
             if (index_range.index_count == 0) {
                 continue;

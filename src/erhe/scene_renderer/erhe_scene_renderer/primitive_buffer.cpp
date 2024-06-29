@@ -146,10 +146,12 @@ auto Primitive_buffer::update(
             ////     mesh_primitive_index,
             ////     m_writer.write_offset
             //// );
-            ERHE_VERIFY(primitive.geometry_primitive); // geometry_primitive must be constructed before draw calls
 
-            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.geometry_primitive->get_geometry_mesh();
+            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
             const uint32_t count         = static_cast<uint32_t>(renderable_mesh.triangle_fill_indices.index_count);
+            if (count == 0) {
+                continue;
+            }
             const uint32_t power_of_two  = erhe::math::next_power_of_two(count);
             const uint32_t mask          = power_of_two - 1;
             const uint32_t current_bits  = m_id_offset & mask;
@@ -158,10 +160,12 @@ auto Primitive_buffer::update(
                 m_id_offset += add;
             }
 
+            erhe::primitive::Material* material = primitive.get_material().get();
+
             const glm::vec4 wireframe_color  = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}; //// mesh->get_wireframe_color();
             const glm::vec3 id_offset_vec3   = erhe::math::vec3_from_uint(m_id_offset);
             const glm::vec4 id_offset_vec4   = glm::vec4{id_offset_vec3, 0.0f};
-            const uint32_t  material_index   = (primitive.material != nullptr) ? primitive.material->material_buffer_index : 0u;
+            const uint32_t  material_index   = (material != nullptr) ? material->material_buffer_index : 0u;
             const auto      skin             = mesh->skin;
             const float     skinning_factor  = skin ? 1.0f : 0.0f;
             const uint32_t  base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0;

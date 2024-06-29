@@ -189,9 +189,9 @@ void Bvh_geometry::commit()
                 hash_code = erhe::hash::hash(p2_x, p2_y, p2_z, hash_code);
 
                 const bvh::v2::Tri<float, 3> triangle{
-                    Vec3{p0_x, p0_y, p0_z},
+                    Vec3{p2_x, p2_y, p2_z},
                     Vec3{p1_x, p1_y, p1_z},
-                    Vec3{p2_x, p2_y, p2_z}
+                    Vec3{p0_x, p0_y, p0_z}
                 };
                 tris.emplace_back(triangle);
                 bboxes[i] = triangle.get_bbox();
@@ -200,7 +200,7 @@ void Bvh_geometry::commit()
             log_geometry->trace("BVH hash for {} : {:x}", debug_label(), hash_code);
         }
 
-        // For now, bvh cache is disabled.
+        // TODO For now, bvh cache is disabled.
         //const bool load_ok = load_bvh(m_bvh, hash_code);
         //if (!load_ok)
         {
@@ -230,7 +230,6 @@ void Bvh_geometry::commit()
             }
         }
 
-
         // This precomputes some data to speed up traversal further.
         {
             ERHE_PROFILE_SCOPE("bvh precompute");
@@ -248,7 +247,6 @@ void Bvh_geometry::commit()
             );
         }
     }
-
 }
 
 void Bvh_geometry::enable()
@@ -293,7 +291,7 @@ void Bvh_geometry::set_buffer(
     );
 }
 
-void Bvh_geometry::set_user_data(void* ptr)
+void Bvh_geometry::set_user_data(const void* ptr)
 {
     m_user_data = ptr;
 }
@@ -355,7 +353,7 @@ auto Bvh_geometry::intersect_instance(
         const auto& triangle = m_precomputed_triangles.at(triangle_index);
 
         ray.t_far       = bvh_ray.tmax;
-        hit.triangle_id = static_cast<unsigned int>(triangle_index);
+        hit.triangle_id = static_cast<unsigned int>(prim_id);
         hit.uv          = glm::vec2{u, v};
         hit.normal      = glm::vec3{transform * glm::vec4{from_bvh(triangle.n), 0.0f}};
         hit.instance    = instance;
@@ -375,7 +373,7 @@ auto Bvh_geometry::get_mask() const -> uint32_t
     return m_mask;
 }
 
-auto Bvh_geometry::get_user_data() const -> void*
+auto Bvh_geometry::get_user_data() const -> const void*
 {
     return m_user_data;
 }

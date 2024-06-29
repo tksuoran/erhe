@@ -6,6 +6,7 @@
 #include "erhe_geometry/types.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_primitive/enums.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/build_info.hpp"
 
@@ -106,12 +107,11 @@ public:
     class Scaled
     {
     public:
-        int                                                  scale_key;
-        std::shared_ptr<erhe::geometry::Geometry>            geometry;
-        std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;
-        std::shared_ptr<erhe::physics::ICollision_shape>     collision_shape;
-        float                                                volume;
-        glm::mat4                                            local_inertia;
+        int                                              scale_key;
+        erhe::primitive::Primitive                       primitive;
+        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
+        float                                            volume;
+        glm::mat4                                        local_inertia;
     };
 
     explicit Brush(const Brush_data& create_info);
@@ -151,10 +151,11 @@ public:
     [[nodiscard]] auto get_bounding_box() -> erhe::math::Bounding_box;
     [[nodiscard]] auto get_geometry    () -> std::shared_ptr<erhe::geometry::Geometry>;
 
-    Brush_data                                           data;
-    std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;
-    std::vector<Reference_frame>                         reference_frames;
-    std::vector<Scaled>                                  scaled_entries;
+private:
+    Brush_data                   m_data;
+    erhe::primitive::Primitive   m_primitive;
+    std::vector<Reference_frame> m_reference_frames;
+    std::vector<Scaled>          m_scaled_entries;
 };
 
 }

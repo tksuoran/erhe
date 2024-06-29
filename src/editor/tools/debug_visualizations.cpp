@@ -166,10 +166,7 @@ void Debug_visualizations::mesh_visualization(
         : Trs_transform{};
 
     for (const auto& primitive : mesh->get_primitives()) {
-        if (!primitive.geometry_primitive) {
-            continue;
-        }
-        const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.geometry_primitive->get_geometry_mesh();
+        const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
 
         const float box_volume    = renderable_mesh.bounding_box.volume();
         const float sphere_volume = renderable_mesh.bounding_sphere.volume();
@@ -969,12 +966,9 @@ void Debug_visualizations::mesh_labels(
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     const glm::mat4 world_from_node = node->world_from_node();
-    for (const auto& primitive : mesh->get_primitives()) {
-        const auto& geometry_primitive = primitive.geometry_primitive;
-        if (!geometry_primitive) {
-            continue;
-        }
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry = geometry_primitive->get_geometry();
+    for (const erhe::primitive::Primitive& primitive : mesh->get_primitives()) {
+
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.get_geometry();
         if (!geometry) {
             continue;
         }

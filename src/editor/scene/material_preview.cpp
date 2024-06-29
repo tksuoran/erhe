@@ -190,7 +190,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
     m_mesh->add_primitive(
         erhe::primitive::Primitive{
-            .geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+            std::move(
                 erhe::primitive::make_renderable_mesh(
                     erhe::geometry::shapes::make_sphere(
                         m_radius,
@@ -278,7 +278,7 @@ void Material_preview::render_preview(
     m_content_library->materials->add(material);
     m_last_material = material;
 
-    m_mesh->get_mutable_primitives().front().material = material;
+    m_mesh->get_mutable_primitives().front().set_material(material);
 
     const erhe::math::Viewport viewport{0, 0, m_width, m_height};
 

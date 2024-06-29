@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/transform/transform_tool_settings.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/renderable_mesh.hpp"
 #include "erhe_scene/trs_transform.hpp"
 
@@ -15,7 +16,7 @@ namespace erhe::geometry {
     class Geometry;
 }
 namespace erhe::primitive {
-    class Geometry_primitive;
+    class Primitive;
     class Material;
 }
 namespace erhe::scene {
@@ -61,7 +62,7 @@ public:
             const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry
         );
 
-        std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;
+        erhe::primitive::Primitive primitive;
     };
 
     [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;

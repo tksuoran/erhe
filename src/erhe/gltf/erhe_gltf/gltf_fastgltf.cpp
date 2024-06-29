@@ -15,8 +15,6 @@
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
-#include "erhe_raytrace/ibuffer.hpp"
-#include "erhe_raytrace/igeometry.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/projection.hpp"
@@ -1183,9 +1181,9 @@ private:
     class Primitive_entry
     {
     public:
-        std::size_t                    index_accessor;
-        std::vector<std::size_t>       attribute_accessors;
-        erhe::primitive::Triangle_soup triangle_soup;
+        std::size_t                                     index_accessor;
+        std::vector<std::size_t>                        attribute_accessors;
+        std::shared_ptr<erhe::primitive::Triangle_soup> triangle_soup;
     };
     std::vector<Primitive_entry> m_primitive_entries;
 
@@ -1194,11 +1192,14 @@ private:
         Primitive_entry&           primitive_entry
     )
     {
-        erhe::primitive::Triangle_soup& triangle_soup = primitive_entry.triangle_soup;
+        primitive_entry.triangle_soup.reset();
 
         if (!primitive.indicesAccessor.has_value()) {
             return;
         }
+
+        primitive_entry.triangle_soup = std::make_shared<erhe::primitive::Triangle_soup>();
+        erhe::primitive::Triangle_soup& triangle_soup = *primitive_entry.triangle_soup.get();
 
         // Copy indices
         const fastgltf::Accessor& indices_accessor = m_asset->accessors[primitive.indicesAccessor.value()];
@@ -1300,10 +1301,10 @@ private:
 
         erhe_mesh->add_primitive(
             erhe::primitive::Primitive{
-                .material = primitive.materialIndex.has_value()
+                primitive_entry.triangle_soup,
+                primitive.materialIndex.has_value()
                     ? m_data_out.materials.at(primitive.materialIndex.value())
-                    : std::shared_ptr<erhe::primitive::Material>{},
-                .triangle_soup = std::make_shared<erhe::primitive::Triangle_soup>(primitive_entry.triangle_soup)
+                    : std::shared_ptr<erhe::primitive::Material>{}
             }
         );
     }

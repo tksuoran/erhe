@@ -10,6 +10,7 @@
 #include "tools/grid.hpp"
 #include "tools/tools.hpp"
 
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_renderer/line_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
@@ -223,31 +224,17 @@ void Hover_tool::tool_render(
     if (entry->mesh != nullptr) {
         const auto* node = entry->mesh->get_node();
         const glm::vec3 node_position_in_world = glm::vec3{node->position_in_world()};
-        add_line(fmt::format(
-            "Node position in world: {}",
-            node_position_in_world
-        ));
-        auto node_physics = get_node_physics(node);
-        if (node_physics) {
-            erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
-            if (rigid_body) {
-                const glm::vec3 local_position = node->transform_point_from_world_to_local(entry->position.value());
-                add_line(fmt::format(
-                    "Position in {}: {}",
-                    entry->mesh->get_name(),
-                    local_position
-                ));
-            }
+        add_line(fmt::format("Node position in world: {}", node_position_in_world));
+        if (entry->position.has_value()) {
+            const glm::vec3 local_position = node->transform_point_from_world_to_local(entry->position.value());
+            add_line(fmt::format("Position in {}: {}", entry->mesh->get_name(), local_position));
         }
+
     } else if (entry->grid != nullptr) {
         const glm::vec3 local_position = glm::vec3{
             entry->grid->grid_from_world() * glm::vec4{entry->position.value(), 1.0f}
         };
-        add_line(fmt::format(
-            "Position in {}: {}",
-            entry->grid->get_name(),
-            local_position
-        ));
+        add_line(fmt::format("Position in {}: {}", entry->grid->get_name(), local_position));
     }
 
     for (const auto& text_line : m_text_lines) {

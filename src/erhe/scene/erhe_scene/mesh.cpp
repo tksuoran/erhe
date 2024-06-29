@@ -28,13 +28,9 @@ void Mesh::add_primitive(erhe::primitive::Primitive primitive)
 {
     const std::size_t primitive_index = m_primitives.size();
     m_primitives.push_back(primitive);
-    const auto& geometry_primitive = primitive.geometry_primitive;
-    if (!geometry_primitive) {
-        return;
-    }
 
-    erhe::primitive::Geometry_raytrace& geometry_raytrace = geometry_primitive->get_geometry_raytrace();
-    const auto& rt_geometry = geometry_raytrace.rt_geometry;
+    erhe::primitive::Primitive_raytrace& primitive_raytrace = primitive.get_geometry_raytrace();
+    const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.m_rt_geometry;
     if (rt_geometry) {
         m_rt_primitives.emplace_back(this, primitive_index, rt_geometry.get());
     }
@@ -44,14 +40,9 @@ void Mesh::set_primitives(const std::vector<erhe::primitive::Primitive>& primiti
 {
     m_primitives = primitives;
     for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
-        const auto& primitive = primitives[i];
-        const auto& geometry_primitive = primitive.geometry_primitive;
-        if (!geometry_primitive) {
-            return;
-        }
-
-        erhe::primitive::Geometry_raytrace& geometry_raytrace = geometry_primitive->get_geometry_raytrace();
-        const auto& rt_geometry = geometry_raytrace.rt_geometry;
+        const erhe::primitive::Primitive& primitive = primitives[i];
+        const erhe::primitive::Primitive_raytrace& primitive_raytrace = primitive.get_geometry_raytrace();
+        const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.m_rt_geometry;
         if (rt_geometry) {
             m_rt_primitives.emplace_back(this, i, rt_geometry.get());
         }
@@ -78,10 +69,7 @@ Mesh::Mesh(const std::string_view name)
 {
 }
 
-Mesh::Mesh(
-    const std::string_view           name,
-    const erhe::primitive::Primitive primitive
-)
+Mesh::Mesh(const std::string_view name, const erhe::primitive::Primitive primitive)
     : Item{name}
 {
     add_primitive(primitive);

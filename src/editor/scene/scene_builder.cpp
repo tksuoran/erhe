@@ -789,19 +789,15 @@ void Scene_builder::make_brushes(
         const auto ring_geometry_shared = std::make_shared<erhe::geometry::Geometry>(
             std::move(ring_geometry)
         );
-        auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-            ring_geometry_shared,
-            build_info(mesh_memory),
-            erhe::primitive::Normal_style::point_normals
-        );
-
         using erhe::scene::Transform;
         auto make_mesh_node = [&](const char* name, const Transform& transform) {
             auto mesh = std::make_shared<erhe::scene::Mesh>(name);
             mesh->add_primitive(
                 erhe::primitive::Primitive{
-                    .material           = aniso_material,
-                    .geometry_primitive = geometry_primitive
+                    ring_geometry_shared,
+                    aniso_material,
+                    build_info(mesh_memory),
+                    erhe::primitive::Normal_style::point_normals
                 }
             );
             mesh->enable_flag_bits(
@@ -1071,13 +1067,6 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
     auto material = material_library->make<erhe::primitive::Material>(
         "cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f
     );
-    auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-        make_renderable_mesh(
-            make_cube(0.1f),
-            build_info(mesh_memory),
-            Normal_style::polygon_normals
-        )
-    );
 
     constexpr float scale   = 0.5f;
     constexpr int   x_count = 20;
@@ -1085,8 +1074,12 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
     constexpr int   z_count = 20;
 
     const erhe::primitive::Primitive primitive{
-        .material           = material,
-        .geometry_primitive = geometry_primitive
+        make_renderable_mesh(
+            make_cube(0.1f),
+            build_info(mesh_memory),
+            Normal_style::polygon_normals
+        ),
+        material
     };
     for (int i = 0; i < x_count; ++i) {
         const float x_rel = static_cast<float>(i) - static_cast<float>(x_count) * 0.5f;

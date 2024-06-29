@@ -425,10 +425,10 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     // Make sure materials are in the material library
     auto& material_library = content_library()->materials;
     for (const auto& primitive : mesh->get_primitives()) {
-        if (!primitive.material) {
+        if (!primitive.get_material()) {
             continue;
         }
-        material_library->add(primitive.material);
+        material_library->add(primitive.get_material());
     }
 }
 

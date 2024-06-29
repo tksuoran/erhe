@@ -336,31 +336,31 @@ void Scene_view::update_hover_with_raytrace()
             ERHE_VERIFY(entry.mesh != nullptr);
             auto* const node = entry.mesh->get_node();
             ERHE_VERIFY(node != nullptr);
-            const auto& mesh_primitives = entry.mesh->get_primitives();
+            const std::vector<erhe::primitive::Primitive>& mesh_primitives = entry.mesh->get_primitives();
             ERHE_VERIFY(raytrace_primitive->primitive_index < mesh_primitives.size());
-            const auto& primitive = mesh_primitives[raytrace_primitive->primitive_index];
+            const erhe::primitive::Primitive& primitive = mesh_primitives[raytrace_primitive->primitive_index];
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit node: {}", Hover_entry::slot_names[slot], node->get_name());
             ERHE_VERIFY(raytrace_primitive->rt_instance);
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: RT instance {}", Hover_entry::slot_names[slot], raytrace_primitive->rt_instance->is_enabled());
-            const auto& geometry_primitive = primitive.geometry_primitive;
-            ERHE_VERIFY(geometry_primitive);
-            entry.geometry = geometry_primitive->get_geometry();
+            entry.normal = hit.normal;
+            entry.geometry = primitive.get_geometry();
             if (entry.geometry) {
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit geometry: {}", Hover_entry::slot_names[slot], entry.geometry->name);
-                const erhe::primitive::Renderable_mesh& renderable_mesh = geometry_primitive->get_geometry_mesh();
+                const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
                 ERHE_VERIFY(hit.triangle_id < renderable_mesh.primitive_id_to_polygon_id.size());
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit triangle: {}", Hover_entry::slot_names[slot], hit.triangle_id);
                 const auto polygon_id = renderable_mesh.primitive_id_to_polygon_id[hit.triangle_id];
                 ERHE_VERIFY(polygon_id < entry.geometry->get_polygon_count());
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit polygon: {}", Hover_entry::slot_names[slot], polygon_id);
                 entry.polygon_id = polygon_id;
-                entry.normal = {};
-                auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
-                if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id)) {
-                    const auto local_normal    = polygon_normals->get(polygon_id);
-                    const auto world_from_node = node->world_from_node();
-                    entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                    SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
-                }
+                ///// entry.normal = {};
+                ///// auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
+                ///// if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id)) {
+                /////     const auto local_normal    = polygon_normals->get(polygon_id);
+                /////     const auto world_from_node = node->world_from_node();
+                /////     entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
+                /////     SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
+                ///// }
             }
         } else {
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: no hit", Hover_entry::slot_names[slot]);

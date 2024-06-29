@@ -27,9 +27,6 @@ namespace erhe::geometry {
 namespace erhe::graphics {
     class Texture;
 }
-namespace erhe::primitive {
-    class Geometry_primitive;
-}
 namespace erhe::scene {
     class Camera;
     class Mesh;

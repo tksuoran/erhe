@@ -352,20 +352,16 @@ void Brush_tool::update_mesh_node_transform()
         m_brush_node->set_parent_from_node(transform);
     }
 
-    auto material = m_brush_mesh->get_primitives().front().material;
+    const std::shared_ptr<erhe::primitive::Material>& material = m_brush_mesh->get_primitives().front().get_material();
     m_brush_mesh->clear_primitives();
-    m_brush_mesh->add_primitive(
-        erhe::primitive::Primitive{
-            .material           = material,
-            .geometry_primitive = brush_scaled.geometry_primitive
-        }
-    );
+    m_brush_mesh->add_primitive(brush_scaled.primitive);
+    m_brush_mesh->get_mutable_primitives().front().set_material(material);
 }
 
 void Brush_tool::do_insert_operation()
 {
-    auto brush    = m_context.selection->get<Brush>();
-    auto material = m_context.selection->get<erhe::primitive::Material>();
+    const std::shared_ptr<Brush>&                     brush    = m_context.selection->get<Brush>();
+    const std::shared_ptr<erhe::primitive::Material>& material = m_context.selection->get<erhe::primitive::Material>();
     if (
         !m_hover.position.has_value() ||
         !brush                        ||
@@ -457,8 +453,8 @@ void Brush_tool::add_brush_mesh()
     m_brush_mesh = std::make_shared<erhe::scene::Mesh>(
         name,
         erhe::primitive::Primitive{
-            .material           = material,
-            .geometry_primitive = brush_scaled.geometry_primitive,
+            brush_scaled.primitive,
+            material,
         }
     );
     m_brush_node->enable_flag_bits(

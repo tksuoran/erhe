@@ -152,9 +152,9 @@ public:
         std::size_t  byte_stride,
         std::size_t  item_count
     ) = 0;
-    virtual void set_user_data(void* ptr) = 0;
+    virtual void set_user_data(const void* ptr) = 0;
     [[nodiscard]] virtual auto get_mask     () const -> uint32_t         = 0;
-    [[nodiscard]] virtual auto get_user_data() const -> void*            = 0;
+    [[nodiscard]] virtual auto get_user_data() const -> const void*      = 0;
     [[nodiscard]] virtual auto is_enabled   () const -> bool             = 0;
     [[nodiscard]] virtual auto debug_label  () const -> std::string_view = 0;
 

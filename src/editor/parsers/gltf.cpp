@@ -99,8 +99,8 @@ void import_gltf(
     };
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 
-    for (const auto& geometry_primitive : gltf_data.geometry_primitives) {
-        geometry_primitive->build_from_geometry(build_info, erhe::primitive::Normal_style::corner_normals);
+    for (const auto& primitive : gltf_data.primitives) {
+        primitive->make_renderable_mesh(build_info, erhe::primitive::Normal_style::corner_normals);
     }
 
     std::shared_ptr<Content_library> content_library = scene_root.content_library();
@@ -161,12 +161,14 @@ void import_gltf(
             //content_library->meshes.add(mesh);
             std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
             for (erhe::primitive::Primitive& primitive : primitives) {
-                if (!primitive.geometry_primitive && primitive.triangle_soup) {
-                    primitive.geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
-                        *primitive.triangle_soup.get(),
-                        build_info.buffer_info
-                    );
+                if (!primitive.has_renderable_triangles() && primitive.get_triangle_soup()) {
+                    primitive.make_renderable_mesh(build_info, erhe::primitive::Normal_style::corner_normals);
                 }
+                // TODO By the time we get here, it is too late to ask primitive to create, as Primitive has already been added to the Mesh.
+                //      Currently, raytrace scene is updated to match primitives when they are added to Mesh.
+                // if (!primitive.has_raytrace_triangles()) {
+                //     primitive.make_raytrace();
+                // }
             }
         }
 

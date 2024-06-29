@@ -22,6 +22,7 @@
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
@@ -257,7 +258,7 @@ void Handle_visualizations::update_mesh_visibility(
 
     const auto& material = get_handle_material(handle, mode);
 
-    mesh->get_mutable_primitives().front().material = material;
+    mesh->get_mutable_primitives().front().set_material(material);
 
     log_trs_tool->trace(
         "{}->set_visible({}) mode = {}, material = {}",
@@ -341,10 +342,13 @@ auto Handle_visualizations::make_mesh(
     auto mesh = std::make_shared<erhe::scene::Mesh>(
         name,
         erhe::primitive::Primitive{
-            .material           = material,
-            .geometry_primitive = part.geometry_primitive
+            part.primitive,
+            material
         }
     );
+    bool has_raytrace = mesh->get_mutable_primitives().front().has_raytrace_triangles();
+    static_cast<void>(has_raytrace);
+    ERHE_VERIFY(mesh->get_mutable_primitives().front().has_raytrace_triangles());
 
     mesh->enable_flag_bits(
         //erhe::Item_flags::visible |
@@ -381,15 +385,14 @@ Handle_visualizations::Part::Part(
     const std::shared_ptr<erhe::geometry::Geometry>& render_geometry,
     const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry
 )
-    : geometry_primitive{
-        std::make_shared<erhe::primitive::Geometry_primitive>(
-            render_geometry,
-            collision_geometry,
-            erhe::primitive::Build_info{
-                .primitive_types{ .fill_triangles = true },
-                .buffer_info = mesh_memory.buffer_info
-            }
-        )
+    : primitive{
+        render_geometry,
+        collision_geometry,
+        std::shared_ptr<erhe::primitive::Material>{},
+        erhe::primitive::Build_info{
+            .primitive_types{ .fill_triangles = true },
+            .buffer_info = mesh_memory.buffer_info
+        }
     }
 {
 }

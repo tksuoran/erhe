@@ -133,14 +133,14 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         for (auto& primitive : mesh->get_primitives()) {
-            const std::shared_ptr<erhe::geometry::Geometry>& render_geometry = primitive.geometry_primitive->get_geometry();
+            const std::shared_ptr<erhe::geometry::Geometry>& render_geometry = primitive.get_geometry();
             if (render_geometry) {
                 combined_render_geometry.merge(*render_geometry, transform);
                 if (normal_style == Normal_style::none) {
-                    normal_style = primitive.geometry_primitive->get_normal_style();
+                    normal_style = primitive.get_normal_style();
                 }
                 if (!material) {
-                    material = primitive.material;
+                    material = primitive.get_material();
                 }
             }
         }
@@ -176,13 +176,11 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
     m_first_mesh_primitives_after.push_back(
         erhe::primitive::Primitive{
+            welded_render_geometry,
+            welded_render_geometry,
             material,
-            std::make_shared<erhe::primitive::Geometry_primitive>(
-                welded_render_geometry,
-                welded_render_geometry,
-                parameters.build_info,
-                normal_style
-            )
+            parameters.build_info,
+            normal_style
         }
     );
 }

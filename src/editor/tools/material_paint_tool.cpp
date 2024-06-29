@@ -173,7 +173,7 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
     auto& hover_primitive = hover.mesh->get_mutable_primitives().at(hover.primitive_index);
-    hover_primitive.material = m_material;
+    hover_primitive.set_material(m_material);
 
     return true;
 }
@@ -189,7 +189,7 @@ auto Material_paint_tool::on_pick() -> bool
         return false;
     }
     auto& hover_primitive = hover.mesh->get_primitives().at(hover.primitive_index);
-    m_material = hover_primitive.material;
+    m_material = hover_primitive.get_material();
 
     return true;
 }
