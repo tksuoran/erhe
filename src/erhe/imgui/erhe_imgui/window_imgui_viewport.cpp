@@ -117,7 +117,7 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
 
     SPDLOG_LOGGER_TRACE(log_frame, "ImGui::NewFrame()");
     ImGui::NewFrame();
-    ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
     if (m_begin_callback) {
         m_begin_callback(*this);
