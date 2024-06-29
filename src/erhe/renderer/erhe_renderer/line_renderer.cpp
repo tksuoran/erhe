@@ -522,14 +522,14 @@ void Line_renderer::set_line_color(const vec4& color)
     m_line_color = color;
 }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Line_renderer::set_line_color(const ImVec4 color)
-{
-    ERHE_VERIFY(m_inside_begin_end);
-
-    m_line_color = vec4{color.x, color.y, color.z, color.w};
-}
-#endif
+//#if defined(ERHE_GUI_LIBRARY_IMGUI)
+//void Line_renderer::set_line_color(const ImVec4 color)
+//{
+//    ERHE_VERIFY(m_inside_begin_end);
+//
+//    m_line_color = vec4{color.x, color.y, color.z, color.w};
+//}
+//#endif
 
 void Line_renderer::set_thickness(const float thickness)
 {

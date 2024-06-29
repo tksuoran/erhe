@@ -16,9 +16,9 @@
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+//#if defined(ERHE_GUI_LIBRARY_IMGUI)
+//#   include <imgui/imgui.h>
+//#endif
 
 #include <cstdint>
 #include <deque>
@@ -103,16 +103,16 @@ public:
         const bool                 show_visible_lines,
         const bool                 show_hidden_lines
     );
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    void imgui();
-#endif
+//#if defined(ERHE_GUI_LIBRARY_IMGUI)
+//    void imgui();
+//#endif
 
     void set_line_color(float r, float g, float b, float a);
     void set_line_color(const glm::vec3& color);
     void set_line_color(const glm::vec4& color);
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    void set_line_color(const ImVec4 color);
-#endif
+//#if defined(ERHE_GUI_LIBRARY_IMGUI)
+//    void set_line_color(const ImVec4 color);
+//#endif
     void set_thickness (float thickness);
 
     void add_lines(

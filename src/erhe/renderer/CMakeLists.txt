@@ -35,9 +35,6 @@ target_link_libraries(
         erhe::profile
         erhe::verify
 )
-if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
-    target_link_libraries(${_target} PRIVATE imgui)
-endif ()
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
