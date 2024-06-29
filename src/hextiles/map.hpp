@@ -4,7 +4,7 @@
 #include "stream.hpp"
 #include "types.hpp"
 
-#include <gsl/span>
+#include <span>
 
 #include "etl/vector.h"
 

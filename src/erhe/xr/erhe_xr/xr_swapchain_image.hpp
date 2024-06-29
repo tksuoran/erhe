@@ -2,8 +2,6 @@
 
 #include <openxr/openxr.h>
 
-#include <gsl/gsl>
-
 #include <optional>
 #include <vector>
 
@@ -15,7 +13,7 @@ class Swapchain;
 class Swapchain_image
 {
 public:
-    Swapchain_image (gsl::not_null<Swapchain*> swapchain, const uint32_t image_index);
+    Swapchain_image (Swapchain* swapchain, const uint32_t image_index);
     ~Swapchain_image() noexcept;
     Swapchain_image (const Swapchain_image&) = delete;
     void operator=  (const Swapchain_image&) = delete;

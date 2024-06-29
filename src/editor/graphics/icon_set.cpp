@@ -137,7 +137,7 @@ void Icon_set::add_icons(
 auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
 {
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
-    Expects(m_row < m_row_count);
+    ERHE_VERIFY(m_row < m_row_count);
 
     const auto document = lunasvg::Document::loadFromFile(path.string());
     if (!document) {

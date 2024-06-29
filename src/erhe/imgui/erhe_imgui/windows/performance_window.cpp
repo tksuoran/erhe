@@ -9,8 +9,6 @@
 
 #include <glm/glm.hpp>
 
-#include <gsl/gsl>
-
 #include <imgui/imgui_internal.h>
 
 #include <string>

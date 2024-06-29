@@ -150,7 +150,7 @@ void Build_context_root::get_vertex_attributes()
 
 void Build_context_root::allocate_vertex_buffer()
 {
-    Expects(total_vertex_count > 0);
+    ERHE_VERIFY(total_vertex_count > 0);
 
     renderable_mesh->vertex_buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(
         total_vertex_count, vertex_stride
@@ -161,7 +161,7 @@ void Build_context_root::allocate_index_buffer()
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(total_index_count > 0);
+    ERHE_VERIFY(total_index_count > 0);
 
     const erhe::dataformat::Format index_type     {build_info.buffer_info.index_type};
     const std::size_t              index_type_size{erhe::dataformat::get_format_size(index_type)};
@@ -230,7 +230,7 @@ void Build_context_root::calculate_bounding_volume(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(renderable_mesh != nullptr);
+    ERHE_VERIFY(renderable_mesh != nullptr);
 
     const Geometry_point_source point_source{geometry, point_locations};
 
@@ -263,7 +263,7 @@ void Primitive_builder::build(Renderable_mesh* renderable_mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(renderable_mesh != nullptr);
+    ERHE_VERIFY(renderable_mesh != nullptr);
 
     SPDLOG_LOGGER_INFO(
         log_primitive_builder,
@@ -306,7 +306,7 @@ Build_context::Build_context(
     , index_writer {*this, build_info.buffer_info.buffer_sink}
     , property_maps{geometry, build_info.primitive_types, build_info.buffer_info.vertex_format}
 {
-    Expects(property_maps.point_locations != nullptr);
+    ERHE_VERIFY(property_maps.point_locations != nullptr);
 
     root.calculate_bounding_volume(property_maps.point_locations);
 }
@@ -352,7 +352,7 @@ void Build_context::build_vertex_position()
         return;
     }
 
-    Expects(property_maps.point_locations != nullptr);
+    ERHE_VERIFY(property_maps.point_locations != nullptr);
     const vec3 position = property_maps.point_locations->get(point_id);
     vertex_writer.write(root.attributes.position, position);
 

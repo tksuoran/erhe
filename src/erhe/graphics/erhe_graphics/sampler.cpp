@@ -1,8 +1,8 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_verify/verify.hpp"
 #include <fmt/format.h>
-#include <gsl/assert>
 
 namespace erhe::graphics
 {
@@ -18,7 +18,7 @@ Sampler::Sampler(const Sampler_create_info& create_info)
     , min_lod       {create_info.min_lod       }
     , max_anisotropy{create_info.max_anisotropy}
 {
-    Expects(m_handle.gl_name() != 0);
+    ERHE_VERIFY(m_handle.gl_name() != 0);
     apply();
     set_debug_label(create_info.debug_label);
     log_texture->trace("Created sampler '{}'", debug_label());
@@ -55,7 +55,7 @@ auto Sampler::uses_mipmaps() const -> bool
 
 void Sampler::apply()
 {
-    Expects(m_handle.gl_name() != 0);
+    ERHE_VERIFY(m_handle.gl_name() != 0);
 
     const auto name = m_handle.gl_name();
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_min_filter,     static_cast<int>(min_filter));
@@ -81,8 +81,8 @@ void Sampler::apply()
 
 auto operator==(const Sampler& lhs, const Sampler& rhs) noexcept -> bool
 {
-    Expects(lhs.gl_name() != 0);
-    Expects(rhs.gl_name() != 0);
+    ERHE_VERIFY(lhs.gl_name() != 0);
+    ERHE_VERIFY(rhs.gl_name() != 0);
 
     return lhs.gl_name() == rhs.gl_name();
 }
@@ -97,7 +97,7 @@ auto operator!=(const Sampler& lhs, const Sampler& rhs) noexcept -> bool
 //public:
 //    [[nodiscard]] auto operator()(const Sampler& sampler) const noexcept -> size_t
 //    {
-//        Expects(sampler.gl_name() != 0);
+//        ERHE_VERIFY(sampler.gl_name() != 0);
 //
 //        return static_cast<size_t>(sampler.gl_name());
 //    }

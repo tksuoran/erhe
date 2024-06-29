@@ -5,8 +5,8 @@
 #include "erhe_dataformat/dataformat.hpp"
 
 #include <glm/glm.hpp>
-#include <gsl/span>
 
+#include <span>
 #include <vector>
 
 namespace erhe::geometry
@@ -47,7 +47,7 @@ public:
     Buffer_sink&              buffer_sink;
     Buffer_range              buffer_range;
     std::vector<std::uint8_t> vertex_data;
-    gsl::span<std::uint8_t>   vertex_data_span;
+    std::span<std::uint8_t>   vertex_data_span;
     std::size_t               vertex_write_offset{0};
 };
 
@@ -69,19 +69,19 @@ public:
     void write_edge    (const uint32_t v0, const uint32_t v1);
     void write_centroid(const uint32_t v0);
 
-    [[nodiscard]] auto start_offset  () -> std::size_t;
+    [[nodiscard]] auto start_offset() -> std::size_t;
 
     Build_context&                 build_context;
     Buffer_sink&                   buffer_sink;
     Buffer_range                   buffer_range;
     const erhe::dataformat::Format index_type;
-    const std::size_t             index_type_size{0};
-    std::vector<std::uint8_t>     index_data;
-    gsl::span<std::uint8_t>       index_data_span;
-    gsl::span<std::uint8_t>       corner_point_index_data_span;
-    gsl::span<std::uint8_t>       triangle_fill_index_data_span;
-    gsl::span<std::uint8_t>       edge_line_index_data_span;
-    gsl::span<std::uint8_t>       polygon_centroid_index_data_span;
+    const std::size_t              index_type_size{0};
+    std::vector<std::uint8_t>      index_data;
+    std::span<std::uint8_t>        index_data_span;
+    std::span<std::uint8_t>        corner_point_index_data_span;
+    std::span<std::uint8_t>        triangle_fill_index_data_span;
+    std::span<std::uint8_t>        edge_line_index_data_span;
+    std::span<std::uint8_t>        polygon_centroid_index_data_span;
 
     std::size_t corner_point_indices_written    {0};
     std::size_t triangle_indices_written        {0};

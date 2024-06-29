@@ -4,7 +4,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_item/unique_id.hpp"
 
-#include <gsl/span>
+#include <span>
 
 #include <string>
 
@@ -76,7 +76,7 @@ public:
 
     void upload(
         gl::Internal_format              internal_format,
-        const gsl::span<const std::byte> data,
+        const std::span<const std::byte> data,
         int                              width,
         int                              height = 1,
         int                              depth = 1,
@@ -87,7 +87,7 @@ public:
     );
     void upload_subimage(
         gl::Internal_format              internal_format,
-        const gsl::span<const std::byte> data,
+        const std::span<const std::byte> data,
         int                              src_row_length,
         int                              src_x,
         int                              src_y,
@@ -139,7 +139,7 @@ class Texture_hash
 public:
     auto operator()(const Texture& texture) const noexcept -> size_t
     {
-        Expects(texture.gl_name() != 0);
+        ERHE_VERIFY(texture.gl_name() != 0);
 
         return static_cast<size_t>(texture.gl_name());
     }

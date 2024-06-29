@@ -3,10 +3,10 @@
 #include "erhe_geometry/shapes/sphere.hpp"
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
-#include <gsl/assert>
 
 #include <map>
 #include <sstream>
@@ -172,7 +172,7 @@ public:
         const int        stack
     ) -> Corner_id
     {
-        Expects(slice >= 0);
+        ERHE_VERIFY(slice >= 0);
 
         const scalar rel_slice           = static_cast<scalar>(slice) / static_cast<scalar>(slice_count);
         const scalar rel_stack           = static_cast<scalar>(stack) / static_cast<scalar>(stack_count);

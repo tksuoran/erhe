@@ -449,7 +449,7 @@ auto Geometry::compute_point_normal(const Point_id point_id) -> vec3
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(point_id < points.size());
+    ERHE_VERIFY(point_id < points.size());
 
     compute_polygon_normals();
     const auto* const polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);

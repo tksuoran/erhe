@@ -56,7 +56,6 @@ target_link_libraries(${_target}
         erhe::profile
         erhe::renderer
         erhe::time
-        Microsoft.GSL::GSL
 )
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
     target_link_libraries(${_target} PUBLIC mango spng)

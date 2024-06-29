@@ -808,7 +808,7 @@ private:
         if (generate_mipmap) {
             texture_create_info.level_count = mipmap_count;
         }
-        gsl::span<std::byte> span = slot.begin_span_for(
+        std::span<std::byte> span = slot.begin_span_for(
             image_info.width,
             image_info.height,
             texture_create_info.internal_format
@@ -858,7 +858,7 @@ private:
             fastgltf::visitor{
                 [](auto& arg) { static_cast<void>(arg); },
                 [&](const fastgltf::sources::Array& data) {
-                    gsl::span<const std::byte> png_encoded_buffer_view{
+                    std::span<const std::byte> png_encoded_buffer_view{
                         data.bytes.data() + buffer_view.byteOffset,
                         buffer_view.byteLength
                     };
@@ -881,7 +881,7 @@ private:
                     if (generate_mipmap) {
                         texture_create_info.level_count = mipmap_count;
                     }
-                    gsl::span<std::byte> span = slot.begin_span_for(
+                    std::span<std::byte> span = slot.begin_span_for(
                         image_info.width,
                         image_info.height,
                         texture_create_info.internal_format

@@ -393,13 +393,13 @@ auto Viewport_windows::alt_key_down() const -> bool
 
 auto Viewport_windows::mouse_button_pressed(const erhe::window::Mouse_button button) const -> bool
 {
-    Expects(button < erhe::window::Mouse_button_count);
+    ERHE_VERIFY(button < erhe::window::Mouse_button_count);
     return m_mouse_button[static_cast<int>(button)].pressed;
 }
 
 auto Viewport_windows::mouse_button_released(const erhe::window::Mouse_button button) const -> bool
 {
-    Expects(button < erhe::window::Mouse_button_count);
+    ERHE_VERIFY(button < erhe::window::Mouse_button_count);
     return m_mouse_button[static_cast<int>(button)].released;
 }
 

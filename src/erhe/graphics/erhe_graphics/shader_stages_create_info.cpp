@@ -178,9 +178,10 @@ auto Shader_stages_create_info::final_source(
 }
 
 void Shader_stages_create_info::add_interface_block(
-    gsl::not_null<const Shader_resource*> interface_block
+    const Shader_resource* interface_block
 )
 {
+    ERHE_VERIFY(interface_block != nullptr);
     interface_blocks.push_back(interface_block);
 }
 

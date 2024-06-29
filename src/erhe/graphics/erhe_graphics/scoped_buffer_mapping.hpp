@@ -4,7 +4,7 @@
 #include "erhe_graphics/gl_objects.hpp"
 #include "erhe_graphics/span.hpp"
 
-#include <gsl/span>
+#include <span>
 
 #include <string_view>
 #include <mutex>
@@ -36,14 +36,14 @@ public:
     Scoped_buffer_mapping(const Scoped_buffer_mapping&) = delete;
     auto operator=       (const Scoped_buffer_mapping&) -> Scoped_buffer_mapping& = delete;
 
-    auto span() const -> const gsl::span<T>&
+    auto span() const -> const std::span<T>&
     {
         return m_span;
     }
 
 private:
     Buffer&      m_buffer;
-    gsl::span<T> m_span;
+    std::span<T> m_span;
 };
 
 } // namespace erhe::graphics

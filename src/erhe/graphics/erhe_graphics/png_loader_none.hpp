@@ -41,7 +41,7 @@ public:
     ) -> bool;
 
     [[nodiscard]] auto load(
-        gsl::span<std::byte> transfer_buffer
+        std::span<std::byte> transfer_buffer
     ) -> bool;
 
     void close();

@@ -10,7 +10,7 @@ if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(erhe_pch PUBLIC [[erhe_pch.hpp]])
     erhe_target_settings(erhe_pch)
     set_property(TARGET erhe_pch PROPERTY FOLDER "erhe")
-    target_link_libraries(erhe_pch PRIVATE fmt::fmt glm::glm-header-only Microsoft.GSL::GSL spdlog::spdlog_header_only)
+    target_link_libraries(erhe_pch PRIVATE fmt::fmt glm::glm-header-only spdlog::spdlog_header_only)
 endif()
 
 add_subdirectory(bit)

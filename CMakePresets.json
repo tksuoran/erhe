@@ -136,19 +136,19 @@
 
         {
             "hidden": true,
-            "name": "Configure GCC 12",
+            "name": "Configure GCC 14",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc-12",
-                "CMAKE_CXX_COMPILER": "g++-12"
+                "CMAKE_C_COMPILER": "gcc-14",
+                "CMAKE_CXX_COMPILER": "g++-14"
             }
         },
         {
-            "name": "Configure GCC 12 Debug",
-            "inherits": [ "Configure Debug", "Configure GCC 12" ]
+            "name": "Configure GCC 14 Debug",
+            "inherits": [ "Configure Debug", "Configure GCC 14" ]
         },
         {
-            "name": "Configure GCC 12 Release",
-            "inherits": [ "Configure Release", "Configure GCC 12" ]
+            "name": "Configure GCC 14 Release",
+            "inherits": [ "Configure Release", "Configure GCC 14" ]
         },
 
         {
@@ -299,14 +299,14 @@
         },
 
         {
-            "name": "Build GCC 12 Debug",
+            "name": "Build GCC 14 Debug",
             "inherits": "Build Debug",
-            "configurePreset": "Configure GCC 12 Debug"
+            "configurePreset": "Configure GCC 14 Debug"
         },
         {
-            "name": "Build GCC 12 Release",
+            "name": "Build GCC 14 Release",
             "inherits": "Build Release",
-            "configurePreset": "Configure GCC 12 Release"
+            "configurePreset": "Configure GCC 14 Release"
         },
 
         {

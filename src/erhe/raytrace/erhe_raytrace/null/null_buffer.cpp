@@ -1,8 +1,6 @@
 #include "erhe_raytrace/null/null_buffer.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <gsl/assert>
-
 #include <mutex>
 
 namespace erhe::raytrace
@@ -28,9 +26,9 @@ Null_buffer::Null_buffer(const std::string_view debug_label, const std::size_t c
     , m_next_free_byte     {0}
     , m_debug_label        {debug_label}
 {
-    Expects(capacity_bytes_count > 0);
+    ERHE_VERIFY(capacity_bytes_count > 0);
     m_buffer.resize(capacity_bytes_count);
-    m_span = gsl::span<std::byte>(m_buffer.data(), m_buffer.size());
+    m_span = std::span<std::byte>(m_buffer.data(), m_buffer.size());
 }
 
 Null_buffer::Null_buffer(Null_buffer&& other) noexcept
@@ -46,7 +44,7 @@ Null_buffer& Null_buffer::operator=(Null_buffer&& other) noexcept
     m_capacity_byte_count = other.m_capacity_byte_count;
     m_next_free_byte      = other.m_next_free_byte;
     m_buffer              = std::move(other.m_buffer);
-    m_span                = gsl::span<std::byte>(m_buffer.data(), m_buffer.size());
+    m_span                = std::span<std::byte>(m_buffer.data(), m_buffer.size());
     return *this;
 }
 
@@ -78,7 +76,7 @@ auto Null_buffer::allocate_bytes(
     return offset;
 }
 
-auto Null_buffer::span() noexcept -> gsl::span<std::byte>
+auto Null_buffer::span() noexcept -> std::span<std::byte>
 {
     return m_span;
 }

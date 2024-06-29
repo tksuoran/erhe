@@ -29,7 +29,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <gsl/span>
+#include <span>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 #include <algorithm>

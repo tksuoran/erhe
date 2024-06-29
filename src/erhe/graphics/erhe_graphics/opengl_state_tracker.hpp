@@ -10,8 +10,6 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/sampler.hpp"
 
-#include <gsl/pointers>
-
 #include <memory>
 #include <stack>
 

@@ -111,8 +111,8 @@ private:
     erhe::imgui::Imgui_renderer& m_imgui_renderer;
     Tiles&                       m_tiles;
 
-    gsl::span<float>    m_gpu_float_data;
-    gsl::span<uint32_t> m_gpu_uint_data;
+    std::span<float>    m_gpu_float_data;
+    std::span<uint32_t> m_gpu_uint_data;
     size_t              m_word_offset{0};
     bool                m_can_blit   {false};
 

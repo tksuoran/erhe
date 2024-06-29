@@ -3,6 +3,7 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_renderer/multi_buffer.hpp"
 
+#include <array>
 #include <vector>
 
 namespace erhe {
@@ -109,7 +110,7 @@ public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
     auto update(
-        const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
         const erhe::Item_filter&                                   filter,
         const Primitive_interface_settings&                        settings,
         bool                                                       use_id_ranges = false

@@ -19,8 +19,6 @@
 
 #include "erhe_renderer/pipeline_renderpass.hpp"
 
-#include <gsl/gsl>
-
 namespace erhe::commands {
     class Commands;
 }

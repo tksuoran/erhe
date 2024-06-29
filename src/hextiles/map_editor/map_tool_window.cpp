@@ -15,8 +15,6 @@
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <gsl/assert>
-
 namespace hextiles
 {
 

@@ -2,8 +2,6 @@
 
 #include "erhe_graphics/gl_objects.hpp"
 
-#include <gsl/pointers>
-
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -23,7 +21,7 @@ public:
     public:
         Attachment(
             const gl::Framebuffer_attachment attachment_point,
-            const gsl::not_null<Texture*>    texture,
+            Texture*                         texture,
             const unsigned int               level,
             const unsigned int               layer
         )
@@ -35,8 +33,8 @@ public:
         }
 
         Attachment(
-            const gl::Framebuffer_attachment   attachment_point,
-            const gsl::not_null<Renderbuffer*> renderbuffer
+            const gl::Framebuffer_attachment attachment_point,
+            Renderbuffer*                    renderbuffer
         )
             : attachment_point{attachment_point}
             , renderbuffer    {renderbuffer}
@@ -54,15 +52,15 @@ public:
     {
     public:
         void attach(
-            gl::Framebuffer_attachment    attachment_point,
-            const gsl::not_null<Texture*> texture,
-            unsigned int                  level = 0,
-            unsigned int                  layer = 0
+            gl::Framebuffer_attachment attachment_point,
+            Texture*                   texture,
+            unsigned int               level = 0,
+            unsigned int               layer = 0
         );
 
         void attach(
-            const gl::Framebuffer_attachment   attachment_point,
-            const gsl::not_null<Renderbuffer*> renderbuffer
+            const gl::Framebuffer_attachment attachment_point,
+            Renderbuffer*                    renderbuffer
         );
 
         std::vector<Attachment> attachments;

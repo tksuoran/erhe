@@ -1,7 +1,6 @@
 #include "erhe_graphics/gl_objects.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-
-#include <gsl/assert>
+#include "erhe_verify/verify.hpp"
 
 #include <utility>
 
@@ -11,7 +10,7 @@ namespace erhe::graphics
 Gl_texture::Gl_texture(gl::Texture_target target)
 {
     gl::create_textures(target, 1, &m_gl_name);
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name)
@@ -21,7 +20,7 @@ Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name)
     if (m_owned) {
         gl::create_textures(target, 1, &m_gl_name);
     }
-    Ensures((wrap_name == 0) || (m_gl_name != 0));
+    ERHE_VERIFY((wrap_name == 0) || (m_gl_name != 0));
 }
 
 Gl_texture::Gl_texture(Gl_texture&& old) noexcept
@@ -56,7 +55,7 @@ auto Gl_texture::gl_name() const -> GLuint
 Gl_program::Gl_program()
 {
     m_gl_name = gl::create_program();
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_program::Gl_program(Gl_program&& old) noexcept
@@ -88,7 +87,7 @@ auto Gl_program::gl_name() const -> GLuint
 Gl_shader::Gl_shader(gl::Shader_type shader_type)
 {
     m_gl_name = gl::create_shader(shader_type);
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_shader::~Gl_shader() noexcept
@@ -120,7 +119,7 @@ auto Gl_shader::gl_name() const -> unsigned int
 Gl_sampler::Gl_sampler()
 {
     gl::create_samplers(1, &m_gl_name);
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_sampler::~Gl_sampler() noexcept
@@ -152,7 +151,7 @@ auto Gl_sampler::gl_name() const -> unsigned int
 Gl_framebuffer::Gl_framebuffer()
 {
     gl::create_framebuffers(1, &m_gl_name);
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_framebuffer::~Gl_framebuffer() noexcept
@@ -184,7 +183,7 @@ auto Gl_framebuffer::gl_name() const -> GLuint
 Gl_renderbuffer::Gl_renderbuffer()
 {
     gl::create_renderbuffers(1, &m_gl_name);
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_renderbuffer::~Gl_renderbuffer() noexcept
@@ -216,7 +215,7 @@ auto Gl_renderbuffer::gl_name() const -> GLuint
 Gl_buffer::Gl_buffer()
 {
     gl::create_buffers(1, &m_gl_name);
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_buffer::~Gl_buffer() noexcept
@@ -249,7 +248,7 @@ auto Gl_buffer::gl_name() const -> GLuint
 Gl_transform_feedback::Gl_transform_feedback()
 {
     gl::create_transform_feedbacks(1, &m_gl_name);
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_transform_feedback::~Gl_transform_feedback() noexcept
@@ -282,7 +281,7 @@ auto Gl_transform_feedback::gl_name() const -> GLuint
 Gl_query::Gl_query(gl::Query_target target)
 {
     gl::create_queries(target, 1, &m_gl_name);
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_query::~Gl_query() noexcept
@@ -314,7 +313,7 @@ auto Gl_query::gl_name() const -> GLuint
 Gl_vertex_array::Gl_vertex_array()
 {
     gl::create_vertex_arrays(1, &m_gl_name);
-    Ensures(m_gl_name != 0);
+    ERHE_VERIFY(m_gl_name != 0);
 }
 
 Gl_vertex_array::~Gl_vertex_array() noexcept

@@ -59,11 +59,11 @@ auto Embree_buffer::allocate_bytes(
     return offset;
 }
 
-auto Embree_buffer::span() noexcept -> gsl::span<std::byte>
+auto Embree_buffer::span() noexcept -> std::span<std::byte>
 {
     auto* const ptr = reinterpret_cast<std::byte*>(rtcGetBufferData(m_buffer));
     SPDLOG_LOGGER_TRACE(log_embree, "rtcGetBufferData(hbuffer = {} {})", m_debug_label, fmt::ptr(ptr));
-    return gsl::span<std::byte>{
+    return std::span<std::byte>{
         ptr,
         m_capacity_byte_count
     };

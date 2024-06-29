@@ -29,7 +29,6 @@ target_link_libraries(
     PRIVATE
         erhe::log
         erhe::profile
-        Microsoft.GSL::GSL
         RectangleBinPack::RectangleBinPack
 )
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")

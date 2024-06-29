@@ -53,7 +53,6 @@ target_link_libraries(
         erhe::gl
         erhe::log
         fmt::fmt
-        Microsoft.GSL::GSL
 )
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

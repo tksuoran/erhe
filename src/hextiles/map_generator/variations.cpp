@@ -1,6 +1,6 @@
 #include "map_generator/variations.hpp"
 
-#include <gsl/assert>
+#include "erhe_verify/verify.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -25,7 +25,7 @@ void Variations::push(float value)
 
 auto Variations::get_noise_value(size_t index) const -> float
 {
-    Expects(index < m_values.size());
+    ERHE_VERIFY(index < m_values.size());
     return m_values[index];
 }
 

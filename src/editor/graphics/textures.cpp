@@ -79,7 +79,7 @@ auto Textures::load(
         .level_count     = image_info.level_count,
         .row_stride      = image_info.row_stride,
     };
-    gsl::span<std::byte> span = slot.begin_span_for(
+    std::span<std::byte> span = slot.begin_span_for(
         image_info.width,
         image_info.height,
         texture_create_info.internal_format

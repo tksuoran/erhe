@@ -1,14 +1,13 @@
 #pragma once
 
+#include "erhe_verify/verify.hpp"
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <limits>
 #include <vector>
-
-#include <gsl/assert>
-#include <gsl/pointers>    // for owner
 
 namespace hextiles
 {
@@ -31,7 +30,7 @@ public:
     void op(const std::vector<T>& v)
     {
         const size_t size = v.size();
-        Expects(size <= std::numeric_limits<uint32_t>::max());
+        ERHE_VERIFY(size <= std::numeric_limits<uint32_t>::max());
         const uint32_t size_u32 = static_cast<uint32_t>(size);
         op(size_u32);
         for (const auto& element : v) {
@@ -40,7 +39,7 @@ public:
     }
 
 private:
-    gsl::owner<FILE*> m_file;
+    FILE* m_file; // owning pointer
 };
 
 class File_read_stream
@@ -70,7 +69,7 @@ public:
     }
 
 private:
-    gsl::owner<FILE*> m_file;
+    FILE* m_file; // owning pointer
 };
 
 } // namespace hextiles

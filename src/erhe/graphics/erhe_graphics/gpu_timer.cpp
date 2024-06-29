@@ -4,8 +4,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-
-#include <gsl/gsl>
+#include "erhe_verify/verify.hpp"
 
 #include <sstream>
 #include <thread>
@@ -123,7 +122,7 @@ void Gpu_timer::create()
 
     for (auto& query : m_queries) {
         if (query.query_object.has_value()) {
-            Expects(m_owner_thread == std::this_thread::get_id());
+            ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
         } else {
             query.query_object.emplace(
                 Gl_query{gl::Query_target::time_elapsed}
@@ -156,8 +155,8 @@ void Gpu_timer::begin()
 #if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard<std::mutex> lock{s_mutex};
 
-    Expects(m_owner_thread == std::this_thread::get_id());
-    Expects(s_active_timer == nullptr);
+    ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
+    ERHE_VERIFY(s_active_timer == nullptr);
 
     auto& query = m_queries[s_index % s_count];
 
@@ -176,8 +175,8 @@ void Gpu_timer::end()
 #if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard<std::mutex> lock{s_mutex};
 
-    Expects(m_owner_thread == std::this_thread::get_id());
-    Expects(s_active_timer == this);
+    ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
+    ERHE_VERIFY(s_active_timer == this);
 
     auto& query = m_queries[s_index % s_count];
 
@@ -192,7 +191,7 @@ void Gpu_timer::end()
 void Gpu_timer::read()
 {
 #if defined(ERHE_USE_TIME_QUERY)
-    Expects(m_owner_thread == std::this_thread::get_id());
+    ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
 
     for (size_t i = 0; i <= s_count; ++i) {
         const auto poll_index = (s_index + 1 + i) % s_count;

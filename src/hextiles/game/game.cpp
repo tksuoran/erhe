@@ -431,7 +431,7 @@ auto Game::get_unit_tile(
             //occupied_battle_type_mask |= (1u << unit_type.battle_type);
             occupied_player_mask      |= (1u << player_index);
 
-            //Expects(
+            //ERHE_VERIFY(
             //    (battle_type_player_id[unit_type.battle_type] == 0) ||
             //    (battle_type_player_id[unit_type.battle_type] == player_id)
             //);                        //
@@ -544,7 +544,7 @@ void Game::update_current_player()
 
 auto Game::get_current_player() -> Player&
 {
-    Expects(!m_players.empty());
+    ERHE_VERIFY(!m_players.empty());
     return m_players.at(m_current_player);
 }
 

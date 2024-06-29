@@ -93,7 +93,7 @@ Light_projections::Light_projections()
 }
 
 Light_projections::Light_projections(
-    const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
+    const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const erhe::scene::Camera*                                  view_camera,
     const erhe::math::Viewport&                                 light_texture_viewport,
     const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
@@ -150,7 +150,7 @@ Light_projections::Light_projections(
 }
 
 auto Light_buffer::update(
-    const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
+    const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const Light_projections*                                    light_projections,
     const glm::vec3&                                            ambient_light
 ) -> erhe::renderer::Buffer_range

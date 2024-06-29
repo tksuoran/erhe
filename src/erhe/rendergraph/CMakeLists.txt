@@ -34,7 +34,6 @@ target_link_libraries(${_target}
         erhe::math
         erhe::ui
         mINI
-        Microsoft.GSL::GSL
     PRIVATE
         erhe::profile
         erhe::verify

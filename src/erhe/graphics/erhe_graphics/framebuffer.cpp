@@ -101,18 +101,20 @@ std::vector<Framebuffer*> Framebuffer::s_all_framebuffers;
 
 void Framebuffer::Create_info::attach(
     const gl::Framebuffer_attachment attachment_point,
-    const gsl::not_null<Texture*>    texture,
+    Texture*                         texture,
     const unsigned int               level,
     const unsigned int               layer
 )
 {
+    ERHE_VERIFY(texture != nullptr);
     attachments.emplace_back(attachment_point, texture, level, layer);
 }
 
 void Framebuffer::Create_info::attach(
-    const gl::Framebuffer_attachment   attachment_point,
-    const gsl::not_null<Renderbuffer*> renderbuffer)
+    const gl::Framebuffer_attachment attachment_point,
+    Renderbuffer*                    renderbuffer)
 {
+    ERHE_VERIFY(renderbuffer != nullptr);
     attachments.emplace_back(attachment_point, renderbuffer);
 }
 
@@ -212,7 +214,7 @@ void Framebuffer::create()
         }
     }
 
-    Ensures(check_status());
+    ERHE_VERIFY(check_status());
 }
 
 auto Framebuffer::check_status() const -> bool

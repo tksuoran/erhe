@@ -22,9 +22,9 @@ Renderbuffer::Renderbuffer(
     , m_height         {height}
 {
     static_cast<void>(instance);
-    Expects(gl_name() != 0);
-    Expects(m_width  > 0);
-    Expects(m_height > 0);
+    ERHE_VERIFY(gl_name() != 0);
+    ERHE_VERIFY(m_width  > 0);
+    ERHE_VERIFY(m_height > 0);
 
     gl::named_renderbuffer_storage_multisample(
         gl_name(),
@@ -47,9 +47,9 @@ Renderbuffer::Renderbuffer(
     , m_width          {width}
     , m_height         {height}
 {
-    Expects(gl_name() != 0);
-    Expects(m_width  > 0);
-    Expects(m_height > 0);
+    ERHE_VERIFY(gl_name() != 0);
+    ERHE_VERIFY(m_width  > 0);
+    ERHE_VERIFY(m_height > 0);
 
     if (sample_count > 0) {
         // int num_sample_counts = 0;
@@ -134,7 +134,7 @@ Renderbuffer::~Renderbuffer() noexcept
 {
 }
 
-void Renderbuffer::set_debug_label(const std::string& label)
+void Renderbuffer::set_debug_label(std::string_view label)
 {
     m_debug_label = fmt::format("(R:{}) {}", gl_name(), label);
     gl::object_label(
@@ -174,15 +174,15 @@ auto Renderbuffer_hash::operator()(
     const Renderbuffer& renderbuffer
 ) const noexcept -> size_t
 {
-    Expects(renderbuffer.gl_name() != 0);
+    ERHE_VERIFY(renderbuffer.gl_name() != 0);
 
     return static_cast<size_t>(renderbuffer.gl_name());
 }
 
 auto operator==(const Renderbuffer& lhs, const Renderbuffer& rhs) noexcept -> bool
 {
-    Expects(lhs.gl_name() != 0);
-    Expects(rhs.gl_name() != 0);
+    ERHE_VERIFY(lhs.gl_name() != 0);
+    ERHE_VERIFY(rhs.gl_name() != 0);
 
     return lhs.gl_name() == rhs.gl_name();
 }

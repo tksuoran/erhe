@@ -17,8 +17,8 @@ auto Geometry::make_corner(const Point_id point_id, const Polygon_id polygon_id)
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(point_id < m_next_point_id);
-    Expects(polygon_id < m_next_polygon_id);
+    ERHE_VERIFY(point_id < m_next_point_id);
+    ERHE_VERIFY(polygon_id < m_next_polygon_id);
     ++m_serial;
     const Corner_id corner_id = m_next_corner_id++;
 
@@ -85,8 +85,8 @@ auto Geometry::make_edge(const Point_id a, const Point_id b) -> Edge_id
     ++m_serial;
 
     ERHE_VERIFY(a < b);
-    //Expects(a < b);
-    Expects(b < points.size());
+    //ERHE_VERIFY(a < b);
+    ERHE_VERIFY(b < points.size());
     const Edge_id edge_id = m_next_edge_id++;
 
     if (edge_id >= edges.size()) {
@@ -110,8 +110,8 @@ void Geometry::reserve_point_corner(const Point_id point_id, const Corner_id cor
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(point_id < m_next_point_id);
-    Expects(corner_id < m_next_corner_id);
+    ERHE_VERIFY(point_id < m_next_point_id);
+    ERHE_VERIFY(corner_id < m_next_corner_id);
 
     ++m_serial;
 
@@ -271,8 +271,8 @@ auto Geometry::make_edge_polygon(const Edge_id edge_id, const Polygon_id polygon
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(edge_id < m_next_edge_id);
-    Expects(polygon_id < m_next_polygon_id);
+    ERHE_VERIFY(edge_id < m_next_edge_id);
+    ERHE_VERIFY(polygon_id < m_next_polygon_id);
 
     ++m_serial;
 
@@ -313,8 +313,8 @@ auto Geometry::make_polygon_corner_(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(polygon_id < m_next_polygon_id);
-    Expects(corner_id < m_next_corner_id);
+    ERHE_VERIFY(polygon_id < m_next_polygon_id);
+    ERHE_VERIFY(corner_id < m_next_corner_id);
 
     ++m_serial;
 
@@ -356,8 +356,8 @@ auto Geometry::make_polygon_corner(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(polygon_id < m_next_polygon_id);
-    Expects(point_id < m_next_point_id);
+    ERHE_VERIFY(polygon_id < m_next_polygon_id);
+    ERHE_VERIFY(point_id < m_next_point_id);
 
     ++m_serial;
 

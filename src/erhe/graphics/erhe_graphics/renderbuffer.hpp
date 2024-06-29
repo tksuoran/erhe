@@ -2,7 +2,7 @@
 
 #include "erhe_graphics/gl_objects.hpp"
 
-#include <gsl/pointers>
+#include <string_view>
 
 namespace erhe::graphics
 {
@@ -35,7 +35,7 @@ public:
     [[nodiscard]] auto height         () const -> unsigned int;
     [[nodiscard]] auto gl_name        () const -> unsigned int;
 
-    void set_debug_label(const std::string& label);
+    void set_debug_label(std::string_view label);
 
 private:
     Gl_renderbuffer     m_handle;

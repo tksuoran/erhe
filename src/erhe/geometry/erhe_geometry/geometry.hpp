@@ -5,7 +5,6 @@
 #include "erhe_geometry/types.hpp"
 
 #include <glm/glm.hpp>
-#include <gsl/assert>
 
 #include <functional>
 #include <optional>

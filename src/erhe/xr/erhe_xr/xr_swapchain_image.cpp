@@ -20,8 +20,8 @@
 namespace erhe::xr {
 
 Swapchain_image::Swapchain_image(
-    gsl::not_null<Swapchain*> swapchain,
-    const uint32_t            image_index
+    Swapchain*     swapchain,
+    const uint32_t image_index
 )
     : m_swapchain  {swapchain}
     , m_image_index{image_index}
@@ -68,7 +68,7 @@ Swapchain::Swapchain(XrSwapchain xr_swapchain)
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(xr_swapchain != XR_NULL_HANDLE);
+    ERHE_VERIFY(xr_swapchain != XR_NULL_HANDLE);
     enumerate_images();
 }
 
@@ -91,7 +91,7 @@ Swapchain::Swapchain(Swapchain&& other) noexcept
 
 void Swapchain::operator=(Swapchain&& other) noexcept
 {
-    Expects(other.m_xr_swapchain != XR_NULL_HANDLE);
+    ERHE_VERIFY(other.m_xr_swapchain != XR_NULL_HANDLE);
     if (m_xr_swapchain != XR_NULL_HANDLE) {
         check_gl_context_in_current_in_this_thread();
         check(xrDestroySwapchain(m_xr_swapchain));

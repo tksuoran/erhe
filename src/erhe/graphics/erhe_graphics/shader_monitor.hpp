@@ -24,8 +24,8 @@ public:
     // Public API
     void set_enabled(bool enabled);
     void add(
-        Shader_stages_create_info     create_info,
-        gsl::not_null<Shader_stages*> program
+        Shader_stages_create_info create_info,
+        Shader_stages*            program
     );
     void add(Reloadable_shader_stages& reloadable_shader_stages);
 
@@ -41,7 +41,7 @@ private:
     void add(
         const std::filesystem::path&                     path,
         const erhe::graphics::Shader_stages_create_info& create_info,
-        gsl::not_null<erhe::graphics::Shader_stages*>    program
+        erhe::graphics::Shader_stages*                   program
     );
 
     class Reload_entry
@@ -49,15 +49,15 @@ private:
     public:
         Reload_entry(
             const erhe::graphics::Shader_stages_create_info& create_info,
-            gsl::not_null<erhe::graphics::Shader_stages*>    shader_stages
+            erhe::graphics::Shader_stages*                   shader_stages
         )
             : create_info  {create_info}
             , shader_stages{shader_stages}
         {
         }
 
-        erhe::graphics::Shader_stages_create_info     create_info;
-        gsl::not_null<erhe::graphics::Shader_stages*> shader_stages;
+        erhe::graphics::Shader_stages_create_info create_info;
+        erhe::graphics::Shader_stages*            shader_stages;
     };
 
     class Compare_object

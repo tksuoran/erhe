@@ -97,9 +97,6 @@ FetchContent_MakeAvailable(glm)
 # Enable GLM_GTX_component_wise
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
-message("Fetching GSL")
-FetchContent_MakeAvailable(GSL)
-
 message("Fetching MathGeoLib")
 FetchContent_MakeAvailable(MathGeoLib)
 

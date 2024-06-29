@@ -789,7 +789,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
                 m_xr_views.data()
             )
         );
-        Expects(view_count_output == view_capacity_input);
+        ERHE_VERIFY(view_count_output == view_capacity_input);
     }
 
     const auto& view_configuration_views = m_instance.get_xr_view_configuration_views();

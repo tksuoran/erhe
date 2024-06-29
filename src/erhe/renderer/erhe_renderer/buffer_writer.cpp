@@ -27,7 +27,7 @@ void Buffer_writer::uniform_align()
     }
 }
 
-auto Buffer_writer::begin(erhe::graphics::Buffer* const buffer, std::size_t byte_count) -> gsl::span<std::byte>
+auto Buffer_writer::begin(erhe::graphics::Buffer* const buffer, std::size_t byte_count) -> std::span<std::byte>
 {
     ERHE_VERIFY(m_buffer == nullptr);
     m_buffer = buffer;
@@ -76,7 +76,7 @@ auto Buffer_writer::begin(erhe::graphics::Buffer* const buffer, std::size_t byte
 
 }
 
-auto Buffer_writer::subspan(const std::size_t byte_count) -> gsl::span<std::byte>
+auto Buffer_writer::subspan(const std::size_t byte_count) -> std::span<std::byte>
 {
     ERHE_VERIFY(m_map.size() >= write_offset + byte_count);
     auto result = m_map.subspan(write_offset, byte_count);

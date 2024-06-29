@@ -7,7 +7,8 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/packing.hpp>
-#include <gsl/span>
+
+#include <span>
 
 namespace erhe::primitive
 {
@@ -16,7 +17,7 @@ namespace
 {
 
 inline void write_low(
-    const gsl::span<std::uint8_t>  destination,
+    const std::span<std::uint8_t>  destination,
     const erhe::dataformat::Format format,
     const std::size_t              value
 )
@@ -24,14 +25,14 @@ inline void write_low(
     switch (format) {
         case erhe::dataformat::Format::format_8_scalar_uint: {
             auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
-            Expects(value <= 0xffU);
+            ERHE_VERIFY(value <= 0xffU);
             ptr[0] = value & 0xffU;
             break;
         }
 
         case erhe::dataformat::Format::format_16_scalar_uint: {
             auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
-            Expects(value <= 0xffffU);
+            ERHE_VERIFY(value <= 0xffffU);
             ptr[0] = value & 0xffffU;
             break;
         }
@@ -49,7 +50,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t>  destination,
+    const std::span<std::uint8_t>  destination,
     const erhe::dataformat::Format format,
     const unsigned int             value
 )
@@ -58,7 +59,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t>  destination,
+    const std::span<std::uint8_t>  destination,
     const erhe::dataformat::Format format,
     const glm::vec2                value
 )
@@ -102,7 +103,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t>  destination,
+    const std::span<std::uint8_t>  destination,
     const erhe::dataformat::Format format,
     const glm::vec3                value
 )
@@ -151,7 +152,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t>  destination,
+    const std::span<std::uint8_t>  destination,
     const erhe::dataformat::Format format,
     const glm::vec4                value
 )
@@ -205,7 +206,7 @@ inline void write_low(
 }
 
 inline void write_low(
-    const gsl::span<std::uint8_t>  destination,
+    const std::span<std::uint8_t>  destination,
     const erhe::dataformat::Format format,
     const glm::uvec4               value
 )
@@ -256,10 +257,10 @@ Vertex_buffer_writer::Vertex_buffer_writer(Build_context& build_context, Buffer_
     : build_context{build_context}
     , buffer_sink  {buffer_sink}
 {
-    Expects(build_context.root.renderable_mesh != nullptr);
+    ERHE_VERIFY(build_context.root.renderable_mesh != nullptr);
     const auto& vertex_buffer_range = build_context.root.renderable_mesh->vertex_buffer_range;
     vertex_data.resize(vertex_buffer_range.count * vertex_buffer_range.element_size);
-    vertex_data_span = gsl::make_span(vertex_data);
+    vertex_data_span = vertex_data;
 }
 
 Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
@@ -278,12 +279,12 @@ Index_buffer_writer::Index_buffer_writer(Build_context& build_context, Buffer_si
     , index_type     {build_context.root.build_info.buffer_info.index_type}
     , index_type_size{build_context.root.renderable_mesh->index_buffer_range.element_size}
 {
-    Expects(build_context.root.renderable_mesh != nullptr);
+    ERHE_VERIFY(build_context.root.renderable_mesh != nullptr);
     const auto& renderable_mesh    = *build_context.root.renderable_mesh;
     const auto& index_buffer_range = renderable_mesh.index_buffer_range;
     const auto& mesh_info          = build_context.root.mesh_info;
     index_data.resize(index_buffer_range.count * index_type_size);
-    index_data_span = gsl::make_span(index_data);
+    index_data_span = index_data;
 
     const auto& primitive_types = build_context.root.build_info.primitive_types;
 

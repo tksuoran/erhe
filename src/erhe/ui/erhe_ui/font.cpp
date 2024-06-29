@@ -493,8 +493,8 @@ void Font::post_process()
 
 #if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 auto Font::print(
-    gsl::span<float>    float_data,
-    gsl::span<uint32_t> uint_data,
+    std::span<float>    float_data,
+    std::span<uint32_t> uint_data,
     std::string_view    text,
     glm::vec3           text_position,
     const uint32_t      text_color,
@@ -690,8 +690,8 @@ auto Font::measure(const std::string_view text) const -> Rectangle
 }
 #else
 auto Font::print(
-    gsl::span<float>    ,
-    gsl::span<uint32_t> ,
+    std::span<float>    ,
+    std::span<uint32_t> ,
     std::string_view    ,
     glm::vec3           ,
     const uint32_t      ,

@@ -25,15 +25,13 @@ class Draw_indirect_buffer
     : public Multi_buffer
 {
 public:
-    explicit Draw_indirect_buffer(
-        erhe::graphics::Instance& graphics_instance
-    );
+    explicit Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance);
 
     // Can discard return value
     auto update(
-        const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
         erhe::primitive::Primitive_mode                            primitive_mode,
-        const erhe::Item_filter&                            filter
+        const erhe::Item_filter&                                   filter
     ) -> Draw_indirect_buffer_range;
 
     //// void debug_properties_window();

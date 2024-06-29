@@ -4,8 +4,6 @@
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_graphics/vertex_attribute_mapping.hpp"
 
-#include <gsl/pointers>
-
 #include <memory>
 #include <string_view>
 #include <vector>

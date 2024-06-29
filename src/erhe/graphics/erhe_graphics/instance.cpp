@@ -496,7 +496,7 @@ auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
         0xee, 0x11, 0xdd, 0xff,
         0xcc, 0x11, 0xbb, 0xff
     };
-    const gsl::span<const std::byte> image_data{
+    const std::span<const std::byte> image_data{
         reinterpret_cast<const std::byte*>(&dummy_pixel[0]),
         dummy_pixel.size()
     };

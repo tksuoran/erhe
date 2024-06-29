@@ -3,8 +3,6 @@
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <gsl/assert>
-
 #include <algorithm>
 #include <cassert>
 

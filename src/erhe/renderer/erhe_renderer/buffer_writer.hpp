@@ -1,6 +1,6 @@
 #pragma once
 
-#include <gsl/span>
+#include <span>
 
 #include <cstddef>
 
@@ -30,8 +30,8 @@ public:
 
     void shader_storage_align();
     void uniform_align       ();
-    auto begin               (erhe::graphics::Buffer* buffer, std::size_t byte_count) -> gsl::span<std::byte>;
-    auto subspan             (std::size_t byte_count) -> gsl::span<std::byte>;
+    auto begin               (erhe::graphics::Buffer* buffer, std::size_t byte_count) -> std::span<std::byte>;
+    auto subspan             (std::size_t byte_count) -> std::span<std::byte>;
     void end                 ();
     void reset               ();
     void dump                ();
@@ -39,7 +39,7 @@ public:
 private:
     erhe::graphics::Instance& m_instance;
     erhe::graphics::Buffer*   m_buffer{nullptr};
-    gsl::span<std::byte>      m_map;
+    std::span<std::byte>      m_map;
 };
 
 } // namespace erhe::renderer

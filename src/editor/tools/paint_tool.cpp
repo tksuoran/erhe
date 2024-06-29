@@ -258,13 +258,15 @@ void Paint_tool::paint_vertex(
     const glm::vec4                 color
 )
 {
+    using Vertex_attribute = erhe::graphics::Vertex_attribute;
     auto& mesh_memory = *m_context.mesh_memory;
     const erhe::graphics::Vertex_format&    vertex_format = mesh_memory.buffer_info.vertex_format;
     const erhe::graphics::Vertex_attribute* attribute     = vertex_format.find_attribute(erhe::graphics::Vertex_attribute::Usage_type::color, 0);
-    const std::size_t                       vertex_offset = vertex_id * vertex_format.stride() + attribute->offset;
     if (attribute == nullptr) {
         return;
     }
+
+    const std::size_t vertex_offset = vertex_id * vertex_format.stride() + attribute->offset;
 
     std::vector<std::uint8_t> buffer;
 
