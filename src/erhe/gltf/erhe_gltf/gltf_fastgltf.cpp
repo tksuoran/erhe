@@ -591,6 +591,7 @@ public:
                 parse_node(scene.nodeIndices[i], m_arguments.root_node);
             }
         } else {
+            // TODO Make a graph and sort by depth.
             std::vector<bool> is_child(m_asset->nodes.size()); // default initialized to false
             for (std::size_t i = 0, end = m_asset->nodes.size(); i < end; ++i) {
                 const fastgltf::Node& node = m_asset->nodes[i];
@@ -610,11 +611,6 @@ public:
         m_data_out.skins.resize(m_asset->skins.size());
         for (std::size_t i = 0, end = m_asset->skins.size(); i < end; ++i) {
             parse_skin(i);
-        }
-
-        log_gltf->trace("fixing pointers");
-        for (std::size_t i = 0, end = m_asset->nodes.size(); i < end; ++i) {
-            fix_pointers(i);
         }
 
         log_gltf->trace("parsing animations");
@@ -838,7 +834,6 @@ private:
         }
         return texture;
     }
-
     auto load_png_buffer(const std::size_t buffer_view_index, const std::size_t image_index) -> std::shared_ptr<erhe::graphics::Texture>
     {
         const fastgltf::BufferView& buffer_view      = m_asset->bufferViews[buffer_view_index];
@@ -919,7 +914,6 @@ private:
         }
         return texture;
     }
-
     void parse_image(const std::size_t image_index)
     {
         const fastgltf::Image& image      = m_asset->images[image_index];
@@ -949,7 +943,6 @@ private:
         }
         m_data_out.images[image_index] = erhe_texture;
     }
-
     void parse_sampler(const std::size_t sampler_index)
     {
         const fastgltf::Sampler& sampler = m_asset->samplers[sampler_index];
@@ -1233,6 +1226,9 @@ private:
     {
         const fastgltf::Primitive& primitive = mesh.primitives[primitive_index];
         std::string name = fmt::format("{}[{}]", mesh.name.c_str(), primitive_index);
+        std::shared_ptr<erhe::primitive::Material> erhe_material = primitive.materialIndex.has_value()
+            ? m_data_out.materials.at(primitive.materialIndex.value())
+            : std::shared_ptr<erhe::primitive::Material>{};
 
         Primitive_entry primitive_entry;
         get_primitive_geometry(primitive, primitive_entry);
@@ -1240,9 +1236,7 @@ private:
         erhe_mesh->add_primitive(
             erhe::primitive::Primitive{
                 primitive_entry.triangle_soup,
-                primitive.materialIndex.has_value()
-                    ? m_data_out.materials.at(primitive.materialIndex.value())
-                    : std::shared_ptr<erhe::primitive::Material>{}
+                erhe_material
             }
         );
     }
@@ -1325,14 +1319,7 @@ private:
             std::size_t child_index = node.children[i];
             parse_node(child_index, erhe_node);
         }
-    }
-    void fix_pointers(const std::size_t node_index)
-    {
-        const fastgltf::Node& node = m_asset->nodes[node_index];
-        auto& erhe_node = m_data_out.nodes.at(node_index);
-        if (!erhe_node) {
-            return;
-        }
+
         for (std::size_t i = 0, end = node.children.size(); i < end; ++i) {
             std::size_t child_node_index = node.children[i];
             auto& erhe_child_node = m_data_out.nodes.at(child_node_index);
@@ -1351,7 +1338,12 @@ private:
 
         if (node.meshIndex.has_value()) {
             const std::size_t mesh_index = node.meshIndex.value();
-            const auto erhe_mesh = m_data_out.meshes[mesh_index];
+            const erhe::scene::Mesh& template_mesh = *m_data_out.meshes[mesh_index].get();
+            // Mesh needs to be cloned, because erhe currently puts skin into the mesh.
+            std::shared_ptr<erhe::scene::Mesh> erhe_mesh = std::make_shared<erhe::scene::Mesh>(
+                template_mesh,
+                erhe::for_clone{true}
+            );
             if (node.skinIndex.has_value()) {
                 const std::size_t skin_index = node.skinIndex.value();
                 erhe_mesh->skin = m_data_out.skins[skin_index];

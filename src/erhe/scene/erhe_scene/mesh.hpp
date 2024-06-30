@@ -68,7 +68,7 @@ public:
     [[nodiscard]] auto get_rt_primitives     () const -> const std::vector<Raytrace_primitive>&;
 
     Layer_id              layer_id{0xff};
-    std::shared_ptr<Skin> skin;
+    std::shared_ptr<Skin> skin; // TODO Make this a separate node attachment
     float                 point_size{3.0f};
     float                 line_width{1.0f};
 
