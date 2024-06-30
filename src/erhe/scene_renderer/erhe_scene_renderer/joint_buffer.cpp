@@ -74,7 +74,7 @@ auto Joint_buffer::update(
 
     std::size_t joint_count = 0;
     std::size_t skin_index = 0;
-    for (const auto& skin : skins) {
+    for (const std::shared_ptr<erhe::scene::Skin>& skin : skins) {
         ERHE_VERIFY(skin);
         ++skin_index;
 
@@ -131,10 +131,10 @@ auto Joint_buffer::update(
             break;
         }
 
-        auto& skin_data = skin->skin_data;
+        erhe::scene::Skin_data& skin_data = skin->skin_data;
         skin_data.joint_buffer_index = joint_index;
         for (std::size_t i = 0, end_i = skin->skin_data.joints.size(); i < end_i; ++i) {
-            const auto&     joint           = skin->skin_data.joints[i];
+            const std::shared_ptr<erhe::scene::Node>& joint = skin->skin_data.joints[i];
             const glm::mat4 joint_from_bind = skin->skin_data.inverse_bind_matrices[i];
             if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
                 log_render->critical("joint buffer capacity {} exceeded", buffer.capacity_byte_count());

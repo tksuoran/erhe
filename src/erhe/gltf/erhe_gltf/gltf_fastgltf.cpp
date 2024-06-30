@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <numeric>
 #include <string>
 #include <variant>
 #include <vector>
@@ -583,21 +584,28 @@ public:
 
         log_gltf->trace("parsing nodes");
         m_data_out.nodes.resize(m_asset->nodes.size());
-        for (std::size_t i = 0, end = m_asset->nodes.size(); i < end; ++i) {
-            parse_node(i, m_arguments.root_node);
+        if (!m_asset->scenes.empty()) {
+            // TODO For now, only one scene per glTF is supported.
+            const fastgltf::Scene& scene = m_asset->scenes.front();
+            for (std::size_t i = 0, end = scene.nodeIndices.size(); i < end; ++i) {
+                parse_node(scene.nodeIndices[i], m_arguments.root_node);
+            }
+        } else {
+            std::vector<bool> is_child(m_asset->nodes.size()); // default initialized to false
+            for (std::size_t i = 0, end = m_asset->nodes.size(); i < end; ++i) {
+                const fastgltf::Node& node = m_asset->nodes[i];
+                for (std::size_t child_index : node.children) {
+                    is_child[child_index] = true;
+                }
+            }
+            for (std::size_t i = 0, end = m_asset->nodes.size(); i < end; ++i) {
+                if (is_child[i]) {
+                    continue;
+                }
+                parse_node(i, m_arguments.root_node);
+            }
         }
-        //  TODO scenes
-        //  
-        //} else {
-        //    for (std::size_t i = 0; i < m_data->scenes_count; ++i) {
-        //        const cgltf_scene* scene = &m_data->scenes[i];
-        //        for (std::size_t j = 0; i < scene->nodes_count; ++i) {
-        //            parse_node(scene->nodes[j], m_root_node);
-        //        }
-        //        break; // only first scene for now
-        //    }
-        //}
-
+        
         log_gltf->trace("parsing skins");
         m_data_out.skins.resize(m_asset->skins.size());
         for (std::size_t i = 0, end = m_asset->skins.size(); i < end; ++i) {
@@ -1032,16 +1040,16 @@ private:
                         glm::quat{r[3], r[0], r[1], r[2]},
                         glm::vec3{s[0], s[1], s[2]}
                     );
-                    erhe_node->update_world_from_node();
-                    erhe_node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
                 },
                 [&](const fastgltf::math::fmat4x4 matrix) {
                     glm::mat4 glm_matrix = glm::make_mat4x4(matrix.data());
-                    erhe_node->set_parent_from_node(glm_matrix);
+                    erhe_node->node_data.transforms.parent_from_node.set(glm_matrix);
                 },
             },
             node.transform
         );
+        erhe_node->update_world_from_node();
+        erhe_node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
     }
     void parse_camera(const std::size_t camera_index)
     {
@@ -1365,7 +1373,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     fastgltf::Expected<fastgltf::Asset> asset = fastgltf_parser.loadGltf(
         data.get(),
         arguments.path.parent_path(),
-        fastgltf::Options::LoadExternalBuffers
+        fastgltf::Options::LoadExternalBuffers // TODO Consider | fastgltf::Options::DecomposeNodeMatrices
     );
     if (auto error = asset.error(); error != fastgltf::Error::None) {
         log_gltf->error("glTF parse error: {}", fastgltf::getErrorMessage(error));

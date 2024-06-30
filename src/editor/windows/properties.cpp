@@ -285,6 +285,7 @@ void Properties::skin_properties(erhe::scene::Skin& skin) const
     ERHE_PROFILE_FUNCTION();
 
     auto& skin_data = skin.skin_data;
+    ImGui::Text("Skeleton : %s", skin_data.skeleton ? skin_data.skeleton->get_name().c_str() : "(no skeleton)");
     ImGui::Text("Joint Count : %d", static_cast<int>(skin_data.joints.size()));
     if (!ImGui::TreeNodeEx("Skin")) {
         return;
