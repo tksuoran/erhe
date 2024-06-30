@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
 #include "erhe_gl/draw_indirect.hpp"
@@ -79,6 +81,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION();
 
+    log_render->debug("Forward_renderer::render({})", parameters.debug_label);
+
     // TODO This is not needed, Mesh_memory should have all needed attributes
     // m_program_interface.apply_default_attribute_values();
 
@@ -105,7 +109,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_nearest_sampler
     );
 
-    log_shadow_renderer->trace(
+    log_forward_renderer->trace(
         "render({}) shadow T '{}' handle {}",
         safe_str(parameters.passes.front()->pipeline.data.name),
         enable_shadows ? parameters.shadow_texture->debug_label() : "",

@@ -70,6 +70,7 @@ public:
         const erhe::graphics::Shader_stages*                               error_shader_stages{nullptr};
         const glm::uvec4&                                                  debug_joint_indices{0, 0, 0, 0};
         const std::span<glm::vec4>&                                        debug_joint_colors{};
+        const std::string_view                                             debug_label;
     };
 
     void render(const Render_parameters& parameters);

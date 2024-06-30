@@ -111,6 +111,7 @@ void Shadow_renderer::next_frame()
 
 auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 {
+    log_render->debug("Shadow_renderer::render()");
     log_shadow_renderer->trace(
         "Making light projections using texture '{}' sampler '{}' handle '{}'",
         parameters.texture->debug_label(),

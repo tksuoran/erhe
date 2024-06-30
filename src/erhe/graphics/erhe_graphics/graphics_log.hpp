@@ -18,6 +18,7 @@ extern std::shared_ptr<spdlog::logger> log_program;
 extern std::shared_ptr<spdlog::logger> log_save_png;
 extern std::shared_ptr<spdlog::logger> log_shader_monitor;
 extern std::shared_ptr<spdlog::logger> log_texture;
+extern std::shared_ptr<spdlog::logger> log_texture_frame;
 extern std::shared_ptr<spdlog::logger> log_threads;
 extern std::shared_ptr<spdlog::logger> log_vertex_attribute_mappings;
 extern std::shared_ptr<spdlog::logger> log_vertex_stream;

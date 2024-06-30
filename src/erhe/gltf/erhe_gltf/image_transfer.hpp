@@ -36,9 +36,6 @@ public:
 
         void end();
 
-        void begin_write();
-        void end_write  (std::size_t byte_offset, std::size_t byte_count);
-
     private:
         void map();
         void unmap();

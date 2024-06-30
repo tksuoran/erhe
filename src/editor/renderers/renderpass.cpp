@@ -137,7 +137,8 @@ void Renderpass::render(const Render_context& context) const
                 .shadow_texture         = nullptr,
                 .viewport               = context.viewport,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
-                .error_shader_stages    = &context.editor_context.programs->error.shader_stages
+                .error_shader_stages    = &context.editor_context.programs->error.shader_stages,
+                .debug_label            = get_name()
             },
             nullptr
         );
@@ -189,7 +190,8 @@ void Renderpass::render(const Render_context& context) const
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
                 .error_shader_stages    = &context.editor_context.programs->error.shader_stages,
                 .debug_joint_indices    = context.editor_context.editor_rendering->debug_joint_indices,
-                .debug_joint_colors     = context.editor_context.editor_rendering->debug_joint_colors
+                .debug_joint_colors     = context.editor_context.editor_rendering->debug_joint_colors,
+                .debug_label            = get_name()
             }
         );
     }

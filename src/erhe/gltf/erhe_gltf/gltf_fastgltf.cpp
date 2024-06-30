@@ -273,18 +273,6 @@ void to_erhe_attribute(const fastgltf::Accessor& accessor, erhe::graphics::Glsl_
     }
 }
 
-[[nodiscard]] auto safe_resource_name(
-    const char* const text,
-    const char* const resource_type,
-    const std::size_t resource_index
-) -> std::string
-{
-    if ((text == nullptr) || strlen(text) == 0) {
-        return fmt::format("{}-{}", resource_type, resource_index);
-    }
-    return std::string(text);
-}
-
 } // anonymous namespace
 
 using namespace glm;
@@ -538,6 +526,18 @@ public:
         trace_info();
     }
 
+    [[nodiscard]] auto safe_resource_name(
+        std::string_view  name,
+        std::string_view  resource_type,
+        const std::size_t resource_index
+    ) const -> std::string
+    {
+        if (name.empty() || name.size() == 0) {
+            return fmt::format("{}-{}-{}", m_arguments.path.filename().string(), resource_type, resource_index);
+        }
+        return std::string{name};
+    }
+
     void parse_and_build()
     {
         if (m_asset.error() != fastgltf::Error::None) {
@@ -651,12 +651,8 @@ private:
     void parse_animation(const std::size_t animation_index)
     {
         const fastgltf::Animation& animation = m_asset->animations[animation_index];
-        const std::string animation_name = safe_resource_name(animation.name.c_str(), "animation", animation_index);
-        log_gltf->trace(
-            "Animation: id = {}, name = {}",
-            animation_index,
-            animation_name
-        );
+        const std::string animation_name = safe_resource_name(animation.name, "animation", animation_index);
+        log_gltf->trace("Animation: id = {}, name = {}", animation_index, animation_name);
 
         auto erhe_animation = std::make_shared<erhe::scene::Animation>(animation_name);
         erhe_animation->set_source_path(m_arguments.path);
@@ -814,8 +810,8 @@ private:
 
         const bool ok = loader.load(span);
         loader.close();
+        slot.end();
         if (!ok) {
-            slot.end();
             return {};
         }
 
@@ -829,20 +825,20 @@ private:
         texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
 
-        slot.end();
         if (generate_mipmap) {
             gl::generate_texture_mipmap(texture->gl_name());
         }
         return texture;
     }
 
-    auto load_png_buffer(const fastgltf::BufferView& buffer_view, const std::size_t image_index) -> std::shared_ptr<erhe::graphics::Texture>
+    auto load_png_buffer(const std::size_t buffer_view_index, const std::size_t image_index) -> std::shared_ptr<erhe::graphics::Texture>
     {
-        const std::size_t          buffer_view_index = &buffer_view - &m_asset->bufferViews.front();
-        const fastgltf::Buffer&    buffer            = m_asset->buffers.at(buffer_view.bufferIndex);
-        const std::string          name              = safe_resource_name(buffer_view.name.c_str(), "buffer_view", buffer_view_index);
-        erhe::graphics::Image_info image_info;
-        erhe::graphics::PNG_loader loader;
+        const fastgltf::BufferView& buffer_view      = m_asset->bufferViews[buffer_view_index];
+        const fastgltf::Buffer&     buffer           = m_asset->buffers.at(buffer_view.bufferIndex);
+        const std::string           buffer_view_name = safe_resource_name(buffer_view.name, "buffer_view", buffer_view_index);
+        const std::string           name             = fmt::format("{} image {} {}", m_arguments.path.filename().string(), image_index, buffer_view_name);
+        erhe::graphics::Image_info  image_info;
+        erhe::graphics::PNG_loader  loader;
 
         bool load_ok = false;
         auto& slot = m_arguments.image_transfer.get_slot();
@@ -854,7 +850,10 @@ private:
 
         std::visit(
             fastgltf::visitor{
-                [](auto& arg) { static_cast<void>(arg); },
+                [](auto& arg) {
+                    static_cast<void>(arg);
+                    ERHE_FATAL("TODO Unsupported image buffer view source");
+                },
                 [&](const fastgltf::sources::Array& data) {
                     std::span<const std::byte> png_encoded_buffer_view{
                         data.bytes.data() + buffer_view.byteOffset,
@@ -872,7 +871,7 @@ private:
                     texture_create_info.depth           = image_info.depth;
                     texture_create_info.level_count     = image_info.level_count;
                     texture_create_info.row_stride      = image_info.row_stride;
-                    texture_create_info.debug_label     = fmt::format("{} image {}", m_arguments.path.filename().string(), image_index);
+                    texture_create_info.debug_label     = name;
 
                     mipmap_count    = texture_create_info.calculate_level_count();
                     generate_mipmap = mipmap_count != image_info.level_count;
@@ -887,10 +886,6 @@ private:
 
                     load_ok = loader.load(span);
                     loader.close();
-                    if (!load_ok) {
-                        slot.end();
-                        return;
-                    }
                     if (load_ok) {
                         gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
                     }
@@ -898,8 +893,7 @@ private:
             },
             buffer.data
         );
-        //const uint8_t*   data_u8 = cgltf_buffer_view_data(buffer_view);
-        //const std::byte* data    = reinterpret_cast<const std::byte*>(data_u8);
+        slot.end();
         if (!load_ok) {
             return {};
         }
@@ -912,7 +906,6 @@ private:
         texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
 
-        slot.end();
         if (generate_mipmap) {
             gl::generate_texture_mipmap(texture->gl_name());
         }
@@ -922,15 +915,17 @@ private:
     void parse_image(const std::size_t image_index)
     {
         const fastgltf::Image& image      = m_asset->images[image_index];
-        const std::string      image_name = safe_resource_name(image.name.c_str(), "image", image_index);
+        const std::string      image_name = safe_resource_name(image.name, "image", image_index);
         log_gltf->trace("Image: image index = {}, name = {}", image_index, image_name);
         std::shared_ptr<erhe::graphics::Texture> erhe_texture;
         std::visit(
             fastgltf::visitor {
-                [](auto& arg) { static_cast<void>(arg); },
+                [](auto& arg) {
+                    static_cast<void>(arg);
+                    ERHE_FATAL("TODO Unsupported image source");
+                },
                 [&](const fastgltf::sources::BufferView& buffer_view_source){
-                    const fastgltf::BufferView& buffer_view = m_asset->bufferViews[buffer_view_source.bufferViewIndex];
-                    erhe_texture = load_png_buffer(buffer_view, image_index);
+                    erhe_texture = load_png_buffer(buffer_view_source.bufferViewIndex, image_index);
                 },
                 [&](const fastgltf::sources::URI& uri){
                     std::filesystem::path relative_path = uri.uri.fspath();
@@ -939,55 +934,6 @@ private:
             },
             image.data
         );
-
-        // FASTGLTF_EXPORT using DataSource = std::variant<
-        //      std::monostate,
-        //      sources::BufferView,
-        //      sources::URI,
-        //      sources::Array,
-        //      sources::Vector,
-        //      sources::CustomBuffer,
-        //      sources::ByteView,
-        //      sources::Fallback
-        // >;
-#if 0
-        std::visit(
-            fastgltf::visitor {
-                //[&](const fastgltf::sources::BufferView& buffer_view){
-                //    static_cast<void>(buffer_view);
-                //},
-                [&](const fastgltf::sources::URI& uri){
-                    std::filesystem::path relative_path = uri.uri.fspath();
-                    erhe_texture = load_image_file(m_arguments.path.replace_filename(relative_path));
-                }//,
-                //[&](const fastgltf::sources::Array& array_){
-                //    static_cast<void>(array_);
-                //},
-                //[&](const fastgltf::sources::Vector& vector_){
-                //    static_cast<void>(vector_);
-                //},
-                //[&](const fastgltf::sources::CustomBuffer& custom_buffer){
-                //    static_cast<void>(custom_buffer);
-                //},
-                //[&](const fastgltf::sources::ByteView& byte_view){
-                //    static_cast<void>(byte_view);
-                //},
-                //[&](const fastgltf::sources::Fallback& fallback){
-                //    static_cast<void>(fallback);
-                //}
-            },
-            image.data
-        );
-#endif
-        //if (image.uri != nullptr) {
-        //    std::filesystem::path uri{image.uri};
-        //    erhe_texture = load_image_file(m_arguments.path.replace_filename(uri));
-        //    if (!erhe_texture) {
-        //        erhe_texture = load_image_file(image.uri);
-        //    }
-        //} else if (image.buffer_view != nullptr) {
-        //    erhe_texture = load_png_buffer(image.buffer_view, image_index);
-        //}
 
         if (erhe_texture) {
             erhe_texture->set_debug_label(image_name);
@@ -999,7 +945,7 @@ private:
     void parse_sampler(const std::size_t sampler_index)
     {
         const fastgltf::Sampler& sampler = m_asset->samplers[sampler_index];
-        const std::string sampler_name = safe_resource_name(sampler.name.c_str(), "sampler", sampler_index);
+        const std::string sampler_name = safe_resource_name(sampler.name, "sampler", sampler_index);
         log_gltf->trace("Sampler: sampler index = {}, name = {}", sampler_index, sampler_name);
 
         erhe::graphics::Sampler_create_info create_info;
@@ -1019,12 +965,8 @@ private:
     void parse_material(const std::size_t material_index)
     {
         const fastgltf::Material& material = m_asset->materials[material_index];
-        const std::string material_name = safe_resource_name(material.name.c_str(), "material", material_index);
-        log_gltf->trace(
-            "Primitive material: id = {}, name = {}",
-            material_index,
-            material_name
-        );
+        const std::string material_name = safe_resource_name(material.name, "material", material_index);
+        log_gltf->trace("Primitive material: id = {}, name = {}", material_index, material_name);
 
         auto new_material = std::make_shared<erhe::primitive::Material>(material_name);
         new_material->set_source_path(m_arguments.path);
@@ -1044,7 +986,7 @@ private:
                 // TODO texture transform
             }
             if (pbr_data.metallicRoughnessTexture.has_value()) {
-                const fastgltf::TextureInfo& texture_info = pbr_data.baseColorTexture.value();
+                const fastgltf::TextureInfo& texture_info = pbr_data.metallicRoughnessTexture.value();
                 const fastgltf::Texture& texture = m_asset->textures[texture_info.textureIndex];
                 if (texture.imageIndex.has_value()) {
                     new_material->textures.metallic_roughness = m_data_out.images[texture.imageIndex.value()];
@@ -1060,10 +1002,10 @@ private:
                 pbr_data.baseColorFactor[2],
                 pbr_data.baseColorFactor[3]
             };
-            new_material->metallic      = pbr_data.metallicFactor;
-            new_material->roughness.x   = pbr_data.roughnessFactor;
-            new_material->roughness.y   = pbr_data.roughnessFactor;
-            new_material->emissive      = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
+            new_material->metallic    = pbr_data.metallicFactor;
+            new_material->roughness.x = pbr_data.roughnessFactor;
+            new_material->roughness.y = pbr_data.roughnessFactor;
+            new_material->emissive    = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
             new_material->enable_flag_bits(erhe::Item_flags::show_in_ui);
             log_gltf->trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
@@ -1072,20 +1014,11 @@ private:
                 pbr_data.baseColorFactor[2],
                 pbr_data.baseColorFactor[3]
             );
-            log_gltf->trace(
-                "Material PBR metallic roughness metallic factor = {}",
-                pbr_data.metallicFactor
-            );
-            log_gltf->trace(
-                "Material PBR metallic roughness roughness factor = {}",
-                pbr_data.roughnessFactor
-            );
+            log_gltf->trace("Material PBR metallic roughness metallic factor = {}", pbr_data.metallicFactor);
+            log_gltf->trace("Material PBR metallic roughness roughness factor = {}", pbr_data.roughnessFactor);
         }
     }
-    void parse_node_transform(
-        const fastgltf::Node&                     node,
-        const std::shared_ptr<erhe::scene::Node>& erhe_node
-    )
+    void parse_node_transform(const fastgltf::Node& node, const std::shared_ptr<erhe::scene::Node>& erhe_node)
     {
         std::visit(
             fastgltf::visitor {
@@ -1113,7 +1046,7 @@ private:
     void parse_camera(const std::size_t camera_index)
     {
         const fastgltf::Camera& camera = m_asset->cameras[camera_index];
-        const std::string camera_name = safe_resource_name(camera.name.c_str(), "camera", camera_index);
+        const std::string camera_name = safe_resource_name(camera.name, "camera", camera_index);
         log_gltf->trace("Camera: camera index = {}, name = {}", camera_index, camera_name);
 
         auto erhe_camera = std::make_shared<erhe::scene::Camera>(camera_name);
@@ -1157,7 +1090,7 @@ private:
     void parse_light(const std::size_t light_index)
     {
         const fastgltf::Light& light = m_asset->lights[light_index];
-        const std::string light_name = safe_resource_name(light.name.c_str(), "light", light_index);
+        const std::string light_name = safe_resource_name(light.name, "light", light_index);
         log_gltf->trace("Light: camera index = {}, name = {}", light_index, light_name);
 
         auto erhe_light = std::make_shared<erhe::scene::Light>(light_name);
@@ -1187,10 +1120,7 @@ private:
     };
     std::vector<Primitive_entry> m_primitive_entries;
 
-    void load_new_primitive_geometry(
-        const fastgltf::Primitive& primitive,
-        Primitive_entry&           primitive_entry
-    )
+    void load_new_primitive_geometry(const fastgltf::Primitive& primitive, Primitive_entry& primitive_entry)
     {
         primitive_entry.triangle_soup.reset();
 
@@ -1311,7 +1241,7 @@ private:
     void parse_skin(const std::size_t skin_index)
     {
         const fastgltf::Skin& skin = m_asset->skins[skin_index];
-        const std::string skin_name = safe_resource_name(skin.name.c_str(), "skin", skin_index);
+        const std::string skin_name = safe_resource_name(skin.name, "skin", skin_index);
         log_gltf->info("Skin: skin index = {}, name = {}", skin_index, skin_name);
 
         auto erhe_skin = std::make_shared<erhe::scene::Skin>(skin_name);
@@ -1352,7 +1282,7 @@ private:
     void parse_mesh(const std::size_t mesh_index)
     {
         const fastgltf::Mesh& mesh = m_asset->meshes[mesh_index];
-        const std::string mesh_name = safe_resource_name(mesh.name.c_str(), "mesh", mesh_index);
+        const std::string mesh_name = safe_resource_name(mesh.name, "mesh", mesh_index);
         log_gltf->trace("Mesh: mesh index = {}, name = {}", mesh_index, mesh_name);
 
         auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
@@ -1371,13 +1301,10 @@ private:
             parse_primitive(erhe_mesh, mesh, i);
         }
     }
-    void parse_node(
-        const std::size_t                         node_index,
-        const std::shared_ptr<erhe::scene::Node>& parent
-    )
+    void parse_node(const std::size_t node_index, const std::shared_ptr<erhe::scene::Node>& parent)
     {
         const fastgltf::Node& node = m_asset->nodes[node_index];
-        const std::string node_name = safe_resource_name(node.name.c_str(), "node", node_index);
+        const std::string node_name = safe_resource_name(node.name, "node", node_index);
         log_gltf->trace("Node: node index = {}, name = {}", node_index, node.name);
         auto erhe_node = std::make_shared<erhe::scene::Node>(node_name);
         erhe_node->set_source_path(m_arguments.path);
@@ -1471,60 +1398,71 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
     }
 
     fastgltf::Asset* asset = asset_expected.get_if();
-    if (asset == nullptr)
-    {
+    if (asset == nullptr) {
         return {};
     }
+
+    const auto resource_name = [&](
+        std::string_view  name,
+        std::string_view  resource_type,
+        const std::size_t resource_index
+    ) -> std::string
+    {
+        if (name.empty() || name.size() == 0) {
+            return fmt::format("{}-{}-{}", path.filename().string(), resource_type, resource_index);
+        }
+        return std::string{name};
+    };
 
     Gltf_scan result;
     result.images.resize(asset->images.size());
     for (std::size_t i = 0, end = asset->images.size(); i < end; ++i) {
-        result.images[i] = safe_resource_name(asset->images[i].name.c_str(), "image", i);
+        result.images[i] = resource_name(asset->images[i].name, "image", i);
     }
 
     result.samplers.resize(asset->samplers.size());
     for (std::size_t i = 0, end = asset->samplers.size(); i < end; ++i) {
-        result.samplers[i] = safe_resource_name(asset->samplers[i].name.c_str(), "sampler", i);
+        result.samplers[i] = resource_name(asset->samplers[i].name, "sampler", i);
     }
 
     result.materials.resize(asset->materials.size());
     for (std::size_t i = 0, end = asset->materials.size(); i < end; ++i) {
-        result.materials[i] = safe_resource_name(asset->materials[i].name.c_str(), "material", i);
+        result.materials[i] = resource_name(asset->materials[i].name, "material", i);
     }
 
     result.cameras.resize(asset->cameras.size());
     for (std::size_t i = 0, end = asset->cameras.size(); i < end; ++i) {
-        result.cameras[i] = safe_resource_name(asset->cameras[i].name.c_str(), "camera", i);
+        result.cameras[i] = resource_name(asset->cameras[i].name, "camera", i);
     }
 
     result.lights.resize(asset->lights.size());
     for (std::size_t i = 0, end = asset->lights.size(); i < end; ++i) {
-        result.lights[i] = safe_resource_name(asset->lights[i].name.c_str(), "light", i);
+        result.lights[i] = resource_name(asset->lights[i].name, "light", i);
     }
 
     result.meshes.resize(asset->meshes.size());
     for (std::size_t i = 0, end = asset->meshes.size(); i < end; ++i) {
-        result.meshes[i] = safe_resource_name(asset->meshes[i].name.c_str(), "mesh", i);
+        result.meshes[i] = resource_name(asset->meshes[i].name, "mesh", i);
     }
 
     result.nodes.resize(asset->nodes.size());
     for (std::size_t i = 0, end = asset->nodes.size(); i < end; ++i) {
-        result.nodes[i] = safe_resource_name(asset->nodes[i].name.c_str(), "node", i);
+        result.nodes[i] = resource_name(asset->nodes[i].name, "node", i);
     }
 
     result.skins.resize(asset->skins.size());
     for (std::size_t i = 0, end = asset->skins.size(); i < end; ++i) {
-        result.skins[i] = safe_resource_name(asset->skins[i].name.c_str(), "skin", i);
+        result.skins[i] = resource_name(asset->skins[i].name, "skin", i);
     }
 
     result.animations.resize(asset->animations.size());
     for (std::size_t i = 0, end = asset->animations.size(); i < end; ++i) {
-        result.animations[i] = safe_resource_name(asset->animations[i].name.c_str(), "animation", i);
+        result.animations[i] = resource_name(asset->animations[i].name, "animation", i);
     }
 
     result.scenes.resize(asset->scenes.size());
     for (std::size_t i = 0, end = asset->scenes.size(); i < end; ++i) {
-        result.scenes[i] = safe_resource_name(asset->scenes[i].name.c_str(), "scene", i);
+        result.scenes[i] = resource_name(asset->scenes[i].name, "scene", i);
     }
 
     return result;

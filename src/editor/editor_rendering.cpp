@@ -824,8 +824,7 @@ void Editor_rendering::render_id(const Render_context& context)
     ERHE_PROFILE_FUNCTION();
 
     const auto scene_root = context.scene_view.get_scene_root();
-    if (!scene_root)
-    {
+    if (!scene_root){
         return;
     }
 

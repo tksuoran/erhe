@@ -129,7 +129,7 @@ public:
 
     // Public API
     [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
-    [[nodiscard]] auto depth_function           (const gl::Depth_function depth_function) const -> gl::Depth_function;
+    [[nodiscard]] auto depth_function           (gl::Depth_function depth_function) const -> gl::Depth_function;
 
     Shader_monitor         shader_monitor;
     OpenGL_state_tracker   opengl_state_tracker;

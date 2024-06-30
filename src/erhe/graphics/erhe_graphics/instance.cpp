@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe_graphics/instance.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -19,12 +21,9 @@
 
 typedef unsigned char GLubyte;
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
-
-namespace
-{
+namespace {
 
 constexpr float float_zero_value{0.0f};
 constexpr float float_one_value {1.0f};
@@ -36,10 +35,7 @@ auto to_int(const std::string& text) -> int
 
 } // namespace
 
-auto split(
-    const std::string& text,
-    const char         separator
-) -> std::vector<std::string>
+auto split(const std::string& text, const char separator) -> std::vector<std::string>
 {
     std::vector<std::string> result;
     const std::size_t length = text.size();
@@ -455,17 +451,12 @@ auto Instance::depth_clear_value_pointer() const -> const float*
     return configuration.reverse_depth ? &float_zero_value : &float_one_value;
 }
 
-auto Instance::depth_function(
-    const gl::Depth_function depth_function
-) const -> gl::Depth_function
+auto Instance::depth_function(const gl::Depth_function depth_function) const -> gl::Depth_function
 {
     return configuration.reverse_depth ? reverse(depth_function) : depth_function;
 }
 
-auto Instance::get_handle(
-    const Texture& texture,
-    const Sampler& sampler
-) const -> uint64_t
+auto Instance::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
     if (info.use_bindless_texture) {
         return gl::get_texture_sampler_handle_arb(
@@ -514,6 +505,8 @@ auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
 
 void Instance::texture_unit_cache_reset(const unsigned int base_texture_unit)
 {
+    SPDLOG_LOGGER_TRACE(log_texture_frame, "texture_unit_cache_reset(base_texture_unit = {})", base_texture_unit);
+
     m_base_texture_unit = base_texture_unit;
     m_texture_units.clear();
 }
@@ -530,7 +523,7 @@ auto Instance::texture_unit_cache_allocate(
     for (std::size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit) {
         if (m_texture_units[texture_unit] == handle) {
             SPDLOG_LOGGER_TRACE(
-                log_texture,
+                log_texture_frame,
                 "cache hit texture unit {} for texture {}, sampler {}",
                 texture_unit,
                 texture_name,
@@ -543,7 +536,7 @@ auto Instance::texture_unit_cache_allocate(
     const std::size_t result = m_texture_units.size();
     m_texture_units.push_back(handle);
     SPDLOG_LOGGER_TRACE(
-        log_texture,
+        log_texture_frame,
         "allocted texture unit {} for texture {}, sampler {}",
         result,
         texture_name,
@@ -573,7 +566,7 @@ auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> size_t
             if (gl::is_texture(texture_name) == GL_TRUE) {
                 gl::bind_texture_unit(m_base_texture_unit + i, texture_name);
                 SPDLOG_LOGGER_TRACE(
-                    log_texture,
+                    log_texture_frame,
                     "texture unit {} + {} = {}: bound texture {}",
                     m_base_texture_unit,
                     i,
@@ -581,7 +574,7 @@ auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> size_t
                     texture_name
                 );
             } else {
-                log_texture->warn(
+                log_texture_frame->warn(
                     "texture unit {} + {} = {}: {} is not a texture",
                     m_base_texture_unit,
                     i,
@@ -597,7 +590,7 @@ auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> size_t
             ) {
                 gl::bind_sampler(m_base_texture_unit + i, sampler_name);
                 SPDLOG_LOGGER_TRACE(
-                    log_texture,
+                    log_texture_frame,
                     "texture unit {} + {} = {}: bound sampler {}",
                     m_base_texture_unit,
                     i,
@@ -606,7 +599,7 @@ auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> size_t
                 );
             } else {
                 gl::bind_sampler(m_base_texture_unit + i, erhe::graphics::get_sampler_from_handle(fallback_handle));
-                log_texture->warn(
+                log_texture_frame->warn(
                     "texture unit {} + {} = {}: {} is not a sampler",
                     m_base_texture_unit,
                     i,

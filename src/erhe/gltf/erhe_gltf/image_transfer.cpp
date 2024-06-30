@@ -39,22 +39,12 @@ Image_transfer::Slot::Slot(erhe::graphics::Instance& graphics_instance)
         gl::Map_buffer_access_mask::map_flush_explicit_bit    |
         gl::Map_buffer_access_mask::map_write_bit;
 
-    if (graphics_instance.info.use_persistent_buffers) {
-        m_storage_mask = m_storage_mask | gl::Buffer_storage_mask::map_persistent_bit;
-        m_access_mask  = m_access_mask  | gl::Map_buffer_access_mask::map_persistent_bit;
-    }
-
     gl::named_buffer_storage(
         m_pbo.gl_name(),
         m_capacity,
         nullptr,
-        gl::Buffer_storage_mask::map_write_bit |
-        gl::Buffer_storage_mask::map_persistent_bit
+        gl::Buffer_storage_mask::map_write_bit
     );
-
-    if (graphics_instance.info.use_persistent_buffers) {
-        map();
-    }
 }
 
 void Image_transfer::Slot::map()
@@ -81,9 +71,7 @@ void Image_transfer::Slot::unmap()
 
 void Image_transfer::Slot::end()
 {
-    if (!m_graphics_instance.info.use_persistent_buffers) {
-        unmap();
-    }
+    unmap();
 }
 
 auto Image_transfer::Slot::begin_span_for(
@@ -99,9 +87,7 @@ auto Image_transfer::Slot::begin_span_for(
     auto byte_count = row_stride * span_height;
     ERHE_VERIFY(byte_count >= 1);
     ERHE_VERIFY(byte_count <= m_capacity);
-    if (!m_graphics_instance.info.use_persistent_buffers) {
-        map();
-    }
+    map();
 
     return m_span.subspan(0, byte_count);
 }

@@ -119,7 +119,8 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
             .mesh_spans         = {},
             .passes             = { &m_renderpass },
             .shadow_texture     = nullptr,
-            .viewport           = output_viewport
+            .viewport           = output_viewport,
+            .debug_label        = "Brdf_slice_rendergraph_node::execute_rendergraph_node()"
         },
         nullptr
     );

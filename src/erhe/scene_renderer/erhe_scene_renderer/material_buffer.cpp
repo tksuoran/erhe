@@ -84,12 +84,12 @@ auto Material_buffer::update(
 {
     ERHE_PROFILE_FUNCTION();
 
-    SPDLOG_LOGGER_TRACE(
-        log_render,
-        "materials.size() = {}, m_material_writer.write_offset = {}",
-        materials.size(),
-        m_writer.write_offset
-    );
+    // SPDLOG_LOGGER_TRACE(
+    //     log_material_buffer,
+    //     "materials.size() = {}, write_offset = {}",
+    //     materials.size(),
+    //     m_writer.write_offset
+    // );
 
     auto&             buffer         = current_buffer();
     const auto        entry_size     = m_material_interface.material_struct.size_bytes();
@@ -131,9 +131,31 @@ auto Material_buffer::update(
 
         if (base_color_handle != c_texture_unused_64) {
             m_used_handles.insert(base_color_handle);
+            SPDLOG_LOGGER_TRACE(
+                log_material_buffer,
+                "[{}] {} base_color_handle = {} - {} - {}",
+                material_index,
+                material->get_name(),
+                material->textures.base_color->get_name(),
+                material->textures.base_color->get_source_path().string(),
+                erhe::graphics::format_texture_handle(base_color_handle)
+            );
+        //} else {
+        //    SPDLOG_LOGGER_TRACE(log_material_buffer, "{}: no base_color_handle", material->get_name());
         }
         if (metallic_roughness_handle != c_texture_unused_64) {
             m_used_handles.insert(metallic_roughness_handle);
+            SPDLOG_LOGGER_TRACE(
+                log_material_buffer,
+                "[{}] {} metallic_roughness_handle = {} - {} - {}",
+                material->get_name(),
+                material->get_name(),
+                material->textures.metallic_roughness->get_name(),
+                material->textures.metallic_roughness->get_source_path().string(),
+                erhe::graphics::format_texture_handle(metallic_roughness_handle)
+            );
+        //} else {
+        //    SPDLOG_LOGGER_TRACE(log_material_buffer, "{}: no metallic_roughness_handle", material->get_name());
         }
 
         material->material_buffer_index = material_index;
@@ -153,9 +175,15 @@ auto Material_buffer::update(
                 std::optional<std::size_t> opt_texture_unit = material->textures.base_color
                     ? m_graphics_instance.texture_unit_cache_allocate(base_color_handle)
                     : std::nullopt;
+                if (opt_texture_unit.has_value()) {
+                    SPDLOG_LOGGER_TRACE(log_material_buffer, "[{}] {} base_color allocated texture unit = {}", material_index, material->get_name(), opt_texture_unit.value());
+                } else {
+                    SPDLOG_LOGGER_TRACE(log_material_buffer, "[{}] {} base_color texture unit not allocated", material_index, material->get_name());
+                }
+
                 const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : c_texture_unused_32);
-                const uint64_t reserved     = static_cast<uint64_t>(0);
-                const uint64_t value        = texture_unit | (reserved << 32);
+                //const uint64_t reserved     = static_cast<uint64_t>(0);
+                const uint64_t value        = texture_unit; // | (reserved << 32);
                 write(gpu_data, m_writer.write_offset + offsets.base_color_texture, as_span(value));
             }
             {
@@ -163,8 +191,8 @@ auto Material_buffer::update(
                     ? m_graphics_instance.texture_unit_cache_allocate(metallic_roughness_handle)
                     : std::nullopt;
                 const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : c_texture_unused_32);
-                const uint64_t reserved     = static_cast<uint64_t>(0);
-                const uint64_t value        = texture_unit | (reserved << 32);
+                //const uint64_t reserved     = static_cast<uint64_t>(0);
+                const uint64_t value        = texture_unit; // | (reserved << 32);
                 write(gpu_data, m_writer.write_offset + offsets.metallic_roughness_texture, as_span(value));
             }
         }
@@ -175,7 +203,7 @@ auto Material_buffer::update(
     }
     m_writer.end();
 
-    SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to material buffer", material_index);
+    // SPDLOG_LOGGER_TRACE(log_material_buffer, "wrote {} entries to material buffer", material_index);
 
     return m_writer.range;
 }

@@ -76,24 +76,27 @@ auto Primitive_buffer::update(
 {
     ERHE_PROFILE_FUNCTION();
 
-    SPDLOG_LOGGER_TRACE(
-        log_render,
-        "meshes.size() = {}, m_writer.write_offset = {}",
-        meshes.size(),
-        m_writer.write_offset
-    );
+    // SPDLOG_LOGGER_TRACE(
+    //     log_primitive_buffer,
+    //     "meshes.size() = {}, write_offset = {}",
+    //     meshes.size(),
+    //     m_writer.write_offset
+    // );
 
     std::size_t primitive_count = 0;
     std::size_t mesh_index = 0;
     for (const auto& mesh : meshes) {
         ERHE_VERIFY(mesh);
         ++mesh_index;
-        if (!filter(mesh->get_flag_bits())) {
-            continue;
-        }
-
         const auto* node = mesh->get_node();
-        if (node == nullptr) {
+        ERHE_VERIFY(node != nullptr);
+        //if (node == nullptr) {
+        //    SPDLOG_LOGGER_TRACE(log_primitive_buffer, "{} does not have node", mesh->get_name());
+        //    continue;
+        //}
+
+        if (!filter(mesh->get_flag_bits())) {
+            // SPDLOG_LOGGER_TRACE(log_primitive_buffer, "node = {}, mesh = {} does not pass filter", node->get_name(), mesh->get_name());
             continue;
         }
 
@@ -105,7 +108,7 @@ auto Primitive_buffer::update(
     const auto&       offsets            = m_primitive_interface.offsets;
     const std::size_t max_byte_count     = primitive_count * entry_size;
     const auto        primitive_gpu_data = m_writer.begin(&buffer, max_byte_count);
-    mesh_index = 0;
+    std::size_t primitive_index    = 0;
     for (const auto& mesh : meshes) {
         ++mesh_index;
 
@@ -139,14 +142,6 @@ auto Primitive_buffer::update(
                 break;
             }
 
-            //// log_render->info(
-            ////     "writing mesh {} node {} primitive {} offset = {}",
-            ////     mesh_index - 1,
-            ////     node->describe(),
-            ////     mesh_primitive_index,
-            ////     m_writer.write_offset
-            //// );
-
             const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
             const uint32_t count         = static_cast<uint32_t>(renderable_mesh.triangle_fill_indices.index_count);
             if (count == 0) {
@@ -166,9 +161,20 @@ auto Primitive_buffer::update(
             const glm::vec3 id_offset_vec3   = erhe::math::vec3_from_uint(m_id_offset);
             const glm::vec4 id_offset_vec4   = glm::vec4{id_offset_vec3, 0.0f};
             const uint32_t  material_index   = (material != nullptr) ? material->material_buffer_index : 0u;
-            const auto      skin             = mesh->skin;
+            const auto&     skin             = mesh->skin;
             const float     skinning_factor  = skin ? 1.0f : 0.0f;
             const uint32_t  base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0;
+
+            SPDLOG_LOGGER_TRACE(
+                log_primitive_buffer, 
+                "[{}] node {}, mesh {}, material {}, mat. idx = {}, offset = {}",
+                primitive_index,
+                node->describe(),
+                mesh_index - 1,
+                (material != nullptr) ? material->get_name() : std::string{},
+                material_index,
+                m_writer.write_offset
+            );
 
             using erhe::graphics::as_span;
             const auto color_span =
@@ -207,12 +213,13 @@ auto Primitive_buffer::update(
 
                 m_id_offset += count;
             }
+            ++primitive_index;
         }
     }
 
     m_writer.end();
 
-    SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to primitive buffer", primitive_index);
+    // SPDLOG_LOGGER_TRACE(log_primitive_buffer, "wrote {} entries to primitive buffer", primitive_index);
 
     return m_writer.range;
 }

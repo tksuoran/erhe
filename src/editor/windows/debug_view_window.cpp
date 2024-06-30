@@ -189,7 +189,8 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
             .mesh_spans         = {},
             .passes             = { &m_renderpass },
             .shadow_texture     = texture.get(),
-            .viewport           = output_viewport
+            .viewport           = output_viewport,
+            .debug_label        = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
         },
         light_projection_transforms.light
     );

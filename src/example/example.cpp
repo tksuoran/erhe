@@ -184,7 +184,8 @@ public:
                 .shadow_texture         = nullptr,
                 .viewport               = viewport,
                 .filter                 = erhe::Item_filter{},
-                .override_shader_stages = nullptr
+                .override_shader_stages = nullptr,
+                .debug_label            = "example main render"
             }
         );
 
@@ -407,6 +408,7 @@ void run_example()
             .image_transfer    = image_transfer,
             .root_node         = scene.get_root_node(),
             .path              = "res/models/Box.gltf"
+            //.path              = "res/assets/SM_Deccer_Cubes_Textured.glb"
         }
     );
 
