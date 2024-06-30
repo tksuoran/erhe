@@ -33,6 +33,7 @@ target_link_libraries(
     erhe::math
     erhe::primitive
     erhe::profile
+    erhe::raytrace # TODO Make it optional - glTF loader currently uses it and log needs to be initialized..
     erhe::renderer
     erhe::scene
     erhe::scene_renderer

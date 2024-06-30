@@ -19,6 +19,7 @@
 #include "erhe_item/item_log.hpp"
 #include "erhe_log/log.hpp"
 #include "erhe_primitive/primitive_log.hpp"
+#include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -375,6 +376,7 @@ void run_example()
     erhe::gltf::initialize_logging();
     erhe::graphics::initialize_logging();
     erhe::primitive::initialize_logging();
+    erhe::raytrace::initialize_logging();
     erhe::renderer::initialize_logging();
     erhe::scene::initialize_logging();
     erhe::scene_renderer::initialize_logging();
@@ -407,8 +409,8 @@ void run_example()
             .graphics_instance = graphics_instance,
             .image_transfer    = image_transfer,
             .root_node         = scene.get_root_node(),
-            .path              = "res/models/Box.gltf"
-            //.path              = "res/assets/SM_Deccer_Cubes_Textured.glb"
+            //.path              = "res/models/Box.gltf"
+            .path              = "res/models/SM_Deccer_Cubes_Textured.glb"
         }
     );
 
