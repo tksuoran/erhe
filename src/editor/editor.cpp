@@ -11,7 +11,6 @@
 #include "time.hpp"
 
 #include "graphics/icon_set.hpp"
-#include "graphics/image_transfer.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -157,7 +156,6 @@ public:
         , m_editor_settings       {m_editor_message_bus}
         , m_graphics_instance     {m_context_window}
         , m_imgui_renderer        {m_graphics_instance, m_editor_settings.imgui}
-        , m_image_transfer        {m_graphics_instance}
         , m_line_renderer_set     {m_graphics_instance}
         , m_program_interface     {m_graphics_instance}
         , m_rendergraph           {m_graphics_instance}
@@ -448,7 +446,6 @@ public:
     Editor_settings                         m_editor_settings;
     erhe::graphics::Instance                m_graphics_instance;
     erhe::imgui::Imgui_renderer             m_imgui_renderer;
-    Image_transfer                          m_image_transfer;
     erhe::renderer::Line_renderer_set       m_line_renderer_set;
     erhe::scene_renderer::Program_interface m_program_interface;
     erhe::rendergraph::Rendergraph          m_rendergraph;
