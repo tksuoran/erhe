@@ -338,10 +338,7 @@ void Selection::setup_xr_bindings(
 }
 #endif
 
-void Selection_tool::handle_priority_update(
-    const int old_priority,
-    const int new_priority
-)
+void Selection_tool::handle_priority_update(int old_priority, int new_priority)
 {
     if (new_priority < old_priority) {
         m_context.selection->clear_selection();
@@ -360,7 +357,36 @@ auto Selection::delete_selection() -> bool
     }
 
     Compound_operation::Parameters compound_parameters;
-    for (auto& item : m_selection) {
+    std::vector<std::shared_ptr<erhe::Item_base>> recursive_selection;
+    auto collect_item = [&recursive_selection](erhe::Hierarchy& item) -> bool {
+        recursive_selection.push_back(item.shared_from_this());
+        return true;
+    };
+    for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
+        const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+        if (!hierarchy) {
+            continue;
+        }
+        erhe::Hierarchy& hierarchy_reference = *hierarchy.get();
+        hierarchy_reference.for_each<erhe::Hierarchy>(collect_item);
+    }
+
+    // Sort deepest first
+    std::sort(
+        recursive_selection.begin(),
+        recursive_selection.end(),
+        [](const std::shared_ptr<erhe::Item_base>& lhs, const std::shared_ptr<erhe::Item_base>& rhs)
+        {
+            const std::shared_ptr<erhe::Hierarchy> lhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(lhs);
+            const std::shared_ptr<erhe::Hierarchy> rhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(rhs);
+            size_t lhs_depth = lhs_hierarchy ? lhs_hierarchy->get_depth() : 0;
+            size_t rhs_depth = rhs_hierarchy ? rhs_hierarchy->get_depth() : 0;
+            return lhs_depth > rhs_depth;
+        }
+    );
+
+    //for (auto& item : m_selection) {
+    for (auto& item : recursive_selection) {
         // TODO
         const auto hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (!hierarchy) {

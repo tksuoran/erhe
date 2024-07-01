@@ -135,7 +135,7 @@ auto Content_library_node::combo(
         }
 
         // TODO Consideer keeping flat vector of entries
-        for_each<Content_library_node>(
+        for_each_const<Content_library_node>(
             [this, &context, &selection_changed, &in_out_selected_entry](const Content_library_node& node) -> bool {
                 auto node_item_shared = std::dynamic_pointer_cast<T>(node.item);
                 if (!node_item_shared) {
@@ -170,7 +170,7 @@ auto Content_library_node::combo(
             ? *(static_cast<erhe::Item_base**>(drag_item_payload->Data))
             : drag_node->item.get();
         if (drag_item != nullptr) {
-            for_each<Content_library_node>(
+            for_each_const<Content_library_node>(
                 [&selection_changed, &in_out_selected_entry, drag_item](const Content_library_node& node) -> bool {
                     auto node_item_shared = std::dynamic_pointer_cast<T>(node.item);
                     if (node_item_shared && (node_item_shared.get() == drag_item)) {
