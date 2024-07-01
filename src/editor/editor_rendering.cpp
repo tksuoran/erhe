@@ -315,9 +315,7 @@ void Editor_rendering::handle_graphics_settings_changed(Graphics_preset* graphic
     }
 }
 
-auto Editor_rendering::get_shadow_node_for_view(
-    const Scene_view& scene_view
-) -> std::shared_ptr<Shadow_render_node>
+auto Editor_rendering::get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>
 {
     auto i = std::find_if(
         m_all_shadow_render_nodes.begin(),
@@ -775,9 +773,7 @@ void Editor_rendering::render()
     begin_frame();
 }
 
-void Editor_rendering::render_viewport_main(
-    const Render_context& context
-)
+void Editor_rendering::render_viewport_main(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 

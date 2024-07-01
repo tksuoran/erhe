@@ -390,7 +390,7 @@ auto Brush::make_instance(
 
     auto node = std::make_shared<erhe::scene::Node>(name);
     auto mesh = std::make_shared<erhe::scene::Mesh>(name);
-    mesh->add_primitive(scaled.primitive);
+    mesh->add_primitive(scaled.primitive, instance_create_info.material);
 
     ERHE_VERIFY(instance_create_info.scene_root != nullptr);
 

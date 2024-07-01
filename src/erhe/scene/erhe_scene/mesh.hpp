@@ -8,9 +8,6 @@
 #include <memory>
 #include <vector>
 
-namespace erhe::geometry {
-    class Geometry;
-}
 namespace erhe::raytrace {
     class IGeometry;
     class IInstance;
@@ -57,6 +54,7 @@ public:
     // Public API
     void clear_primitives    ();
     void add_primitive       (erhe::primitive::Primitive primitive);
+    void add_primitive       (erhe::primitive::Primitive primitive, const std::shared_ptr<erhe::primitive::Material>& material);
     void set_primitives      (const std::vector<erhe::primitive::Primitive>& primitives);
     void set_rt_mask         (uint32_t rt_mask);
     void attach_rt_to_scene  (erhe::raytrace::IScene* rt_scene);

@@ -112,6 +112,9 @@ public:
     void link_to                   (std::shared_ptr<Post_processing_node> node);
     void set_final_output          (std::shared_ptr<Rendergraph_node> node);
 
+    void set_shader_stages_variant(Shader_stages_variant variant);
+    auto get_shader_stages_variant() const -> Shader_stages_variant;
+
     [[nodiscard]] auto ini_label               () const -> const char* { return m_ini_label; }
     [[nodiscard]] auto viewport_from_window    (const glm::vec2 position_in_window) const -> glm::vec2;
     [[nodiscard]] auto project_to_viewport     (const glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;

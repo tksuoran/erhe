@@ -36,6 +36,19 @@ void Mesh::add_primitive(erhe::primitive::Primitive primitive)
     }
 }
 
+void Mesh::add_primitive(erhe::primitive::Primitive primitive, const std::shared_ptr<erhe::primitive::Material>& material)
+{
+    const std::size_t primitive_index = m_primitives.size();
+    m_primitives.push_back(primitive);
+    m_primitives.back().set_material(material);
+
+    erhe::primitive::Primitive_raytrace& primitive_raytrace = primitive.get_geometry_raytrace();
+    const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.m_rt_geometry;
+    if (rt_geometry) {
+        m_rt_primitives.emplace_back(this, primitive_index, rt_geometry.get());
+    }
+}
+
 void Mesh::set_primitives(const std::vector<erhe::primitive::Primitive>& primitives)
 {
     m_primitives = primitives;

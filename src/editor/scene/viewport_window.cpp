@@ -620,6 +620,16 @@ auto Viewport_window::get_final_output() -> erhe::rendergraph::Rendergraph_node*
     return m_final_output.get();
 }
 
+void Viewport_window::set_shader_stages_variant(Shader_stages_variant variant)
+{
+    m_shader_stages_variant = variant;
+}
+
+auto Viewport_window::get_shader_stages_variant() const -> Shader_stages_variant
+{
+    return m_shader_stages_variant;
+}
+
 auto Viewport_window::get_closest_point_on_line(
     const glm::vec3 P0,
     const glm::vec3 P1
