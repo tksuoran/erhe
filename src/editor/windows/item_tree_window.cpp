@@ -62,9 +62,7 @@ void Item_tree_window::set_item_filter(const erhe::Item_filter& filter)
     m_filter = filter;
 }
 
-void Item_tree_window::set_item_callback(
-    std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun
-)
+void Item_tree_window::set_item_callback(std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun)
 {
     m_item_callback = fun;
 }
@@ -76,9 +74,7 @@ void Item_tree_window::clear_selection()
     m_context.selection->clear_selection();
 }
 
-void Item_tree_window::recursive_add_to_selection(
-    const std::shared_ptr<erhe::Item_base>& item
-)
+void Item_tree_window::recursive_add_to_selection(const std::shared_ptr<erhe::Item_base>& item)
 {
     m_context.selection->add_to_selection(item);
     auto hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
@@ -106,10 +102,7 @@ void Item_tree_window::select_all()
 }
 
 template <typename T, typename U>
-[[nodiscard]] auto is_in(
-    const T&              item,
-    const std::vector<U>& items
-) -> bool
+[[nodiscard]] auto is_in(const T& item, const std::vector<U>& items) -> bool
 {
     return std::find(
         items.begin(),
@@ -450,9 +443,7 @@ void drag_and_drop_gradient_preview(
 
 }
 
-auto Item_tree_window::drag_and_drop_target(
-    const std::shared_ptr<erhe::Item_base>& item
-) -> bool
+auto Item_tree_window::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -538,18 +529,13 @@ auto Item_tree_window::drag_and_drop_target(
     return false;
 }
 
-void Item_tree_window::set_item_selection_terminator(
-    const std::shared_ptr<erhe::Item_base>& item
-)
+void Item_tree_window::set_item_selection_terminator(const std::shared_ptr<erhe::Item_base>& item)
 {
     auto& range_selection = m_context.selection->range_selection();
     range_selection.set_terminator(item);
 }
 
-void Item_tree_window::set_item_selection(
-    const std::shared_ptr<erhe::Item_base>& item,
-    const bool                              selected
-)
+void Item_tree_window::set_item_selection(const std::shared_ptr<erhe::Item_base>& item, bool selected)
 {
     if (selected) {
         m_context.selection->add_to_selection(item);
@@ -558,9 +544,7 @@ void Item_tree_window::set_item_selection(
     }
 }
 
-void Item_tree_window::item_update_selection(
-    const std::shared_ptr<erhe::Item_base>& item
-)
+void Item_tree_window::item_update_selection(const std::shared_ptr<erhe::Item_base>& item)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -568,13 +552,49 @@ void Item_tree_window::item_update_selection(
 
     drag_and_drop_source(item);
 
-    const bool shift_down     = ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift);
-    const bool ctrl_down      = ImGui::IsKeyDown(ImGuiKey_LeftCtrl ) || ImGui::IsKeyDown(ImGuiKey_RightCtrl);
-    const bool mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
-    const bool focused        = ImGui::IsItemFocused();
-    const bool hovered        = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+    const bool shift_down          = ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift);
+    const bool ctrl_down           = ImGui::IsKeyDown(ImGuiKey_LeftCtrl ) || ImGui::IsKeyDown(ImGuiKey_RightCtrl);
+    const bool mouse_down          = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    const bool mouse_released      = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+    const bool focused             = ImGui::IsItemFocused();
+    const bool hovered             = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+    const bool was_selected        = item->is_selected();
+    const bool non_mouse_activated = ImGui::IsItemActivated() && !mouse_released && !mouse_down;
 
-    if (hovered && mouse_released) {
+    if (!shift_down) {
+        m_shift_down_range_selection_started = false;
+    }
+
+    std::shared_ptr<erhe::Item_base> last_focus_item = m_last_focus_item.lock();
+    bool have_last_focus_item = last_focus_item.operator bool();
+    bool focus_change = have_last_focus_item && focused && (last_focus_item != item);
+
+    if (focus_change) {
+        SPDLOG_LOGGER_TRACE(
+            log_tree,
+            "focus change from {} to {}: {}, {}, {}",
+            last_focus_item->get_name(),
+            item->get_name(),
+            shift_down ? "shift" : "no shift",
+            m_shift_down_range_selection_started ? "range already started" : "range not yet started",
+            have_last_focus_item ? "have last focus item" : "no last focus item"
+        );
+        if (shift_down && !m_shift_down_range_selection_started && have_last_focus_item) {
+            m_shift_down_range_selection_started = true;
+            range_selection.reset();
+            set_item_selection_terminator(last_focus_item);
+            SPDLOG_LOGGER_TRACE(
+                log_tree,
+                "nav with shift: resetting range {}, {} last {}, {}",
+                item->get_type_name(),
+                item->get_name(),
+                last_focus_item->get_type_name(),
+                last_focus_item->get_name()
+            );
+        }
+    }
+
+    if (non_mouse_activated || (hovered && mouse_released)) {
         if (ctrl_down) {
             range_selection.reset();
             if (item->is_selected()) {
@@ -592,7 +612,6 @@ void Item_tree_window::item_update_selection(
             );
             set_item_selection_terminator(item);
         } else {
-            const bool was_selected = item->is_selected();
             range_selection.reset();
             m_context.selection->clear_selection();
             SPDLOG_LOGGER_TRACE(
@@ -647,14 +666,11 @@ void Item_tree_window::item_update_selection(
     }
 }
 
-void Item_tree_window::item_popup_menu(
-    const std::shared_ptr<erhe::Item_base>& item
-)
+void Item_tree_window::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 {
     const auto& node       = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     Scene_root* scene_root = static_cast<Scene_root*>(item->get_item_host());
-    if (!node || (scene_root == nullptr))
-    {
+    if (!node || (scene_root == nullptr)) {
         return;
     }
 
@@ -829,9 +845,7 @@ auto Item_tree_window::item_icon_and_text(
     };
 }
 
-auto Item_tree_window::should_show(
-    const std::shared_ptr<erhe::Item_base>& item
-) -> Show_mode
+auto Item_tree_window::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode
 {
     const bool show_by_type = m_filter(item->get_flag_bits());
     const bool show_by_name = m_text_filter.PassFilter(item->get_name().c_str());
@@ -865,9 +879,7 @@ auto Item_tree_window::should_show(
     return Show_mode::Hide;
 }
 
-void Item_tree_window::imgui_item_node(
-    const std::shared_ptr<erhe::Item_base>& item
-)
+void Item_tree_window::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
 {
     // Special handling for invisible parents (scene root)
     if (erhe::bit::test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {

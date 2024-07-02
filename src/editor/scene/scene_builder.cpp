@@ -940,6 +940,8 @@ void Scene_builder::make_mesh_nodes()
 
         for (const auto& brush : m_scene_brushes) {
             for (int i = 0; i < config.instance_count; ++i) {
+                const erhe::math::Bounding_box& bounding_box = brush->get_bounding_box();
+                ERHE_VERIFY(bounding_box.is_valid());
                 pack_entries.emplace_back(brush.get());
             }
         }

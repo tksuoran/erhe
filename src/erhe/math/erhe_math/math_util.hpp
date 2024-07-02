@@ -772,10 +772,16 @@ public:
         const auto d = diagonal();
         return d.x * d.y * d.z;
     }
+    [[nodiscard]] auto is_valid() const -> bool
+    {
+        return
+            (min.x <= max.x) ||
+            (min.y <= max.y) ||
+            (min.z <= max.z);
+    }
 
     glm::vec3 min{std::numeric_limits<float>::max()}; // bounding box
     glm::vec3 max{std::numeric_limits<float>::lowest()};
-
 };
 
 class Bounding_sphere

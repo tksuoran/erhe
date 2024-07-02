@@ -129,7 +129,6 @@ auto Brush::get_type_name() const -> std::string_view
 Brush::Brush(const Brush_data& create_info)
     : Item       {create_info.get_name()}
     , m_data     {create_info}
-    , m_primitive{create_info.geometry}
 {
 }
 
@@ -137,6 +136,7 @@ void Brush::late_initialize()
 {
     const auto geometry = get_geometry();
     ERHE_VERIFY(geometry);
+    m_primitive = erhe::primitive::Primitive{geometry};
     if (!m_primitive.has_renderable_triangles()) {
         m_primitive.make_renderable_mesh(m_data.build_info, m_data.normal_style);
     }
@@ -421,8 +421,11 @@ auto Brush::make_instance(
 
 [[nodiscard]] auto Brush::get_bounding_box() -> erhe::math::Bounding_box
 {
-    if (!m_primitive.has_renderable_triangles()) {
-        m_primitive.make_renderable_mesh(m_data.build_info, m_data.normal_style);
+    if (
+        !m_primitive.has_renderable_triangles() ||
+        !m_primitive.get_renderable_mesh().bounding_box.is_valid()
+    ) {
+        late_initialize();
     }
     erhe::primitive::Renderable_mesh& renderable_mesh = m_primitive.get_renderable_mesh();
     return renderable_mesh.bounding_box;

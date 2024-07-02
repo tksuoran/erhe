@@ -133,28 +133,25 @@ void main(void)
     EndPrimitive();
 
 #else
-
+    // CCW Triangle strip indices: 0123 = adbc
+    // CCW Triangles indices:      012, 213 = adb, bdc
+    // a-b  0-2
+    // |/|  |/|
+    // d-c  1-3
 #if STRIP
-#if 1
-    gl_Position = d; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = a; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = c; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
-    gl_Position = b; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
-#else
     gl_Position = a; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
     gl_Position = d; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
     gl_Position = b; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
     gl_Position = c; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
-#endif
     EndPrimitive();
 #else
+    gl_Position = a; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
     gl_Position = d; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = a; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = c; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
-    EndPrimitive();
-    gl_Position = c; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
-    gl_Position = a; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
     gl_Position = b; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
+    EndPrimitive();
+    gl_Position = b; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
+    gl_Position = d; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
+    gl_Position = c; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
     EndPrimitive();
 #endif
 

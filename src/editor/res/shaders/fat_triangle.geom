@@ -199,27 +199,25 @@ void do_line(uint i0, uint i1)
 
 #else
 
+    // CCW Triangle strip indices: 0123 = adbc
+    // CCW Triangles indices:      012, 213 = adb, bdc
+    // a-b  0-2
+    // |/|  |/|
+    // d-c  1-3
 #if ERHE_LINE_SHADER_STRIP
-#if 1
-    gl_Position = d; v_position = position0; v_color = color0; v_line_width = width0; EmitVertex();
-    gl_Position = a; v_position = position0; v_color = color0; v_line_width = width0; EmitVertex();
-    gl_Position = c; v_position = position1; v_color = color1; v_line_width = width1; EmitVertex();
-    gl_Position = b; v_position = position1; v_color = color1; v_line_width = width1; EmitVertex();
-#else
     gl_Position = a; v_position = position0; v_color = color0; v_line_width = width0; EmitVertex();
     gl_Position = d; v_position = position0; v_color = color0; v_line_width = width0; EmitVertex();
     gl_Position = b; v_position = position1; v_color = color1; v_line_width = width1; EmitVertex();
     gl_Position = c; v_position = position1; v_color = color1; v_line_width = width1; EmitVertex();
-#endif
     EndPrimitive();
 #else
+    gl_Position = a; v_position = position0; v_color = color0; v_line_width = width0; EmitVertex();
     gl_Position = d; v_position = position0; v_color = color0; v_line_width = width0; EmitVertex();
-    gl_Position = a; v_position = position0; v_color = color0; v_line_width = width0; EmitVertex();
-    gl_Position = c; v_position = position1; v_color = color1; v_line_width = width1; EmitVertex();
-    EndPrimitive();
-    gl_Position = c; v_position = position1; v_color = color1; v_line_width = width1; EmitVertex();
-    gl_Position = a; v_position = position0; v_color = color0; v_line_width = width0; EmitVertex();
     gl_Position = b; v_position = position1; v_color = color1; v_line_width = width1; EmitVertex();
+    EndPrimitive();
+    gl_Position = b; v_position = position1; v_color = color1; v_line_width = width1; EmitVertex();
+    gl_Position = d; v_position = position0; v_color = color0; v_line_width = width0; EmitVertex();
+    gl_Position = c; v_position = position1; v_color = color1; v_line_width = width1; EmitVertex();
     EndPrimitive();
 #endif
 

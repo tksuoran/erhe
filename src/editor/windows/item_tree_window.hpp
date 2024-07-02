@@ -140,7 +140,7 @@ private:
     std::shared_ptr<erhe::Item_base>   m_popup_item;
     std::string                        m_popup_id_string;
     unsigned int                       m_popup_id{0};
-
+    bool                               m_shift_down_range_selection_started{false};
 };
 
 } // namespace editor

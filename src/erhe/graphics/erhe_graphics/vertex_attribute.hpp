@@ -133,9 +133,9 @@ public:
     [[nodiscard]] static auto normal1_float3() -> Vertex_attribute
     {
         return Vertex_attribute{
-            .usage       = { Usage_type::normal },
-            .shader_type = Glsl_type::float_vec3,
-            .data_type   = erhe::dataformat::Format::format_32_vec3_float,
+            .usage         = { Usage_type::normal, 1 },
+            .shader_type   = Glsl_type::float_vec3,
+            .data_type     = erhe::dataformat::Format::format_32_vec3_float,
             .default_value = glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}
         };
     }

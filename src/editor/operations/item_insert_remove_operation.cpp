@@ -10,18 +10,40 @@
 namespace editor
 {
 
+auto c_str(Item_insert_remove_operation::Mode mode) -> const char*
+{
+    switch (mode) {
+        //using enum Mode;
+        case Item_insert_remove_operation::Mode::insert: return "Item_insert";
+        case Item_insert_remove_operation::Mode::remove: return "Item_remove";
+        default: return "?";
+    }
+}
+
 auto Item_insert_remove_operation::describe() const -> std::string
 {
     ERHE_VERIFY(m_item);
+    bool before_parent = m_before_parent.operator bool();
+    bool after_parent = m_after_parent.operator bool();
+    const erhe::Hierarchy* parent = before_parent ? m_before_parent.get() : m_after_parent.get();
     std::stringstream ss;
-    switch (m_mode) {
-        //using enum Mode;
-        case Mode::insert: ss << "Item_insert "; break;
-        case Mode::remove: ss << "Item_remove "; break;
-        default: break;
+    bool first = true;
+    for (const std::shared_ptr<Item_parent_change_operation>& op : m_parent_changes) {
+        if (!first) {
+            ss << ", ";
+        }
+        ss << op->describe();
     }
-    ss << m_item->get_name() << " ";
-    return ss.str();
+
+    return fmt::format(
+        "{} {}, {}{}, {} parent changes: {}",
+        c_str(m_mode),
+        m_item->get_name(),
+        before_parent ? "before parent = " : after_parent ? "after parent = " : "no parent",
+        (parent != nullptr) ? parent->get_name() : "",
+        m_parent_changes.size(),
+        ss.str()
+    );
 }
 
 Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& parameters)
@@ -62,6 +84,8 @@ void Item_insert_remove_operation::execute(Editor_context& context)
 
     if (m_mode == Mode::remove) {
         m_before_parent = m_item->get_parent().lock();
+        m_index_in_parent = m_item->get_index_in_parent();
+
         const auto& children = m_item->get_children();
         m_parent_changes.clear();
         for (const auto& child : children) {
@@ -75,13 +99,15 @@ void Item_insert_remove_operation::execute(Editor_context& context)
                 )
             );
         }
+    } else {
+        m_index_in_parent = 0;
     }
 
     for (auto& child_parent_change : m_parent_changes) {
         child_parent_change->execute(context);
     }
 
-    m_item->set_parent(m_after_parent);
+    m_item->set_parent(m_after_parent, m_index_in_parent);
 
     context.selection->set_selection(m_selection_after);
 }
@@ -93,7 +119,7 @@ void Item_insert_remove_operation::undo(Editor_context& context)
     if (m_mode == Mode::remove) {
         m_after_parent = m_item->get_parent().lock();
     }
-    m_item->set_parent(m_before_parent);
+    m_item->set_parent(m_before_parent, m_index_in_parent);
 
     for (
         auto i = rbegin(m_parent_changes),

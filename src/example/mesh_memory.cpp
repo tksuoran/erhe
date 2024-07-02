@@ -31,6 +31,7 @@ Mesh_memory::Mesh_memory(
     , vertex_format{
         erhe::graphics::Vertex_attribute::position_float3 (),
         erhe::graphics::Vertex_attribute::normal0_float3  (),
+        erhe::graphics::Vertex_attribute::normal1_float3  (), // Needed for edge line wide shader bias computation
         erhe::graphics::Vertex_attribute::texcoord0_float2(),
         erhe::graphics::Vertex_attribute::color_ubyte4    ()
     }

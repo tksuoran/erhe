@@ -665,7 +665,7 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     colors[ImGuiCol_ButtonHovered]             = ImVec4(0.30f, 0.36f, 0.37f, 1.00f);
     colors[ImGuiCol_ButtonActive]              = ImVec4(0.42f, 0.45f, 0.48f, 1.00f);
     colors[ImGuiCol_Header]                    = ImVec4(0.12f, 0.37f, 0.61f, 0.48f);
-    colors[ImGuiCol_HeaderHovered]             = ImVec4(0.10f, 0.38f, 0.65f, 0.56f);
+    colors[ImGuiCol_HeaderHovered]             = ImVec4(0.10f, 0.56f, 0.65f, 0.56f);
     colors[ImGuiCol_HeaderActive]              = ImVec4(0.10f, 0.41f, 0.71f, 0.63f);
     colors[ImGuiCol_Separator]                 = ImVec4(0.17f, 0.31f, 0.34f, 1.00f);
     colors[ImGuiCol_SeparatorHovered]          = ImVec4(0.11f, 0.34f, 0.38f, 1.00f);

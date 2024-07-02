@@ -31,7 +31,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <span>
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cassert>
 #include <chrono>
