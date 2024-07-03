@@ -340,6 +340,16 @@ void Brush_tool::update_mesh_node_transform()
 
     const auto  transform    = m_hover.mesh ? get_hover_mesh_transform() : get_hover_grid_transform();
     const auto& brush_scaled = brush->get_scaled(m_transform_scale);
+
+    // TODO Unparent, to remove raytrace primitives to raytrace scene.
+    //      This is a workaround for clear_primitives() issue below
+    m_brush_node->set_parent({});
+
+    const std::shared_ptr<erhe::primitive::Material>& material = m_brush_mesh->get_primitives().front().get_material();
+    m_brush_mesh->clear_primitives(); // TODO This is dangerous, as primitives *must* first be removed from rt_scene
+    m_brush_mesh->add_primitive(brush_scaled.primitive);
+    m_brush_mesh->get_mutable_primitives().front().set_material(material);
+
     if (m_hover.mesh) {
         m_brush_node->set_parent(m_hover.mesh->get_node());
         m_brush_node->set_parent_from_node(transform);
@@ -352,10 +362,6 @@ void Brush_tool::update_mesh_node_transform()
         m_brush_node->set_parent_from_node(transform);
     }
 
-    const std::shared_ptr<erhe::primitive::Material>& material = m_brush_mesh->get_primitives().front().get_material();
-    m_brush_mesh->clear_primitives();
-    m_brush_mesh->add_primitive(brush_scaled.primitive);
-    m_brush_mesh->get_mutable_primitives().front().set_material(material);
 }
 
 void Brush_tool::do_insert_operation()

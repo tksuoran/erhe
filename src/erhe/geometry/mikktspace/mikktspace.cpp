@@ -1561,7 +1561,7 @@ static void BuildNeighborsFast(STriInfo pTriInfos[], SEdge * pEdges, const int p
 		int i0_A, i1_A;
 		int edgenum_A, edgenum_B=0;	// 0,1 or 2
 		GetEdge(&i0_A, &i1_A, &edgenum_A, &piTriListIn[f_*3], i0, i1);	// resolve index ordering and edge_num
-		bUnassigned_A = pTriInfos[f].FaceNeighbors[edgenum_A] == -1 ? TTRUE : TFALSE;
+		bUnassigned_A = pTriInfos[f_].FaceNeighbors[edgenum_A] == -1 ? TTRUE : TFALSE;
 
 		if (bUnassigned_A)
 		{
@@ -1588,7 +1588,7 @@ static void BuildNeighborsFast(STriInfo pTriInfos[], SEdge * pEdges, const int p
 				int t_ = pEdges[j].u.f;
 				pTriInfos[f_].FaceNeighbors[edgenum_A] = t_;
 				//assert(pTriInfos[t].FaceNeighbors[edgenum_B]==-1);
-				pTriInfos[t_].FaceNeighbors[edgenum_B] = f;
+				pTriInfos[t_].FaceNeighbors[edgenum_B] = f_;
 			}
 		}
 	}
