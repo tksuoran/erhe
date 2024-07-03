@@ -103,60 +103,60 @@ auto Geometry::compute_tangents(
 
         [[nodiscard]] auto get_triangle(const int iFace) -> Triangle&
         {
+            assert(iFace < triangles.size());
             return triangles[iFace];
         }
 
         [[nodiscard]] auto get_triangle(const int iFace) const -> const Triangle&
         {
+            assert(iFace < triangles.size());
             return triangles[iFace];
         }
 
         [[nodiscard]] auto get_polygon_id(const int iFace) const -> Polygon_id
         {
+            assert(iFace < triangles.size());
             return get_triangle(iFace).polygon_id;
         }
 
         [[nodiscard]] auto get_polygon(const int iFace) -> Polygon&
         {
-            return geometry->polygons[get_polygon_id(iFace)];
+            const Polygon_id polygon_id = get_polygon_id(iFace);
+            assert(polygon_id < geometry->polygons.size());
+            return geometry->polygons[polygon_id];
         }
 
         [[nodiscard]] auto get_polygon(const int iFace) const -> const Polygon&
         {
-            return geometry->polygons[get_polygon_id(iFace)];
+            const Polygon_id polygon_id = get_polygon_id(iFace);
+            assert(polygon_id < geometry->polygons.size());
+            return geometry->polygons[polygon_id];
         }
 
-        [[nodiscard]] auto get_corner_id_triangulated(
-            const int iFace,
-            const int iVert
-        ) const -> Point_id
+        [[nodiscard]] auto get_corner_id_triangulated(const int iFace, const int iVert) const -> Point_id
         {
-            ERHE_VERIFY(iVert > 0); // This only works for triangulated polygons, N > 3
+            assert(iVert > 0); // This only works for triangulated polygons, N > 3
             const auto& triangle = get_triangle(iFace);
             const auto& polygon  = get_polygon(iFace);
-            ERHE_VERIFY(polygon.corner_count > 0);
+            assert(polygon.corner_count > 0);
             const uint32_t          corner_offset     = (iVert - 1 + triangle.triangle_index) % polygon.corner_count;
             const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + corner_offset;
+            assert(polygon_corner_id < geometry->polygon_corners.size());
             const Corner_id         corner_id         = geometry->polygon_corners[polygon_corner_id];
             return corner_id;
         }
 
-        [[nodiscard]] auto get_corner_id_direct(
-            const int iFace,
-            const int iVert
-        ) const -> Point_id
+        [[nodiscard]] auto get_corner_id_direct(const int iFace, const int iVert) const -> Point_id
         {
-            ERHE_VERIFY(iVert < 3); // This only works for triangles
+            assert(iVert < 3); // This only works for triangles
             const auto&             polygon           = get_polygon(iFace);
             const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + iVert;
+            assert(polygon_corner_id < geometry->polygon_corners.size());
             const Corner_id         corner_id         = geometry->polygon_corners[polygon_corner_id];
             return corner_id;
         }
 
-        [[nodiscard]] auto get_corner_id(
-            const int iFace,
-            const int iVert
-        ) const -> Corner_id
+        [[nodiscard]] auto get_corner_id(const int iFace, const int iVert) const -> Corner_id
         {
             const auto& polygon = get_polygon(iFace);
             return (polygon.corner_count == 3)
@@ -164,20 +164,14 @@ auto Geometry::compute_tangents(
                 : get_corner_id_triangulated(iFace, iVert);
         }
 
-        [[nodiscard]] auto get_point_id(
-            const int iFace,
-            const int iVert
-        ) const -> Point_id
+        [[nodiscard]] auto get_point_id(const int iFace, const int iVert) const -> Point_id
         {
             const Corner_id corner_id = get_corner_id(iFace, iVert);
             const Corner&   corner    = geometry->corners[corner_id];
             return corner.point_id;
         }
 
-        [[nodiscard]] auto get_position(
-            const int iFace,
-            const int iVert
-        ) const -> vec3
+        [[nodiscard]] auto get_position(const int iFace, const int iVert) const -> vec3
         {
             const Polygon_id polygon_id = get_polygon_id(iFace);
             if (iVert == 0)
@@ -190,10 +184,7 @@ auto Geometry::compute_tangents(
             return position;
         }
 
-        [[nodiscard]] auto get_normal(
-            const int iFace,
-            const int iVert
-        ) const -> vec3
+        [[nodiscard]] auto get_normal(const int iFace, const int iVert) const -> vec3
         {
             static_cast<void>(iVert);
             const Polygon_id polygon_id = get_polygon_id(iFace);
@@ -224,23 +215,23 @@ auto Geometry::compute_tangents(
 #endif
         }
 
-        [[nodiscard]] auto get_texcoord(
-            const int iFace,
-            const int iVert
-        ) -> vec2
+        [[nodiscard]] auto get_texcoord(const int iFace, const int iVert) -> vec2
         {
             if (iVert == 0) {
                 // Calculate and return average texture coordinate from all polygon vertices
-                const Polygon& polygon    = get_polygon(iFace);
-                vec2           texcoord{0.0f, 0.0f};
+                const Polygon& polygon = get_polygon(iFace);
+                vec2 texcoord{0.0f, 0.0f};
                 for (
                     Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id;
                     polygon_corner_id < polygon.first_polygon_corner_id + polygon.corner_count;
                     ++polygon_corner_id
                 ) {
+                    assert(polygon_corner_id < geometry->polygon_corners.size());
                     const Corner_id corner_id = geometry->polygon_corners[polygon_corner_id];
+                    assert(corner_id < geometry->corners.size());
                     const Corner&   corner    = geometry->corners[corner_id];
                     const Point_id  point_id  = corner.point_id;
+                    assert(point_id < geometry->points.size());
                     if ((corner_texcoords != nullptr) && corner_texcoords->has(corner_id)) {
                         texcoord += corner_texcoords->get(corner_id);
                     } else if ((point_texcoords != nullptr) && point_texcoords->has(point_id)) {
@@ -345,6 +336,7 @@ auto Geometry::compute_tangents(
     g.triangle_count = static_cast<int>(triangle_count);
     g.triangles.resize(triangle_count);
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id) {
+        assert(polygon_id < polygons.size());
         const Polygon& polygon = polygons[polygon_id];
         if (polygon.corner_count < 3) {
             continue;
@@ -355,15 +347,13 @@ auto Geometry::compute_tangents(
     }
 
     SMikkTSpaceInterface mikktspace{
-        .m_getNumFaces = [](const SMikkTSpaceContext* pContext)
-        {
+        .m_getNumFaces = [](const SMikkTSpaceContext* pContext) {
             const auto* context   = static_cast<Geometry_context*>(pContext->m_pUserData);
             const int   num_faces = context->triangle_count;
             return num_faces;
         },
 
-        .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, int32_t)
-        {
+        .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, int32_t) {
             const int num_vertices_of_face = 3;
             return num_vertices_of_face;
         },
@@ -463,8 +453,7 @@ auto Geometry::compute_tangents(
         }
     };
 
-    SMikkTSpaceContext context
-    {
+    SMikkTSpaceContext context {
         .m_pInterface = &mikktspace,
         .m_pUserData  = &g
     };
