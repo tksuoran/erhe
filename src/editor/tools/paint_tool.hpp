@@ -84,6 +84,7 @@ public:
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
+    void tool_render(const Render_context& context) override;
 
     auto try_ready() -> bool;
     void paint();

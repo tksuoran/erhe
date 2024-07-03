@@ -285,8 +285,8 @@ void Line_renderer_set::render(
                     .z_pass_op       = gl::Stencil_op::replace,
                     .function        = gl::Stencil_function::gequal,
                     .reference       = stencil_reference,
-                    .test_mask       = 0xffu,
-                    .write_mask      = 0xffu
+                    .test_mask       = 0x7fu,
+                    .write_mask      = 0x7fu
                 },
                 .stencil_back = {
                     .stencil_fail_op = gl::Stencil_op::keep,
@@ -294,8 +294,8 @@ void Line_renderer_set::render(
                     .z_pass_op       = gl::Stencil_op::replace,
                     .function        = gl::Stencil_function::gequal,
                     .reference       = stencil_reference,
-                    .test_mask       = 0xffu,
-                    .write_mask      = 0xffu
+                    .test_mask       = 0x7fu,
+                    .write_mask      = 0x7fu
                 },
             },
 

@@ -353,7 +353,7 @@ auto Bvh_geometry::intersect_instance(
         const auto& triangle = m_precomputed_triangles.at(triangle_index);
 
         ray.t_far       = bvh_ray.tmax;
-        hit.triangle_id = static_cast<unsigned int>(prim_id);
+        hit.triangle_id = static_cast<unsigned int>(m_bvh.prim_ids[prim_id]);
         hit.uv          = glm::vec2{u, v};
         hit.normal      = glm::vec3{transform * glm::vec4{from_bvh(triangle.n), 0.0f}};
         hit.instance    = instance;

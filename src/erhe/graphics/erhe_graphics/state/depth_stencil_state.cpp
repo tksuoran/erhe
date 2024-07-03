@@ -124,8 +124,8 @@ Depth_stencil_state Depth_stencil_state::depth_test_always_stencil_test_disabled
         .z_pass_op       = gl::Stencil_op::keep,
         .function        = gl::Stencil_function::always,
         .reference       = 0u,
-        .test_mask       = 0xffffu,
-        .write_mask      = 0xffffu
+        .test_mask       = 0x00u,
+        .write_mask      = 0x00u
     },
     .stencil_back = {
         .stencil_fail_op = gl::Stencil_op::keep,
@@ -133,8 +133,8 @@ Depth_stencil_state Depth_stencil_state::depth_test_always_stencil_test_disabled
         .z_pass_op       = gl::Stencil_op::keep,
         .function        = gl::Stencil_function::always,
         .reference       = 0u,
-        .test_mask       = 0xffffu,
-        .write_mask      = 0xffffu
+        .test_mask       = 0x00u,
+        .write_mask      = 0x00u
     },
 };
 
@@ -145,8 +145,8 @@ void Depth_stencil_state_tracker::reset()
     gl::depth_mask(GL_TRUE);
 
     gl::stencil_op(gl::Stencil_op::keep, gl::Stencil_op::keep, gl::Stencil_op::keep);
-    gl::stencil_mask(0xffffU);
-    gl::stencil_func(gl::Stencil_function::always, 0, 0xffffU);
+    gl::stencil_mask(0xffu);
+    gl::stencil_func(gl::Stencil_function::always, 0, 0xffu);
     m_cache = Depth_stencil_state{};
 }
 

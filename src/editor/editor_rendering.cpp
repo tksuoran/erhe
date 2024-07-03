@@ -414,18 +414,18 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                 .z_fail_op       = gl::Stencil_op::replace,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
-                .reference       = 1,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .reference       = 128,
+                .test_mask       = 0x00u, // always does not use
+                .write_mask      = 0x80u  // 128
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::replace,
                 .z_fail_op       = gl::Stencil_op::replace,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
-                .reference       = 1,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .reference       = 128,
+                .test_mask       = 0x00u,
+                .write_mask      = 0x80u
             },
         },
         .color_blend    = Color_blend_state::color_blend_disabled
@@ -449,7 +449,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
             .depth_test_enable      = true,
             .depth_write_enable     = false,
             .depth_compare_op       = graphics_instance.depth_function(gl::Depth_function::greater),
-            .stencil_test_enable = true, //// TODO Why?
+            .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
@@ -457,7 +457,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                 .function        = gl::Stencil_function::equal,
                 .reference       = 0,
                 .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .write_mask      = 0x7fu // ignore high bit (selection)
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -466,7 +466,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                 .function        = gl::Stencil_function::equal,
                 .reference       = 0,
                 .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .write_mask      = 0x7fu // ignore high bit (selection)
             },
         },
         .color_blend = {
@@ -508,20 +508,19 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::lines,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        //.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
             .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::lequal),
-            .stencil_test_enable = true, //// TODO Why?
+            .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::incr,
                 .function        = gl::Stencil_function::equal,
                 .reference       = 0,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .test_mask       = 0x7fu,
+                .write_mask      = 0x7fu // ignore high bit (selection)
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -529,8 +528,8 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                 .z_pass_op       = gl::Stencil_op::incr,
                 .function        = gl::Stencil_function::equal,
                 .reference       = 0,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .test_mask       = 0x7fu,
+                .write_mask      = 0x7fu // ignore high bit (selection)
             }
         },
         .color_blend    = Color_blend_state::color_blend_premultiplied
@@ -549,20 +548,20 @@ Pipeline_renderpasses::Pipeline_renderpasses(
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::decr_wrap,
-                .function        = gl::Stencil_function::equal,
-                .reference       = 0,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .z_pass_op       = gl::Stencil_op::replace,
+                .function        = gl::Stencil_function::notequal,
+                .reference       = 128,
+                .test_mask       = 0x80u,
+                .write_mask      = 0x80u
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::decr_wrap,
-                .function        = gl::Stencil_function::equal,
-                .reference       = 0,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .z_pass_op       = gl::Stencil_op::replace,
+                .function        = gl::Stencil_function::notequal,
+                .reference       = 128,
+                .test_mask       = 0x80u,
+                .write_mask      = 0x80u
             }
         },
         .color_blend    = Color_blend_state::color_blend_premultiplied
@@ -614,7 +613,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                         .function        = gl::Stencil_function::equal,
                         .reference       = 0,
                         .test_mask       = 0xffu,
-                        .write_mask      = 0xffu
+                        .write_mask      = 0x00u
                     },
                     .stencil_back = {
                         .stencil_fail_op = gl::Stencil_op::keep,
@@ -623,7 +622,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                         .function        = gl::Stencil_function::equal,
                         .reference       = 0,
                         .test_mask       = 0xffu,
-                        .write_mask      = 0xffu
+                        .write_mask      = 0x00u
                     },
                 },
                 .color_blend    = Color_blend_state::color_blend_disabled

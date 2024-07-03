@@ -53,7 +53,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
                 .reference       = s_stencil_tool_mesh_hidden,
-                .test_mask       = 0xffu,
+                .test_mask       = 0x00u,
                 .write_mask      = 0xffu
             },
             .stencil_back = {
@@ -62,7 +62,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
                 .reference       = s_stencil_tool_mesh_hidden,
-                .test_mask       = 0xffu,
+                .test_mask       = 0x00u,
                 .write_mask      = 0xffu
             },
         },
@@ -88,7 +88,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
                 .reference       = s_stencil_tool_mesh_visible,
-                .test_mask       = 0xffu,
+                .test_mask       = 0x00u,
                 .write_mask      = 0xffu
             },
             .stencil_back = {
@@ -97,7 +97,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
                 .reference       = s_stencil_tool_mesh_visible,
-                .test_mask       = 0xffu,
+                .test_mask       = 0x00u,
                 .write_mask      = 0xffu
             },
         },
@@ -197,7 +197,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
                 .z_pass_op          = gl::Stencil_op::replace,
                 .function           = gl::Stencil_function::always,
                 .reference          = s_stencil_tool_mesh_hidden,
-                .test_mask          = 0xffu,
+                .test_mask          = 0x00u,
                 .write_mask         = 0xffu
             },
         },

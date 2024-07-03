@@ -7,6 +7,7 @@
 #include "editor_settings.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -19,6 +20,8 @@
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -200,6 +203,83 @@ Paint_tool::Paint_tool(
     );
 
     m_paint_vertex_command.set_host(this);
+}
+
+void Paint_tool::tool_render(const Render_context& context)
+{
+    auto& line_renderer = *(context.editor_context.line_renderer_set->visible.at(2).get());
+    line_renderer.set_thickness(5.0f);
+
+    auto* scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return;
+    }
+
+    const Hover_entry& content = scene_view->get_hover(Hover_entry::content_slot);
+    if (
+        !content.valid                ||
+        !content.position.has_value() ||
+        !content.normal.has_value()   ||
+        !content.geometry
+    ) {
+        return;
+    }
+
+    ERHE_VERIFY(content.mesh != nullptr);
+    ERHE_VERIFY(content.primitive_index != std::numeric_limits<std::size_t>::max());
+
+    erhe::geometry::Geometry& geometry = *content.geometry.get();
+    auto* const point_locations = geometry.point_attributes().find<glm::vec3>(erhe::geometry::c_point_locations);
+    if (point_locations == nullptr) {
+        return;
+    }
+
+    const erhe::geometry::Polygon_id polygon_id = static_cast<erhe::geometry::Polygon_id>(content.polygon_id);
+    const erhe::geometry::Polygon&   polygon    = geometry.polygons.at(polygon_id);
+    if (polygon.corner_count == 0) {
+        return;
+    }
+
+    const glm::vec3 hover_position_in_world = content.position.value();
+
+    const auto* node = content.mesh->get_node();
+    if (node == nullptr) {
+        return;
+    }
+
+    const glm::vec3 hover_position_in_mesh = node->transform_point_from_world_to_local(hover_position_in_world);
+
+    float                     max_distance_squared = std::numeric_limits<float>::max();
+    erhe::geometry::Point_id  nearest_point_id     = 0;
+    erhe::geometry::Corner_id nearest_corner_id    = 0;
+    std::vector<erhe::geometry::Point_id> corner_points;
+    polygon.for_each_corner_const(
+        geometry,
+        [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i) {
+            const erhe::geometry::Point_id point_id = i.corner.point_id;
+            const glm::vec3 p_in_mesh = point_locations->get(point_id);
+            corner_points.push_back(point_id);
+            const float d2 = glm::distance2(hover_position_in_mesh, p_in_mesh);
+            if (d2 < max_distance_squared) {
+                max_distance_squared = d2;
+                nearest_point_id = point_id;
+                nearest_corner_id = i.corner_id;
+            }
+        }
+    );
+
+    glm::vec3 n = glm::normalize(content.normal.value());
+
+    for (const erhe::geometry::Point_id point_id : corner_points) {
+        const glm::vec3 p_in_mesh = point_locations->get(point_id);
+        const glm::vec3 p = node->transform_point_from_local_to_world(p_in_mesh);
+        line_renderer.add_lines(
+            (point_id == nearest_point_id) 
+                ? glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
+                : glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
+            {{ p, p + 0.2f * n }}
+        );
+    }
 }
 
 void Paint_tool::handle_priority_update(const int old_priority, const int new_priority)
