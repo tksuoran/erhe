@@ -5,14 +5,12 @@
 struct XrActionStateBoolean;
 
 namespace erhe::xr {
-
-class Xr_action_boolean;
-
+    class Xr_action_boolean;
 }
 
 namespace erhe::commands {
 
-union Input_arguments;
+struct Input_arguments;
 
 enum class Button_trigger : unsigned int
 {

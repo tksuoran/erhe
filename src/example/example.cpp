@@ -204,9 +204,8 @@ public:
         return true;
     }
 
-    auto on_key(erhe::window::Keycode code, uint32_t modifier_mask, bool pressed) -> bool override
+    auto on_key(erhe::window::Keycode code, uint32_t, bool pressed) -> bool override
     {
-        static_cast<void>(modifier_mask);
         switch (code) {
             case erhe::window::Key_w: m_camera_controller->translate_z.set_less(pressed); return true;
             case erhe::window::Key_s: m_camera_controller->translate_z.set_more(pressed); return true;
@@ -216,28 +215,22 @@ public:
         }
     }
 
-    auto on_mouse_move(float x, float y) -> bool override
+    auto on_mouse_move(float, float, float relative_x, float relative_y, uint32_t) -> bool override
     {
         if (!m_mouse_pressed) {
-            m_mouse_last_x = x;
-            m_mouse_last_y = y;
             return false;
         }
-        float dx = x - m_mouse_last_x;
-        float dy = y - m_mouse_last_y;
-        m_mouse_last_x = x;
-        m_mouse_last_y = y;
-        if (dx != 0.0f) {
-            m_camera_controller->rotate_y.adjust(dx * (-1.0f / 1024.0f));
+        if (relative_x != 0.0f) {
+            m_camera_controller->rotate_y.adjust(relative_x * (-1.0f / 1024.0f));
         }
 
-        if (dy != 0.0f) {
-            m_camera_controller->rotate_x.adjust(dy * (-1.0f / 1024.0f));
+        if (relative_y != 0.0f) {
+            m_camera_controller->rotate_x.adjust(relative_y * (-1.0f / 1024.0f));
         }
         return true;
     }
 
-    auto on_mouse_button(erhe::window::Mouse_button button, bool pressed) -> bool override
+    auto on_mouse_button(erhe::window::Mouse_button button, bool pressed, uint32_t) -> bool override
     {
         if (button != erhe::window::Mouse_button_left) {
             return false;
@@ -246,7 +239,7 @@ public:
         return true;
     }
 
-    auto on_mouse_wheel(float, float y) -> bool override
+    auto on_mouse_wheel(float, float y, uint32_t) -> bool override
     {
         glm::vec3 position = m_camera_controller->get_position();
         const float l = glm::length(position);
@@ -360,9 +353,7 @@ private:
     double                                  m_time            {0.0};
     uint64_t                                m_frame_number{0};
 
-    bool  m_mouse_pressed{false};
-    float m_mouse_last_x{0.0f};
-    float m_mouse_last_y{0.0f};
+    bool m_mouse_pressed{false};
 };
 
 void run_example()

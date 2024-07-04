@@ -74,16 +74,18 @@ public:
     void bind_command_to_mouse_button(
         Command*                   command,
         erhe::window::Mouse_button button,
-        bool                       trigger_on_pressed
+        bool                       trigger_on_pressed,
+        std::optional<uint32_t>    modifier_mask = {}
     );
 
-    void bind_command_to_mouse_wheel(Command* command);
-    void bind_command_to_mouse_motion(Command* command);
+    void bind_command_to_mouse_wheel(Command* command, std::optional<uint32_t> modifier_mask = {});
+    void bind_command_to_mouse_motion(Command* command, std::optional<uint32_t> modifier_mask = {});
 
     void bind_command_to_mouse_drag(
         Command*                   command,
         erhe::window::Mouse_button button,
-        bool                       call_on_button_down_without_motion
+        bool                       call_on_button_down_without_motion,
+        std::optional<uint32_t>    modifier_mask = {}
     );
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -104,9 +106,7 @@ public:
     );
 #endif
 
-    void bind_command_to_update(
-        Command* command
-    );
+    void bind_command_to_update(Command* command);
 
     [[nodiscard]] auto accept_mouse_command(const Command* command) const -> bool
     {
@@ -122,12 +122,12 @@ public:
     [[nodiscard]] auto last_mouse_position_delta() const -> glm::vec2;
 
     // Implements erhe::window::Window_event_handler
-    auto has_active_mouse() const                                                           -> bool override;
-    auto on_key          (erhe::window::Keycode code, uint32_t modifier_mask, bool pressed) -> bool override;
-    auto on_mouse_move   (float x, float y)                                                 -> bool override;
-    auto on_mouse_button (erhe::window::Mouse_button button, bool pressed)                  -> bool override;
-    auto on_mouse_wheel  (float x, float y)                                                 -> bool override;
-    auto on_idle         ()                                                                 -> bool override;
+    auto has_active_mouse() const                                                                                         -> bool override;
+    auto on_key          (erhe::window::Keycode code, uint32_t modifier_mask, bool pressed)                               -> bool override;
+    auto on_mouse_move   (float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool override;
+    auto on_mouse_button (erhe::window::Mouse_button button, bool pressed, uint32_t modifier_mask)                        -> bool override;
+    auto on_mouse_wheel  (float x, float y, uint32_t modifier_mask)                                                       -> bool override;
+    auto on_idle         ()                                                                                               -> bool override;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void on_xr_action   (erhe::xr::Xr_action_boolean&  xr_action);
@@ -143,13 +143,13 @@ private:
     void sort_xr_bindings           ();
     void inactivate_ready_commands  ();
     void update_active_mouse_command(Command* command);
-    void commands                   (State filter);
 
     std::mutex m_command_mutex;
     Command*   m_active_mouse_command     {nullptr}; // does not tell if command(s) is/are ready
     uint32_t   m_last_mouse_button_bits   {0u};
     glm::vec2  m_last_mouse_position      {0.0f, 0.0f};
     glm::vec2  m_last_mouse_position_delta{0.0f, 0.0f};
+    uint32_t   m_last_modifier_mask       {0};
 
     std::vector<Command*>                             m_commands;
     std::vector<Key_binding>                          m_key_bindings;

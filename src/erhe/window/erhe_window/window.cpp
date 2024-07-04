@@ -24,7 +24,7 @@ auto format_window_title(const char* window_name) -> std::string
     const time_t now = time(0);
     tm* l = localtime(&now);
     return fmt::format(
-        "{} {}. {}",
+        "{} {} {}. {}",
         window_name,
         month_name[l->tm_mon],
         l->tm_mday,

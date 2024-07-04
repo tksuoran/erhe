@@ -10,9 +10,10 @@ class Mouse_drag_binding
 {
 public:
     Mouse_drag_binding(
-        Command*                   command,
-        erhe::window::Mouse_button button,
-        bool                       call_on_button_down_without_motion
+        Command*                      command,
+        erhe::window::Mouse_button    button,
+        bool                          call_on_button_down_without_motion,
+        const std::optional<uint32_t> modifier_mask = {}
     );
     Mouse_drag_binding();
     ~Mouse_drag_binding() noexcept override;
@@ -24,6 +25,8 @@ public:
     auto on_motion(Input_arguments& input) -> bool override;
 
 private:
+    auto ensure_inactive() -> bool;
+
     erhe::window::Mouse_button m_button;
     bool                       m_call_on_button_down_without_motion;
 };

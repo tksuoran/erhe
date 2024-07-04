@@ -10,9 +10,10 @@ class Mouse_button_binding
 {
 public:
     Mouse_button_binding(
-        Command*                   command,
-        erhe::window::Mouse_button button,
-        bool                       trigger_on_pressed = false
+        Command*                      command,
+        erhe::window::Mouse_button    button,
+        bool                          trigger_on_pressed = false,
+        const std::optional<uint32_t> modifier_mask = {}
     );
     Mouse_button_binding();
     ~Mouse_button_binding() noexcept override;
@@ -21,7 +22,6 @@ public:
     [[nodiscard]] auto get_button() const -> erhe::window::Mouse_button override;
 
     auto on_button(Input_arguments& input) -> bool override;
-
     auto on_motion(Input_arguments& input) -> bool override;
 
 private:

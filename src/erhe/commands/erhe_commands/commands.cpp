@@ -22,10 +22,6 @@ namespace erhe::commands {
 
 Commands::Commands()
 {
-    float mouse_x{};
-    float mouse_y{};
-    //// g_window->get_context_window()->get_cursor_position(mouse_x, mouse_y);
-    m_last_mouse_position = glm::vec2{mouse_x, mouse_y};
 }
 
 Commands::~Commands() noexcept
@@ -105,44 +101,42 @@ void Commands::bind_command_to_key(
 void Commands::bind_command_to_mouse_button(
     Command* const                   command,
     const erhe::window::Mouse_button button,
-    const bool                       trigger_on_pressed
+    const bool                       trigger_on_pressed,
+    const std::optional<uint32_t>    modifier_mask
 )
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
     m_mouse_bindings.push_back(
-        std::make_unique<Mouse_button_binding>(command, button, trigger_on_pressed)
+        std::make_unique<Mouse_button_binding>(command, button, trigger_on_pressed, modifier_mask)
     );
 }
 
-void Commands::bind_command_to_mouse_wheel(
-    Command* const command
-)
+void Commands::bind_command_to_mouse_wheel(Command* const command, const std::optional<uint32_t> modifier_mask)
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
     m_mouse_wheel_bindings.push_back(
-        std::make_unique<Mouse_wheel_binding>(command)
+        std::make_unique<Mouse_wheel_binding>(command, modifier_mask)
     );
 }
 
-void Commands::bind_command_to_mouse_motion(
-    Command* const command
-)
+void Commands::bind_command_to_mouse_motion(Command* const command, const std::optional<uint32_t> modifier_mask)
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
     m_mouse_bindings.push_back(
-        std::make_unique<Mouse_motion_binding>(command)
+        std::make_unique<Mouse_motion_binding>(command, modifier_mask)
     );
 }
 
 void Commands::bind_command_to_mouse_drag(
     Command* const                   command,
     const erhe::window::Mouse_button button,
-    const bool                       call_on_button_down_without_motion
+    const bool                       call_on_button_down_without_motion,
+    const std::optional<uint32_t>    modifier_mask
 )
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
     m_mouse_bindings.push_back(
-        std::make_unique<Mouse_drag_binding>(command, button, call_on_button_down_without_motion)
+        std::make_unique<Mouse_drag_binding>(command, button, call_on_button_down_without_motion, modifier_mask)
     );
 }
 
@@ -286,6 +280,8 @@ auto Commands::on_key(
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
+    m_last_modifier_mask = modifier_mask;
+
     Input_arguments context;
 
     for (auto& binding : m_key_bindings) {
@@ -319,9 +315,12 @@ auto Commands::on_idle() -> bool
     // Call mouse drag bindings if buttons are being held down
     if (m_last_mouse_button_bits != 0) {
         Input_arguments dummy_input{
-            .vector2{
-                .absolute_value{0.0f, 0.0f},
-                .relative_value{0.0f, 0.0f}
+            .modifier_mask = m_last_modifier_mask,
+            .variant = {
+                .vector2{
+                    .absolute_value{0.0f, 0.0f},
+                    .relative_value{0.0f, 0.0f}
+                }
             }
         };
 
@@ -377,14 +376,31 @@ void Commands::sort_mouse_bindings()
             ERHE_VERIFY(rhs_command != nullptr);
             const auto lhs_priority = get_command_priority(lhs_command);
             const auto rhs_priority = get_command_priority(rhs_command);
-            const bool is_higher = lhs_priority > rhs_priority;
             // log_input->trace(
             //     "lhs = {} {}, rhs = {} {}, is_higher = {}",
             //     lhs_command->get_name(), lhs_priority,
             //     rhs_command->get_name(), rhs_priority,
             //     is_higher
             // );
-            return is_higher;
+
+            // Sort higher priority first
+            if (lhs_priority != rhs_priority) {
+                return lhs_priority > rhs_priority;
+            }
+
+            const std::optional<uint32_t> lmask = lhs->get_modifier_mask();
+            const std::optional<uint32_t> rmask = rhs->get_modifier_mask();
+            // Sort one with modifiers set first
+            if (lmask.has_value() && !rmask.has_value()) {
+                return true;
+            }
+            if (!lmask.has_value()) {
+                return false;
+            }
+            // Sort one with more bits set first
+            const uint32_t lmask_value = lmask.value();
+            const uint32_t rmask_value = rmask.value();
+            return (lmask_value != rmask_value) && (lmask_value & rmask_value) == rmask_value;
         }
     );
     // log_input->trace("Mouse bindings after sort:");
@@ -469,9 +485,7 @@ auto Commands::last_mouse_position_delta() const -> glm::vec2
     return m_last_mouse_position_delta;
 }
 
-void Commands::update_active_mouse_command(
-    Command* const command
-)
+void Commands::update_active_mouse_command(Command* const command)
 {
     inactivate_ready_commands();
 
@@ -491,12 +505,11 @@ void Commands::update_active_mouse_command(
     }
 }
 
-auto Commands::on_mouse_button(
-    const erhe::window::Mouse_button button,
-    const bool                        pressed
-) -> bool
+auto Commands::on_mouse_button(const erhe::window::Mouse_button button, const bool pressed, const uint32_t modifier_mask) -> bool
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    m_last_modifier_mask = modifier_mask;
 
     sort_mouse_bindings();
 
@@ -508,7 +521,10 @@ auto Commands::on_mouse_button(
     }
 
     Input_arguments input{
-        .button_pressed = pressed
+        .modifier_mask = modifier_mask,
+        .variant = {
+            .button_pressed = pressed
+        }
     };
 
     const char* button_name = erhe::window::c_str(button);
@@ -549,17 +565,21 @@ auto Commands::on_mouse_button(
     return false;
 }
 
-auto Commands::on_mouse_wheel(const float x, const float y) -> bool
+auto Commands::on_mouse_wheel(const float x, const float y, const uint32_t modifier_mask) -> bool
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    m_last_modifier_mask = modifier_mask;
 
     sort_mouse_bindings();
 
     Input_arguments input{
-        .vector2
-        {
-            .absolute_value = glm::vec2{x, y},
-            .relative_value = glm::vec2{x, y}
+        .modifier_mask = modifier_mask,
+        .variant = {
+            .vector2 {
+                .absolute_value = glm::vec2{x, y},
+                .relative_value = glm::vec2{x, y}
+            }
         }
     };
     for (const auto& binding : m_mouse_wheel_bindings) {
@@ -577,18 +597,23 @@ auto Commands::on_mouse_wheel(const float x, const float y) -> bool
     return false;
 }
 
-auto Commands::on_mouse_move(const float x, const float y) -> bool
+auto Commands::on_mouse_move(float absolute_x, float absolute_y, const float relative_x, const float relative_y, const uint32_t modifier_mask) -> bool
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    glm::vec2 new_mouse_position{x, y};
-    m_last_mouse_position_delta = m_last_mouse_position - new_mouse_position;
+    m_last_modifier_mask = modifier_mask;
+
+    glm::vec2 new_mouse_position{absolute_x, absolute_y};
+    m_last_mouse_position_delta = glm::vec2{relative_x, relative_y}; //m_last_mouse_position - new_mouse_position;
 
     m_last_mouse_position = new_mouse_position;
     Input_arguments input{
-        .vector2{
-            .absolute_value = m_last_mouse_position,
-            .relative_value = m_last_mouse_position_delta
+        .modifier_mask = modifier_mask,
+        .variant = {
+            .vector2{
+                .absolute_value = new_mouse_position,
+                .relative_value = m_last_mouse_position_delta
+            }
         }
     };
 
@@ -611,9 +636,7 @@ auto Commands::on_mouse_move(const float x, const float y) -> bool
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-void Commands::on_xr_action(
-    erhe::xr::Xr_action_boolean& xr_action
-)
+void Commands::on_xr_action(erhe::xr::Xr_action_boolean& xr_action)
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
@@ -621,7 +644,9 @@ void Commands::on_xr_action(
 
     const bool state = xr_action.state.currentState == XR_TRUE;
     Input_arguments input{
-        .button_pressed = state
+        .variant = {
+            .button_pressed = state
+        }
     };
 
     log_input->trace("{}: {}", xr_action.name, state);
@@ -652,16 +677,16 @@ void Commands::on_xr_action(
     log_input->trace("OpenXR bool {} was not consumed", state);
 }
 
-void Commands::on_xr_action(
-    erhe::xr::Xr_action_float& xr_action
-)
+void Commands::on_xr_action(erhe::xr::Xr_action_float& xr_action)
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
     sort_xr_bindings();
 
     Input_arguments input{
-        .float_value = xr_action.state.currentState
+        .variant = {
+            .float_value = xr_action.state.currentState
+        }
     };
 
     for (auto& binding : m_xr_float_bindings) {
@@ -682,21 +707,21 @@ void Commands::on_xr_action(
     log_input->trace("OpenXR float input action was not consumed");
 }
 
-void Commands::on_xr_action(
-    erhe::xr::Xr_action_vector2f& xr_action
-)
+void Commands::on_xr_action(erhe::xr::Xr_action_vector2f& xr_action)
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
     sort_xr_bindings();
 
     Input_arguments context{
-        .vector2{
-            .absolute_value = glm::vec2{
-                xr_action.state.currentState.x,
-                xr_action.state.currentState.y
-            },
-            .relative_value = glm::vec2{0.0f, 0.0f}
+        .variant = {
+            .vector2{
+                .absolute_value = glm::vec2{
+                    xr_action.state.currentState.x,
+                    xr_action.state.currentState.y
+                },
+                .relative_value = glm::vec2{0.0f, 0.0f}
+            }
         }
     };
 

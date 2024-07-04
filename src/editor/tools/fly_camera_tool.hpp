@@ -30,12 +30,34 @@ class Fly_camera_turn_command
     : public erhe::commands::Command
 {
 public:
-    Fly_camera_turn_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Fly_camera_turn_command(erhe::commands::Commands& commands, Editor_context& context);
     void try_ready          () override;
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Editor_context& m_context;
+};
+
+class Fly_camera_tumble_command
+    : public erhe::commands::Command
+{
+public:
+    Fly_camera_tumble_command(erhe::commands::Commands& commands, Editor_context& context);
+    void try_ready          () override;
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+    void on_inactive        () override;
+
+private:
+    Editor_context& m_context;
+};
+
+class Fly_camera_track_command
+    : public erhe::commands::Command
+{
+public:
+    Fly_camera_track_command(erhe::commands::Commands& commands, Editor_context& context);
+    void try_ready() override;
+    auto try_call () -> bool override;
 
 private:
     Editor_context& m_context;
@@ -45,12 +67,20 @@ class Fly_camera_zoom_command
     : public erhe::commands::Command
 {
 public:
-    Fly_camera_zoom_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Fly_camera_zoom_command(erhe::commands::Commands& commands, Editor_context& context);
     void try_ready          () override;
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Editor_context& m_context;
+};
+
+class Fly_camera_frame_command
+    : public erhe::commands::Command
+{
+public:
+    Fly_camera_frame_command(erhe::commands::Commands& commands, Editor_context& context);
+    auto try_call() -> bool override;
 
 private:
     Editor_context& m_context;
@@ -120,20 +150,26 @@ public:
 
     // Commands
     void on_hover_viewport_change();
-    auto try_ready() -> bool;
-    auto try_move(
-        Variable                                variable,
-        erhe::math::Simulation_variable_control item,
-        bool                                    active
-    ) -> bool;
-    auto turn_relative(float dx, float dy) -> bool;
-    auto zoom         (float delta) -> bool;
+    auto try_ready       () -> bool;
+    auto try_move        (Variable variable, erhe::math::Simulation_variable_control item, bool active) -> bool;
+    auto turn_relative   (float dx, float dy) -> bool;
+    auto try_start_tumble() -> bool;
+    auto tumble_relative (float dx, float dy) -> bool;
+    auto try_start_track () -> bool;
+    auto track           () -> bool;
+    auto zoom            (float delta) -> bool;
+
+    void capture_pointer();
+    void release_pointer();
 
 private:
     void update_camera();
 
     Fly_camera_turn_command           m_turn_command;
+    Fly_camera_tumble_command         m_tumble_command;
+    Fly_camera_track_command          m_track_command;
     Fly_camera_zoom_command           m_zoom_command;
+    Fly_camera_frame_command          m_frame_command;
     Fly_camera_move_command           m_move_up_active_command;
     Fly_camera_move_command           m_move_up_inactive_command;
     Fly_camera_move_command           m_move_down_active_command;
@@ -149,10 +185,13 @@ private:
     std::shared_ptr<Frame_controller> m_camera_controller;
     float                             m_rotate_scale_x{1.0f};
     float                             m_rotate_scale_y{1.0f};
+    std::optional<glm::vec3>          m_tumble_pivot;
+    std::optional<glm::vec3>          m_track_plane_point;
+    std::optional<glm::vec3>          m_track_plane_normal;
 
-    std::mutex                         m_mutex;
-    float                              m_sensitivity        {1.0f};
-    bool                               m_use_viewport_camera{true};
+    std::mutex                        m_mutex;
+    float                             m_sensitivity        {1.0f};
+    bool                              m_use_viewport_camera{true};
 
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     Fly_camera_space_mouse_listener      m_space_mouse_listener;

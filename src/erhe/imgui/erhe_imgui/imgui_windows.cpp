@@ -63,9 +63,7 @@ void Imgui_windows::unlock_mutex()
     m_mutex.unlock();
 }
 
-void Imgui_windows::register_imgui_window(
-    Imgui_window* window
-)
+void Imgui_windows::register_imgui_window(Imgui_window* window)
 {
     ERHE_VERIFY(!m_iterating);
     const std::lock_guard<std::recursive_mutex> lock{m_mutex};
@@ -267,11 +265,11 @@ auto Imgui_windows::on_cursor_enter(const int entered) -> bool
 //    return want_capture_mouse();
 //}
 
-auto Imgui_windows::on_mouse_move(
-    const float x,
-    const float y
-) -> bool
+auto Imgui_windows::on_mouse_move(float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool
 {
+    static_cast<float>(relative_x);
+    static_cast<float>(relative_y);
+    static_cast<float>(modifier_mask);
     if (!m_window_imgui_viewport) {
         return false;
     }
@@ -283,18 +281,16 @@ auto Imgui_windows::on_mouse_move(
     //     }
     // }
 
-    m_window_imgui_viewport->on_mouse_move(x, y);
+    m_window_imgui_viewport->on_mouse_move(absolute_x, absolute_y);
 
     // If ImGui wants to capture mouse, the mouse event is not passed
     // to lower priority Window_event_handlers (Commands).
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_mouse_button(
-    const uint32_t button,
-    const bool     pressed
-) -> bool
+auto Imgui_windows::on_mouse_button(const uint32_t button, const bool pressed, const uint32_t modifier_mask) -> bool
 {
+    static_cast<void>(modifier_mask);
     const auto& imgui_viewports = m_imgui_renderer.get_imgui_viewports();
     for (const auto& viewport : imgui_viewports) {
         viewport->on_mouse_button(button, pressed);
@@ -305,10 +301,7 @@ auto Imgui_windows::on_mouse_button(
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_mouse_wheel(
-    const float x,
-    const float y
-) -> bool
+auto Imgui_windows::on_mouse_wheel(const float x, const float y, uint32_t) -> bool
 {
     const auto& imgui_viewports = m_imgui_renderer.get_imgui_viewports();
     for (const auto& viewport : imgui_viewports) {
@@ -334,9 +327,7 @@ auto Imgui_windows::on_key(
     return want_capture_keyboard();
 }
 
-auto Imgui_windows::on_char(
-    const unsigned int codepoint
-) -> bool
+auto Imgui_windows::on_char(const unsigned int codepoint) -> bool
 {
     const auto& imgui_viewports = m_imgui_renderer.get_imgui_viewports();
     for (const auto& viewport : imgui_viewports) {

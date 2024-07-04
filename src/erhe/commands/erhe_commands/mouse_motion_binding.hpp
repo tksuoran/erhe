@@ -8,7 +8,7 @@ class Mouse_motion_binding
     : public Mouse_binding
 {
 public:
-    explicit Mouse_motion_binding(Command* command);
+    explicit Mouse_motion_binding(Command* command, const std::optional<uint32_t> modifier_mask = {});
     Mouse_motion_binding();
     ~Mouse_motion_binding() noexcept override;
 

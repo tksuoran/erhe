@@ -287,11 +287,11 @@ void Root_window_event_handler::set_active_mouse_handler(Window_event_handler* h
     m_active_mouse_handler = handler;
 }
 
-auto Root_window_event_handler::on_mouse_move(const float x, const float y) -> bool
+auto Root_window_event_handler::on_mouse_move(const float absolute_x, const float absolute_y, const float relative_x, const float relative_y, const uint32_t modifier_mask) -> bool
 {
     if (m_active_mouse_handler != nullptr) {
         if (m_active_mouse_handler->has_active_mouse()) {
-            if (m_active_mouse_handler->on_mouse_move(x, y)) {
+            if (m_active_mouse_handler->on_mouse_move(absolute_x, absolute_y, relative_x, relative_y, modifier_mask)) {
                 return true;
             }
         } else {
@@ -300,7 +300,7 @@ auto Root_window_event_handler::on_mouse_move(const float x, const float y) -> b
     }
 
     for (auto* handler : m_handlers) {
-        const bool consumed = handler->on_mouse_move(x, y);
+        const bool consumed = handler->on_mouse_move(absolute_x, absolute_y, relative_x, relative_y, modifier_mask);
         if (m_active_mouse_handler == nullptr) {
             if (handler->has_active_mouse()) {
                 set_active_mouse_handler(handler);
@@ -313,14 +313,11 @@ auto Root_window_event_handler::on_mouse_move(const float x, const float y) -> b
     return false;
 }
 
-auto Root_window_event_handler::on_mouse_button(
-    const Mouse_button button,
-    const bool         pressed
-) -> bool
+auto Root_window_event_handler::on_mouse_button(const Mouse_button button, const bool pressed, const uint32_t modifier_mask) -> bool
 {
     if (m_active_mouse_handler != nullptr) {
         if (m_active_mouse_handler->has_active_mouse()) {
-            const bool handled = m_active_mouse_handler->on_mouse_button(button, pressed);
+            const bool handled = m_active_mouse_handler->on_mouse_button(button, pressed, modifier_mask);
             if (handled) {
                 return true;
             }
@@ -330,7 +327,7 @@ auto Root_window_event_handler::on_mouse_button(
     }
 
     for (auto* handler : m_handlers) {
-        const bool consumed = handler->on_mouse_button(button, pressed);
+        const bool consumed = handler->on_mouse_button(button, pressed, modifier_mask);
         if (m_active_mouse_handler == nullptr) {
             if (handler->has_active_mouse()) {
                 set_active_mouse_handler(handler);
@@ -343,14 +340,11 @@ auto Root_window_event_handler::on_mouse_button(
     return false;
 }
 
-auto Root_window_event_handler::on_mouse_wheel(
-    const float x,
-    const float y
-) -> bool
+auto Root_window_event_handler::on_mouse_wheel(const float x, const float y, const uint32_t modifier_mask) -> bool
 {
     if (m_active_mouse_handler != nullptr) {
         if (m_active_mouse_handler->has_active_mouse()) {
-            if (m_active_mouse_handler->on_mouse_wheel(x, y)) {
+            if (m_active_mouse_handler->on_mouse_wheel(x, y, modifier_mask)) {
                 return true;
             }
         } else {
@@ -359,7 +353,7 @@ auto Root_window_event_handler::on_mouse_wheel(
     }
 
     for (auto* handler : m_handlers) {
-        const bool consumed = handler->on_mouse_wheel(x, y);
+        const bool consumed = handler->on_mouse_wheel(x, y, modifier_mask);
         if (m_active_mouse_handler == nullptr) {
             if (handler->has_active_mouse()) {
                 set_active_mouse_handler(handler);

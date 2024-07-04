@@ -3,8 +3,9 @@
 
 namespace erhe::commands {
 
-Mouse_binding::Mouse_binding(Command* const command)
+Mouse_binding::Mouse_binding(Command* const command, const std::optional<uint32_t> modifier_mask)
     : Command_binding{command}
+    , m_modifier_mask{modifier_mask}
 {
 }
 
@@ -17,9 +18,7 @@ auto Mouse_binding::get_button() const -> erhe::window::Mouse_button
     return erhe::window::Mouse_button_none;
 }
 
-auto Mouse_binding::on_button(
-    Input_arguments& input
-) -> bool
+auto Mouse_binding::on_button(Input_arguments& input) -> bool
 {
     static_cast<void>(input);
     return false;

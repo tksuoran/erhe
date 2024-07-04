@@ -13,9 +13,9 @@ public:
     // Implements Window_event_handler
     [[nodiscard]] auto get_name() const -> const char* override { return "Input_state"; }
 
-    auto on_key         (signed int keycode, uint32_t modifier_mask, bool pressed) -> bool override;
-    auto on_mouse_move  (float x, float y) -> bool                                         override;
-    auto on_mouse_button(uint32_t button, bool pressed) -> bool                            override;
+    auto on_key         (signed int keycode, uint32_t modifier_mask, bool pressed) -> bool                         override;
+    auto on_mouse_move  (float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t) -> bool override;
+    auto on_mouse_button(uint32_t button, bool pressed, uint32_t) -> bool                                          override;
 
     bool      mouse_button[static_cast<int>(erhe::window::Mouse_button_count)]{};
     glm::vec2 mouse_position{0.0f, 0.0f};

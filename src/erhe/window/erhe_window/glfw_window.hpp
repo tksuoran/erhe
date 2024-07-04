@@ -59,18 +59,24 @@ public:
     [[nodiscard]] auto is_mouse_captured            () const -> bool;
     [[nodiscard]] auto get_glfw_window              () const -> GLFWwindow*;
 
-    auto open               (const Window_configuration& configuration) -> bool;
-    void make_current       () const;
-    void clear_current      () const;
-    void swap_buffers       () const;
-    void break_event_loop   ();
-    void enter_event_loop   ();
-    void poll_events        ();
-    void get_cursor_position(float& xpos, float& ypos);
-    void set_visible        (bool visible);
-    void set_cursor         (Mouse_cursor cursor);
-    void capture_mouse      (bool capture);
+    auto open                     (const Window_configuration& configuration) -> bool;
+    void make_current             () const;
+    void clear_current            () const;
+    void swap_buffers             () const;
+    void break_event_loop         ();
+    void enter_event_loop         ();
+    void poll_events              ();
+    void get_cursor_position      (float& xpos, float& ypos);
+    void get_capture_position     (float& xpos, float& ypos);
+    void set_visible              (bool visible);
+    void set_cursor               (Mouse_cursor cursor);
+    void capture_mouse            (bool capture);
+    void handle_key_event         (int key, int scancode, int action, int glfw_modifiers);
+    void handle_mouse_button_event(int button, int action, int glfw_modifiers);
+    void handle_mouse_wheel_event (double x, double y);
+    void handle_mouse_move        (double x, double y);
 
+    [[nodiscard]] auto get_modifier_mask () const -> Key_modifier_mask;
     [[nodiscard]] auto get_device_pointer() const -> void*;
     [[nodiscard]] auto get_window_handle () const -> void*;
     [[nodiscard]] auto get_scale_factor  () const -> float;
@@ -86,6 +92,13 @@ private:
     bool                      m_is_window_visible    {false};
     GLFWcursor*               m_mouse_cursor         [Mouse_cursor_COUNT];
     Window_configuration      m_configuration;
+    double                    m_last_mouse_x         {0.0};
+    double                    m_last_mouse_y         {0.0};
+    double                    m_mouse_capture_xpos   {0.0};
+    double                    m_mouse_capture_ypos   {0.0};
+    double                    m_mouse_virtual_xpos   {0.0};
+    double                    m_mouse_virtual_ypos   {0.0};
+    int                       m_glfw_key_modifiers{0};
 
     static int s_window_count;
 };

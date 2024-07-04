@@ -57,9 +57,9 @@ public:
     auto on_char        (unsigned int codepoint) -> bool                                   override;
     auto on_focus       (int focused) -> bool                                              override;
     auto on_cursor_enter(int entered) -> bool                                              override;
-    auto on_mouse_move  (float x, float y) -> bool                                         override;
-    auto on_mouse_button(uint32_t button, bool pressed) -> bool                            override;
-    auto on_mouse_wheel (float x, float y) -> bool                                         override;
+    auto on_mouse_move  (float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool override;
+    auto on_mouse_button(uint32_t button, bool pressed, uint32_t modifier_mask) -> bool    override;
+    auto on_mouse_wheel (float x, float y, uint32_t modifier_mask) -> bool                 override;
 
 private:
     Imgui_renderer&                        m_imgui_renderer;

@@ -7,6 +7,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 namespace editor
 {
@@ -48,8 +49,7 @@ auto Frame_controller::clone() const -> std::shared_ptr<erhe::Item_base>
     return std::shared_ptr<erhe::Item_base>{};
 }
 
-auto Frame_controller::get_variable(const Variable control) 
--> erhe::math::Simulation_variable&
+auto Frame_controller::get_variable(const Variable control) -> erhe::math::Simulation_variable&
 {
     switch (control) {
         case Variable::translate_x: return translate_x;
@@ -70,19 +70,9 @@ void Frame_controller::set_position(const vec3 position)
     update();
 }
 
-void Frame_controller::set_elevation(const float value)
+void Frame_controller::set_orientation(const glm::mat4& orientation)
 {
-    m_elevation = value;
-    update();
-}
-
-void Frame_controller::set_heading(const float value)
-{
-    m_heading = value;
-    m_heading_matrix = erhe::math::create_rotation(
-        m_heading,
-        erhe::math::vector_types<float>::vec3_unit_y()
-    );
+    m_orientation = orientation;
     update();
 }
 
@@ -91,14 +81,9 @@ auto Frame_controller::get_position() const -> vec3
     return m_position;
 }
 
-auto Frame_controller::get_elevation() const -> float
+auto Frame_controller::get_orientation() const -> glm::mat4
 {
-    return m_elevation;
-}
-
-auto Frame_controller::get_heading() const -> float
-{
-    return m_heading;
+    return m_orientation;
 }
 
 auto Frame_controller::get_static_type() -> uint64_t
@@ -121,20 +106,9 @@ void Frame_controller::get_transform_from_node(erhe::scene::Node* node)
     if (node == nullptr) {
         return;
     }
-    const vec4 position  = node->position_in_world();
-    const vec4 direction = node->direction_in_world();
-
-    m_position = position;
-    float heading  {0.0f};
-    float elevation{0.0f};
-    erhe::math::cartesian_to_heading_elevation(direction, elevation, heading);
-    m_elevation = elevation;
-    m_heading   = heading;
-
-    m_heading_matrix = erhe::math::create_rotation(
-        m_heading,
-        erhe::math::vector_types<float>::vec3_unit_y()
-    );
+    const erhe::scene::Trs_transform& transform = node->world_from_node_transform();
+    m_position = transform.get_translation();
+    m_orientation = glm::toMat4(transform.get_rotation());
 }
 
 void Frame_controller::handle_node_update(erhe::scene::Node* old_node, erhe::scene::Node* new_node)
@@ -177,38 +151,24 @@ void Frame_controller::update()
         return;
     }
 
-    const mat4 elevation_matrix = erhe::math::create_rotation(
-        m_elevation,
-        erhe::math::vector_types<float>::vec3_unit_x()
-    );
-    m_rotation_matrix = m_heading_matrix * elevation_matrix;
-
-    mat4 parent_from_local = m_rotation_matrix;
-
-    // Put translation to column 3
-    parent_from_local[3] = vec4{m_position, 1.0f};
-
     m_transform_update = true;
-    node->set_parent_from_node(parent_from_local);
+    node->set_world_from_node(erhe::scene::Trs_transform{m_position, m_orientation});
     m_transform_update = false;
 }
 
 auto Frame_controller::get_axis_x() const -> vec3
 {
-    return vec3{m_rotation_matrix[0]};
-    //return vec3{m_heading_matrix[0]};
+    return vec3{m_orientation[0]};
 }
 
 auto Frame_controller::get_axis_y() const -> vec3
 {
-    return vec3{m_rotation_matrix[1]};
-    //return vec3{m_heading_matrix[1]};
+    return vec3{m_orientation[1]};
 }
 
 auto Frame_controller::get_axis_z() const -> vec3
 {
-    return vec3{m_rotation_matrix[2]};
-    //return vec3{m_heading_matrix[2]};
+    return vec3{m_orientation[2]};
 }
 
 void Frame_controller::update_fixed_step()
@@ -235,23 +195,54 @@ void Frame_controller::update_fixed_step()
         m_position += get_axis_z() * translate_z.current_value() * speed;
     }
 
-    if (
-        (rotate_x.current_value() != 0.0f) ||
-        (rotate_y.current_value() != 0.0f)
-    ) {
-        m_heading += rotate_y.current_value();
-        m_elevation += rotate_x.current_value();
-        const mat4 elevation_matrix = erhe::math::create_rotation(
-            m_elevation,
-            erhe::math::vector_types<float>::vec3_unit_x()
-        );
-        m_heading_matrix = erhe::math::create_rotation(
-            m_heading,
-            erhe::math::vector_types<float>::vec3_unit_y()
-        );
-        m_rotation_matrix = m_heading_matrix * elevation_matrix;
-    }
+    apply_rotation(rotate_x.current_value(), rotate_y.current_value(), 0.0f);
 
+    update();
+}
+
+void Frame_controller::apply_rotation(float rx, float ry, float rz)
+{
+    glm::mat4 new_orientation = m_orientation;
+    if (rx != 0.0f) {
+        glm::mat4 rotate = erhe::math::create_rotation<float>(rx, get_axis_x());
+        new_orientation = rotate * new_orientation;
+    }
+    if (ry != 0.0f) {
+        glm::mat4 rotate = erhe::math::create_rotation<float>(ry, glm::vec3{0.0f, 1.0f, 0.0f}); //get_axis_y());
+        new_orientation = rotate * new_orientation;
+    }
+    if (rz != 0.0f) {
+        glm::mat4 rotate = erhe::math::create_rotation<float>(rz, get_axis_z());
+        new_orientation = rotate * new_orientation;
+    }
+    m_orientation = new_orientation;
+    update();
+}
+
+void Frame_controller::apply_tumble(glm::vec3 pivot, float rx, float ry, float rz)
+{
+    glm::mat4 new_orientation = m_orientation;
+    if (rx != 0.0f) {
+        glm::mat4 rotate = erhe::math::create_rotation<float>(rx, get_axis_x());
+        new_orientation = rotate * new_orientation;
+    }
+    if (ry != 0.0f) {
+        glm::mat4 rotate = erhe::math::create_rotation<float>(ry, glm::vec3{0.0f, 1.0f, 0.0f}); //get_axis_y());
+        new_orientation = rotate * new_orientation;
+    }
+    if (rz != 0.0f) {
+        glm::mat4 rotate = erhe::math::create_rotation<float>(rz, get_axis_z());
+        new_orientation = rotate * new_orientation;
+    }
+    {
+        glm::mat4 old_world_from_view = m_orientation;
+        glm::mat4 old_view_from_world = glm::transpose(old_world_from_view);
+        glm::mat4 new_world_from_view = new_orientation;
+        glm::vec3 direction_in_world  = m_position - pivot;
+        glm::vec4 direction_in_view   = old_view_from_world * glm::vec4{direction_in_world, 0.0f};
+        m_position = pivot + glm::vec3{new_world_from_view * direction_in_view};
+    }
+    m_orientation = new_orientation;
     update();
 }
 
@@ -287,9 +278,7 @@ auto as_frame_controller(erhe::Item_base* item) -> Frame_controller*
     return static_cast<Frame_controller*>(item);
 }
 
-auto get_frame_controller(
-    const erhe::scene::Node* node
-) -> std::shared_ptr<Frame_controller>
+auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>
 {
     for (const auto& attachment : node->get_attachments()) {
         auto frame_controller = std::dynamic_pointer_cast<Frame_controller>(attachment);

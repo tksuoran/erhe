@@ -51,17 +51,18 @@ public:
     void update                 ();
     void update_fixed_step      ();
     void set_position           (const glm::vec3 position);
-    void set_elevation          (const float value);
-    void set_heading            (const float value);
+    void set_orientation        (const glm::mat4& orientation);
     void get_transform_from_node(erhe::scene::Node* node);
 
-    [[nodiscard]] auto get_position () const -> glm::vec3;
-    [[nodiscard]] auto get_elevation() const -> float;
-    [[nodiscard]] auto get_heading  () const -> float;
-    [[nodiscard]] auto get_axis_x   () const -> glm::vec3;
-    [[nodiscard]] auto get_axis_y   () const -> glm::vec3;
-    [[nodiscard]] auto get_axis_z   () const -> glm::vec3;
-    [[nodiscard]] auto get_variable (const Variable variable) -> erhe::math::Simulation_variable&;
+    void apply_rotation(float rx, float ry, float rz);
+    void apply_tumble(glm::vec3 pivot, float rx, float ry, float rz);
+
+    [[nodiscard]] auto get_position   () const -> glm::vec3;
+    [[nodiscard]] auto get_orientation() const -> glm::mat4;
+    [[nodiscard]] auto get_axis_x     () const -> glm::vec3;
+    [[nodiscard]] auto get_axis_y     () const -> glm::vec3;
+    [[nodiscard]] auto get_axis_z     () const -> glm::vec3;
+    [[nodiscard]] auto get_variable   (const Variable variable) -> erhe::math::Simulation_variable&;
 
     erhe::math::Simulation_variable rotate_x;
     erhe::math::Simulation_variable rotate_y;
@@ -72,11 +73,8 @@ public:
     erhe::math::Simulation_variable speed_modifier;
 
 private:
-    float     m_elevation       {0.0f};
-    float     m_heading         {0.0f};
-    glm::mat4 m_heading_matrix  {1.0f};
-    glm::mat4 m_rotation_matrix {1.0f};
-    glm::vec3 m_position        {0.0f};
+    glm::vec3 m_position;
+    glm::mat4 m_orientation;
     bool      m_transform_update{false};
 };
 

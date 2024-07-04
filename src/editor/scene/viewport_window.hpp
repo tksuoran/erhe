@@ -107,7 +107,7 @@ public:
     void set_is_hovered            (bool is_hovered);
     void set_camera                (const std::shared_ptr<erhe::scene::Camera>& camera);
     void update_pointer_2d_position(glm::vec2 position_in_viewport);
-    void update_hover              ();
+    void update_hover              (bool ray_only = false);
     void link_to                   (std::shared_ptr<erhe::rendergraph::Multisample_resolve_node> node);
     void link_to                   (std::shared_ptr<Post_processing_node> node);
     void set_final_output          (std::shared_ptr<Rendergraph_node> node);

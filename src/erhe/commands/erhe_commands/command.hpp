@@ -17,7 +17,7 @@ namespace erhe::xr {
 namespace erhe::commands {
 
 class Commands;
-union Input_arguments;
+struct Input_arguments;
 
 class Command_host
 {

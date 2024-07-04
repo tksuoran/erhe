@@ -3,14 +3,12 @@
 #include "erhe_commands/command_binding.hpp"
 
 namespace erhe::xr {
-
-class Xr_action_float;
-
+    class Xr_action_float;
 }
 
 namespace erhe::commands {
 
-union Input_arguments;
+struct Input_arguments;
 
 class Xr_float_binding
     : public Command_binding

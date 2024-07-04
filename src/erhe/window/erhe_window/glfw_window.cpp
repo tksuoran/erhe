@@ -238,33 +238,9 @@ void key_event_callback(
     int         glfw_modifiers
 )
 {
-    static_cast<void>(scancode);
-
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        switch (action) {
-            case GLFW_PRESS:
-            case GLFW_RELEASE: {
-                // Workaround: X11 does not include current pressed/released modifier key
-                // in 'mods' flags. https://github.com/glfw/glfw/issues/1630
-                if (int modifier_from_key = glfw_key_to_modifier(key)) {
-                    glfw_modifiers = (action == GLFW_PRESS)
-                        ? (glfw_modifiers | modifier_from_key)
-                        : (glfw_modifiers & ~modifier_from_key);
-                }
-
-                event_handler->on_key(
-                    glfw_key_to_erhe(key),
-                    glfw_modifiers_to_erhe(glfw_modifiers),
-                    (action == GLFW_PRESS)
-                );
-                break;
-            }
-
-            case GLFW_REPEAT:
-            default:
-                break;
-        }
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window != nullptr) {
+        window->handle_key_event(key, scancode, action, glfw_modifiers);
     }
 }
 
@@ -281,30 +257,26 @@ void char_event_callback(
 
 void mouse_position_event_callback(GLFWwindow* glfw_window, double x, double y)
 {
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        event_handler->on_mouse_move(static_cast<float>(x), static_cast<float>(y));
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window == nullptr) {
+        return;
     }
+    window->handle_mouse_move(x, y);
 }
 
 void mouse_button_event_callback(GLFWwindow* glfw_window, const int button, const int action, const int mods)
 {
-    static_cast<void>(mods);
-
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        event_handler->on_mouse_button(
-            glfw_mouse_button_to_erhe(button),
-            glfw_mouse_button_action_to_erhe(action)
-        );
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window != nullptr) {
+        window->handle_mouse_button_event(button, action, mods);
     }
 }
 
 void mouse_wheel_event_callback(GLFWwindow* glfw_window, const double x, const double y)
 {
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        event_handler->on_mouse_wheel(static_cast<float>(x), static_cast<float>(y));
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window != nullptr) {
+        window->handle_mouse_wheel_event(x, y);
     }
 }
 
@@ -571,6 +543,8 @@ auto Context_window::open(
         }
     }
 
+    glfwGetCursorPos(window, &m_last_mouse_x, &m_last_mouse_y);
+
     m_configuration = configuration;
 
     return true;
@@ -600,17 +574,20 @@ void Context_window::break_event_loop()
 void Context_window::poll_events()
 {
     ERHE_PROFILE_FUNCTION();
-
     if (m_configuration.sleep_time > 0.0f) {
         ERHE_PROFILE_SCOPE("sleep");
         erhe::time::sleep_for(std::chrono::duration<float, std::milli>(m_configuration.sleep_time * 1000.0f));
     }
+
+    if (m_is_mouse_captured) {
+        glfwSetCursorPos(m_glfw_window, m_mouse_capture_xpos, m_mouse_capture_ypos);
+    }
+
     if (m_configuration.wait_time > 0.0f) {
         ERHE_PROFILE_SCOPE("wait");
         glfwWaitEventsTimeout(m_configuration.wait_time);
     } else {
         ERHE_PROFILE_SCOPE("poll");
-
         glfwPollEvents();
     }
 }
@@ -643,6 +620,12 @@ void Context_window::get_cursor_position(float& xpos, float& ypos)
         xpos = static_cast<float>(xpos_double);
         ypos = static_cast<float>(ypos_double);
     }
+}
+
+void Context_window::get_capture_position(float& xpos, float& ypos)
+{
+    xpos = static_cast<float>(m_mouse_capture_xpos);
+    ypos = static_cast<float>(m_mouse_capture_ypos);
 }
 
 void Context_window::set_visible(const bool visible)
@@ -692,13 +675,18 @@ void Context_window::capture_mouse(const bool capture)
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr) {
+        if (capture) {
+            glfwGetCursorPos(window, &m_mouse_capture_xpos, &m_mouse_capture_ypos);
+            m_mouse_virtual_xpos = m_mouse_capture_xpos;
+            m_mouse_virtual_ypos = m_mouse_capture_ypos;
+        }
         if (m_is_mouse_captured != capture) {
             m_is_mouse_captured = capture;
             glfwSetInputMode(
                 window,
                 GLFW_CURSOR,
                 m_is_mouse_captured
-                    ? GLFW_CURSOR_DISABLED
+                    ? GLFW_CURSOR_CAPTURED
                     : (m_current_mouse_cursor != Mouse_cursor_None)
                         ? GLFW_CURSOR_NORMAL
                         : GLFW_CURSOR_HIDDEN
@@ -707,12 +695,85 @@ void Context_window::capture_mouse(const bool capture)
     }
 }
 
+auto Context_window::get_modifier_mask() const -> Key_modifier_mask
+{
+    return glfw_modifiers_to_erhe(m_glfw_key_modifiers);
+}
+
+void Context_window::handle_key_event(int key, int scancode, int action, int glfw_modifiers)
+{
+    static_cast<void>(scancode);
+
+    m_glfw_key_modifiers = glfw_modifiers;
+
+    switch (action) {
+        case GLFW_PRESS:
+        case GLFW_RELEASE: {
+            m_root_window_event_handler.on_key(
+                glfw_key_to_erhe(key),
+                glfw_modifiers_to_erhe(glfw_modifiers),
+                (action == GLFW_PRESS)
+            );
+            break;
+        }
+
+        case GLFW_REPEAT:
+        default:
+            break;
+    }
+}
+
+void Context_window::handle_mouse_button_event(int button, int action, int glfw_modifiers)
+{
+    m_glfw_key_modifiers = glfw_modifiers;
+
+    m_root_window_event_handler.on_mouse_button(
+        glfw_mouse_button_to_erhe(button),
+        glfw_mouse_button_action_to_erhe(action),
+        get_modifier_mask()
+    );
+}
+
+void Context_window::handle_mouse_wheel_event(double x, double y)
+{
+    m_root_window_event_handler.on_mouse_wheel(static_cast<float>(x), static_cast<float>(y), get_modifier_mask());
+}
+
+void Context_window::handle_mouse_move(double x, double y)
+{
+    Root_window_event_handler& event_handler = get_root_window_event_handler();
+
+    if (m_is_mouse_captured) {
+        double dx = x - m_mouse_capture_xpos;
+        double dy = y - m_mouse_capture_ypos;
+        event_handler.on_mouse_move(
+            static_cast<float>(m_mouse_capture_xpos),
+            static_cast<float>(m_mouse_capture_ypos),
+            static_cast<float>(dx),
+            static_cast<float>(dy),
+            get_modifier_mask()
+        );
+    } else {
+        double dx = x - m_last_mouse_x;
+        double dy = y - m_last_mouse_y;
+        m_last_mouse_x = x;
+        m_last_mouse_y = y;
+        event_handler.on_mouse_move(
+            static_cast<float>(x),
+            static_cast<float>(y),
+            static_cast<float>(dx),
+            static_cast<float>(dy),
+            get_modifier_mask()
+        );
+    }
+}
+
 auto Context_window::is_mouse_captured() const -> bool
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr) {
         const int mode = glfwGetInputMode(window, GLFW_CURSOR);
-        if (mode == GLFW_CURSOR_DISABLED) {
+        if (mode == GLFW_CURSOR_CAPTURED) {
             return true;
         }
         if (mode == GLFW_CURSOR_NORMAL) {

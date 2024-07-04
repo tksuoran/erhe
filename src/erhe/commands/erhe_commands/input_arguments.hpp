@@ -3,26 +3,29 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <cstdint>
+
 namespace erhe::commands {
 
-union Input_arguments
+struct Input_arguments
 {
-    bool button_pressed;
+    uint32_t modifier_mask;
 
-    float float_value;
+    union Variant {
+        bool button_pressed;
 
-    struct Vector2
-    {
-        glm::vec2 absolute_value;
-        glm::vec2 relative_value;
-    } vector2;
+        float float_value;
 
-    struct Pose
-    {
-        glm::quat orientation;
-        glm::vec3 position;
-    } pose;
+        struct Vector2 {
+            glm::vec2 absolute_value;
+            glm::vec2 relative_value;
+        } vector2;
+
+        struct Pose {
+            glm::quat orientation;
+            glm::vec3 position;
+        } pose;
+    } variant;
 };
 
-} // namespace erhe::commands/
-
+} // namespace erhe::commands

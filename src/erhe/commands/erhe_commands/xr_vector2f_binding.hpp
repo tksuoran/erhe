@@ -3,14 +3,12 @@
 #include "erhe_commands/command_binding.hpp"
 
 namespace erhe::xr {
-
-class Xr_action_vector2f;
-
+    class Xr_action_vector2f;
 }
 
 namespace erhe::commands {
 
-union Input_arguments;
+struct Input_arguments;
 
 class Xr_vector2f_binding
     : public Command_binding

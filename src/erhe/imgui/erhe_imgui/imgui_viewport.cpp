@@ -287,10 +287,7 @@ void Imgui_viewport::on_event(const Cursor_enter_event& cursor_enter_event)
     io.AddFocusEvent(m_has_cursor);
 }
 
-void Imgui_viewport::on_mouse_move(
-    const float x,
-    const float y
-)
+void Imgui_viewport::on_mouse_move(const float x, const float y)
 {
     std::lock_guard<std::mutex> lock{m_event_mutex};
     m_events.push_back(

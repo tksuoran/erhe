@@ -8,9 +8,10 @@ namespace erhe::commands {
 Mouse_button_binding::Mouse_button_binding(
     Command* const                   command,
     const erhe::window::Mouse_button button,
-    const bool                       trigger_on_pressed
+    const bool                       trigger_on_pressed,
+    const std::optional<uint32_t>    modifier_mask
 )
-    : Mouse_binding       {command}
+    : Mouse_binding       {command, modifier_mask}
     , m_button            {button }
     , m_trigger_on_pressed{trigger_on_pressed}
 {
@@ -25,11 +26,21 @@ Mouse_button_binding::~Mouse_button_binding() noexcept = default;
     return m_button;
 }
 
-auto Mouse_button_binding::on_button(
-    Input_arguments& input
-) -> bool
+auto Mouse_button_binding::on_button(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
+
+    if (
+        m_modifier_mask.has_value() &&
+        m_modifier_mask.value() != input.modifier_mask
+    ) {
+        log_input_event_filtered->trace(
+            "{} rejected button {} due to modifier mask mismatch",
+            command->get_name(),
+            input.variant.button_pressed ? "press" : "release"
+        );
+        return false;
+    }
 
     if (command->get_command_state() == State::Disabled) {
         log_input->trace("  binding command {} is disabled", command->get_name());
@@ -48,7 +59,7 @@ auto Mouse_button_binding::on_button(
         return false;
     }
 
-    if (input.button_pressed) {
+    if (input.variant.button_pressed) {
         if (command->get_command_state() == State::Inactive) {
             log_input->trace("  {}->try_ready()", command->get_name());
             command->try_ready();
@@ -57,7 +68,7 @@ auto Mouse_button_binding::on_button(
             return false;
         }
     }
-    if (!input.button_pressed || m_trigger_on_pressed) {
+    if (!input.variant.button_pressed || m_trigger_on_pressed) {
         bool consumed{false};
         const auto command_state = command->get_command_state();
         if (command_state == State::Ready) {
@@ -67,13 +78,13 @@ auto Mouse_button_binding::on_button(
                 "{} consumed mouse button {} {}",
                 command->get_name(),
                 erhe::window::c_str(m_button),
-                input.button_pressed ? "pressed" : "released"
+                input.variant.button_pressed ? "pressed" : "released"
             );
             log_input_event_consumed->trace(
                 "  {} {} mouse button {}",
                 command->get_name(),
                 consumed ? "consumed" : "did not consume",
-                input.button_pressed ? "pressed" : "released"
+                input.variant.button_pressed ? "pressed" : "released"
             );
         } else {
             log_input->trace(

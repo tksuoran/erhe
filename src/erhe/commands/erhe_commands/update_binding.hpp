@@ -7,7 +7,7 @@
 namespace erhe::commands {
 
 class Command;
-union Input_arguments;
+struct Input_arguments;
 
 class Update_binding
     : public Command_binding

@@ -111,4 +111,4 @@ auto Node_attachment::get_node() const -> const Node*
     return m_node;
 }
 
-}
+} // namespace erhe::scene

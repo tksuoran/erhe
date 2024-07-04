@@ -8,7 +8,7 @@
 
 namespace erhe::commands {
 
-union Input_arguments;
+struct Input_arguments;
 
 // Key pressesed or released
 class Key_binding

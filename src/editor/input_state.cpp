@@ -16,19 +16,13 @@ auto Input_state::on_key(
     return false; // not consumed
 }
 
-auto Input_state::on_mouse_move(
-    const float x,
-    const float y
-) -> bool
+auto Input_state::on_mouse_move(float absolute_x, float absolute_y, float, float, const uint32_t) -> bool
 {
-    mouse_position = glm::vec2{x, y};
+    mouse_position = glm::vec2{absolute_x, absolute_y};
     return false; // not consumed
 }
 
-auto Input_state::on_mouse_button(
-    const uint32_t button,
-    const bool     pressed
-) -> bool
+auto Input_state::on_mouse_button(const uint32_t button, const bool pressed, uint32_t) -> bool
 {
     mouse_button[button] = pressed;
     return false; // not consumed

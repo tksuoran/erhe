@@ -105,7 +105,7 @@ public:
         return m_object_to_broad_phase[inLayer];
     }
 
-//#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
     auto GetBroadPhaseLayerName(
         const JPH::BroadPhaseLayer inLayer
     ) const -> const char* override
@@ -117,7 +117,7 @@ public:
             default:                                                          return "?";
         }
     }
-//#endif // JPH_EXTERNAL_PROFILE || JPH_PROFILE_ENABLED
+#endif // JPH_EXTERNAL_PROFILE || JPH_PROFILE_ENABLED
 
 private:
     JPH::BroadPhaseLayer m_object_to_broad_phase[Layers::NUM_LAYERS];

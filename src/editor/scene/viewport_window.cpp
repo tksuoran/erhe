@@ -340,7 +340,7 @@ void Viewport_window::update_pointer_2d_position(
     m_position_in_viewport = position_in_viewport;
 }
 
-void Viewport_window::update_hover()
+void Viewport_window::update_hover(bool ray_only)
 {
     const bool reverse_depth          = projection_viewport().reverse_depth;
     const auto near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
@@ -362,6 +362,10 @@ void Viewport_window::update_hover()
         near_position_in_world.value(),
         far_position_in_world.value()
     );
+
+    if (ray_only) {
+        return;
+    }
 
     const auto scene_root = m_scene_root.lock();
     if (scene_root) {

@@ -48,11 +48,9 @@ auto Map_primary_brush_command::try_call() -> bool
     return true;
 }
 
-auto Map_primary_brush_command::try_call_with_input(
-    erhe::commands::Input_arguments& input
-) -> bool
+auto Map_primary_brush_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
-    map_editor.hover(input.vector2.absolute_value);
+    map_editor.hover(input.variant.vector2.absolute_value);
     return try_call();
 }
 
@@ -65,11 +63,9 @@ Map_hover_command::Map_hover_command(
 {
 }
 
-auto Map_hover_command::try_call_with_input(
-    erhe::commands::Input_arguments& input
-) -> bool
+auto Map_hover_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
-    map_editor.hover(input.vector2.absolute_value);
+    map_editor.hover(input.variant.vector2.absolute_value);
     return false;
 }
 

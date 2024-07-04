@@ -238,7 +238,7 @@ Drag_enable_command::Drag_enable_command(Commands& commands, Command& update_com
 
 auto Drag_enable_command::try_call_with_input(Input_arguments& input) -> bool
 {
-    const bool enable = input.button_pressed;
+    const bool enable = input.variant.button_pressed;
     this->Command_host::set_enabled(enable);
     if (enable) { // TODO This assymetry does not look great
         m_update_command.try_ready();
@@ -278,8 +278,8 @@ auto Drag_enable_float_command::try_call_with_input(Input_arguments& input) -> b
 {
     static_cast<void>(input);
 
-    const bool enable  = !Command_host::is_enabled() && (input.float_value >= m_min_to_enable);
-    const bool disable =  Command_host::is_enabled() && (input.float_value <= m_max_to_disable);
+    const bool enable  = !Command_host::is_enabled() && (input.variant.float_value >= m_min_to_enable);
+    const bool disable =  Command_host::is_enabled() && (input.variant.float_value <= m_max_to_disable);
 
     if (!enable && !disable) {
         return true; // consumed but didn't make a difference (yet)
@@ -326,10 +326,7 @@ auto Redirect_command::try_call() -> bool
 
 //
 
-Drag_float_command::Drag_float_command(
-    Commands& commands,
-    Command&  target_command
-)
+Drag_float_command::Drag_float_command(Commands& commands, Command& target_command)
     : Helper_command{
         commands,
         target_command,
@@ -348,10 +345,7 @@ auto Drag_float_command::try_call() -> bool
 
 //
 
-Drag_vector2f_command::Drag_vector2f_command(
-    Commands& commands,
-    Command&  target_command
-)
+Drag_vector2f_command::Drag_vector2f_command(Commands& commands, Command& target_command)
     : Helper_command{
         commands,
         target_command,
@@ -378,10 +372,7 @@ auto Drag_vector2f_command::try_call_with_input(Input_arguments& input) -> bool
 
 //
 
-Drag_pose_command::Drag_pose_command(
-    Commands& commands,
-    Command&  target_command
-)
+Drag_pose_command::Drag_pose_command(Commands& commands, Command& target_command)
     : Helper_command{
         commands,
         target_command,
@@ -401,10 +392,7 @@ auto Drag_pose_command::try_call() -> bool
 //
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-Xr_float_click_command::Xr_float_click_command(
-    Commands& commands,
-    Command&  target_command
-)
+Xr_float_click_command::Xr_float_click_command(Commands& commands, Command& target_command)
     : Helper_command{
         commands,
         target_command,
@@ -426,17 +414,16 @@ void Xr_float_click_command::try_ready()
 auto Xr_float_click_command::try_call() -> bool
 {
     Input_arguments input{
-        .float_value = m_xr_action_for_value->state.currentState
+        .variant = {
+            .float_value = m_xr_action_for_value->state.currentState
+        }
     };
     return m_target_command.try_call_with_input(input);
 }
 
 //
 
-Xr_vector2f_click_command::Xr_vector2f_click_command(
-    Commands& commands,
-    Command&  target_command
-)
+Xr_vector2f_click_command::Xr_vector2f_click_command(Commands& commands, Command& target_command)
     : Helper_command{
         commands,
         target_command,
@@ -459,10 +446,12 @@ auto Xr_vector2f_click_command::try_call() -> bool
 {
     Input_arguments input
     {
-        .vector2 = {
-            .absolute_value = glm::vec2{
-                m_xr_action_for_value->state.currentState.x,
-                m_xr_action_for_value->state.currentState.y
+        .variant = {
+            .vector2 = {
+                .absolute_value = glm::vec2{
+                    m_xr_action_for_value->state.currentState.x,
+                    m_xr_action_for_value->state.currentState.y
+                }
             }
         }
     };
@@ -471,10 +460,7 @@ auto Xr_vector2f_click_command::try_call() -> bool
 
 //
 
-Xr_pose_click_command::Xr_pose_click_command(
-    Commands& commands,
-    Command&  target_command
-)
+Xr_pose_click_command::Xr_pose_click_command(Commands& commands, Command& target_command)
     : Helper_command{
         commands,
         target_command,
@@ -493,13 +479,14 @@ void Xr_pose_click_command::try_ready()
     m_target_command.try_ready();
 }
 
-
 auto Xr_pose_click_command::try_call() -> bool
 {
     Input_arguments input{
-        .pose = {
-            .orientation = m_xr_action_for_value->orientation,
-            .position    = m_xr_action_for_value->position
+        .variant = {
+            .pose = {
+                .orientation = m_xr_action_for_value->orientation,
+                .position    = m_xr_action_for_value->position
+            }
         }
     };
     return m_target_command.try_call_with_input(input);

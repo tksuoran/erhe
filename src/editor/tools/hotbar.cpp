@@ -474,7 +474,7 @@ auto Hotbar::try_call(erhe::commands::Input_arguments& input) -> bool
         return false;
     }
 
-    const auto position = input.vector2.absolute_value;
+    const auto position = input.variant.vector2.absolute_value;
 
     const auto old_slot = m_slot;
     if (position.x < -0.2f) {

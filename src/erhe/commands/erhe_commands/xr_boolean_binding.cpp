@@ -38,8 +38,8 @@ auto c_str(const Button_trigger value) -> const char*
 auto Xr_boolean_binding::test_trigger(Input_arguments& input) const -> bool
 {
     switch (m_trigger) {
-        case Button_trigger::Button_pressed:  return  input.button_pressed;
-        case Button_trigger::Button_released: return !input.button_pressed;
+        case Button_trigger::Button_pressed:  return  input.variant.button_pressed;
+        case Button_trigger::Button_released: return !input.variant.button_pressed;
         case Button_trigger::Any:             return true;
         default: return false;
     }
@@ -58,7 +58,7 @@ auto Xr_boolean_binding::on_value_changed(Input_arguments& input) -> bool
         log_input->trace(
             "  binding trigger condition {} not met with value = {} for {}",
             c_str(m_trigger),
-            input.button_pressed,
+            input.variant.button_pressed,
             command->get_name()
         );
         return false;
@@ -82,7 +82,7 @@ auto Xr_boolean_binding::on_value_changed(Input_arguments& input) -> bool
             "  {} {} XR bool {}",
             command->get_name(),
             consumed ? "consumed" : "did not consume",
-            input.button_pressed ? "pressed" : "released"
+            input.variant.button_pressed ? "pressed" : "released"
         );
     } else {
         log_input->trace(

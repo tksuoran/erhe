@@ -43,7 +43,6 @@ public:
     Command_binding();
     virtual ~Command_binding() noexcept;
 
-
     [[nodiscard]] virtual auto get_type                    () const -> Type { return Type::None; }
     [[nodiscard]] auto         get_command                 () const -> Command*;
     [[nodiscard]] auto         is_command_host_enabled     () const -> bool;
