@@ -584,6 +584,7 @@ public:
 
         log_gltf->trace("parsing nodes");
         m_data_out.nodes.resize(m_asset->nodes.size());
+        m_data_out.skins.resize(m_asset->skins.size()); // Skins are parsed just in time during node parsing
         if (!m_asset->scenes.empty()) {
             // TODO For now, only one scene per glTF is supported.
             const fastgltf::Scene& scene = m_asset->scenes.front();
@@ -606,11 +607,12 @@ public:
                 parse_node(i, m_arguments.root_node);
             }
         }
-        
+
         log_gltf->trace("parsing skins");
-        m_data_out.skins.resize(m_asset->skins.size());
         for (std::size_t i = 0, end = m_asset->skins.size(); i < end; ++i) {
-            parse_skin(i);
+            if (!m_data_out.skins[i]) {
+                parse_skin(i);
+            }
         }
 
         log_gltf->trace("parsing animations");
@@ -1303,9 +1305,11 @@ private:
             parse_primitive(erhe_mesh, mesh, i);
         }
     }
+
     void parse_node(const std::size_t node_index, const std::shared_ptr<erhe::scene::Node>& parent)
     {
         const fastgltf::Node& node = m_asset->nodes[node_index];
+
         const std::string node_name = safe_resource_name(node.name, "node", node_index);
         log_gltf->trace("Node: node index = {}, name = {}", node_index, node.name);
         auto erhe_node = std::make_shared<erhe::scene::Node>(node_name);
@@ -1346,6 +1350,9 @@ private:
             );
             if (node.skinIndex.has_value()) {
                 const std::size_t skin_index = node.skinIndex.value();
+                if (!m_data_out.skins[skin_index]) {
+                    parse_skin(skin_index);
+                }
                 erhe_mesh->skin = m_data_out.skins[skin_index];
             }
             erhe_node->attach(erhe_mesh);

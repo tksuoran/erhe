@@ -647,6 +647,7 @@ public:
 
     [[nodiscard]] auto has_polygon_tangents  () const -> bool;
     [[nodiscard]] auto has_polygon_bitangents() const -> bool;
+    [[nodiscard]] auto has_corner_normals    () const -> bool;
     [[nodiscard]] auto has_corner_tangents   () const -> bool;
     [[nodiscard]] auto has_corner_bitangents () const -> bool;
 

@@ -231,6 +231,15 @@ Primitive::Primitive(
     : m_geometry{geometry}
     , m_material{material}
 {
+    if (geometry->has_point_normals()) {
+        m_normal_style = erhe::primitive::Normal_style::point_normals;
+    } else if (geometry->has_corner_normals()) {
+        m_normal_style = erhe::primitive::Normal_style::corner_normals;
+    } else if (geometry->has_polygon_normals()) {
+        m_normal_style = erhe::primitive::Normal_style::point_normals;
+    } else {
+        m_normal_style = erhe::primitive::Normal_style::none;
+    }
 }
 
 Primitive::Primitive(

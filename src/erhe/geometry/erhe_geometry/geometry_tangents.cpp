@@ -27,6 +27,11 @@ auto Geometry::has_polygon_bitangents() const -> bool
     return m_serial_polygon_bitangents == m_serial;
 }
 
+auto Geometry::has_corner_normals() const -> bool
+{
+    return m_serial_corner_normals == m_serial;
+}
+
 auto Geometry::has_corner_tangents() const -> bool
 {
     return m_serial_corner_tangents == m_serial;

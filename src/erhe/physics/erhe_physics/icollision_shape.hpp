@@ -23,8 +23,8 @@ class ICollision_shape;
 class Compound_child
 {
 public:
-    std::shared_ptr<ICollision_shape>& shape;
-    Transform                          transform;
+    std::shared_ptr<ICollision_shape> shape;
+    Transform                         transform;
 };
 
 class Compound_shape_create_info

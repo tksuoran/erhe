@@ -89,15 +89,15 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         if (!shared_node) {
             continue;
         }
-        auto* node = shared_node.get();
+        erhe::scene::Node* node = shared_node.get();
 
-        const auto& mesh = erhe::scene::get_mesh(node);
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node);
         if (!mesh) {
             continue;
         }
 
         mat4 transform;
-        const auto node_physics = get_node_physics(node);
+        const std::shared_ptr<Node_physics> node_physics = get_node_physics(node);
 
         Entry source_entry{
             .mesh          = mesh,
@@ -120,7 +120,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         if (node_physics) {
-            auto* rigid_body = node_physics->get_rigid_body();
+            erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
             if (rigid_body != nullptr) {
                 auto collision_shape = rigid_body->get_collision_shape();
 
@@ -155,7 +155,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
     if (!compound_shape_create_info.children.empty()) {
         ERHE_VERIFY(scene_root != nullptr);
-        const auto& combined_collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared(
+        const std::shared_ptr<erhe::physics::ICollision_shape> combined_collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared(
             compound_shape_create_info
         );
 
@@ -208,23 +208,29 @@ void Merge_operation::execute(Editor_context& context)
     for (const auto& entry : m_sources) {
         ERHE_VERIFY(entry.node != nullptr);
         erhe::scene::Node* node = entry.node.get();
+
         auto& mesh = entry.mesh;
 
         if (first_entry) {
-            // For first mesh: Replace mesh primitives
-            mesh->set_primitives(m_first_mesh_primitives_after);
+            // TODO Improve physics RAII and remove this workaround
+            std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+            node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
+            // For first mesh: Replace mesh primitives
             auto old_node_physics = get_node_physics(node);
             if (old_node_physics) {
                 node->detach(old_node_physics.get());
             }
+            mesh->set_primitives(m_first_mesh_primitives_after);
             if (m_combined_node_physics) {
                 node->attach(m_combined_node_physics);
             }
 
             first_entry = false;
+
+            node->set_parent(parent);
         } else {
-            node->set_node_parent(nullptr);
+            node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
         }
     }
     context.selection->set_selection(m_selection_after);
@@ -253,16 +259,24 @@ void Merge_operation::undo(Editor_context& context)
         erhe::scene::Node* node = entry.node.get();
 
         if (first_entry) {
+            // TODO Improve physics RAII and remove this workaround
+            std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+            node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
+
             first_entry = false;
-            mesh->set_primitives(m_first_mesh_primitives_before);
 
             auto old_node_physics = get_node_physics(node);
             if (old_node_physics) {
                 node->detach(old_node_physics.get());
             }
+
+            mesh->set_primitives(m_first_mesh_primitives_before);
+
             if (entry.node_physics) {
                 node->attach(entry.node_physics);
             }
+
+            node->set_parent(parent);
         } else {
             node->set_parent(entry.before_parent);
         }

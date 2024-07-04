@@ -32,7 +32,9 @@ void Mesh::add_primitive(erhe::primitive::Primitive primitive)
     erhe::primitive::Primitive_raytrace& primitive_raytrace = primitive.get_geometry_raytrace();
     const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.m_rt_geometry;
     if (rt_geometry) {
-        m_rt_primitives.emplace_back(this, primitive_index, rt_geometry.get());
+        m_rt_primitives.emplace_back(
+            new Raytrace_primitive(this, primitive_index, rt_geometry.get())
+        );
     }
 }
 
@@ -45,19 +47,22 @@ void Mesh::add_primitive(erhe::primitive::Primitive primitive, const std::shared
     erhe::primitive::Primitive_raytrace& primitive_raytrace = primitive.get_geometry_raytrace();
     const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.m_rt_geometry;
     if (rt_geometry) {
-        m_rt_primitives.emplace_back(this, primitive_index, rt_geometry.get());
+        m_rt_primitives.emplace_back(new Raytrace_primitive(this, primitive_index, rt_geometry.get()));
     }
 }
 
 void Mesh::set_primitives(const std::vector<erhe::primitive::Primitive>& primitives)
 {
+    m_rt_primitives.clear();
     m_primitives = primitives;
     for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
         const erhe::primitive::Primitive& primitive = primitives[i];
         const erhe::primitive::Primitive_raytrace& primitive_raytrace = primitive.get_geometry_raytrace();
         const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.m_rt_geometry;
         if (rt_geometry) {
-            m_rt_primitives.emplace_back(this, i, rt_geometry.get());
+            m_rt_primitives.emplace_back(
+                new Raytrace_primitive(this, i, rt_geometry.get())
+            );
         }
     }
 }
@@ -126,15 +131,15 @@ auto Mesh::get_rt_scene() const -> erhe::raytrace::IScene*
     return m_rt_scene;
 }
 
-auto Mesh::get_rt_primitives() const -> const std::vector<Raytrace_primitive>&
+auto Mesh::get_rt_primitives() const -> const std::vector<std::unique_ptr<Raytrace_primitive>>&
 {
     return m_rt_primitives;
 }
 
 void Mesh::set_rt_mask(const uint32_t mask)
 {
-    for (auto& rt_primitive : m_rt_primitives) {
-        rt_primitive.rt_instance->set_mask(mask);
+    for (const auto& rt_primitive : m_rt_primitives) {
+        rt_primitive->rt_instance->set_mask(mask);
     }
 }
 
@@ -142,8 +147,8 @@ void Mesh::attach_rt_to_scene(erhe::raytrace::IScene* rt_scene)
 {
     ERHE_VERIFY(rt_scene != nullptr);
     ERHE_VERIFY(m_rt_scene == nullptr);
-    for (auto& rt_primitive : m_rt_primitives) {
-        rt_scene->attach(rt_primitive.rt_instance.get());
+    for (const auto& rt_primitive : m_rt_primitives) {
+        rt_scene->attach(rt_primitive->rt_instance.get());
     }
     m_rt_scene = rt_scene;
 }
@@ -155,8 +160,8 @@ void Mesh::detach_rt_from_scene() // erhe::raytrace::IScene* rt_scene)
         return;
     }
     //ERHE_VERIFY(m_rt_scene != nullptr);
-    for (auto& rt_primitive : m_rt_primitives) {
-        m_rt_scene->detach(rt_primitive.rt_instance.get());
+    for (const auto& rt_primitive : m_rt_primitives) {
+        m_rt_scene->detach(rt_primitive->rt_instance.get());
     }
     m_rt_scene = nullptr;
 }
@@ -188,12 +193,12 @@ void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bit
         return;
     }
 
-    for (auto& rt_primitive : m_rt_primitives) {
+    for (const auto& rt_primitive : m_rt_primitives) {
         const bool visible = (new_flag_bits & erhe::Item_flags::visible) == erhe::Item_flags::visible;
-        if (visible && !rt_primitive.rt_instance->is_enabled()) {
-            rt_primitive.rt_instance->enable();
-        } else if (!visible && rt_primitive.rt_instance->is_enabled()) {
-            rt_primitive.rt_instance->disable();
+        if (visible && !rt_primitive->rt_instance->is_enabled()) {
+            rt_primitive->rt_instance->enable();
+        } else if (!visible && rt_primitive->rt_instance->is_enabled()) {
+            rt_primitive->rt_instance->disable();
         }
     }
 }
@@ -201,9 +206,9 @@ void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bit
 void Mesh::handle_node_transform_update()
 {
     const glm::mat4& world_from_node = (get_node() != nullptr) ? get_node()->world_from_node() : glm::mat4{1.0f};
-    for (auto& rt_primitive : m_rt_primitives) {
-        rt_primitive.rt_instance->set_transform(world_from_node);
-        rt_primitive.rt_instance->commit();
+    for (const auto& rt_primitive : m_rt_primitives) {
+        rt_primitive->rt_instance->set_transform(world_from_node);
+        rt_primitive->rt_instance->commit();
     }
 }
 

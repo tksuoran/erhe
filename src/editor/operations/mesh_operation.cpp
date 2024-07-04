@@ -42,15 +42,21 @@ void Mesh_operation::execute(Editor_context&)
 
     for (const auto& entry : m_entries) {
         auto* node = entry.mesh->get_node();
-        entry.mesh->set_primitives(entry.after.primitives);
+
+        // TODO Improve physics RAII and remove this workaround
+        std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+        node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
         auto old_node_physics = get_node_physics(node);
         if (old_node_physics) {
             node->detach(old_node_physics.get());
         }
+        entry.mesh->set_primitives(entry.after.primitives);
         if (entry.after.node_physics) {
             node->attach(entry.after.node_physics);
         }
+
+        node->set_parent(parent);
     }
 }
 
@@ -60,15 +66,21 @@ void Mesh_operation::undo(Editor_context&)
 
     for (const auto& entry : m_entries) {
         auto* node = entry.mesh->get_node();
-        entry.mesh->set_primitives(entry.before.primitives);
+
+        // TODO Improve physics RAII and remove this workaround
+        std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+        node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
         auto old_node_physics = get_node_physics(node);
         if (old_node_physics) {
             node->detach(old_node_physics.get());
         }
+        entry.mesh->set_primitives(entry.before.primitives);
         if (entry.before.node_physics) {
             node->attach(entry.before.node_physics);
         }
+
+        node->set_parent(parent);
     }
 }
 

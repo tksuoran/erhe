@@ -59,11 +59,10 @@ public:
     void set_rt_mask         (uint32_t rt_mask);
     void attach_rt_to_scene  (erhe::raytrace::IScene* rt_scene);
     void detach_rt_from_scene();
-    void update_rt_mask      ();
     [[nodiscard]] auto get_mutable_primitives()       ->       std::vector<erhe::primitive::Primitive>&;
     [[nodiscard]] auto get_primitives        () const -> const std::vector<erhe::primitive::Primitive>&;
     [[nodiscard]] auto get_rt_scene          () const -> erhe::raytrace::IScene*;
-    [[nodiscard]] auto get_rt_primitives     () const -> const std::vector<Raytrace_primitive>&;
+    [[nodiscard]] auto get_rt_primitives     () const -> const std::vector<std::unique_ptr<Raytrace_primitive>>&;
 
     Layer_id              layer_id{0xff};
     std::shared_ptr<Skin> skin; // TODO Make this a separate node attachment
@@ -71,9 +70,9 @@ public:
     float                 line_width{1.0f};
 
 private:
-    std::vector<erhe::primitive::Primitive> m_primitives;
-    erhe::raytrace::IScene*                 m_rt_scene{nullptr};
-    std::vector<Raytrace_primitive>         m_rt_primitives;
+    std::vector<erhe::primitive::Primitive>          m_primitives;
+    erhe::raytrace::IScene*                          m_rt_scene{nullptr};
+    std::vector<std::unique_ptr<Raytrace_primitive>> m_rt_primitives;
 };
 
 [[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;

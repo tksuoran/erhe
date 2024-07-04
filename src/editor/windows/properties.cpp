@@ -338,11 +338,11 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
         const auto& rt_primitives = mesh.get_rt_primitives();
         if (ImGui::TreeNodeEx("Raytrace Primitives", ImGuiTreeNodeFlags_DefaultOpen )) {
             for (const auto& rt_primitive : rt_primitives) {
-                ImGui::Text("Mesh: %s", (rt_primitive.mesh != nullptr) ? rt_primitive.mesh->get_name().c_str() : "(nullptr)");
-                ImGui::Text("Primitive Index: %zu", rt_primitive.primitive_index);
-                const auto* rt_instance = rt_primitive.rt_instance.get();
+                ImGui::Text("Mesh: %s", (rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)");
+                ImGui::Text("Primitive Index: %zu", rt_primitive->primitive_index);
+                const auto* rt_instance = rt_primitive->rt_instance.get();
                 ImGui::Text("RT Instance: %s", (rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)");
-                const auto* rt_scene = rt_primitive.rt_scene.get();
+                const auto* rt_scene = rt_primitive->rt_scene.get();
                 ImGui::Text("RT Scene: %s", (rt_scene!= nullptr) ? rt_scene->debug_label().data() : "(nullptr)");
             }
             ImGui::TreePop();

@@ -937,7 +937,7 @@ void Debug_visualizations::raytrace_nodes_visualization(
         }
 
         for (const auto& rt_primitive : mesh->get_rt_primitives()) {
-            const auto m = rt_primitive.rt_instance->get_transform();
+            const auto m = rt_primitive->rt_instance->get_transform();
             line_renderer.add_lines( m, red,   {{ O, axis_x }} );
             line_renderer.add_lines( m, green, {{ O, axis_y }} );
             line_renderer.add_lines( m, blue,  {{ O, axis_z }} );

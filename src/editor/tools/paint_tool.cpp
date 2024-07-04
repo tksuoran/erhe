@@ -207,6 +207,9 @@ Paint_tool::Paint_tool(
 
 void Paint_tool::tool_render(const Render_context& context)
 {
+    if (!is_enabled()) {
+        return;
+    }
     auto& line_renderer = *(context.editor_context.line_renderer_set->visible.at(2).get());
     line_renderer.set_thickness(5.0f);
 
