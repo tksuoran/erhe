@@ -377,15 +377,15 @@ void Build_context::build_vertex_normal()
     vec3 point_normal{0.0f, 1.0f, 0.0f};
     bool found_point_normal{false};
     if (property_maps.point_normals != nullptr) {
-        found_point_normal = property_maps.point_normals->maybe_get(point_id, point_normal);
+        found_point_normal = property_maps.point_normals->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
     }
     if (!found_point_normal && (property_maps.point_normals_smooth != nullptr)) {
-        found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal);
+        found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
     }
 
     bool found_normal{false};
     if (property_maps.corner_normals != nullptr) {
-        found_normal = property_maps.corner_normals->maybe_get(corner_id, normal);
+        found_normal = property_maps.corner_normals->maybe_get(corner_id, normal) && (glm::length(normal) > 0.9f);
     }
     if (!found_normal) {
         normal = point_normal;
@@ -400,18 +400,21 @@ void Build_context::build_vertex_normal()
             }
 
             case Normal_style::corner_normals: {
+                ERHE_VERIFY(glm::length(normal) > 0.9f);
                 vertex_writer.write(root.attributes.normal, normal);
                 SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} normal {}", point_id, corner_id, normal);
                 break;
             }
 
             case Normal_style::point_normals: {
+                ERHE_VERIFY(glm::length(point_normal) > 0.9f);
                 vertex_writer.write(root.attributes.normal, point_normal);
                 SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point normal {}", point_id, corner_id, point_normal);
                 break;
             }
 
             case Normal_style::polygon_normals: {
+                ERHE_VERIFY(glm::length(polygon_normal) > 0.9f);
                 vertex_writer.write(root.attributes.normal, polygon_normal);
                 SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} polygon normal {}", point_id, corner_id, polygon_normal);
                 break;
@@ -458,7 +461,7 @@ void Build_context::build_vertex_tangent()
     vec4 tangent{1.0f, 0.0f, 0.0, 1.0f};
     bool found{false};
     if (property_maps.corner_tangents != nullptr) {
-        found = property_maps.corner_tangents->maybe_get(corner_id, tangent);
+        found = property_maps.corner_tangents->maybe_get(corner_id, tangent) && (glm::length(tangent) > 0.9f);
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
         if (found)
         {
@@ -467,7 +470,7 @@ void Build_context::build_vertex_tangent()
 #endif
     }
     if (!found && (property_maps.point_tangents != nullptr)) {
-        found = property_maps.point_tangents->maybe_get(point_id, tangent);
+        found = property_maps.point_tangents->maybe_get(point_id, tangent) && (glm::length(tangent) > 0.9f);
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
         if (found) {
             SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point tangent {}", point_id, corner_id, tangent);
@@ -493,7 +496,7 @@ void Build_context::build_vertex_bitangent()
     vec4 bitangent{0.0f, 0.0f, 1.0, 1.0f};
     bool found{false};
     if (property_maps.corner_bitangents != nullptr) {
-        found = property_maps.corner_bitangents->maybe_get(corner_id, bitangent);
+        found = property_maps.corner_bitangents->maybe_get(corner_id, bitangent) && (glm::length(bitangent) > 0.9f);
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
         if (found) {
             SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} bitangent {}", point_id, corner_id, bitangent);
@@ -501,7 +504,7 @@ void Build_context::build_vertex_bitangent()
 #endif
     }
     if (!found && (property_maps.point_bitangents != nullptr)) {
-        found = property_maps.point_bitangents->maybe_get(point_id, bitangent);
+        found = property_maps.point_bitangents->maybe_get(point_id, bitangent) && (glm::length(bitangent) > 0.9f);
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
         if (found) {
             SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point bitangent {}", point_id, corner_id, bitangent);
