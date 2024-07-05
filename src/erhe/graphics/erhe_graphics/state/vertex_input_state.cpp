@@ -285,6 +285,11 @@ auto Vertex_input_state::gl_name() const -> unsigned int
         : 0;
 }
 
+auto Vertex_input_state::get_data() const -> const Vertex_input_state_data&
+{
+    return m_data;
+}
+
 void Vertex_input_state_tracker::reset()
 {
     gl::bind_vertex_array(0);
@@ -293,9 +298,7 @@ void Vertex_input_state_tracker::reset()
 
 void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
 {
-    const unsigned int name = (state != nullptr)
-        ? state->gl_name()
-        : 0;
+    const unsigned int name = (state != nullptr) ? state->gl_name() : 0;
     if (m_last == name) {
         return;
     }

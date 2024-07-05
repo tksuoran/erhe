@@ -35,6 +35,7 @@ public:
     explicit Renderpass(const std::string_view name);
 
     void render(const Render_context& context) const;
+    void imgui();
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Renderpass"};

@@ -247,6 +247,8 @@ erhe_target_sources_grouped(
     windows/clipboard_window.hpp
     windows/commands_window.cpp
     windows/commands_window.hpp
+    windows/composer_window.cpp
+    windows/composer_window.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
     windows/imgui_viewport_window.cpp

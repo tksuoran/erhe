@@ -14,8 +14,7 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 Viewport_config_window::Viewport_config_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
@@ -155,6 +154,10 @@ void Viewport_config_window::imgui()
         ImGuiTreeNodeFlags_SpanFullWidth     |
         ImGuiTreeNodeFlags_DefaultOpen
     };
+
+    if (ImGui::Button("Make RenderDoc Capture")) {
+        m_context.editor_rendering->request_renderdoc_capture();
+    }
 
     if (edit_data != nullptr) {
         ImGui::SliderFloat("Gizmo Scale", &edit_data->gizmo_scale, 1.0f, 8.0f, "%.2f");

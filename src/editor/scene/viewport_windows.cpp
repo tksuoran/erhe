@@ -562,10 +562,7 @@ auto Viewport_windows::last_window() -> std::shared_ptr<Viewport_window>
     return m_last_window.lock();
 }
 
-void Viewport_windows::viewport_toolbar(
-    Viewport_window& viewport_window,
-    bool&            hovered
-)
+void Viewport_windows::viewport_toolbar(Viewport_window& viewport_window, bool& hovered)
 {
     ImGui::PushID("Viewport_windows::viewport_toolbar");
     const auto& rasterization = m_context.icon_set->get_small_rasterization();

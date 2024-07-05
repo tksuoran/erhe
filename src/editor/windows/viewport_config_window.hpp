@@ -10,8 +10,7 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 
@@ -49,7 +48,7 @@ public:
     void imgui() override;
 
     // Public API
-    void render_style_ui(Render_style_data& render_style);
+    static void render_style_ui(Render_style_data& render_style);
 
     Editor_context& m_context;
 

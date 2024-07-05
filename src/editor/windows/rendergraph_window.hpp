@@ -30,10 +30,7 @@ public:
     auto flags() -> ImGuiWindowFlags override;
 
 private:
-    void imnodes_demo();
-
-    Editor_context&    m_context;
-
+    Editor_context&       m_context;
     float                 m_image_size{100.0f};
     float                 m_curve_strength{10.0f};
     ImNodes::Ez::Context* m_imnodes_context{nullptr};

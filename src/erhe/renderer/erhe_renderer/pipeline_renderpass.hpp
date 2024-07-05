@@ -4,17 +4,14 @@
 
 #include <functional>
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 class Pipeline_renderpass
 {
 public:
     void reset();
 
-    explicit Pipeline_renderpass(
-        erhe::graphics::Pipeline&& pipeline
-    );
+    explicit Pipeline_renderpass(erhe::graphics::Pipeline&& pipeline);
     Pipeline_renderpass(
         erhe::graphics::Pipeline&& pipeline,
         std::function<void()>      begin,

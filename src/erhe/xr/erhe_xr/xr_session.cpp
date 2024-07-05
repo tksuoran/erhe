@@ -3,6 +3,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_xr/xr_instance.hpp"
 #include "erhe_xr/xr.hpp"
 #include "erhe_xr/xr_log.hpp"
@@ -47,16 +49,16 @@ Xr_session::Xr_session(
     Xr_instance&                   instance,
     erhe::window::Context_window& context_window
 )
-    : m_instance                {instance}
-    , m_context_window          {context_window}
-    , m_xr_session              {XR_NULL_HANDLE}
-    , m_swapchain_color_format  {gl::Internal_format::srgb8_alpha8}
-    , m_swapchain_depth_format  {gl::Internal_format::depth24_stencil8}
-    , m_xr_reference_space_local{XR_NULL_HANDLE}
-    , m_xr_reference_space_stage{XR_NULL_HANDLE}
-    , m_xr_reference_space_view {XR_NULL_HANDLE}
+    : m_instance                      {instance}
+    , m_context_window                {context_window}
+    , m_xr_session                    {XR_NULL_HANDLE}
+    , m_swapchain_color_format        {gl::Internal_format::srgb8_alpha8}
+    , m_swapchain_depth_stencil_format{gl::Internal_format::depth24_stencil8}
+    , m_xr_reference_space_local      {XR_NULL_HANDLE}
+    , m_xr_reference_space_stage      {XR_NULL_HANDLE}
+    , m_xr_reference_space_view       {XR_NULL_HANDLE}
     //, m_xr_session_state      {XR_SESSION_STATE_VISIBLE}
-    , m_xr_frame_state        {
+    , m_xr_frame_state{
         XR_TYPE_FRAME_STATE,
         nullptr,
         0,
@@ -346,13 +348,13 @@ auto Xr_session::create_swapchains() -> bool
         check_gl_context_in_current_in_this_thread();
         ERHE_XR_CHECK(xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_swapchain));
 
-        const XrSwapchainCreateInfo depth_swapchain_create_info{
+        const XrSwapchainCreateInfo depth_stencil_swapchain_create_info{
             .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
             .next        = nullptr,
             .createFlags = 0,
             //.usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
             .usageFlags  = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-            .format      = static_cast<int64_t>(m_swapchain_depth_format),
+            .format      = static_cast<int64_t>(m_swapchain_depth_stencil_format),
             .sampleCount = view.recommendedSwapchainSampleCount,
             .width       = view.recommendedImageRectWidth,
             .height      = view.recommendedImageRectHeight,
@@ -361,11 +363,11 @@ auto Xr_session::create_swapchains() -> bool
             .mipCount    = 1
         };
 
-        XrSwapchain depth_swapchain{XR_NULL_HANDLE};
+        XrSwapchain depth_stencil_swapchain{XR_NULL_HANDLE};
 
         check_gl_context_in_current_in_this_thread();
-        ERHE_XR_CHECK(xrCreateSwapchain(m_xr_session, &depth_swapchain_create_info, &depth_swapchain));
-        m_view_swapchains.emplace_back(color_swapchain, depth_swapchain);
+        ERHE_XR_CHECK(xrCreateSwapchain(m_xr_session, &depth_stencil_swapchain_create_info, &depth_stencil_swapchain));
+        m_view_swapchains.emplace_back(color_swapchain, depth_stencil_swapchain);
     }
 
     return true;
@@ -815,45 +817,64 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             return false;
         }
 
-        auto acquired_depth_swapchain_image_opt = swapchain.depth_swapchain.acquire();
+        auto acquired_depth_stencil_swapchain_image_opt = swapchain.depth_stencil_swapchain.acquire();
         if (
-            !acquired_depth_swapchain_image_opt.has_value() ||
-            !swapchain.depth_swapchain.wait()
+            !acquired_depth_stencil_swapchain_image_opt.has_value() ||
+            !swapchain.depth_stencil_swapchain.wait()
         ) {
-            log_xr->warn("no swapchain depth image for view {}", i);
+            log_xr->warn("no swapchain depth stencilimage for view {}", i);
             return false;
         }
 
-        const auto& acquired_color_swapchain_image = acquired_color_swapchain_image_opt.value();
-        const auto& acquired_depth_swapchain_image = acquired_depth_swapchain_image_opt.value();
+        const auto& acquired_color_swapchain_image         = acquired_color_swapchain_image_opt.value();
+        const auto& acquired_depth_stencil_swapchain_image = acquired_depth_stencil_swapchain_image_opt.value();
 
-        const uint32_t color_texture = acquired_color_swapchain_image.get_gl_texture();
-        const uint32_t depth_texture = acquired_depth_swapchain_image.get_gl_texture();
+        const uint32_t color_texture         = acquired_color_swapchain_image.get_gl_texture();
+        const uint32_t depth_stencil_texture = acquired_depth_stencil_swapchain_image.get_gl_texture();
         if (
             (color_texture == 0) ||
-            (depth_texture == 0)
+            (depth_stencil_texture == 0)
         ) {
             log_xr->warn("invalid color / depth image for view {}", i);
             return false;
         }
 
+        // GLint color_internal_format_i{0};
+        // GLint depth_internal_format_i{0};
+        // gl::Error_code start_error_code = gl::get_error();
+        // gl::get_texture_level_parameter_iv(color_texture, 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_INTERNAL_FORMAT), &color_internal_format_i);
+        // gl::Error_code color_error_code = gl::get_error();
+        // gl::get_texture_level_parameter_iv(depth_texture, 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_INTERNAL_FORMAT), &depth_internal_format_i);
+        // gl::Error_code depth_error_code = gl::get_error();
+        // static_cast<void>(start_error_code);
+        // static_cast<void>(color_error_code);
+        // static_cast<void>(depth_error_code);
+        // gl::Internal_format color_internal_format = static_cast<gl::Internal_format>(color_internal_format_i);
+        // gl::Internal_format depth_internal_format = static_cast<gl::Internal_format>(depth_internal_format_i);
+        // if (color_internal_format != m_swapchain_color_format) {
+        //     log_xr->warn("swapchain color format = {}, expected format = {}", gl::c_str(color_internal_format), gl::c_str(m_swapchain_color_format));
+        // }
+        // if (depth_internal_format != m_swapchain_depth_format) {
+        //     log_xr->warn("swapchain depth format = {}, expected format = {}", gl::c_str(depth_internal_format), gl::c_str(m_swapchain_depth_format));
+        // }
+ 
         Render_view render_view{
             .slot      = i,
             .view_pose = {
                 .orientation = to_glm(m_xr_views[i].pose.orientation),
                 .position    = to_glm(m_xr_views[i].pose.position),
             },
-            .fov_left          = m_xr_views[i].fov.angleLeft,
-            .fov_right         = m_xr_views[i].fov.angleRight,
-            .fov_up            = m_xr_views[i].fov.angleUp,
-            .fov_down          = m_xr_views[i].fov.angleDown,
-            .color_texture     = color_texture,
-            .depth_texture     = depth_texture,
-            .color_format      = m_swapchain_color_format,
-            .depth_format      = m_swapchain_depth_format,
-            .width             = view_configuration_views[i].recommendedImageRectWidth,
-            .height            = view_configuration_views[i].recommendedImageRectHeight,
-            .composition_alpha = m_instance.get_configuration().composition_alpha
+            .fov_left              = m_xr_views[i].fov.angleLeft,
+            .fov_right             = m_xr_views[i].fov.angleRight,
+            .fov_up                = m_xr_views[i].fov.angleUp,
+            .fov_down              = m_xr_views[i].fov.angleDown,
+            .color_texture         = color_texture,
+            .depth_stencil_texture = depth_stencil_texture,
+            .color_format          = m_swapchain_color_format,
+            .depth_stencil_format  = m_swapchain_depth_stencil_format,
+            .width                 = view_configuration_views[i].recommendedImageRectWidth,
+            .height                = view_configuration_views[i].recommendedImageRectHeight,
+            .composition_alpha     = m_instance.get_configuration().composition_alpha
         };
         {
             const auto result = render_view_callback(render_view);
@@ -867,7 +888,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             .type     = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR,
             .next     = nullptr,
             .subImage = {
-                .swapchain = swapchain.depth_swapchain.get_xr_swapchain(),
+                .swapchain = swapchain.depth_stencil_swapchain.get_xr_swapchain(),
                 .imageRect = {
                     .offset = { 0, 0 },
                     .extent = {

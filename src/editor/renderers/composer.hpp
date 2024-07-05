@@ -31,6 +31,8 @@ public:
     // Public API
     void render(const Render_context& context) const;
 
+    void imgui();
+
     // TODO Move to children
     std::vector<std::shared_ptr<Renderpass>> renderpasses;
 };

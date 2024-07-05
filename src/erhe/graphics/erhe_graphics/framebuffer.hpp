@@ -32,10 +32,7 @@ public:
         {
         }
 
-        Attachment(
-            const gl::Framebuffer_attachment attachment_point,
-            Renderbuffer*                    renderbuffer
-        )
+        Attachment(const gl::Framebuffer_attachment attachment_point, Renderbuffer* renderbuffer)
             : attachment_point{attachment_point}
             , renderbuffer    {renderbuffer}
         {

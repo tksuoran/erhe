@@ -31,9 +31,9 @@ public:
     float               fov_up;
     float               fov_down;
     uint32_t            color_texture;
-    uint32_t            depth_texture;
+    uint32_t            depth_stencil_texture;
     gl::Internal_format color_format;
-    gl::Internal_format depth_format;
+    gl::Internal_format depth_stencil_format;
     uint32_t            width;
     uint32_t            height;
     bool                composition_alpha;

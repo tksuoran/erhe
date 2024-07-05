@@ -19,10 +19,7 @@
 
 namespace erhe::xr {
 
-Swapchain_image::Swapchain_image(
-    Swapchain*     swapchain,
-    const uint32_t image_index
-)
+Swapchain_image::Swapchain_image(Swapchain* swapchain, const uint32_t image_index)
     : m_swapchain  {swapchain}
     , m_image_index{image_index}
 {

@@ -2,25 +2,21 @@
 
 #include <memory>
 
-namespace erhe::xr
-{
+namespace erhe::xr {
     class Render_view;
 }
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Framebuffer;
     class Instance;
     class Texture;
 }
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Camera;
     class Node;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_rendering;
 class Headset_view;
@@ -42,7 +38,7 @@ public:
     int                                          width;
     int                                          height;
     std::shared_ptr<erhe::graphics::Texture>     color_texture;
-    std::shared_ptr<erhe::graphics::Texture>     depth_texture;
+    std::shared_ptr<erhe::graphics::Texture>     depth_stencil_texture;
     std::shared_ptr<erhe::graphics::Framebuffer> framebuffer;
     std::shared_ptr<erhe::scene::Node>           node;
     std::shared_ptr<erhe::scene::Camera>         camera;

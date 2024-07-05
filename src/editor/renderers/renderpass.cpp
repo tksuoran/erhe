@@ -11,11 +11,14 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 
+#include "erhe_imgui/windows/pipelines.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_profile/profile.hpp"
 
-namespace editor
-{
+#include <imgui/imgui.h>
+
+namespace editor {
 
 Renderpass::Renderpass(const Renderpass&)            = default;
 Renderpass& Renderpass::operator=(const Renderpass&) = default;
@@ -194,6 +197,24 @@ void Renderpass::render(const Render_context& context) const
                 .debug_label            = get_name()
             }
         );
+    }
+}
+
+void Renderpass::imgui()
+{
+    if (ImGui::TreeNodeEx("Pipeline passes", ImGuiTreeNodeFlags_Framed)) {
+        int pipeline_pass_index = 0;
+        for (erhe::renderer::Pipeline_renderpass* pass : passes) {
+            ImGui::PushID(pipeline_pass_index++);
+            erhe::imgui::pipeline_imgui(pass->pipeline);
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
+    ImGui::Text("Primitive Mode: %s", erhe::primitive::c_str(primitive_mode));
+    ImGui::Checkbox("Allow shader stages override", &allow_shader_stages_override);
+    if (primitive_settings.has_value()) {
+        //static void render_style_ui(Render_style_data& render_style);
     }
 }
 

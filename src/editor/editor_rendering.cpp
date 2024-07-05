@@ -16,6 +16,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
+#include "windows/viewport_config_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -687,6 +688,8 @@ void Editor_rendering::imgui()
         }
         ImGui::TreePop();
     }
+
+    m_composer.imgui();
 }
 
 void Editor_rendering::begin_frame()
@@ -702,7 +705,16 @@ void Editor_rendering::begin_frame()
     m_context.viewport_windows->update_hover(imgui_viewport);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+    m_context.viewport_config_window->edit_data = &m_context.headset_view->get_config();
+
     m_context.headset_view->begin_frame();
+#endif
+}
+
+void Editor_rendering::request_renderdoc_capture()
+{
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    m_context.headset_view->request_renderdoc_capture();
 #endif
 }
 

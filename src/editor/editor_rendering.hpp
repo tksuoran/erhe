@@ -119,6 +119,7 @@ public:
     auto make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>;
 
     void imgui();
+    void request_renderdoc_capture();
 
     glm::uvec4                  debug_joint_indices{0, 0, 0, 0};
     std::vector<glm::vec4>      debug_joint_colors;

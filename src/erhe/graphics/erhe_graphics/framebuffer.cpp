@@ -13,10 +13,7 @@ namespace erhe::graphics
 
 namespace {
 
-void dump_fbo_attachment(
-    int                        fbo_name,
-    gl::Framebuffer_attachment attachment
-)
+void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
 {
     int type{0};
     gl::get_named_framebuffer_attachment_parameter_iv(
@@ -62,15 +59,40 @@ void dump_fbo_attachment(
             );
         }
 
-        log_framebuffer->trace(
-            "\t{} {} attachment {} samples = {} size = {} x {} format = {}",
+        int component_type{0};
+        int red_size{0};
+        int green_size{0};
+        int blue_size{0};
+        int alpha_size{0};
+        int depth_size{0};
+        int stencil_size{0};
+        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_component_type, &component_type);
+        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_red_size, &red_size);
+        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_green_size, &green_size);
+        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_blue_size, &blue_size);
+        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_alpha_size, &alpha_size);
+        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_depth_size, &depth_size);
+        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_stencil_size, &stencil_size);
+
+        log_framebuffer->info(
+            "\t{} {} attachment {} samples = {} size = {} x {} format = {} component_type = {}, RGBA size = {}.{}.{}.{}, DS size = {}.{}",
             c_str(attachment),
             gl::enum_string(type),
             name,
             samples,
             width,
             height,
-            gl::enum_string(internal_format)
+            gl::enum_string(internal_format),
+            gl::enum_string(component_type),
+            red_size, green_size, blue_size, alpha_size,
+            depth_size, stencil_size
         );
     }
 }
@@ -82,7 +104,7 @@ void dump_fbo(int fbo_name)
     gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::samples, &samples);
     gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::sample_buffers, &sample_buffers);
 
-    log_framebuffer->trace(
+    log_framebuffer->info(
         "FBO {} uses {} samples {} sample buffers",
         fbo_name,
         samples,

@@ -33,6 +33,7 @@
 #include "windows/brdf_slice.hpp"
 #include "windows/clipboard_window.hpp"
 #include "windows/commands_window.hpp"
+#include "windows/composer_window.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/layers_window.hpp"
 #include "windows/network_window.hpp"
@@ -173,6 +174,7 @@ public:
         , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_editor_context, m_editor_settings.icons, m_programs}
         , m_post_processing       {m_graphics_instance, m_editor_context,    m_programs}
         , m_id_renderer           {m_graphics_instance, m_program_interface, m_mesh_memory,     m_programs}
+        , m_composer_window       {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_selection_window      {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_settings_window       {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_viewport_windows      {m_commands,          m_editor_context,    m_editor_message_bus}
@@ -464,6 +466,7 @@ public:
     Icon_set                                m_icon_set;
     Post_processing                         m_post_processing;
     Id_renderer                             m_id_renderer;
+    Composer_window                         m_composer_window;
     Selection_window                        m_selection_window;
     Settings_window                         m_settings_window;
     Viewport_windows                        m_viewport_windows;
@@ -561,14 +564,7 @@ void run_editor()
         ini->get("openxr", openxr);
     }
     if (enable_renderdoc_capture_support) {
-        if (!openxr) {
-            erhe::window::initialize_frame_capture();
-        } else {
-            log_startup->warn(
-                "Renderdoc capture cannot be used together with OpenXR. "
-                "Keeping OpenXR enabled and disabling renderdoc capture."
-            );
-        }
+        erhe::window::initialize_frame_capture();
     }
 
     Editor editor{};

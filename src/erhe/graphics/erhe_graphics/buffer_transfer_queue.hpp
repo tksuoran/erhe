@@ -12,19 +12,15 @@ class Buffer;
 class Buffer_transfer_queue final
 {
 public:
-    Buffer_transfer_queue ();
+    Buffer_transfer_queue();
     ~Buffer_transfer_queue() noexcept;
-    Buffer_transfer_queue (Buffer_transfer_queue&) = delete;
-    auto operator=        (Buffer_transfer_queue&) -> Buffer_transfer_queue& = delete;
+    Buffer_transfer_queue(Buffer_transfer_queue&) = delete;
+    auto operator=(Buffer_transfer_queue&) -> Buffer_transfer_queue& = delete;
 
     class Transfer_entry
     {
     public:
-        Transfer_entry(
-            Buffer&                target,
-            const std::size_t      target_offset,
-            std::vector<uint8_t>&& data
-        )
+        Transfer_entry(Buffer& target, const std::size_t target_offset, std::vector<uint8_t>&& data)
             : target       {target}
             , target_offset{target_offset}
             , data         {data}
@@ -50,11 +46,7 @@ public:
 
     void flush();
 
-    void enqueue(
-        Buffer&                buffer,
-        std::size_t            offset,
-        std::vector<uint8_t>&& data
-    );
+    void enqueue(Buffer& buffer, std::size_t offset, std::vector<uint8_t>&& data);
 
 private:
     std::mutex                  m_mutex;

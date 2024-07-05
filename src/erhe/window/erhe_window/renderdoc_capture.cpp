@@ -92,9 +92,7 @@ void initialize_frame_capture()
     is_initialized = true;
 }
 
-void start_frame_capture(
-    const erhe::window::Context_window& context_window
-)
+void start_frame_capture(const erhe::window::Context_window& context_window)
 {
     if (!renderdoc_api || !is_initialized) {
         return;

@@ -66,6 +66,8 @@ public:
     void reset  ();
     void update ();
 
+    [[nodiscard]] auto get_data()  const -> const Vertex_input_state_data&;
+
     static void on_thread_enter();
     static void on_thread_exit();
 

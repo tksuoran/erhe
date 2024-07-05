@@ -2,8 +2,9 @@
 #include "editor_log.hpp"
 #include "renderers/renderpass.hpp"
 
-namespace editor
-{
+#include <imgui/imgui.h>
+
+namespace editor {
 
 // TODO Do deep copy instead / use Hierarchy
 
@@ -33,6 +34,25 @@ void Composer::render(const Render_context& context) const
         log_frame->trace("  rp: {}", renderpass->describe());
         renderpass->render(context);
     }
+}
+
+void Composer::imgui()
+{
+    if (!ImGui::TreeNodeEx("Composer", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    int renderpass_index = 0;
+    for (const auto& renderpass : renderpasses) {
+        ImGui::PushID(renderpass_index++);
+        if (ImGui::TreeNodeEx(renderpass->describe().c_str(), ImGuiTreeNodeFlags_Framed)) {
+            renderpass->imgui();
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::TreePop();
 }
 
 } // namespace editor

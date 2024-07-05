@@ -28,21 +28,18 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_xr/headset.hpp"
 #include "erhe_xr/xr_instance.hpp"
 #include "erhe_xr/xr_session.hpp"
 
 #include <imgui/imgui.h>
 
-namespace editor
-{
+namespace editor {
 
 using erhe::graphics::Color_blend_state;
 
-Headset_view_node::Headset_view_node(
-    erhe::rendergraph::Rendergraph& rendergraph,
-    Headset_view&                   headset_view
-)
+Headset_view_node::Headset_view_node(erhe::rendergraph::Rendergraph& rendergraph, Headset_view& headset_view)
     : erhe::rendergraph::Rendergraph_node{rendergraph, "Headset"}
     , m_headset_view                     {headset_view}
 {
@@ -76,6 +73,7 @@ Headset_view::Headset_view(
     Scene_builder&                  scene_builder
 )
     : Scene_view{editor_context, Viewport_config{}}
+    , m_context_window{context_window}
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
     ini->get("openxr",            config.openxr);
@@ -297,6 +295,12 @@ void Headset_view::render_headset()
                 return false;
             }
 
+            if (m_request_renderdoc_capture) {
+                erhe::window::start_frame_capture(m_context_window);
+                m_renderdoc_capture_started = true;
+                m_request_renderdoc_capture = false;
+            }
+
             if (m_head_tracking_enabled) {
                 view_resources->update(render_view);
             }
@@ -336,9 +340,11 @@ void Headset_view::render_headset()
             {
                 gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
                 gl::clear_depth_f(*graphics_instance.depth_clear_value_pointer());
+                gl::clear_stencil(0);
                 gl::clear(
                     gl::Clear_buffer_mask::color_buffer_bit |
-                    gl::Clear_buffer_mask::depth_buffer_bit
+                    gl::Clear_buffer_mask::depth_buffer_bit |
+                    gl::Clear_buffer_mask::stencil_buffer_bit
                 );
 
                 Viewport_config viewport_config;
@@ -356,6 +362,11 @@ void Headset_view::render_headset()
                 m_context.editor_rendering ->render_viewport_renderables(render_context);
                 m_context.line_renderer_set->end();
                 m_context.line_renderer_set->render(render_context.viewport, render_context.camera);
+
+                if (m_renderdoc_capture_started) {
+                    erhe::window::end_frame_capture(m_context_window);
+                    m_renderdoc_capture_started = false;
+                }
             }
 
             return true;
@@ -504,6 +515,11 @@ void Headset_view::begin_frame()
     if (!m_scene_root) {
         return;
     }
+}
+
+void Headset_view::request_renderdoc_capture()
+{
+    m_request_renderdoc_capture = true;
 }
 
 void Headset_view::end_frame()

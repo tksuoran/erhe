@@ -102,9 +102,10 @@ public:
     );
 
     // Public API
-    void render_headset  ();
-    void begin_frame     ();
-    void end_frame       ();
+    void render_headset           ();
+    void begin_frame              ();
+    void end_frame                ();
+    void request_renderdoc_capture();
 
     void add_finger_input(const Finger_point& finger_point);
 
@@ -121,14 +122,13 @@ public:
     [[nodiscard]] auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
 
 private:
-    [[nodiscard]] auto get_headset_view_resources(
-        erhe::xr::Render_view& render_view
-    ) -> std::shared_ptr<Headset_view_resources>;
+    [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;
 
     void setup_root_camera();
 
     void update_pointer_context_from_controller();
 
+    erhe::window::Context_window&                        m_context_window;
     std::shared_ptr<Headset_view_node>                   m_rendergraph_node;
     std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;
     std::shared_ptr<Scene_root>                          m_scene_root;
@@ -142,6 +142,9 @@ private:
     bool                                                 m_head_tracking_enabled{true};
     bool                                                 m_mouse_down{false};
     bool                                                 m_menu_down {false};
+
+    bool                                                 m_request_renderdoc_capture{false};
+    bool                                                 m_renderdoc_capture_started{false};
 };
 
 } // namespace editor

@@ -34,10 +34,10 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
 )
 #define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
 
-    // Tool pass one: For hidden tool parts, set stencil to 1.
+    // Tool pass one: For hidden tool parts, set stencil to s_stencil_tool_mesh_hidden.
     // Only reads depth buffer, only writes stencil buffer.
     : tool1_hidden_stencil{erhe::graphics::Pipeline{{
-        .name                    = "Tool pass 1: Tag depth hidden with stencil = 1",
+        .name                    = "Tool pass 1: Tag depth hidden `s_stencil_tool_mesh_hidden`",
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
@@ -69,10 +69,10 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
         .color_blend             = Color_blend_state::color_writes_disabled
     }}}
 
-    // Tool pass two: For visible tool parts, set stencil to 2.
+    // Tool pass two: For visible tool parts, set stencil to s_stencil_tool_mesh_visible.
     // Only reads depth buffer, only writes stencil buffer.
     , tool2_visible_stencil{erhe::graphics::Pipeline{{
-        .name                    = "Tool pass 2: Tag visible tool parts with stencil = 2",
+        .name                    = "Tool pass 2: Tag visible tool parts `s_stencil_tool_mesh_visible`",
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = erhe::graphics::Input_assembly_state::triangles,
@@ -135,9 +135,9 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     }}}
 
     // Tool pass five: Render visible tool parts
-    // Normal depth test, stencil test require 2, color writes enabled, no blending
+    // Normal depth test, stencil test require s_stencil_tool_mesh_visible, color writes enabled, no blending
     , tool5_visible_color{erhe::graphics::Pipeline{{
-        .name                    = "Tool pass 5: Render visible tool parts",
+        .name                    = "Tool pass 5: Render visible tool parts, require `s_stencil_tool_mesh_visible`",
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
@@ -170,9 +170,9 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     }}}
 
     // Tool pass six: Render hidden tool parts
-    // Normal depth test, stencil test requires 1, color writes enabled, blending
+    // Normal depth test, stencil test requires s_stencil_tool_mesh_hidden, color writes enabled, blending
     , tool6_hidden_color{erhe::graphics::Pipeline{{
-        .name                       = "Tool pass 6: Render hidden tool parts",
+        .name                       = "Tool pass 6: Render hidden tool parts, require `s_stencil_tool_mesh_hidden`",
         .shader_stages              = &programs.tool.shader_stages,
         .vertex_input               = &mesh_memory.vertex_input,
         .input_assembly             = Input_assembly_state::triangles,
@@ -289,9 +289,7 @@ void Tools::register_tool(Tool* tool)
     }
 }
 
-void Tools::render_viewport_tools(
-    const Render_context& context
-)
+void Tools::render_viewport_tools(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 

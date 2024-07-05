@@ -5,11 +5,14 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 
 #include "erhe_gl/enum_base_zero_functions.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/state/color_blend_state.hpp"
 #include "erhe_graphics/state/depth_stencil_state.hpp"
 #include "erhe_graphics/state/input_assembly_state.hpp"
 #include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -134,9 +137,7 @@ void make_combo(
     }
 }
 
-void Pipelines::rasterization(
-    erhe::graphics::Rasterization_state& rasterization
-)
+void Pipelines::rasterization(erhe::graphics::Rasterization_state& rasterization)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -205,10 +206,7 @@ void make_hex_uint(const char* label, unsigned int& value)
     }
 }
 
-void Pipelines::stencil_op(
-    const char*                       label,
-    erhe::graphics::Stencil_op_state& stencil_op
-)
+void Pipelines::stencil_op(const char* label, erhe::graphics::Stencil_op_state& stencil_op)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -300,10 +298,7 @@ void Pipelines::depth_stencil(erhe::graphics::Depth_stencil_state& depth_stencil
     ImGui::PopID();
 }
 
-void Pipelines::blend_state_component(
-    const char*                            label,
-    erhe::graphics::Blend_state_component& component
-)
+void Pipelines::blend_state_component(const char* label, erhe::graphics::Blend_state_component& component)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -407,20 +402,55 @@ void Pipelines::imgui()
         ) {
             continue;
         }
-        const std::string label = fmt::format("{0}##{0}-{1}", pipeline->data.name, i);
-        if (
-            ImGui::TreeNodeEx(
-                label.c_str(),
-                ImGuiTreeNodeFlags_Framed
-            )
-        ) {
-            rasterization(pipeline->data.rasterization);
-            depth_stencil(pipeline->data.depth_stencil);
-            color_blend  (pipeline->data.color_blend);
-            ImGui::TreePop();
-        }
+        pipeline_imgui(*pipeline);
     }
 #endif
+}
+
+void pipeline_imgui(erhe::graphics::Pipeline& pipeline)
+{
+    const char* name = (pipeline.data.name != nullptr) ? pipeline.data.name : "";
+    if (ImGui::TreeNodeEx(name, ImGuiTreeNodeFlags_Framed)) {
+        if (pipeline.data.shader_stages != nullptr) {
+            ImGui::Text("Shader stages: %s", pipeline.data.shader_stages->name().c_str());
+        }
+        if (pipeline.data.vertex_input != nullptr) {
+            if (ImGui::TreeNodeEx("Vertex input", ImGuiTreeNodeFlags_Framed)) {
+                const erhe::graphics::Vertex_input_state_data& vertex_input_data = pipeline.data.vertex_input->get_data();
+                if (vertex_input_data.index_buffer != nullptr) {
+                    ImGui::Text("Index buffer: %u %s", vertex_input_data.index_buffer->gl_name(), vertex_input_data.index_buffer->debug_label().c_str());
+                }
+                int attribute_index = 0;
+                for (const erhe::graphics::Vertex_input_attribute& attribute : vertex_input_data.attributes) {
+                    std::string attribute_label = fmt::format("Attribute {}", attribute_index++);
+                    ImGui::PushID(attribute_index);
+                    if (ImGui::TreeNodeEx(attribute_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
+                        ImGui::Text("Location: %u", attribute.layout_location);
+                        if (attribute.vertex_buffer != nullptr) {
+                            ImGui::Text("Vertex buffer: %u %s", attribute.vertex_buffer->gl_name(), attribute.vertex_buffer->debug_label().c_str());
+                        }
+                        ImGui::Text("Location: %zu", attribute.stride);
+                        ImGui::Text("Dimension: %d", attribute.dimension);
+                        ImGui::Text("Shader type: %d", gl::c_str(attribute.shader_type));
+                        ImGui::Text("Data type: %d", gl::c_str(attribute.data_type));
+                        ImGui::Text("Normalized: %s", attribute.normalized ? "yes" : "no");
+                        ImGui::Text("Offset: %u", attribute.offset);
+                        ImGui::Text("Divisor: %u", attribute.divisor);
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::TreePop();
+            }
+        }
+        ImGui::Text("Primitive type: %s", gl::c_str(pipeline.data.input_assembly.primitive_topology));
+        ImGui::Text("Primitive restart: %s", pipeline.data.input_assembly.primitive_restart ? "yes" : "no");
+
+        Pipelines::rasterization(pipeline.data.rasterization);
+        Pipelines::depth_stencil(pipeline.data.depth_stencil);
+        Pipelines::color_blend  (pipeline.data.color_blend);
+        ImGui::TreePop();
+    }
 }
 
 } // namespace erhe::imgui

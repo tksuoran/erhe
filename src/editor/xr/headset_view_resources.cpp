@@ -3,6 +3,7 @@
 #include "xr/headset_view.hpp"
 
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene/camera.hpp"
@@ -51,21 +52,26 @@ Headset_view_resources::Headset_view_resources(
     );
     color_texture->set_debug_label(fmt::format("XR color {}", slot));
 
-    depth_texture = std::make_shared<Texture>(
+    depth_stencil_texture = std::make_shared<Texture>(
         Texture::Create_info{
             .instance          = graphics_instance,
             .target            = gl::Texture_target::texture_2d,
-            .internal_format   = render_view.depth_format,
+            .internal_format   = render_view.depth_stencil_format,
             .width             = width,
             .height            = height,
-            .wrap_texture_name = render_view.depth_texture,
+            .wrap_texture_name = render_view.depth_stencil_texture,
         }
     );
-    depth_texture->set_debug_label(fmt::format("XR depth {}", slot));
+    depth_stencil_texture->set_debug_label(fmt::format("XR depth stencil {}", slot));
 
     Framebuffer::Create_info create_info;
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, color_texture.get());
-    create_info.attach(gl::Framebuffer_attachment::depth_attachment,  depth_texture.get());
+    if (gl_helpers::has_depth(render_view.depth_stencil_format)) {
+        create_info.attach(gl::Framebuffer_attachment::depth_attachment, depth_stencil_texture.get());
+    }
+    if (gl_helpers::has_depth(render_view.depth_stencil_format)) {
+        create_info.attach(gl::Framebuffer_attachment::stencil_attachment, depth_stencil_texture.get());
+    }
     framebuffer = std::make_shared<Framebuffer>(create_info);
     framebuffer->set_debug_label(fmt::format("XR {}", slot));
 

@@ -57,14 +57,14 @@ private:
     class Swapchains
     {
     public:
-        Swapchains(XrSwapchain color_swapchain, XrSwapchain depth_swapchain)
+        Swapchains(XrSwapchain color_swapchain, XrSwapchain depth_stencil_swapchain)
             : color_swapchain{color_swapchain}
-            , depth_swapchain{depth_swapchain}
+            , depth_stencil_swapchain{depth_stencil_swapchain}
         {
         }
 
         Swapchain color_swapchain;
-        Swapchain depth_swapchain;
+        Swapchain depth_stencil_swapchain;
     };
 
     class Hand_tracker
@@ -81,7 +81,7 @@ private:
     erhe::window::Context_window&                m_context_window;
     XrSession                                     m_xr_session;
     gl::Internal_format                           m_swapchain_color_format;
-    gl::Internal_format                           m_swapchain_depth_format;
+    gl::Internal_format                           m_swapchain_depth_stencil_format;
     std::vector<Swapchains>                       m_view_swapchains;
     std::vector<XrView>                           m_xr_views;
     std::vector<XrCompositionLayerProjectionView> m_xr_composition_layer_projection_views;
