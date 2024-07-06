@@ -37,6 +37,7 @@ public:
     ~Headset() noexcept;
 
     auto is_valid   () const -> bool;
+    auto is_active  () const -> bool;
     auto begin_frame() -> Frame_timing;
     auto render     (std::function<bool(Render_view&)> render_view_callback) -> bool;
     auto end_frame  (bool rendered) -> bool;

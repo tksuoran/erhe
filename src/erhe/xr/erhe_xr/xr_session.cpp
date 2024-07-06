@@ -57,7 +57,7 @@ Xr_session::Xr_session(
     , m_xr_reference_space_local      {XR_NULL_HANDLE}
     , m_xr_reference_space_stage      {XR_NULL_HANDLE}
     , m_xr_reference_space_view       {XR_NULL_HANDLE}
-    //, m_xr_session_state      {XR_SESSION_STATE_VISIBLE}
+    , m_xr_session_state              {XR_SESSION_STATE_UNKNOWN}
     , m_xr_frame_state{
         XR_TYPE_FRAME_STATE,
         nullptr,
@@ -667,6 +667,16 @@ void Xr_session::update_hand_tracking()
             )
         );
     }
+}
+
+void Xr_session::set_state(XrSessionState state)
+{
+    m_xr_session_state = state;
+}
+
+auto Xr_session::get_state() const -> XrSessionState
+{
+    return m_xr_session_state;
 }
 
 auto Xr_session::get_hand_tracking_joint(const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint

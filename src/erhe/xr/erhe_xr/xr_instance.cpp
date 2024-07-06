@@ -613,9 +613,7 @@ void Xr_instance::get_path(const char* path, XrPath& xr_path)
     );
 }
 
-void Xr_instance::collect_bindings(
-    const Xr_action& action
-)
+void Xr_instance::collect_bindings(const Xr_action& action)
 {
     if ((action.profile_mask & Profile_mask::khr_simple) != 0) {
         ERHE_VERIFY(action.action != XR_NULL_HANDLE);
@@ -1104,6 +1102,7 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
             if (buffer.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
                 auto session_state_changed_event = *reinterpret_cast<const XrEventDataSessionStateChanged*>(base_header);
                 log_xr->info("XrEventDataSessionStateChanged::state = {}", c_str(session_state_changed_event.state));
+                session.set_state(session_state_changed_event.state);
                 switch (session_state_changed_event.state) {
                     case XR_SESSION_STATE_UNKNOWN:
                     case XR_SESSION_STATE_IDLE:

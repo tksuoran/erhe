@@ -101,6 +101,11 @@ auto Headset::is_valid() const -> bool
     return static_cast<bool>(m_xr_instance) && static_cast<bool>(m_xr_session);
 }
 
+auto Headset::is_active() const -> bool
+{
+    return is_valid() && m_xr_session->is_session_running();
+}
+
 auto Headset::begin_frame() -> Frame_timing
 {
     ERHE_PROFILE_FUNCTION();

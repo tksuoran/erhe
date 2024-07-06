@@ -27,9 +27,6 @@ class Xr_session;
 class Xr_path
 {
 public:
-    Xr_path();
-    Xr_path(XrInstance instance, const char* path);
-
     XrPath xr_path{XR_NULL_PATH};
 };
 

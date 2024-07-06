@@ -705,7 +705,9 @@ void Editor_rendering::begin_frame()
     m_context.viewport_windows->update_hover(imgui_viewport);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_context.viewport_config_window->set_edit_data(&m_context.headset_view->get_config());
+    if (m_context.headset_view->is_active()) {
+        m_context.viewport_config_window->set_edit_data(&m_context.headset_view->get_config());
+    }
 
     m_context.headset_view->begin_frame();
 #endif

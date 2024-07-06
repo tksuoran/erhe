@@ -108,6 +108,7 @@ public:
     [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
     [[nodiscard]] auto get_headset                          () const -> erhe::xr::Headset*;
     [[nodiscard]] auto get_root_node                        () const -> std::shared_ptr<erhe::scene::Node>;
+    [[nodiscard]] auto is_active                            () const -> bool;
 
     void render(const Render_context&);
 

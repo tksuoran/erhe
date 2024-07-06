@@ -37,12 +37,14 @@ public:
     [[nodiscard]] auto get_xr_reference_space_stage() const -> XrSpace;
     [[nodiscard]] auto get_xr_reference_space_view () const -> XrSpace;
     [[nodiscard]] auto get_xr_frame_state          () const -> const XrFrameState&;
-    void update_hand_tracking        ();
-    void update_view_pose            ();
+    void update_hand_tracking();
+    void update_view_pose    ();
+    void set_state           (XrSessionState state);
 
     [[nodiscard]] auto get_hand_tracking_joint (const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint;
     [[nodiscard]] auto get_hand_tracking_active(const XrHandEXT hand) const -> bool;
     [[nodiscard]] auto get_view_space_location () const -> const XrSpaceLocation&;
+    [[nodiscard]] auto get_state               () const -> XrSessionState;
 
 private:
     [[nodiscard]] auto create_session             () -> bool;
@@ -90,7 +92,7 @@ private:
     XrSpace                                       m_xr_reference_space_stage;
     XrSpace                                       m_xr_reference_space_view;
     XrSpaceLocation                               m_view_location;
-    //XrSessionState                                m_xr_session_state;
+    XrSessionState                                m_xr_session_state;
     XrFrameState                                  m_xr_frame_state;
     Hand_tracker                                  m_hand_tracker_left;
     Hand_tracker                                  m_hand_tracker_right;

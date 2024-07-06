@@ -415,6 +415,11 @@ auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>
     return m_root_node;
 }
 
+auto Headset_view::is_active() const -> bool
+{
+    return m_headset && m_headset->is_active();
+}
+
 auto Headset_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
     return m_root_camera;
