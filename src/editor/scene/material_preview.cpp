@@ -110,7 +110,8 @@ void Material_preview::update_rendertarget(
             .target          = gl::Texture_target::texture_2d,
             .internal_format = m_color_format,
             .width           = m_width,
-            .height          = m_height
+            .height          = m_height,
+            .debug_label     = "Material preview"
         }
     );
     m_color_texture->set_debug_label("Material Preview Color Texture");
@@ -164,7 +165,8 @@ void Material_preview::update_rendertarget(
             .internal_format = gl::Internal_format::depth_component32f,
             .width           = 1,
             .height          = 1,
-            .depth           = 1
+            .depth           = 1,
+            .debug_label     = "dummy shadowmap"
         }
     );
 
@@ -190,19 +192,17 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
     m_mesh->add_primitive(
         erhe::primitive::Primitive{
-            std::move(
-                erhe::primitive::make_renderable_mesh(
-                    erhe::geometry::shapes::make_sphere(
-                        m_radius,
-                        std::max(1, m_slice_count),
-                        std::max(1, m_stack_count)
-                    ),
-                    erhe::primitive::Build_info{
-                        .primitive_types = { .fill_triangles = true },
-                        .buffer_info     = mesh_memory.buffer_info
-                    },
-                    erhe::primitive::Normal_style::corner_normals
-                )
+            erhe::primitive::make_renderable_mesh(
+                erhe::geometry::shapes::make_sphere(
+                    m_radius,
+                    std::max(1, m_slice_count),
+                    std::max(1, m_stack_count)
+                ),
+                erhe::primitive::Build_info{
+                    .primitive_types = { .fill_triangles = true },
+                    .buffer_info     = mesh_memory.buffer_info
+                },
+                erhe::primitive::Normal_style::corner_normals
             )
         }
     );

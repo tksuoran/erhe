@@ -429,10 +429,10 @@ void pipeline_imgui(erhe::graphics::Pipeline& pipeline)
                         if (attribute.vertex_buffer != nullptr) {
                             ImGui::Text("Vertex buffer: %u %s", attribute.vertex_buffer->gl_name(), attribute.vertex_buffer->debug_label().c_str());
                         }
-                        ImGui::Text("Location: %zu", attribute.stride);
+                        ImGui::Text("Location: %d", attribute.stride);
                         ImGui::Text("Dimension: %d", attribute.dimension);
-                        ImGui::Text("Shader type: %d", gl::c_str(attribute.shader_type));
-                        ImGui::Text("Data type: %d", gl::c_str(attribute.data_type));
+                        ImGui::Text("Shader type: %s", gl::c_str(attribute.shader_type));
+                        ImGui::Text("Data type: %s", gl::c_str(attribute.data_type));
                         ImGui::Text("Normalized: %s", attribute.normalized ? "yes" : "no");
                         ImGui::Text("Offset: %u", attribute.offset);
                         ImGui::Text("Divisor: %u", attribute.divisor);

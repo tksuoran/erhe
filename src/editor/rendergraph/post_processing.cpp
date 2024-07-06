@@ -46,7 +46,8 @@ Downsample_node::Downsample_node(
                 .internal_format = gl::Internal_format::rgba16f, // TODO other formats
                 .sample_count    = 0,
                 .width           = width,
-                .height          = height
+                .height          = height,
+                .debug_label     = label
             }
         )
     }

@@ -36,7 +36,7 @@ using std::string_view;
     }
 }
 
-[[nodiscard]] void format_to_gl_attribute(erhe::dataformat::Format format, gl::Vertex_attrib_type& type, GLint& dimension, bool& normalized)
+void format_to_gl_attribute(erhe::dataformat::Format format, gl::Vertex_attrib_type& type, GLint& dimension, bool& normalized)
 {
     dimension = static_cast<GLint>(erhe::dataformat::get_component_count(format));
     switch (format) {

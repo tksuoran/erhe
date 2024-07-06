@@ -71,7 +71,8 @@ void Shadow_render_node::reconfigure(
                     //.sparse          = erhe::graphics::g_instance->info.use_sparse_texture,
                     .width           = resolution,
                     .height          = resolution,
-                    .depth           = light_count
+                    .depth           = light_count,
+                    .debug_label     = "Shadowmap"
                 }
             );
 

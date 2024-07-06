@@ -92,12 +92,15 @@ auto PNG_loader::open(
         return false;
     }
 
-    struct ::spng_ihdr ihdr{
-        .width      = 0,
-        .height     = 0,
-        .bit_depth  = 0,
-        .color_type = SPNG_COLOR_TYPE_GRAYSCALE
-    };
+    struct ::spng_ihdr ihdr{};
+    //    .width              = 0,
+    //    .height             = 0,
+    //    .bit_depth          = 0,
+    //    .color_type         = 0,
+    //    .compression_method = 0,
+    //    .filter_method      = 0,
+    //    .interlace_method   = 0
+    //};
     result = ::spng_get_ihdr(m_image_decoder, &ihdr);
     if (result != 0) {
         return false;
@@ -142,12 +145,13 @@ auto PNG_loader::open(
         return false;
     }
 
-    struct ::spng_ihdr ihdr{
-        .width      = 0,
-        .height     = 0,
-        .bit_depth  = 0,
-        .color_type = SPNG_COLOR_TYPE_GRAYSCALE
-    };
+    struct ::spng_ihdr ihdr{};
+    //    .width              = 0,
+    //    .height             = 0,
+    //    .bit_depth          = 0,
+    //    .color_type         = SPNG_COLOR_TYPE_GRAYSCALE,
+    //    .compression_method = 0
+    //};
     result = ::spng_get_ihdr(m_image_decoder, &ihdr);
     if (result != 0) {
         return false;
@@ -221,10 +225,11 @@ auto PNG_writer::write(
 
     /* Specify image dimensions, PNG format */
     struct ::spng_ihdr ihdr{
-        .width      = static_cast<uint32_t>(info.width),
-        .height     = static_cast<uint32_t>(info.height),
-        .bit_depth  = 8,
-        .color_type = SPNG_COLOR_TYPE_TRUECOLOR_ALPHA
+        .width              = static_cast<uint32_t>(info.width),
+        .height             = static_cast<uint32_t>(info.height),
+        .bit_depth          = 8,
+        .color_type         = SPNG_COLOR_TYPE_TRUECOLOR_ALPHA,
+        .compression_method = 0
     };
 
     result = ::spng_set_ihdr(m_image_encoder, &ihdr);

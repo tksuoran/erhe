@@ -360,7 +360,8 @@ auto make_font_texture_create_info(
     // Build texture atlas
     Texture::Create_info create_info{
         .instance        = graphics_instance,
-        .internal_format = gl::Internal_format::rgba8
+        .internal_format = gl::Internal_format::rgba8,
+        .debug_label     = "ImGui Font texture"
     };
 
     unsigned char* pixels = nullptr;

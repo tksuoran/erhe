@@ -331,8 +331,7 @@ Line_renderer::Frame_resources::Frame_resources(
     const std::string&                        style_name,
     const std::size_t                         slot
 )
-    : compute_shader_stages{compute_shader_stages}
-    , line_vertex_buffer{
+    : line_vertex_buffer{
         graphics_instance,
         line_vertex_format.stride() * 2 * line_count,
         storage_mask(graphics_instance),

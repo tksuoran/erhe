@@ -212,7 +212,8 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
                     .internal_format = gl::Internal_format::rgba8,
                     .use_mipmaps     = false,
                     .width           = viewport.width,
-                    .height          = viewport.height
+                    .height          = viewport.height,
+                    .debug_label     = "ID Render color"
                 }
             );
             m_depth_texture = std::make_unique<Texture>(
@@ -222,7 +223,8 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
                     .internal_format = gl::Internal_format::depth_component32f,
                     .use_mipmaps     = false,
                     .width           = viewport.width,
-                    .height          = viewport.height
+                    .height          = viewport.height,
+                    .debug_label     = "ID Render depth"
                 }
             );
             m_color_texture->set_debug_label("ID Color");

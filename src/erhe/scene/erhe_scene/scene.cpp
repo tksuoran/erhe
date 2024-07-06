@@ -326,7 +326,7 @@ Scene::Scene(
     m_root_node->node_data.transforms.world_from_node_serial  = 1;
 }
 
-Scene::~Scene()
+Scene::~Scene() noexcept
 {
     m_root_node->trace();
     sanity_check();

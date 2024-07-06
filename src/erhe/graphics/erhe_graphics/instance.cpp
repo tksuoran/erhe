@@ -474,9 +474,10 @@ auto Instance::get_handle(const Texture& texture, const Sampler& sampler) const 
 auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
 {
     const erhe::graphics::Texture::Create_info create_info{
-        .instance = *this,
-        .width    = 2,
-        .height   = 2
+        .instance    = *this,
+        .width       = 2,
+        .height      = 2,
+        .debug_label = "dummy"
     };
 
     auto texture = std::make_shared<Texture>(create_info);

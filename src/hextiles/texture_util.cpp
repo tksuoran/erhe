@@ -131,6 +131,7 @@ auto load_texture(
         .depth           = image.info.depth,
         .level_count     = image.info.level_count,
         .row_stride      = image.info.row_stride,
+        .debug_label     = path.string()
     };
 
     auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);

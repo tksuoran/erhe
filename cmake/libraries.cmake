@@ -62,7 +62,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     etl
     GIT_REPOSITORY https://github.com/ETLCPP/etl.git
-    GIT_TAG        20.38.10
+    GIT_TAG        20.38.17
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -88,7 +88,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
     #GIT_TAG        origin/master
     #GIT_TAG        171a020c828669490b98af0c2640e50f1511d2cc
-    GIT_TAG        10.2.1
+    GIT_TAG        11.0.1
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -181,7 +181,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     JoltPhysics
     GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
-    GIT_TAG         28783b7cbc85fa7a3472247c3d58b654ef0e1335 # v5.0.0 has issue
+    GIT_TAG         a69a48404ea4c16102e381abe2c86b7334e6ed89 # v5.0.0 has issue
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )
@@ -189,7 +189,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     lunasvg
     GIT_REPOSITORY  https://github.com/sammycage/lunasvg.git
-    GIT_TAG         v2.3.9
+    GIT_TAG         v2.4.0
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )
@@ -206,7 +206,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     meshoptimizer
     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
-    GIT_TAG        v0.20
+    GIT_TAG        v0.21
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -230,7 +230,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     OpenXR-SDK
     GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git
-    GIT_TAG        release-1.0.34
+    GIT_TAG        release-1.1.38    
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -246,7 +246,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG        v1.13.0
+    GIT_TAG        v1.14.1
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -254,7 +254,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     taskflow
     GIT_REPOSITORY https://github.com/taskflow/taskflow.git
-    GIT_TAG        v3.6.0
+    GIT_TAG        v3.7.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

@@ -40,11 +40,11 @@ protected:
         class Version
         {
         public:
-            std::shared_ptr<Node_physics>           node_physics;
+            std::shared_ptr<Node_physics>           node_physics{};
             std::vector<erhe::primitive::Primitive> primitives{};
         };
-        Version before;
-        Version after;
+        Version before{};
+        Version after{};
     };
 
     explicit Mesh_operation(Parameters&& parameters);

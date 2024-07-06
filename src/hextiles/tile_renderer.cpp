@@ -377,7 +377,8 @@ void Tile_renderer::compose_tileset_texture()
         .width           = m_tileset_image.info.width,
         .height          = ty_offset * Tile_shape::height,
         .depth           = 1,
-        .level_count     = 1
+        .level_count     = 1,
+        .debug_label     = "tiles"
     };
 
     m_tileset_texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);

@@ -134,11 +134,9 @@ void Multisample_resolve_node::execute_rendergraph_node()
                 .internal_format = gl::Internal_format::rgba16f, // TODO other formats
                 .sample_count    = m_sample_count,
                 .width           = output_viewport.width,
-                .height          = output_viewport.height
+                .height          = output_viewport.height,
+                .debug_label     = fmt::format("{} Multisample_resolve_node color texture", get_name())
             }
-        );
-        m_color_texture->set_debug_label(
-            fmt::format("{} Multisample_resolve_node color texture", get_name())
         );
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
         if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {

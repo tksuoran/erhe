@@ -521,8 +521,8 @@ public:
         const Gltf_parse_arguments&           arguments
     )
         : m_data_out {gltf_data}
-        , m_asset    {std::move(asset)}
         , m_arguments{arguments}
+        , m_asset    {std::move(asset)}
     {
         trace_info();
     }
@@ -721,6 +721,10 @@ private:
                     );
                     break;
                 }
+                default: {
+                    // TODO log warning
+                    break;
+                }
             }
 
             erhe_sampler.set(std::move(timestamps), std::move(values));
@@ -848,7 +852,8 @@ private:
         bool load_ok = false;
         auto& slot = m_arguments.image_transfer.get_slot();
         erhe::graphics::Texture_create_info texture_create_info{
-            .instance = m_arguments.graphics_instance
+            .instance    = m_arguments.graphics_instance,
+            .debug_label = name
         };
         int  mipmap_count    = 0;
         bool generate_mipmap = false;

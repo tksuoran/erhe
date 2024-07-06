@@ -311,8 +311,8 @@ Primitive::Primitive(
     const std::shared_ptr<Material>&      material
 )
     : m_material     {material}
-    , m_normal_style {Normal_style::corner_normals}
     , m_triangle_soup{triangle_soup}
+    , m_normal_style {Normal_style::corner_normals}
     // m_renderable_mesh needs to be explicitly requested using has_renderable_triangles()
 {
     // For now, when Primitive is created using Triangle_soup, raytrace is always created.

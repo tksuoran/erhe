@@ -127,7 +127,7 @@ public:
     {
     public:
         glm::vec2 icon;
-        std::optional<glm::vec4> color;
+        std::optional<glm::vec4> color{};
     };
     std::vector<std::optional<Type_icon>> type_icons;
 };

@@ -153,11 +153,9 @@ void Texture_rendergraph_node::execute_rendergraph_node()
                 .target          = gl::Texture_target::texture_2d,
                 .internal_format = m_color_format,
                 .width           = output_viewport.width,
-                .height          = output_viewport.height
+                .height          = output_viewport.height,
+                .debug_label     = fmt::format("{} Texture_rendergraph_node color texture", get_name())
             }
-        );
-        m_color_texture->set_debug_label(
-            fmt::format("{} Texture_rendergraph_node color texture", get_name())
         );
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
         if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {

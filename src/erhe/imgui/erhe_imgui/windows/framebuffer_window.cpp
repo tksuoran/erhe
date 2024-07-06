@@ -118,7 +118,8 @@ void Framebuffer_window::update_framebuffer()
             .internal_format = gl::Internal_format::srgb8_alpha8,
             .sample_count    = 0,
             .width           = m_viewport.width,
-            .height          = m_viewport.height
+            .height          = m_viewport.height,
+            .debug_label     = "Framebuffer_window"
         }
     );
     m_texture->set_debug_label(m_debug_label);

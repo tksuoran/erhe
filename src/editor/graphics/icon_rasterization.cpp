@@ -33,7 +33,8 @@ Icon_rasterization::Icon_rasterization(
             .internal_format = gl::Internal_format::rgba8,
             .use_mipmaps     = true,
             .width           = column_count * m_icon_width,
-            .height          = row_count * m_icon_height
+            .height          = row_count * m_icon_height,
+            .debug_label     = "Icons"
         }
     );
     m_texture->set_debug_label("Icon_set");

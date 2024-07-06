@@ -88,7 +88,7 @@ public:
     erhe::scene::Mesh*                        mesh           {nullptr};
     const Grid*                               grid           {nullptr};
     std::size_t                               primitive_index{std::numeric_limits<std::size_t>::max()};
-    std::shared_ptr<erhe::geometry::Geometry> geometry;
+    std::shared_ptr<erhe::geometry::Geometry> geometry       {};
     std::optional<glm::vec3>                  position       {};
     std::optional<glm::vec3>                  normal         {};
     std::optional<glm::vec2>                  uv             {};

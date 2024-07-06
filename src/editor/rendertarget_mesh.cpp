@@ -80,7 +80,8 @@ void Rendertarget_mesh::resize_rendertarget(
             .use_mipmaps     = true,
             .sample_count    = 0,
             .width           = width,
-            .height          = height
+            .height          = height,
+            .debug_label     = "Rendertarget"
         }
     );
     m_texture->set_debug_label("Rendertarget Node");

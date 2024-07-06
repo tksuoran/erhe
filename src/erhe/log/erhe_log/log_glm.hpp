@@ -16,8 +16,8 @@ template <> struct fmt::formatter<glm::vec2>
         return it;
     }
 
-    template <typename FormatContext>
-    auto format(const glm::vec2& p, FormatContext& ctx) -> decltype(ctx.out())
+    template <typename format_context>
+    auto format(const glm::vec2& p, format_context& ctx) const -> decltype(ctx.out())
     {
         return fmt::format_to(ctx.out(), "({:.3f}, {:.3f})", p.x, p.y);
     }
@@ -35,8 +35,8 @@ template <> struct fmt::formatter<glm::vec3>
         return it;
     }
 
-    template <typename FormatContext>
-    auto format(const glm::vec3& p, FormatContext& ctx) -> decltype(ctx.out())
+    template <typename format_context>
+    auto format(const glm::vec3& p, format_context& ctx) const -> decltype(ctx.out())
     {
         return fmt::format_to(ctx.out(), "({:.3f}, {:.3f}, {:.3f})", p.x, p.y, p.z);
     }
@@ -54,8 +54,8 @@ template <> struct fmt::formatter<glm::vec4>
         return it;
     }
 
-    template <typename FormatContext>
-    auto format(const glm::vec4& p, FormatContext& ctx) -> decltype(ctx.out())
+    template <typename format_context>
+    auto format(const glm::vec4& p, format_context& ctx) const -> decltype(ctx.out())
     {
         return fmt::format_to(ctx.out(), "({:.3f}, {:.3f}, {:.3f}, {:.3f})", p.x, p.y, p.z, p.w);
     }
@@ -74,8 +74,8 @@ template <> struct fmt::formatter<glm::dvec2>
         return it;
     }
 
-    template <typename FormatContext>
-    auto format(const glm::dvec2& p, FormatContext& ctx) -> decltype(ctx.out())
+    template <typename format_context>
+    auto format(const glm::dvec2& p, format_context& ctx) const -> decltype(ctx.out())
     {
         return fmt::format_to(ctx.out(), "({:.3f}, {:.3f})", p.x, p.y);
     }
@@ -93,8 +93,8 @@ template <> struct fmt::formatter<glm::dvec3>
         return it;
     }
 
-    template <typename FormatContext>
-    auto format(const glm::dvec3& p, FormatContext& ctx) -> decltype(ctx.out())
+    template <typename format_context>
+    auto format(const glm::dvec3& p, format_context& ctx) const -> decltype(ctx.out())
     {
         return fmt::format_to(ctx.out(), "({:.3f}, {:.3f}, {:.3f})", p.x, p.y, p.z);
     }
@@ -112,8 +112,8 @@ template <> struct fmt::formatter<glm::dvec4>
         return it;
     }
 
-    template <typename FormatContext>
-    auto format(const glm::dvec4& p, FormatContext& ctx) -> decltype(ctx.out())
+    template <typename format_context>
+    auto format(const glm::dvec4& p, format_context& ctx) const -> decltype(ctx.out())
     {
         return fmt::format_to(ctx.out(), "({:.3f}, {:.3f}, {:.3f}, {:.3f})", p.x, p.y, p.z, p.w);
     }
@@ -132,8 +132,8 @@ template <> struct fmt::formatter<glm::ivec2>
         return it;
     }
 
-    template <typename FormatContext>
-    auto format(const glm::ivec2& p, FormatContext& ctx) -> decltype(ctx.out())
+    template <typename format_context>
+    auto format(const glm::ivec2& p, format_context& ctx) const -> decltype(ctx.out())
     {
         return fmt::format_to(ctx.out(), "({}, {})", p.x, p.y);
     }
@@ -151,8 +151,8 @@ template <> struct fmt::formatter<glm::ivec3>
         return it;
     }
 
-    template <typename FormatContext>
-    auto format(const glm::dvec3& p, FormatContext& ctx) -> decltype(ctx.out())
+    template <typename format_context>
+    auto format(const glm::dvec3& p, format_context& ctx) const -> decltype(ctx.out())
     {
         return fmt::format_to(ctx.out(), "({}, {}, {})", p.x, p.y, p.z);
     }
@@ -170,8 +170,8 @@ template <> struct fmt::formatter<glm::ivec4>
         return it;
     }
 
-    template <typename FormatContext>
-    auto format(const glm::dvec4& p, FormatContext& ctx) -> decltype(ctx.out())
+    template <typename format_context>
+    auto format(const glm::dvec4& p, format_context& ctx) const -> decltype(ctx.out())
     {
         return fmt::format_to(ctx.out(), "({}, {}, {}, {})", p.x, p.y, p.z, p.w);
     }

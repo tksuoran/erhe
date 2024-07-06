@@ -459,7 +459,8 @@ void Font::post_process()
         .internal_format = internal_format,
         .use_mipmaps     = false,
         .width           = m_texture_width,
-        .height          = m_texture_height
+        .height          = m_texture_height,
+        .debug_label     = "Font"
     };
 
     m_texture = std::make_unique<Texture>(create_info);

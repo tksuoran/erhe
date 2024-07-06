@@ -42,7 +42,7 @@ class Hextiles
     : public erhe::window::Window_event_handler
 {
 public:
-    virtual auto get_name() const -> const char* { return "Hextiles"; }
+    auto get_name() const -> const char* override { return "Hextiles"; }
 
     Hextiles()
         : m_context_window{
