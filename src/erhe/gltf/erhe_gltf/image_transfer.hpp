@@ -34,7 +34,7 @@ public:
             return m_pbo.gl_name();
         }
 
-        void end();
+        void end(bool flush);
 
     private:
         void map();

@@ -69,8 +69,11 @@ void Image_transfer::Slot::unmap()
     m_span = std::span<std::byte>{};
 }
 
-void Image_transfer::Slot::end()
+void Image_transfer::Slot::end(bool flush)
 {
+    if (flush) {
+        gl::flush_mapped_named_buffer_range(gl_name(), 0, m_span.size_bytes());
+    }
     unmap();
 }
 

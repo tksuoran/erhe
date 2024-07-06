@@ -14,16 +14,12 @@
 // Comment this out disable timer queries
 #define ERHE_USE_TIME_QUERY 1
 
-namespace gl
-{
-
-extern std::shared_ptr<spdlog::logger> log_gl;
-
+namespace gl {
+    extern std::shared_ptr<spdlog::logger> log_gl;
 }
 
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 void erhe_opengl_callback(
     GLenum        gl_source,
@@ -96,18 +92,16 @@ void erhe_opengl_callback(
             : ""
     );
 
-//    if (severity == gl::Debug_severity::debug_severity_high) {
-//#if defined(WIN32)
-//        DebugBreak();
-//#else
-//        raise(SIGTRAP);
-//#endif
-//    }
+    if (severity == gl::Debug_severity::debug_severity_high) {
+#if defined(WIN32)
+        DebugBreak();
+#else
+        raise(SIGTRAP);
+#endif
+    }
 }
 
-Scoped_debug_group::Scoped_debug_group(
-    const std::string_view debug_label
-)
+Scoped_debug_group::Scoped_debug_group(const std::string_view debug_label)
     : m_debug_label{debug_label}
 {
     gl::log_gl->trace("---- begin: {}", debug_label);

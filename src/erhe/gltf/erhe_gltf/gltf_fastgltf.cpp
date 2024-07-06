@@ -820,7 +820,7 @@ private:
 
         const bool ok = loader.load(span);
         loader.close();
-        slot.end();
+        slot.end(ok);
         if (!ok) {
             return {};
         }
@@ -829,7 +829,6 @@ private:
         texture->set_source_path(path);
         texture->set_debug_label(erhe::file::to_string(path));
 
-        gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
         gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
         texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
@@ -896,14 +895,11 @@ private:
 
                     load_ok = loader.load(span);
                     loader.close();
-                    if (load_ok) {
-                        gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
-                    }
                 }
             },
             buffer.data
         );
-        slot.end();
+        slot.end(load_ok);
         if (!load_ok) {
             return {};
         }
