@@ -379,17 +379,14 @@ void Hud::tool_render(const Render_context&)
 
 void Hud::imgui()
 {
-    if (ImGui::TreeNodeEx("Hud", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed)) {
-        ImGui::Checkbox("Locked to Head", &m_locked_to_head);
-        ImGui::Checkbox("Visible",        &m_is_visible);
+    ImGui::Checkbox("Locked to Head", &m_locked_to_head);
+    ImGui::Checkbox("Visible",        &m_is_visible);
 
-        const bool x_changed = ImGui::DragFloat("X", &m_x, 0.0001f);
-        const bool y_changed = ImGui::DragFloat("Y", &m_y, 0.0001f);
-        const bool z_changed = ImGui::DragFloat("Z", &m_z, 0.0001f);
-        if (x_changed || y_changed || z_changed) {
-            update_node_transform(m_world_from_camera);
-        }
-        ImGui::TreePop();
+    const bool x_changed = ImGui::DragFloat("X", &m_x, 0.0001f);
+    const bool y_changed = ImGui::DragFloat("Y", &m_y, 0.0001f);
+    const bool z_changed = ImGui::DragFloat("Z", &m_z, 0.0001f);
+    if (x_changed || y_changed || z_changed) {
+        update_node_transform(m_world_from_camera);
     }
 }
 

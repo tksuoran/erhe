@@ -140,18 +140,20 @@ void animation_curve(erhe::scene::Animation& animation)
     view.Max.y *= zoom_scale;
     view.Translate(pan);
 
-    if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
-        ImVec2 delta_in_view = scale(ImVec2{io.MouseDelta.x, io.MouseDelta.y}, bb, view); 
-        pan -= delta_in_view;
-    }
+    if (ImGui::IsWindowHovered()) {
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+            ImVec2 delta_in_view = scale(ImVec2{io.MouseDelta.x, io.MouseDelta.y}, bb, view); 
+            pan -= delta_in_view;
+        }
 
-    if (io.MouseWheel != 0.0f) {
-        zoom_scale -= io.MouseWheel * 0.05f * zoom_scale;
-    }
+        if (io.MouseWheel != 0.0f) {
+            zoom_scale -= io.MouseWheel * 0.05f * zoom_scale;
+        }
 
-    if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
-        float distance = io.MouseDelta.y;
-        zoom_scale += 0.005f * distance * zoom_scale;
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+            float distance = io.MouseDelta.y;
+            zoom_scale += 0.005f * distance * zoom_scale;
+        }
     }
 
     ImGui::ItemSize(bb);

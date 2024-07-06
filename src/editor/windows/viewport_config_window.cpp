@@ -164,6 +164,7 @@ void Viewport_config_window::imgui()
     if (ImGui::TreeNodeEx("Hud", flags)) {
         auto& hud = *m_context.hud;
         hud.imgui();
+        ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Hotbar", flags)) {
