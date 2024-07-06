@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4714)
+#endif
+
 #if defined(ERHE_PROFILE_LIBRARY_TRACY)
 #   if defined(TRACY_ENABLE) && defined(ERHE_TRACY_GL)
 #       include "erhe_gl/dynamic_load.hpp"

@@ -152,7 +152,7 @@ auto Xr_instance::create_instance() -> bool
             .applicationVersion = 1,
             .engineName         = { 'e', 'r', 'h', 'e', '\0' },
             .engineVersion      = 1,
-            .apiVersion         = XR_CURRENT_API_VERSION
+            .apiVersion         = XR_MAKE_VERSION(1, 0, 34)
         },
         .enabledApiLayerCount   = 0,
         .enabledApiLayerNames   = nullptr,
