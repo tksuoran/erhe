@@ -116,7 +116,7 @@ public:
 
 private:
     void on_message           (Editor_message& message);
-    void update_node_transform(const glm::mat4& world_from_camera);
+    void update_node_transform(const glm::mat4& world_from_hud);
 
     Toggle_hud_visibility_command m_toggle_visibility_command;
 
@@ -133,7 +133,7 @@ private:
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
-    glm::mat4                                    m_world_from_camera{1.0f};
+    glm::mat4                                    m_world_from_hud{1.0f};
     float m_x             {-0.09f};
     float m_y             { 0.0f};
     float m_z             {-0.38f};

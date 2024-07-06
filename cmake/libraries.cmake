@@ -230,7 +230,8 @@ FetchContent_Declare(
 FetchContent_Declare(
     OpenXR-SDK
     GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git
-    GIT_TAG        release-1.1.38    
+    #GIT_TAG        release-1.0.34
+    GIT_TAG        release-1.1.38
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

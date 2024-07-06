@@ -13,7 +13,8 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -36,10 +37,7 @@ namespace editor
 using glm::vec3;
 
 #pragma region Commands
-Hud_drag_command::Hud_drag_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Hud_drag_command::Hud_drag_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Hud.drag"}
     , m_context{context}
 {
@@ -77,10 +75,7 @@ void Hud_drag_command::on_inactive()
     }
 }
 
-Toggle_hud_visibility_command::Toggle_hud_visibility_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Toggle_hud_visibility_command::Toggle_hud_visibility_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Hud.toggle_visibility"}
     , m_context{context}
 {
@@ -234,18 +229,18 @@ auto Hud::intersect_ray(
     const glm::vec3& ray_direction_in_world
 ) -> std::optional<glm::vec3>
 {
-    const glm::vec3 ray_origin_in_grid    = glm::vec3{node_from_world() * glm::vec4{ray_origin_in_world,    1.0f}};
-    const glm::vec3 ray_direction_in_grid = glm::vec3{node_from_world() * glm::vec4{ray_direction_in_world, 0.0f}};
+    const glm::vec3 ray_origin_in_hud    = glm::vec3{node_from_world() * glm::vec4{ray_origin_in_world,    1.0f}};
+    const glm::vec3 ray_direction_in_hud = glm::vec3{node_from_world() * glm::vec4{ray_direction_in_world, 0.0f}};
     const auto intersection = erhe::math::intersect_plane<float>(
         glm::vec3{0.0f, 1.0f, 0.0f},
         glm::vec3{0.0f, 0.0f, 0.0f},
-        ray_origin_in_grid,
-        ray_direction_in_grid
+        ray_origin_in_hud,
+        ray_direction_in_hud
     );
     if (!intersection.has_value()) {
         return {};
     }
-    const glm::vec3 position_in_node = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;
+    const glm::vec3 position_in_node = ray_origin_in_hud + intersection.value() * ray_direction_in_hud;
 
     const auto half_width  = 0.5f * m_rendertarget_mesh->width();
     const auto half_height = 0.5f * m_rendertarget_mesh->height();
@@ -320,7 +315,6 @@ void Hud::on_drag()
     const glm::mat4 control_from_world = control_from_world_opt.value();
     const glm::mat4 node_from_world    = m_node_from_control.value() * control_from_world;
     drag_node->set_node_from_world(node_from_world);
-    //m_rendertarget_node->set_node_from_world(node_from_world);
 }
 
 void Hud::end_drag()
@@ -336,41 +330,24 @@ void Hud::on_message(Editor_message& message)
     if (m_locked_to_head) {
         using namespace erhe::bit;
         if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
-            const auto& camera = message.scene_view->get_camera();
-            if (camera) {
-                const auto* camera_node = camera->get_node();
-                if (camera_node != nullptr) {
-                    const auto& world_from_camera = camera_node->world_from_node();
-                    update_node_transform(world_from_camera);
-                }
+            const auto& world_from_control_opt = message.scene_view->get_world_from_control();
+            if (world_from_control_opt.has_value()) {
+                update_node_transform(world_from_control_opt.value());
             }
         }
     }
 }
 
-void Hud::update_node_transform(const glm::mat4& world_from_camera)
+void Hud::update_node_transform(const glm::mat4& world_from_hud)
 {
     if (!m_rendertarget_node) {
         return;
     }
 
-    m_world_from_camera = world_from_camera;
-    const glm::vec3 target_position{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}};
-    const glm::vec3 self_position  {world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
-    const glm::vec3 up_direction   {world_from_camera * glm::vec4{0.0, 1.0, 0.0, 1.0}};
-
-    const glm::vec3 back  = glm::normalize(self_position - target_position);
-    const glm::vec3 up    = glm::vec4{0.0, 1.0, 0.0, 1.0};
-    const glm::vec3 right = glm::cross(-back, up);
-
-    const glm::mat4 m{
-        glm::vec4{right,         0.0f},
-        glm::vec4{up,            0.0f},
-        glm::vec4{-back,         0.0f},
-        glm::vec4{self_position, 1.0f}
-    };
-
-    m_rendertarget_node->set_world_from_node(m);
+    m_world_from_hud = world_from_hud;
+    const glm::mat4 offset = erhe::math::create_translation(m_x, m_y, m_z);
+    const glm::mat4 final_transform = m_world_from_hud * offset;
+    m_rendertarget_node->set_world_from_node(final_transform);
 }
 
 void Hud::tool_render(const Render_context&)
@@ -386,7 +363,7 @@ void Hud::imgui()
     const bool y_changed = ImGui::DragFloat("Y", &m_y, 0.0001f);
     const bool z_changed = ImGui::DragFloat("Z", &m_z, 0.0001f);
     if (x_changed || y_changed || z_changed) {
-        update_node_transform(m_world_from_camera);
+        update_node_transform(m_world_from_hud);
     }
 }
 
@@ -414,13 +391,9 @@ void Hud::set_visibility(const bool value)
 
     Scene_view* hover_scene_view = get_hover_scene_view();
     if (hover_scene_view != nullptr) {
-        const auto& camera = get_hover_scene_view()->get_camera();
-        if (camera) {
-            const auto* camera_node = camera->get_node();
-            if (camera_node != nullptr) {
-                const auto& world_from_camera = camera_node->world_from_node();
-                update_node_transform(world_from_camera);
-            }
+        const auto& world_from_control_opt = hover_scene_view->get_world_from_control();
+        if (world_from_control_opt.has_value()) {
+            update_node_transform(world_from_control_opt.value());
         }
     }
 
