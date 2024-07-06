@@ -1,7 +1,6 @@
 #pragma once
 
-namespace erhe::math
-{
+namespace erhe::math {
 
 enum class Simulation_variable_control : unsigned int {
     less = 0,
@@ -53,4 +52,4 @@ private:
     float m_current_value  { 0.000f};
 };
 
-}
+} // namespace erhe::math

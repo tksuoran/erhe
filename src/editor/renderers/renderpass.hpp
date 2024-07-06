@@ -17,8 +17,7 @@ namespace erhe::scene {
     using Layer_id = uint64_t;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Render_context;
 class Render_style_data;

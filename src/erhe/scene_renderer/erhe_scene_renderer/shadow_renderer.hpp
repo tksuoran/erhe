@@ -29,8 +29,7 @@ namespace erhe::scene {
     class Mesh;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 class Program_interface;
 class Scene_root;
@@ -42,10 +41,7 @@ class Shadow_renderer
 public:
     static const int shadow_texture_unit{15};
 
-    Shadow_renderer(
-        erhe::graphics::Instance& graphics_instance,
-        Program_interface&        program_interface
-    );
+    Shadow_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface);
 
     // Public API
     class Render_parameters

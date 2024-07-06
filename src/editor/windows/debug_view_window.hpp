@@ -20,8 +20,7 @@ namespace erhe::scene_renderer {
     class Forward_renderer;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Debug_view_window;
 class Depth_to_color_rendergraph_node;
@@ -66,14 +65,9 @@ public:
     explicit Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph);
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto get_type_name() const -> std::string_view override { return "Debug_view_node"; }
+    auto get_type_name() const -> std::string_view override { return "Debug_view_node"; }
     void execute_rendergraph_node() override;
-
-    [[nodiscard]] auto get_consumer_input_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
+    auto get_consumer_input_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
     void set_area_size(int size);
 
@@ -100,9 +94,6 @@ public:
     // Overrides Framebuffer_window / Imgui_window
     void imgui () override;
     void hidden() override;
-
-    // Public API
-    //// void register_node(const std::shared_ptr<Shadow_render_node>& shadow_renderer_node)
 
 private:
     void set_shadow_renderer_node(Shadow_render_node* node);

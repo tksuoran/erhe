@@ -5,8 +5,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace editor
-{
+namespace editor {
 
 class Item_parent_change_operation;
 
@@ -19,7 +18,7 @@ public:
         remove
     };
 
-    static auto inverse(const Mode mode) -> Mode
+    [[nodiscard]] static auto inverse(const Mode mode) -> Mode
     {
         switch (mode) {
             //using enum Mode;
@@ -44,7 +43,7 @@ public:
     explicit Item_insert_remove_operation(const Parameters& parameters);
 
     // Implements IOperation
-    [[nodiscard]] auto describe() const -> std::string override;
+    auto describe() const -> std::string override;
     void execute(Editor_context& context) override;
     void undo   (Editor_context& context) override;
 
@@ -61,4 +60,4 @@ private:
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection_after;
 };
 
-}
+} // namespace editor

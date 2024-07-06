@@ -9,8 +9,7 @@
 #include <memory>
 #include <vector>
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Tiles
 {

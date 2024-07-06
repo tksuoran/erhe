@@ -17,8 +17,7 @@ namespace erhe::scene {
     class Skin;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message_bus;
@@ -58,9 +57,7 @@ public:
     void imgui() override;
 
 private:
-    [[nodiscard]] auto get_selected_camera(
-        const Render_context& render_context
-    ) -> std::shared_ptr<erhe::scene::Camera>;
+    [[nodiscard]] auto get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>;
 
     class Light_visualization_context
     {
@@ -72,14 +69,8 @@ private:
         glm::vec4                            half_light_color{0};
     };
 
-    void mesh_visualization(
-        const Render_context& render_context,
-        erhe::scene::Mesh*    mesh
-    );
-    void skin_visualization(
-        const Render_context& render_context,
-        erhe::scene::Skin&    skin
-    );
+    void mesh_visualization(const Render_context& render_context, erhe::scene::Mesh* mesh);
+    void skin_visualization(const Render_context& render_context, erhe::scene::Skin& skin);
 
     void light_visualization(
         const Render_context&                render_context,

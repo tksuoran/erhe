@@ -8,8 +8,7 @@
 #include <string>
 #include <string_view>
 
-namespace erhe::xr
-{
+namespace erhe::xr {
 
 class Profile_mask
 {

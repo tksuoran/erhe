@@ -23,32 +23,25 @@ namespace erhe::window {
     class Context_window;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message_bus;
 class Editor_rendering;
 class Editor_settings;
 class Graphics_preset;
-class Headset_view;
 class Mesh_memory;
 class Programs;
 class Render_context;
 class Renderable;
 class Scene_view;
 class Shadow_render_node;
-class Tools;
-class Viewport_windows;
 
 class Capture_frame_command
     : public erhe::commands::Command
 {
 public:
-    Capture_frame_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Capture_frame_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -166,6 +159,5 @@ static constexpr unsigned int s_stencil_line_renderer_grid_minor =  8u;
 static constexpr unsigned int s_stencil_line_renderer_grid_major =  9u;
 static constexpr unsigned int s_stencil_line_renderer_selection  = 10u;
 static constexpr unsigned int s_stencil_line_renderer_tools      = 11u;
-
 
 }

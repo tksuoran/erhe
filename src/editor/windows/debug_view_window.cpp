@@ -64,12 +64,12 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
 {
     // register_input() & register_output() is done by Texture_rendergraph_node constructor
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "shadow_maps",
         erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
     register_output(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "depth_visualization",
         erhe::rendergraph::Rendergraph_node_key::depth_visualization
     );
@@ -91,7 +91,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     ERHE_PROFILE_FUNCTION();
 
     Rendergraph_node* input_node = get_consumer_input_node(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
     if (input_node == nullptr) {
@@ -154,7 +154,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     erhe::graphics::Scoped_debug_group pass_scope{"Debug View"};
 
     const auto& output_viewport = get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         m_output_key
     );
     ERHE_VERIFY(output_viewport.width >= 0);
@@ -208,7 +208,7 @@ Debug_view_node::Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph)
     : erhe::rendergraph::Rendergraph_node{rendergraph, "Debug View"}
 {
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "depth_visualization",
         erhe::rendergraph::Rendergraph_node_key::depth_visualization
     );
@@ -220,7 +220,7 @@ Debug_view_node::Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph)
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(
-        erhe::rendergraph::Resource_routing::None,
+        erhe::rendergraph::Routing::None,
         "window",
         erhe::rendergraph::Rendergraph_node_key::window
     );
@@ -238,9 +238,9 @@ void Debug_view_node::set_area_size(const int size)
 }
 
 [[nodiscard]] auto Debug_view_node::get_consumer_input_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -331,7 +331,7 @@ void Debug_view_window::hidden()
 
     // TODO
     const auto* input = m_node.get_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         erhe::rendergraph::Rendergraph_node_key::depth_visualization
     );
     if (
@@ -372,7 +372,7 @@ void Debug_view_window::imgui()
     ERHE_PROFILE_FUNCTION();
 
     const auto* input = m_node.get_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         erhe::rendergraph::Rendergraph_node_key::depth_visualization
     );
     if (input == nullptr) {
@@ -396,7 +396,7 @@ void Debug_view_window::imgui()
     auto* input_texture_node = static_cast<Depth_to_color_rendergraph_node*>(producer_node);
     auto* shadow_render_node = static_cast<Shadow_render_node*>(
         producer_node->get_consumer_input_node(
-            erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+            erhe::rendergraph::Routing::Resource_provided_by_producer,
             erhe::rendergraph::Rendergraph_node_key::shadow_maps
         )
     );
@@ -442,7 +442,7 @@ void Debug_view_window::imgui()
     };
 
     const auto& texture = m_node.get_consumer_input_texture(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         erhe::rendergraph::Rendergraph_node_key::depth_visualization
     );
 

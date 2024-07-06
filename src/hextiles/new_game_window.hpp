@@ -9,13 +9,11 @@
 #include "etl/string.h"
 #include "etl/vector.h"
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
     class Imgui_windows;
 }
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Game;
 class Map_editor;

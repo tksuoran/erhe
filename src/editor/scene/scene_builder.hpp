@@ -33,8 +33,7 @@ namespace erhe::scene_renderer {
     class Shadow_renderer;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Brush;
 class Brush_data;
@@ -101,7 +100,6 @@ public:
         Editor_settings&                editor_settings,
         Mesh_memory&                    mesh_memory,
         Tools&                          tools,
-        Viewport_config_window&         viewport_config_window,
         Viewport_windows&               viewport_windows
     );
 
@@ -121,7 +119,6 @@ public:
     //[[nodiscard]] auto buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
 
 private:
-
     auto make_directional_light(
         const std::string_view name,
         const glm::vec3        position,
@@ -167,7 +164,6 @@ private:
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings,
         Tools&                          tools,
-        Viewport_config_window&         viewport_config_window,
         Viewport_windows&               viewport_windows
     );
     void animate_lights     (const double time_d);

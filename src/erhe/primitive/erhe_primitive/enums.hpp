@@ -1,7 +1,6 @@
 #pragma once
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 enum class Normal_style : unsigned int {
     none            = 0,

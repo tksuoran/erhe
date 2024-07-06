@@ -8,9 +8,7 @@
 
 #include <string_view>
 
-
-namespace editor
-{
+namespace editor {
 
 class Render_style_data
 {

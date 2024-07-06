@@ -3,8 +3,7 @@
 #include <vector>
 #include <string>
 
-namespace hextiles
-{
+namespace hextiles {
 
 auto read_file       (const char* path) -> std::vector<unsigned char>;
 auto read_file_string(const char* path) -> std::string;

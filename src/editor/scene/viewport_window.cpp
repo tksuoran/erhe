@@ -61,13 +61,12 @@ Viewport_window::Viewport_window(
     Editor_context&                             editor_context,
     erhe::rendergraph::Rendergraph&             rendergraph,
     Tools&                                      tools,
-    Viewport_config_window&                     viewport_config_window,
     const std::string_view                      name,
     const char*                                 ini_label,
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera
 )
-    : Scene_view       {editor_context, viewport_config_window.config}
+    : Scene_view       {editor_context, Viewport_config::default_config()}
     , Rendergraph_node {rendergraph, name}
     , m_name           {name}
     , m_ini_label      {ini_label}
@@ -76,17 +75,17 @@ Viewport_window::Viewport_window(
     , m_camera         {camera}
 {
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "shadow_maps",
         erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "rendertarget texture",
         erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
     );
     register_output(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         "viewport",
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
@@ -135,11 +134,11 @@ void Viewport_window::execute_rendergraph_node()
     ERHE_PROFILE_FUNCTION();
 
     const auto& output_viewport = get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
     const auto& output_framebuffer = get_producer_output_framebuffer(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
@@ -499,7 +498,7 @@ auto Viewport_window::position_in_world_viewport_depth(
 auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
 {
     Rendergraph_node* input_node = get_consumer_input_node(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
     Shadow_render_node* shadow_render_node = static_cast<Shadow_render_node*>(input_node);

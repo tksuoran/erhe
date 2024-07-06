@@ -11,8 +11,7 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 

@@ -43,10 +43,7 @@ class Create_new_camera_command
     : public erhe::commands::Command
 {
 public:
-    Create_new_camera_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Create_new_camera_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -57,10 +54,7 @@ class Create_new_empty_node_command
     : public erhe::commands::Command
 {
 public:
-    Create_new_empty_node_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Create_new_empty_node_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -71,10 +65,7 @@ class Create_new_light_command
     : public erhe::commands::Command
 {
 public:
-    Create_new_light_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Create_new_light_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -84,10 +75,7 @@ private:
 class Scene_commands
 {
 public:
-    Scene_commands(
-        erhe::commands::Commands& commands,
-        Editor_context&           editor_context
-    );
+    Scene_commands(erhe::commands::Commands& commands, Editor_context& editor_context);
 
     // Public API
     auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;

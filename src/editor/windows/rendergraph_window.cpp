@@ -186,7 +186,7 @@ void Rendergraph_window::imgui()
 
             // Custom node content may go here
             for (const auto& output : outputs) {
-                if (output.resource_routing == erhe::rendergraph::Resource_routing::None) {
+                if (output.resource_routing == erhe::rendergraph::Routing::None) {
                     ImGui::Text("<%s>", output.label.c_str());
                     continue;
                 }

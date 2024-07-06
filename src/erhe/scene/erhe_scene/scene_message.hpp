@@ -2,8 +2,7 @@
 
 #include <memory>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Node;
 class Scene;
@@ -26,4 +25,4 @@ public:
     std::shared_ptr<Node> rhs{};
 };
 
-}
+} // namespace erhe::scene

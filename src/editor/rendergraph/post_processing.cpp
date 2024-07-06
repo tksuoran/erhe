@@ -17,13 +17,9 @@
 
 #include <algorithm>
 
-namespace editor
-{
+namespace editor {
 
-Post_processing::Offsets::Offsets(
-    erhe::graphics::Shader_resource& block,
-    const std::size_t                source_texture_count
-)
+Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block, const std::size_t source_texture_count)
     : texel_scale   {block.add_float("texel_scale"                         )->offset_in_parent()}
     , texture_count {block.add_uint ("texture_count"                       )->offset_in_parent()}
     , reserved0     {block.add_float("reserved0"                           )->offset_in_parent()}
@@ -115,20 +111,18 @@ Post_processing_node::Post_processing_node(
     , m_context{editor_context}
 {
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         "viewport",
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
     register_output(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         "viewport",
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
 }
 
-auto Post_processing_node::update_downsample_nodes(
-    erhe::graphics::Instance& graphics_instance
-) -> bool
+auto Post_processing_node::update_downsample_nodes(erhe::graphics::Instance& graphics_instance) -> bool
 {
     constexpr bool downsample_nodes_unchanged = true;
     constexpr bool downsample_nodes_changed   = false;
@@ -139,7 +133,7 @@ auto Post_processing_node::update_downsample_nodes(
     //
     // Output *should* be multisample resolved
     const auto viewport = get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
@@ -209,10 +203,10 @@ void Post_processing_node::viewport_toolbar()
     // TODO Fix ImGui::Checkbox("Post Processing", &m_enabled);
 }
 
-[[nodiscard]] auto Post_processing_node::get_consumer_input_texture(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Post_processing_node::get_consumer_input_texture(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -224,10 +218,10 @@ void Post_processing_node::viewport_toolbar()
 }
 
 // Overridden to provide framebuffer from the first downsample node
-[[nodiscard]] auto Post_processing_node::get_consumer_input_framebuffer(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Post_processing_node::get_consumer_input_framebuffer(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -238,10 +232,10 @@ void Post_processing_node::viewport_toolbar()
         : std::shared_ptr<erhe::graphics::Framebuffer>{};
 }
 
-[[nodiscard]] auto Post_processing_node::get_consumer_input_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Post_processing_node::get_consumer_input_viewport(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     return get_producer_output_viewport(resource_routing, key, depth + 1);
@@ -268,7 +262,7 @@ void Post_processing_node::execute_rendergraph_node()
     m_context.post_processing->post_process(*this);
 }
 
-[[nodiscard]] auto Post_processing_node::get_downsample_nodes() -> const std::vector<Downsample_node>&
+auto Post_processing_node::get_downsample_nodes() -> const std::vector<Downsample_node>&
 {
     return m_downsample_nodes;
 }
@@ -636,12 +630,12 @@ void Post_processing::compose(Post_processing_node& node)
     parameter_writer.end();
 
     const auto viewport = node.get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
     const auto& output_framebuffer = node.get_producer_output_framebuffer(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
     const GLuint framebuffer_name = output_framebuffer ? output_framebuffer->gl_name() : 0;

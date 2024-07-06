@@ -10,8 +10,7 @@
 #include <memory>
 #include <string>
 
-namespace erhe
-{
+namespace erhe {
 
 class Item_host;
 
@@ -175,7 +174,7 @@ class Item_filter
 public:
     [[nodiscard]] auto operator()(uint64_t filter_bits) const -> bool;
 
-    auto describe() const -> std::string;
+    [[nodiscard]] auto describe() const -> std::string;
 
     uint64_t require_all_bits_set          {0};
     uint64_t require_at_least_one_bit_set  {0};

@@ -2,8 +2,7 @@
 
 #include <glm/glm.hpp>
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Fbm_noise
 {

@@ -19,8 +19,7 @@
 #include <string>
 #include <vector>
 
-namespace erhe::ui
-{
+namespace erhe::ui {
 
 class Glyph
 {

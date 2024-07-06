@@ -2,8 +2,7 @@
 
 #include "types.hpp"
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Tile_shape
 {

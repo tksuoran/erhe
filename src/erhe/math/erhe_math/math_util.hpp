@@ -9,12 +9,10 @@
 #include <optional>
 #include <vector>
 
-namespace erhe::math
-{
+namespace erhe::math {
 
 template <typename T, typename U>
-[[nodiscard]]
-auto round(const float num) -> T
+[[nodiscard]] auto round(const float num) -> T
 {
     return
         static_cast<T>((num > U{0.0})
@@ -96,9 +94,7 @@ template <> struct vector_types<double>
 };
 
 template <typename T>
-[[nodiscard]] inline auto max_axis(
-    const typename vector_types<T>::vec3 v
-) -> typename vector_types<T>::vec3
+[[nodiscard]] inline auto max_axis(const typename vector_types<T>::vec3 v) -> typename vector_types<T>::vec3
 {
     if (
         (std::abs(v.x) >= std::abs(v.y)) &&
@@ -117,9 +113,7 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] auto min_axis(
-    const typename vector_types<T>::vec3 v
-) -> typename vector_types<T>::vec3
+[[nodiscard]] auto min_axis(const typename vector_types<T>::vec3 v) -> typename vector_types<T>::vec3
 {
     if (
         (std::abs(v.x) <= std::abs(v.y)) &&
@@ -139,9 +133,7 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] inline auto max_axis_index(
-    const typename vector_types<T>::vec3 v
-) -> typename vector_types<T>::vec3::length_type
+[[nodiscard]] inline auto max_axis_index(const typename vector_types<T>::vec3 v) -> typename vector_types<T>::vec3::length_type
 {
     if (
         (std::abs(v.x) >= std::abs(v.y)) &&
@@ -160,9 +152,7 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] inline auto min_axis_index(
-    const typename vector_types<T>::vec3 v
-) -> typename vector_types<T>::vec3::length_type
+[[nodiscard]] inline auto min_axis_index(const typename vector_types<T>::vec3 v) -> typename vector_types<T>::vec3::length_type
 {
     if (
         (std::abs(v.x) <= std::abs(v.y)) &&
@@ -351,83 +341,18 @@ template <typename T>
     };
 }
 
-[[nodiscard]] auto create_frustum(
-    float left,
-    float right,
-    float bottom,
-    float top,
-    float z_near,
-    float z_far
-) -> glm::mat4;
-
-[[nodiscard]] auto create_frustum_simple(
-    float width,
-    float height,
-    float z_near,
-    float z_far
-) -> glm::mat4;
-
-[[nodiscard]] auto create_perspective(
-    float fov_x,
-    float fov_y,
-    float z_near,
-    float z_far
-) -> glm::mat4;
-
-[[nodiscard]] auto create_perspective_xr(
-    float fov_left,
-    float fov_right,
-    float fov_up,
-    float fov_down,
-    float z_near,
-    float z_far
-) -> glm::mat4;
-
-[[nodiscard]] auto create_perspective_vertical(
-    float fov_y,
-    float aspect_ratio,
-    float z_near,
-    float z_far
-) -> glm::mat4;
-
-[[nodiscard]] auto create_perspective_horizontal(
-    float fov_x,
-    float aspect_ratio,
-    float z_near,
-    float z_far
-) -> glm::mat4;
-
-[[nodiscard]] auto create_projection(
-    float     s,
-    float     p,
-    float     n,
-    float     f,
-    float     w,
-    float     h,
-    glm::vec3 v,
-    glm::vec3 e
-) -> glm::mat4;
-
-[[nodiscard]] auto create_orthographic(
-    float left,
-    float right,
-    float bottom,
-    float top,
-    float z_near,
-    float z_far
-) -> glm::mat4;
-
-[[nodiscard]] auto create_orthographic_centered(
-    float width,
-    float height,
-    float z_near,
-    float z_far
-) -> glm::mat4;
+[[nodiscard]] auto create_frustum(float left, float right, float bottom, float top, float z_near, float z_far) -> glm::mat4;
+[[nodiscard]] auto create_frustum_simple(float width, float height, float z_near, float z_far) -> glm::mat4;
+[[nodiscard]] auto create_perspective(float fov_x, float fov_y, float z_near, float z_far) -> glm::mat4;
+[[nodiscard]] auto create_perspective_xr(float fov_left, float fov_right, float fov_up, float fov_down, float z_near, float z_far) -> glm::mat4;
+[[nodiscard]] auto create_perspective_vertical(float fov_y, float aspect_ratio, float z_near, float z_far) -> glm::mat4;
+[[nodiscard]] auto create_perspective_horizontal(float fov_x, float aspect_ratio, float z_near, float z_far) -> glm::mat4;
+[[nodiscard]] auto create_projection(float s, float p, float n, float f, float w, float h, glm::vec3 v, glm::vec3 e) -> glm::mat4;
+[[nodiscard]] auto create_orthographic(float left,float right,float bottom, float top, float z_near, float z_far) -> glm::mat4;
+[[nodiscard]] auto create_orthographic_centered(float width,float height, float z_near, float z_far) -> glm::mat4;
 
 template <typename T>
-[[nodiscard]] auto create_translation(
-    const typename vector_types<T>::vec2 t
-) -> typename vector_types<T>::mat4
+[[nodiscard]] auto create_translation(const typename vector_types<T>::vec2 t) -> typename vector_types<T>::mat4
 {
     return typename vector_types<T>::mat4{
         T{1.0}, T{0.0}, T{0.0}, T{0.0},
@@ -438,9 +363,7 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] auto create_translation(
-    const typename vector_types<T>::vec3 t
-) -> typename vector_types<T>::mat4
+[[nodiscard]] auto create_translation(const typename vector_types<T>::vec3 t) -> typename vector_types<T>::mat4
 {
     return typename vector_types<T>::mat4{
         T{1.0}, T{0.0}, T{0.0}, T{0.0},
@@ -451,11 +374,7 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] auto create_translation(
-    const T x,
-    const T y,
-    const T z
-) -> typename vector_types<T>::mat4
+[[nodiscard]] auto create_translation(const T x, const T y, const T z) -> typename vector_types<T>::mat4
 {
     return typename vector_types<T>::mat4{
         T{1.0}, T{0.0}, T{0.0}, T{0.0},
@@ -542,40 +461,20 @@ template <typename T>
     };
 }
 
-[[nodiscard]] auto create_look_at(
-    const glm::vec3 eye,
-    const glm::vec3 center,
-    const glm::vec3 up0
-) -> glm::mat4;
+// Creates world from view matrix (different from glu/glm, which create view from world)
+[[nodiscard]] auto create_look_at(glm::vec3 eye, glm::vec3 center, glm::vec3 up0) -> glm::mat4;
 
 void hsv_to_rgb(float h, float s, float v, float& r, float& g, float& b);
-
 void rgb_to_hsv(float r, float g, float b, float& h, float& s, float& v);
 
 [[nodiscard]] auto srgb_to_linear(float cs) -> float;
-
 [[nodiscard]] auto linear_rgb_to_srgb(float cl) -> float;
+[[nodiscard]] auto srgb_to_linear_rgb(glm::vec3 srgb) -> glm::vec3;
+[[nodiscard]] auto linear_rgb_to_srgb(glm::vec3 linear_rgb) -> glm::vec3;
 
-[[nodiscard]] auto srgb_to_linear_rgb(const glm::vec3 srgb) -> glm::vec3;
-
-[[nodiscard]] auto linear_rgb_to_srgb(const glm::vec3 linear_rgb) -> glm::vec3;
-
-void cartesian_to_heading_elevation(
-    const glm::vec3 v,
-    float&          out_elevation,
-    float&          out_heading
-);
-
-void cartesian_to_spherical_iso(
-    const glm::vec3 v,
-    float&          out_theta,
-    float&          out_phi
-);
-
-[[nodiscard]] auto spherical_to_cartesian_iso(
-    float theta,
-    float phi
-) -> glm::vec3;
+void cartesian_to_heading_elevation(glm::vec3 v, float& out_elevation, float& out_heading);
+void cartesian_to_spherical_iso(glm::vec3 v, float& out_theta, float& out_phi);
+[[nodiscard]] auto spherical_to_cartesian_iso(float theta, float phi) -> glm::vec3;
 
 template <typename T>
 class Closest_points
@@ -591,9 +490,7 @@ template <typename T>
     const typename vector_types<T>::vec3& P1,
     const typename vector_types<T>::vec3& Q0,
     const typename vector_types<T>::vec3& Q1
-) -> std::optional<
-    Closest_points<T>
->
+) -> std::optional<Closest_points<T>>
 {
     using vec3 = typename vector_types<T>::vec3;
 
@@ -833,10 +730,7 @@ public:
     float     radius{0.0f};
 };
 
-[[nodiscard]] auto transform(
-    const glm::mat4&       m,
-    const Bounding_sphere& sphere
-) -> Bounding_sphere;
+[[nodiscard]] auto transform(const glm::mat4& m, const Bounding_sphere& sphere) -> Bounding_sphere;
 
 class Bounding_volume_source
 {
@@ -997,10 +891,7 @@ public:
         return m_sizes.at(element_index);
     }
 
-    auto get_point(
-        const std::size_t element_index,
-        const std::size_t point_index
-    ) const -> std::optional<glm::vec3> override
+    auto get_point(const std::size_t element_index, const std::size_t point_index) const -> std::optional<glm::vec3> override
     {
         return m_points.at(m_offsets.at(element_index) + point_index);
     }
@@ -1011,7 +902,7 @@ private:
     std::vector<glm::vec3>   m_points;
 };
 
-static inline auto saturate(float value) -> float
+[[nodiscard]] static inline auto saturate(float value) -> float
 {
     return (value < 0.0f)
         ? 0.0f
@@ -1020,12 +911,12 @@ static inline auto saturate(float value) -> float
             : value;
 }
 
-static inline auto float_to_int8_saturate(float value) -> uint32_t
+[[nodiscard]] static inline auto float_to_int8_saturate(float value) -> uint32_t
 {
     return static_cast<uint32_t>(saturate(value) * 255.0f + 0.5f);
 }
 
-static inline auto convert_float4_to_uint32(const glm::vec4& in) -> uint32_t
+[[nodiscard]] static inline auto convert_float4_to_uint32(const glm::vec4& in) -> uint32_t
 {
     return
         (float_to_int8_saturate(in.x)      ) |
@@ -1034,7 +925,7 @@ static inline auto convert_float4_to_uint32(const glm::vec4& in) -> uint32_t
         (float_to_int8_saturate(in.w) << 24);
 }
 
-static inline auto convert_float4_to_uint32(const glm::vec3& in) -> uint32_t
+[[nodiscard]] static inline auto convert_float4_to_uint32(const glm::vec3& in) -> uint32_t
 {
     return
         (float_to_int8_saturate(in.x)      ) |
@@ -1043,7 +934,7 @@ static inline auto convert_float4_to_uint32(const glm::vec3& in) -> uint32_t
         0xff000000u;
 }
 
-static inline auto compute_cofactor(glm::mat4 const& m) -> glm::mat4
+[[nodiscard]] static inline auto compute_cofactor(glm::mat4 const& m) -> glm::mat4
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1119,4 +1010,4 @@ static inline auto compute_cofactor(glm::mat4 const& m) -> glm::mat4
     glm::vec3 skew
 ) -> glm::mat4;
 
-}
+} // namespace erhe::math

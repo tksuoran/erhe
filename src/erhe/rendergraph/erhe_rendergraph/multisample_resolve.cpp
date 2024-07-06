@@ -30,8 +30,8 @@ Multisample_resolve_node::Multisample_resolve_node(
     , m_label         {label}
     , m_key           {key}
 {
-    register_input (Resource_routing::Resource_provided_by_consumer, label, key);
-    register_output(Resource_routing::Resource_provided_by_consumer, label, key);
+    register_input (Routing::Resource_provided_by_consumer, label, key);
+    register_output(Routing::Resource_provided_by_consumer, label, key);
 }
 
 void Multisample_resolve_node::reconfigure(const int sample_count)
@@ -47,10 +47,10 @@ void Multisample_resolve_node::reconfigure(const int sample_count)
     m_framebuffer.reset();
 }
 
-[[nodiscard]] auto Multisample_resolve_node::get_consumer_input_texture(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Multisample_resolve_node::get_consumer_input_texture(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
@@ -66,10 +66,10 @@ void Multisample_resolve_node::reconfigure(const int sample_count)
     return get_producer_output_texture(resource_routing, key, depth + 1);
 }
 
-[[nodiscard]] auto Multisample_resolve_node::get_consumer_input_framebuffer(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Multisample_resolve_node::get_consumer_input_framebuffer(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
@@ -85,10 +85,10 @@ void Multisample_resolve_node::reconfigure(const int sample_count)
     return get_producer_output_framebuffer(resource_routing, key, depth + 1);
 }
 
-[[nodiscard]] auto Multisample_resolve_node::get_consumer_input_viewport(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Multisample_resolve_node::get_consumer_input_viewport(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> erhe::math::Viewport
 {
     return get_producer_output_viewport(resource_routing, key, depth + 1);
@@ -101,10 +101,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
     using erhe::graphics::Framebuffer;
     using erhe::graphics::Texture;
 
-    const auto& output_viewport = get_producer_output_viewport(
-        Resource_routing::Resource_provided_by_consumer,
-        m_key
-    );
+    const auto& output_viewport = get_producer_output_viewport(Routing::Resource_provided_by_consumer, m_key);
 
     if (
         (output_viewport.width  < 1) ||
@@ -222,7 +219,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
         ERHE_PROFILE_SCOPE("blitframebuffer");
 
         const auto& output_framebuffer = get_producer_output_framebuffer(
-            Resource_routing::Resource_provided_by_consumer,
+            Routing::Resource_provided_by_consumer,
             Rendergraph_node_key::viewport
         );
         const GLint output_framebuffer_name = output_framebuffer

@@ -346,16 +346,16 @@ void Rendertarget_mesh::clear(const glm::vec4 clear_color)
     gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
 }
 
-void Rendertarget_mesh::render_done(Editor_context& context)
+void Rendertarget_mesh::render_done(Editor_context&)
 {
     gl::generate_texture_mipmap(m_texture->gl_name());
 
-    if (context.viewport_config_window->rendertarget_mesh_lod_bias != m_sampler->lod_bias) {
+    if (s_rendertarget_mesh_lod_bias != m_sampler->lod_bias) {
         m_sampler = std::make_shared<erhe::graphics::Sampler>(
             erhe::graphics::Sampler_create_info{
                 .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
                 .mag_filter  = gl::Texture_mag_filter::nearest,
-                .lod_bias    = context.viewport_config_window->rendertarget_mesh_lod_bias,
+                .lod_bias    = s_rendertarget_mesh_lod_bias,
                 .debug_label = "Rendertarget_mesh"
             }
         );
@@ -396,9 +396,7 @@ auto is_rendertarget(const std::shared_ptr<erhe::Item_base>& item) -> bool
     return is_rendertarget(item.get());
 }
 
-auto get_rendertarget(
-    const erhe::scene::Node* const node
-) -> std::shared_ptr<Rendertarget_mesh>
+auto get_rendertarget(const erhe::scene::Node* const node) -> std::shared_ptr<Rendertarget_mesh>
 {
     for (const auto& attachment : node->get_attachments()) {
         auto rendertarget = std::dynamic_pointer_cast<Rendertarget_mesh>(attachment);
@@ -409,4 +407,16 @@ auto get_rendertarget(
     return {};
 }
 
+float Rendertarget_mesh::s_rendertarget_mesh_lod_bias{-0.666f};
+
+void Rendertarget_mesh::set_mesh_lod_bias(float lod_bias)
+{
+    s_rendertarget_mesh_lod_bias = lod_bias;
+}
+
+auto Rendertarget_mesh::get_mesh_lod_bias() -> float
+{
+    return s_rendertarget_mesh_lod_bias;
+}
+    
 }  // namespace editor

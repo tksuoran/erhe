@@ -2,8 +2,7 @@
 
 #include "terrain_type.hpp"
 
-namespace hextiles
-{
+namespace hextiles {
 
 struct Terrain_variation
 {

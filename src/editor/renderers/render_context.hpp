@@ -11,8 +11,7 @@ namespace erhe::scene {
     class Scene;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Scene_view;

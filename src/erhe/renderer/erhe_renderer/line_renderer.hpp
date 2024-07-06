@@ -26,20 +26,17 @@
 #include <memory>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Buffer;
     class Shader_stages;
 }
 
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Camera;
     class Transform;
 }
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 class Line
 {

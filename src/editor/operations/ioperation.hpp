@@ -2,8 +2,7 @@
 
 #include <string>
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 

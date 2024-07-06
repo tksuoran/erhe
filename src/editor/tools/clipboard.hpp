@@ -13,8 +13,7 @@ namespace erhe::commands {
     class Commands;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Content_library;
 class Editor_context;
@@ -25,10 +24,7 @@ class Clipboard_paste_command
     : public erhe::commands::Command
 {
 public:
-    Clipboard_paste_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Clipboard_paste_command(erhe::commands::Commands& commands, Editor_context& context);
 
     void try_ready()         override;
     auto try_call () -> bool override;
@@ -41,10 +37,7 @@ class Clipboard
     : public erhe::commands::Command_host
 {
 public:
-    Clipboard(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Clipboard(erhe::commands::Commands& commands, Editor_context& context);
 
     // Commands
     auto try_ready() -> bool;

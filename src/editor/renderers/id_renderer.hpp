@@ -30,8 +30,7 @@ namespace erhe::scene_renderer {
     class Program_interface;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Programs;
 class Mesh_memory;
@@ -91,10 +90,7 @@ private:
             Read_complete
         };
 
-        Id_frame_resources(
-            erhe::graphics::Instance& graphics_instance,
-            const std::size_t         slot
-        );
+        Id_frame_resources(erhe::graphics::Instance& graphics_instance, const std::size_t slot);
 
         Id_frame_resources(const Id_frame_resources& other) = delete;
         auto operator=    (const Id_frame_resources&) -> Id_frame_resources& = delete;
@@ -146,9 +142,7 @@ private:
         std::size_t                        mesh_primitive_index{0};
     };
 
-    void render(
-        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
-    );
+    void render(const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes);
 
     std::vector<Range> m_ranges;
     bool               m_use_scissor      {true};

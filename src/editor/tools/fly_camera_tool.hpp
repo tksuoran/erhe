@@ -18,8 +18,7 @@ namespace erhe::scene {
     class Camera;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_message_bus;
 class Fly_camera_tool;

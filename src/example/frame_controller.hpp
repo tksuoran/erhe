@@ -8,8 +8,7 @@
 
 #include <memory>
 
-namespace example
-{
+namespace example {
 
 enum class Control : unsigned int {
     translate_x = 0,
@@ -30,8 +29,8 @@ public:
     [[nodiscard]] static auto get_static_type() -> uint64_t;
 
     // Implements Item_base
-    [[nodiscard]] auto get_type     () const -> uint64_t         override;
-    [[nodiscard]] auto get_type_name() const -> std::string_view override;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
 
     // Implements / overrides Node_attachment
     void handle_node_update          (erhe::scene::Node* old_node, erhe::scene::Node* new_node) override;

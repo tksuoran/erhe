@@ -17,15 +17,11 @@ class Sink_rendergraph_node
 public:
     static constexpr std::string_view c_type_name{"Sink_rendergraph_node"};
 
-    Sink_rendergraph_node(
-        Rendergraph&           rendergraph,
-        const std::string_view name
-    );
+    Sink_rendergraph_node(Rendergraph& rendergraph, const std::string_view name);
 
-    [[nodiscard]] auto get_type_name() const -> std::string_view override { return c_type_name; }
+    auto get_type_name           () const -> std::string_view override { return c_type_name; }
     void execute_rendergraph_node() override;
-
-    auto outputs_allowed() const -> bool override;
+    auto outputs_allowed         () const -> bool override;
 };
 
 } // namespace erhe::rendergraph

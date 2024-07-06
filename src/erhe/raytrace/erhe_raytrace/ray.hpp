@@ -5,8 +5,7 @@
 #include <array>
 #include <cstdint>
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 class IGeometry;
 class IInstance;

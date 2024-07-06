@@ -9,8 +9,7 @@
 #include <limits>
 #include <vector>
 
-namespace hextiles
-{
+namespace hextiles {
 
 class File_write_stream
 {

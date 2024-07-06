@@ -12,8 +12,7 @@ namespace erhe::physics {
     class IWorld;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Node_physics
     : public erhe::Item<

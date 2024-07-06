@@ -16,9 +16,7 @@
 namespace erhe::rendergraph
 {
 
-Texture_rendergraph_node::Texture_rendergraph_node(
-    const Texture_rendergraph_node_create_info& create_info
-)
+Texture_rendergraph_node::Texture_rendergraph_node(const Texture_rendergraph_node_create_info& create_info)
     : Rendergraph_node      {create_info.rendergraph, create_info.name}
     , m_input_key           {create_info.input_key}
     , m_output_key          {create_info.output_key}
@@ -27,9 +25,7 @@ Texture_rendergraph_node::Texture_rendergraph_node(
 {
 }
 
-Texture_rendergraph_node::Texture_rendergraph_node(
-    const Texture_rendergraph_node_create_info&& create_info
-)
+Texture_rendergraph_node::Texture_rendergraph_node(const Texture_rendergraph_node_create_info&& create_info)
     : Rendergraph_node      {create_info.rendergraph, create_info.name}
     , m_input_key           {create_info.input_key}
     , m_output_key          {create_info.output_key}
@@ -40,10 +36,10 @@ Texture_rendergraph_node::Texture_rendergraph_node(
 
 Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
 
-[[nodiscard]] auto Texture_rendergraph_node::get_consumer_input_texture(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Texture_rendergraph_node::get_consumer_input_texture(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
@@ -65,10 +61,10 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
     return get_producer_output_texture(resource_routing, m_output_key, depth + 1);
 }
 
-[[nodiscard]] auto Texture_rendergraph_node::get_consumer_input_framebuffer(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Texture_rendergraph_node::get_consumer_input_framebuffer(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
@@ -90,10 +86,10 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
     return get_producer_output_framebuffer(resource_routing, m_output_key, depth + 1);
 }
 
-[[nodiscard]] auto Texture_rendergraph_node::get_producer_output_texture(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Texture_rendergraph_node::get_producer_output_texture(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     static_cast<void>(resource_routing);
@@ -102,10 +98,10 @@ Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
     return m_color_texture;
 }
 
-[[nodiscard]] auto Texture_rendergraph_node::get_producer_output_framebuffer(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Texture_rendergraph_node::get_producer_output_framebuffer(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     static_cast<void>(resource_routing);
@@ -121,7 +117,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
 
     // TODO Figure out exactly what to do here.
     const auto& output_viewport = get_producer_output_viewport(
-        Resource_routing::Resource_provided_by_consumer,
+        Routing::Resource_provided_by_consumer,
         m_output_key
     );
 

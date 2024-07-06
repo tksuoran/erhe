@@ -12,8 +12,7 @@ namespace erhe::scene {
     class Node;
 }
 
-namespace editor
-{
+namespace editor {
 
 enum class Variable : unsigned int {
     translate_x = 0,

@@ -243,10 +243,11 @@ auto create_orthographic_centered(
     );
 }
 
+// Creates world_from_view matrix
 auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
 {
 #if 0
-    // This does NOT? give the same result
+    // glm (and pratically everything since glu) creates view_from_world matrix.
     return glm::lookAt(eye, center, up0);
 #else
     if (eye == center) {
@@ -254,7 +255,6 @@ auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
     }
 
     // TODO Verify that up0 has some reasonable length (that it is not (0,0,0)
-
     const vec3 back  = glm::normalize(eye - center);
     const vec3 up1   = (up0 == back) ? erhe::math::min_axis<float>(back) : up0;
     const vec3 right = glm::normalize(glm::cross(up1, back));
@@ -702,4 +702,4 @@ auto Point_vector_bounding_volume_source::get_point(std::size_t element_index, s
     return m_points[element_index];
 }
 
-}
+} // namespace erhe::math

@@ -2,10 +2,9 @@
 
 #include <string>
 
-namespace erhe::time
-{
+namespace erhe::time {
 
-auto timestamp      () -> std::string;
-auto timestamp_short() -> std::string;
+[[nodiscard]] auto timestamp      () -> std::string;
+[[nodiscard]] auto timestamp_short() -> std::string;
 
 }

@@ -10,13 +10,11 @@
 #include "etl/string.h"
 #include "etl/vector.h"
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
     class Imgui_windows;
 }
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Game;
 class Map;
@@ -37,8 +35,7 @@ struct Game_create_parameters
     etl::vector<Tile_coordinate, max_city_count>   city_positions;
 };
 
-class Move_unit_command final
-    : public erhe::commands::Command
+class Move_unit_command final : public erhe::commands::Command
 {
 public:
     Move_unit_command(
@@ -60,8 +57,7 @@ private:
     direction_t m_direction;
 };
 
-class Select_unit_command final
-    : public erhe::commands::Command
+class Select_unit_command final : public erhe::commands::Command
 {
 public:
     Select_unit_command(

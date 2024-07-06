@@ -15,8 +15,7 @@ namespace erhe::scene {
     class Mesh;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Node_physics;
@@ -52,7 +51,7 @@ protected:
     ~Mesh_operation() noexcept override;
 
     // Implements IOperation
-    [[nodiscard]] auto describe() const -> std::string override;
+    auto describe() const -> std::string override;
     void execute(Editor_context& context) override;
     void undo   (Editor_context& context) override;
 

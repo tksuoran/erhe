@@ -55,9 +55,9 @@ public:
     );
 
     void sample() override;
+    auto label() const -> const char* override;
 
     [[nodiscard]] auto gpu_timer() const -> erhe::graphics::Gpu_timer*;
-    [[nodiscard]] auto label    () const -> const char* override;
 
 private:
     erhe::graphics::Gpu_timer* m_gpu_timer{nullptr};
@@ -73,9 +73,9 @@ public:
     );
 
     void sample() override;
+    auto label() const -> const char* override;
 
     [[nodiscard]] auto timer() const -> erhe::time::Timer*;
-    [[nodiscard]] auto label() const -> const char* override;
 
 private:
     erhe::time::Timer* m_timer{nullptr};
@@ -88,9 +88,9 @@ public:
     explicit Frame_time_plot(std::size_t width = 256);
 
     void sample() override;
+    auto label() const -> const char* override;
 
     [[nodiscard]] auto timer() const -> erhe::time::Timer*;
-    [[nodiscard]] auto label() const -> const char* override;
 
 private:
     std::optional<std::chrono::steady_clock::time_point> m_last_frame_time_point;

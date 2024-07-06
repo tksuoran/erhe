@@ -9,8 +9,7 @@ namespace ImNodes::Ez {
     struct Context;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 

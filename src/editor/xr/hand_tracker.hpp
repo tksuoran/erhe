@@ -16,8 +16,7 @@ namespace erhe::renderer {
     class Line_renderer;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_rendering;
@@ -70,9 +69,7 @@ public:
         const glm::vec3 p1
     ) const -> std::optional<Finger_point>;
 
-    [[nodiscard]] auto get_joint(
-        XrHandJointEXT joint
-    ) const -> std::optional<Joint>;
+    [[nodiscard]] auto get_joint(XrHandJointEXT joint) const -> std::optional<Joint>;
 
     auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> std::optional<float>;
     auto is_active() const -> bool;
@@ -97,10 +94,7 @@ class Hand_tracker
     : public Renderable
 {
 public:
-    Hand_tracker(
-        Editor_context&   editor_context,
-        Editor_rendering& editor_rendering
-    );
+    Hand_tracker(Editor_context& editor_context, Editor_rendering& editor_rendering);
     ~Hand_tracker() noexcept override;
 
     // Implements Renderable
@@ -108,13 +102,9 @@ public:
 
     // Public API
     void update_hands(erhe::xr::Headset& headset);
-    auto get_hand (const Hand_name hand_name) -> Hand&;
-    void set_color(const Hand_name hand_name, const ImVec4 color);
-    void set_color(
-        const Hand_name   hand_name,
-        const std::size_t finger_name,
-        const ImVec4      color
-    );
+    auto get_hand (Hand_name hand_name) -> Hand&;
+    void set_color(Hand_name hand_name, ImVec4 color);
+    void set_color(Hand_name hand_name, std::size_t finger_name, ImVec4 color);
 
 private:
     Editor_context& m_context;

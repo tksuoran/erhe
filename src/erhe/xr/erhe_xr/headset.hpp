@@ -33,10 +33,7 @@ public:
 class Headset final
 {
 public:
-    Headset(
-        erhe::window::Context_window& context_window,
-        const Xr_configuration&        configuration
-    );
+    Headset(erhe::window::Context_window& context_window, const Xr_configuration& configuration);
     ~Headset() noexcept;
 
     auto is_valid   () const -> bool;
@@ -58,4 +55,4 @@ private:
     std::unique_ptr<Xr_session > m_xr_session;
 };
 
-}
+} // namespace erhe::xr

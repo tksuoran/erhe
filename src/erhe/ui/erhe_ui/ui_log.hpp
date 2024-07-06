@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::ui
-{
+namespace erhe::ui {
 
 extern std::shared_ptr<spdlog::logger> log_text_buffer;
 extern std::shared_ptr<spdlog::logger> log_font;

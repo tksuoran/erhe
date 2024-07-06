@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Camera;
 class Light;

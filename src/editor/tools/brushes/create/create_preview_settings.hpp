@@ -6,8 +6,7 @@ namespace erhe::scene {
     class Transform;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Render_context;
 

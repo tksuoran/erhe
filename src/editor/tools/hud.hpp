@@ -20,8 +20,7 @@ namespace erhe::scene {
     class Node;
 };
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message;
@@ -42,10 +41,7 @@ class Toggle_hud_visibility_command
     : public erhe::commands::Command
 {
 public:
-    Toggle_hud_visibility_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Toggle_hud_visibility_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -56,10 +52,7 @@ class Hud_drag_command
     : public erhe::commands::Command
 {
 public:
-    Hud_drag_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Hud_drag_command(erhe::commands::Commands& commands, Editor_context& context);
     void try_ready  () override;
     auto try_call   () -> bool override;
     void on_inactive() override;
@@ -119,10 +112,7 @@ public:
 
     [[nodiscard]] auto world_from_node() const -> glm::mat4;
     [[nodiscard]] auto node_from_world() const -> glm::mat4;
-    [[nodiscard]] auto intersect_ray(
-        const glm::vec3& ray_origin_in_world,
-        const glm::vec3& ray_direction_in_world
-    ) -> std::optional<glm::vec3>;
+    [[nodiscard]] auto intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>;
 
 private:
     void on_message           (Editor_message& message);
@@ -147,8 +137,6 @@ private:
     float m_x             {-0.09f};
     float m_y             { 0.0f};
     float m_z             {-0.38f};
-    int   m_width_items   {10};
-    int   m_height_items  {10};
     bool  m_enabled       {true};
     bool  m_locked_to_head{false};
 

@@ -17,7 +17,7 @@ public:
 /// <summary>
 /// Describes where input / output resource should be queried from.
 /// </summary>
-enum class Resource_routing : unsigned int {
+enum class Routing : unsigned int {
     /// No-one owns the resource / there is no resource to be owned.
     None = 0,
 
@@ -37,7 +37,7 @@ enum class Resource_routing : unsigned int {
     Resource_provided_by_producer = 3,
 };
 
-[[nodiscard]] auto c_str(Resource_routing resource_routing) -> const char*;
+[[nodiscard]] auto c_str(Routing resource_routing) -> const char*;
 
 //// [[nodiscard]] auto is_connection_allowed(
 ////     Resource_ownership producer_resource_ownership,

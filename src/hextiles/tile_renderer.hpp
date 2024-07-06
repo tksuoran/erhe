@@ -33,24 +33,19 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics{
     class Buffer;
     class Sampler;
     class Shader_resource;
     class Shader_stages;
     class Texture;
 }
-
-namespace erhe::imgui
-{
+namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
 }
 
-
-namespace hextiles
-{
+namespace hextiles {
 
 class Tiles;
 

@@ -16,8 +16,7 @@ namespace erhe::raytrace {
     class Ray;
 }
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 using Layer_id = uint64_t;
 

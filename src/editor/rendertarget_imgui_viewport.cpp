@@ -48,7 +48,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     , m_rendertarget_mesh{rendertarget_mesh}
 {
     register_output(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "rendertarget texture",
         erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
     );
@@ -298,9 +298,9 @@ void Rendertarget_imgui_viewport::execute_rendergraph_node()
 }
 
 auto Rendertarget_imgui_viewport::get_consumer_input_texture(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -310,9 +310,9 @@ auto Rendertarget_imgui_viewport::get_consumer_input_texture(
 }
 
 auto Rendertarget_imgui_viewport::get_producer_output_texture(
-    erhe::rendergraph::Resource_routing resource_routing,
-    int                                 key,
-    int                                 depth
+    erhe::rendergraph::Routing resource_routing,
+    int                        key,
+    int                        depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -322,9 +322,9 @@ auto Rendertarget_imgui_viewport::get_producer_output_texture(
 }
 
 auto Rendertarget_imgui_viewport::get_consumer_input_framebuffer(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -334,9 +334,9 @@ auto Rendertarget_imgui_viewport::get_consumer_input_framebuffer(
 }
 
 auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -352,9 +352,9 @@ auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
 }
 
 auto Rendertarget_imgui_viewport::get_producer_output_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate

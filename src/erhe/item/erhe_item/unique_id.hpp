@@ -3,8 +3,7 @@
 #include <atomic>
 #include <cstddef>
 
-namespace erhe
-{
+namespace erhe {
 
 template <class T>
 class Unique_id
@@ -14,15 +13,11 @@ public:
 
     static constexpr id_type null_id{0};
 
-    constexpr Unique_id()
-        : m_id{allocate_id()}
-    {
-    }
+    constexpr Unique_id() : m_id{allocate_id()} {}
 
     Unique_id(const Unique_id&) = delete;
 
-    Unique_id(Unique_id&& other) noexcept
-        : m_id{other.get_id()}
+    Unique_id(Unique_id&& other) noexcept : m_id{other.get_id()}
     {
         other.reset();
     }

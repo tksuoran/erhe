@@ -31,7 +31,8 @@ public:
         uint32_t              modifier_mask
     ) -> bool;
 
-    [[nodiscard]] auto get_type   () const -> Type override { return Command_binding::Type::Key; }
+    auto get_type() const -> Type override { return Command_binding::Type::Key; }
+
     [[nodiscard]] auto get_keycode() const -> erhe::window::Keycode;
     [[nodiscard]] auto get_pressed() const -> bool;
 

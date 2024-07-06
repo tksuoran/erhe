@@ -21,7 +21,7 @@ public:
     Xr_vector2f_binding();
     ~Xr_vector2f_binding() noexcept override;
 
-    [[nodiscard]] auto get_type() const -> Type override;
+    auto get_type() const -> Type override;
 
     auto on_value_changed(Input_arguments& input) -> bool;
 

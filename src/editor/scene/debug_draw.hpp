@@ -2,8 +2,7 @@
 
 #include "erhe_physics/idebug_draw.hpp"
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 

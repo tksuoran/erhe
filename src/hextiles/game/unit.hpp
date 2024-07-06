@@ -5,8 +5,7 @@
 
 #include "etl/string.h"
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Unit
 {

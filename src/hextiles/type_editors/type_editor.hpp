@@ -22,8 +22,7 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Tile_renderer;
 class Tiles;

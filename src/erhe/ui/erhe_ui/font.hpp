@@ -17,8 +17,7 @@ struct FT_FaceRec_;
 struct hb_font_t;
 struct hb_buffer_t;
 
-namespace erhe::ui
-{
+namespace erhe::ui {
 
 class Font final
 {
@@ -31,8 +30,6 @@ public:
     );
 
     ~Font() noexcept;
-
-    void save() const;
 
     [[nodiscard]] auto line_height() const -> float
     {

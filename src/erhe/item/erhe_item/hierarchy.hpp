@@ -32,8 +32,8 @@ public:
     // Overrides Item_base
     static constexpr std::string_view static_type_name{"Hierarchy"};
     [[nodiscard]] static auto get_static_type() -> uint64_t{ return 0; }
-    [[nodiscard]] auto get_type     () const -> uint64_t          override { return get_static_type(); }
-    [[nodiscard]] auto get_type_name() const -> std::string_view  override { return static_type_name; }
+    auto get_type     () const -> uint64_t          override { return get_static_type(); }
+    auto get_type_name() const -> std::string_view  override { return static_type_name; }
 
     virtual void set_parent          (const std::shared_ptr<Hierarchy>& parent);
     virtual void set_parent          (const std::shared_ptr<Hierarchy>& parent, std::size_t position);

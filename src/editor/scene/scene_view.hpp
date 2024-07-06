@@ -35,8 +35,7 @@ namespace erhe::scene_renderer {
     class Light_projections;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message;

@@ -9,7 +9,6 @@ namespace erhe::xr {
 
 class Swapchain;
 
-
 class Swapchain_image
 {
 public:
@@ -20,8 +19,8 @@ public:
     Swapchain_image (Swapchain_image&& other) noexcept;
     void operator=  (Swapchain_image&& other) noexcept;
 
-    auto get_image_index() const -> unsigned int;
-    auto get_gl_texture () const -> unsigned int;
+    [[nodiscard]] auto get_image_index() const -> unsigned int;
+    [[nodiscard]] auto get_gl_texture () const -> unsigned int;
 
 private:
     Swapchain* m_swapchain  {nullptr};
@@ -38,14 +37,14 @@ public:
     Swapchain     (Swapchain&& other) noexcept;
     void operator=(Swapchain&& other) noexcept;
 
-    auto acquire         () -> std::optional<Swapchain_image>;
-    auto release         () -> bool;
-    auto wait            () -> bool;
-    auto get_gl_texture  (const uint32_t image_index) const -> unsigned int;
-    auto get_xr_swapchain() const -> XrSwapchain;
+    [[nodiscard]] auto acquire         () -> std::optional<Swapchain_image>;
+                  auto release         () -> bool;
+    [[nodiscard]] auto wait            () -> bool;
+    [[nodiscard]] auto get_gl_texture  (const uint32_t image_index) const -> unsigned int;
+    [[nodiscard]] auto get_xr_swapchain() const -> XrSwapchain;
 
 private:
-    auto enumerate_images() -> bool;
+    [[nodiscard]] auto enumerate_images() -> bool;
 
     XrSwapchain               m_xr_swapchain{XR_NULL_HANDLE};
     std::vector<unsigned int> m_gl_textures;

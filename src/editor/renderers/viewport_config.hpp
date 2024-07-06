@@ -6,13 +6,13 @@
 
 #include <glm/glm.hpp>
 
-namespace editor
-{
-
+namespace editor {
 
 class Viewport_config
 {
 public:
+    [[nodiscard]] static auto default_config() -> Viewport_config;
+
     // TODO Use Render_style instead of Render_style_data?
     Render_style_data render_style_not_selected;
     Render_style_data render_style_selected;
@@ -35,6 +35,5 @@ public:
     bool                 selection_bounding_box   {false};
     bool                 selection_bounding_sphere{false};
 };
-
 
 } // namespace editor

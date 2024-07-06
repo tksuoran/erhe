@@ -110,7 +110,7 @@ class Editor
 {
 public:
     // Implements Window_event_handler
-    [[nodiscard]] auto get_name() const -> const char* override { return "Editor"; }
+    auto get_name() const -> const char* override { return "Editor"; }
 
     [[nodiscard]] auto create_window() -> erhe::window::Context_window
     {
@@ -217,7 +217,6 @@ public:
             m_editor_settings,
             m_mesh_memory,
             m_tools,
-            m_viewport_config_window,
             m_viewport_windows
         }
         , m_headset_view{

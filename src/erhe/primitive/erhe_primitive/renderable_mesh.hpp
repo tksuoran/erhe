@@ -17,8 +17,7 @@ namespace erhe::geometry {
     class Geometry;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 class Renderable_mesh
 {

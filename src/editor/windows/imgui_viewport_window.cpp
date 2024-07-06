@@ -86,7 +86,7 @@ Imgui_viewport_window::Imgui_viewport_window(
     m_viewport.height = 0;
 
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         "viewport",
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
@@ -98,7 +98,7 @@ Imgui_viewport_window::Imgui_viewport_window(
     //
     // TODO Texture dependencies should be handled in a generic way.
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "rendertarget texture",
         erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
     );
@@ -110,7 +110,7 @@ Imgui_viewport_window::Imgui_viewport_window(
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(
-        erhe::rendergraph::Resource_routing::None,
+        erhe::rendergraph::Routing::None,
         "window",
         erhe::rendergraph::Rendergraph_node_key::window
     );
@@ -163,9 +163,9 @@ void Imgui_viewport_window::set_viewport(
 }
 
 [[nodiscard]] auto Imgui_viewport_window::get_consumer_input_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -176,9 +176,9 @@ void Imgui_viewport_window::set_viewport(
 }
 
 [[nodiscard]] auto Imgui_viewport_window::get_producer_output_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -223,7 +223,7 @@ void Imgui_viewport_window::imgui()
     m_viewport.height = std::max(1, static_cast<int>(size.y));
 
     const auto& color_texture = get_consumer_input_texture(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
 

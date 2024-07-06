@@ -5,8 +5,7 @@
 
 #include <string_view>
 
-namespace editor
-{
+namespace editor {
 
 class Icon_set;
 class Transform_tool;
@@ -19,11 +18,7 @@ class Move_tool
 public:
     static constexpr int c_priority{1};
 
-    Move_tool(
-        Editor_context& editor_context,
-        Icon_set&       icon_set,
-        Tools&          tools
-    );
+    Move_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools);
     ~Move_tool() noexcept override;
 
     // Implements Tool

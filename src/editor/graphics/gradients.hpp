@@ -5,11 +5,9 @@
 #include <initializer_list>
 #include <vector>
 
-namespace editor
-{
+namespace editor {
 
-namespace gradient
-{
+namespace gradient {
 
 class Stop
 {

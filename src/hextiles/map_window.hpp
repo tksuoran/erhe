@@ -13,27 +13,21 @@
 
 #include <numeric>
 
-namespace erhe::commands
-{
+namespace erhe::commands {
     class Commands;
 }
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Instance;
 }
-namespace erhe::imgui
-{
+namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
 }
-namespace erhe::renderer
-{
+namespace erhe::renderer {
     class Text_renderer;
 }
 
-
-namespace hextiles
-{
+namespace hextiles {
 
 class Map;
 class Map_window;
@@ -56,29 +50,20 @@ private:
     glm::vec2   m_offset;
 };
 
-class Map_free_zoom_command final
-    : public erhe::commands::Command
+class Map_free_zoom_command final : public erhe::commands::Command
 {
 public:
-    Map_free_zoom_command(
-        erhe::commands::Commands& commands,
-        Map_window&               map_window
-    );
-
+    Map_free_zoom_command(erhe::commands::Commands& commands, Map_window& map_window);
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
     Map_window& m_map_window;
 };
 
-class Map_mouse_scroll_command final
-    : public erhe::commands::Command
+class Map_mouse_scroll_command final : public erhe::commands::Command
 {
 public:
-    Map_mouse_scroll_command(
-        erhe::commands::Commands& commands,
-        Map_window&               map_window
-    );
+    Map_mouse_scroll_command(erhe::commands::Commands& commands, Map_window& map_window);
 
     void try_ready          () override;
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
@@ -87,15 +72,10 @@ private:
     Map_window& m_map_window;
 };
 
-class Map_zoom_command
-    : public erhe::commands::Command
+class Map_zoom_command : public erhe::commands::Command
 {
 public:
-    Map_zoom_command(
-        erhe::commands::Commands& commands,
-        Map_window&               map_window,
-        float                     scale
-    );
+    Map_zoom_command(erhe::commands::Commands& commands, Map_window& map_window, float scal);
     auto try_call() -> bool override;
 
 private:
@@ -103,14 +83,10 @@ private:
     float       m_scale{1.0f};
 };
 
-class Map_grid_cycle_command
-    : public erhe::commands::Command
+class Map_grid_cycle_command : public erhe::commands::Command
 {
 public:
-    Map_grid_cycle_command(
-        erhe::commands::Commands& commands,
-        Map_window&               map_window
-    );
+    Map_grid_cycle_command(erhe::commands::Commands& commands, Map_window& map_window);
 
     auto try_call() -> bool override;
 

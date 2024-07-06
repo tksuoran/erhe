@@ -10,8 +10,7 @@ namespace erhe::renderer {
     class Line_renderer_set;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Selection_tool;
 
@@ -46,10 +45,7 @@ public:
     [[nodiscard]] auto snap_grid_position (const glm::vec3& position_in_grid ) const -> glm::vec3;
     [[nodiscard]] auto world_from_grid    () const -> glm::mat4;
     [[nodiscard]] auto grid_from_world    () const -> glm::mat4;
-    [[nodiscard]] auto intersect_ray(
-        const glm::vec3& ray_origin_in_world,
-        const glm::vec3& ray_direction_in_world
-    ) -> std::optional<glm::vec3>;
+    [[nodiscard]] auto intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>;
 
     void render(const Render_context& context);
     void imgui (Editor_context& context);
@@ -78,6 +74,5 @@ private:
     glm::mat4       m_world_from_grid {1.0f};
     glm::mat4       m_grid_from_world {1.0f};
 };
-
 
 } // namespace editor

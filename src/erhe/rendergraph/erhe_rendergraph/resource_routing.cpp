@@ -2,16 +2,14 @@
 
 namespace erhe::rendergraph {
 
-[[nodiscard]] auto c_str(
-    const Resource_routing resource_routing
-) -> const char*
+auto c_str(const Routing resource_routing) -> const char*
 {
     switch (resource_routing)
     {
-        case Resource_routing::None:                          return "None";
-        case Resource_routing::Dont_care:                     return "Dont care";
-        case Resource_routing::Resource_provided_by_consumer: return "Resource provided by consumer";
-        case Resource_routing::Resource_provided_by_producer: return "Resource provided by producer";
+        case Routing::None:                          return "None";
+        case Routing::Dont_care:                     return "Dont care";
+        case Routing::Resource_provided_by_consumer: return "Resource provided by consumer";
+        case Routing::Resource_provided_by_producer: return "Resource provided by producer";
         default:                                              return "?";
     }
 }

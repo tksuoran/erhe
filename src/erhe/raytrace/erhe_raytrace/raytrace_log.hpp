@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 extern std::shared_ptr<spdlog::logger> log_buffer;
 extern std::shared_ptr<spdlog::logger> log_device;

@@ -22,8 +22,7 @@ namespace erhe::scene {
     class Scene_message_bus;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_scenes;
 class Editor_settings;
@@ -102,13 +101,9 @@ private:
         Show          = 1,
         Show_expanded = 2
     };
-    [[nodiscard]] auto should_show(
-        const std::shared_ptr<erhe::Item_base>& item
-    ) -> Show_mode;
 
-    auto get_item_by_id(
-        std::size_t id
-    ) const -> std::shared_ptr<erhe::Item_base>;
+    [[nodiscard]] auto should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode;
+    [[nodiscard]] auto get_item_by_id(std::size_t id) const -> std::shared_ptr<erhe::Item_base>;
 
     void try_add_to_attach(
         Compound_operation::Parameters&         compound_parameters,

@@ -25,10 +25,10 @@ Rendergraph_node::~Rendergraph_node() noexcept
     m_rendergraph.unregister_node(this);
 }
 
-[[nodiscard]] auto Rendergraph_node::get_input(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Rendergraph_node::get_input(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> const Rendergraph_consumer_connector*
 {
     static_cast<void>(resource_routing);
@@ -60,10 +60,10 @@ Rendergraph_node::~Rendergraph_node() noexcept
     return nullptr;
 }
 
-[[nodiscard]] auto Rendergraph_node::get_consumer_input_node(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Rendergraph_node::get_consumer_input_node(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> Rendergraph_node*
 {
     if (!inputs_allowed()) {
@@ -85,10 +85,10 @@ Rendergraph_node::~Rendergraph_node() noexcept
     return input->producer_nodes.front();
 }
 
-[[nodiscard]] auto Rendergraph_node::get_consumer_input_texture(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Rendergraph_node::get_consumer_input_texture(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     auto* producer = get_consumer_input_node(resource_routing, key, depth);
@@ -97,10 +97,10 @@ Rendergraph_node::~Rendergraph_node() noexcept
         : std::shared_ptr<erhe::graphics::Texture>{};
 }
 
-[[nodiscard]] auto Rendergraph_node::get_consumer_input_framebuffer(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Rendergraph_node::get_consumer_input_framebuffer(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     auto* producer = get_consumer_input_node(resource_routing, key, depth);
@@ -110,9 +110,9 @@ Rendergraph_node::~Rendergraph_node() noexcept
 }
 
 auto Rendergraph_node::get_consumer_input_viewport(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> erhe::math::Viewport
 {
     auto* producer = get_consumer_input_node(resource_routing, key, depth);
@@ -121,10 +121,10 @@ auto Rendergraph_node::get_consumer_input_viewport(
         : erhe::math::Viewport{};
 }
 
-[[nodiscard]] auto Rendergraph_node::get_output(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Rendergraph_node::get_output(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> const Rendergraph_producer_connector*
 {
     static_cast<void>(resource_routing);
@@ -156,10 +156,10 @@ auto Rendergraph_node::get_consumer_input_viewport(
     return nullptr;
 }
 
-[[nodiscard]] auto Rendergraph_node::get_producer_output_node(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Rendergraph_node::get_producer_output_node(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> Rendergraph_node*
 {
     if (!outputs_allowed()) {
@@ -181,10 +181,10 @@ auto Rendergraph_node::get_consumer_input_viewport(
     return output->consumer_nodes.front();
 }
 
-[[nodiscard]] auto Rendergraph_node::get_producer_output_texture(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Rendergraph_node::get_producer_output_texture(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     auto* consumer = get_producer_output_node(resource_routing, key, depth);
@@ -193,10 +193,10 @@ auto Rendergraph_node::get_consumer_input_viewport(
         : std::shared_ptr<erhe::graphics::Texture>{};
 }
 
-[[nodiscard]] auto Rendergraph_node::get_producer_output_framebuffer(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+auto Rendergraph_node::get_producer_output_framebuffer(
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     auto* consumer = get_producer_output_node(resource_routing, key, depth);
@@ -206,9 +206,9 @@ auto Rendergraph_node::get_consumer_input_viewport(
 }
 
 auto Rendergraph_node::get_producer_output_viewport(
-    const Resource_routing resource_routing,
-    const int              key,
-    const int              depth
+    const Routing resource_routing,
+    const int     key,
+    const int     depth
 ) const -> erhe::math::Viewport
 {
     auto* consumer = get_producer_output_node(resource_routing, key, depth);
@@ -217,36 +217,32 @@ auto Rendergraph_node::get_producer_output_viewport(
         : erhe::math::Viewport{};
 }
 
-[[nodiscard]] auto Rendergraph_node::get_inputs(
-) const -> const std::vector<Rendergraph_consumer_connector>&
+auto Rendergraph_node::get_inputs() const -> const std::vector<Rendergraph_consumer_connector>&
 {
     return m_inputs;
 }
 
-[[nodiscard]] auto Rendergraph_node::get_inputs(
-) -> std::vector<Rendergraph_consumer_connector>&
+auto Rendergraph_node::get_inputs() -> std::vector<Rendergraph_consumer_connector>&
 {
     return m_inputs;
 }
 
-[[nodiscard]] auto Rendergraph_node::get_outputs(
-) const -> const std::vector<Rendergraph_producer_connector>&
+auto Rendergraph_node::get_outputs() const -> const std::vector<Rendergraph_producer_connector>&
 {
     return m_outputs;
 }
 
-[[nodiscard]] auto Rendergraph_node::get_outputs(
-) -> std::vector<Rendergraph_producer_connector>&
+auto Rendergraph_node::get_outputs() -> std::vector<Rendergraph_producer_connector>&
 {
     return m_outputs;
 }
 
-[[nodiscard]] auto Rendergraph_node::get_size() const -> std::optional<glm::vec2>
+auto Rendergraph_node::get_size() const -> std::optional<glm::vec2>
 {
     std::optional<glm::vec2> size;
 
     for (const auto& output : m_outputs) {
-        if (output.resource_routing == Resource_routing::None) {
+        if (output.resource_routing == Routing::None) {
             continue;
         }
 
@@ -271,12 +267,12 @@ auto Rendergraph_node::get_producer_output_viewport(
     return size;
 }
 
-[[nodiscard]] auto Rendergraph_node::is_enabled() const -> bool
+auto Rendergraph_node::is_enabled() const -> bool
 {
     return m_enabled;
 }
 
-[[nodiscard]] auto Rendergraph_node::get_name() const -> const std::string&
+auto Rendergraph_node::get_name() const -> const std::string&
 {
     return m_name;
 }
@@ -287,7 +283,7 @@ void Rendergraph_node::set_enabled(bool value)
 }
 
 auto Rendergraph_node::register_input(
-    const Resource_routing resource_routing,
+    const Routing resource_routing,
     const std::string_view label,
     const int              key
 ) -> bool
@@ -312,7 +308,7 @@ auto Rendergraph_node::register_input(
     }
     m_inputs.push_back(
         Rendergraph_consumer_connector{
-            .resource_routing = resource_routing,       // Resource_routing
+            .resource_routing = resource_routing,       // Routing
             .label = std::string{label},
             .key = key
         }
@@ -321,7 +317,7 @@ auto Rendergraph_node::register_input(
 }
 
 auto Rendergraph_node::register_output(
-    const Resource_routing resource_routing,
+    const Routing resource_routing,
     const std::string_view label,
     const int              key
 ) -> bool
@@ -355,10 +351,7 @@ auto Rendergraph_node::register_output(
     return true;
 }
 
-auto Rendergraph_node::connect_input(
-    const int         key,
-    Rendergraph_node* producer
-) -> bool
+auto Rendergraph_node::connect_input(const int key, Rendergraph_node* producer) -> bool
 {
     if (!inputs_allowed()) {
         log_tail->error("Node '{}' inputs are not allowed (key = {})", get_name(), key);
@@ -384,7 +377,7 @@ auto Rendergraph_node::connect_input(
     // Only single input with 'Resource_provided_by_producer' allowed
     if (
         (!producer_nodes.empty()) &&
-        (i->resource_routing == Resource_routing::Resource_provided_by_producer)
+        (i->resource_routing == Routing::Resource_provided_by_producer)
     ) {
         log_tail->warn(
             "Node '{}' input key {} already has {} producer{} registered",
@@ -419,10 +412,7 @@ auto Rendergraph_node::connect_input(
     return true;
 }
 
-auto Rendergraph_node::connect_output(
-    const int         key,
-    Rendergraph_node* consumer
-) -> bool
+auto Rendergraph_node::connect_output(const int key, Rendergraph_node* consumer) -> bool
 {
     if (!outputs_allowed()) {
         log_tail->error("Node '{}' outputs are not allowed (key = {})", get_name(), key);
@@ -448,7 +438,7 @@ auto Rendergraph_node::connect_output(
     // Only single output with 'Resource_provided_by_consumer' allowed
     if (
         (!consumer_nodes.empty()) &&
-        (i->resource_routing == Resource_routing::Resource_provided_by_consumer)
+        (i->resource_routing == Routing::Resource_provided_by_consumer)
     ) {
         log_tail->warn(
             "Node '{}' output key {} already has {} consumer{} registered",
@@ -481,10 +471,7 @@ auto Rendergraph_node::connect_output(
     return true;
 }
 
-auto Rendergraph_node::disconnect_input(
-    const int         key,
-    Rendergraph_node* producer
-) -> bool
+auto Rendergraph_node::disconnect_input(const int key, Rendergraph_node* producer) -> bool
 {
     auto i = std::find_if(
         m_inputs.begin(),
@@ -521,10 +508,7 @@ auto Rendergraph_node::disconnect_input(
     return true;
 }
 
-auto Rendergraph_node::disconnect_output(
-    const int         key,
-    Rendergraph_node* consumer
-) -> bool
+auto Rendergraph_node::disconnect_output(const int key, Rendergraph_node* consumer) -> bool
 {
     ERHE_VERIFY(consumer != nullptr);
 
@@ -584,7 +568,7 @@ void Rendergraph_node::set_depth(int depth)
     }
 }
 
-[[nodiscard]] auto Rendergraph_node::get_depth() const -> int
+auto Rendergraph_node::get_depth() const -> int
 {
     return m_depth;
 }
@@ -594,7 +578,7 @@ void Rendergraph_node::set_position(glm::vec2 position)
     m_position = position;
 }
 
-[[nodiscard]] auto Rendergraph_node::get_position() const -> glm::vec2
+auto Rendergraph_node::get_position() const -> glm::vec2
 {
     return m_position;
 }
@@ -604,7 +588,7 @@ void Rendergraph_node::set_selected(bool selected)
     m_selected = selected;
 }
 
-[[nodiscard]] auto Rendergraph_node::get_selected() const -> bool
+auto Rendergraph_node::get_selected() const -> bool
 {
     return m_selected;
 }

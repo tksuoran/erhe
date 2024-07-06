@@ -1,7 +1,6 @@
 #include "erhe_math/simulation_variable.hpp"
 
-namespace erhe::math
-{
+namespace erhe::math {
 
 Simulation_variable::Simulation_variable()
 {
@@ -205,4 +204,4 @@ void Simulation_variable::set_damp_and_max_delta(const float damp, const float m
     m_max_delta = max_delta;
 }
 
-}
+} // namespace erhe::math

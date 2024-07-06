@@ -22,28 +22,20 @@ namespace erhe::scene {
     class Scene;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message_bus;
 class Editor_scenes;
-class Editor_settings;
 class Icon_set;
-class Input_state;
-class Operation_stack;
 class Selection;
-class Selection_tool;
 class Tools;
 
 class Selection_delete_command
     : public erhe::commands::Command
 {
 public:
-    Selection_delete_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Selection_delete_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -54,10 +46,7 @@ class Selection_cut_command
     : public erhe::commands::Command
 {
 public:
-    Selection_cut_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Selection_cut_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -151,11 +140,7 @@ class Selection_tool
 public:
     static constexpr int c_priority{3};
 
-    Selection_tool(
-        Editor_context& editor_context,
-        Icon_set&       icon_set,
-        Tools&          tools
-    );
+    Selection_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools);
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;

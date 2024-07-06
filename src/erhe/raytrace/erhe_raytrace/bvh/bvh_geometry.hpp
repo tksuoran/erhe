@@ -16,8 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 class Bvh_instance;
 class Bvh_scene;
@@ -28,10 +27,7 @@ class Bvh_geometry
     : public IGeometry
 {
 public:
-    Bvh_geometry(
-        const std::string_view debug_label,
-        const Geometry_type    geometry_type
-    );
+    Bvh_geometry(const std::string_view debug_label, const Geometry_type geometry_type);
     ~Bvh_geometry() noexcept override;
 
     // Implements IGeometry
@@ -50,10 +46,10 @@ public:
         std::size_t  item_count
     ) override;
     void set_user_data(const void* ptr) override;
-    [[nodiscard]] auto get_mask     () const -> uint32_t         override;
-    [[nodiscard]] auto get_user_data() const -> const void*      override;
-    [[nodiscard]] auto is_enabled   () const -> bool             override;
-    [[nodiscard]] auto debug_label  () const -> std::string_view override;
+    auto get_mask     () const -> uint32_t         override;
+    auto get_user_data() const -> const void*      override;
+    auto is_enabled   () const -> bool             override;
+    auto debug_label  () const -> std::string_view override;
 
     // Bvh_geometry public API
     auto intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool;
@@ -84,7 +80,7 @@ private:
     bvh::v2::Bvh<bvh::v2::Node<float, 3>>       m_bvh;
 };
 
-}
+} // namespace erhe::raytrace
 
 #if defined(_MSC_VER)
 #   pragma warning(pop)

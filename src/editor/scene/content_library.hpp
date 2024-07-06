@@ -27,8 +27,7 @@ namespace erhe::scene {
     class Skin;
 };
 
-namespace editor
-{
+namespace editor {
 
 class Brush;
 class Editor_context;

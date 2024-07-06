@@ -10,8 +10,7 @@ namespace erhe::scene {
     class Node;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Material_library;
 class Mesh_memory;
@@ -20,11 +19,7 @@ class Scene_root;
 class Controller_visualization
 {
 public:
-    Controller_visualization(
-        erhe::scene::Node* view_root,
-        Mesh_memory&       mesh_memory,
-        Scene_root&        scene_root
-    );
+    Controller_visualization(erhe::scene::Node* view_root, Mesh_memory& mesh_memory, Scene_root& scene_root);
 
     [[nodiscard]] auto get_node() const -> erhe::scene::Node*;
 

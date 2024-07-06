@@ -8,8 +8,7 @@ namespace erhe::scene {
     class Light;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Light_mesh
 {

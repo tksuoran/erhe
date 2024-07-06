@@ -75,10 +75,7 @@ class Programs
 public:
     static constexpr std::size_t s_texture_unit_count = 15; // for non bindless textures
 
-    Programs(
-        erhe::graphics::Instance&                graphics_instance,
-        erhe::scene_renderer::Program_interface& program_interface
-    );
+    Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface);
 
     // Public members
     int                              shadow_texture_unit{15};

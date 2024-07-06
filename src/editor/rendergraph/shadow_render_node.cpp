@@ -26,7 +26,6 @@ namespace editor
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
-
 Shadow_render_node::Shadow_render_node(
     erhe::graphics::Instance&       graphics_instance,
     erhe::rendergraph::Rendergraph& rendergraph,
@@ -41,7 +40,7 @@ Shadow_render_node::Shadow_render_node(
     , m_scene_view{scene_view}
 {
     register_output(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "shadow_maps",
         erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
@@ -148,10 +147,10 @@ void Shadow_render_node::execute_rendergraph_node()
     );
 }
 
-[[nodiscard]] auto Shadow_render_node::get_producer_output_texture(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    int                                       depth
+auto Shadow_render_node::get_producer_output_texture(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    int                              depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     static_cast<void>(resource_routing);
@@ -160,10 +159,10 @@ void Shadow_render_node::execute_rendergraph_node()
     return m_texture;
 }
 
-[[nodiscard]] auto Shadow_render_node::get_producer_output_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Shadow_render_node::get_producer_output_viewport(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -172,17 +171,17 @@ void Shadow_render_node::execute_rendergraph_node()
     return m_viewport;
 }
 
-[[nodiscard]] auto Shadow_render_node::get_scene_view() -> Scene_view&
+auto Shadow_render_node::get_scene_view() -> Scene_view&
 {
     return m_scene_view;
 }
 
-[[nodiscard]] auto Shadow_render_node::get_scene_view() const -> const Scene_view&
+auto Shadow_render_node::get_scene_view() const -> const Scene_view&
 {
     return m_scene_view;
 }
 
-[[nodiscard]] auto Shadow_render_node::get_light_projections() -> erhe::scene_renderer::Light_projections&
+auto Shadow_render_node::get_light_projections() -> erhe::scene_renderer::Light_projections&
 {
     return m_light_projections;
 }
@@ -197,28 +196,9 @@ auto Shadow_render_node::get_viewport() const -> erhe::math::Viewport
     return m_viewport;
 }
 
-[[nodiscard]] auto Shadow_render_node::inputs_allowed() const -> bool
+auto Shadow_render_node::inputs_allowed() const -> bool
 {
     return false;
 }
 
 } // namespace editor
-
-
-
-#if 0
-        if (erhe::graphics::g_instance->info.use_sparse_texture) {
-            // commit the whole texture for now
-            gl::texture_page_commitment_ext(
-                m_texture->gl_name(),
-                0,                  // level
-                0,                  // x offset
-                0,                  // y offset,
-                0,                  // z offset
-                m_texture->width(),
-                m_texture->height(),
-                m_texture->depth(),
-                GL_TRUE
-            );
-        }
-#endif

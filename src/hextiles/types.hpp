@@ -2,8 +2,7 @@
 
 #include <cstdint>
 
-namespace hextiles
-{
+namespace hextiles {
 
 using pixel_t        = int;
 using coordinate_t   = int16_t;

@@ -27,8 +27,7 @@ namespace erhe::scene {
     class Node;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message_bus;
@@ -47,10 +46,7 @@ class Toggle_menu_visibility_command
     : public erhe::commands::Command
 {
 public:
-    Toggle_menu_visibility_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Toggle_menu_visibility_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -61,10 +57,7 @@ class Hotbar_trackpad_command
     : public erhe::commands::Command
 {
 public:
-    Hotbar_trackpad_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Hotbar_trackpad_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
@@ -97,7 +90,7 @@ public:
     void get_all_tools();
 
     // Implements Imgui_window
-    [[nodiscard]] auto flags() -> ImGuiWindowFlags override;
+    auto flags   () -> ImGuiWindowFlags override;
     void on_begin() override;
     void imgui   () override;
 
@@ -118,10 +111,7 @@ private:
     void handle_slot_update    ();
 
     void init_hotbar();
-    void init_radial_menu(
-        Mesh_memory& mesh_memory,
-        Scene_root&  scene_root
-    );
+    void init_radial_menu(Mesh_memory& mesh_memory, Scene_root& scene_root);
 
     [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
 

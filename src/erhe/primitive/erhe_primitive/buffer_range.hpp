@@ -2,8 +2,7 @@
 
 #include <cstddef>
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 class Buffer_range
 {

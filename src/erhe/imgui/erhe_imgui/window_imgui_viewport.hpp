@@ -28,14 +28,10 @@ public:
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;
-    [[nodiscard]] auto get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
+    auto get_producer_output_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
     // Implements Imgui_vewport
-    [[nodiscard]] auto begin_imgui_frame() -> bool override;
+    auto begin_imgui_frame() -> bool override;
 
     void end_imgui_frame() override;
 

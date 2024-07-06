@@ -12,8 +12,7 @@
 
 #include <memory>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Buffer;
     class Buffer_transfer_queue;
     class Instance;
@@ -22,27 +21,20 @@ namespace erhe::graphics
     class Vertex_input_state;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
     class Gl_buffer_sink;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
     class Program_interface;
 }
 
-namespace example
-{
-
+namespace example {
 
 class Mesh_memory
 {
 public:
-    Mesh_memory(
-        erhe::graphics::Instance&                graphics_instance,
-        erhe::scene_renderer::Program_interface& program_interface
-    );
+    Mesh_memory(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface);
 
     erhe::graphics::Instance&             graphics_instance;
     erhe::graphics::Vertex_format         vertex_format;
@@ -52,8 +44,6 @@ public:
     erhe::primitive::Gl_buffer_sink       gl_buffer_sink;
     erhe::primitive::Buffer_info          buffer_info;
     erhe::graphics::Vertex_input_state    vertex_input;
-    //erhe::graphics::Shader_resource       vertex_data_in;   // For SSBO read
-    //erhe::graphics::Shader_resource       vertex_data_out;  // For SSBO write
 
 private:
     [[nodiscard]] auto get_vertex_buffer_size() const -> std::size_t;

@@ -157,7 +157,7 @@ Imgui_viewport::Imgui_viewport(
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_input(
-        erhe::rendergraph::Resource_routing::None,
+        erhe::rendergraph::Routing::None,
         "window",
         erhe::rendergraph::Rendergraph_node_key::window
     );

@@ -11,8 +11,7 @@ namespace erhe::scene {
     class Mesh;
 }
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 class Draw_indirect_buffer_range
 {

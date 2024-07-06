@@ -13,8 +13,7 @@ namespace erhe::window {
     class Window;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Viewport_window;
 class Viewport_windows;
@@ -30,41 +29,12 @@ public:
     );
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto get_consumer_input_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
-
-    [[nodiscard]] auto get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
-
-    [[nodiscard]] auto get_consumer_input_texture(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
-
-    [[nodiscard]] auto get_producer_output_texture(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
-
-    [[nodiscard]] auto get_consumer_input_framebuffer(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
-
-    [[nodiscard]] auto get_producer_output_framebuffer(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_consumer_input_viewport    (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> erhe::math::Viewport override;
+    auto get_producer_output_viewport   (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> erhe::math::Viewport override;
+    auto get_consumer_input_texture     (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_producer_output_texture    (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_consumer_input_framebuffer (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_producer_output_framebuffer(erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
 
     // Public API
     [[nodiscard]] auto get_viewport_window() const -> std::shared_ptr<Viewport_window>;

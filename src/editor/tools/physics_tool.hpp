@@ -22,8 +22,7 @@ namespace erhe::scene {
     class Mesh;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_message;
 class Editor_message_bus;
@@ -43,10 +42,7 @@ class Physics_tool_drag_command
     : public erhe::commands::Command
 {
 public:
-    Physics_tool_drag_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Physics_tool_drag_command(erhe::commands::Commands& commands, Editor_context& context);
     void try_ready  () override;
     auto try_call   () -> bool override;
     void on_inactive() override;

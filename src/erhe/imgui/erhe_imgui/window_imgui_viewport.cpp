@@ -149,9 +149,9 @@ void Window_imgui_viewport::execute_rendergraph_node()
 }
 
 auto Window_imgui_viewport::get_producer_output_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate

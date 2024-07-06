@@ -122,7 +122,7 @@ void check_gl_context_in_current_in_this_thread()
     }
 }
 
-}
+} // namespace erhe::xr
 
 #undef GEN_C_STR_CASE
 #undef GEN_C_STR

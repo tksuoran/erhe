@@ -19,7 +19,7 @@ public:
     Mouse_wheel_binding();
     ~Mouse_wheel_binding() noexcept override;
 
-    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Mouse_wheel; }
+    auto get_type() const -> Type override { return Command_binding::Type::Mouse_wheel; }
 
     virtual auto on_wheel(Input_arguments& input) -> bool;
 

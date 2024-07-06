@@ -56,7 +56,7 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     }
 {
     register_output(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "brdf_slice",
         erhe::rendergraph::Rendergraph_node_key::texture_for_gui
     );
@@ -96,7 +96,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
     erhe::graphics::Scoped_debug_group pass_scope{"BRDF Slice"};
 
     const auto& output_viewport = get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         m_output_key
     );
 
@@ -135,9 +135,9 @@ void Brdf_slice_rendergraph_node::set_area_size(const int size)
 }
 
 [[nodiscard]] auto Brdf_slice_rendergraph_node::get_producer_output_viewport(
-    erhe::rendergraph::Resource_routing resource_routing,
-    int                                 key,
-    int                                 depth
+    erhe::rendergraph::Routing resource_routing,
+    int                        key,
+    int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -195,7 +195,7 @@ void Brdf_slice::show_brdf_slice(int area_size)
     m_node->set_area_size(area_size);
 
     const auto& texture = m_node->get_producer_output_texture(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         erhe::rendergraph::Rendergraph_node_key::texture_for_gui
     );
     if (!texture) {

@@ -6,8 +6,7 @@
 
 #include <optional>
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message;

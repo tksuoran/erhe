@@ -4,8 +4,7 @@
 
 #include "erhe_message_bus/message_bus.hpp"
 
-namespace editor
-{
+namespace editor {
 
 class Editor_message_bus
     : public erhe::message_bus::Message_bus<Editor_message>

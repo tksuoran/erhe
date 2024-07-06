@@ -32,8 +32,7 @@ namespace erhe::scene {
     class Scene_message_bus;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_rendering;
@@ -69,9 +68,7 @@ public:
 
     void set_area_size(int size);
     void update_rendertarget(erhe::graphics::Instance& graphics_instance);
-    void render_preview(
-        const std::shared_ptr<erhe::primitive::Material>& material
-    );
+    void render_preview(const std::shared_ptr<erhe::primitive::Material>& material);
     void show_preview();
 
 private:

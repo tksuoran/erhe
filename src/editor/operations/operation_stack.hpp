@@ -16,8 +16,7 @@ namespace tf {
     class Executor;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message_bus;
@@ -30,10 +29,7 @@ class Undo_command
     : public erhe::commands::Command
 {
 public:
-    Undo_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Undo_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -44,10 +40,7 @@ class Redo_command
     : public erhe::commands::Command
 {
 public:
-    Redo_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Redo_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -81,10 +74,7 @@ public:
     [[nodiscard]] auto get_executor() -> tf::Executor&;
 
 private:
-    void imgui(
-        const char*                                     stack_label,
-        const std::vector<std::shared_ptr<IOperation>>& operations
-    );
+    void imgui(const char* stack_label, const std::vector<std::shared_ptr<IOperation>>& operations);
 
     Editor_context& m_context;
 

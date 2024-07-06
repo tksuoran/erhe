@@ -7,8 +7,7 @@
 #include "etl/string.h"
 #include "etl/vector.h"
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Terrain_flags
 {

@@ -5,19 +5,16 @@
 #include <vector>
 #include <cstdint>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Buffer;
     class Buffer_transfer_queue;
 }
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
     class IBuffer;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 class Build_context;
 class Index_buffer_writer;
@@ -28,15 +25,8 @@ class Buffer_sink
 public:
     virtual ~Buffer_sink() noexcept;
 
-    [[nodiscard]] virtual auto allocate_vertex_buffer(
-        std::size_t vertex_count,
-        std::size_t vertex_element_size
-    ) -> Buffer_range = 0;
-
-    [[nodiscard]] virtual auto allocate_index_buffer(
-        std::size_t index_count,
-        std::size_t index_element_size
-    ) -> Buffer_range = 0;
+    [[nodiscard]] virtual auto allocate_vertex_buffer(std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_range = 0;
+    [[nodiscard]] virtual auto allocate_index_buffer(std::size_t index_count, std::size_t index_element_size) -> Buffer_range = 0;
 
     virtual void enqueue_index_data (std::size_t offset, std::vector<uint8_t>&& data) const = 0;
     virtual void enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const = 0;
@@ -54,15 +44,8 @@ public:
         erhe::graphics::Buffer&                index_buffer
     );
 
-    [[nodiscard]] auto allocate_vertex_buffer(
-        std::size_t vertex_count,
-        std::size_t vertex_element_size
-    ) -> Buffer_range override;
-
-    [[nodiscard]] auto allocate_index_buffer(
-        std::size_t index_count,
-        std::size_t index_element_size
-    ) -> Buffer_range override;
+    [[nodiscard]] auto allocate_vertex_buffer(std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_range override;
+    [[nodiscard]] auto allocate_index_buffer(std::size_t index_count, std::size_t index_element_size) -> Buffer_range override;
 
     void enqueue_index_data (std::size_t offset, std::vector<uint8_t>&& data) const override;
     void enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const override;
@@ -79,20 +62,10 @@ class Raytrace_buffer_sink
     : public Buffer_sink
 {
 public:
-    Raytrace_buffer_sink(
-        erhe::raytrace::IBuffer& vertex_buffer,
-        erhe::raytrace::IBuffer& index_buffer
-    );
+    Raytrace_buffer_sink(erhe::raytrace::IBuffer& vertex_buffer, erhe::raytrace::IBuffer& index_buffer);
 
-    [[nodiscard]] auto allocate_vertex_buffer(
-        std::size_t vertex_count,
-        std::size_t vertex_element_size
-    ) -> Buffer_range override;
-
-    [[nodiscard]] auto allocate_index_buffer(
-        std::size_t index_count,
-        std::size_t index_element_size
-    ) -> Buffer_range override;
+    auto allocate_vertex_buffer(std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_range override;
+    auto allocate_index_buffer(std::size_t index_count, std::size_t index_element_size) -> Buffer_range override;
 
     void enqueue_index_data (std::size_t offset, std::vector<uint8_t>&& data) const override;
     void enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const override;

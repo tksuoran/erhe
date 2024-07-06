@@ -8,8 +8,7 @@
 #include <cstdint>
 #include <string>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Camera;
 

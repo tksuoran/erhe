@@ -3,8 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Clip_range
 {
@@ -42,10 +41,6 @@ protected:
     glm::mat4 m_matrix        {1.0f};
     glm::mat4 m_inverse_matrix{1.0f};
 };
-
-auto operator* (const Transform& lhs, const Transform& rhs) -> Transform;
-auto operator==(const Transform& lhs, const Transform& rhs) -> bool;
-auto operator!=(const Transform& lhs, const Transform& rhs) -> bool;
 
 } // namespace erhe::scene
 

@@ -2,8 +2,7 @@
 
 #include "tools/brushes/create/create_shape.hpp"
 
-namespace editor
-{
+namespace editor {
 
 class Create_cone
     : public Create_shape
@@ -13,7 +12,7 @@ public:
 
     void imgui() override;
 
-    [[nodiscard]] auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
+    auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
 private:
     int   m_slice_count  {32};

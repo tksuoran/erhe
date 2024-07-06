@@ -1,7 +1,6 @@
 #pragma once
 
-namespace editor
-{
+namespace editor {
 
 class Render_context;
 

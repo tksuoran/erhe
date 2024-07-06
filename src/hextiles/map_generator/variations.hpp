@@ -5,8 +5,7 @@
 
 #include <vector>
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Variations
 {

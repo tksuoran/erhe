@@ -41,8 +41,7 @@ namespace erhe::scene_renderer {
     class Light_projections;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_message_bus;
 class Editor_rendering;
@@ -57,7 +56,6 @@ class Selection_tool;
 class Shadow_render_node;
 class Tools;
 class Transform_tool;
-class Viewport_config_window;
 class Viewport_window;
 class Viewport_windows;
 
@@ -80,7 +78,6 @@ public:
         Editor_context&                             editor_context,
         erhe::rendergraph::Rendergraph&             rendergraph,
         Tools&                                      tools,
-        Viewport_config_window&                     viewport_config_window,
         const std::string_view                      name,
         const char*                                 ini_label,
         const std::shared_ptr<Scene_root>&          scene_root,
@@ -92,6 +89,7 @@ public:
     auto get_scene_root            () const -> std::shared_ptr<Scene_root>                              override;
     auto get_camera                () const -> std::shared_ptr<erhe::scene::Camera>                     override;
     auto get_rendergraph_node      () -> erhe::rendergraph::Rendergraph_node*                           override;
+    auto get_shadow_render_node    () const -> Shadow_render_node*                                      override;
     auto as_viewport_window        () -> Viewport_window*                                               override;
     auto as_viewport_window        () const -> const Viewport_window*                                   override;
     auto get_closest_point_on_line (const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3> override;
@@ -100,6 +98,7 @@ public:
     // Implements Rendergraph_node
     auto get_type_name           () const -> std::string_view override { return "Viewport_window"; }
     void execute_rendergraph_node() override;
+
 
     // Public API
     void reconfigure               (int sample_count);
@@ -125,7 +124,6 @@ public:
     [[nodiscard]] auto get_position_in_viewport() const -> std::optional<glm::vec2>;
     [[nodiscard]] auto position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto viewport_toolbar        () -> bool;
-    [[nodiscard]] auto get_shadow_render_node  () const -> Shadow_render_node* override;
     [[nodiscard]] auto get_post_processing_node() -> Post_processing_node*;
     [[nodiscard]] auto get_final_output        () -> Rendergraph_node*;
 

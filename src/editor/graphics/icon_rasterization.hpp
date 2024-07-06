@@ -33,19 +33,10 @@ public:
         int                          row_count
     );
 
-    void rasterize(
-        lunasvg::Document& document,
-        int                column,
-        int                row
-    );
-
     [[nodiscard]] auto get_size() const -> int;
 
-    void icon(
-        glm::vec2 uv0,
-        glm::vec4 tint_color = glm::vec4{1.0f}
-    ) const;
-
+    void rasterize(lunasvg::Document& document, int column, int row);
+    void icon(glm::vec2 uv0, glm::vec4 tint_color = glm::vec4{1.0f}) const;
     auto icon_button(
         uint32_t  id,
         glm::vec2 uv0,

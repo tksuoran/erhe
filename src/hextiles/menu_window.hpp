@@ -24,8 +24,7 @@ namespace erhe::window {
     class Window_event_handler;
 }
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Tiles;
 class Tile_renderer;

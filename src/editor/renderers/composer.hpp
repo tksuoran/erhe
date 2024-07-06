@@ -6,8 +6,7 @@
 #include <memory>
 #include <vector>
 
-namespace editor
-{
+namespace editor {
 
 class Render_context;
 class Renderpass;

@@ -25,19 +25,18 @@ public:
     Xr_session    (Xr_session&&)      = delete;
     void operator=(Xr_session&&)      = delete;
 
-    // TODO [[nodiscard]]
-    auto begin_session               () -> bool;
-    auto end_session                 () -> bool;
-    auto is_session_running          () const -> bool;
-    auto begin_frame                 () -> bool;
-    auto wait_frame                  () -> XrFrameState*;
-    auto render_frame                (std::function<bool(Render_view&)> render_view_callback) -> bool;
-    auto end_frame                   (const bool rendered) -> bool;
-    auto get_xr_session              () const -> XrSession;
-    auto get_xr_reference_space_local() const -> XrSpace;
-    auto get_xr_reference_space_stage() const -> XrSpace;
-    auto get_xr_reference_space_view () const -> XrSpace;
-    auto get_xr_frame_state          () const -> const XrFrameState&;
+    [[nodiscard]] auto begin_session               () -> bool;
+    [[nodiscard]] auto end_session                 () -> bool;
+    [[nodiscard]] auto is_session_running          () const -> bool;
+    [[nodiscard]] auto begin_frame                 () -> bool;
+    [[nodiscard]] auto wait_frame                  () -> XrFrameState*;
+    [[nodiscard]] auto render_frame                (std::function<bool(Render_view&)> render_view_callback) -> bool;
+    [[nodiscard]] auto end_frame                   (const bool rendered) -> bool;
+    [[nodiscard]] auto get_xr_session              () const -> XrSession;
+    [[nodiscard]] auto get_xr_reference_space_local() const -> XrSpace;
+    [[nodiscard]] auto get_xr_reference_space_stage() const -> XrSpace;
+    [[nodiscard]] auto get_xr_reference_space_view () const -> XrSpace;
+    [[nodiscard]] auto get_xr_frame_state          () const -> const XrFrameState&;
     void update_hand_tracking        ();
     void update_view_pose            ();
 
@@ -46,13 +45,13 @@ public:
     [[nodiscard]] auto get_view_space_location () const -> const XrSpaceLocation&;
 
 private:
-    auto create_session             () -> bool;
-    auto enumerate_swapchain_formats() -> bool;
-    auto enumerate_reference_spaces () -> bool;
-    auto create_swapchains          () -> bool;
-    auto create_reference_space     () -> bool;
-    auto attach_actions             () -> bool;
-    auto create_hand_tracking       () -> bool;
+    [[nodiscard]] auto create_session             () -> bool;
+    [[nodiscard]] auto enumerate_swapchain_formats() -> bool;
+    [[nodiscard]] auto enumerate_reference_spaces () -> bool;
+    [[nodiscard]] auto create_swapchains          () -> bool;
+    [[nodiscard]] auto create_reference_space     () -> bool;
+    [[nodiscard]] auto attach_actions             () -> bool;
+    [[nodiscard]] auto create_hand_tracking       () -> bool;
 
     class Swapchains
     {
@@ -98,4 +97,4 @@ private:
     bool                                          m_session_running{false};
 };
 
-}
+} // namespace erhe::xr

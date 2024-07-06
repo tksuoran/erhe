@@ -1,7 +1,6 @@
 #pragma once
 
 #include "tools/tool.hpp"
-
 #include "erhe_imgui/imgui_window.hpp"
 
 #include <glm/glm.hpp>
@@ -12,8 +11,7 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Grid;
 class Icon_set;

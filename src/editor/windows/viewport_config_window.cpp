@@ -3,6 +3,8 @@
 #include "editor_context.hpp"
 #include "editor_rendering.hpp"
 #include "tools/hotbar.hpp"
+#include "tools/hud.hpp"
+#include "rendertarget_mesh.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -24,51 +26,6 @@ Viewport_config_window::Viewport_config_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Viewport config", "viewport_config"}
     , m_context                {editor_context}
 {
-    config.render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
-    config.render_style_not_selected.edge_lines = false;
-
-    config.render_style_selected.edge_lines = false;
-
-    auto ini = erhe::configuration::get_ini("erhe.ini", "viewport");
-    ini->get("gizmo_scale",               gizmo_scale);
-    ini->get("polygon_fill",              polygon_fill);
-    ini->get("edge_lines",                edge_lines);
-    ini->get("edge_color",                edge_color);
-    ini->get("selection_polygon_fill",    selection_polygon_fill);
-    ini->get("selection_edge_lines",      selection_edge_lines);
-    ini->get("corner_points",             corner_points);
-    ini->get("polygon_centroids",         polygon_centroids);
-    ini->get("selection_bounding_box",    selection_bounding_box);
-    ini->get("selection_bounding_sphere", selection_bounding_sphere);
-    ini->get("selection_edge_color",      selection_edge_color);
-    ini->get("clear_color",               clear_color);
-
-    config.render_style_not_selected.polygon_fill      = polygon_fill;
-    config.render_style_not_selected.edge_lines        = edge_lines;
-    config.render_style_not_selected.corner_points     = corner_points;
-    config.render_style_not_selected.polygon_centroids = polygon_centroids;
-    config.render_style_not_selected.line_color        = edge_color;
-    config.render_style_not_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
-    config.render_style_not_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
-
-    config.render_style_selected.polygon_fill      = selection_polygon_fill;
-    config.render_style_selected.edge_lines        = selection_edge_lines;
-    config.render_style_selected.corner_points     = corner_points;
-    config.render_style_selected.polygon_centroids = polygon_centroids;
-    config.render_style_selected.line_color        = selection_edge_color;
-    config.render_style_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
-    config.render_style_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
-
-    config.selection_highlight_low        = glm::vec4{  0.0f,  0.0f, 0.0f, 0.0f};
-    config.selection_highlight_high       = glm::vec4{200.0f, 10.0f, 1.0f, 0.5f};
-    config.selection_highlight_width_low  =  0.0f;
-    config.selection_highlight_width_high = -3.0f;
-    config.selection_highlight_frequency  = 1.0f;
-
-    config.gizmo_scale               = gizmo_scale;
-    config.selection_bounding_box    = selection_bounding_box;
-    config.selection_bounding_sphere = selection_bounding_sphere;
-    config.clear_color               = clear_color;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -142,6 +99,11 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
 }
 #endif
 
+void Viewport_config_window::set_edit_data(Viewport_config* edit_data)
+{
+    m_edit_data = edit_data;
+}
+
 void Viewport_config_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -159,41 +121,50 @@ void Viewport_config_window::imgui()
         m_context.editor_rendering->request_renderdoc_capture();
     }
 
-    if (edit_data != nullptr) {
-        ImGui::SliderFloat("Gizmo Scale", &edit_data->gizmo_scale, 1.0f, 8.0f, "%.2f");
-        ImGui::ColorEdit4("Clear Color", &edit_data->clear_color.x, ImGuiColorEditFlags_Float);
+    if (m_edit_data != nullptr) {
+        ImGui::SliderFloat("Gizmo Scale", &m_edit_data->gizmo_scale, 1.0f, 8.0f, "%.2f");
+        ImGui::ColorEdit4("Clear Color", &m_edit_data->clear_color.x, ImGuiColorEditFlags_Float);
 
         if (ImGui::TreeNodeEx("Default Style", flags)) {
-            render_style_ui(edit_data->render_style_not_selected);
+            render_style_ui(m_edit_data->render_style_not_selected);
             ImGui::TreePop();
         }
 
         if (ImGui::TreeNodeEx("Selection", flags)) {
-            render_style_ui(edit_data->render_style_selected);
+            render_style_ui(m_edit_data->render_style_selected);
             ImGui::TreePop();
         }
 
         if (ImGui::TreeNodeEx("Selection Outline", flags)) {
-            ImGui::ColorEdit4 ("Color Low",  &edit_data->selection_highlight_low.x,  ImGuiColorEditFlags_Float);
-            ImGui::ColorEdit4 ("Color High", &edit_data->selection_highlight_high.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("Width Low",  &edit_data->selection_highlight_width_low,  -20.0f, 0.0f, "%.2f");
-            ImGui::SliderFloat("Width High", &edit_data->selection_highlight_width_high, -20.0f, 0.0f, "%.2f");
-            ImGui::SliderFloat("Frequency",  &edit_data->selection_highlight_frequency,    0.0f, 1.0f, "%.2f");
+            ImGui::ColorEdit4 ("Color Low",  &m_edit_data->selection_highlight_low.x,  ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit4 ("Color High", &m_edit_data->selection_highlight_high.x, ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("Width Low",  &m_edit_data->selection_highlight_width_low,  -20.0f, 0.0f, "%.2f");
+            ImGui::SliderFloat("Width High", &m_edit_data->selection_highlight_width_high, -20.0f, 0.0f, "%.2f");
+            ImGui::SliderFloat("Frequency",  &m_edit_data->selection_highlight_frequency,    0.0f, 1.0f, "%.2f");
             ImGui::TreePop();
         }
 
         if (ImGui::TreeNodeEx("Debug Visualizations", flags)) {
-            erhe::imgui::make_combo("Light",  edit_data->debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-            erhe::imgui::make_combo("Camera", edit_data->debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+            erhe::imgui::make_combo("Light",  m_edit_data->debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+            erhe::imgui::make_combo("Camera", m_edit_data->debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
             ImGui::TreePop();
         }
     }
 
     ImGui::Separator();
 
+    float rendertarget_mesh_lod_bias = Rendertarget_mesh::get_mesh_lod_bias();
     ImGui::SliderFloat("LoD Bias", &rendertarget_mesh_lod_bias, -8.0f, 8.0f);
+    if (ImGui::IsItemEdited()) {
+        Rendertarget_mesh::set_mesh_lod_bias(rendertarget_mesh_lod_bias);
+    }
 
     m_context.editor_rendering->imgui();
+
+    if (ImGui::TreeNodeEx("Hud", flags)) {
+        auto& hud = *m_context.hud;
+        hud.imgui();
+    }
 
     if (ImGui::TreeNodeEx("Hotbar", flags)) {
         auto& hotbar = *m_context.hotbar;

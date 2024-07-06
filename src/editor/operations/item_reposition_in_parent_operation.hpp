@@ -11,8 +11,7 @@ namespace erhe {
     class Hierarchy;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Item_reposition_in_parent_operation
     : public IOperation
@@ -26,7 +25,7 @@ public:
     );
 
     // Implements IOperation
-    [[nodiscard]] auto describe() const -> std::string override;
+    auto describe() const -> std::string override;
     void execute(Editor_context& context) override;
     void undo   (Editor_context& context) override;
 

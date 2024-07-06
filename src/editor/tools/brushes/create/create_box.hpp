@@ -4,8 +4,7 @@
 
 #include <glm/glm.hpp>
 
-namespace editor
-{
+namespace editor {
 
 class Brush;
 class Brush_data;
@@ -18,13 +17,12 @@ public:
 
     void imgui() override;
 
-    [[nodiscard]] auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
+    auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
 private:
     glm::vec3  m_size {1.0f, 1.0f, 1.0f};
     glm::ivec3 m_steps{3, 3, 3};
     float      m_power{1.0f};
 };
-
 
 } // namespace editor

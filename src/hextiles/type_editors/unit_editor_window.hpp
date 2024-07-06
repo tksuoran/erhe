@@ -2,13 +2,11 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
     class Imgui_windows;
 }
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Menu_window;
 class Tiles;

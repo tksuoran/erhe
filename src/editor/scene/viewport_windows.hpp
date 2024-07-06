@@ -24,8 +24,7 @@ namespace erhe::scene_renderer {
     class Shadow_renderer;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Basic_viewport_window;
 class Editor_context;
@@ -45,10 +44,7 @@ class Open_new_viewport_window_command
     : public erhe::commands::Command
 {
 public:
-    Open_new_viewport_window_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           editor_context
-    );
+    Open_new_viewport_window_command(erhe::commands::Commands& commands, Editor_context& editor_context);
     auto try_call() -> bool override;
 
 private:
@@ -92,7 +88,6 @@ public:
         Editor_rendering&                           editor_rendering,
         Editor_settings&                            editor_settings,
         Tools&                                      tools,
-        Viewport_config_window&                     viewport_config_window,
         const std::string_view                      name,
         const std::shared_ptr<Scene_root>&          scene_root,
         const std::shared_ptr<erhe::scene::Camera>& camera,
@@ -115,9 +110,7 @@ public:
     void erase(Viewport_window* viewport_window);
     void erase(Basic_viewport_window* basic_viewport_window);
 
-    auto open_new_viewport_window(
-        const std::shared_ptr<Scene_root>& scene_root = {}
-    ) -> std::shared_ptr<Viewport_window>;
+    auto open_new_viewport_window(const std::shared_ptr<Scene_root>& scene_root = {}) -> std::shared_ptr<Viewport_window>;
 
     void open_new_imgui_viewport_window();
 
@@ -133,8 +126,8 @@ public:
     /// <returns>Pointer to the Viewport_window instance which is currently
     /// under pointer (mouse cursor), or nullptr if pointer (mouse cursor)
     /// is not currently over any Viewport_window</returns>
-    auto hover_window() -> std::shared_ptr<Viewport_window>;
-    auto last_window () -> std::shared_ptr<Viewport_window>;
+    [[nodiscard]] auto hover_window() -> std::shared_ptr<Viewport_window>;
+    [[nodiscard]] auto last_window () -> std::shared_ptr<Viewport_window>;
 
     void viewport_toolbar(Viewport_window& viewport_window, bool& hovered);
 

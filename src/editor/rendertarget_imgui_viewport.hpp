@@ -11,8 +11,7 @@ namespace erhe::rendergraph {
     class Rendergraph;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Headset_view;
@@ -36,46 +35,21 @@ public:
     void set_clear_color(const glm::vec4& value);
 
     // Implements Imgui_viewport
-    [[nodiscard]] auto get_scale_value  () const -> float override;
-    [[nodiscard]] auto begin_imgui_frame() -> bool override;
+    auto get_scale_value  () const -> float override;
+    auto begin_imgui_frame() -> bool override;
     void end_imgui_frame() override;
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;
 
-    [[nodiscard]] auto get_consumer_input_texture(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
-
-    [[nodiscard]] auto get_consumer_input_framebuffer(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
-
-    [[nodiscard]] auto get_consumer_input_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
-
-    [[nodiscard]] auto get_producer_output_texture(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
-
-    [[nodiscard]] auto get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
+    auto get_consumer_input_texture    (erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_consumer_input_framebuffer(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_consumer_input_viewport   (erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
+    auto get_producer_output_texture   (erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_producer_output_viewport  (erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
 private:
     Editor_context&    m_context;
-
     Rendertarget_mesh* m_rendertarget_mesh{nullptr};
     glm::vec4          m_clear_color {0.0f, 0.0f, 0.0f, 0.2f};
     float              m_last_mouse_x{0.0f};

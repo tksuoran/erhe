@@ -2,6 +2,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_xr/xr.hpp"
+#include "erhe_xr/xr_log.hpp"
 
 #ifdef _WIN32
 #   include <unknwn.h>
@@ -66,7 +67,9 @@ Swapchain::Swapchain(XrSwapchain xr_swapchain)
     ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(xr_swapchain != XR_NULL_HANDLE);
-    enumerate_images();
+    if (!enumerate_images()) {
+        log_xr->warn("Swapchain::enumerate_images() failed");
+    }
 }
 
 Swapchain::~Swapchain()

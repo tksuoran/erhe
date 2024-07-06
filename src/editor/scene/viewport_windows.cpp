@@ -145,7 +145,6 @@ auto Viewport_windows::create_viewport_window(
     Editor_rendering&                           editor_rendering,
     Editor_settings&                            editor_settings,
     Tools&                                      tools,
-    Viewport_config_window&                     viewport_config_window,
     const std::string_view                      name,
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera,
@@ -157,7 +156,6 @@ auto Viewport_windows::create_viewport_window(
         m_context,
         rendergraph,
         tools,
-        viewport_config_window,
         name,
         nullptr, // no ini for viewport windows for now
         scene_root,
@@ -340,7 +338,6 @@ auto Viewport_windows::open_new_viewport_window(
                     *m_context.editor_rendering,
                     *m_context.editor_settings,
                     *m_context.tools,
-                    *m_context.viewport_config_window,
                     name,
                     scene_root,
                     camera,
@@ -357,7 +354,6 @@ auto Viewport_windows::open_new_viewport_window(
                 *m_context.editor_rendering,
                 *m_context.editor_settings,
                 *m_context.tools,
-                *m_context.viewport_config_window,
                 name,
                 scene_root,
                 camera,
@@ -373,7 +369,6 @@ auto Viewport_windows::open_new_viewport_window(
         *m_context.editor_rendering,
         *m_context.editor_settings,
         *m_context.tools,
-        *m_context.viewport_config_window,
         name,
         {},
         nullptr,
@@ -581,7 +576,7 @@ void Viewport_windows::viewport_toolbar(Viewport_window& viewport_window, bool& 
     }
     if (button_pressed) {
         m_context.viewport_config_window->show();
-        m_context.viewport_config_window->edit_data = &viewport_window.get_config();
+        m_context.viewport_config_window->set_edit_data(&viewport_window.get_config());
     }
     ImGui::PopID();
 }

@@ -8,8 +8,7 @@ namespace erhe::graphics {
     class Vertex_attribute_mappings;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 class Primitive_types
 {

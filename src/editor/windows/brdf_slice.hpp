@@ -21,8 +21,7 @@ namespace erhe::scene_renderer {
     class Forward_renderer;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Brdf_slice;
 class Editor_context;
@@ -45,9 +44,9 @@ public:
     void set_area_size(int size);
 
     [[nodiscard]] auto get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
+        erhe::rendergraph::Routing resource_routing,
+        int                        key,
+        int                        depth = 0
     ) const -> erhe::math::Viewport override;
 
     // Public API

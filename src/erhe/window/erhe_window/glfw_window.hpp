@@ -9,8 +9,7 @@
 struct GLFWwindow;
 struct GLFWcursor;
 
-namespace erhe::window
-{
+namespace erhe::window {
 
 using Mouse_cursor = signed int;
 constexpr Mouse_cursor Mouse_cursor_None       = -1;
@@ -103,6 +102,6 @@ private:
     static int s_window_count;
 };
 
-}
+} // namespace erhe::window
 
 #endif // defined(ERHE_WINDOW_LIBRARY_GLFW)

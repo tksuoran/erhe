@@ -29,8 +29,7 @@ namespace erhe::scene {
     class Scene;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_settings;
@@ -126,7 +125,7 @@ public:
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
-    [[nodiscard]] auto clone() const -> std::shared_ptr<Item_base> override
+    auto clone() const -> std::shared_ptr<Item_base> override
     {
         return std::shared_ptr<Item_base>{}; // No clone() for brush
     }

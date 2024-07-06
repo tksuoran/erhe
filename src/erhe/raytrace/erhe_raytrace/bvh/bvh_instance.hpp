@@ -6,8 +6,7 @@
 
 #include <string>
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 class Bvh_scene;
 
@@ -45,4 +44,4 @@ private:
     std::string m_debug_label;
 };
 
-}
+} // namespace erhe::raytrace

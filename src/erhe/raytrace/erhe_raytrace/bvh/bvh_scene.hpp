@@ -13,8 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 class Bvh_geometry;
 class Bvh_instance;
@@ -45,7 +44,7 @@ private:
     std::string                m_debug_label;
 };
 
-}
+} // namespace erhe::raytrace
 
 #if defined(_MSC_VER)
 #   pragma warning(pop)

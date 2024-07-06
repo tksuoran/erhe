@@ -28,10 +28,7 @@ namespace editor
 class Mesh_memory
 {
 public:
-    Mesh_memory(
-        erhe::graphics::Instance&                graphics_instance,
-        erhe::scene_renderer::Program_interface& program_interface
-    );
+    Mesh_memory(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface);
 
     erhe::graphics::Instance&             graphics_instance;
     erhe::graphics::Buffer_transfer_queue gl_buffer_transfer_queue;

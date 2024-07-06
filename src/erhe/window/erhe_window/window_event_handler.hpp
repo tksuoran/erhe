@@ -4,8 +4,7 @@
 #include <mutex>
 #include <vector>
 
-namespace erhe::window
-{
+namespace erhe::window {
 
 class Context_window;
 
@@ -278,4 +277,4 @@ private:
     Window_event_handler*              m_active_mouse_handler{nullptr};
 };
 
-}
+} // namespace erhe::window

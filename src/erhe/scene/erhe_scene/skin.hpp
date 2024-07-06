@@ -6,8 +6,7 @@
 
 #include <vector>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Node;
 

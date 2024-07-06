@@ -22,8 +22,7 @@ namespace erhe::renderer {
     class Line_renderer;
 }
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Mesh;
 
@@ -48,4 +47,4 @@ public:
     std::unique_ptr<erhe::raytrace::IScene>    rt_scene;
 };
 
-}
+} // namespace erhe::scene

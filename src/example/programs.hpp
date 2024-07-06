@@ -7,16 +7,14 @@
 #include <filesystem>
 #include <memory>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics{
     class Instance;
     class Sampler;
     class Shader_resource;
     class Shader_stages;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer{
     class Program_interface;
 }
 

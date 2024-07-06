@@ -27,7 +27,7 @@ class Imgui_windows
 {
 public:
     // Implements Window_event_handler
-    [[nodiscard]] auto get_name() const -> const char* override { return "Imgui_windows"; }
+    auto get_name() const -> const char* override { return "Imgui_windows"; }
 
     Imgui_windows(
         Imgui_renderer&                 imgui_renderer,

@@ -14,8 +14,7 @@ namespace erhe::scene_renderer {
     class Light_projections;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Scene_view;
@@ -39,37 +38,21 @@ public:
     );
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto get_type_name() const -> std::string_view override { return "Shadow_render_node"; }
+    auto get_type_name() const -> std::string_view override { return "Shadow_render_node"; }
     void execute_rendergraph_node() override;
 
-    [[nodiscard]] auto get_producer_output_texture(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
-
-    [[nodiscard]] auto get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
-
-    [[nodiscard]] auto inputs_allowed() const -> bool override;
+    auto get_producer_output_texture (erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_producer_output_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
+    auto inputs_allowed() const -> bool override;
 
     // Public API
-    void reconfigure(
-        erhe::graphics::Instance& graphics_instance,
-        int                       resolution,
-        int                       light_count
-    );
+    void reconfigure(erhe::graphics::Instance& graphics_instance, int resolution, int light_count);
 
     [[nodiscard]] auto get_scene_view       () -> Scene_view&;
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;
     [[nodiscard]] auto get_light_projections() -> erhe::scene_renderer::Light_projections&;
     [[nodiscard]] auto get_texture          () const -> std::shared_ptr<erhe::graphics::Texture>;
     [[nodiscard]] auto get_viewport         () const -> erhe::math::Viewport;
-
-    static void handle_graphics_settings_changed();
 
 private:
     Editor_context&                                           m_context;

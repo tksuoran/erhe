@@ -1112,13 +1112,14 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
                     }
 
                     case XR_SESSION_STATE_READY: {
-                        session.begin_session();
+                        if (!session.begin_session()) {
+                            log_xr->warn("XR_SESSION_STATE_READY: begin_session() failed");
+                        }
                         break;
                     }
 
                     case XR_SESSION_STATE_SYNCHRONIZED:
-                    case XR_SESSION_STATE_VISIBLE:
-                    {
+                    case XR_SESSION_STATE_VISIBLE: {
                         break;
                     }
 
@@ -1128,7 +1129,9 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
                     }
 
                     case XR_SESSION_STATE_STOPPING: {
-                        session.end_session();
+                        if (!session.end_session()) {
+                            log_xr->warn("XR_SESSION_STATE_STOPPING: end_session() failed");
+                        }
                         break;
                     }
 

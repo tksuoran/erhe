@@ -5,8 +5,7 @@
 
 #include <vector>
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 class Multi_buffer
 {
@@ -21,17 +20,8 @@ public:
     void reset     ();
     void next_frame();
     void bind      (const erhe::renderer::Buffer_range& range);
-
-    void allocate(
-        gl::Buffer_target target,
-        unsigned int      binding_point,
-        std::size_t       size
-    );
-
-    void allocate(
-        gl::Buffer_target target,
-        std::size_t       size
-    );
+    void allocate  (gl::Buffer_target target, unsigned int binding_point, std::size_t size);
+    void allocate  (gl::Buffer_target target, std::size_t size);
 
     [[nodiscard]] auto writer        () -> Buffer_writer&;
     [[nodiscard]] auto buffers       () -> std::vector<erhe::graphics::Buffer>&;

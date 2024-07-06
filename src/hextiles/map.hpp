@@ -8,8 +8,7 @@
 
 #include "etl/vector.h"
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Tiles;
 

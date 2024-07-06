@@ -8,8 +8,7 @@ namespace erhe::scene {
     class Mesh;
 }
 
-namespace editor
-{
+namespace editor {
 
 auto intersect(
     const erhe::scene::Mesh&    mesh,

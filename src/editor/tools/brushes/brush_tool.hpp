@@ -6,8 +6,7 @@
 #include <memory>
 #include <mutex>
 
-namespace editor
-{
+namespace editor {
 
 class Brush_tool;
 class Editor_message;
@@ -24,10 +23,7 @@ class Brush_tool_preview_command
     : public erhe::commands::Command
 {
 public:
-    Brush_tool_preview_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Brush_tool_preview_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -38,10 +34,7 @@ class Brush_tool_insert_command
     : public erhe::commands::Command
 {
 public:
-    Brush_tool_insert_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Brush_tool_insert_command(erhe::commands::Commands& commands, Editor_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 

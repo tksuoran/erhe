@@ -13,8 +13,7 @@ namespace erhe {
     class Item_host;
 }
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Node;
 class Node_attachment;

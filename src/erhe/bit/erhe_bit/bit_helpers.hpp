@@ -1,7 +1,6 @@
 #pragma once
 
-namespace erhe::bit
-{
+namespace erhe::bit {
 
 template <typename T>
 auto test_all_rhs_bits_set(T lhs, T rhs) -> bool

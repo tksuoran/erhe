@@ -12,8 +12,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace erhe::ui
-{
+namespace erhe::ui {
 
 class Bitmap final
 {
@@ -21,11 +20,7 @@ public:
     using value_t     = uint8_t;
     using component_t = int;
 
-    Bitmap(
-        const int         width,
-        const int         height,
-        const component_t components
-    )
+    Bitmap(const int width, const int height, const component_t components)
         : m_width     {width}
         , m_height    {height}
         , m_components{components}

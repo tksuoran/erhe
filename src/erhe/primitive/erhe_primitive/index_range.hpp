@@ -4,8 +4,7 @@
 
 #include <cstddef>
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 /// Holds index range for specified GL primitive type
 class Index_range

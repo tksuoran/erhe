@@ -60,8 +60,7 @@ namespace erhe::scene {
     class Scene_message_bus;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Content_library;
 class Editor_context;
@@ -90,7 +89,7 @@ public:
 class Scene_layers
 {
 public:
-    explicit Scene_layers();
+    Scene_layers();
 
     void add_layers_to_scene(erhe::scene::Scene& scene);
 
@@ -129,7 +128,7 @@ public:
     ~Scene_root() noexcept override;
 
     // Implements erhe::Item_host
-    [[nodiscard]] auto get_host_name() const -> const char* override;
+    auto get_host_name() const -> const char* override;
 
     // Public API
     auto make_browser_window(
@@ -172,30 +171,14 @@ public:
 
     void imgui();
 
-    auto camera_combo(
-        const char*           label,
-        erhe::scene::Camera*& camera,
-        bool                  nullptr_option = false
-    ) const -> bool;
-
-    auto camera_combo(
-        const char*                           label,
-        std::shared_ptr<erhe::scene::Camera>& selected_camera,
-        bool                                  nullptr_option = false
-    ) const -> bool;
-
-    auto camera_combo(
-        const char*                         label,
-        std::weak_ptr<erhe::scene::Camera>& selected_camera,
-        bool                                nullptr_option = false
-    ) const -> bool;
-
+    auto camera_combo(const char* label, erhe::scene::Camera*& camera, bool nullptr_option = false) const -> bool;
+    auto camera_combo(const char* label, std::shared_ptr<erhe::scene::Camera>& selected_camera, bool nullptr_option = false) const -> bool;
+    auto camera_combo(const char* label, std::weak_ptr<erhe::scene::Camera>& selected_camera, bool nullptr_option = false) const -> bool;
     void sort_lights();
 
     [[nodiscard]] auto content_library() const -> std::shared_ptr<Content_library>;
 
     void update_pointer_for_rendertarget_meshes(Scene_view* scene_view);
-
     void sanity_check();
 
 private:

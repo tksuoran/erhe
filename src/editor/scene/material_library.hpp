@@ -2,8 +2,7 @@
 
 #include "scene/content_library.hpp"
 
-namespace editor
-{
+namespace editor {
 
 void add_default_materials(Content_library& library);
 

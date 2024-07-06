@@ -24,8 +24,7 @@ namespace erhe::scene {
     class Node;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Mesh_memory;
@@ -39,11 +38,7 @@ enum class Handle : unsigned int;
 class Handle_visualizations
 {
 public:
-    Handle_visualizations(
-        Editor_context& editor_context,
-        Mesh_memory&    mesh_memory,
-        Tools&          tools
-    );
+    Handle_visualizations(Editor_context& editor_context, Mesh_memory& mesh_memory, Tools& tools);
 
     enum class Mode : unsigned int {
         Normal = 0,

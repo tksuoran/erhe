@@ -13,8 +13,7 @@ namespace erhe::graphics {
     class Texture;
 }
 
-namespace erhe::rendergraph
-{
+namespace erhe::rendergraph {
 
 class Texture_rendergraph_node_create_info
 {
@@ -39,44 +38,20 @@ class Texture_rendergraph_node
 public:
     static constexpr std::string_view c_type_name{"Texture_rendergraph_node"};
 
-    explicit Texture_rendergraph_node(
-        const Texture_rendergraph_node_create_info& create_info
-    );
-    explicit Texture_rendergraph_node(
-        const Texture_rendergraph_node_create_info&& create_info
-    );
+    explicit Texture_rendergraph_node(const Texture_rendergraph_node_create_info& create_info);
+    explicit Texture_rendergraph_node(const Texture_rendergraph_node_create_info&& create_info);
 
     ~Texture_rendergraph_node() noexcept override; 
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto get_type_name() const -> std::string_view override { return c_type_name; }
+    auto get_type_name() const -> std::string_view override { return c_type_name; }
 
     // TODO Think if we want to provide here both consumer input and producer output
-    [[nodiscard]] auto get_consumer_input_texture(
-        Resource_routing resource_routing,
-        int              key,
-        int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
-
-    [[nodiscard]] auto get_consumer_input_framebuffer(
-        Resource_routing resource_routing,
-        int              key,
-        int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
-
-    [[nodiscard]] auto get_producer_output_texture(
-        Resource_routing resource_routing,
-        int              key,
-        int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
-
-    [[nodiscard]] auto get_producer_output_framebuffer(
-        Resource_routing resource_routing,
-        int              key,
-        int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
-
-    void execute_rendergraph_node() override;
+    auto get_consumer_input_texture     (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_consumer_input_framebuffer (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_producer_output_texture    (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_producer_output_framebuffer(Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    void execute_rendergraph_node       () override;
 
 protected:
     int                                           m_input_key;

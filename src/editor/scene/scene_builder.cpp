@@ -125,7 +125,6 @@ Scene_builder::Scene_builder(
     Editor_settings&                editor_settings,
     Mesh_memory&                    mesh_memory,
     Tools&                          tools,
-    Viewport_config_window&         viewport_config_window,
     Viewport_windows&               viewport_windows
 )
     : m_context{editor_context}
@@ -154,7 +153,6 @@ Scene_builder::Scene_builder(
         editor_rendering,
         editor_settings,
         tools,
-        viewport_config_window,
         viewport_windows
     );
     setup_lights   ();
@@ -293,7 +291,6 @@ void Scene_builder::setup_cameras(
     Editor_rendering&               editor_rendering,
     Editor_settings&                editor_settings,
     Tools&                          tools,
-    Viewport_config_window&         viewport_config_window,
     Viewport_windows&               viewport_windows
 )
 {
@@ -335,8 +332,6 @@ void Scene_builder::setup_cameras(
         editor_rendering,
         editor_settings,
         tools,
-        viewport_config_window,
-
         "Primary Viewport",
         m_scene_root,
         camera_a,

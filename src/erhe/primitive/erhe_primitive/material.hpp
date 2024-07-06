@@ -10,14 +10,12 @@
 #include <string>
 #include <string_view>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Sampler;
     class Texture;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 class Material
     : public erhe::Item<erhe::Item_base, erhe::Item_base, Material>

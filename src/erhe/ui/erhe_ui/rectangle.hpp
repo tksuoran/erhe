@@ -5,8 +5,7 @@
 #include <algorithm>
 #include <limits>
 
-namespace erhe::ui
-{
+namespace erhe::ui {
 
 class Rectangle
 {

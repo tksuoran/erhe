@@ -23,18 +23,8 @@ public:
     void execute        ();
     void register_node  (Rendergraph_node* node);
     void unregister_node(Rendergraph_node* node);
-
-    auto connect(
-        int               key,
-        Rendergraph_node* source_node,
-        Rendergraph_node* sink_node
-    ) -> bool;
-
-    auto disconnect(
-        int               key,
-        Rendergraph_node* source_node,
-        Rendergraph_node* sink_node
-    ) -> bool;
+    auto connect        (int key, Rendergraph_node* source_node, Rendergraph_node* sink_node) -> bool;
+    auto disconnect     (int key, Rendergraph_node* source_node, Rendergraph_node* sink_node) -> bool;
 
     [[nodiscard]] auto get_graphics_instance() -> erhe::graphics::Instance&;
 

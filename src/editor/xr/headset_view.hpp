@@ -34,8 +34,7 @@ namespace erhe::window {
 //    class Headset;
 //}
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message_bus;
@@ -59,10 +58,7 @@ class Headset_view_node
     : public erhe::rendergraph::Rendergraph_node
 {
 public:
-    Headset_view_node(
-        erhe::rendergraph::Rendergraph& rendergraph,
-        Headset_view&                   headset_view
-    );
+    Headset_view_node(erhe::rendergraph::Rendergraph& rendergraph, Headset_view& headset_view);
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;
@@ -116,10 +112,10 @@ public:
     void render(const Render_context&);
 
     // Implements Scene_view
-    [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
-    [[nodiscard]] auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
-    [[nodiscard]] auto get_shadow_render_node() const -> Shadow_render_node*                  override;
-    [[nodiscard]] auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
+    auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
+    auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
+    auto get_shadow_render_node() const -> Shadow_render_node*                  override;
+    auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
 
 private:
     [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;

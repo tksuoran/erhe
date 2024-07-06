@@ -6,14 +6,12 @@
 
 #include <string>
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
 }
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Map_editor;
 class Map_generator;

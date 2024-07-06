@@ -4,9 +4,7 @@
 
 #include <glm/glm.hpp>
 
-
-namespace editor
-{
+namespace editor {
 
 class Create_torus
     : public Create_shape
@@ -16,7 +14,7 @@ public:
 
     void imgui() override;
 
-    [[nodiscard]] auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
+    auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
 private:
     float m_major_radius{1.0f};

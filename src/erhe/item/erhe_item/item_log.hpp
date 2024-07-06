@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::item
-{
+namespace erhe::item {
 
 extern std::shared_ptr<spdlog::logger> log;
 extern std::shared_ptr<spdlog::logger> log_frame;

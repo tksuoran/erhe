@@ -6,8 +6,7 @@
 
 #include <optional>
 
-namespace editor
-{
+namespace editor {
 
 enum class Handle : unsigned int;
 
@@ -46,7 +45,6 @@ protected:
 
     bool         m_active   {false};
     unsigned int m_axis_mask{0u};
-
 };
 
 } // namespace editor

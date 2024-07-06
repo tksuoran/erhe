@@ -26,6 +26,10 @@
 #   include "erhe_xr/headset.hpp"
 #endif
 
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui/imgui.h>
+#endif
+
 namespace editor
 {
 
@@ -351,34 +355,41 @@ void Hud::update_node_transform(const glm::mat4& world_from_camera)
     }
 
     m_world_from_camera = world_from_camera;
-    const glm::vec3 target_position{world_from_camera * glm::vec4{0.0, m_y, 0.0, 1.0}};
-    const glm::vec3 eye_position   {world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
-    const glm::vec3 up_direction   {world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}};
+    const glm::vec3 target_position{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}};
+    const glm::vec3 self_position  {world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
+    const glm::vec3 up_direction   {world_from_camera * glm::vec4{0.0, 1.0, 0.0, 1.0}};
 
-    const glm::mat4 m = erhe::math::create_look_at(
-        eye_position,
-        target_position,
-        up_direction
-    );
+    const glm::vec3 back  = glm::normalize(self_position - target_position);
+    const glm::vec3 up    = glm::vec4{0.0, 1.0, 0.0, 1.0};
+    const glm::vec3 right = glm::cross(-back, up);
+
+    const glm::mat4 m{
+        glm::vec4{right,         0.0f},
+        glm::vec4{up,            0.0f},
+        glm::vec4{-back,         0.0f},
+        glm::vec4{self_position, 1.0f}
+    };
 
     m_rendertarget_node->set_world_from_node(m);
 }
 
-void Hud::tool_render(
-    const Render_context& /*context*/
-)
+void Hud::tool_render(const Render_context&)
 {
 }
 
 void Hud::imgui()
 {
-    ImGui::Checkbox("Locked to Head", &m_locked_to_head);
-    ImGui::Checkbox("Visible",        &m_is_visible);
-    const bool x_changed = ImGui::DragFloat("X", &m_x, 0.0001f);
-    const bool y_changed = ImGui::DragFloat("Y", &m_y, 0.0001f);
-    const bool z_changed = ImGui::DragFloat("Z", &m_z, 0.0001f);
-    if (x_changed || y_changed || z_changed) {
-        update_node_transform(m_world_from_camera);
+    if (ImGui::TreeNodeEx("Hud", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed)) {
+        ImGui::Checkbox("Locked to Head", &m_locked_to_head);
+        ImGui::Checkbox("Visible",        &m_is_visible);
+
+        const bool x_changed = ImGui::DragFloat("X", &m_x, 0.0001f);
+        const bool y_changed = ImGui::DragFloat("Y", &m_y, 0.0001f);
+        const bool z_changed = ImGui::DragFloat("Z", &m_z, 0.0001f);
+        if (x_changed || y_changed || z_changed) {
+            update_node_transform(m_world_from_camera);
+        }
+        ImGui::TreePop();
     }
 }
 

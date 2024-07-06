@@ -3,14 +3,11 @@
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Vertex_attribute_mappings;
 }
 
-namespace erhe::primitive
-{
-
+namespace erhe::primitive {
 
 class Attributes
 {
@@ -45,19 +42,6 @@ public:
     erhe::dataformat::Format joint_weights{erhe::dataformat::Format::format_32_vec4_float};
 };
 
-[[nodiscard]] auto prepare_vertex_format(
-    const Attributes&      attributes,
-    const Attribute_types& attribute_types
-) -> erhe::graphics::Vertex_format;
+[[nodiscard]] auto prepare_vertex_format(const Attributes& attributes, const Attribute_types& attribute_types) -> erhe::graphics::Vertex_format;
 
-//class Format_info
-//{
-//public:
-//    glm::vec4                                  constant_color           {1.0f};
-//    bool                                       keep_geometry            {false};
-//    Normal_style                               normal_style             {Normal_style::corner_normals};
-//    erhe::graphics::Vertex_attribute_mappings* vertex_attribute_mappings{nullptr};
-//    bool                                       autocolor                {false};
-//};
-
-}
+} // namespace erhe::primitive

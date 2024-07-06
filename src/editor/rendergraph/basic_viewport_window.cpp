@@ -2,24 +2,10 @@
 
 #include "scene/viewport_window.hpp"
 
-
-namespace editor
-{
+namespace editor {
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
-
-//Basic_viewport_window::Basic_viewport_window(
-//    erhe::rendergraph::Rendergraph&         rendergraph,
-//    const std::string_view                  name,
-//    const std::shared_ptr<Viewport_window>& viewport_window
-//)
-//    : erhe::rendergraph::Sink_rendergraph_node{
-//        rendergraph,
-//        std::string{"(default constructed Basic_viewport_window)"}
-//    }
-//{
-//}
 
 Basic_viewport_window::Basic_viewport_window(
     erhe::rendergraph::Rendergraph&         rendergraph,
@@ -39,7 +25,7 @@ Basic_viewport_window::Basic_viewport_window(
     m_viewport.height = 0;
 
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Routing::Resource_provided_by_consumer,
         "viewport",
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
@@ -51,21 +37,21 @@ Basic_viewport_window::Basic_viewport_window(
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(
-        erhe::rendergraph::Resource_routing::None,
+        erhe::rendergraph::Routing::None,
         "window",
         erhe::rendergraph::Rendergraph_node_key::window
     );
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_viewport_window() const -> std::shared_ptr<Viewport_window>
+auto Basic_viewport_window::get_viewport_window() const -> std::shared_ptr<Viewport_window>
 {
     return m_viewport_window.lock();
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_consumer_input_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Basic_viewport_window::get_consumer_input_viewport(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -75,10 +61,10 @@ Basic_viewport_window::Basic_viewport_window(
     return get_viewport();
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_producer_output_viewport(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Basic_viewport_window::get_producer_output_viewport(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -88,10 +74,10 @@ Basic_viewport_window::Basic_viewport_window(
     return get_viewport();
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_consumer_input_texture(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Basic_viewport_window::get_consumer_input_texture(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     static_cast<void>(resource_routing);
@@ -100,10 +86,10 @@ Basic_viewport_window::Basic_viewport_window(
     return {};
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_producer_output_texture(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Basic_viewport_window::get_producer_output_texture(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     static_cast<void>(resource_routing);
@@ -112,10 +98,10 @@ Basic_viewport_window::Basic_viewport_window(
     return {};
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_consumer_input_framebuffer(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Basic_viewport_window::get_consumer_input_framebuffer(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     static_cast<void>(resource_routing);
@@ -124,10 +110,10 @@ Basic_viewport_window::Basic_viewport_window(
     return {};
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_producer_output_framebuffer(
-    const erhe::rendergraph::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
+auto Basic_viewport_window::get_producer_output_framebuffer(
+    const erhe::rendergraph::Routing resource_routing,
+    const int                        key,
+    const int                        depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     static_cast<void>(resource_routing);
@@ -136,7 +122,7 @@ Basic_viewport_window::Basic_viewport_window(
     return {};
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_viewport() const -> const erhe::math::Viewport&
+auto Basic_viewport_window::get_viewport() const -> const erhe::math::Viewport&
 {
     return m_viewport;
 }

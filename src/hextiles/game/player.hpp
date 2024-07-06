@@ -11,8 +11,7 @@
 #include <memory>
 #include <optional>
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Player
 {

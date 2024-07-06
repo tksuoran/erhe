@@ -54,16 +54,16 @@ public:
     Xr_instance   (Xr_instance&&)      = delete;
     void operator=(Xr_instance&&)      = delete;
 
-    auto is_available                   () const -> bool;
-    auto poll_xr_events                 (Xr_session& session) -> bool;
-    auto get_xr_instance                () const -> XrInstance;
-    auto get_xr_system_id               () const -> XrSystemId;
-    auto get_xr_view_configuration_type () const -> XrViewConfigurationType;
-    auto get_xr_view_configuration_views() const -> const std::vector<XrViewConfigurationView>&;
-    auto get_xr_environment_blend_mode  () const -> XrEnvironmentBlendMode;
-    auto update_actions                 (Xr_session& session) -> bool;
-    auto get_current_interaction_profile(Xr_session& session) -> bool;
-    auto get_configuration              () const -> const Xr_configuration&;
+    [[nodiscard]] auto is_available                   () const -> bool;
+    [[nodiscard]] auto poll_xr_events                 (Xr_session& session) -> bool;
+    [[nodiscard]] auto get_xr_instance                () const -> XrInstance;
+    [[nodiscard]] auto get_xr_system_id               () const -> XrSystemId;
+    [[nodiscard]] auto get_xr_view_configuration_type () const -> XrViewConfigurationType;
+    [[nodiscard]] auto get_xr_view_configuration_views() const -> const std::vector<XrViewConfigurationView>&;
+    [[nodiscard]] auto get_xr_environment_blend_mode  () const -> XrEnvironmentBlendMode;
+    [[nodiscard]] auto update_actions                 (Xr_session& session) -> bool;
+                  auto get_current_interaction_profile(Xr_session& session) -> bool;
+    [[nodiscard]] auto get_configuration              () const -> const Xr_configuration&;
 
     //void set_environment_depth_estimation(XrSession xr_session, bool enabled);
 
@@ -76,7 +76,7 @@ public:
         const XrDebugUtilsMessengerCallbackDataEXT* callbackData
     ) const -> XrBool32;
 
-    auto get_path_string(XrPath path) -> std::string;
+    [[nodiscard]] auto get_path_string(XrPath path) -> std::string;
 
     class Paths
     {
@@ -93,25 +93,10 @@ public:
     Xr_actions actions_left;
     Xr_actions actions_right;
 
-    [[nodiscard]] auto create_boolean_action(
-        unsigned int           profile_mask,
-        const std::string_view path_name
-    ) -> Xr_action_boolean*;
-
-    [[nodiscard]] auto create_float_action(
-        unsigned int           profile_mask,
-        const std::string_view path_name
-    ) -> Xr_action_float*;
-
-    [[nodiscard]] auto create_vector2f_action(
-        unsigned int           profile_mask,
-        const std::string_view path_name
-    ) -> Xr_action_vector2f*;
-
-    [[nodiscard]] auto create_pose_action(
-        unsigned int           profile_mask,
-        const std::string_view path_name
-    ) -> Xr_action_pose*;
+    [[nodiscard]] auto create_boolean_action (unsigned int profile_mask, const std::string_view path_name) -> Xr_action_boolean*;
+    [[nodiscard]] auto create_float_action   (unsigned int profile_mask, const std::string_view path_name) -> Xr_action_float*;
+    [[nodiscard]] auto create_vector2f_action(unsigned int profile_mask, const std::string_view path_name) -> Xr_action_vector2f*;
+    [[nodiscard]] auto create_pose_action    (unsigned int profile_mask, const std::string_view path_name) -> Xr_action_pose*;
 
     static constexpr unsigned int max_action_count = 50;
     [[nodiscard]] auto get_boolean_actions () -> etl::vector<Xr_action_boolean,  max_action_count>&;
@@ -132,10 +117,10 @@ public:
     PFN_xrLocateHandJointsEXT              xrLocateHandJointsEXT             {nullptr};
 
 private:
-    auto get_proc_addr(const char* function) const -> PFN_xrVoidFunction;
+    [[nodiscard]] auto get_proc_addr(const char* function) const -> PFN_xrVoidFunction;
 
     template <typename T>
-    auto get_proc_addr(const char* function) const -> T
+    [[nodiscard]] auto get_proc_addr(const char* function) const -> T
     {
         return reinterpret_cast<T>(get_proc_addr(function));
     }
@@ -178,4 +163,4 @@ private:
     //PFN_xrSetEnvironmentDepthEstimationVARJO m_xrSetEnvironmentDepthEstimationVARJO{nullptr};
 };
 
-}
+} // namespace erhe::xr

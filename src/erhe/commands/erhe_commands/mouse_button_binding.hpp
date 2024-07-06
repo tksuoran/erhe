@@ -18,8 +18,8 @@ public:
     Mouse_button_binding();
     ~Mouse_button_binding() noexcept override;
 
-    [[nodiscard]] auto get_type  () const -> Type override { return Command_binding::Type::Mouse_button; }
-    [[nodiscard]] auto get_button() const -> erhe::window::Mouse_button override;
+    auto get_type  () const -> Type override { return Command_binding::Type::Mouse_button; }
+    auto get_button() const -> erhe::window::Mouse_button override;
 
     auto on_button(Input_arguments& input) -> bool override;
     auto on_motion(Input_arguments& input) -> bool override;

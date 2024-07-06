@@ -4,8 +4,7 @@
 
 #include <cassert>
 
-namespace hextiles
-{
+namespace hextiles {
 
 struct Coordinate_modifier
 {

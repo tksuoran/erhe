@@ -2,8 +2,7 @@
 
 #include "erhe_scene/transform.hpp"
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Trs_transform
     : public Transform

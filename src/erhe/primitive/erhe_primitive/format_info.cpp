@@ -1,12 +1,8 @@
 #include "erhe_primitive/format_info.hpp"
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
-auto prepare_vertex_format(
-    const Attributes&      attributes,
-    const Attribute_types& attribute_types
-) -> erhe::graphics::Vertex_format
+auto prepare_vertex_format(const Attributes& attributes, const Attribute_types& attribute_types) -> erhe::graphics::Vertex_format
 {
     using Vertex_attribute = erhe::graphics::Vertex_attribute;
     erhe::graphics::Vertex_format vertex_format;
@@ -145,4 +141,4 @@ auto prepare_vertex_format(
     return vertex_format;
 }
 
-}
+} // namespace erhe::primitive

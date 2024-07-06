@@ -8,8 +8,7 @@
 #include <memory>
 #include <string>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 enum class Light_type : unsigned int {
     directional = 0,
@@ -22,7 +21,6 @@ class Light_projection_parameters
 public:
     const Camera*        view_camera{nullptr};
     erhe::math::Viewport shadow_map_viewport{};
-    ////erhe::math::Viewport view_camera_viewport;
 };
 
 class Light;

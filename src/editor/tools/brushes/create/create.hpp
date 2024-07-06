@@ -13,7 +13,6 @@
 
 #include <imgui/imgui.h>
 
-
 namespace erhe::imgui {
     class Imgui_windows;
 }
@@ -21,8 +20,7 @@ namespace erhe::scene {
     class Node;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Brush;
 class Render_context;

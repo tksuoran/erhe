@@ -5,8 +5,7 @@
 #include <optional>
 #include <vector>
 
-namespace erhe::time
-{
+namespace erhe::time {
 
 class Timer
 {
@@ -45,4 +44,4 @@ private:
     Timer& m_timer;
 };
 
-}
+} // namespace erhe::time

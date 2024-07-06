@@ -2,8 +2,7 @@
 
 #include <glm/glm.hpp>
 
-namespace editor
-{
+namespace editor {
 
 enum class Handle : unsigned int {
     e_handle_none         =  0,
@@ -84,4 +83,5 @@ public:
 [[nodiscard]] auto c_str           (Handle handle) -> const char*;
 
 [[nodiscard]] auto get_axis_color  (unsigned int axis_mask) -> glm::vec4;
+
 }

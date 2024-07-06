@@ -20,7 +20,8 @@ public:
     Mouse_binding();
     ~Mouse_binding() noexcept override;
 
-    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Mouse; }
+    auto get_type() const -> Type override { return Command_binding::Type::Mouse; }
+
     [[nodiscard]] auto get_modifier_mask() const -> std::optional<uint32_t> { return m_modifier_mask; }
 
     virtual auto get_button() const -> erhe::window::Mouse_button;

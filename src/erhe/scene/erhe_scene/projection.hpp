@@ -5,9 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
-
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Transform;
 

@@ -12,14 +12,11 @@
 #include <cstddef>
 #include <string>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
 }
 
-namespace erhe::primitive
-{
-
+namespace erhe::primitive {
 
 class Property_maps
 {

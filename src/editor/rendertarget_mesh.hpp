@@ -21,8 +21,7 @@ namespace erhe::primitive {
     class Material;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message;
@@ -50,8 +49,8 @@ public:
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Rendertarget_mesh"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
-    [[nodiscard]] auto get_type     () const -> uint64_t         override;
-    [[nodiscard]] auto get_type_name() const -> std::string_view override;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
 
     // Public API
     [[nodiscard]] auto texture         () const -> std::shared_ptr<erhe::graphics::Texture>;
@@ -78,6 +77,9 @@ public:
         int                       height
     );
 
+    static void set_mesh_lod_bias(float lod_bias);
+    [[nodiscard]] static auto get_mesh_lod_bias() -> float;
+
 private:
     float                                        m_pixels_per_meter{0.0f};
     float                                        m_local_width     {0.0f};
@@ -93,6 +95,8 @@ private:
     std::optional<Finger_point> m_pointer_finger;
     bool                        m_finger_trigger{false};
 #endif
+
+    static float s_rendertarget_mesh_lod_bias;
 };
 
 [[nodiscard]] auto is_rendertarget(const erhe::Item_base* item) -> bool;

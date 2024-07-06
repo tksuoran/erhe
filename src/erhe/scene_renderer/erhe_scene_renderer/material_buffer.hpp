@@ -5,18 +5,15 @@
 
 #include <set>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Sampler;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
     class Material;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 class Program_interface;
 class Shader_resources;
@@ -40,9 +37,7 @@ public:
 class Material_interface
 {
 public:
-    explicit Material_interface(
-        erhe::graphics::Instance& graphics_instance
-    );
+    explicit Material_interface(erhe::graphics::Instance& graphics_instance);
 
     erhe::graphics::Shader_resource material_block;
     erhe::graphics::Shader_resource material_struct;
@@ -54,10 +49,7 @@ class Material_buffer
     : public erhe::renderer::Multi_buffer
 {
 public:
-    Material_buffer(
-        erhe::graphics::Instance& graphics_instance,
-        Material_interface&       material_interface
-    );
+    Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface);
 
     auto update(
         const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials

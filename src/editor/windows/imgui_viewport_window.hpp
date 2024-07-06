@@ -16,8 +16,7 @@ namespace erhe::rendergraph {
     class Rendergraph_node;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Post_processing_node;
 class Viewport_window;
@@ -50,18 +49,10 @@ public:
     void on_mouse_move       (glm::vec2 mouse_position_in_window);
 
     // Implements Rendergraph_node
-    auto get_consumer_input_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
+    auto get_consumer_input_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
     // Overridden to source viewport size from ImGui window
-    auto get_producer_output_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
+    auto get_producer_output_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
     // Public API
     [[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;

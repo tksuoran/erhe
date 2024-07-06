@@ -10,8 +10,7 @@ namespace erhe {
     class Item_host;
 }
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Node;
 
@@ -40,10 +39,7 @@ public:
 
     virtual void handle_node_update          (Node* old_node, Node* new_node);
     virtual void handle_node_transform_update();
-    virtual void handle_item_host_update(
-        Item_host* const old_item_host,
-        Item_host* const new_item_host
-    )
+    virtual void handle_item_host_update     (Item_host* const old_item_host, Item_host* const new_item_host)
     {
         static_cast<void>(old_item_host);
         static_cast<void>(new_item_host);

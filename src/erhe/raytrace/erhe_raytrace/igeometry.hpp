@@ -4,8 +4,7 @@
 #include <memory>
 #include <string_view>
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 class IScene;
 class Ray;

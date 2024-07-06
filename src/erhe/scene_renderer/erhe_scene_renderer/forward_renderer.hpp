@@ -30,8 +30,7 @@ namespace erhe::scene {
     class Mesh_layer;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 class Program_interface;
 
@@ -40,10 +39,7 @@ class Forward_renderer
 public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
-    Forward_renderer(
-        erhe::graphics::Instance& graphics_instance,
-        Program_interface&        program_interface
-    );
+    Forward_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface);
 
     // Public API
     class Render_parameters

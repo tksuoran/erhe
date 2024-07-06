@@ -33,7 +33,7 @@ public:
     explicit Scene_open_operation(const std::filesystem::path& path);
 
     // Implements IOperation
-    [[nodiscard]] auto describe() const -> std::string override;
+    auto describe() const -> std::string override;
     void execute(Editor_context& context) override;
     void undo   (Editor_context& context) override;
 

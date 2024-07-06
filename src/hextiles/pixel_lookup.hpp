@@ -5,8 +5,7 @@
 
 #include <array>
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Pixel_lookup
 {

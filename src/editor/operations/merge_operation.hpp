@@ -10,8 +10,7 @@ namespace erhe::primitive {
     class Buffer_info;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Node_physics;
@@ -31,7 +30,7 @@ public:
     explicit Merge_operation(Parameters&& parameters);
 
     // Implements IOperation
-    [[nodiscard]] auto describe() const -> std::string override;
+    auto describe() const -> std::string override;
     void execute(Editor_context& context) override;
     void undo   (Editor_context& context) override;
 

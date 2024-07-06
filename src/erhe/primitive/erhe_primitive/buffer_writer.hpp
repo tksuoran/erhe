@@ -9,14 +9,12 @@
 #include <span>
 #include <vector>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
     class Mesh_info;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 class Build_context;
 class Buffer_sink;
@@ -28,10 +26,7 @@ class Renderable_mesh;
 class Vertex_buffer_writer
 {
 public:
-    Vertex_buffer_writer(
-        Build_context& build_context,
-        Buffer_sink&   buffer_sink
-    );
+    Vertex_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink);
     virtual ~Vertex_buffer_writer() noexcept;
 
     void write(const Vertex_attribute_info& attribute, const glm::vec2 value);
@@ -57,10 +52,7 @@ public:
 class Index_buffer_writer
 {
 public:
-    Index_buffer_writer(
-        Build_context& build_context,
-        Buffer_sink&   buffer_sink
-    );
+    Index_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink);
     virtual ~Index_buffer_writer() noexcept;
 
     void write_corner  (const uint32_t v0);

@@ -14,40 +14,29 @@
 #include <cstdint>
 #include <optional>
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
 }
 
-namespace hextiles
-{
+namespace hextiles {
 
 class Menu_window;
 
-class Map_hover_command final
-    : public erhe::commands::Command
+class Map_hover_command final : public erhe::commands::Command
 {
 public:
-    Map_hover_command(
-        erhe::commands::Commands& commands,
-        Map_editor&               map_editor
-    );
-
+    Map_hover_command(erhe::commands::Commands& commands, Map_editor& map_editor);
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
     Map_editor& map_editor;
 };
 
-class Map_primary_brush_command final
-    : public erhe::commands::Command
+class Map_primary_brush_command final : public erhe::commands::Command
 {
 public:
-    Map_primary_brush_command(
-        erhe::commands::Commands& commands,
-        Map_editor&               map_editor
-    );
+    Map_primary_brush_command(erhe::commands::Commands& commands, Map_editor& map_editor);
 
     void try_ready          () override;
     auto try_call           () -> bool override;

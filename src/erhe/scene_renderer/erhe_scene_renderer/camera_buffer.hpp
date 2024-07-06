@@ -4,19 +4,16 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_math/viewport.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Instance;
 }
 
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Node;
     class Projection;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 class Camera_struct
 {
@@ -35,9 +32,7 @@ public:
 class Camera_interface
 {
 public:
-    explicit Camera_interface(
-        erhe::graphics::Instance& graphics_instance
-    );
+    explicit Camera_interface(erhe::graphics::Instance& graphics_instance);
 
     erhe::graphics::Shader_resource camera_block;
     erhe::graphics::Shader_resource camera_struct;
@@ -49,10 +44,7 @@ class Camera_buffer
     : public erhe::renderer::Multi_buffer
 {
 public:
-    Camera_buffer(
-        erhe::graphics::Instance& graphics_instance,
-        Camera_interface&         camera_interface
-    );
+    Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface);
 
     auto update(
         const erhe::scene::Projection& camera_projection,

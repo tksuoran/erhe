@@ -18,9 +18,7 @@ namespace erhe::scene_renderer {
 class Program_interface
 {
 public:
-    explicit Program_interface(
-        erhe::graphics::Instance& graphics_instance
-    );
+    explicit Program_interface(erhe::graphics::Instance& graphics_instance);
 
     Program_interface(const Program_interface&) = delete;
     void operator=   (const Program_interface&) = delete;

@@ -1,19 +1,16 @@
 #pragma once
 
 #include "tools/tool.hpp"
-
 #include "erhe_imgui/imgui_window.hpp"
 
 #include <string>
 #include <vector>
 
-
 namespace erhe::imgui {
     class Imgui_windows;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message_bus;
@@ -43,7 +40,6 @@ private:
     bool m_show_snapped_grid_position{false};
 
     std::vector<std::string> m_text_lines;
-
 };
 
 } // namespace editor

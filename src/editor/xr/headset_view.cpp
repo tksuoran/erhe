@@ -44,12 +44,12 @@ Headset_view_node::Headset_view_node(erhe::rendergraph::Rendergraph& rendergraph
     , m_headset_view                     {headset_view}
 {
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "shadow_maps",
         erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
     register_input(
-        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Routing::Resource_provided_by_producer,
         "rendertarget texture",
         erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
     );
@@ -72,7 +72,7 @@ Headset_view::Headset_view(
     Mesh_memory&                    mesh_memory,
     Scene_builder&                  scene_builder
 )
-    : Scene_view{editor_context, Viewport_config{}}
+    : Scene_view{editor_context, Viewport_config::default_config()}
     , m_context_window{context_window}
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
@@ -209,9 +209,7 @@ void Headset_view::render(const Render_context&)
     }
 }
 
-auto Headset_view::get_headset_view_resources(
-    erhe::xr::Render_view& render_view
-) -> std::shared_ptr<Headset_view_resources>
+auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -347,11 +345,11 @@ void Headset_view::render_headset()
                     gl::Clear_buffer_mask::stencil_buffer_bit
                 );
 
-                Viewport_config viewport_config;
+                //Viewport_config viewport_config;
                 Render_context render_context {
                     .editor_context  = m_context,
                     .scene_view      = *this,
-                    .viewport_config = viewport_config,
+                    .viewport_config = m_viewport_config,
                     .camera          = *view_resources->camera.get(),
                     .viewport        = viewport
                 };
@@ -392,9 +390,9 @@ void Headset_view::setup_root_camera()
     projection.z_far           = 200.0f;
 
     const glm::mat4 m = erhe::math::create_look_at(
-        glm::vec3{0.0f, 0.0f, 0.0f}, // eye
-        glm::vec3{0.0f, 0.0f, 0.0f}, // look at
-        glm::vec3{0.0f, 1.0f, 0.0f}  // up
+        glm::vec3{0.0f, 0.0f,  0.0f}, // eye
+        glm::vec3{0.0f, 0.0f, -1.0f}, // look at
+        glm::vec3{0.0f, 1.0f,  0.0f}  // up
     );
 
     m_root_node = m_scene_root->get_scene().get_root_node();
@@ -432,19 +430,17 @@ auto Headset_view::get_shadow_render_node() const -> Shadow_render_node*
     return m_shadow_render_node.get();
 }
 
-void Headset_view::add_finger_input(
-    const Finger_point& finger_input
-)
+void Headset_view::add_finger_input(const Finger_point& finger_input)
 {
     m_finger_inputs.push_back(finger_input);
 }
 
-[[nodiscard]] auto Headset_view::finger_to_viewport_distance_threshold() const -> float
+auto Headset_view::finger_to_viewport_distance_threshold() const -> float
 {
     return m_finger_to_viewport_distance_threshold;
 }
 
-[[nodiscard]] auto Headset_view::get_headset() const -> erhe::xr::Headset*
+auto Headset_view::get_headset() const -> erhe::xr::Headset*
 {
     return m_headset.get();
 }

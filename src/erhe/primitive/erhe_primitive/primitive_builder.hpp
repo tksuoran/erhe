@@ -15,14 +15,12 @@
 
 #include <cstddef>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Buffer;
     class Buffer_transfer_queue;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 class Index_range;
 class Material;

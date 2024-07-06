@@ -26,8 +26,7 @@ namespace erhe::scene {
     class Mesh;
 }
 
-namespace editor
-{
+namespace editor {
 
 [[nodiscard]] auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t;
 

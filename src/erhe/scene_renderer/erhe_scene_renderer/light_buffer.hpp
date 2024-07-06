@@ -9,18 +9,15 @@
 
 #include <memory>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Texture;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
     class Material;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 class Light_struct
 {
@@ -50,9 +47,7 @@ public:
 class Light_interface
 {
 public:
-    explicit Light_interface(
-        erhe::graphics::Instance& graphics_instance
-    );
+    explicit Light_interface(erhe::graphics::Instance& graphics_instance);
 
     std::size_t                     max_light_count;
     erhe::graphics::Shader_resource light_block;
@@ -101,10 +96,7 @@ public:
 class Light_buffer
 {
 public:
-    Light_buffer(
-        erhe::graphics::Instance& graphics_instance,
-        Light_interface&          light_interface
-    );
+    Light_buffer(erhe::graphics::Instance& graphics_instance, Light_interface& light_interface);
 
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,

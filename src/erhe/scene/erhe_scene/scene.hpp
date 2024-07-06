@@ -11,8 +11,7 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 class Camera;
 class Light;
@@ -27,16 +26,10 @@ using Layer_id = uint64_t;
 class Mesh_layer
 {
 public:
-    Mesh_layer(
-        const std::string_view name,
-        uint64_t               flags,
-        Layer_id               id
-    );
+    Mesh_layer(const std::string_view name, uint64_t flags, Layer_id id);
 
     // Public API
-    [[nodiscard]] auto get_mesh_by_id(
-        const erhe::Unique_id<Node>::id_type mesh_id
-    ) const -> std::shared_ptr<Mesh>;
+    [[nodiscard]] auto get_mesh_by_id(const erhe::Unique_id<Node>::id_type mesh_id) const -> std::shared_ptr<Mesh>;
     [[nodiscard]] auto get_name() const -> const std::string&;
 
     void add   (const std::shared_ptr<Mesh>& mesh);

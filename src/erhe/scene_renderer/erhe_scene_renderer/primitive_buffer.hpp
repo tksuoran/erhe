@@ -32,9 +32,7 @@ public:
 class Primitive_interface
 {
 public:
-    explicit Primitive_interface(
-        erhe::graphics::Instance& graphics_instance
-    );
+    explicit Primitive_interface(erhe::graphics::Instance& graphics_instance);
 
     erhe::graphics::Shader_resource primitive_block;
     erhe::graphics::Shader_resource primitive_struct;
@@ -102,10 +100,7 @@ class Primitive_buffer
     : public erhe::renderer::Multi_buffer
 {
 public:
-    Primitive_buffer(
-        erhe::graphics::Instance& graphics_instance,
-        Primitive_interface&      primitive_interface
-    );
+    Primitive_buffer(erhe::graphics::Instance& graphics_instance, Primitive_interface& primitive_interface);
 
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 

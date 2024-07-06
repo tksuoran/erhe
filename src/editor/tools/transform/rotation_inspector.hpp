@@ -14,8 +14,7 @@ namespace erhe::scene {
     class Node;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Rotation_inspector
 {
@@ -83,11 +82,7 @@ public:
     void update_axis_angle_from_quaternion             ();
     void update_matrix_and_quaternion_from_euler_angles();
 
-    void imgui(
-        erhe::imgui::Value_edit_state& value_edit_state,
-        glm::quat                      rotation,
-        bool                           matches_gizmo
-    );
+    void imgui(erhe::imgui::Value_edit_state& value_edit_state, glm::quat rotation, bool matches_gizmo);
 
     [[nodiscard]] auto get_matrix     () -> glm::mat4;
     [[nodiscard]] auto get_quaternion () -> glm::quat;

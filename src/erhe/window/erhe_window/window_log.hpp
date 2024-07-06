@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::window
-{
+namespace erhe::window {
 
 extern std::shared_ptr<spdlog::logger> log_space_mouse;
 extern std::shared_ptr<spdlog::logger> log_window;

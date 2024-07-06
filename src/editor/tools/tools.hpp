@@ -30,8 +30,7 @@ namespace erhe::scene {
     class Scene_message_bus;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_settings;

@@ -5,14 +5,12 @@
 
 #include <string>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Gpu_timer;
     class Texture;
 }
 
-namespace erhe::rendergraph
-{
+namespace erhe::rendergraph {
 
 /// <summary>
 /// Rendergraph processer node for adding multisampling to output rendergraph node
@@ -37,25 +35,13 @@ public:
     void reconfigure(int sample_count);
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto get_type_name() const -> std::string_view override { return c_type_name; }
-    [[nodiscard]] auto get_consumer_input_texture(
-        Resource_routing resource_routing,
-        int              key,
-        int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_type_name() const -> std::string_view override { return c_type_name; }
+    auto get_consumer_input_texture(Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
 
-    [[nodiscard]] auto get_consumer_input_framebuffer(
-        Resource_routing resource_routing,
-        int              key,
-        int              depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_consumer_input_framebuffer(Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
 
     // Override so that size is always sources from output
-    [[nodiscard]] auto get_consumer_input_viewport(
-        Resource_routing resource_routing,
-        int              key,
-        int              depth = 0
-    ) const -> erhe::math::Viewport override;
+    auto get_consumer_input_viewport(Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
     void execute_rendergraph_node() override;
 

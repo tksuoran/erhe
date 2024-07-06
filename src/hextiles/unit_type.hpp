@@ -5,8 +5,7 @@
 #include <cstdint>
 #include "etl/string.h"
 
-namespace hextiles
-{
+namespace hextiles {
 
 constexpr int Category_air    = 1;
 constexpr int Category_ground = 2;

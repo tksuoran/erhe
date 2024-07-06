@@ -10,4 +10,4 @@ namespace erhe::window {
 
 [[nodiscard]] auto format_window_title(const char* window_name) -> std::string;
 
-}
+} // namespace erhe::window

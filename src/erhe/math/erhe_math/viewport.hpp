@@ -4,8 +4,7 @@
 
 #include <optional>
 
-namespace erhe::math
-{
+namespace erhe::math {
 
 class Viewport
 {
@@ -35,4 +34,4 @@ public:
     bool reverse_depth{true};
 };
 
-}
+} // namespace erhe::math

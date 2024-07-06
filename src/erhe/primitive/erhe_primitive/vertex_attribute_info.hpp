@@ -5,13 +5,11 @@
 #include <cstddef>
 #include <limits>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Vertex_format;
 }
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 class Vertex_attribute_info
 {

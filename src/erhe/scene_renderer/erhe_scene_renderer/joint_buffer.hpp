@@ -3,13 +3,11 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_renderer/multi_buffer.hpp"
 
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Skin;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 class Joint_struct
 {
@@ -48,10 +46,7 @@ class Joint_buffer
     : public erhe::renderer::Multi_buffer
 {
 public:
-    Joint_buffer(
-        erhe::graphics::Instance& graphics_instance,
-        Joint_interface&          joint_interface
-    );
+    Joint_buffer(erhe::graphics::Instance& graphics_instance, Joint_interface& joint_interface);
 
     auto update(
         const glm::uvec4&                                          debug_joint_indices,

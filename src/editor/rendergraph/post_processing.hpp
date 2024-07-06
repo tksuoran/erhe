@@ -40,7 +40,6 @@ class Programs;
 class Downsample_node
 {
 public:
-    //Downsample_node();
     Downsample_node(
         erhe::graphics::Instance& graphics_instance,
         const std::string&        label,
@@ -68,29 +67,17 @@ public:
     );
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto get_type_name() const -> std::string_view override { return "Post_processing_node"; }
+    auto get_type_name() const -> std::string_view override { return "Post_processing_node"; }
     void execute_rendergraph_node() override;
 
     // Overridden to provide texture from the first downsample node
-    [[nodiscard]] auto get_consumer_input_texture(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_consumer_input_texture(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
 
     // Overridden to provide framebuffer from the first downsample node
-    [[nodiscard]] auto get_consumer_input_framebuffer(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_consumer_input_framebuffer(erhe::rendergraph::Routing resource_routing, int key, int depth = 0 ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
 
     // Override so that size is always sources from output
-    [[nodiscard]] auto get_consumer_input_viewport(
-        erhe::rendergraph::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::math::Viewport override;
+    auto get_consumer_input_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
     // Public API
     void viewport_toolbar();
@@ -99,9 +86,7 @@ public:
     [[nodiscard]] auto get_downsample_nodes() -> const std::vector<Downsample_node>&;
 
 private:
-    auto update_downsample_nodes(
-        erhe::graphics::Instance& graphics_instance
-    ) -> bool;
+    auto update_downsample_nodes(erhe::graphics::Instance& graphics_instance) -> bool;
 
     Editor_context& m_context;
 
@@ -120,12 +105,8 @@ public:
     );
 
     // Public API
-    auto create_node (
-        erhe::rendergraph::Rendergraph& rendergraph,
-        const std::string_view          name
-    ) -> std::shared_ptr<Post_processing_node>;
-
-    auto get_nodes   () -> const std::vector<std::shared_ptr<Post_processing_node>>&;
+    [[nodiscard]] auto create_node(erhe::rendergraph::Rendergraph& rendergraph, std::string_view name) -> std::shared_ptr<Post_processing_node>;
+    [[nodiscard]] auto get_nodes  () -> const std::vector<std::shared_ptr<Post_processing_node>>&;
     void post_process(Post_processing_node& node);
     void next_frame  ();
 
@@ -147,10 +128,7 @@ private:
     class Offsets
     {
     public:
-        Offsets(
-            erhe::graphics::Shader_resource& block,
-            std::size_t                      source_texture_count
-        );
+        Offsets(erhe::graphics::Shader_resource& block, std::size_t source_texture_count);
 
         std::size_t texel_scale   {0}; // float
         std::size_t texture_count {0}; // uint

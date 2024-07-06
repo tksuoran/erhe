@@ -29,8 +29,7 @@ namespace erhe::scene {
     class Node;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Compound_operation;
 class Editor_message_bus;
@@ -46,10 +45,7 @@ class Transform_tool_drag_command
     : public erhe::commands::Command
 {
 public:
-    Transform_tool_drag_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Transform_tool_drag_command(erhe::commands::Commands& commands, Editor_context& context);
     void try_ready  () override;
     auto try_call   () -> bool override;
     void on_inactive() override;
@@ -153,7 +149,6 @@ public:
 
 private:
     void on_message     (Editor_message& message);
-    void update_entry   ();
     void update_for_view(Scene_view* scene_view);
     void update_hover   ();
     void render_rays    (erhe::scene::Node& node);
@@ -161,16 +156,12 @@ private:
     Transform_tool_drag_command         m_drag_command;
     erhe::commands::Redirect_command    m_drag_redirect_update_command;
     erhe::commands::Drag_enable_command m_drag_enable_command;
-
-public:
-
-private:
-    Handle                             m_hover_handle {Handle::e_handle_none};
-    Handle                             m_active_handle{Handle::e_handle_none};
-    std::shared_ptr<erhe::scene::Node> m_tool_node;
-    Subtool*                           m_hover_tool   {nullptr};
-    Subtool*                           m_active_tool  {nullptr};
-    Rotation_inspector                 m_rotation;
+    Handle                              m_hover_handle {Handle::e_handle_none};
+    Handle                              m_active_handle{Handle::e_handle_none};
+    std::shared_ptr<erhe::scene::Node>  m_tool_node;
+    Subtool*                            m_hover_tool   {nullptr};
+    Subtool*                            m_active_tool  {nullptr};
+    Rotation_inspector                  m_rotation;
 };
 
 } // namespace editor

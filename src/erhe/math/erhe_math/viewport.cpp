@@ -1,8 +1,7 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_math/math_util.hpp"
 
-namespace erhe::math
-{
+namespace erhe::math {
 
 auto Viewport::aspect_ratio() const -> float
 {
@@ -58,4 +57,4 @@ auto Viewport::hit_test(const int px, const int py) const -> bool
         (py <= y + height);
 }
 
-}
+} // namespace erhe::math
