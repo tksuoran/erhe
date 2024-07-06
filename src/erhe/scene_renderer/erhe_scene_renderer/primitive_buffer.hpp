@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_renderer/multi_buffer.hpp"
+#include "erhe_primitive/enums.hpp"
 
 #include <array>
 #include <vector>
@@ -106,8 +107,10 @@ public:
 
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+        erhe::primitive::Primitive_mode                            primitive_mode,
         const erhe::Item_filter&                                   filter,
         const Primitive_interface_settings&                        settings,
+        std::size_t&                                               out_primitive_count,
         bool                                                       use_id_ranges = false
     ) -> erhe::renderer::Buffer_range;
 

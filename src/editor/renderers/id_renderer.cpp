@@ -267,14 +267,15 @@ void Id_renderer::render(
         .color_source = erhe::scene_renderer::Primitive_color_source::id_offset
     };
 
-    const auto primitive_range            = m_primitive_buffers.update(meshes, id_filter, settings, true);
-    const auto draw_indirect_buffer_range = m_draw_indirect_buffers.update(
-        meshes,
-        erhe::primitive::Primitive_mode::polygon_fill,
-        id_filter
-    );
+    const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+    std::size_t primitive_count{0};
+    const auto primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, id_filter, settings, primitive_count, true);
+    const auto draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, id_filter);
     if (draw_indirect_buffer_range.draw_indirect_count == 0) {
         return;
+    }
+    if (primitive_count != draw_indirect_buffer_range.draw_indirect_count) {
+        log_render->warn("primitive_range != draw_indirect_buffer_range.draw_indirect_count");
     }
 
     m_primitive_buffers    .bind(primitive_range);

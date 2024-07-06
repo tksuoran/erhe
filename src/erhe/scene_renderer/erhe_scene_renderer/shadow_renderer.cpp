@@ -178,13 +178,15 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->debug_label());
 
+    const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     for (const auto& meshes : mesh_spans) {
-        const auto primitive_range = m_primitive_buffers.update(meshes, shadow_filter, Primitive_interface_settings{});
-        const auto draw_indirect_buffer_range = m_draw_indirect_buffers.update(
-            meshes,
-            erhe::primitive::Primitive_mode::polygon_fill,
-            shadow_filter
-        );
+        std::size_t primitive_count{0};
+        const auto primitive_range = m_primitive_buffers.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
+        const auto draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, shadow_filter);
+        if (primitive_count != draw_indirect_buffer_range.draw_indirect_count) {
+            log_render->warn("primitive_range != draw_indirect_buffer_range.draw_indirect_count");
+        }
+
         if (draw_indirect_buffer_range.draw_indirect_count > 0) {
             m_primitive_buffers.bind(primitive_range);
             m_draw_indirect_buffers.bind(draw_indirect_buffer_range.range);

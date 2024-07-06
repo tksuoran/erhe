@@ -12,12 +12,9 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
-Primitive_interface::Primitive_interface(
-    erhe::graphics::Instance& graphics_instance
-)
+Primitive_interface::Primitive_interface(erhe::graphics::Instance& graphics_instance)
     : primitive_block {graphics_instance, "primitive", 3, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , primitive_struct{graphics_instance, "Primitive"}
     , offsets{
@@ -37,10 +34,7 @@ Primitive_interface::Primitive_interface(
     primitive_block.set_readonly(true);
 }
 
-Primitive_buffer::Primitive_buffer(
-    erhe::graphics::Instance& graphics_instance,
-    Primitive_interface&      primitive_interface
-)
+Primitive_buffer::Primitive_buffer(erhe::graphics::Instance& graphics_instance, Primitive_interface& primitive_interface)
     : Multi_buffer         {graphics_instance, "primitive"}
     , m_primitive_interface{primitive_interface}
 {
@@ -69,8 +63,10 @@ auto Primitive_buffer::id_ranges() const -> const std::vector<Id_range>&
 
 auto Primitive_buffer::update(
     const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    erhe::primitive::Primitive_mode                            primitive_mode,
     const erhe::Item_filter&                                   filter,
     const Primitive_interface_settings&                        settings,
+    std::size_t&                                               out_primitive_count,
     bool                                                       use_id_ranges
 ) -> erhe::renderer::Buffer_range
 {
@@ -82,6 +78,8 @@ auto Primitive_buffer::update(
     //     meshes.size(),
     //     m_writer.write_offset
     // );
+
+    out_primitive_count = 0;
 
     std::size_t primitive_count = 0;
     std::size_t mesh_index = 0;
@@ -109,6 +107,7 @@ auto Primitive_buffer::update(
     const std::size_t max_byte_count     = primitive_count * entry_size;
     const auto        primitive_gpu_data = m_writer.begin(&buffer, max_byte_count);
     std::size_t primitive_index    = 0;
+    mesh_index = 0;
     for (const auto& mesh : meshes) {
         ++mesh_index;
 
@@ -143,7 +142,8 @@ auto Primitive_buffer::update(
             }
 
             const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
-            const uint32_t count         = static_cast<uint32_t>(renderable_mesh.triangle_fill_indices.index_count);
+            const erhe::primitive::Index_range      index_range     = renderable_mesh.index_range(primitive_mode);
+            const uint32_t count         = static_cast<uint32_t>(index_range.index_count);
             if (count == 0) {
                 continue;
             }
@@ -214,13 +214,13 @@ auto Primitive_buffer::update(
                 m_id_offset += count;
             }
             ++primitive_index;
+            ++out_primitive_count;
         }
     }
 
     m_writer.end();
 
     // SPDLOG_LOGGER_TRACE(log_primitive_buffer, "wrote {} entries to primitive buffer", primitive_index);
-
     return m_writer.range;
 }
 

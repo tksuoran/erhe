@@ -10,16 +10,9 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-////#if defined(ERHE_GUI_LIBRARY_IMGUI)
-////#   include <imgui/imgui.h>
-////#endif
+namespace erhe::renderer {
 
-namespace erhe::renderer
-{
-
-Draw_indirect_buffer::Draw_indirect_buffer(
-    erhe::graphics::Instance& graphics_instance
-)
+Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance)
     : Multi_buffer{graphics_instance, "draw indirect"}
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
@@ -64,6 +57,12 @@ auto Draw_indirect_buffer::update(
     std::size_t       draw_indirect_count{0};
     
     for (const auto& mesh : meshes) {
+        const auto* node = mesh->get_node();
+
+        if (node == nullptr) {
+            continue;
+        }
+
         if (!filter(mesh->get_flag_bits())) {
             continue;
         }

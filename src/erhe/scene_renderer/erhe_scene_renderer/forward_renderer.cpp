@@ -207,10 +207,14 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 continue;
             }
 
-            const auto primitive_range            = m_primitive_buffers.update(meshes, filter, parameters.primitive_settings);
+            std::size_t primitive_count{0};
+            const auto primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, filter, parameters.primitive_settings, primitive_count);
             const auto draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, filter);
             if (draw_indirect_buffer_range.draw_indirect_count == 0) {
                 continue;
+            }
+            if (primitive_count != draw_indirect_buffer_range.draw_indirect_count) {
+                log_render->warn("primitive_count != draw_indirect_buffer_range.draw_indirect_count");
             }
             m_primitive_buffers.bind(primitive_range);
             m_draw_indirect_buffers.bind(draw_indirect_buffer_range.range);

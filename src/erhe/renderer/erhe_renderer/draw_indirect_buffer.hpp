@@ -6,7 +6,6 @@
 namespace erhe {
     class Item_filter;
 }
-
 namespace erhe::scene {
     class Mesh;
 }
