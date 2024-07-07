@@ -17,8 +17,7 @@ class Editor_context;
 class Headset_view;
 class Rendertarget_mesh;
 
-class Rendertarget_imgui_viewport
-    : public erhe::imgui::Imgui_viewport
+class Rendertarget_imgui_viewport : public erhe::imgui::Imgui_viewport
 {
 public:
     Rendertarget_imgui_viewport(

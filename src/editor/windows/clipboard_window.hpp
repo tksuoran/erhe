@@ -10,8 +10,7 @@ namespace editor {
 
 class Editor_context;
 
-class Clipboard_window
-    : public erhe::imgui::Imgui_window
+class Clipboard_window : public erhe::imgui::Imgui_window
 {
 public:
     Clipboard_window(

@@ -40,10 +40,7 @@ namespace editor
 class Scene_builder;
 
 #pragma region Commands
-Physics_tool_drag_command::Physics_tool_drag_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Physics_tool_drag_command::Physics_tool_drag_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Physics_tool.drag"}
     , m_context{context}
 {

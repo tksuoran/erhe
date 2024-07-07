@@ -22,8 +22,7 @@ class Menu_window;
 class Tile_renderer;
 class Tiles;
 
-class New_game_window
-    : public erhe::imgui::Imgui_window
+class New_game_window : public erhe::imgui::Imgui_window
 {
 public:
     New_game_window(

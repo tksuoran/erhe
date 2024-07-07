@@ -53,10 +53,7 @@ using glm::vec4;
 using erhe::geometry::Polygon; // Resolve conflict with wingdi.h BOOL Polygon(HDC,const POINT *,int)
 
 #pragma region Commands
-Brush_tool_preview_command::Brush_tool_preview_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Brush_tool_preview_command::Brush_tool_preview_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Brush_tool.motion_preview"}
     , m_context{context}
 {
@@ -74,10 +71,7 @@ auto Brush_tool_preview_command::try_call() -> bool
     return true;
 }
 
-Brush_tool_insert_command::Brush_tool_insert_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Brush_tool_insert_command::Brush_tool_insert_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Brush_tool.insert"}
     , m_context{context}
 {

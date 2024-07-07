@@ -24,8 +24,7 @@ class Viewport_window;
 
 // TODO Think about Shadow_render_node / Shadow_renderer relationship,
 //      should Shadow_render_node have more state?
-class Shadow_render_node
-    : public erhe::rendergraph::Rendergraph_node
+class Shadow_render_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     Shadow_render_node(

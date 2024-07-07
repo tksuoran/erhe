@@ -42,8 +42,7 @@ class Tools;
 class Viewport_windows;
 class Headset_view;
 
-class Toggle_menu_visibility_command
-    : public erhe::commands::Command
+class Toggle_menu_visibility_command : public erhe::commands::Command
 {
 public:
     Toggle_menu_visibility_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -53,8 +52,7 @@ private:
     Editor_context& m_context;
 };
 
-class Hotbar_trackpad_command
-    : public erhe::commands::Command
+class Hotbar_trackpad_command : public erhe::commands::Command
 {
 public:
     Hotbar_trackpad_command(erhe::commands::Commands& commands, Editor_context& context);

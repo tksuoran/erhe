@@ -14,8 +14,7 @@ class Node;
 class Scene;
 class Skin;
 
-class Scene_host
-    : public erhe::Item_host
+class Scene_host : public erhe::Item_host
 {
 public:
     ~Scene_host() noexcept override;

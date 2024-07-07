@@ -44,10 +44,7 @@ namespace editor
 {
 
 #pragma region Commands
-Paint_vertex_command::Paint_vertex_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Paint_vertex_command::Paint_vertex_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Paint_tool.paint_vertex"}
     , m_context{context}
 {

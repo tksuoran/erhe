@@ -11,8 +11,7 @@ namespace editor {
 class Editor_context;
 
 // ImGui window for showing downsample steps for a Post_processing node
-class Post_processing_window
-    : public erhe::imgui::Imgui_window
+class Post_processing_window : public erhe::imgui::Imgui_window
 {
 public:
     Post_processing_window(

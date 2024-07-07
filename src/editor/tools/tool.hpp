@@ -25,8 +25,7 @@ public:
     static constexpr uint64_t allow_secondary = (1u << 4);
 };
 
-class Tool
-    : public erhe::commands::Command_host
+class Tool : public erhe::commands::Command_host
 {
 public:
     explicit Tool(Editor_context& editor_context);

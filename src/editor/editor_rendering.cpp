@@ -49,10 +49,7 @@ using erhe::graphics::Color_blend_state;
 
 
 #pragma region Commands
-Capture_frame_command::Capture_frame_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Capture_frame_command::Capture_frame_command(erhe::commands::Commands& commands, Editor_context& editor_context)
     : Command  {commands, "editor.capture_frame"}
     , m_context{editor_context}
 {

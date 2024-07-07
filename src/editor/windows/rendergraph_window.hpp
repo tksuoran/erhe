@@ -13,8 +13,7 @@ namespace editor {
 
 class Editor_context;
 
-class Rendergraph_window
-    : public erhe::imgui::Imgui_window
+class Rendergraph_window : public erhe::imgui::Imgui_window
 {
 public:
     Rendergraph_window(

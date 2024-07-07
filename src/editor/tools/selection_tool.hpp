@@ -31,8 +31,7 @@ class Icon_set;
 class Selection;
 class Tools;
 
-class Selection_delete_command
-    : public erhe::commands::Command
+class Selection_delete_command : public erhe::commands::Command
 {
 public:
     Selection_delete_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -42,8 +41,7 @@ private:
     Editor_context& m_context;
 };
 
-class Selection_cut_command
-    : public erhe::commands::Command
+class Selection_cut_command : public erhe::commands::Command
 {
 public:
     Selection_cut_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -53,42 +51,30 @@ private:
     Editor_context& m_context;
 };
 
-class Selection_copy_command
-    : public erhe::commands::Command
+class Selection_copy_command : public erhe::commands::Command
 {
 public:
-    Selection_copy_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Selection_copy_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
     Editor_context& m_context;
 };
 
-class Selection_duplicate_command
-    : public erhe::commands::Command
+class Selection_duplicate_command : public erhe::commands::Command
 {
 public:
-    Selection_duplicate_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Selection_duplicate_command(erhe::commands::Commands& commands, Editor_context& context);
     auto try_call() -> bool override;
 
 private:
     Editor_context& m_context;
 };
 
-class Viewport_select_command
-    : public erhe::commands::Command
+class Viewport_select_command : public erhe::commands::Command
 {
 public:
-    Viewport_select_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Viewport_select_command(erhe::commands::Commands& commands, Editor_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
@@ -96,14 +82,10 @@ private:
     Editor_context& m_context;
 };
 
-class Viewport_select_toggle_command
-    : public erhe::commands::Command
+class Viewport_select_toggle_command : public erhe::commands::Command
 {
 public:
-    Viewport_select_toggle_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context
-    );
+    Viewport_select_toggle_command(erhe::commands::Commands& commands, Editor_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
@@ -161,8 +143,7 @@ private:
     Selection& selection;
 };
 
-class Selection
-    : public erhe::commands::Command_host
+class Selection : public erhe::commands::Command_host
 {
 public:
     Selection(
@@ -172,10 +153,7 @@ public:
     );
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    void setup_xr_bindings(
-        erhe::commands::Commands& commands,
-        Headset_view&             headset_view
-    );
+    void setup_xr_bindings(erhe::commands::Commands& commands, Headset_view& headset_view);
 #endif
 
     // Public API

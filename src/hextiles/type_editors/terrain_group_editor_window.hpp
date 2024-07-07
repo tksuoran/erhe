@@ -12,8 +12,7 @@ class Menu_window;
 class Tiles;
 class Type_editor;
 
-class Terrain_group_editor_window
-    : public erhe::imgui::Imgui_window
+class Terrain_group_editor_window : public erhe::imgui::Imgui_window
 {
 public:
     Terrain_group_editor_window(

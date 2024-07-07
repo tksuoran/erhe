@@ -105,8 +105,7 @@
 
 namespace editor {
 
-class Editor
-    : public erhe::window::Window_event_handler
+class Editor : public erhe::window::Window_event_handler
 {
 public:
     // Implements Window_event_handler

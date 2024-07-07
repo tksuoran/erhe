@@ -37,8 +37,7 @@ class Renderable;
 class Scene_view;
 class Shadow_render_node;
 
-class Capture_frame_command
-    : public erhe::commands::Command
+class Capture_frame_command : public erhe::commands::Command
 {
 public:
     Capture_frame_command(erhe::commands::Commands& commands, Editor_context& context);

@@ -41,8 +41,7 @@ class Tools;
 class Transform_tool;
 class Viewport_window;
 
-class Transform_tool_drag_command
-    : public erhe::commands::Command
+class Transform_tool_drag_command : public erhe::commands::Command
 {
 public:
     Transform_tool_drag_command(erhe::commands::Commands& commands, Editor_context& context);

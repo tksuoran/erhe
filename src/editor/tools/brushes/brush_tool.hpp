@@ -19,8 +19,7 @@ class Render_context;
 class Tools;
 class Headset_view;
 
-class Brush_tool_preview_command
-    : public erhe::commands::Command
+class Brush_tool_preview_command : public erhe::commands::Command
 {
 public:
     Brush_tool_preview_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -30,8 +29,7 @@ private:
     Editor_context& m_context;
 };
 
-class Brush_tool_insert_command
-    : public erhe::commands::Command
+class Brush_tool_insert_command : public erhe::commands::Command
 {
 public:
     Brush_tool_insert_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -42,8 +40,7 @@ private:
     Editor_context& m_context;
 };
 
-class Brush_tool
-    : public Tool
+class Brush_tool : public Tool
 {
 public:
     static constexpr int c_priority{4};

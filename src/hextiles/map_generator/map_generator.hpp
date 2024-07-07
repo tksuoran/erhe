@@ -23,8 +23,7 @@ class Map;
 class Map_editor;
 class Tiles;
 
-class Map_generator
-    : public erhe::imgui::Imgui_window
+class Map_generator : public erhe::imgui::Imgui_window
 {
 public:
     Map_generator(

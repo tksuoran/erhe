@@ -38,8 +38,7 @@ class Mouse_motion_binding;
 class Mouse_wheel_binding;
 class Update_binding;
 
-class Commands
-    : public erhe::window::Window_event_handler
+class Commands : public erhe::window::Window_event_handler
 {
 public:
     // Implements Window_event_handler

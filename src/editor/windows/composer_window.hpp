@@ -10,8 +10,7 @@ namespace editor {
 
 class Editor_context;
 
-class Composer_window
-    : public erhe::imgui::Imgui_window
+class Composer_window : public erhe::imgui::Imgui_window
 {
 public:
     Composer_window(

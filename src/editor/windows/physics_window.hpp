@@ -14,8 +14,7 @@ class Selection_tool;
 class Tools;
 class Viewport_windows;
 
-class Physics_window
-    : public erhe::imgui::Imgui_window
+class Physics_window : public erhe::imgui::Imgui_window
 {
 public:
     Physics_window(

@@ -10,8 +10,7 @@ namespace hextiles {
 
 class Map_editor;
 
-class Terrain_palette_window
-    : public erhe::imgui::Imgui_window
+class Terrain_palette_window : public erhe::imgui::Imgui_window
 {
 public:
     Terrain_palette_window(

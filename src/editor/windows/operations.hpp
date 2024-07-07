@@ -59,8 +59,7 @@ struct Tool_slot
 
 class Editor_context;
 
-class Operations
-    : public erhe::imgui::Imgui_window
+class Operations : public erhe::imgui::Imgui_window
 {
 public:
     Operations(

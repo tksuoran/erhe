@@ -6,8 +6,7 @@ namespace editor {
 
 class Editor_context;
 
-class Debug_draw
-    : public erhe::physics::IDebug_draw
+class Debug_draw : public erhe::physics::IDebug_draw
 {
 public:
     explicit Debug_draw(Editor_context& editor_context);

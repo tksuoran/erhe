@@ -26,10 +26,7 @@ using erhe::Item_flags;
 
 #pragma region Command
 
-Create_new_camera_command::Create_new_camera_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Create_new_camera_command::Create_new_camera_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "scene.create_new_camera"}
     , m_context{context}
 {
@@ -40,10 +37,7 @@ auto Create_new_camera_command::try_call() -> bool
     return m_context.scene_commands->create_new_camera().operator bool();
 }
 
-Create_new_empty_node_command::Create_new_empty_node_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Create_new_empty_node_command::Create_new_empty_node_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "scene.create_new_empty_node"}
     , m_context{context}
 {
@@ -54,10 +48,7 @@ auto Create_new_empty_node_command::try_call() -> bool
     return m_context.scene_commands->create_new_empty_node().operator bool();
 }
 
-Create_new_light_command::Create_new_light_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Create_new_light_command::Create_new_light_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "scene.create_new_light"}
     , m_context{context}
 {
@@ -69,10 +60,7 @@ auto Create_new_light_command::try_call() -> bool
 }
 #pragma endregion Command
 
-Scene_commands::Scene_commands(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Scene_commands::Scene_commands(erhe::commands::Commands& commands, Editor_context& editor_context)
     : m_context                      {editor_context}
     , m_create_new_camera_command    {commands, editor_context}
     , m_create_new_empty_node_command{commands, editor_context}

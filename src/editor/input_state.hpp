@@ -6,8 +6,7 @@
 
 namespace editor {
 
-class Input_state
-    : public erhe::window::Window_event_handler
+class Input_state : public erhe::window::Window_event_handler
 {
 public:
     // Implements Window_event_handler

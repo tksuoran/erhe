@@ -12,8 +12,7 @@ class Menu_window;
 class Tiles;
 class Type_editor;
 
-class Terrain_replacement_rule_editor_window
-    : public erhe::imgui::Imgui_window
+class Terrain_replacement_rule_editor_window : public erhe::imgui::Imgui_window
 {
 public:
     Terrain_replacement_rule_editor_window(

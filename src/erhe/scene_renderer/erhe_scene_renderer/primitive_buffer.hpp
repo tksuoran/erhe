@@ -97,8 +97,7 @@ public:
     float                  constant_size {1.0f};
 };
 
-class Primitive_buffer
-    : public erhe::renderer::Multi_buffer
+class Primitive_buffer : public erhe::renderer::Multi_buffer
 {
 public:
     Primitive_buffer(erhe::graphics::Instance& graphics_instance, Primitive_interface& primitive_interface);

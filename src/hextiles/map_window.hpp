@@ -33,8 +33,7 @@ class Map;
 class Map_window;
 class Tile_renderer;
 
-class Map_scroll_command final
-    : public erhe::commands::Command
+class Map_scroll_command final : public erhe::commands::Command
 {
 public:
     Map_scroll_command(
@@ -94,8 +93,7 @@ private:
     Map_window& m_map_window;
 };
 
-class Map_window
-    : public erhe::imgui::Framebuffer_window
+class Map_window : public erhe::imgui::Framebuffer_window
 {
 public:
     Map_window(

@@ -29,8 +29,7 @@ class Editor_context;
 class Node_physics;
 class Rendertarget_mesh;
 
-class Properties
-    : public erhe::imgui::Imgui_window
+class Properties : public erhe::imgui::Imgui_window
 {
 public:
     Properties(

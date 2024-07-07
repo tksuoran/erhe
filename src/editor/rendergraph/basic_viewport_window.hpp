@@ -18,8 +18,7 @@ namespace editor {
 class Viewport_window;
 class Viewport_windows;
 
-class Basic_viewport_window
-    : public erhe::rendergraph::Sink_rendergraph_node
+class Basic_viewport_window : public erhe::rendergraph::Sink_rendergraph_node
 {
 public:
     Basic_viewport_window(

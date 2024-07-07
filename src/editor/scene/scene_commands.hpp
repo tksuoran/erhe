@@ -39,8 +39,7 @@ class Scene_root;
 class Selection_tool;
 class Viewport_windows;
 
-class Create_new_camera_command
-    : public erhe::commands::Command
+class Create_new_camera_command : public erhe::commands::Command
 {
 public:
     Create_new_camera_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -50,8 +49,7 @@ private:
     Editor_context& m_context;
 };
 
-class Create_new_empty_node_command
-    : public erhe::commands::Command
+class Create_new_empty_node_command : public erhe::commands::Command
 {
 public:
     Create_new_empty_node_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -61,8 +59,7 @@ private:
     Editor_context& m_context;
 };
 
-class Create_new_light_command
-    : public erhe::commands::Command
+class Create_new_light_command : public erhe::commands::Command
 {
 public:
     Create_new_light_command(erhe::commands::Commands& commands, Editor_context& context);

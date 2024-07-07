@@ -25,8 +25,7 @@ class Fly_camera_tool;
 class Tools;
 class Viewport_windows;
 
-class Fly_camera_turn_command
-    : public erhe::commands::Command
+class Fly_camera_turn_command : public erhe::commands::Command
 {
 public:
     Fly_camera_turn_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -37,8 +36,7 @@ private:
     Editor_context& m_context;
 };
 
-class Fly_camera_tumble_command
-    : public erhe::commands::Command
+class Fly_camera_tumble_command : public erhe::commands::Command
 {
 public:
     Fly_camera_tumble_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -50,8 +48,7 @@ private:
     Editor_context& m_context;
 };
 
-class Fly_camera_track_command
-    : public erhe::commands::Command
+class Fly_camera_track_command : public erhe::commands::Command
 {
 public:
     Fly_camera_track_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -62,8 +59,7 @@ private:
     Editor_context& m_context;
 };
 
-class Fly_camera_zoom_command
-    : public erhe::commands::Command
+class Fly_camera_zoom_command : public erhe::commands::Command
 {
 public:
     Fly_camera_zoom_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -74,8 +70,7 @@ private:
     Editor_context& m_context;
 };
 
-class Fly_camera_frame_command
-    : public erhe::commands::Command
+class Fly_camera_frame_command : public erhe::commands::Command
 {
 public:
     Fly_camera_frame_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -85,8 +80,7 @@ private:
     Editor_context& m_context;
 };
 
-class Fly_camera_move_command
-    : public erhe::commands::Command
+class Fly_camera_move_command : public erhe::commands::Command
 {
 public:
     Fly_camera_move_command(

@@ -14,8 +14,7 @@ namespace editor {
 
 class Editor_context;
 
-class Viewport_config_window
-    : public erhe::imgui::Imgui_window
+class Viewport_config_window : public erhe::imgui::Imgui_window
 {
 public:
     static constexpr const char* c_visualization_mode_strings[] = {

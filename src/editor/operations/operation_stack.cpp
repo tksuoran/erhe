@@ -14,18 +14,14 @@
 
 #include <taskflow/taskflow.hpp>
 
-namespace editor
-{
+namespace editor {
 
 IOperation::~IOperation() noexcept
 {
 }
 
 #pragma region Commands
-Undo_command::Undo_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Undo_command::Undo_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "undo"}
     , m_context{context}
 {
@@ -41,10 +37,7 @@ auto Undo_command::try_call() -> bool
     }
 }
 
-Redo_command::Redo_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Redo_command::Redo_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "redo"}
     , m_context{context}
 {

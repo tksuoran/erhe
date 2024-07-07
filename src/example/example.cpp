@@ -40,8 +40,7 @@
 
 namespace example {
 
-class Example
-    : public erhe::window::Window_event_handler
+class Example : public erhe::window::Window_event_handler
 {
 public:
     virtual auto get_name() const -> const char* { return "Example"; }

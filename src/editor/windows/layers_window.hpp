@@ -10,8 +10,7 @@ namespace editor {
 
 class Editor_context;
 
-class Layers_window
-    : public erhe::imgui::Imgui_window
+class Layers_window : public erhe::imgui::Imgui_window
 {
 public:
     Layers_window(

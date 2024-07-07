@@ -26,8 +26,7 @@ namespace editor {
 
 class Paint_tool;
 
-class Paint_vertex_command
-    : public erhe::commands::Command
+class Paint_vertex_command : public erhe::commands::Command
 {
 public:
     Paint_vertex_command(erhe::commands::Commands& commands, Editor_context& context);

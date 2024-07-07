@@ -13,13 +13,9 @@
 
 #include <fmt/format.h>
 
-namespace hextiles
-{
+namespace hextiles {
 
-Map_primary_brush_command::Map_primary_brush_command(
-    erhe::commands::Commands& commands,
-    Map_editor&               map_editor
-)
+Map_primary_brush_command::Map_primary_brush_command(erhe::commands::Commands& commands, Map_editor& map_editor)
     : Command   {commands, "Map_editor.primary_brush"}
     , map_editor{map_editor}
 {
@@ -54,10 +50,7 @@ auto Map_primary_brush_command::try_call_with_input(erhe::commands::Input_argume
     return try_call();
 }
 
-Map_hover_command::Map_hover_command(
-    erhe::commands::Commands& commands,
-    Map_editor&               map_editor
-)
+Map_hover_command::Map_hover_command(erhe::commands::Commands& commands, Map_editor& map_editor)
     : Command   {commands, "Map_editor.hover"}
     , map_editor{map_editor}
 {

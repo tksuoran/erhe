@@ -38,8 +38,7 @@ enum class Physics_tool_mode : int {
     Pull = 2
 };
 
-class Physics_tool_drag_command
-    : public erhe::commands::Command
+class Physics_tool_drag_command : public erhe::commands::Command
 {
 public:
     Physics_tool_drag_command(erhe::commands::Commands& commands, Editor_context& context);

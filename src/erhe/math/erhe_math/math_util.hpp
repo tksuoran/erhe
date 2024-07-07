@@ -762,8 +762,7 @@ void calculate_bounding_volume(
     Bounding_sphere&              bounding_sphere
 );
 
-class Bounding_volume_combiner
-    : public erhe::math::Bounding_volume_source
+class Bounding_volume_combiner : public erhe::math::Bounding_volume_source
 {
 public:
     Bounding_volume_combiner()

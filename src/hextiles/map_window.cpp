@@ -31,10 +31,7 @@ namespace hextiles
 {
 
 #pragma region commands
-Map_free_zoom_command::Map_free_zoom_command(
-    erhe::commands::Commands& commands,
-    Map_window&               map_window
-)
+Map_free_zoom_command::Map_free_zoom_command(erhe::commands::Commands& commands, Map_window& map_window)
     : Command     {commands, "Map.hover"}
     , m_map_window{map_window}
 {
@@ -55,10 +52,7 @@ auto Map_free_zoom_command::try_call_with_input(erhe::commands::Input_arguments&
     return true;
 }
 
-Map_mouse_scroll_command::Map_mouse_scroll_command(
-    erhe::commands::Commands& commands,
-    Map_window&               map_window
-)
+Map_mouse_scroll_command::Map_mouse_scroll_command(erhe::commands::Commands& commands, Map_window& map_window)
     : Command     {commands, "Map.mouse_scroll"}
     , m_map_window{map_window}
 {

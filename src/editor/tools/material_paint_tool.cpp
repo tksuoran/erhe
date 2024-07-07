@@ -27,10 +27,7 @@ namespace editor
 
 #pragma region Command
 
-Material_paint_command::Material_paint_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Material_paint_command::Material_paint_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Material_paint.paint"}
     , m_context{context}
 {
@@ -74,10 +71,7 @@ void Material_pick_command::try_ready()
     }
 }
 
-Material_pick_command::Material_pick_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Material_pick_command::Material_pick_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Material_paint.pick"}
     , m_context{context}
 {

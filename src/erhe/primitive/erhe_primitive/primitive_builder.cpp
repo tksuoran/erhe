@@ -179,8 +179,7 @@ void Build_context_root::allocate_index_buffer()
     );
 }
 
-class Geometry_point_source
-    : public erhe::math::Bounding_volume_source
+class Geometry_point_source : public erhe::math::Bounding_volume_source
 {
 public:
     Geometry_point_source(

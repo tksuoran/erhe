@@ -12,8 +12,7 @@ class Menu_window;
 class Tiles;
 class Type_editor;
 
-class Unit_editor_window
-    : public erhe::imgui::Imgui_window
+class Unit_editor_window : public erhe::imgui::Imgui_window
 {
 public:
     Unit_editor_window(

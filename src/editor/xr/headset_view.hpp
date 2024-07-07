@@ -54,8 +54,7 @@ public:
     float     trigger_value{0.0f};
 };
 
-class Headset_view_node
-    : public erhe::rendergraph::Rendergraph_node
+class Headset_view_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     Headset_view_node(erhe::rendergraph::Rendergraph& rendergraph, Headset_view& headset_view);

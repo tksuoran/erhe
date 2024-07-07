@@ -56,8 +56,7 @@ public:
 };
 
 /// Rendergraph_node for applying bloom and tonemap.
-class Post_processing_node
-    : public erhe::rendergraph::Rendergraph_node
+class Post_processing_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     Post_processing_node(

@@ -20,8 +20,7 @@ class Editor_context;
 class Editor_message_bus;
 class Tools;
 
-class Clipboard_paste_command
-    : public erhe::commands::Command
+class Clipboard_paste_command : public erhe::commands::Command
 {
 public:
     Clipboard_paste_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -33,8 +32,7 @@ private:
     Editor_context& m_context;
 };
 
-class Clipboard
-    : public erhe::commands::Command_host
+class Clipboard : public erhe::commands::Command_host
 {
 public:
     Clipboard(erhe::commands::Commands& commands, Editor_context& context);

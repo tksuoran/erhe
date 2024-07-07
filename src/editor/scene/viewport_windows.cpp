@@ -59,10 +59,7 @@ using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
 #pragma region Commands
-Open_new_viewport_window_command::Open_new_viewport_window_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Open_new_viewport_window_command::Open_new_viewport_window_command(erhe::commands::Commands& commands, Editor_context& editor_context)
     : Command  {commands, "Viewport_windows.open_new_viewport_window"}
     , m_context{editor_context}
 {

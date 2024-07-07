@@ -37,8 +37,7 @@ class Viewport_windows;
 
 class Hud;
 
-class Toggle_hud_visibility_command
-    : public erhe::commands::Command
+class Toggle_hud_visibility_command : public erhe::commands::Command
 {
 public:
     Toggle_hud_visibility_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -48,8 +47,7 @@ private:
     Editor_context& m_context;
 };
 
-class Hud_drag_command
-    : public erhe::commands::Command
+class Hud_drag_command : public erhe::commands::Command
 {
 public:
     Hud_drag_command(erhe::commands::Commands& commands, Editor_context& context);

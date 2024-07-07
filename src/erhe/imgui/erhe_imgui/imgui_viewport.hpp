@@ -98,8 +98,7 @@ public:
 /// Each Imgui_viewport is a Rendergraph_node and as such must implement
 /// execute_rendergraph_node() method for rendering ImGui data with
 /// Imgui_renderer::render_draw_data().
-class Imgui_viewport
-    : public erhe::rendergraph::Rendergraph_node
+class Imgui_viewport : public erhe::rendergraph::Rendergraph_node
 {
 public:
     Imgui_viewport(

@@ -19,8 +19,7 @@ enum class Control : unsigned int {
     rotate_z    = 5
 };
 
-class Frame_controller
-    : public erhe::scene::Node_attachment
+class Frame_controller : public erhe::scene::Node_attachment
 {
 public:
     Frame_controller();

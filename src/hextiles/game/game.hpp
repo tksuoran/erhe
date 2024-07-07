@@ -79,8 +79,7 @@ private:
     int   m_direction;
 };
 
-class Game
-    : public erhe::imgui::Imgui_window
+class Game : public erhe::imgui::Imgui_window
 {
 public:
     Game(

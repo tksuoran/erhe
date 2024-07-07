@@ -6,8 +6,7 @@
 
 namespace editor {
 
-class Editor_message_bus
-    : public erhe::message_bus::Message_bus<Editor_message>
+class Editor_message_bus : public erhe::message_bus::Message_bus<Editor_message>
 {
 public:
     Editor_message_bus();

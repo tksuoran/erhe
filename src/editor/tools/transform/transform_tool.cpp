@@ -68,10 +68,7 @@ using Trs_transform = erhe::scene::Trs_transform;
 
 #pragma region Commands
 
-Transform_tool_drag_command::Transform_tool_drag_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Transform_tool_drag_command::Transform_tool_drag_command(erhe::commands::Commands& commands, Editor_context& editor_context)
     : Command  {commands, "Transform_tool.drag"}
     , m_context{editor_context}
 {

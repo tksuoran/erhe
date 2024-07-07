@@ -42,8 +42,7 @@ public:
     std::size_t                     max_joint_count{1000};
 };
 
-class Joint_buffer
-    : public erhe::renderer::Multi_buffer
+class Joint_buffer : public erhe::renderer::Multi_buffer
 {
 public:
     Joint_buffer(erhe::graphics::Instance& graphics_instance, Joint_interface& joint_interface);

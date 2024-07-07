@@ -12,8 +12,7 @@ namespace editor {
 
 class Editor_context;
 
-class Settings_window
-    : public erhe::imgui::Imgui_window
+class Settings_window : public erhe::imgui::Imgui_window
 {
 public:
     Settings_window(

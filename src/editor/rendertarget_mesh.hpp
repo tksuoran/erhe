@@ -34,8 +34,7 @@ class Scene_view;
 class Viewport_config_window;
 class Viewport_window;
 
-class Rendertarget_mesh
-    : public erhe::scene::Mesh
+class Rendertarget_mesh : public erhe::scene::Mesh
 {
 public:
     Rendertarget_mesh(

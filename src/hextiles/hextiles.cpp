@@ -38,8 +38,7 @@
 
 namespace hextiles {
 
-class Hextiles
-    : public erhe::window::Window_event_handler
+class Hextiles : public erhe::window::Window_event_handler
 {
 public:
     auto get_name() const -> const char* override { return "Hextiles"; }

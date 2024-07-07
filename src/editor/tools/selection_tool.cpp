@@ -141,10 +141,7 @@ void Range_selection::reset()
 #pragma endregion Range_selection
 #pragma region Commands
 
-Viewport_select_command::Viewport_select_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Viewport_select_command::Viewport_select_command(erhe::commands::Commands& commands, Editor_context& editor_context)
     : Command  {commands, "Selection.viewport_select"}
     , m_context{editor_context}
 {
@@ -173,10 +170,7 @@ auto Viewport_select_command::try_call() -> bool
 
 //
 
-Viewport_select_toggle_command::Viewport_select_toggle_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Viewport_select_toggle_command::Viewport_select_toggle_command(erhe::commands::Commands& commands, Editor_context& editor_context)
     : Command  {commands, "Selection.viewport_select_toggle"}
     , m_context{editor_context}
 {
@@ -203,10 +197,7 @@ auto Viewport_select_toggle_command::try_call() -> bool
 
 //
 
-Selection_delete_command::Selection_delete_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Selection_delete_command::Selection_delete_command(erhe::commands::Commands& commands, Editor_context& editor_context)
     : Command  {commands, "Selection.delete"}
     , m_context{editor_context}
 {
@@ -219,10 +210,7 @@ auto Selection_delete_command::try_call() -> bool
 
 //
 
-Selection_cut_command::Selection_cut_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Selection_cut_command::Selection_cut_command(erhe::commands::Commands& commands, Editor_context& editor_context)
     : Command  {commands, "Selection.cut"}
     , m_context{editor_context}
 {
@@ -235,10 +223,7 @@ auto Selection_cut_command::try_call() -> bool
 
 //
 
-Selection_copy_command::Selection_copy_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Selection_copy_command::Selection_copy_command(erhe::commands::Commands& commands, Editor_context& editor_context)
     : Command  {commands, "Selection.copy"}
     , m_context{editor_context}
 {
@@ -251,10 +236,7 @@ auto Selection_copy_command::try_call() -> bool
 
 //
 
-Selection_duplicate_command::Selection_duplicate_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           editor_context
-)
+Selection_duplicate_command::Selection_duplicate_command(erhe::commands::Commands& commands, Editor_context& editor_context)
     : Command  {commands, "Selection.duplicate"}
     , m_context{editor_context}
 {
@@ -322,10 +304,7 @@ Selection::Selection(
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-void Selection::setup_xr_bindings(
-    erhe::commands::Commands& commands,
-    Headset_view&             headset_view
-)
+void Selection::setup_xr_bindings(erhe::commands::Commands& commands, Headset_view& headset_view)
 {
     const auto* headset = headset_view.get_headset();
     if (headset != nullptr) {

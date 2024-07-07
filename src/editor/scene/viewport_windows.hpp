@@ -40,8 +40,7 @@ class Viewport_config_window;
 class Viewport_window;
 class Viewport_windows;
 
-class Open_new_viewport_window_command
-    : public erhe::commands::Command
+class Open_new_viewport_window_command : public erhe::commands::Command
 {
 public:
     Open_new_viewport_window_command(erhe::commands::Commands& commands, Editor_context& editor_context);
@@ -57,8 +56,7 @@ private:
 // All Viewport_window instances should be created using Viewport_windows.
 // Keeps track of the Viewport_window that is currently under pointer
 // (mouse cursor).
-class Viewport_windows
-    : erhe::commands::Command_host
+class Viewport_windows : erhe::commands::Command_host
 {
 public:
     Viewport_windows(

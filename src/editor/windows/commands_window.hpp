@@ -14,8 +14,7 @@ namespace editor {
 
 class Editor_context;
 
-class Commands_window
-    : public erhe::imgui::Imgui_window
+class Commands_window : public erhe::imgui::Imgui_window
 {
 public:
     Commands_window(

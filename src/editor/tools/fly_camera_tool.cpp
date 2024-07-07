@@ -74,10 +74,7 @@ auto Fly_camera_tool::try_ready() -> bool
 }
 
 #pragma region Fly_camera_turn_command
-Fly_camera_turn_command::Fly_camera_turn_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Fly_camera_turn_command::Fly_camera_turn_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Fly_camera.turn_camera"}
     , m_context{context}
 {

@@ -16,13 +16,9 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_scene/scene.hpp"
 
-namespace editor
-{
+namespace editor {
 
-Clipboard_paste_command::Clipboard_paste_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Clipboard_paste_command::Clipboard_paste_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Clipboard.paste"}
     , m_context{context}
 {

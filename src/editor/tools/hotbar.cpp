@@ -1,4 +1,4 @@
-#include "tools/hotbar.hpp"
+﻿#include "tools/hotbar.hpp"
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
@@ -44,35 +44,45 @@
 #endif
 
 // https://math.stackexchange.com/questions/1662616/calculate-the-diameter-of-an-inscribed-circle-inside-a-sector-of-circle
-//
-//                                                                               .
-//    |---___                                          r = (R-r) * sin(theta/2)  .
-//   |    ___---___                                                              .
-//  |   _/         ---___                                                        .
-//  | _/              \_ ---___                            R * sin(theta/2)      .
-// | /                  \      ---___                  r = ----------------      .
-// ||                    |           ---___                1 + sin(theta/2)      .
-// ||   r                |    R-r          ---___                                .
-// +----------X----------+--------------------------                             .
-// ||          \         |                 ___---                                .
-// ||           \        |           ___---                                      .
-// | \           \r     /      ___---                                            .
-//  | \_          \    / ___---                                                  .
-//  |   \_         \__---                                                        .
-//   |    \_____---                                                              .
-//    |___---                                                                    .
-//                                                                               .
-
+//                                                                              .
+// Diameter of an inscribed circle inside a sector of circle:                   .
+//                                                                              .
+//   r = (R-r) * sin(theta/2)                                                   .
+//                                                                              .
+//                                                                              .
+//       R * sin(theta/2)                                                       .
+//   r = ----------------                                                       .
+//       1 + sin(theta/2)                                                       .
+//                                                                              .
+//                                                                              .
+//      :..                                                                     .
+//     :   ˙˙··..                                                               .
+//     :         ˙˙··..                                                         .
+//     :       ..··˙˙˙˙˙˙··..                                                   .
+//    :    .·˙               ˙˙:·..                                             .
+//    :  .˙                     ˙. ˙˙··..                                       .
+//    : .                         ˙.     ˙˙··..                                 .
+//    :.                            ·          ˙˙··..                           .
+//    ::                             :               ˙˙··..                     .
+//    :       r                       :    R-r             ˙˙··..               .
+//    |--------------X----------------+--------------------------::-            .
+//    :               \               :                    ..··˙˙               .
+//    ::               \             :               ..··˙˙                     .
+//    : ·               \           ·          ..··˙˙                           .
+//    :  ˙.              \r       .˙     ..··˙˙                                 .
+//    :    ˙.             \     .˙ ..··˙˙                                       .
+//    :      ˙·.           \ ..··˙˙                                             .
+//     :        ˙··.......··˙                                                   .
+//     :          ..··˙˙                                                        .
+//     :    ..··˙˙                                                              .
+//      :·˙˙                                                                    .
 namespace editor
 {
 
 using glm::vec3;
 
 #pragma region Commmands
-Toggle_menu_visibility_command::Toggle_menu_visibility_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Toggle_menu_visibility_command::Toggle_menu_visibility_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Hotbar.toggle_visibility"}
     , m_context{context}
 {
@@ -84,10 +94,7 @@ auto Toggle_menu_visibility_command::try_call() -> bool
     return true;
 }
 
-Hotbar_trackpad_command::Hotbar_trackpad_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context
-)
+Hotbar_trackpad_command::Hotbar_trackpad_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Hotbar.trackpad"}
     , m_context{context}
 {

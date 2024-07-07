@@ -10,8 +10,7 @@ namespace editor {
 
 class Editor_context;
 
-class Selection_window
-    : public erhe::imgui::Imgui_window
+class Selection_window : public erhe::imgui::Imgui_window
 {
 public:
     Selection_window(

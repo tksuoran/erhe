@@ -30,8 +30,7 @@ class Tiles;
 class Tile_renderer;
 class Map_window;
 
-class Menu_window
-    : public erhe::imgui::Imgui_window
+class Menu_window : public erhe::imgui::Imgui_window
 {
 public:
     Menu_window(

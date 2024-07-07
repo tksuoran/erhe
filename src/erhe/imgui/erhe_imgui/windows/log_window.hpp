@@ -15,20 +15,17 @@
 namespace spdlog::level {
     enum level_enum : int;
 }
+
 namespace erhe::imgui
 {
 
 class Imgui_windows;
 class Logs;
 
-class Logs_toggle_pause_command
-    : public erhe::commands::Command
+class Logs_toggle_pause_command : public erhe::commands::Command
 {
 public:
-    Logs_toggle_pause_command(
-        erhe::commands::Commands& commands,
-        Logs&                     logs
-    );
+    Logs_toggle_pause_command(erhe::commands::Commands& commands, Logs& logs);
 
     auto try_call() -> bool override;
 
@@ -36,8 +33,7 @@ private:
     Logs& m_logs;
 };
 
-class Logs
-    : public erhe::commands::Command_host
+class Logs : public erhe::commands::Command_host
 {
 public:
     Logs(erhe::commands::Commands& commands, Imgui_renderer& imgui_renderer);

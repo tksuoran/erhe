@@ -27,8 +27,7 @@ class Viewport_windows;
 class Headset_view;
 #endif
 
-class Material_paint_command
-    : public erhe::commands::Command
+class Material_paint_command : public erhe::commands::Command
 {
 public:
     Material_paint_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -39,8 +38,7 @@ private:
     Editor_context& m_context;
 };
 
-class Material_pick_command
-    : public erhe::commands::Command
+class Material_pick_command : public erhe::commands::Command
 {
 public:
     Material_pick_command(erhe::commands::Commands& commands, Editor_context& context);

@@ -10,8 +10,7 @@ namespace editor {
 
 class Editor_context;
 
-class Tool_properties_window
-    : public erhe::imgui::Imgui_window
+class Tool_properties_window : public erhe::imgui::Imgui_window
 {
 public:
     Tool_properties_window(

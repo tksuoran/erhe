@@ -50,8 +50,7 @@ public:
     bool need_tree_pop{false};
 };
 
-class Item_tree_window
-    : public erhe::imgui::Imgui_window
+class Item_tree_window : public erhe::imgui::Imgui_window
 {
 public:
     Item_tree_window(

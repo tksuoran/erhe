@@ -46,8 +46,7 @@ private:
     Map_editor& map_editor;
 };
 
-class Map_editor
-    : public erhe::commands::Command_host
+class Map_editor : public erhe::commands::Command_host
 {
 public:
     Map_editor(

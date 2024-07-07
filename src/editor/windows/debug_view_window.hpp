@@ -31,8 +31,7 @@ class Programs;
 class Shadow_render_node;
 
 // Rendergraph processor node for converting depth texture into color texture.
-class Depth_to_color_rendergraph_node
-    : public erhe::rendergraph::Texture_rendergraph_node
+class Depth_to_color_rendergraph_node : public erhe::rendergraph::Texture_rendergraph_node
 {
 public:
     Depth_to_color_rendergraph_node(
@@ -58,8 +57,7 @@ private:
     int                                 m_light_index{};
 };
 
-class Debug_view_node
-    : public erhe::rendergraph::Rendergraph_node
+class Debug_view_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     explicit Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph);
@@ -76,8 +74,7 @@ private:
 };
 
 /// Rendergraph sink node for showing texture in ImGui window
-class Debug_view_window
-    : public erhe::imgui::Imgui_window
+class Debug_view_window : public erhe::imgui::Imgui_window
 {
 public:
     Debug_view_window(

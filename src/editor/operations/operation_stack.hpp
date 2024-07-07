@@ -25,8 +25,7 @@ class Editor_context;
 class Operation_stack;
 class Selection_tool;
 
-class Undo_command
-    : public erhe::commands::Command
+class Undo_command : public erhe::commands::Command
 {
 public:
     Undo_command(erhe::commands::Commands& commands, Editor_context& context);
@@ -36,8 +35,7 @@ private:
     Editor_context& m_context;
 };
 
-class Redo_command
-    : public erhe::commands::Command
+class Redo_command : public erhe::commands::Command
 {
 public:
     Redo_command(erhe::commands::Commands& commands, Editor_context& context);

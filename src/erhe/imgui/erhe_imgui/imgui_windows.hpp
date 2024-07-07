@@ -22,8 +22,7 @@ class Imgui_viewport;
 class Imgui_renderer;
 class Window_imgui_viewport;
 
-class Imgui_windows
-    : public erhe::window::Window_event_handler
+class Imgui_windows : public erhe::window::Window_event_handler
 {
 public:
     // Implements Window_event_handler
