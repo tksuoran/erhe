@@ -27,11 +27,11 @@
 
 #include <fstream>
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 using Bvh = bvh::v2::Bvh<bvh::v2::Node<float, 3>>;
 
+// TODO Add versioning
 auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
 {
     std::string file_name = fmt::format("cache/bvh/{}", hash_code);
@@ -49,6 +49,7 @@ auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
     }
 }
 
+// TODO Add versioning
 auto load_bvh(Bvh& bvh, const uint64_t hash_code) -> bool
 {
     std::string file_name = fmt::format("cache/bvh/{}", hash_code);
@@ -65,34 +66,22 @@ auto load_bvh(Bvh& bvh, const uint64_t hash_code) -> bool
     }
 }
 
-auto IGeometry::create(
-    const std::string_view debug_label,
-    const Geometry_type    geometry_type
-) -> IGeometry*
+auto IGeometry::create(const std::string_view debug_label, const Geometry_type geometry_type) -> IGeometry*
 {
     return new Bvh_geometry(debug_label, geometry_type);
 }
 
-auto IGeometry::create_shared(
-    const std::string_view debug_label,
-    const Geometry_type    geometry_type
-) -> std::shared_ptr<IGeometry>
+auto IGeometry::create_shared(const std::string_view debug_label, const Geometry_type geometry_type) -> std::shared_ptr<IGeometry>
 {
     return std::make_shared<Bvh_geometry>(debug_label, geometry_type);
 }
 
-auto IGeometry::create_unique(
-    const std::string_view debug_label,
-    const Geometry_type    geometry_type
-) -> std::unique_ptr<IGeometry>
+auto IGeometry::create_unique(const std::string_view debug_label, const Geometry_type geometry_type) -> std::unique_ptr<IGeometry>
 {
     return std::make_unique<Bvh_geometry>(debug_label, geometry_type);
 }
 
-Bvh_geometry::Bvh_geometry(
-    const std::string_view debug_label,
-    const Geometry_type    geometry_type
-)
+Bvh_geometry::Bvh_geometry(const std::string_view debug_label, const Geometry_type geometry_type)
     : m_debug_label{debug_label}
 {
     static_cast<void>(geometry_type);
@@ -200,9 +189,8 @@ void Bvh_geometry::commit()
             log_geometry->trace("BVH hash for {} : {:x}", debug_label(), hash_code);
         }
 
-        // TODO For now, bvh cache is disabled.
-        //const bool load_ok = load_bvh(m_bvh, hash_code);
-        //if (!load_ok)
+        const bool load_ok = load_bvh(m_bvh, hash_code);
+        if (!load_ok)
         {
             typename bvh::v2::DefaultBuilder<Node>::Config config;
             config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High; // TODO Low
@@ -224,11 +212,10 @@ void Bvh_geometry::commit()
                 log_geometry->trace("BVH build {} in {} ms", debug_label(), time);
             }
 
-            // TODO for now bvh cache is disabled
-            // const bool save_ok = save_bvh(m_bvh, hash_code);
-            // if (!save_ok) {
-            //     log_geometry->warn("BVH save failed, hash = {}", hash_code);
-            // }
+            const bool save_ok = save_bvh(m_bvh, hash_code);
+            if (!save_ok) {
+                log_geometry->warn("BVH save failed, hash = {}", hash_code);
+            }
         }
 
         // This precomputes some data to speed up traversal further.

@@ -79,17 +79,27 @@ template <typename T>
     return std::span<const T>(&value, 1);
 }
 
-[[nodiscard]] auto Rendertarget_imgui_viewport::rendertarget_mesh() -> Rendertarget_mesh*
+auto Rendertarget_imgui_viewport::rendertarget_mesh() -> Rendertarget_mesh*
 {
     return m_rendertarget_mesh;
 }
 
-[[nodiscard]] auto Rendertarget_imgui_viewport::get_scale_value() const -> float
+auto Rendertarget_imgui_viewport::get_mutable_style() -> ImGuiStyle&
+{
+    return m_imgui_context->Style;
+}
+
+auto Rendertarget_imgui_viewport::get_style() const -> const ImGuiStyle&
+{
+    return m_imgui_context->Style;
+}
+
+auto Rendertarget_imgui_viewport::get_scale_value() const -> float
 {
     return 2.0f;
 }
 
-[[nodiscard]] auto Rendertarget_imgui_viewport::begin_imgui_frame() -> bool
+auto Rendertarget_imgui_viewport::begin_imgui_frame() -> bool
 {
     SPDLOG_LOGGER_TRACE(
         log_rendertarget_imgui_windows,

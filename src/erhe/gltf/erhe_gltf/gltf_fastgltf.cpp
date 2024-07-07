@@ -15,6 +15,7 @@
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/projection.hpp"
@@ -23,6 +24,7 @@
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_time/timer.hpp"
 
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
@@ -31,6 +33,7 @@
 #include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
 
+#include <fmt/chrono.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -304,6 +307,8 @@ auto is_number(std::string_view s) -> bool
 
 auto get_attribute_index(std::string_view lhs, std::string_view rhs) -> std::size_t
 {
+    ERHE_PROFILE_FUNCTION();
+
     bool prefix_match = lhs.starts_with(rhs);
     ERHE_VERIFY(prefix_match);
     std::string_view number_part = lhs.substr(rhs.length());
@@ -324,6 +329,8 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
 
 [[nodiscard]] auto get_attribute_index(std::string_view gltf_attribute_name) -> std::size_t
 {
+    ERHE_PROFILE_FUNCTION();
+
     using Usage_type = erhe::graphics::Vertex_attribute::Usage_type;
 
 #if 0
@@ -365,6 +372,8 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
 
 [[nodiscard]] auto to_erhe(std::string_view gltf_attribute_name) -> erhe::graphics::Vertex_attribute::Usage_type
 {
+    ERHE_PROFILE_FUNCTION();
+
     using Usage_type = erhe::graphics::Vertex_attribute::Usage_type;
 
     static constexpr std::string_view POSITION {"POSITION"};
@@ -410,6 +419,8 @@ void accessor_read_floats(
     std::size_t               component_count_of_out_out_value
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     std::size_t component_count = std::min(fastgltf::getNumComponents(accessor.type), component_count_of_out_out_value);
     switch (component_count) {
         case 1: {
@@ -452,6 +463,8 @@ void accessor_read_u32s(
     std::size_t               component_count_of_out_out_value
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     std::size_t component_count = std::min(fastgltf::getNumComponents(accessor.type), component_count_of_out_out_value);
     switch (component_count) {
         case 1: {
@@ -489,6 +502,8 @@ void accessor_read_u32s(
 // Derived from fastgltf::copyComponentsFromAccessor()
 void copyComponentsFromAccessor(const fastgltf::Asset& asset, const fastgltf::Accessor& accessor, void* dest, std::size_t destStride)
 {
+    ERHE_PROFILE_FUNCTION();
+
     assert((!bool(accessor.sparse) || accessor.sparse->count == 0) && "copyComponentsFromAccessor currently does not support sparse accessors.");
 
     auto* dstBytes = static_cast<std::byte*>(dest);
@@ -541,6 +556,8 @@ public:
 
     void parse_and_build()
     {
+        ERHE_PROFILE_FUNCTION();
+
         if (m_asset.error() != fastgltf::Error::None) {
             log_gltf->error("No data loaded to parse glTF");
             return;
@@ -656,6 +673,8 @@ private:
     }
     void parse_animation(const std::size_t animation_index)
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Animation& animation = m_asset->animations[animation_index];
         const std::string animation_name = safe_resource_name(animation.name, "animation", animation_index);
         log_gltf->trace("Animation: id = {}, name = {}", animation_index, animation_name);
@@ -782,6 +801,8 @@ private:
     }
     auto load_image_file(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>
     {
+        ERHE_PROFILE_FUNCTION();
+
         const bool file_is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::load_image_file", path);
         if (!file_is_ok) {
             return {};
@@ -841,6 +862,8 @@ private:
     }
     auto load_png_buffer(const std::size_t buffer_view_index, const std::size_t image_index) -> std::shared_ptr<erhe::graphics::Texture>
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::BufferView& buffer_view      = m_asset->bufferViews[buffer_view_index];
         const fastgltf::Buffer&     buffer           = m_asset->buffers.at(buffer_view.bufferIndex);
         const std::string           buffer_view_name = safe_resource_name(buffer_view.name, "buffer_view", buffer_view_index);
@@ -919,6 +942,8 @@ private:
     }
     void parse_image(const std::size_t image_index)
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Image& image      = m_asset->images[image_index];
         const std::string      image_name = safe_resource_name(image.name, "image", image_index);
         log_gltf->trace("Image: image index = {}, name = {}", image_index, image_name);
@@ -948,6 +973,8 @@ private:
     }
     void parse_sampler(const std::size_t sampler_index)
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Sampler& sampler = m_asset->samplers[sampler_index];
         const std::string sampler_name = safe_resource_name(sampler.name, "sampler", sampler_index);
         log_gltf->trace("Sampler: sampler index = {}, name = {}", sampler_index, sampler_name);
@@ -968,6 +995,8 @@ private:
     }
     void parse_material(const std::size_t material_index)
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Material& material = m_asset->materials[material_index];
         const std::string material_name = safe_resource_name(material.name, "material", material_index);
         log_gltf->trace("Primitive material: id = {}, name = {}", material_index, material_name);
@@ -1024,6 +1053,8 @@ private:
     }
     void parse_node_transform(const fastgltf::Node& node, const std::shared_ptr<erhe::scene::Node>& erhe_node)
     {
+        ERHE_PROFILE_FUNCTION();
+
         std::visit(
             fastgltf::visitor {
                 [&](const fastgltf::TRS& trs) {
@@ -1049,6 +1080,8 @@ private:
     }
     void parse_camera(const std::size_t camera_index)
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Camera& camera = m_asset->cameras[camera_index];
         const std::string camera_name = safe_resource_name(camera.name, "camera", camera_index);
         log_gltf->trace("Camera: camera index = {}, name = {}", camera_index, camera_name);
@@ -1093,6 +1126,8 @@ private:
     }
     void parse_light(const std::size_t light_index)
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Light& light = m_asset->lights[light_index];
         const std::string light_name = safe_resource_name(light.name, "light", light_index);
         log_gltf->trace("Light: camera index = {}, name = {}", light_index, light_name);
@@ -1126,6 +1161,8 @@ private:
 
     void load_new_primitive_geometry(const fastgltf::Primitive& primitive, Primitive_entry& primitive_entry)
     {
+        ERHE_PROFILE_FUNCTION();
+
         primitive_entry.triangle_soup.reset();
 
         if (!primitive.indicesAccessor.has_value()) {
@@ -1203,6 +1240,8 @@ private:
     }
     auto get_primitive_geometry(const fastgltf::Primitive& primitive, Primitive_entry& primitive_entry)
     {
+        ERHE_PROFILE_FUNCTION();
+
         primitive_entry.index_accessor = primitive.indicesAccessor.value();
         primitive_entry.attribute_accessors.clear();
         for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
@@ -1227,6 +1266,8 @@ private:
         const std::size_t                         primitive_index
     )
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Primitive& primitive = mesh.primitives[primitive_index];
         std::string name = fmt::format("{}[{}]", mesh.name.c_str(), primitive_index);
         std::shared_ptr<erhe::primitive::Material> erhe_material = primitive.materialIndex.has_value()
@@ -1245,6 +1286,8 @@ private:
     }
     void parse_skin(const std::size_t skin_index)
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Skin& skin = m_asset->skins[skin_index];
         const std::string skin_name = safe_resource_name(skin.name, "skin", skin_index);
         log_gltf->info("Skin: skin index = {}, name = {}", skin_index, skin_name);
@@ -1286,6 +1329,8 @@ private:
     }
     void parse_mesh(const std::size_t mesh_index)
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Mesh& mesh = m_asset->meshes[mesh_index];
         const std::string mesh_name = safe_resource_name(mesh.name, "mesh", mesh_index);
         log_gltf->trace("Mesh: mesh index = {}, name = {}", mesh_index, mesh_name);
@@ -1309,6 +1354,8 @@ private:
 
     void parse_node(const std::size_t node_index, const std::shared_ptr<erhe::scene::Node>& parent)
     {
+        ERHE_PROFILE_FUNCTION();
+
         const fastgltf::Node& node = m_asset->nodes[node_index];
 
         const std::string node_name = safe_resource_name(node.name, "node", node_index);
@@ -1361,8 +1408,37 @@ private:
     }
 };
 
+[[nodiscard]] auto format_duration(std::chrono::steady_clock::duration duration) -> std::string
+{
+    using namespace std::chrono;
+    auto ms = duration_cast<milliseconds>(duration);
+    auto s = duration_cast<seconds>(ms);
+    ms -= duration_cast<milliseconds>(s);
+    auto m = duration_cast<minutes>(s);
+    s -= duration_cast<seconds>(m);
+    auto h = duration_cast<hours>(m);
+    m -= duration_cast<minutes>(h);
+
+    const int hours = static_cast<int>(h.count());
+    const int minutes = static_cast<int>(m.count());
+    const int seconds = static_cast<int>(s.count());
+    const int milliseconds = static_cast<int>(ms.count());
+    if (hours > 0) {
+        return fmt::format("{}:{:02}:{:02}.{:03}", hours, minutes, seconds, milliseconds);
+    } else if (minutes) {
+        return fmt::format("{}:{:02}.{:03}", minutes, seconds, milliseconds);
+    } else {
+        return fmt::format("{}.{:03}", seconds, milliseconds);
+    }
+}
+
 auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 {
+    ERHE_PROFILE_FUNCTION();
+
+    erhe::time::Timer timer{"parse_gltf"};
+    timer.begin();
+
     fastgltf::Expected<fastgltf::GltfDataBuffer> data = fastgltf::GltfDataBuffer::FromPath(arguments.path);
     if (data.error() != fastgltf::Error::None) {
         log_gltf->error("glTF load error: {}", fastgltf::getErrorMessage(data.error()));
@@ -1383,11 +1459,22 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     Gltf_data result;
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
     erhe_parser.parse_and_build();
+
+    timer.end();
+    if (timer.duration().has_value()) {
+        log_geometry->info("glTF loaded {} in {}", arguments.path.string(), format_duration(timer.duration().value()));
+    }
+
     return result;
 }
 
 auto scan_gltf(std::filesystem::path path) -> Gltf_scan
 {
+    ERHE_PROFILE_FUNCTION();
+
+    erhe::time::Timer timer{"scan_gltf"};
+    timer.begin();
+
     fastgltf::Expected<fastgltf::GltfDataBuffer> data = fastgltf::GltfDataBuffer::FromPath(path);
     if (data.error() != fastgltf::Error::None) {
         log_gltf->error("glTF load error: {}", fastgltf::getErrorMessage(data.error()));
@@ -1471,6 +1558,11 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
     result.scenes.resize(asset->scenes.size());
     for (std::size_t i = 0, end = asset->scenes.size(); i < end; ++i) {
         result.scenes[i] = resource_name(asset->scenes[i].name, "scene", i);
+    }
+
+    timer.end();
+    if (timer.duration().has_value()) {
+        log_geometry->info("glTF scanned {} in {}", path.string(), format_duration(timer.duration().value()));
     }
 
     return result;

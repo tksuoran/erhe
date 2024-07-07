@@ -76,8 +76,7 @@
 //     :          ..··˙˙                                                        .
 //     :    ..··˙˙                                                              .
 //      :·˙˙                                                                    .
-namespace editor
-{
+namespace editor {
 
 using glm::vec3;
 
@@ -152,8 +151,7 @@ Hotbar::Hotbar(
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     commands.register_command(&m_trackpad_command);
     const auto* headset = headset_view.get_headset();
-    if (headset != nullptr)
-    {
+    if (headset != nullptr) {
         auto& xr_right = headset->get_actions_right();
         m_trackpad_click_command.bind(xr_right.trackpad);
         commands.bind_command_to_xr_boolean_action(&m_trackpad_click_command, xr_right.trackpad_click, erhe::commands::Button_trigger::Button_pressed);
@@ -230,13 +228,19 @@ void Hotbar::init_hotbar()
 
     m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
+    ImGuiStyle& style = m_rendertarget_imgui_viewport->get_mutable_style();
+    style.FrameRounding    = 0.0f;
+    style.WindowRounding   = 0.0f;
+    style.ChildRounding    = 0.0f;
+    style.FramePadding     = ImVec2{0.0f, 0.0f};
+    style.ItemSpacing      = ImVec2{0.0f, 0.0f};
+    style.ItemInnerSpacing = ImVec2{0.0f, 0.0f};
+    style.MouseCursorScale = 2.0f;
+
     this->Hotbar::set_viewport(m_rendertarget_imgui_viewport.get());
 }
 
-void Hotbar::init_radial_menu(
-    Mesh_memory& mesh_memory,
-    Scene_root&  scene_root
-)
+void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
 {
     const float outer_radius = 1.0f;
     const float inner_radius = 0.125f;
@@ -406,7 +410,14 @@ void Hotbar::update_node_transform()
         }
 
         const auto& world_from_camera = camera_node->world_from_node();
-        world_from_node = erhe::math::create_look_at(
+        constexpr glm::mat4 rotate{
+            -1.0f, 0.0f, 0.0f, 0.0f,
+             0.0f, 1.0f, 0.0f, 0.0f,
+             0.0f, 0.0f,-1.0f, 0.0f,
+             0.0f, 0.0f, 0.0f, 1.0f
+        };
+
+        world_from_node = rotate * erhe::math::create_look_at(
             glm::vec3{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}}, // eye
             glm::vec3{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}}, // target
             glm::vec3{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}}  // up
@@ -529,6 +540,7 @@ auto Hotbar::get_locked() const -> bool
 {
     return m_locked;
 }
+
 void Hotbar::set_locked(bool value)
 {
     m_locked = value;
@@ -584,9 +596,11 @@ void Hotbar::imgui()
     ImGui::PushStyleColor(ImGuiCol_Button,        m_color_inactive);
 
     uint32_t id = 0;
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
     for (auto* tool : m_slots) {
         tool_button(++id, tool);
     }
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     ImGui::PopID();
 #endif
