@@ -55,9 +55,7 @@ Json_library::Json_library(const std::filesystem::path& path)
     }
 }
 
-auto Json_library::make_geometry(
-    const std::string& key_name
-) const -> erhe::geometry::Geometry
+auto Json_library::make_geometry(const std::string& key_name) const -> erhe::geometry::Geometry
 {
     ERHE_PROFILE_FUNCTION();
 

@@ -15,8 +15,7 @@
 
 #include <glm/glm.hpp>
 
-namespace editor
-{
+namespace editor {
 
 using mat4 = glm::mat4;
 using vec3 = glm::vec3;
@@ -110,10 +109,7 @@ auto Light_mesh::get_light_transform(const erhe::scene::Light& light) -> glm::ma
     }
 }
 
-auto Light_mesh::point_in_light(
-    const glm::vec3           point,
-    const erhe::scene::Light& light
-) -> bool
+auto Light_mesh::point_in_light(const glm::vec3 point, const erhe::scene::Light& light) -> bool
 {
     if (light.type != erhe::scene::Light::Type::spot) {
         return true;
@@ -142,9 +138,7 @@ auto Light_mesh::point_in_light(
     }
 }
 
-auto Light_mesh::get_light_mesh(
-    const erhe::scene::Light& light
-) -> erhe::primitive::Renderable_mesh*
+auto Light_mesh::get_light_mesh(const erhe::scene::Light& light) -> erhe::primitive::Renderable_mesh*
 {
     switch (light.type) {
         //using enum erhe::scene::Light_type;

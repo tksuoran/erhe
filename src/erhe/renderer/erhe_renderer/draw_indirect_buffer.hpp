@@ -19,8 +19,7 @@ public:
     std::size_t  draw_indirect_count{0};
 };
 
-class Draw_indirect_buffer
-    : public Multi_buffer
+class Draw_indirect_buffer : public Multi_buffer
 {
 public:
     explicit Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance);

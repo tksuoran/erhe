@@ -110,6 +110,7 @@ public:
     [[nodiscard]] auto parent_from_world                      () const -> glm::mat4;
     [[nodiscard]] auto position_in_world                      () const -> glm::vec4;
     [[nodiscard]] auto direction_in_world                     () const -> glm::vec4;
+    [[nodiscard]] auto look_at                                (const glm::vec3 target_position) const -> glm::mat4;
     [[nodiscard]] auto look_at                                (const Node& target) const -> glm::mat4;
     [[nodiscard]] auto transform_point_from_world_to_local    (const glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto transform_direction_from_world_to_local(const glm::vec3 p) const -> glm::vec3;

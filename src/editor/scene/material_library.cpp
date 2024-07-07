@@ -5,8 +5,7 @@
 
 #include <fmt/format.h>
 
-namespace editor
-{
+namespace editor {
 
 void add_default_materials(Content_library& library)
 {

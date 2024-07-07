@@ -3,8 +3,7 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 const ImVec4 c_color                  = ImVec4{0.30f, 0.40f, 0.80f, 1.0f};
 const ImVec4 c_color_hovered          = ImVec4{0.40f, 0.50f, 0.90f, 1.0f};
@@ -46,11 +45,7 @@ void end_button_style(const Item_mode mode)
     }
 }
 
-auto make_button(
-    const char*     label,
-    const Item_mode mode,
-    const ImVec2    size
-) -> bool
+auto make_button(const char* label, const Item_mode mode, const ImVec2 size) -> bool
 {
     begin_button_style(mode);
     const bool pressed = ImGui::Button(label, size) && (mode != Item_mode::disabled);
@@ -58,10 +53,7 @@ auto make_button(
     return pressed;
 }
 
-auto make_small_button(
-    const char*     label,
-    const Item_mode mode
-) -> bool
+auto make_small_button(const char* label, const Item_mode mode) -> bool
 {
     begin_button_style(mode);
     const bool pressed = ImGui::SmallButton(label) && (mode != Item_mode::disabled);
@@ -82,9 +74,7 @@ void make_check_box(const char* label, bool* value, const Item_mode mode)
     }
 }
 
-void Value_edit_state::combine(
-    const Value_edit_state& other
-)
+void Value_edit_state::combine(const Value_edit_state& other)
 {
     value_changed = value_changed || other.value_changed;
     edit_ended    = edit_ended    || other.edit_ended;

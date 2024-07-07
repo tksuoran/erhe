@@ -9,10 +9,7 @@
 
 namespace erhe::rendergraph {
 
-Rendergraph_node::Rendergraph_node(
-    Rendergraph&           rendergraph,
-    const std::string_view name
-)
+Rendergraph_node::Rendergraph_node(Rendergraph& rendergraph, const std::string_view name)
     : m_rendergraph{rendergraph}
     , m_name       {name}
 {
@@ -25,14 +22,8 @@ Rendergraph_node::~Rendergraph_node() noexcept
     m_rendergraph.unregister_node(this);
 }
 
-auto Rendergraph_node::get_input(
-    const Routing resource_routing,
-    const int     key,
-    const int     depth
-) const -> const Rendergraph_consumer_connector*
+auto Rendergraph_node::get_input(Routing, const int key, const int depth) const -> const Rendergraph_consumer_connector*
 {
-    static_cast<void>(resource_routing);
-
     SPDLOG_LOGGER_TRACE(
         log_tail,
         "{} Rendergraph_node::get_input(resource_routing = {}, key = {}, depth = {})",
@@ -60,11 +51,7 @@ auto Rendergraph_node::get_input(
     return nullptr;
 }
 
-auto Rendergraph_node::get_consumer_input_node(
-    const Routing resource_routing,
-    const int     key,
-    const int     depth
-) const -> Rendergraph_node*
+auto Rendergraph_node::get_consumer_input_node(const Routing resource_routing, const int key, const int depth) const -> Rendergraph_node*
 {
     if (!inputs_allowed()) {
         log_tail->error("Node '{}' inputs are not allowed ('{}')", get_name(), key);

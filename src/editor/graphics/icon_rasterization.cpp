@@ -45,11 +45,7 @@ Icon_rasterization::Icon_rasterization(
     );
 }
 
-void Icon_rasterization::rasterize(
-    lunasvg::Document& document,
-    const int          column,
-    const int          row
-)
+void Icon_rasterization::rasterize(lunasvg::Document& document, const int column, const int row)
 {
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
     // Render a super sampled icon
@@ -111,7 +107,7 @@ void Icon_rasterization::rasterize(
 #endif
 }
 
-[[nodiscard]] auto Icon_rasterization::get_size() const -> int
+auto Icon_rasterization::get_size() const -> int
 {
     return m_icon_width;
 }
@@ -135,10 +131,7 @@ auto imvec_from_glm(glm::vec4 v) -> ImVec4
 }
 #endif
 
-void Icon_rasterization::icon(
-    const glm::vec2 uv0,
-    const glm::vec4 tint_color
-) const
+void Icon_rasterization::icon(const glm::vec2 uv0, const glm::vec4 tint_color) const
 {
 #if !defined(ERHE_GUI_LIBRARY_IMGUI)
     static_cast<void>(uv0);

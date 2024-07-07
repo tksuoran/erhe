@@ -7,8 +7,7 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 // Allocates new Corner / Corner_id
 // - Point must be allocated.
@@ -368,11 +367,7 @@ auto Geometry::make_polygon_corner(
     return corner_id;
 }
 
-auto Geometry::make_point(
-    const float x,
-    const float y,
-    const float z
-) -> Point_id
+auto Geometry::make_point(const float x, const float y, const float z) -> Point_id
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -384,13 +379,7 @@ auto Geometry::make_point(
     return point_id;
 }
 
-auto Geometry::make_point(
-    const float x,
-    const float y,
-    const float z,
-    const float s,
-    const float t
-) -> Point_id
+auto Geometry::make_point(const float x, const float y, const float z, const float s, const float t) -> Point_id
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -404,42 +393,28 @@ auto Geometry::make_point(
     return point_id;
 }
 
-auto Geometry::make_point(
-    const double x,
-    const double y,
-    const double z
-) -> Point_id
+auto Geometry::make_point(const double x, const double y, const double z) -> Point_id
 {
     return make_point(float(x), float(y), float(z));
 }
 
-auto Geometry::make_point(
-    const double x,
-    const double y,
-    const double z,
-    const double s,
-    const double t
-) -> Point_id
+auto Geometry::make_point(const double x, const double y, const double z, const double s, const double t) -> Point_id
 {
     return make_point(float(x), float(y), float(z), float(s), float(t));
 }
 
-auto Geometry::make_polygon(
-    const std::initializer_list<Point_id> point_list
-) -> Polygon_id
+auto Geometry::make_polygon(const std::initializer_list<Point_id> point_list) -> Polygon_id
 {
     ERHE_PROFILE_FUNCTION();
 
     const Polygon_id polygon_id = make_polygon();
-    for (Point_id point_id : point_list)
-    {
+    for (Point_id point_id : point_list) {
         make_polygon_corner(polygon_id, point_id);
     }
     return polygon_id;
 }
 
-auto Geometry::make_polygon_reverse(const std::initializer_list<Point_id> point_list)
--> Polygon_id
+auto Geometry::make_polygon_reverse(const std::initializer_list<Point_id> point_list) -> Polygon_id
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -495,4 +470,4 @@ void Geometry::compute_polygon_corner_texcoords(Property_map<Corner_id, glm::vec
     });
 }
 
-}
+} // namespace erhe::geometry

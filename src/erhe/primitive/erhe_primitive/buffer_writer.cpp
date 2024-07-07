@@ -10,11 +10,9 @@
 
 #include <span>
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
-namespace
-{
+namespace {
 
 inline void write_low(
     const std::span<std::uint8_t>  destination,

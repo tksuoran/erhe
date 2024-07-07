@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_math/viewport.hpp"
 
@@ -8,23 +8,21 @@ namespace erhe::window {
     class Context_window;
 }
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 class Imgui_renderer;
 
-// Imgui_viewport which displays Imgui_window instance into (glfw) Window.
-class Window_imgui_viewport
-    : public Imgui_viewport
+// Imgui_host which displays Imgui_window instance into (glfw) Window.
+class Window_imgui_host : public Imgui_host
 {
 public:
-    Window_imgui_viewport(
+    Window_imgui_host(
         Imgui_renderer&                 imgui_renderer,
         erhe::window::Context_window&   context_window,
         erhe::rendergraph::Rendergraph& rendergraph,
         const std::string_view          name
     );
-    ~Window_imgui_viewport() override;
+    ~Window_imgui_host() override;
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;

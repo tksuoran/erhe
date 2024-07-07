@@ -23,10 +23,7 @@ public:
 
     // Public API
     void set_enabled(bool enabled);
-    void add(
-        Shader_stages_create_info create_info,
-        Shader_stages*            program
-    );
+    void add(Shader_stages_create_info create_info, Shader_stages* program);
     void add(Reloadable_shader_stages& reloadable_shader_stages);
 
 private:
@@ -63,10 +60,7 @@ private:
     class Compare_object
     {
     public:
-        [[nodiscard]] auto operator()(
-            const Reload_entry& lhs,
-            const Reload_entry& rhs
-        ) const -> bool
+        [[nodiscard]] auto operator()(const Reload_entry& lhs, const Reload_entry& rhs) const -> bool
         {
             return lhs.shader_stages < rhs.shader_stages;
         }

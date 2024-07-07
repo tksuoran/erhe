@@ -540,10 +540,7 @@ void calculate_bounding_volume(
     bounding_sphere.center = glm::vec3{sphere.pos.x, sphere.pos.y, sphere.pos.z};
 }
 
-[[nodiscard]] auto transform(
-    const glm::mat4&       m,
-    const Bounding_sphere& sphere
-) -> Bounding_sphere
+[[nodiscard]] auto transform(const glm::mat4& m, const Bounding_sphere& sphere) -> Bounding_sphere
 {
 #if 0
     // Initial simple version

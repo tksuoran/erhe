@@ -249,10 +249,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     }
 }
 
-void Forward_renderer::render_fullscreen(
-    const Render_parameters&  parameters,
-    const erhe::scene::Light* light
-)
+void Forward_renderer::render_fullscreen(const Render_parameters&  parameters, const erhe::scene::Light* light)
 {
     ERHE_PROFILE_FUNCTION();
 

@@ -9,8 +9,7 @@ namespace editor {
 
 class Item_parent_change_operation;
 
-class Item_insert_remove_operation
-    : public IOperation
+class Item_insert_remove_operation : public IOperation
 {
 public:
     enum class Mode : unsigned int {

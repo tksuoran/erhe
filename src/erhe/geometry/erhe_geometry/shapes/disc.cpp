@@ -6,8 +6,7 @@
 #include <map>
 #include <vector>
 
-namespace erhe::geometry::shapes
-{
+namespace erhe::geometry::shapes {
 
 using glm::vec2;
 using glm::vec3;
@@ -67,11 +66,7 @@ public:
         return point_id;
     }
 
-    auto make_corner(
-        const Polygon_id polygon_id,
-        const int        slice,
-        const int        stack
-    ) -> Corner_id
+    auto make_corner(const Polygon_id polygon_id, const int slice, const int stack) -> Corner_id
     {
         const double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);
         const double rel_stack           = (stack_count == 1) ? 1.0 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
@@ -198,12 +193,7 @@ public:
     }
 };
 
-auto make_disc(
-    const double outer_radius,
-    const double inner_radius,
-    const int    slice_count,
-    const int    stack_count
-) -> Geometry
+auto make_disc(const double outer_radius, const double inner_radius, const int slice_count, const int stack_count) -> Geometry
 {
     ERHE_PROFILE_FUNCTION();
 

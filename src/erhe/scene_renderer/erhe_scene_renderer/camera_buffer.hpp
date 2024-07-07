@@ -40,8 +40,7 @@ public:
     std::size_t                     max_camera_count;
 };
 
-class Camera_buffer
-    : public erhe::renderer::Multi_buffer
+class Camera_buffer : public erhe::renderer::Multi_buffer
 {
 public:
     Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface);

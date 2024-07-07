@@ -23,8 +23,7 @@ class Bvh_scene;
 class Ray;
 class Hit;
 
-class Bvh_geometry
-    : public IGeometry
+class Bvh_geometry : public IGeometry
 {
 public:
     Bvh_geometry(const std::string_view debug_label, const Geometry_type geometry_type);

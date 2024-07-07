@@ -138,19 +138,13 @@ auto Post_processing_node::update_downsample_nodes(erhe::graphics::Instance& gra
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
-    if (
-        (m_width  == viewport.width) &&
-        (m_height == viewport.height)
-    ) {
+    if ((m_width == viewport.width) && (m_height == viewport.height)) {
         return downsample_nodes_unchanged; // post processing nodes are
     }
 
     m_downsample_nodes.clear();
 
-    if (
-        (viewport.width  < 1) ||
-        (viewport.height < 1)
-    ) {
+    if ((viewport.width  < 1) || (viewport.height < 1)) {
         log_post_processing->trace(
             "Resizing Post_processing_node '{}' to 0 x 0",
             get_name()
@@ -204,30 +198,16 @@ void Post_processing_node::viewport_toolbar()
     // TODO Fix ImGui::Checkbox("Post Processing", &m_enabled);
 }
 
-auto Post_processing_node::get_consumer_input_texture(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Post_processing_node::get_consumer_input_texture(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
     return !m_downsample_nodes.empty()
         ? m_downsample_nodes.front().texture
         : std::shared_ptr<erhe::graphics::Texture>{};
 }
 
 // Overridden to provide framebuffer from the first downsample node
-auto Post_processing_node::get_consumer_input_framebuffer(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Post_processing_node::get_consumer_input_framebuffer(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
     return !m_downsample_nodes.empty()
         ? m_downsample_nodes.front().framebuffer
         : std::shared_ptr<erhe::graphics::Framebuffer>{};
@@ -253,9 +233,7 @@ void Post_processing_node::execute_rendergraph_node()
     ERHE_PROFILE_FUNCTION();
     //ERHE_PROFILE_GPU_SCOPE(c_post_processing)
 
-    const bool downsample_nodes_unchanged = update_downsample_nodes(
-        *m_context.graphics_instance
-    );
+    const bool downsample_nodes_unchanged = update_downsample_nodes(*m_context.graphics_instance);
     if (!downsample_nodes_unchanged) {
         return;
     }
@@ -409,16 +387,9 @@ void Post_processing::next_frame()
     m_parameter_buffer.next_frame();
 }
 
-auto Post_processing::create_node(
-    erhe::rendergraph::Rendergraph& rendergraph,
-    const std::string_view          name
-) -> std::shared_ptr<Post_processing_node>
+auto Post_processing::create_node(erhe::rendergraph::Rendergraph& rendergraph, const std::string_view name) -> std::shared_ptr<Post_processing_node>
 {
-    auto new_node = std::make_shared<Post_processing_node>(
-        rendergraph,
-        m_context,
-        name
-    );
+    auto new_node = std::make_shared<Post_processing_node>(rendergraph, m_context, name);
     m_nodes.push_back(new_node);
     return new_node;
 }
@@ -443,12 +414,7 @@ void Post_processing::post_process(Post_processing_node& node)
     }
 
     if (downsample_nodes.size() > 1) {
-        for (
-            std::size_t i = 0,
-            end = downsample_nodes.size() - 2;
-            i < end;
-            ++i
-        ) {
+        for (std::size_t i = 0, end = downsample_nodes.size() - 2; i < end; ++i) {
             const Downsample_node&               source_downsample_node = downsample_nodes.at(i);
             const Downsample_node&               downsample_node        = downsample_nodes.at(i + 1);
             const erhe::graphics::Texture* const source_texture         = source_downsample_node.texture.get();
@@ -596,10 +562,7 @@ void Post_processing::compose(Post_processing_node& node)
         std::size_t texture_slot = 0;
         for (const Downsample_node& downsample_node : downsample_nodes) {
             const erhe::graphics::Texture* const texture = downsample_node.texture.get();
-            const uint64_t handle = graphics_instance.get_handle(
-                *texture,
-                m_linear_sampler
-            );
+            const uint64_t handle = graphics_instance.get_handle(*texture, m_linear_sampler );
 
             const uint32_t texture_handle[2] =
             {
@@ -641,18 +604,10 @@ void Post_processing::compose(Post_processing_node& node)
     );
     const GLuint framebuffer_name = output_framebuffer ? output_framebuffer->gl_name() : 0;
 
-    gl::bind_framebuffer(
-        gl::Framebuffer_target::draw_framebuffer,
-        framebuffer_name
-    );
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer_name);
 
     // TODO Add destination viewport Rendergraph_node
-    gl::viewport(
-        viewport.x,
-        viewport.y,
-        viewport.width,
-        viewport.height
-    );
+    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
     gl::clear_color(1.0f, 1.0f, 0.0f, 0.0f);
     gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
@@ -686,10 +641,7 @@ void Post_processing::compose(Post_processing_node& node)
 
         for (const Downsample_node& downsample_node : downsample_nodes) {
             const erhe::graphics::Texture* const texture = downsample_node.texture.get();
-            const uint64_t handle = graphics_instance.get_handle(
-                *texture,
-                m_linear_sampler
-            );
+            const uint64_t handle = graphics_instance.get_handle(*texture, m_linear_sampler);
 
             const uint32_t texture_handle[2] = {
                 static_cast<uint32_t>((handle & 0xffffffffu)),

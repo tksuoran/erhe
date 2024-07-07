@@ -50,8 +50,7 @@ private:
     Editor_context& m_context;
 };
 
-class Physics_tool
-    : public Tool
+class Physics_tool : public Tool
 {
 public:
     static constexpr int c_priority{2};

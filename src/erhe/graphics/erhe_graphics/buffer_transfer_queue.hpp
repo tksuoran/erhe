@@ -3,9 +3,7 @@
 #include <mutex>
 #include <vector>
 
-
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Buffer;
 

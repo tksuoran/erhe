@@ -12,8 +12,7 @@ namespace erhe::commands {
 class Command;
 struct Input_arguments;
 
-class Mouse_binding
-    : public Command_binding
+class Mouse_binding : public Command_binding
 {
 public:
     Mouse_binding(Command* command, const std::optional<uint32_t> modifier_mask = {});

@@ -5,9 +5,7 @@
 #include <queue>
 #include <vector>
 
-namespace erhe::message_bus
-{
-
+namespace erhe::message_bus {
 
 //// TODO use something like https://github.com/TheWisp/signals instead
 template <typename Message_type>

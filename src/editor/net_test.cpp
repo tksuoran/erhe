@@ -27,8 +27,7 @@ public:
     virtual void send      (const std::string& message) = 0;
 };
 
-class Server_peer
-    : public Peer
+class Server_peer : public Peer
 {
 public:
     Server_peer() = default;
@@ -55,8 +54,7 @@ private:
     erhe::net::Server* m_server{nullptr};
 };
 
-class Client_peer
-    : public Peer
+class Client_peer : public Peer
 {
 public:
     Client_peer() = default;

@@ -2,7 +2,7 @@
 
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_log.hpp"
-#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/draw_indirect.hpp"
@@ -167,7 +167,7 @@ void Multi_pipeline::allocate(
     }
 }
 
-[[nodiscard]] auto Multi_pipeline::current_pipeline() -> erhe::graphics::Pipeline&
+auto Multi_pipeline::current_pipeline() -> erhe::graphics::Pipeline&
 {
     return m_pipelines.at(m_current_slot);
 }
@@ -223,9 +223,7 @@ auto get_shader_default_uniform_block(
     return default_uniform_block;
 }
 
-Imgui_program_interface::Imgui_program_interface(
-    erhe::graphics::Instance& graphics_instance
-)
+Imgui_program_interface::Imgui_program_interface(erhe::graphics::Instance& graphics_instance)
     : draw_parameter_block{
         graphics_instance,
         "draw", // block name
@@ -390,10 +388,7 @@ auto get_font_atlas_pixel_data(ImFontAtlas& font_atlas) -> std::vector<uint8_t>
     return post_processed_data;
 }
 
-Imgui_renderer::Imgui_renderer(
-    erhe::graphics::Instance& graphics_instance,
-    Imgui_settings&           settings
-)
+Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgui_settings& settings)
     // Parse config
     : m_graphics_instance{graphics_instance}
 
@@ -435,64 +430,59 @@ void Imgui_renderer::unlock_mutex()
     m_mutex.unlock();
 }
 
-void Imgui_renderer::make_current(const Imgui_viewport* imgui_viewport)
+void Imgui_renderer::make_current(const Imgui_host* imgui_host)
 {
-    m_current_viewport = imgui_viewport;
-    if (imgui_viewport != nullptr) {
-        ImGui::SetCurrentContext(imgui_viewport->imgui_context());
+    m_current_host = imgui_host;
+    if (imgui_host != nullptr) {
+        ImGui::SetCurrentContext(imgui_host->imgui_context());
     } else {
         ImGui::SetCurrentContext(nullptr);
     }
 }
 
-void Imgui_renderer::register_imgui_viewport(
-    Imgui_viewport* viewport
-)
+void Imgui_renderer::register_imgui_host(Imgui_host* imgui_host)
 {
     //ERHE_VERIFY(!m_iterating);
     const std::lock_guard<std::recursive_mutex> lock{m_mutex};
 #if !defined(NDEBUG)
     const auto i = std::find_if(
-        m_imgui_viewports.begin(),
-        m_imgui_viewports.end(),
-        [viewport](Imgui_viewport* entry) {
-            return entry == viewport;
+        m_imgui_hosts.begin(),
+        m_imgui_hosts.end(),
+        [imgui_host](Imgui_host* entry) {
+            return entry == imgui_host;
         }
     );
-    if (i != m_imgui_viewports.end()) {
-        log_imgui->error("Imgui_viewport '{}' is already registered to Imgui_windows", viewport->get_name());
+    if (i != m_imgui_hosts.end()) {
+        log_imgui->error("Imgui_host '{}' is already registered to Imgui_windows", imgui_host->get_name());
         return;
     }
 #endif
 
-    m_imgui_viewports.push_back(viewport);
-
+    m_imgui_hosts.push_back(imgui_host);
 }
 
-void Imgui_renderer::unregister_imgui_viewport(
-    Imgui_viewport* viewport
-)
+void Imgui_renderer::unregister_imgui_host(Imgui_host* imgui_host)
 {
     //ERHE_VERIFY(!m_iterating);
 
     const std::lock_guard<std::recursive_mutex> lock{m_mutex};
     const auto i = std::find_if(
-        m_imgui_viewports.begin(),
-        m_imgui_viewports.end(),
-        [viewport](Imgui_viewport* entry) {
-            return entry == viewport;
+        m_imgui_hosts.begin(),
+        m_imgui_hosts.end(),
+        [imgui_host](Imgui_host* entry) {
+            return entry == imgui_host;
         }
     );
-    if (i == m_imgui_viewports.end()) {
-        log_imgui->error("Imgui_windows::unregister_imgui_viewport(): viewport '{}' is not registered", viewport->get_name());
+    if (i == m_imgui_hosts.end()) {
+        log_imgui->error("Imgui_windows::unregister_imgui_host(): imgui_host '{}' is not registered", imgui_host->get_name());
         return;
     }
-    m_imgui_viewports.erase(i);
+    m_imgui_hosts.erase(i);
 }
 
-[[nodiscard]] auto Imgui_renderer::get_imgui_viewports() const -> const std::vector<Imgui_viewport*>&
+auto Imgui_renderer::get_imgui_hosts() const -> const std::vector<Imgui_host*>&
 {
-    return m_imgui_viewports;
+    return m_imgui_hosts;
 }
 
 void Imgui_renderer::on_font_config_changed(Imgui_settings& settings)
@@ -517,8 +507,8 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
         make_font_texture_create_info(m_graphics_instance, m_font_atlas)
     );
 
-    for (auto viewport : m_imgui_viewports) {
-        auto* context = viewport->get_imgui_context();
+    for (auto imgui_host : m_imgui_hosts) {
+        auto* context = imgui_host->get_imgui_context();
         if (context == nullptr) {
             continue;
         }

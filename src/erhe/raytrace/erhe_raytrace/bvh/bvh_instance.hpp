@@ -10,8 +10,7 @@ namespace erhe::raytrace {
 
 class Bvh_scene;
 
-class Bvh_instance
-    : public IInstance
+class Bvh_instance : public IInstance
 {
 public:
     explicit Bvh_instance(const std::string_view debug_label);

@@ -11,8 +11,7 @@ namespace erhe::rendergraph {
 /// </summary>
 /// Sink rendergraph nodes only consumes input, it cannot have any outputs and cannot
 /// be used as input for other nodes
-class Sink_rendergraph_node
-    : public Rendergraph_node
+class Sink_rendergraph_node : public Rendergraph_node
 {
 public:
     static constexpr std::string_view c_type_name{"Sink_rendergraph_node"};

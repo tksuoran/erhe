@@ -18,8 +18,7 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 using Corner_id         = erhe::geometry::Corner_id;
 using Point_id          = erhe::geometry::Point_id;
@@ -205,10 +204,7 @@ public:
         return 1;
     }
 
-    auto get_point(
-        const std::size_t element_index,
-        const std::size_t point_index
-    ) const -> std::optional<glm::vec3> override
+    auto get_point(const std::size_t element_index, const std::size_t point_index) const -> std::optional<glm::vec3> override
     {
         static_cast<void>(point_index);
         const auto point_id = static_cast<erhe::geometry::Point_id>(element_index);
@@ -223,9 +219,7 @@ private:
     erhe::geometry::Property_map<Point_id, vec3>* m_point_locations{nullptr};
 };
 
-void Build_context_root::calculate_bounding_volume(
-    erhe::geometry::Property_map<Point_id, vec3>* point_locations
-)
+void Build_context_root::calculate_bounding_volume(erhe::geometry::Property_map<Point_id, vec3>* point_locations)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -753,7 +747,7 @@ void Build_context::build_triangle_fill_index()
 {
     if (root.build_info.primitive_types.fill_triangles) {
         if (previous_index != first_index) {
-            index_writer.write_triangle(first_index, vertex_index, previous_index);
+            index_writer.write_triangle(first_index, previous_index, vertex_index);
             root.renderable_mesh->primitive_id_to_polygon_id[primitive_index] = polygon_id;
             ++primitive_index;
         }

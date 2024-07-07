@@ -1,11 +1,8 @@
 #include "erhe_raytrace/ray.hpp"
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
-auto Ray::transform(
-    const glm::mat4& matrix
-) const -> Ray
+auto Ray::transform(const glm::mat4& matrix) const -> Ray
 {
     return Ray{
         .origin    = glm::vec3{matrix * glm::vec4{origin, 1.0}},

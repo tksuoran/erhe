@@ -11,8 +11,7 @@ class Command;
 struct Input_arguments;
 
 // Mouse wheel event
-class Mouse_wheel_binding
-    : public Command_binding
+class Mouse_wheel_binding : public Command_binding
 {
 public:
     explicit Mouse_wheel_binding(Command* command, const std::optional<uint32_t> modifier_mask = {});

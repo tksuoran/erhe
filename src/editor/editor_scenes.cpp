@@ -115,7 +115,7 @@ void Editor_scenes::after_physics_simulation_steps()
     }
 }
 
-[[nodiscard]] auto Editor_scenes::get_scene_roots() -> const std::vector<Scene_root*>&
+auto Editor_scenes::get_scene_roots() -> const std::vector<Scene_root*>&
 {
     return m_scene_roots;
 }

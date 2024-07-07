@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 extern std::shared_ptr<spdlog::logger> log_buffer;
 extern std::shared_ptr<spdlog::logger> log_context;

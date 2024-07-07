@@ -81,17 +81,11 @@ private:
     void directional_light_visualization(const Light_visualization_context& context);
     void point_light_visualization      (const Light_visualization_context& context);
     void spot_light_visualization       (const Light_visualization_context& context);
-    void camera_visualization(
-        const Render_context&      render_context,
-        const erhe::scene::Camera* camera
-    );
-    void selection_visualization     (const Render_context& context);
-    void physics_nodes_visualization (const Render_context& context);
-    void raytrace_nodes_visualization(const Render_context& context);
-    void mesh_labels(
-        const Render_context& context,
-        erhe::scene::Mesh*    mesh
-    );
+    void camera_visualization           (const Render_context& render_context, const erhe::scene::Camera* camera);
+    void selection_visualization        (const Render_context& context);
+    void physics_nodes_visualization    (const Render_context& context);
+    void raytrace_nodes_visualization   (const Render_context& context);
+    void mesh_labels                    (const Render_context& context, erhe::scene::Mesh* mesh);
 
     void label(
         const Render_context&  context,
@@ -104,8 +98,8 @@ private:
 
     void make_combo(const char* label, Visualization_mode& visualization);
 
-    Editor_context& m_context;
-    Scene_view*     m_hover_scene_view{nullptr};
+    Editor_context&                      m_context;
+    Scene_view*                          m_hover_scene_view{nullptr};
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;
 
     Visualization_mode m_lights                 {Visualization_mode::None};

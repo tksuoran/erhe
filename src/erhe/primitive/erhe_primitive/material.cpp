@@ -2,8 +2,7 @@
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_item/unique_id.hpp"
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 auto Material::get_static_type()       -> uint64_t         { return erhe::Item_type::material;}
 auto Material::get_type       () const -> uint64_t         { return get_static_type(); }

@@ -4,8 +4,7 @@
 
 typedef unsigned int GLuint;
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Gl_texture final
 {

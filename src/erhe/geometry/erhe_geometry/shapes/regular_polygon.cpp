@@ -1,10 +1,9 @@
-#include "erhe_geometry/shapes/regular_polygon.hpp"
+﻿#include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <cmath>  // for sqrt
 
-namespace erhe::geometry::shapes
-{
+namespace erhe::geometry::shapes {
 
 auto make_triangle(const double r) -> Geometry
 {
@@ -19,7 +18,7 @@ auto make_triangle(const double r) -> Geometry
             geometry.make_point(static_cast<float>(r *  a), static_cast<float>(r *  0.0), 0.0f, 1.0f, 1.0f);
             geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r * -0.5), 0.0f, 1.0f, 0.0f);
 
-            geometry.make_polygon_reverse( {0, 1, 2} );
+            geometry.make_polygon_reverse( {0, 1, 2} ); // TODO reverse or not
 
             geometry.make_point_corners();
             geometry.build_edges();
@@ -57,12 +56,7 @@ auto make_quad(const double edge) -> Geometry
     };
 }
 
-auto make_rectangle(
-    const double width,
-    const double height,
-    const bool   front_face,
-    const bool   back_face
-) -> Geometry
+auto make_rectangle(const double width, const double height, const bool front_face, const bool back_face) -> Geometry
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -79,6 +73,13 @@ auto make_rectangle(
             geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height *  0.5), 0.0f, 0.0f, 1.0f);
             geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height * -0.5), 0.0f, 0.0f, 0.0f);
             geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height * -0.5), 0.0f, 1.0f, 0.0f);
+
+
+            //   3·······2
+            //   :   ·   :
+            //   ····+····
+            //   :   ·   :
+            //   0·······1
 
             if (front_face) {
                 geometry.make_polygon( {0, 1, 2, 3} );

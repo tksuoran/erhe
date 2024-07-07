@@ -6,9 +6,7 @@
 
 #include <fmt/format.h>
 
-
-namespace erhe::net
-{
+namespace erhe::net {
 
 Server::Server() = default;
 
@@ -120,4 +118,4 @@ auto Server::get_client_count() const -> std::size_t
     return m_clients.size();
 }
 
-}
+} // namespace erhe::net

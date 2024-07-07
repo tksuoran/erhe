@@ -4,8 +4,7 @@
 
 #include <sstream>
 
-namespace editor
-{
+namespace editor {
 
 Compound_operation::Compound_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}

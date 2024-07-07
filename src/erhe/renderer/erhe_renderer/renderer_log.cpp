@@ -1,8 +1,7 @@
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 std::shared_ptr<spdlog::logger> log_draw;
 std::shared_ptr<spdlog::logger> log_render;

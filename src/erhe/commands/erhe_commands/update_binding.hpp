@@ -9,8 +9,7 @@ namespace erhe::commands {
 class Command;
 struct Input_arguments;
 
-class Update_binding
-    : public Command_binding
+class Update_binding : public Command_binding
 {
 public:
     explicit Update_binding(Command* command);

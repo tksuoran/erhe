@@ -2,7 +2,7 @@
 
 #include "editor_context.hpp"
 
-#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include "erhe_commands/command.hpp"
@@ -39,11 +39,11 @@ void Commands_window::imgui()
 {
     using namespace erhe::commands;
 
-    const auto* viewport = get_viewport();
-    if (viewport->want_capture_keyboard()) {
+    const auto* host = get_imgui_host();
+    if (host->want_capture_keyboard()) {
         ImGui::TextUnformatted("ImGui Want Capture Keyboard");
     }
-    if (viewport->want_capture_mouse()) {
+    if (host->want_capture_mouse()) {
         ImGui::TextUnformatted("ImGui Want Capture Mouse");
     }
 

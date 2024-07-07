@@ -8,8 +8,7 @@
 namespace erhe::physics
 {
 
-class Jolt_debug_renderer final
-    : public JPH::DebugRenderer
+class Jolt_debug_renderer final : public JPH::DebugRenderer
 {
 public:
     //static constexpr std::string_view c_name{"Jolt_debug_renderer"};

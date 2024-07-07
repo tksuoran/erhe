@@ -14,9 +14,7 @@
 
 #include <imgui/imgui.h>
 
-
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
@@ -56,7 +54,7 @@ auto Framebuffer_window::to_content(const glm::vec2 position_in_root) const -> g
 void Framebuffer_window::bind_framebuffer()
 {
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-    gl::viewport        (m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
+    gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 }
 
 void Framebuffer_window::update_framebuffer()
@@ -73,10 +71,7 @@ void Framebuffer_window::update_framebuffer()
 
     const auto imgui_available_size = win_size;
 
-    if (
-        (imgui_available_size.x < 1) ||
-        (imgui_available_size.y < 1)
-    ) {
+    if ((imgui_available_size.x < 1) || (imgui_available_size.y < 1)) {
         return;
     }
 
@@ -86,10 +81,7 @@ void Framebuffer_window::update_framebuffer()
     };
 
     const glm::vec2 source_size = get_size(available_size);
-    if (
-        (source_size.x == 0) ||
-        (source_size.y == 0)
-    ) {
+    if ((source_size.x == 0) || (source_size.y == 0)) {
         return;
     }
 

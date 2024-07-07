@@ -5,8 +5,7 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::hash
-{
+namespace erhe::hash {
 
 static const uint64_t c_prime = 0x100000001b3;
 static const uint64_t c_seed  = 0xcbf29ce484222325;

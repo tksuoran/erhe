@@ -13,8 +13,7 @@
 
 #include <sstream>
 
-namespace editor
-{
+namespace editor {
 
 auto Item_parent_change_operation::describe() const -> std::string
 {

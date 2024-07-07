@@ -3,8 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 class Ring_buffer
 {
@@ -56,4 +55,4 @@ private:
     bool                 m_full        {false};
 };
 
-}
+} // namespace erhe::net

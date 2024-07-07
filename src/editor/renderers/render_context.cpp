@@ -3,7 +3,6 @@
 
 #include "erhe_scene/node.hpp"
 
-
 namespace editor {
 
 auto Render_context::get_camera_node() const -> const erhe::scene::Node*

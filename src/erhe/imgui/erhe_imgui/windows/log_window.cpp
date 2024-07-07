@@ -13,8 +13,7 @@
 
 #include <algorithm>
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 Logs_toggle_pause_command::Logs_toggle_pause_command(erhe::commands::Commands& commands, Logs& logs)
     : Command{commands, "Logs.toggle_pause"}

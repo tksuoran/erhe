@@ -14,8 +14,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 auto IScene::create(const std::string_view debug_label) -> IScene*
 {
@@ -169,7 +168,7 @@ auto Bvh_scene::debug_label() const -> std::string_view
     return m_debug_label;
 }
 
-}
+} // namespace erhe::raytrace
 
 #if defined(_MSC_VER)
 #   pragma warning(pop)

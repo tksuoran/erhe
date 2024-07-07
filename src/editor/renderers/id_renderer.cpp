@@ -22,8 +22,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace editor
-{
+namespace editor {
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Renderbuffer;
@@ -34,7 +33,6 @@ using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
 using glm::mat4;
-
 
 namespace {
 
@@ -250,9 +248,7 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
     }
 }
 
-void Id_renderer::render(
-    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
-)
+void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -318,10 +314,7 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     m_ranges.clear();
 
-    if (
-        (viewport.width == 0) ||
-        (viewport.height == 0)
-    ) {
+    if ((viewport.width == 0) || (viewport.height == 0)) {
         return;
     }
 

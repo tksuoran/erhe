@@ -18,8 +18,7 @@
 
 #include <fmt/format.h>
 
-namespace editor
-{
+namespace editor {
 
 auto Catmull_clark_subdivision_operation::describe() const -> std::string
 {

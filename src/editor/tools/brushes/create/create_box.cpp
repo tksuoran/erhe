@@ -15,12 +15,9 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
-void Create_box::render_preview(
-    const Create_preview_settings& preview_settings
-)
+void Create_box::render_preview(const Create_preview_settings& preview_settings)
 {
     const Render_context& render_context = preview_settings.render_context;
     const auto& view_camera = render_context.scene_view.get_camera();
@@ -47,9 +44,7 @@ void Create_box::imgui()
     ImGui::SliderFloat ("Power", &m_power, 0.0f, 10.0f);
 }
 
-[[nodiscard]] auto Create_box::create(
-    Brush_data& brush_create_info
-) const -> std::shared_ptr<Brush>
+auto Create_box::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
     brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_box(

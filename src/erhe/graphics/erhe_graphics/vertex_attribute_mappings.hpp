@@ -8,8 +8,7 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Buffer;
 class Instance;
@@ -19,9 +18,7 @@ class Vertex_format;
 class Vertex_attribute_mappings final
 {
 public:
-    explicit Vertex_attribute_mappings(
-        erhe::graphics::Instance& instance
-    );
+    explicit Vertex_attribute_mappings(erhe::graphics::Instance& instance);
 
     Vertex_attribute_mappings(
         erhe::graphics::Instance&                             instance,

@@ -13,8 +13,7 @@
 
 #include <cstdarg>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 // Callback for traces, connect this to your own trace function if you have one
 static void TraceImpl(const char* inFMT, ...)
@@ -80,8 +79,7 @@ namespace BroadPhaseLayers
 
 // BroadPhaseLayerInterface implementation
 // This defines a mapping between object and broadphase layers.
-class Broad_phase_layer_interface_impl final
-    : public JPH::BroadPhaseLayerInterface
+class Broad_phase_layer_interface_impl final : public JPH::BroadPhaseLayerInterface
 {
 public:
     Broad_phase_layer_interface_impl()
@@ -97,18 +95,14 @@ public:
         return BroadPhaseLayers::NUM_LAYERS;
     }
 
-    auto GetBroadPhaseLayer(
-        const JPH::ObjectLayer inLayer
-    ) const -> JPH::BroadPhaseLayer override
+    auto GetBroadPhaseLayer(const JPH::ObjectLayer inLayer) const -> JPH::BroadPhaseLayer override
     {
         ERHE_VERIFY(inLayer < Layers::NUM_LAYERS);
         return m_object_to_broad_phase[inLayer];
     }
 
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-    auto GetBroadPhaseLayerName(
-        const JPH::BroadPhaseLayer inLayer
-    ) const -> const char* override
+    auto GetBroadPhaseLayerName(const JPH::BroadPhaseLayer inLayer) const -> const char* override
     {
         switch ((JPH::BroadPhaseLayer::Type)inLayer) {
             case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING:    return "NON_MOVING";
@@ -123,10 +117,7 @@ private:
     JPH::BroadPhaseLayer m_object_to_broad_phase[Layers::NUM_LAYERS];
 };
 
-bool Jolt_collision_filter::ShouldCollide(
-    JPH::ObjectLayer     inLayer1,
-    JPH::BroadPhaseLayer inLayer2
-) const
+auto Jolt_collision_filter::ShouldCollide(JPH::ObjectLayer inLayer1, JPH::BroadPhaseLayer inLayer2) const -> bool
 {
     switch (inLayer1) {
         case Layers::NON_MOVING:    return inLayer2 == BroadPhaseLayers::MOVING;
@@ -138,10 +129,7 @@ bool Jolt_collision_filter::ShouldCollide(
     }
 }
 
-bool Jolt_collision_filter::ShouldCollide(
-    JPH::ObjectLayer inLayer1,
-    JPH::ObjectLayer inLayer2
-) const
+auto Jolt_collision_filter::ShouldCollide(JPH::ObjectLayer inLayer1, JPH::ObjectLayer inLayer2) const -> bool
 {
     switch (inLayer1) {
         case Layers::NON_MOVING:    return inLayer2 == Layers::MOVING;        // Non moving only collides with moving
@@ -437,10 +425,7 @@ void Jolt_world::OnBodyActivated(
     );
 }
 
-void Jolt_world::OnBodyDeactivated(
-    const JPH::BodyID& inBodyID,
-    JPH::uint64        inBodyUserData
-)
+void Jolt_world::OnBodyDeactivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData)
 {
     if (!m_on_body_deactivated_callback) {
         return;
@@ -497,9 +482,7 @@ void Jolt_world::OnContactPersisted(
     //);
 }
 
-void Jolt_world::OnContactRemoved(
-    const JPH::SubShapeIDPair& inSubShapePair
-)
+void Jolt_world::OnContactRemoved(const JPH::SubShapeIDPair& inSubShapePair)
 {
     static_cast<void>(inSubShapePair);
     //log_physics->trace("contact removed");

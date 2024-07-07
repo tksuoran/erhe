@@ -17,8 +17,7 @@ namespace erhe::graphics {
 
 namespace erhe::primitive {
 
-class Material
-    : public erhe::Item<erhe::Item_base, erhe::Item_base, Material>
+class Material : public erhe::Item<erhe::Item_base, erhe::Item_base, Material>
 {
 public:
     struct Textures

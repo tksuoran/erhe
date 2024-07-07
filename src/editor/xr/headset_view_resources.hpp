@@ -21,7 +21,7 @@ namespace editor {
 class Editor_rendering;
 class Headset_view;
 class Scene_root;
-class Viewport_window;
+class Viewport_scene_view;
 
 class Headset_view_resources
 {

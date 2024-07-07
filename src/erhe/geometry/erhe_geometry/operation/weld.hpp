@@ -7,16 +7,13 @@
 #include <vector>
 #include <string>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Polygon;
 }
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
-class Weld
-    : public Geometry_operation
+class Weld : public Geometry_operation
 {
 public:
     Weld(Geometry& source, Geometry& destination);
@@ -32,7 +29,6 @@ private:
 
     auto format_polygon_points(const Polygon& polygon) const -> std::string;
 
-
     float                   m_max_distance;
     uint32_t                m_used_point_count;
     std::vector<Point_id>   m_point_id_merge_candidates;
@@ -41,8 +37,6 @@ private:
     std::vector<Polygon_id> m_polygon_id_remove        ;
 };
 
-[[nodiscard]] auto weld(
-    erhe::geometry::Geometry& source
-) -> erhe::geometry::Geometry;
+[[nodiscard]] auto weld(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

@@ -17,12 +17,12 @@ Composer::Composer(const std::string_view name)
 {
 }
 
-[[nodiscard]] auto Composer::get_type() const -> uint64_t
+auto Composer::get_type() const -> uint64_t
 {
     return get_static_type();
 }
 
-[[nodiscard]] auto Composer::get_type_name() const -> std::string_view
+auto Composer::get_type_name() const -> std::string_view
 {
     return static_type_name;
 }

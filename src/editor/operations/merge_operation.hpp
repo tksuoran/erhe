@@ -16,8 +16,7 @@ class Editor_context;
 class Node_physics;
 class Mesh_raytrace;
 
-class Merge_operation
-    : public IOperation
+class Merge_operation : public IOperation
 {
 public:
     class Parameters

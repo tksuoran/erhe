@@ -4,8 +4,8 @@
 #include "editor_scenes.hpp"
 #include "editor_settings.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -113,12 +113,12 @@ void Physics_window::imgui()
     ////     }
     //// }
 
-    const auto viewport_window = m_context.viewport_windows->last_window();
-    if (!viewport_window) {
+    const auto viewport_scene_view = m_context.scene_views->last_scene_view();
+    if (!viewport_scene_view) {
         return;
     }
 
-    const auto scene_root = viewport_window->get_scene_root();
+    const auto scene_root = viewport_scene_view->get_scene_root();
     if (!scene_root) {
         return;
     }

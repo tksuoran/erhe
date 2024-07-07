@@ -1,11 +1,10 @@
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 std::shared_ptr<spdlog::logger> log_primitive_builder;
-std::shared_ptr<spdlog::logger> log_primitive        ;
+std::shared_ptr<spdlog::logger> log_primitive;
 
 void initialize_logging()
 {

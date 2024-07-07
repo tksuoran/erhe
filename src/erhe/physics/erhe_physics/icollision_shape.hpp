@@ -8,9 +8,7 @@
 #include <string>
 #include <vector>
 
-
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 enum class Axis : int {
     X,
@@ -85,8 +83,6 @@ public:
     //    Transform&                principal_transform,
     //    glm::mat4&                inertia
     //) = 0;
-
 };
-
 
 } // namespace erhe::physics

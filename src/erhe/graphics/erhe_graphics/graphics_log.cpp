@@ -1,8 +1,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 std::shared_ptr<spdlog::logger> log_buffer                   ;
 std::shared_ptr<spdlog::logger> log_context                  ;

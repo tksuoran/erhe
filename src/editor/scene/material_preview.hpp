@@ -41,8 +41,7 @@ class Mesh_memory;
 class Scene_root;
 class Tools;
 
-class Material_preview
-    : public Scene_view
+class Material_preview : public Scene_view
 {
 public:
     Material_preview(

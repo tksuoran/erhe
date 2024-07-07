@@ -37,14 +37,9 @@ public:
         "Generic Frustum"
     };
 
-    [[nodiscard]] auto clip_from_node_transform(
-        const erhe::math::Viewport viewport
-    ) const -> Transform;
+    [[nodiscard]] auto clip_from_node_transform(const erhe::math::Viewport viewport) const -> Transform;
 
-    auto get_projection_matrix(
-        const float viewport_aspect_ration,
-        const bool  reverse_depth
-    ) const -> glm::mat4;
+    auto get_projection_matrix(const float viewport_aspect_ration, const bool reverse_depth) const -> glm::mat4;
 
     class Fov_sides
     {

@@ -4,8 +4,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 void Geometry_operation::post_processing()
 {
@@ -51,11 +50,7 @@ void Geometry_operation::reserve_edge_to_new_points()
     );
 }
 
-auto Geometry_operation::find_or_make_point_from_edge(
-    const Point_id    point_a,
-    const Point_id    point_b,
-    const std::size_t count
-) -> Point_id
+auto Geometry_operation::find_or_make_point_from_edge(const Point_id point_a, const Point_id point_b, const std::size_t count) -> Point_id
 {
     const Point_id a = std::min(point_a, point_b);
     const Point_id b = std::max(point_a, point_b);
@@ -191,10 +186,7 @@ auto Geometry_operation::get_edge_new_point(
     return Point_id{0};
 }
 
-auto Geometry_operation::make_new_point_from_point(
-    const float    point_weight,
-    const Point_id old_point
-) -> Point_id
+auto Geometry_operation::make_new_point_from_point(const float point_weight, const Point_id old_point) -> Point_id
 {
     const auto new_point = destination.make_point();
     // log_operation.trace(
@@ -211,9 +203,7 @@ auto Geometry_operation::make_new_point_from_point(
     return new_point;
 }
 
-auto Geometry_operation::make_new_point_from_point(
-    const Point_id old_point
-) -> Point_id
+auto Geometry_operation::make_new_point_from_point(const Point_id old_point) -> Point_id
 {
     const auto new_point = destination.make_point();
     // log_operation.trace(
@@ -230,9 +220,7 @@ auto Geometry_operation::make_new_point_from_point(
     return new_point;
 }
 
-auto Geometry_operation::make_new_point_from_polygon_centroid(
-    const Polygon_id old_polygon
-) -> Point_id
+auto Geometry_operation::make_new_point_from_polygon_centroid(const Polygon_id old_polygon) -> Point_id
 {
     const auto new_point = destination.make_point();
     // log_operation.trace(
@@ -289,9 +277,7 @@ void Geometry_operation::add_point_ring(
     });
 }
 
-auto Geometry_operation::make_new_polygon_from_polygon(
-    const Polygon_id old_polygon_id
-) -> Polygon_id
+auto Geometry_operation::make_new_polygon_from_polygon(const Polygon_id old_polygon_id) -> Polygon_id
 {
     const auto new_polygon_id = destination.make_polygon();
     // log_operation.trace(

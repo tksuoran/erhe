@@ -11,8 +11,7 @@
 
 #include <fmt/format.h>
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 auto c_str(const Primitive_mode primitive_mode) -> const char*
 {

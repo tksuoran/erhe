@@ -6,8 +6,7 @@
 #include <algorithm>
 #include <cassert>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 Vertex_format::Vertex_format()
 {

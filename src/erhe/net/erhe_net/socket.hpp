@@ -9,8 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 using Receive_handler = std::function<void(const uint8_t* data, std::size_t length)>;
 
@@ -27,10 +26,7 @@ public:
     };
 
     Socket();
-    Socket(
-        const SOCKET&      socket,
-        const sockaddr_in& address_in
-    );
+    Socket(const SOCKET& socket, const sockaddr_in& address_in);
     ~Socket();
     Socket(const Socket&) = delete;
     void operator=(const Socket&) = delete;
@@ -74,6 +70,6 @@ private:
     Receive_handler              m_receive_handler;
 };
 
-auto c_str(const Socket::State state) -> const char*;
+[[nodiscard]] auto c_str(const Socket::State state) -> const char*;
 
-}
+} // namespace erhe::net

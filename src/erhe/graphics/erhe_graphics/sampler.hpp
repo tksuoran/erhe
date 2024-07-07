@@ -5,8 +5,7 @@
 #include <array>
 #include <string>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Sampler_create_info
 {

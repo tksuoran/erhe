@@ -7,8 +7,7 @@
 
 #include "erhe_verify/verify.hpp"
 
-namespace editor
-{
+namespace editor {
 
 using namespace glm;
 
@@ -45,7 +44,7 @@ constexpr glm::mat4 mat4_identity{1.0f};
 
 };
 
-[[nodiscard]] auto Subtool::get_shared() const -> Transform_tool_shared&
+auto Subtool::get_shared() const -> Transform_tool_shared&
 {
     return m_context.transform_tool->shared;
 }
@@ -132,10 +131,7 @@ auto Subtool::offset_plane_origo(const vec3 p) const -> vec3
     }
 }
 
-auto Subtool::project_to_offset_plane(
-    const vec3 P,
-    const vec3 Q
-) const -> vec3
+auto Subtool::project_to_offset_plane(const vec3 P, const vec3 Q) const -> vec3
 {
     switch (m_axis_mask) {
         case Axis_mask::x: return vec3{P.x, Q.y, Q.z};
@@ -147,11 +143,7 @@ auto Subtool::project_to_offset_plane(
     }
 }
 
-auto Subtool::project_pointer_to_plane(
-    Scene_view* scene_view,
-    const vec3  n,
-    const vec3  p
-) -> std::optional<vec3>
+auto Subtool::project_pointer_to_plane(Scene_view* scene_view, const vec3 n, const vec3 p) -> std::optional<vec3>
 {
     if (scene_view == nullptr) {
         return {};

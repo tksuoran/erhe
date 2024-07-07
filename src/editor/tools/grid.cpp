@@ -17,8 +17,7 @@
 
 #include <fmt/format.h>
 
-namespace editor
-{
+namespace editor {
 
 using glm::vec3;
 
@@ -234,10 +233,7 @@ void Grid::imgui(Editor_context& context)
     }
 }
 
-auto Grid::intersect_ray(
-    const glm::vec3& ray_origin_in_world,
-    const glm::vec3& ray_direction_in_world
-) -> std::optional<glm::vec3>
+auto Grid::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>
 {
     if (!is_visible()) {
         return {};
@@ -269,6 +265,5 @@ auto Grid::intersect_ray(
         world_from_grid() * glm::vec4{position_in_grid, 1.0}
     };
 }
-
 
 } // namespace editor

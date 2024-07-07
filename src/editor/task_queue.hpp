@@ -12,16 +12,14 @@ public:
     virtual void wait   () = 0;
 };
 
-class Serial_task_queue
-    : public ITask_queue
+class Serial_task_queue : public ITask_queue
 {
 public:
     void enqueue(std::function<void()>&& func) override;
     void wait   () override;
 };
 
-class Parallel_task_queue
-    : public ITask_queue
+class Parallel_task_queue : public ITask_queue
 {
 public:
     Parallel_task_queue(const std::string_view name, std::size_t thread_count);

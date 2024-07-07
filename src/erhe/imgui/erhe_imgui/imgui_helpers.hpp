@@ -6,8 +6,7 @@
 
 struct ImGuiIO;
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 enum class Item_mode : unsigned int {
     normal = 0, // normal button

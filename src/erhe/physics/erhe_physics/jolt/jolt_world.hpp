@@ -13,8 +13,7 @@
 #include <memory>
 #include <vector>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 enum class Motion_mode : unsigned int;
 
@@ -27,8 +26,7 @@ class Jolt_constraint;
 // Typically you at least want to have 1 layer for moving bodies and 1 layer for static bodies, but you can have more
 // layers if you want. E.g. you could have a layer for high detail collision (which is not used by the physics simulation
 // but only if you do collision testing).
-namespace Layers
-{
+namespace Layers {
 
 static constexpr uint8_t NON_MOVING    = 0u;
 static constexpr uint8_t MOVING        = 1u;
@@ -37,7 +35,7 @@ static constexpr uint8_t NUM_LAYERS    = 3u;
 
 [[nodiscard]] auto get_layer(const Motion_mode motion_mode) -> uint8_t;
 
-};
+}
 
 class Jolt_collision_filter
     : public JPH::ObjectVsBroadPhaseLayerFilter

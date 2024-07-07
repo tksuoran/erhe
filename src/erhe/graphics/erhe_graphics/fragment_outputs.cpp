@@ -3,12 +3,9 @@
 
 #include <sstream>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
-static auto gl_fragment_output_type_name(
-    const gl::Fragment_shader_output_type type
-) -> char const *
+static auto gl_fragment_output_type_name(const gl::Fragment_shader_output_type type) -> char const *
 {
     switch (type) {
         //using enum gl::Fragment_shader_output_type;
@@ -34,10 +31,7 @@ static auto gl_fragment_output_type_name(
     }
 }
 
-
-Fragment_outputs::Fragment_outputs(
-    std::initializer_list<Fragment_output> outputs
-)
+Fragment_outputs::Fragment_outputs(std::initializer_list<Fragment_output> outputs)
     : m_outputs{outputs}
 {
 }

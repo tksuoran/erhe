@@ -41,8 +41,7 @@ namespace editor {
 //    std::vector<Entry> m_entries;
 //};
 
-class Item_parent_change_operation
-    : public IOperation
+class Item_parent_change_operation : public IOperation
 {
 public:
     Item_parent_change_operation();
@@ -68,8 +67,7 @@ private:
     std::shared_ptr<erhe::Hierarchy> m_place_after        {};
 };
 
-class Item_reposition_in_parent_operation
-    : public IOperation
+class Item_reposition_in_parent_operation : public IOperation
 {
 public:
     Item_reposition_in_parent_operation();

@@ -80,14 +80,14 @@ erhe_target_sources_grouped(
     renderers/renderpass.hpp
     renderers/viewport_config.cpp
     renderers/viewport_config.hpp
-    rendergraph/basic_viewport_window.cpp
-    rendergraph/basic_viewport_window.hpp
+    rendergraph/basic_scene_view_node.cpp
+    rendergraph/basic_scene_view_node.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp
     rendergraph/shadow_render_node.hpp
-    rendertarget_imgui_viewport.cpp
-    rendertarget_imgui_viewport.hpp
+    rendertarget_imgui_host.cpp
+    rendertarget_imgui_host.hpp
     rendertarget_mesh.cpp
     rendertarget_mesh.hpp
     res/shaders/anisotropic_engine_ready.frag
@@ -166,10 +166,10 @@ erhe_target_sources_grouped(
     scene/scene_root.hpp
     scene/scene_view.cpp
     scene/scene_view.hpp
-    scene/viewport_window.cpp
-    scene/viewport_window.hpp
-    scene/viewport_windows.cpp
-    scene/viewport_windows.hpp
+    scene/viewport_scene_view.cpp
+    scene/viewport_scene_view.hpp
+    scene/viewport_scene_views.cpp
+    scene/viewport_scene_views.hpp
     settings.ini
     task_queue.cpp
     task_queue.hpp
@@ -251,8 +251,8 @@ erhe_target_sources_grouped(
     windows/composer_window.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
-    windows/imgui_viewport_window.cpp
-    windows/imgui_viewport_window.hpp
+    windows/imgui_window_scene_view_node.cpp
+    windows/imgui_window_scene_view_node.hpp
     windows/item_tree_window.cpp
     windows/item_tree_window.hpp
     windows/layers_window.cpp

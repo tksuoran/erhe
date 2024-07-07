@@ -5,8 +5,7 @@
 
 #define DISABLE_CACHE 0
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
 {
@@ -26,9 +25,7 @@ auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
     }
 }
 
-auto Stencil_state_component_hash::operator()(
-    const Stencil_op_state& stencil_state_component
-) const noexcept -> size_t
+auto Stencil_state_component_hash::operator()(const Stencil_op_state& stencil_state_component) const noexcept -> size_t
 {
     static_assert(sizeof(size_t) >= 5u);
     return
@@ -42,9 +39,7 @@ auto Stencil_state_component_hash::operator()(
 }
 
 
-auto Depth_stencil_state_hash::operator()(
-    const Depth_stencil_state& state
-) const noexcept -> size_t
+auto Depth_stencil_state_hash::operator()(const Depth_stencil_state& state) const noexcept -> size_t
 {
     // Since front might match with back, apply std::hash()
     // to one of them to avoid them perfectly canceling out.
@@ -95,18 +90,14 @@ Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_greater_or_equal_s
     .stencil_test_enable = false
 };
 
-auto Depth_stencil_state::depth_test_enabled_stencil_test_disabled(
-    bool reverse_depth
-) -> const Depth_stencil_state&
+auto Depth_stencil_state::depth_test_enabled_stencil_test_disabled(bool reverse_depth) -> const Depth_stencil_state&
 {
     return reverse_depth
         ? s_depth_test_enabled_stencil_test_disabled_reverse_depth
         : s_depth_test_enabled_stencil_test_disabled_forward_depth;
 }
 
-auto Depth_stencil_state::depth_test_enabled_greater_or_equal_stencil_test_disabled(
-    bool reverse_depth
-) -> const Depth_stencil_state&
+auto Depth_stencil_state::depth_test_enabled_greater_or_equal_stencil_test_disabled(bool reverse_depth) -> const Depth_stencil_state&
 {
     return reverse_depth
         ? s_depth_test_enabled_stencil_test_disabled_reverse_depth
@@ -190,10 +181,7 @@ void Depth_stencil_state_tracker::execute_component(
 #endif
 }
 
-void Depth_stencil_state_tracker::execute_shared(
-    const Stencil_op_state& state,
-    Depth_stencil_state&    cache
-)
+void Depth_stencil_state_tracker::execute_shared(const Stencil_op_state& state, Depth_stencil_state& cache)
 {
 #if DISABLE_CACHE
     static_cast<void>(cache);
@@ -310,10 +298,7 @@ void Depth_stencil_state_tracker::execute(const Depth_stencil_state& state)
 #endif
 }
 
-auto operator==(
-    const Stencil_op_state& lhs,
-    const Stencil_op_state& rhs
-) noexcept -> bool
+auto operator==(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexcept -> bool
 {
     return
         (lhs.stencil_fail_op == rhs.stencil_fail_op) &&
@@ -325,18 +310,12 @@ auto operator==(
         (lhs.write_mask      == rhs.write_mask     );
 }
 
-auto operator!=(
-    const Stencil_op_state& lhs,
-    const Stencil_op_state& rhs
-) noexcept -> bool
+auto operator!=(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }
 
-auto operator==(
-    const Depth_stencil_state& lhs,
-    const Depth_stencil_state& rhs
-) noexcept -> bool
+auto operator==(const Depth_stencil_state& lhs, const Depth_stencil_state& rhs) noexcept -> bool
 {
     return
         (lhs.depth_test_enable   == rhs.depth_test_enable  ) &&
@@ -347,10 +326,7 @@ auto operator==(
         (lhs.stencil_back        == rhs.stencil_back       );
 }
 
-auto operator!=(
-    const Depth_stencil_state& lhs,
-    const Depth_stencil_state& rhs
-) noexcept -> bool
+auto operator!=(const Depth_stencil_state& lhs, const Depth_stencil_state& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }

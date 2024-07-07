@@ -6,8 +6,7 @@
 
 namespace editor {
 
-class Create_torus
-    : public Create_shape
+class Create_torus : public Create_shape
 {
 public:
     void render_preview(const Create_preview_settings& preview_settings) override;

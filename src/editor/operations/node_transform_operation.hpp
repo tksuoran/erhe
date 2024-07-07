@@ -17,8 +17,7 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Node_transform_operation
-    : public IOperation
+class Node_transform_operation : public IOperation
 {
 public:
     class Parameters

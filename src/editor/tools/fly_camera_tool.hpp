@@ -23,7 +23,7 @@ namespace editor {
 class Editor_message_bus;
 class Fly_camera_tool;
 class Tools;
-class Viewport_windows;
+class Scene_views;
 
 class Fly_camera_turn_command : public erhe::commands::Command
 {

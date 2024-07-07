@@ -14,8 +14,7 @@
 
 #include <algorithm>
 
-namespace erhe::rendergraph
-{
+namespace erhe::rendergraph {
 
 Multisample_resolve_node::Multisample_resolve_node(
     Rendergraph&           rendergraph,

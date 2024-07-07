@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 extern std::shared_ptr<spdlog::logger> log_net;
 extern std::shared_ptr<spdlog::logger> log_socket;

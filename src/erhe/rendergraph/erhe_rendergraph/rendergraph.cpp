@@ -20,7 +20,7 @@ Rendergraph::~Rendergraph()
     log_tail->info("Rendergraph::~Rendergraph()");
 }
 
-[[nodiscard]] auto Rendergraph::get_nodes() const -> const std::vector<Rendergraph_node*>&
+auto Rendergraph::get_nodes() const -> const std::vector<Rendergraph_node*>&
 {
     return m_nodes;
 }
@@ -215,7 +215,7 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
     log_tail->trace("Unregistered Rendergraph_node {}", node->get_name());
 }
 
-[[nodiscard]] auto Rendergraph::get_graphics_instance() -> erhe::graphics::Instance&
+auto Rendergraph::get_graphics_instance() -> erhe::graphics::Instance&
 {
     return m_graphics_instance;
 }
@@ -289,11 +289,7 @@ void Rendergraph::automatic_layout(const float image_size)
     }
 }
 
-auto Rendergraph::connect(
-    const int         key,
-    Rendergraph_node* source,
-    Rendergraph_node* sink
-) -> bool
+auto Rendergraph::connect(const int key, Rendergraph_node* source, Rendergraph_node* sink) -> bool
 {
     ERHE_VERIFY(source != nullptr);
     ERHE_VERIFY(sink != nullptr);
@@ -312,11 +308,7 @@ auto Rendergraph::connect(
     return true;
 }
 
-auto Rendergraph::disconnect(
-    const int         key,
-    Rendergraph_node* source,
-    Rendergraph_node* sink
-) -> bool
+auto Rendergraph::disconnect(const int key, Rendergraph_node* source, Rendergraph_node* sink) -> bool
 {
     ERHE_VERIFY(source != nullptr);
     ERHE_VERIFY(sink != nullptr);

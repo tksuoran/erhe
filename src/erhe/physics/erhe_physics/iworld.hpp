@@ -8,8 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 class IConstraint;
 class IDebug_draw;

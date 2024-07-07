@@ -5,20 +5,17 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/Body.h>
 
-namespace JPH
-{
+namespace JPH {
     class Body;
     class BodyInterface;
 }
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 class Jolt_collision_shape;
 class Jolt_world;
 
-class Jolt_rigid_body
-    : public IRigid_body
+class Jolt_rigid_body : public IRigid_body
 {
 public:
     Jolt_rigid_body(

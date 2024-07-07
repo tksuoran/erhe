@@ -5,12 +5,9 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 
+namespace erhe::physics {
 
-namespace erhe::physics
-{
-
-class Jolt_uniform_scaling_shape
-    : public Jolt_collision_shape
+class Jolt_uniform_scaling_shape : public Jolt_collision_shape
 {
 public:
     Jolt_uniform_scaling_shape(ICollision_shape* shape, float scale);

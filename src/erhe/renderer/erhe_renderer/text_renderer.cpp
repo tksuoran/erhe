@@ -20,8 +20,7 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_ui/font.hpp"
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 using glm::mat4;
 using glm::vec3;

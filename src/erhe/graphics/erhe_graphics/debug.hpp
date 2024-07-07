@@ -8,8 +8,7 @@ typedef unsigned int GLenum;
 typedef unsigned int GLuint;
 typedef int GLsizei;
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 void erhe_opengl_callback(
     GLenum        gl_source,

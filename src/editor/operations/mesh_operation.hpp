@@ -20,8 +20,7 @@ namespace editor {
 class Editor_context;
 class Node_physics;
 
-class Mesh_operation
-    : public IOperation
+class Mesh_operation : public IOperation
 {
 public:
     class Parameters

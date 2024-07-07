@@ -7,16 +7,11 @@
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
 
-namespace editor
-{
+namespace editor {
 
 using namespace glm;
 
-Scale_tool::Scale_tool(
-    Editor_context& editor_context,
-    Icon_set&       icon_set,
-    Tools&          tools
-)
+Scale_tool::Scale_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools)
     : Subtool{editor_context}
 {
     set_base_priority(c_priority);
@@ -26,10 +21,7 @@ Scale_tool::Scale_tool(
     tools.register_tool(this);
 }
 
-void Scale_tool::handle_priority_update(
-    const int old_priority,
-    const int new_priority
-)
+void Scale_tool::handle_priority_update(const int old_priority, const int new_priority)
 {
     auto& shared = get_shared();
     shared.settings.show_scale = new_priority > old_priority;
@@ -39,10 +31,7 @@ void Scale_tool::imgui()
 {
 }
 
-auto Scale_tool::begin(
-    const unsigned int axis_mask,
-    Scene_view*        scene_view
-) -> bool
+auto Scale_tool::begin(const unsigned int axis_mask, Scene_view* scene_view) -> bool
 {
     m_axis_mask = axis_mask;
     m_active    = true;

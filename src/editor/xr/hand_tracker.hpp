@@ -90,8 +90,7 @@ private:
     std::array<ImVec4, Finger_name::count>                             m_color;
 };
 
-class Hand_tracker
-    : public Renderable
+class Hand_tracker : public Renderable
 {
 public:
     Hand_tracker(Editor_context& editor_context, Editor_rendering& editor_rendering);

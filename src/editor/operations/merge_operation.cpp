@@ -17,8 +17,7 @@
 #include <memory>
 #include <sstream>
 
-namespace editor
-{
+namespace editor {
 
 auto Merge_operation::describe() const -> std::string
 {

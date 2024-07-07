@@ -13,8 +13,7 @@
 
 #include <sstream>
 
-namespace editor
-{
+namespace editor {
 
 Item_reposition_in_parent_operation::Item_reposition_in_parent_operation() = default;
 

@@ -15,8 +15,7 @@
 #include <numeric>
 #include <sstream>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 using vec3 = glm::vec3;
 
@@ -311,10 +310,7 @@ void Weld::count_used_points()
     //// log_merge->info("Used point count = {}", m_used_point_count);
 }
 
-Weld::Weld(
-    Geometry& source,
-    Geometry& destination
-)
+Weld::Weld(Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
     ERHE_PROFILE_FUNCTION();

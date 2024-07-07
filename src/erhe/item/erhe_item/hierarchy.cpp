@@ -7,11 +7,9 @@
 
 #include <sstream>
 
-namespace erhe
-{
+namespace erhe {
 
 using namespace erhe::item;
-
 
 Hierarchy::Hierarchy()           = default;
 Hierarchy::~Hierarchy() noexcept = default;
@@ -203,10 +201,7 @@ void Hierarchy::set_parent(Hierarchy* parent)
     set_parent(parent, std::numeric_limits<std::size_t>::max());
 }
 
-void Hierarchy::set_parent(
-    Hierarchy* const  new_parent,
-    const std::size_t position
-)
+void Hierarchy::set_parent(Hierarchy* const new_parent, const std::size_t position)
 {
     ERHE_VERIFY(new_parent != this);
     if (new_parent != nullptr) {
@@ -219,10 +214,7 @@ void Hierarchy::set_parent(
     }
 }
 
-void Hierarchy::handle_add_child(
-    const std::shared_ptr<Hierarchy>& child,
-    std::size_t                       position
-)
+void Hierarchy::handle_add_child(const std::shared_ptr<Hierarchy>& child, std::size_t position)
 {
     ERHE_VERIFY(child);
     ERHE_VERIFY(child.get() != this);
@@ -241,9 +233,7 @@ void Hierarchy::handle_add_child(
     m_children.insert(m_children.begin() + position, child);
 }
 
-void Hierarchy::handle_remove_child(
-    Hierarchy* const child
-)
+void Hierarchy::handle_remove_child(Hierarchy* const child)
 {
     ERHE_VERIFY(child != nullptr);
 
@@ -266,10 +256,7 @@ void Hierarchy::handle_remove_child(
     }
 }
 
-void Hierarchy::handle_parent_update(
-    Hierarchy* const old_parent,
-    Hierarchy* const new_parent
-)
+void Hierarchy::handle_parent_update(Hierarchy* const old_parent, Hierarchy* const new_parent)
 {
     static_cast<void>(old_parent);
     static_cast<void>(new_parent);

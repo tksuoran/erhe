@@ -15,8 +15,7 @@ namespace spdlog {
     class logger;
 }
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 inline constexpr Property_map_descriptor c_point_locations      { "point_locations"      , Transform_mode::position            , Interpolation_mode::linear };
 inline constexpr Property_map_descriptor c_point_normals        { "point_normals"        , Transform_mode::direction           , Interpolation_mode::none/*Interpolation_mode::normalized*/ };

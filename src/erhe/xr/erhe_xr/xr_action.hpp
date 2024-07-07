@@ -30,8 +30,7 @@ public:
     unsigned int profile_mask{0};
 };
 
-class Xr_action_boolean
-    : public Xr_action
+class Xr_action_boolean : public Xr_action
 {
 public:
     Xr_action_boolean(XrInstance instance, const XrActionSet action_set, const std::string_view name, unsigned int profile_mask);
@@ -48,8 +47,7 @@ public:
     };
 };
 
-class Xr_action_float
-    : public Xr_action
+class Xr_action_float : public Xr_action
 {
 public:
     Xr_action_float(XrInstance instance, const XrActionSet action_set, const std::string_view name, unsigned int profile_mask);
@@ -66,8 +64,7 @@ public:
     };
 };
 
-class Xr_action_vector2f
-    : public Xr_action
+class Xr_action_vector2f : public Xr_action
 {
 public:
     Xr_action_vector2f(XrInstance instance, const XrActionSet action_set, const std::string_view name, unsigned int profile_mask);
@@ -88,8 +85,7 @@ public:
     };
 };
 
-class Xr_action_pose
-    : public Xr_action
+class Xr_action_pose : public Xr_action
 {
 public:
     Xr_action_pose(XrInstance instance, const XrActionSet action_set, const std::string_view name, unsigned int profile_mask);

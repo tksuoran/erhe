@@ -4,8 +4,7 @@
 #include "erhe_verify/verify.hpp"
 #include <fmt/format.h>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 Sampler::Sampler(const Sampler_create_info& create_info)
     : min_filter    {create_info.min_filter    }

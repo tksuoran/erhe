@@ -32,8 +32,7 @@ public:
     glm::vec4 icon_color{1.0f, 1.0f, 1.0f, 1.0f};
 };
 
-class Asset_folder
-    : public erhe::Item<erhe::Item_base, Asset_node, Asset_folder>
+class Asset_folder : public erhe::Item<erhe::Item_base, Asset_node, Asset_folder>
 {
 public:
     explicit Asset_folder(const Asset_folder&);
@@ -49,8 +48,7 @@ public:
     auto get_type_name() const -> std::string_view override;
 };
 
-class Asset_file_gltf
-    : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_gltf>
+class Asset_file_gltf : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_gltf>
 {
 public:
     explicit Asset_file_gltf(const Asset_file_gltf& src);
@@ -69,8 +67,7 @@ public:
     std::vector<std::string> contents;
 };
 
-class Asset_file_other
-    : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_other>
+class Asset_file_other : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_other>
 {
 public:
     explicit Asset_file_other(const Asset_file_other& src);

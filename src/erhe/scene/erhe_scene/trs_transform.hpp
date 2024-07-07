@@ -4,8 +4,7 @@
 
 namespace erhe::scene {
 
-class Trs_transform
-    : public Transform
+class Trs_transform : public Transform
 {
 public:
     Trs_transform         () = default;

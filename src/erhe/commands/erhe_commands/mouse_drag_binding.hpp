@@ -5,8 +5,7 @@
 namespace erhe::commands {
 
 // Mouse button pressed and then moved while pressed
-class Mouse_drag_binding
-    : public Mouse_binding
+class Mouse_drag_binding : public Mouse_binding
 {
 public:
     Mouse_drag_binding(

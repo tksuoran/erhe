@@ -5,8 +5,7 @@
 #include <fmt/format.h>
 #include <glm/glm.hpp>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 Triangulate::Triangulate(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
@@ -43,6 +42,5 @@ auto triangulate(Geometry& source) -> Geometry
         }
     };
 }
-
 
 } // namespace erhe::geometry::operation

@@ -15,8 +15,7 @@
 typedef int GLsizei;
 typedef int GLint;
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Buffer;
 class Vertex_attribute_mapping;

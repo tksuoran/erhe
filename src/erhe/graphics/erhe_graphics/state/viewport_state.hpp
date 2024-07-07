@@ -2,8 +2,7 @@
 
 #include <functional>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Viewport_state
 {
@@ -74,15 +73,8 @@ public:
     }
 };
 
-[[nodiscard]] auto operator==(
-    const Viewport_state& lhs,
-    const Viewport_state& rhs
-) noexcept -> bool;
-
-[[nodiscard]] auto operator!=(
-    const Viewport_state& lhs,
-    const Viewport_state& rhs
-) noexcept -> bool;
+[[nodiscard]] auto operator==(const Viewport_state& lhs, const Viewport_state& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(const Viewport_state& lhs, const Viewport_state& rhs) noexcept -> bool;
 
 class Viewport_state_tracker
 {

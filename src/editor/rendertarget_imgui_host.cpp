@@ -1,6 +1,6 @@
 ﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "rendertarget_imgui_viewport.hpp"
+#include "rendertarget_imgui_host.hpp"
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
@@ -26,10 +26,9 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
-namespace editor
-{
+namespace editor {
 
-Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
+Rendertarget_imgui_host::Rendertarget_imgui_host(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::rendergraph::Rendergraph& rendergraph,
     Editor_context&                 editor_context,
@@ -37,7 +36,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     const std::string_view          name,
     const bool                      imgui_ini
 )
-    : erhe::imgui::Imgui_viewport{
+    : erhe::imgui::Imgui_host{
         rendergraph,
         imgui_renderer,
         name,
@@ -71,7 +70,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     m_last_mouse_y = -FLT_MAX;
 }
 
-Rendertarget_imgui_viewport::~Rendertarget_imgui_viewport() noexcept = default;
+Rendertarget_imgui_host::~Rendertarget_imgui_host() noexcept = default;
 
 template <typename T>
 [[nodiscard]] inline auto as_span(const T& value) -> std::span<const T>
@@ -79,31 +78,31 @@ template <typename T>
     return std::span<const T>(&value, 1);
 }
 
-auto Rendertarget_imgui_viewport::rendertarget_mesh() -> Rendertarget_mesh*
+auto Rendertarget_imgui_host::rendertarget_mesh() -> Rendertarget_mesh*
 {
     return m_rendertarget_mesh;
 }
 
-auto Rendertarget_imgui_viewport::get_mutable_style() -> ImGuiStyle&
+auto Rendertarget_imgui_host::get_mutable_style() -> ImGuiStyle&
 {
     return m_imgui_context->Style;
 }
 
-auto Rendertarget_imgui_viewport::get_style() const -> const ImGuiStyle&
+auto Rendertarget_imgui_host::get_style() const -> const ImGuiStyle&
 {
     return m_imgui_context->Style;
 }
 
-auto Rendertarget_imgui_viewport::get_scale_value() const -> float
+auto Rendertarget_imgui_host::get_scale_value() const -> float
 {
     return 2.0f;
 }
 
-auto Rendertarget_imgui_viewport::begin_imgui_frame() -> bool
+auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
 {
     SPDLOG_LOGGER_TRACE(
         log_rendertarget_imgui_windows,
-        "Rendertarget_imgui_viewport::begin_imgui_frame()"
+        "Rendertarget_imgui_host::begin_imgui_frame()"
     );
 
     if (m_rendertarget_mesh == nullptr) {
@@ -272,34 +271,34 @@ auto Rendertarget_imgui_viewport::begin_imgui_frame() -> bool
     return true;
 }
 
-void Rendertarget_imgui_viewport::end_imgui_frame()
+void Rendertarget_imgui_host::end_imgui_frame()
 {
     SPDLOG_LOGGER_TRACE(
         log_rendertarget_imgui_windows,
-        "Rendertarget_imgui_viewport::end_imgui_frame()"
+        "Rendertarget_imgui_host::end_imgui_frame()"
     );
 
     ImGui::EndFrame();
     ImGui::Render();
 }
 
-void Rendertarget_imgui_viewport::set_clear_color(const glm::vec4& value)
+void Rendertarget_imgui_host::set_clear_color(const glm::vec4& value)
 {
     m_clear_color = value;
 }
 
-void Rendertarget_imgui_viewport::execute_rendergraph_node()
+void Rendertarget_imgui_host::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION();
 
-    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::execute_rendergraph_node()");
+    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_host::execute_rendergraph_node()");
 
     if (!m_enabled) {
         return;
     }
 
-    erhe::imgui::Imgui_viewport& imgui_viewport = *this;
-    erhe::imgui::Scoped_imgui_context imgui_context{imgui_viewport};
+    erhe::imgui::Imgui_host& imgui_host = *this;
+    erhe::imgui::Scoped_imgui_context imgui_context{imgui_host};
 
     m_rendertarget_mesh->bind();
     m_rendertarget_mesh->clear(m_clear_color);
@@ -307,51 +306,23 @@ void Rendertarget_imgui_viewport::execute_rendergraph_node()
     m_rendertarget_mesh->render_done(m_context);
 }
 
-auto Rendertarget_imgui_viewport::get_consumer_input_texture(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Rendertarget_imgui_host::get_consumer_input_texture(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
     return m_rendertarget_mesh->texture();
 }
 
-auto Rendertarget_imgui_viewport::get_producer_output_texture(
-    erhe::rendergraph::Routing resource_routing,
-    int                        key,
-    int                        depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Rendertarget_imgui_host::get_producer_output_texture(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
     return m_rendertarget_mesh->texture();
 }
 
-auto Rendertarget_imgui_viewport::get_consumer_input_framebuffer(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Rendertarget_imgui_host::get_consumer_input_framebuffer(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
     return m_rendertarget_mesh->framebuffer();
 }
 
-auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> erhe::math::Viewport
+auto Rendertarget_imgui_host::get_consumer_input_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
     return erhe::math::Viewport{
         .x      = 0,
         .y      = 0,
@@ -361,15 +332,8 @@ auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
     };
 }
 
-auto Rendertarget_imgui_viewport::get_producer_output_viewport(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> erhe::math::Viewport
+auto Rendertarget_imgui_host::get_producer_output_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
     return erhe::math::Viewport{
         .x      = 0,
         .y      = 0,

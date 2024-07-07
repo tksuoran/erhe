@@ -3,12 +3,9 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_math/math_util.hpp"
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
-auto Projection::clip_from_node_transform(
-    const erhe::math::Viewport viewport
-) const -> Transform
+auto Projection::clip_from_node_transform(const erhe::math::Viewport viewport) const -> Transform
 {
     const auto aspect_ratio = viewport.aspect_ratio();
     const auto m = get_projection_matrix(aspect_ratio, viewport.reverse_depth);
@@ -18,10 +15,7 @@ auto Projection::clip_from_node_transform(
     };
 }
 
-auto Projection::get_projection_matrix(
-    const float aspect_ratio,
-    const bool  reverse_depth
-) const -> glm::mat4
+auto Projection::get_projection_matrix(const float aspect_ratio, const bool reverse_depth) const -> glm::mat4
 {
     const auto clip_range = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
 
@@ -132,9 +126,7 @@ auto Projection::get_projection_matrix(
     }
 }
 
-auto Projection::get_fov_sides(
-    const erhe::math::Viewport viewport
-) const -> Fov_sides
+auto Projection::get_fov_sides(const erhe::math::Viewport viewport) const -> Fov_sides
 {
     switch (projection_type) {
         //using enum Projection::Type;

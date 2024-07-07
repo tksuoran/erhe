@@ -8,8 +8,7 @@
 
 #include <filesystem>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 [[nodiscard]] auto from_spng(const enum ::spng_format format) -> Image_format
 {
@@ -66,10 +65,7 @@ void PNG_loader::close()
     m_file.reset();
 }
 
-auto PNG_loader::open(
-    const std::filesystem::path& path,
-    Image_info&                  info
-) -> bool
+auto PNG_loader::open(const std::filesystem::path& path, Image_info& info) -> bool
 {
     close();
 

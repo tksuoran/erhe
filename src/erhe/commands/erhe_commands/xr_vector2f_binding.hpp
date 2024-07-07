@@ -10,8 +10,7 @@ namespace erhe::commands {
 
 struct Input_arguments;
 
-class Xr_vector2f_binding
-    : public Command_binding
+class Xr_vector2f_binding : public Command_binding
 {
 public:
     Xr_vector2f_binding(

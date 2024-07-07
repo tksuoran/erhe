@@ -83,9 +83,7 @@ auto Operation_stack::get_executor() -> tf::Executor&
     return *m_executor.get();
 }
 
-void Operation_stack::queue(
-    const std::shared_ptr<IOperation>& operation
-)
+void Operation_stack::queue(const std::shared_ptr<IOperation>& operation)
 {
     m_queued.push_back(operation);
 }

@@ -4,8 +4,7 @@
 
 namespace editor {
 
-class Create_cone
-    : public Create_shape
+class Create_cone : public Create_shape
 {
 public:
     void render_preview(const Create_preview_settings& preview_settings) override;

@@ -45,8 +45,7 @@ public:
     std::size_t                     max_material_count;
 };
 
-class Material_buffer
-    : public erhe::renderer::Multi_buffer
+class Material_buffer : public erhe::renderer::Multi_buffer
 {
 public:
     Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface);

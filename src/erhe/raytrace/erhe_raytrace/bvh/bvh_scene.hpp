@@ -19,8 +19,7 @@ class Bvh_geometry;
 class Bvh_instance;
 class IGeometry;
 
-class Bvh_scene
-    : public IScene
+class Bvh_scene : public IScene
 {
 public:
     explicit Bvh_scene(const std::string_view debug_label);

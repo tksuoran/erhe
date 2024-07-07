@@ -8,8 +8,7 @@
 #include <map>
 #include <vector>
 
-namespace erhe::geometry::shapes
-{
+namespace erhe::geometry::shapes {
 
 using glm::vec2;
 using glm::vec3;
@@ -90,10 +89,7 @@ public:
         };
     }
 
-    auto torus_point(
-        const double rel_major,
-        const double rel_minor
-    ) -> Point_id
+    auto torus_point(const double rel_major, const double rel_minor) -> Point_id
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -263,7 +259,6 @@ public:
             }
         }
 
-        geometry.reverse_polygons(); // TODO reverse the code above and remove this
         geometry.make_point_corners();
         geometry.build_edges();
         geometry.promise_has_polygon_normals();
@@ -275,12 +270,7 @@ public:
     }
 };
 
-auto make_torus(
-    const double major_radius,
-    const double minor_radius,
-    const int    major_axis_steps,
-    const int    minor_axis_steps
-) -> Geometry
+auto make_torus(const double major_radius, const double minor_radius, const int major_axis_steps, const int minor_axis_steps) -> Geometry
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -293,10 +283,7 @@ auto make_torus(
     };
 }
 
-auto torus_volume(
-    const float major_radius,
-    const float minor_radius
-) -> float
+auto torus_volume(const float major_radius, const float minor_radius) -> float
 {
     return
         glm::pi<float>() *

@@ -13,8 +13,7 @@
 #include <sstream>
 #include <vector>
 
-namespace erhe::geometry::shapes
-{
+namespace erhe::geometry::shapes {
 
 using glm::vec2;
 using glm::vec3;
@@ -139,10 +138,7 @@ public:
         };
     }
 
-    [[nodiscard]] auto cone_point(
-        const double rel_slice,
-        const double rel_stack
-    ) -> Point_id
+    [[nodiscard]] auto cone_point(const double rel_slice, const double rel_stack) -> Point_id
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -168,19 +164,12 @@ public:
         return point_id;
     }
 
-    auto make_corner(
-        const Polygon_id polygon,
-        const int        slice,
-        const int        stack
-    ) -> Corner_id
+    auto make_corner(const Polygon_id polygon, const int slice, const int stack) -> Corner_id
     {
         return make_corner(polygon, slice, stack, false);
     }
 
-    auto get_point_id(
-        const int slice,
-        const int stack
-    )
+    auto get_point_id(const int slice, const int stack)
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -195,12 +184,7 @@ public:
         }
     }
 
-    auto make_corner(
-        const Polygon_id polygon_id,
-        const int        slice,
-        const int        stack,
-        const bool       base
-    ) -> Corner_id
+    auto make_corner(const Polygon_id polygon_id, const int slice, const int stack, const bool base) -> Corner_id
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -573,7 +557,6 @@ public:
                 SPDLOG_LOGGER_TRACE(log_cone, "Top - none");
             }
         }
-        geometry.reverse_polygons(); // TODO reverse the code above and remove this
         geometry.make_point_corners();
         geometry.build_edges();
         geometry.promise_has_polygon_normals();

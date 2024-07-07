@@ -60,10 +60,7 @@ public:
     // Public API
     void viewport_toolbar(bool& hovered);
 
-    auto update_hover(
-        const glm::vec3 ray_origin,
-        const glm::vec3 ray_direction
-    ) const -> Grid_hover_position;
+    auto update_hover(const glm::vec3 ray_origin, const glm::vec3 ray_direction) const -> Grid_hover_position;
 
 private:
     bool                               m_enable{true};

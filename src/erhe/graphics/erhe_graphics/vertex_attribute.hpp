@@ -9,8 +9,7 @@
 #include <string>
 #include <type_traits>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 enum class Glsl_type
 {

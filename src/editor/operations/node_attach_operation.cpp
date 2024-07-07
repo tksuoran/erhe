@@ -13,8 +13,7 @@
 
 #include <sstream>
 
-namespace editor
-{
+namespace editor {
 
 auto Node_attach_operation::describe() const -> std::string
 {

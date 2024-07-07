@@ -1,11 +1,8 @@
 #include "erhe_renderer/pipeline_renderpass.hpp"
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
-Pipeline_renderpass::Pipeline_renderpass(
-    erhe::graphics::Pipeline&& pipeline
-)
+Pipeline_renderpass::Pipeline_renderpass(erhe::graphics::Pipeline&& pipeline)
     : pipeline{pipeline}
 {
 }

@@ -15,8 +15,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 
-namespace editor
-{
+namespace editor {
 
 using erhe::geometry::Polygon; // Resolve conflict with wingdi.h BOOL Polygon(HDC,const POINT *,int)
 using erhe::geometry::c_polygon_centroids;
@@ -419,7 +418,7 @@ auto Brush::make_instance(
     return node;
 }
 
-[[nodiscard]] auto Brush::get_bounding_box() -> erhe::math::Bounding_box
+auto Brush::get_bounding_box() -> erhe::math::Bounding_box
 {
     if (
         !m_primitive.has_renderable_triangles() ||

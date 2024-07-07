@@ -18,7 +18,6 @@
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 
-
 namespace editor {
 
 using Vertex_input_state   = erhe::graphics::Vertex_input_state;
@@ -272,7 +271,7 @@ Tools::Tools(
     tool->allow_shader_stages_override = false;
 }
 
-[[nodiscard]] auto Tools::get_tool_scene_root() -> std::shared_ptr<Scene_root>
+auto Tools::get_tool_scene_root() -> std::shared_ptr<Scene_root>
 {
     return m_scene_root;
 }
@@ -352,12 +351,12 @@ void Tools::set_priority_tool(Tool* priority_tool)
     );
 }
 
-[[nodiscard]] auto Tools::get_priority_tool() const -> Tool*
+auto Tools::get_priority_tool() const -> Tool*
 {
     return m_priority_tool;
 }
 
-[[nodiscard]] auto Tools::get_tools() const -> const std::vector<Tool*>&
+auto Tools::get_tools() const -> const std::vector<Tool*>&
 {
     return m_tools;
 }

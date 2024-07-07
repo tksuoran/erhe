@@ -7,11 +7,9 @@
 
 #include <algorithm>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
-namespace
-{
+namespace {
 
 auto glsl_token(const gl::Uniform_type type) -> const char*
 {
@@ -721,9 +719,7 @@ auto Shader_resource::layout_string() const -> std::string
     return ss.str();
 }
 
-auto Shader_resource::source(
-    const int indent_level /* = 0 */
-) const -> std::string
+auto Shader_resource::source(const int indent_level /* = 0 */) const -> std::string
 {
     std::stringstream ss;
 

@@ -15,15 +15,8 @@ public:
     gl::Blending_factor     destination_factor{gl::Blending_factor::zero};
 };
 
-[[nodiscard]] auto operator==(
-    const Blend_state_component& lhs,
-    const Blend_state_component& rhs
-) noexcept -> bool;
-
-[[nodiscard]] auto operator!=(
-    const Blend_state_component& lhs,
-    const Blend_state_component& rhs
-) noexcept -> bool;
+[[nodiscard]] auto operator==(const Blend_state_component& lhs, const Blend_state_component& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(const Blend_state_component& lhs, const Blend_state_component& rhs) noexcept -> bool;
 
 class Color_write_mask
 {
@@ -55,15 +48,8 @@ public:
     auto operator()(const Color_blend_state& state) const noexcept -> std::size_t;
 };
 
-[[nodiscard]] auto operator==(
-    const Color_blend_state& lhs,
-    const Color_blend_state& rhs
-) noexcept -> bool;
-
-[[nodiscard]] auto operator!=(
-    const Color_blend_state& lhs,
-    const Color_blend_state& rhs
-) noexcept -> bool;
+[[nodiscard]] auto operator==(const Color_blend_state& lhs, const Color_blend_state& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(const Color_blend_state& lhs, const Color_blend_state& rhs) noexcept -> bool;
 
 class Color_blend_state_tracker
 {

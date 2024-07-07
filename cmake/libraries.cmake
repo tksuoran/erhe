@@ -181,7 +181,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     JoltPhysics
     GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
-    GIT_TAG         a69a48404ea4c16102e381abe2c86b7334e6ed89 # v5.0.0 has issue
+    GIT_TAG         master # v5.0.0 has issue
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )

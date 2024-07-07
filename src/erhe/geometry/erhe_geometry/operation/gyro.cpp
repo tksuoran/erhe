@@ -8,8 +8,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 Gyro::Gyro(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}

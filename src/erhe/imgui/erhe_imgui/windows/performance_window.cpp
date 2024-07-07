@@ -14,8 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 #pragma region Plot
 void Plot::clear()
@@ -38,10 +37,7 @@ auto Plot::last_value() const -> float
     return m_values[last_index];
 }
 
-Gpu_timer_plot::Gpu_timer_plot(
-    erhe::graphics::Gpu_timer* timer,
-    const std::size_t          width
-)
+Gpu_timer_plot::Gpu_timer_plot(erhe::graphics::Gpu_timer* timer, const std::size_t width)
     : m_gpu_timer{timer}
 {
     m_values.resize(width);
@@ -67,10 +63,7 @@ auto Gpu_timer_plot::gpu_timer() const -> erhe::graphics::Gpu_timer*
     return m_gpu_timer;
 }
 
-Cpu_timer_plot::Cpu_timer_plot(
-    erhe::time::Timer* timer,
-    const std::size_t  width
-)
+Cpu_timer_plot::Cpu_timer_plot(erhe::time::Timer* timer, const std::size_t width)
     : m_timer{timer}
 {
     m_values.resize(width);
@@ -357,10 +350,7 @@ void Plot::imgui()
 }
 #pragma endregion Plot
 
-Performance_window::Performance_window(
-    Imgui_renderer& imgui_renderer,
-    Imgui_windows&  imgui_windows
-)
+Performance_window::Performance_window(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows)
     : Imgui_window{imgui_renderer, imgui_windows, "Performance", "performance"}
 {
 }

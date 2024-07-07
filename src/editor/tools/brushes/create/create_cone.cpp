@@ -14,12 +14,9 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
-void Create_cone::render_preview(
-    const Create_preview_settings& preview_settings
-)
+void Create_cone::render_preview(const Create_preview_settings& preview_settings)
 {
     const Render_context& render_context = preview_settings.render_context;
     const auto* camera_node = render_context.get_camera_node();
@@ -58,9 +55,7 @@ void Create_cone::imgui()
     ImGui::Checkbox   ("Use Bottom",    &m_use_bottom);
 }
 
-[[nodiscard]] auto Create_cone::create(
-    Brush_data& brush_create_info
-) const -> std::shared_ptr<Brush>
+auto Create_cone::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
     brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_conical_frustum(

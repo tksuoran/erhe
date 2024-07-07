@@ -1,6 +1,6 @@
 ﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "erhe_imgui/window_imgui_viewport.hpp"
+#include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/scoped_imgui_context.hpp"
@@ -13,19 +13,18 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
-Window_imgui_viewport::Window_imgui_viewport(
+Window_imgui_host::Window_imgui_host(
     Imgui_renderer&                 imgui_renderer,
     erhe::window::Context_window&   context_window,
     erhe::rendergraph::Rendergraph& rendergraph,
     const std::string_view          name
 )
-    : Imgui_viewport{
+    : Imgui_host{
         rendergraph,
         imgui_renderer,
         name,
@@ -72,13 +71,13 @@ Window_imgui_viewport::Window_imgui_viewport(
 
 }
 
-Window_imgui_viewport::~Window_imgui_viewport()
+Window_imgui_host::~Window_imgui_host()
 {
 }
 
-auto Window_imgui_viewport::begin_imgui_frame() -> bool
+auto Window_imgui_host::begin_imgui_frame() -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_viewport::begin_imgui_frame()");
+    SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::begin_imgui_frame()");
 
     ERHE_PROFILE_FUNCTION();
 
@@ -128,14 +127,14 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
     return true;
 }
 
-void Window_imgui_viewport::end_imgui_frame()
+void Window_imgui_host::end_imgui_frame()
 {
-    SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_viewport::end_imgui_frame()");
+    SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::end_imgui_frame()");
     ImGui::EndFrame();
     ImGui::Render();
 }
 
-void Window_imgui_viewport::execute_rendergraph_node()
+void Window_imgui_host::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -148,15 +147,8 @@ void Window_imgui_viewport::execute_rendergraph_node()
     m_imgui_renderer.render_draw_data();
 }
 
-auto Window_imgui_viewport::get_producer_output_viewport(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> erhe::math::Viewport
+auto Window_imgui_host::get_producer_output_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
     return erhe::math::Viewport{
         .x      = 0,
         .y      = 0,

@@ -60,10 +60,7 @@ void Node_attachment::handle_node_update(Node* old_node, Node* new_node)
     set_visible(visible);
 }
 
-void Node_attachment::handle_node_flag_bits_update(
-    const uint64_t old_node_flag_bits,
-    const uint64_t new_node_flag_bits
-)
+void Node_attachment::handle_node_flag_bits_update(const uint64_t old_node_flag_bits, const uint64_t new_node_flag_bits)
 {
     static_cast<void>(old_node_flag_bits);
     const bool visible = (new_node_flag_bits & Item_flags::visible) == Item_flags::visible;

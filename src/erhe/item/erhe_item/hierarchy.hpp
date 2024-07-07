@@ -11,11 +11,9 @@
 #include <string>
 #include <vector>
 
-namespace erhe
-{
+namespace erhe {
 
-class Hierarchy
-    : public Item<Item_base, Item_base, Hierarchy>
+class Hierarchy : public Item<Item_base, Item_base, Hierarchy>
 {
 public:
     Hierarchy();

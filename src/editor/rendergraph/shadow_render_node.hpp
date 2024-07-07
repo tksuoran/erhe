@@ -18,7 +18,7 @@ namespace editor {
 
 class Editor_context;
 class Scene_view;
-class Viewport_window;
+class Viewport_scene_view;
 
 // Helper rendergraph node calling Shadow_renderer
 

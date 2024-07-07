@@ -3,9 +3,7 @@
 #include "erhe_net/net_os.hpp"
 #include "erhe_net/select_sockets.hpp"
 
-
-namespace erhe::net
-{
+namespace erhe::net {
 
 Client::Client() = default;
 

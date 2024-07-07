@@ -5,8 +5,7 @@
 #include <fmt/format.h>
 #include <glm/glm.hpp>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 Dual::Dual(Geometry& source, Geometry& destination, bool post_process)
     : Geometry_operation{source, destination}

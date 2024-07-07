@@ -284,11 +284,7 @@ void Bvh_geometry::set_user_data(const void* ptr)
     m_user_data = ptr;
 }
 
-auto Bvh_geometry::intersect_instance(
-    Ray&          ray,
-    Hit&          hit,
-    Bvh_instance* instance
-) -> bool
+auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -370,7 +366,6 @@ auto Bvh_geometry::debug_label() const -> std::string_view
 {
     return m_debug_label;
 }
-
 
 } // namespace erhe::raytrace
 

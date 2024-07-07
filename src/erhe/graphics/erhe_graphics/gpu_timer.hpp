@@ -9,8 +9,7 @@
 #include <thread>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Gpu_timer
 {

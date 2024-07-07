@@ -20,8 +20,7 @@
 
 #include <fmt/format.h>
 
-namespace editor
-{
+namespace editor {
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
@@ -34,7 +33,7 @@ Shadow_render_node::Shadow_render_node(
     const int                       resolution,
     const int                       light_count
 )
-    // TODO fmt::format("Shadow render {}", viewport_window->name())
+    // TODO fmt::format("Shadow render {}", viewport_scene_view->name())
     : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"} 
     , m_context   {editor_context}
     , m_scene_view{scene_view}
@@ -148,26 +147,13 @@ void Shadow_render_node::execute_rendergraph_node()
     );
 }
 
-auto Shadow_render_node::get_producer_output_texture(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    int                              depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Shadow_render_node::get_producer_output_texture(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    static_cast<void>(resource_routing);
-    static_cast<void>(key);
-    static_cast<void>(depth);
     return m_texture;
 }
 
-auto Shadow_render_node::get_producer_output_viewport(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> erhe::math::Viewport
+auto Shadow_render_node::get_producer_output_viewport(erhe::rendergraph::Routing, const int key, int) const -> erhe::math::Viewport
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(depth);
     ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     return m_viewport;
 }

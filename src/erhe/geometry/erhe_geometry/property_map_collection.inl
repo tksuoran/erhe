@@ -19,12 +19,10 @@
 #   define SPDLOG_LOGGER_TRACE_DUMMY
 #endif
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 template <typename Key_type>
-inline void
-Property_map_collection<Key_type>::clear()
+inline void Property_map_collection<Key_type>::clear()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -32,15 +30,13 @@ Property_map_collection<Key_type>::clear()
 }
 
 template <typename Key_type>
-inline auto
-Property_map_collection<Key_type>::size() const -> size_t
+inline auto Property_map_collection<Key_type>::size() const -> size_t
 {
     return m_entries.size();
 }
 
 template <typename Key_type>
-inline void
-Property_map_collection<Key_type>::insert(Property_map_base<Key_type>* map)
+inline void Property_map_collection<Key_type>::insert(Property_map_base<Key_type>* map)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -53,8 +49,7 @@ Property_map_collection<Key_type>::insert(Property_map_base<Key_type>* map)
 }
 
 template <typename Key_type>
-inline void
-Property_map_collection<Key_type>::remove(const std::string& name)
+inline void Property_map_collection<Key_type>::remove(const std::string& name)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -72,9 +67,7 @@ Property_map_collection<Key_type>::remove(const std::string& name)
 
 template <typename Key_type>
 template <typename Value_type>
-inline auto
-Property_map_collection<Key_type>::contains(const std::string& name) const
-    -> bool
+inline auto Property_map_collection<Key_type>::contains(const std::string& name) const -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -89,10 +82,7 @@ Property_map_collection<Key_type>::contains(const std::string& name) const
 }
 
 template <typename Key_type>
-inline auto
-Property_map_collection<Key_type>::find_base(
-    const Property_map_descriptor& descriptor
-) const -> Property_map_base<Key_type>*
+inline auto Property_map_collection<Key_type>::find_base(const Property_map_descriptor& descriptor) const -> Property_map_base<Key_type>*
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -106,10 +96,7 @@ Property_map_collection<Key_type>::find_base(
 
 template <typename Key_type>
 template <typename Value_type>
-inline auto
-Property_map_collection<Key_type>::create(
-    const Property_map_descriptor& descriptor
-) -> Property_map<Key_type, Value_type>*
+inline auto Property_map_collection<Key_type>::create(const Property_map_descriptor& descriptor) -> Property_map<Key_type, Value_type>*
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -127,10 +114,7 @@ Property_map_collection<Key_type>::create(
 
 template <typename Key_type>
 template <typename Value_type>
-inline auto
-Property_map_collection<Key_type>::find(
-    const Property_map_descriptor& descriptor
-) const -> Property_map<Key_type, Value_type>*
+inline auto Property_map_collection<Key_type>::find(const Property_map_descriptor& descriptor) const -> Property_map<Key_type, Value_type>*
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -148,10 +132,7 @@ Property_map_collection<Key_type>::find(
 
 template <typename Key_type>
 template <typename Value_type>
-inline auto
-Property_map_collection<Key_type>::find_or_create(
-    const Property_map_descriptor& descriptor
-) -> Property_map<Key_type, Value_type>*
+inline auto Property_map_collection<Key_type>::find_or_create(const Property_map_descriptor& descriptor) -> Property_map<Key_type, Value_type>*
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -173,8 +154,7 @@ Property_map_collection<Key_type>::find_or_create(
 }
 
 template <typename Key_type>
-inline void
-Property_map_collection<Key_type>::trim(size_t size)
+inline void Property_map_collection<Key_type>::trim(size_t size)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -184,8 +164,7 @@ Property_map_collection<Key_type>::trim(size_t size)
 }
 
 template <typename Key_type>
-inline void
-Property_map_collection<Key_type>::remap_keys(const std::vector<Key_type>& key_new_to_old)
+inline void Property_map_collection<Key_type>::remap_keys(const std::vector<Key_type>& key_new_to_old)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -254,10 +233,7 @@ Property_map_collection<Key_type>::clone() -> Property_map_collection<Key_type>
 }
 
 template <typename Key_type>
-inline void
-Property_map_collection<Key_type>::transform(
-    const glm::mat4 matrix
-)
+inline void Property_map_collection<Key_type>::transform(const glm::mat4 matrix)
 {
     Property_map_collection<Key_type> result;
     for (auto& entry : m_entries) {
@@ -268,9 +244,7 @@ Property_map_collection<Key_type>::transform(
 
 template <typename Key_type>
 inline auto
-Property_map_collection<Key_type>::clone_with_transform(
-    const glm::mat4 transform
-) -> Property_map_collection<Key_type>
+Property_map_collection<Key_type>::clone_with_transform(const glm::mat4 transform) -> Property_map_collection<Key_type>
 {
     Property_map_collection<Key_type> result;
     for (auto& entry : m_entries) {

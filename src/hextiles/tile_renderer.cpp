@@ -31,8 +31,7 @@
 
 #include <cstdarg>
 
-namespace hextiles
-{
+namespace hextiles {
 
 namespace {
 

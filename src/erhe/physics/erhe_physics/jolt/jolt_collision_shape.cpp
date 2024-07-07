@@ -1,7 +1,6 @@
 #include "erhe_physics/jolt/jolt_collision_shape.hpp"
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 class EmptyShapeSettings final : public JPH::ShapeSettings
 {
@@ -251,8 +250,7 @@ JPH::ShapeSettings::ShapeResult EmptyShapeSettings::Create() const
     return mCachedResult;
 }
 
-class Jolt_empty_shape
-    : public Jolt_collision_shape
+class Jolt_empty_shape : public Jolt_collision_shape
 {
 public:
     ~Jolt_empty_shape() noexcept override = default;

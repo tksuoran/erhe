@@ -8,12 +8,12 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
 #include "rendertarget_mesh.hpp"
-#include "rendertarget_imgui_viewport.hpp"
+#include "rendertarget_imgui_host.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -99,9 +99,7 @@ Hotbar_trackpad_command::Hotbar_trackpad_command(erhe::commands::Commands& comma
 {
 }
 
-auto Hotbar_trackpad_command::try_call_with_input(
-    erhe::commands::Input_arguments& input
-) -> bool
+auto Hotbar_trackpad_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
     return m_context.hotbar->try_call(input);
 }
@@ -197,7 +195,7 @@ void Hotbar::init_hotbar()
 
     m_rendertarget_mesh.reset();
     m_rendertarget_node.reset();
-    m_rendertarget_imgui_viewport.reset();
+    m_rendertarget_imgui_host.reset();
 
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
         *m_context.graphics_instance,
@@ -209,26 +207,23 @@ void Hotbar::init_hotbar()
     const auto scene_root = m_context.scene_builder->get_scene_root();
     m_rendertarget_mesh->layer_id = scene_root->layers().rendertarget()->id;
 
-    m_rendertarget_mesh->enable_flag_bits(
-        erhe::Item_flags::visible     |
-        erhe::Item_flags::translucent
-    );
+    m_rendertarget_mesh->enable_flag_bits(erhe::Item_flags::visible | erhe::Item_flags::translucent);
 
-    m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
+    m_rendertarget_imgui_host = std::make_shared<editor::Rendertarget_imgui_host>(
         *m_context.imgui_renderer,
         *m_context.rendergraph,
         m_context,
         m_rendertarget_mesh.get(),
-        "Hotbar Viewport",
+        "Hotbar imgui host",
         false
     );
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
     m_rendertarget_node->attach(m_rendertarget_mesh);
 
-    m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
+    m_rendertarget_imgui_host->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
-    ImGuiStyle& style = m_rendertarget_imgui_viewport->get_mutable_style();
+    ImGuiStyle& style = m_rendertarget_imgui_host->get_mutable_style();
     style.FrameRounding    = 0.0f;
     style.WindowRounding   = 0.0f;
     style.ChildRounding    = 0.0f;
@@ -237,7 +232,7 @@ void Hotbar::init_hotbar()
     style.ItemInnerSpacing = ImVec2{0.0f, 0.0f};
     style.MouseCursorScale = 2.0f;
 
-    this->Hotbar::set_viewport(m_rendertarget_imgui_viewport.get());
+    this->Hotbar::set_imgui_host(m_rendertarget_imgui_host.get());
 }
 
 void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
@@ -343,7 +338,7 @@ void Hotbar::on_message(Editor_message& message)
                     if (old_node) {
                         m_context.rendergraph->disconnect(
                             erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
-                            m_rendertarget_imgui_viewport.get(),
+                            m_rendertarget_imgui_host.get(),
                             old_node
                         );
                     }
@@ -351,7 +346,7 @@ void Hotbar::on_message(Editor_message& message)
                     if (new_node) {
                         m_context.rendergraph->connect(
                             erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
-                            m_rendertarget_imgui_viewport.get(),
+                            m_rendertarget_imgui_host.get(),
                             new_node
                         );
                     }
@@ -379,11 +374,11 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
         }
     }
 #endif
-    const auto viewport_window = m_context.viewport_windows->hover_window();
-    if (!viewport_window) {
+    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    if (!viewport_scene_view) {
         return {};
     }
-    return viewport_window->get_camera();
+    return viewport_scene_view->get_camera();
 }
 
 void Hotbar::update_node_transform()
@@ -410,6 +405,9 @@ void Hotbar::update_node_transform()
         }
 
         const auto& world_from_camera = camera_node->world_from_node();
+
+        // Lookat creates transform which looks along negative Z.
+        // Rotate around local Y.
         constexpr glm::mat4 rotate{
             -1.0f, 0.0f, 0.0f, 0.0f,
              0.0f, 1.0f, 0.0f, 0.0f,
@@ -417,11 +415,11 @@ void Hotbar::update_node_transform()
              0.0f, 0.0f, 0.0f, 1.0f
         };
 
-        world_from_node = rotate * erhe::math::create_look_at(
+        world_from_node = erhe::math::create_look_at(
             glm::vec3{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}}, // eye
             glm::vec3{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}}, // target
             glm::vec3{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}}  // up
-        );
+        ) * rotate;
 
         auto scene_root = scene_view->get_scene_root();
         if (!scene_root) {
@@ -447,9 +445,7 @@ void Hotbar::update_node_transform()
     }
 }
 
-void Hotbar::tool_render(
-    const Render_context& /*context*/
-)
+void Hotbar::tool_render(const Render_context& /*context*/)
 {
 }
 
@@ -623,7 +619,7 @@ void Hotbar::set_visibility(const bool value)
     Imgui_window::set_visibility(value);
 
     if (m_rendertarget_mesh) {
-        m_rendertarget_imgui_viewport->set_enabled(value);
+        m_rendertarget_imgui_host->set_enabled(value);
         m_rendertarget_mesh->set_visible(value);
         log_hud->trace("Horizontal menu visibility set to {}", value);
     }

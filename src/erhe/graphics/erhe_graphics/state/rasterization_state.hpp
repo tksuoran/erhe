@@ -4,8 +4,7 @@
 
 #include <cstddef>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Rasterization_state
 {
@@ -32,21 +31,11 @@ public:
 class Rasterization_state_hash
 {
 public:
-    [[nodiscard]]
-    auto operator()(
-        const Rasterization_state& rasterization_state
-    ) noexcept -> std::size_t;
+    [[nodiscard]] auto operator()( const Rasterization_state& rasterization_state) noexcept -> std::size_t;
 };
 
-[[nodiscard]] auto operator==(
-    const Rasterization_state& lhs,
-    const Rasterization_state& rhs
-) noexcept -> bool;
-
-[[nodiscard]] auto operator!=(
-    const Rasterization_state& lhs,
-    const Rasterization_state& rhs
-) noexcept -> bool;
+[[nodiscard]] auto operator==(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept -> bool;
 
 class Rasterization_state_tracker
 {

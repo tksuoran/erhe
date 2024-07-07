@@ -7,8 +7,7 @@
 #include <map>
 #include <string>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Fragment_outputs;
 class Shader_resource;
@@ -136,16 +135,9 @@ private:
 class Reloadable_shader_stages
 {
 public:
-    explicit Reloadable_shader_stages(
-        const std::string& non_functional_name
-    );
-    explicit Reloadable_shader_stages(
-        Shader_stages_prototype&& prototype
-    );
-    Reloadable_shader_stages(
-        Instance&                        graphics_instance,
-        const Shader_stages_create_info& create_info
-    );
+    explicit Reloadable_shader_stages(const std::string& non_functional_name);
+    explicit Reloadable_shader_stages(Shader_stages_prototype&& prototype);
+    Reloadable_shader_stages(Instance& graphics_instance, const Shader_stages_create_info& create_info);
     Reloadable_shader_stages(Reloadable_shader_stages&&);
     Reloadable_shader_stages& operator=(Reloadable_shader_stages&&);
 
@@ -167,7 +159,6 @@ public:
 
 [[nodiscard]] auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool;
 [[nodiscard]] auto operator!=(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool;
-
 
 class Shader_stages_tracker
 {

@@ -8,8 +8,7 @@
 
 #include <glm/glm.hpp>
 
-namespace editor
-{
+namespace editor {
 
 Debug_draw::Debug_draw(Editor_context& editor_context)
     : m_context   {editor_context}

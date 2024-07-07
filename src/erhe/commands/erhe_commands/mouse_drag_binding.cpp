@@ -23,7 +23,7 @@ Mouse_drag_binding::Mouse_drag_binding() = default;
 
 Mouse_drag_binding::~Mouse_drag_binding() noexcept = default;
 
-[[nodiscard]] auto Mouse_drag_binding::get_button() const -> erhe::window::Mouse_button
+auto Mouse_drag_binding::get_button() const -> erhe::window::Mouse_button
 {
     return m_button;
 }

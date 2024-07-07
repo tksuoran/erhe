@@ -4,12 +4,9 @@
 
 #define DISABLE_CACHE 1
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
-auto Rasterization_state_hash::operator()(
-    const Rasterization_state& rasterization_state
-) noexcept -> std::size_t
+auto Rasterization_state_hash::operator()(const Rasterization_state& rasterization_state) noexcept -> std::size_t
 {
     return
         (rasterization_state.face_cull_enable ? 1u : 0u)                |
@@ -74,10 +71,7 @@ void Rasterization_state_tracker::execute(const Rasterization_state& state)
 #endif
 }
 
-auto operator==(
-    const Rasterization_state& lhs,
-    const Rasterization_state& rhs
-) noexcept -> bool
+auto operator==(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept -> bool
 {
     return
         (lhs.face_cull_enable     == rhs.face_cull_enable    ) &&
@@ -86,10 +80,7 @@ auto operator==(
         (lhs.polygon_mode         == rhs.polygon_mode        );
 }
 
-auto operator!=(
-    const Rasterization_state& lhs,
-    const Rasterization_state& rhs
-) noexcept -> bool
+auto operator!=(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }

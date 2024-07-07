@@ -4,8 +4,7 @@
 
 #include <string>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Fragment_output
 {

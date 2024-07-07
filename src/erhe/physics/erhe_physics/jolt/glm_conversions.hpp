@@ -8,8 +8,7 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/Color.h>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 [[nodiscard]] inline auto from_jolt(const JPH::Vec3 v) -> glm::vec3
 {

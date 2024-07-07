@@ -13,8 +13,7 @@ namespace erhe::scene {
     class Node;
 }
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 enum class Motion_mode : unsigned int {
     e_invalid                = 0,

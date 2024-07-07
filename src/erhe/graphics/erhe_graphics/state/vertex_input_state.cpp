@@ -11,8 +11,7 @@
 #include <memory>
 #include <sstream>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 std::mutex                       Vertex_input_state::s_mutex;
 std::vector<Vertex_input_state*> Vertex_input_state::s_all_vertex_input_states;

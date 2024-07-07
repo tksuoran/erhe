@@ -179,9 +179,7 @@ auto Handle_visualizations::get_handle(erhe::scene::Mesh* mesh) const -> Handle
     return i->second;
 }
 
-void Handle_visualizations::update_for_view(
-    Scene_view* scene_view
-)
+void Handle_visualizations::update_for_view(Scene_view* scene_view)
 {
     // TODO also consider fov
     m_scene_view = scene_view;
@@ -510,7 +508,7 @@ auto Handle_visualizations::make_rotate_ring(Mesh_memory& mesh_memory) -> Part
     };
 }
 
-[[nodiscard]] auto Handle_visualizations::make_material(
+auto Handle_visualizations::make_material(
     Tools&           tools,
     const char*      name,
     const glm::vec3& color,

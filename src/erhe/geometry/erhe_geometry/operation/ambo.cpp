@@ -5,8 +5,7 @@
 #include <fmt/format.h>
 #include <glm/glm.hpp>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 Ambo::Ambo(Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
@@ -57,6 +56,5 @@ auto ambo(Geometry& source) -> Geometry
         }
     };
 }
-
 
 } // namespace erhe::geometry::operation

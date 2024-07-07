@@ -7,8 +7,7 @@
 
 namespace erhe::raytrace {
 
-class Bvh_buffer
-    : public IBuffer
+class Bvh_buffer : public IBuffer
 {
 public:
     Bvh_buffer           (const std::string_view debug_label, const std::size_t capacity_bytes_count);

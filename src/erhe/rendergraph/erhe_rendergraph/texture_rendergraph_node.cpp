@@ -13,8 +13,7 @@
 
 #include <algorithm>
 
-namespace erhe::rendergraph
-{
+namespace erhe::rendergraph {
 
 Texture_rendergraph_node::Texture_rendergraph_node(const Texture_rendergraph_node_create_info& create_info)
     : Rendergraph_node      {create_info.rendergraph, create_info.name}
@@ -86,27 +85,13 @@ auto Texture_rendergraph_node::get_consumer_input_framebuffer(
     return get_producer_output_framebuffer(resource_routing, m_output_key, depth + 1);
 }
 
-auto Texture_rendergraph_node::get_producer_output_texture(
-    const Routing resource_routing,
-    const int     key,
-    const int     depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Texture_rendergraph_node::get_producer_output_texture(Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    static_cast<void>(resource_routing);
-    static_cast<void>(key);
-    static_cast<void>(depth);
     return m_color_texture;
 }
 
-auto Texture_rendergraph_node::get_producer_output_framebuffer(
-    const Routing resource_routing,
-    const int     key,
-    const int     depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Texture_rendergraph_node::get_producer_output_framebuffer(Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
-    static_cast<void>(resource_routing);
-    static_cast<void>(key);
-    static_cast<void>(depth);
     return m_framebuffer;
 }
 
@@ -116,15 +101,9 @@ void Texture_rendergraph_node::execute_rendergraph_node()
     using erhe::graphics::Texture;
 
     // TODO Figure out exactly what to do here.
-    const auto& output_viewport = get_producer_output_viewport(
-        Routing::Resource_provided_by_consumer,
-        m_output_key
-    );
+    const auto& output_viewport = get_producer_output_viewport(Routing::Resource_provided_by_consumer, m_output_key);
 
-    if (
-        (output_viewport.width  < 1) ||
-        (output_viewport.height < 1)
-    ) {
+    if ((output_viewport.width  < 1) || (output_viewport.height < 1)) {
         return;
     }
 

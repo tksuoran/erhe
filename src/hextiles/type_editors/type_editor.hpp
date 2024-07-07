@@ -266,10 +266,7 @@ void Type_editor::make_bit_combo_def(const char* tooltip_text, uint32_t& value)
 }
 
 template<typename T>
-void Type_editor::make_bit_mask_def(
-    const char* tooltip_text,
-    uint32_t&   value
-)
+void Type_editor::make_bit_mask_def(const char* tooltip_text, uint32_t& value)
 {
     static_cast<void>(tooltip_text);
     static_cast<void>(value);

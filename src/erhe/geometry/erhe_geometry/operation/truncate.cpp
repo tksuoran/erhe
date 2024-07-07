@@ -9,8 +9,7 @@
 #include <fmt/core.h>
 #include <vector>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 Truncate::Truncate(Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
@@ -70,6 +69,5 @@ auto truncate(Geometry& source) -> Geometry
         }
     );
 }
-
 
 } // namespace erhe::geometry::operation

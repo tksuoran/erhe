@@ -16,14 +16,14 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "rendergraph/post_processing.hpp"
-#include "rendertarget_imgui_viewport.hpp"
+#include "rendertarget_imgui_host.hpp"
 #include "scene/asset_browser.hpp"
 #include "scene/debug_draw.hpp"
 #include "scene/material_preview.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/brushes/brush.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/tools.hpp"
@@ -71,7 +71,7 @@
 #   include "erhe_imgui/imgui_log.hpp"
 #   include "erhe_imgui/imgui_renderer.hpp"
 #   include "erhe_imgui/imgui_windows.hpp"
-#   include "erhe_imgui/window_imgui_viewport.hpp"
+#   include "erhe_imgui/window_imgui_host.hpp"
 #   include "erhe_imgui/windows/log_window.hpp"
 #   include "erhe_imgui/windows/performance_window.hpp"
 #   include "erhe_imgui/windows/pipelines.hpp"
@@ -176,7 +176,7 @@ public:
         , m_composer_window       {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_selection_window      {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_settings_window       {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
-        , m_viewport_windows      {m_commands,          m_editor_context,    m_editor_message_bus}
+        , m_viewport_scene_views  {m_commands,          m_editor_context,    m_editor_message_bus}
         , m_editor_rendering      {m_commands,          m_graphics_instance, m_editor_context,  m_editor_message_bus, m_mesh_memory, m_programs}
         , m_selection             {m_commands,          m_editor_context,    m_editor_message_bus}
         , m_operation_stack       {m_commands,          m_imgui_renderer,    m_imgui_windows,   m_editor_context}
@@ -216,7 +216,7 @@ public:
             m_editor_settings,
             m_mesh_memory,
             m_tools,
-            m_viewport_windows
+            m_viewport_scene_views
         }
         , m_headset_view{
             m_graphics_instance,
@@ -298,10 +298,10 @@ public:
 
         auto& root_event_handler = m_context_window.get_root_window_event_handler();
         root_event_handler.attach(this, 3);
-        const auto window_viewport = m_imgui_windows.get_window_viewport();
+        const auto window_viewport = m_imgui_windows.get_window_imgui_host();
         window_viewport->set_begin_callback(
-            [this](erhe::imgui::Imgui_viewport& imgui_viewport) {
-                m_editor_windows.viewport_menu(imgui_viewport);
+            [this](erhe::imgui::Imgui_host& imgui_host) {
+                m_editor_windows.viewport_menu(imgui_host);
             }
         );
 
@@ -309,12 +309,12 @@ public:
         if (m_headset_view.config.openxr) {
             // TODO Create windows directly to correct viewport?
             // Move all imgui windows that have window viewport to hud viewport
-            const auto viewport        = m_hud.get_rendertarget_imgui_viewport();
+            const auto viewport = m_hud.get_rendertarget_imgui_viewport();
             if (viewport) {
                 auto& windows = m_imgui_windows.get_windows();
                 for (auto window : windows) {
-                    if (window->get_viewport() == window_viewport.get()) {
-                        window->set_viewport(viewport.get());
+                    if (window->get_imgui_host() == window_viewport.get()) {
+                        window->set_imgui_host(viewport.get());
                     }
                 }
             }
@@ -384,7 +384,7 @@ public:
         m_editor_context.tools                  = &m_tools                 ;
         m_editor_context.transform_tool         = &m_transform_tool        ;
         m_editor_context.viewport_config_window = &m_viewport_config_window;
-        m_editor_context.viewport_windows       = &m_viewport_windows      ;
+        m_editor_context.scene_views            = &m_viewport_scene_views  ;
     }
 
     void run()
@@ -467,7 +467,7 @@ public:
     Composer_window                         m_composer_window;
     Selection_window                        m_selection_window;
     Settings_window                         m_settings_window;
-    Viewport_windows                        m_viewport_windows;
+    Scene_views                             m_viewport_scene_views;
     Editor_rendering                        m_editor_rendering;
     Selection                               m_selection;
     Operation_stack                         m_operation_stack;

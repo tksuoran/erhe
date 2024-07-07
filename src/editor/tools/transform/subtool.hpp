@@ -15,8 +15,7 @@ class Scene_view;
 class Tools;
 class Transform_tool_shared;
 
-class Subtool
-    : public Tool
+class Subtool : public Tool
 {
 public:
     explicit Subtool(Editor_context& editor_context);

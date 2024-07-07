@@ -22,8 +22,7 @@ namespace erhe::scene_renderer {
     class Program_interface;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Mesh_memory
 {

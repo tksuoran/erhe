@@ -1,7 +1,7 @@
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include <imgui/imgui.h>
@@ -49,14 +49,14 @@ void Imgui_window::image(
     );
 }
 
-auto Imgui_window::get_viewport() const -> Imgui_viewport*
+auto Imgui_window::get_imgui_host() const -> Imgui_host*
 {
-    return m_imgui_viewport;
+    return m_imgui_host;
 }
 
-void Imgui_window::set_viewport(Imgui_viewport* imgui_viewport)
+void Imgui_window::set_imgui_host(Imgui_host* imgui_host)
 {
-    m_imgui_viewport = imgui_viewport;
+    m_imgui_host = imgui_host;
 }
 
 void Imgui_window::set_visibility(const bool visible)
@@ -110,9 +110,9 @@ auto Imgui_window::get_title() const -> const std::string&
     return m_title;
 }
 
-[[nodiscard]] auto Imgui_window::get_scale_value() const -> float
+auto Imgui_window::get_scale_value() const -> float
 {
-    return (m_imgui_viewport != nullptr) ? m_imgui_viewport->get_scale_value() : 0.0f;
+    return (m_imgui_host != nullptr) ? m_imgui_host->get_scale_value() : 0.0f;
 }
 
 void Imgui_window::set_min_size(const float min_width, const float min_height)

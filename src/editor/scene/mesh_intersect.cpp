@@ -4,8 +4,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace editor
-{
+namespace editor {
 
 using erhe::geometry::c_point_locations;
 using erhe::geometry::Corner;
@@ -16,8 +15,7 @@ using erhe::geometry::Polygon_corner_id;
 using glm::vec3;
 using glm::vec4;
 
-namespace
-{
+namespace {
 
 #define CULLING 0
 

@@ -4,23 +4,14 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
-class Clone
-    : public Geometry_operation
+class Clone : public Geometry_operation
 {
 public:
-    Clone(
-        Geometry&        source,
-        Geometry&        destination,
-        const glm::mat4& transform
-    );
+    Clone(Geometry& source, Geometry& destination, const glm::mat4& transform);
 };
 
-[[nodiscard]] auto clone(
-    erhe::geometry::Geometry& source,
-    const glm::mat4&          transform
-) -> erhe::geometry::Geometry;
+[[nodiscard]] auto clone(erhe::geometry::Geometry& source, const glm::mat4& transform) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

@@ -3,8 +3,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <span>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 [[nodiscard]] inline auto as_span(const glm::mat4& m) -> std::span<const float>
 {

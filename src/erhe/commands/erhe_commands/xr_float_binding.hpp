@@ -10,8 +10,7 @@ namespace erhe::commands {
 
 struct Input_arguments;
 
-class Xr_float_binding
-    : public Command_binding
+class Xr_float_binding : public Command_binding
 {
 public:
     Xr_float_binding(Command* command, erhe::xr::Xr_action_float* xr_action);

@@ -4,8 +4,7 @@
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_profile/profile.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 OpenGL_state_tracker::OpenGL_state_tracker() = default;
 

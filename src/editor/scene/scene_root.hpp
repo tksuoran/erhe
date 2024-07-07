@@ -73,7 +73,7 @@ class Raytrace_primitive;
 class Rendertarget_mesh;
 class Scene_root;
 class Scene_view;
-class Viewport_window;
+class Viewport_scene_view;
 
 class Mesh_layer_id
 {
@@ -93,13 +93,13 @@ public:
 
     void add_layers_to_scene(erhe::scene::Scene& scene);
 
-    [[nodiscard]] auto get_layer_by_id(erhe::scene::Layer_id id) const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto brush          () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto content        () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto controller     () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto tool           () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto rendertarget   () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto light          () const -> erhe::scene::Light_layer*;
+    [[nodiscard]] auto brush       () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto content     () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto controller  () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto tool        () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto rendertarget() const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto light       () const -> erhe::scene::Light_layer*;
+    [[nodiscard]] auto mesh_layers () const -> std::vector<erhe::scene::Mesh_layer*>;
 
 private:
     std::shared_ptr<erhe::scene::Mesh_layer>  m_content;

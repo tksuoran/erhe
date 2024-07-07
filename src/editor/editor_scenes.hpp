@@ -13,8 +13,7 @@ class Editor_context;
 class Scene_root;
 class Time;
 
-class Editor_scenes
-    : public Update_fixed_step
+class Editor_scenes : public Update_fixed_step
 {
 public:
     Editor_scenes(Editor_context& editor_context, Time& time);

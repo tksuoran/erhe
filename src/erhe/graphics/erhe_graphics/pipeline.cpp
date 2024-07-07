@@ -3,10 +3,9 @@
 #include <algorithm>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
-
+// TODO Move to graphics instance?
 std::mutex             Pipeline::s_mutex;
 std::vector<Pipeline*> Pipeline::s_pipelines;
 

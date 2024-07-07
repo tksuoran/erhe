@@ -5,8 +5,7 @@
 
 #include <cstdio>
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 class Scoped_socket_context
 {
@@ -189,11 +188,7 @@ auto is_socket_good(const SOCKET socket) -> bool
     return socket != INVALID_SOCKET;
 }
 
-auto set_socket_option(
-    const SOCKET        socket,
-    const Socket_option option,
-    int                 value
-) -> bool
+auto set_socket_option(const SOCKET socket, const Socket_option option, int value) -> bool
 {
     int         result = SOCKET_ERROR;
     char* const optval = reinterpret_cast<char*>(&value);
@@ -277,12 +272,7 @@ auto get_socket_option(const SOCKET socket, const Socket_option option) -> std::
     return value;
 }
 
-auto get_net_hints(
-    const int flags,
-    const int family,
-    const int socktype,
-    const int protocol
-) -> addrinfo
+auto get_net_hints(const int flags, const int family, const int socktype, const int protocol) -> addrinfo
 {
     return addrinfo{
         .ai_flags     = flags,

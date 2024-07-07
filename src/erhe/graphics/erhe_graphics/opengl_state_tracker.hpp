@@ -13,11 +13,9 @@
 #include <memory>
 #include <stack>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Pipeline;
-
 
 class OpenGL_state_tracker
 {

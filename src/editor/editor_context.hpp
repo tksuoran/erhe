@@ -50,7 +50,7 @@ class Hotbar;
 class Hud;
 class Icon_set;
 class Id_renderer;
-class Imgui_viewport_windows;
+class Imgui_window_scene_views;
 class Input_state;
 class Material_paint_tool;
 class Material_preview;
@@ -73,7 +73,7 @@ class Time;
 class Tools;
 class Transform_tool;
 class Viewport_config_window;
-class Viewport_windows;
+class Scene_views;
 
 class Editor_context
 {
@@ -130,7 +130,7 @@ public:
     Tools*                                  tools                 {nullptr};
     Transform_tool*                         transform_tool        {nullptr};
     Viewport_config_window*                 viewport_config_window{nullptr};
-    Viewport_windows*                       viewport_windows      {nullptr};
+    Scene_views*                            scene_views           {nullptr};
 };
 
 } // namespace editor

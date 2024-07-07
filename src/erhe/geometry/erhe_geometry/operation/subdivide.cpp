@@ -8,8 +8,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 Subdivide::Subdivide(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
@@ -74,6 +73,5 @@ auto subdivide(Geometry& source) -> Geometry
         }
     };
 }
-
 
 } // namespace erhe::geometry::operation

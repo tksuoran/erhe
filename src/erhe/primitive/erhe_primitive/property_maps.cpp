@@ -3,8 +3,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_profile/profile.hpp"
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 using vec2 = glm::vec2;
 using vec3 = glm::vec3;
@@ -138,7 +137,6 @@ Property_maps::Property_maps(
     //     point_joint_weights = polygon_attributes.create<vec4>(erhe::geometry::c_point_joint_weights);
     //     log_primitive_builder->trace("created point_joint_weights");
     // }
-
 }
 
 } // namespace erhe::primitive

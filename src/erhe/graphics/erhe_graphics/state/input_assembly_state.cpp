@@ -2,8 +2,7 @@
 
 // #define DISABLE_CACHE 1
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 void Input_assembly_state_tracker::reset()
 {
@@ -51,20 +50,14 @@ Input_assembly_state Input_assembly_state::triangle_strip
 };
 
 
-auto operator==(
-    const Input_assembly_state& lhs,
-    const Input_assembly_state& rhs
-) noexcept -> bool
+auto operator==(const Input_assembly_state& lhs, const Input_assembly_state& rhs) noexcept -> bool
 {
     return
         (lhs.primitive_topology == rhs.primitive_topology) &&
         (lhs.primitive_restart  == rhs.primitive_restart );
 }
 
-auto operator!=(
-    const Input_assembly_state& lhs,
-    const Input_assembly_state& rhs
-) noexcept -> bool
+auto operator!=(const Input_assembly_state& lhs, const Input_assembly_state& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }

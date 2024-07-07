@@ -201,8 +201,7 @@ public:
 };
 
 template <typename Base, typename Intermediate, typename Self, Item_kind kind = Item_kind::clone_using_copy_constructor>
-class Item
-    : public Intermediate
+class Item : public Intermediate
 {
 public:
     using Intermediate::Intermediate;

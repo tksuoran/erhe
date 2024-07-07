@@ -8,20 +8,17 @@
 #include <Jolt/Physics/Constraints/Constraint.h>
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 class IRigid_body;
 
-class Jolt_constraint
-    : public IConstraint
+class Jolt_constraint : public IConstraint
 {
 public:
     [[nodiscard]] virtual auto get_jolt_constraint() const -> JPH::Constraint* = 0;
 };
 
-class Jolt_point_to_point_constraint
-    : public Jolt_constraint
+class Jolt_point_to_point_constraint : public Jolt_constraint
 {
 public:
     explicit Jolt_point_to_point_constraint(const Point_to_point_constraint_settings& settings);

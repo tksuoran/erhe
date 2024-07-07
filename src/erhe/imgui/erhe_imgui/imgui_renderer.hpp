@@ -50,7 +50,7 @@ public:
     float       vr_font_size{22.0f};
 };
 
-class Imgui_viewport;
+class Imgui_host;
 
 class Imgui_draw_parameter_block_offsets
 {
@@ -89,25 +89,16 @@ public:
     [[nodiscard]] auto current_pipeline() -> erhe::graphics::Pipeline&;
 
 protected:
-    std::vector<
-        std::unique_ptr<
-            erhe::graphics::Vertex_input_state
-        >
-    >                            m_vertex_inputs;
-    std::array<
-        erhe::graphics::Pipeline,
-        s_frame_resources_count
-    >                            m_pipelines;
-    std::size_t                  m_current_slot{0};
-    std::string                  m_name;
+    std::vector<std::unique_ptr<erhe::graphics::Vertex_input_state>> m_vertex_inputs;
+    std::array<erhe::graphics::Pipeline, s_frame_resources_count>    m_pipelines;
+    std::size_t                                                      m_current_slot{0};
+    std::string                                                      m_name;
 };
 
 class Imgui_program_interface
 {
 public:
-    explicit Imgui_program_interface(
-        erhe::graphics::Instance& graphics_instance
-    );
+    explicit Imgui_program_interface(erhe::graphics::Instance& graphics_instance);
 
     void next_frame();
 
@@ -137,10 +128,7 @@ public:
 class Imgui_renderer final
 {
 public:
-    Imgui_renderer(
-        erhe::graphics::Instance& graphics_instance,
-        Imgui_settings&           settings
-    );
+    Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgui_settings& settings);
 
     static constexpr std::size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
     static constexpr std::size_t s_uvec2_size  = 2 * sizeof(uint32_t);
@@ -174,10 +162,7 @@ public:
         bool                                            linear           = true
     ) -> bool;
 
-    void use(
-        const std::shared_ptr<erhe::graphics::Texture>& texture,
-        const uint64_t                                  handle
-    );
+    void use(const std::shared_ptr<erhe::graphics::Texture>& texture, const uint64_t handle);
     void render_draw_data();
 
     void at_end_of_frame(std::function<void()>&& func);
@@ -188,10 +173,11 @@ public:
     auto vr_primary_font() const -> ImFont*;
     auto vr_mono_font   () const -> ImFont*;
 
-    void make_current             (const Imgui_viewport* imgui_viewport);
-    void register_imgui_viewport  (Imgui_viewport* viewport);
-    void unregister_imgui_viewport(Imgui_viewport* viewport);
-    [[nodiscard]] auto get_imgui_viewports() const -> const std::vector<Imgui_viewport*>&;
+    void make_current         (const Imgui_host* imgui_host);
+    void register_imgui_host  (Imgui_host* viewport);
+    void unregister_imgui_host(Imgui_host* viewport);
+    [[nodiscard]] auto get_imgui_hosts() const -> const std::vector<Imgui_host*>&;
+
     void lock_mutex();
     void unlock_mutex();
 
@@ -213,8 +199,8 @@ private:
     erhe::graphics::Gpu_timer                m_gpu_timer;
 
     std::recursive_mutex                     m_mutex;
-    std::vector<Imgui_viewport*>             m_imgui_viewports;
-    const Imgui_viewport*                    m_current_viewport{nullptr}; // current context
+    std::vector<Imgui_host*>                 m_imgui_hosts;
+    const Imgui_host*                        m_current_host{nullptr}; // current context
 
     std::set<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
     std::set<uint64_t>                                 m_used_texture_handles;

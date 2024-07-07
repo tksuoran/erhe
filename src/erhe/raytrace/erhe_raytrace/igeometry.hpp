@@ -28,6 +28,7 @@ enum class Buffer_type : int {
     BUFFER_TYPE_FLAGS                = 32
 };
 
+// TODO use erhe::dataformat
 enum class Format : int {
     FORMAT_UNDEFINED = 0,
 

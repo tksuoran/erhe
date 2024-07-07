@@ -13,11 +13,9 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
-class Jolt_collision_shape
-    : public ICollision_shape
+class Jolt_collision_shape : public ICollision_shape
 {
 public:
     ~Jolt_collision_shape() noexcept override = default;
@@ -37,8 +35,7 @@ protected:
     JPH::ShapeRefC m_jolt_shape;
 };
 
-class Jolt_box_shape
-    : public Jolt_collision_shape
+class Jolt_box_shape : public Jolt_collision_shape
 {
 public:
     ~Jolt_box_shape() noexcept override = default;
@@ -51,8 +48,7 @@ private:
     JPH::Ref<JPH::BoxShapeSettings> m_shape_settings;
 };
 
-class Jolt_capsule_shape
-    : public Jolt_collision_shape
+class Jolt_capsule_shape : public Jolt_collision_shape
 {
 public:
     Jolt_capsule_shape(const Axis axis, float radius, float length);
@@ -66,8 +62,7 @@ private:
     JPH::Ref<JPH::RotatedTranslatedShapeSettings> m_shape_settings;
 };
 
-class Jolt_cylinder_shape
-    : public Jolt_collision_shape
+class Jolt_cylinder_shape : public Jolt_collision_shape
 {
 public:
     Jolt_cylinder_shape(const Axis axis, const glm::vec3 half_extents);
@@ -81,8 +76,7 @@ private:
 };
 
 
-class Jolt_sphere_shape
-    : public Jolt_collision_shape
+class Jolt_sphere_shape : public Jolt_collision_shape
 {
 public:
     explicit Jolt_sphere_shape(const float radius);

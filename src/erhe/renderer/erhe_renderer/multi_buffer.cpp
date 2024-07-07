@@ -11,13 +11,9 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::renderer
-{
+namespace erhe::renderer{
 
-Multi_buffer::Multi_buffer(
-    erhe::graphics::Instance& graphics_instance,
-    const std::string_view    name
-)
+Multi_buffer::Multi_buffer(erhe::graphics::Instance& graphics_instance, const std::string_view name)
     : m_instance{graphics_instance}
     , m_writer  {graphics_instance}
     , m_name    {name}
@@ -86,10 +82,7 @@ void Multi_buffer::allocate(
     }
 }
 
-void Multi_buffer::allocate(
-    const gl::Buffer_target target,
-    const std::size_t       size
-)
+void Multi_buffer::allocate(const gl::Buffer_target target, const std::size_t size)
 {
     ERHE_VERIFY(!gl_helpers::is_indexed(target));
     m_binding_point = 0;
@@ -108,22 +101,22 @@ void Multi_buffer::allocate(
     }
 }
 
-[[nodiscard]] auto Multi_buffer::buffers() -> std::vector<erhe::graphics::Buffer>&
+auto Multi_buffer::buffers() -> std::vector<erhe::graphics::Buffer>&
 {
     return m_buffers;
 }
 
-[[nodiscard]] auto Multi_buffer::buffers() const -> const std::vector<erhe::graphics::Buffer>&
+auto Multi_buffer::buffers() const -> const std::vector<erhe::graphics::Buffer>&
 {
     return m_buffers;
 }
 
-[[nodiscard]] auto Multi_buffer::current_buffer() -> erhe::graphics::Buffer&
+auto Multi_buffer::current_buffer() -> erhe::graphics::Buffer&
 {
     return m_buffers.at(m_current_slot);
 }
 
-[[nodiscard]] auto Multi_buffer::name() const -> const std::string&
+auto Multi_buffer::name() const -> const std::string&
 {
     return m_name;
 }

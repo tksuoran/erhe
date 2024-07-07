@@ -8,8 +8,7 @@
 
 #include <thread>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 namespace {
 
@@ -118,6 +117,7 @@ void dump_fbo(int fbo_name)
 
 }
 
+// TODO move to graphics instance?
 std::mutex                Framebuffer::s_mutex;
 std::vector<Framebuffer*> Framebuffer::s_all_framebuffers;
 

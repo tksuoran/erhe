@@ -7,8 +7,8 @@
 #include "tools/tools.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/commands.hpp"
@@ -28,8 +28,7 @@
 
 #include <numeric>
 
-namespace editor
-{
+namespace editor {
 
 auto Fly_camera_tool::try_ready() -> bool
 {
@@ -47,18 +46,18 @@ auto Fly_camera_tool::try_ready() -> bool
         return false;
     }
 
-    const Viewport_window* viewport_window = scene_view->as_viewport_window();
-    if (viewport_window != nullptr) {
+    const Viewport_scene_view* viewport_scene_view = scene_view->as_viewport_scene_view();
+    if (viewport_scene_view != nullptr) {
         // Exclude safe border near viewport edges from mouse interaction
         // to filter out viewport window resizing for example.
-        const auto position_opt = viewport_window->get_position_in_viewport();
+        const auto position_opt = viewport_scene_view->get_position_in_viewport();
         if (!position_opt.has_value()) {
             log_fly_camera->trace("Fly camera has no pointer position in viewport");
             return false;
         }
         constexpr float border   = 32.0f;
         const glm::vec2 position = position_opt.value();
-        const erhe::math::Viewport viewport = viewport_window->projection_viewport();
+        const erhe::math::Viewport viewport = viewport_scene_view->projection_viewport();
         if (
             (position.x <  border) ||
             (position.y <  border) ||
@@ -248,11 +247,11 @@ auto Fly_camera_frame_command::try_call() -> bool
         return false;
     }
 
-    Viewport_window* viewport_window = scene_view->as_viewport_window();
-    if (viewport_window == nullptr) {
+    Viewport_scene_view* viewport_scene_view = scene_view->as_viewport_scene_view();
+    if (viewport_scene_view == nullptr) {
         return false;
     }
-    erhe::math::Viewport viewport = viewport_window->projection_viewport();
+    erhe::math::Viewport viewport = viewport_scene_view->projection_viewport();
 
     erhe::math::Bounding_box bbox{};
     const std::vector<std::shared_ptr<erhe::Item_base>>& selection = m_context.selection->get_selection();
@@ -447,13 +446,11 @@ void Fly_camera_tool::update_camera()
         return;
     }
 
-    const auto viewport_window = m_context.viewport_windows->hover_window();
-    const auto camera = (viewport_window)
-        ? viewport_window->get_camera()
+    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    const auto camera = (viewport_scene_view)
+        ? viewport_scene_view->get_camera()
         : std::shared_ptr<erhe::scene::Camera>{};
-    const auto* camera_node = camera
-        ? camera->get_node()
-        : nullptr;
+    const auto* camera_node = camera ? camera->get_node() : nullptr;
 
     // TODO This is messy
 
@@ -610,8 +607,8 @@ auto Fly_camera_tool::tumble_relative(float dx, float dy) -> bool
 {
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    const auto viewport_window = m_context.viewport_windows->hover_window();
-    if (!viewport_window) {
+    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    if (!viewport_scene_view) {
         return false;
     }
 
@@ -655,8 +652,8 @@ auto Fly_camera_tool::track() -> bool
         return false;
     }
 
-    Viewport_window* viewport_window = scene_view->as_viewport_window();
-    if (viewport_window == nullptr) {
+    Viewport_scene_view* viewport_scene_view = scene_view->as_viewport_scene_view();
+    if (viewport_scene_view == nullptr) {
         return false;
     }
 
@@ -699,7 +696,7 @@ auto Fly_camera_tool::track() -> bool
     glm::vec3 new_position = old_position - translation;
     m_camera_controller->set_position(new_position);
     m_camera_controller->get_node()->update_world_from_node();
-    viewport_window->update_hover(true);
+    viewport_scene_view->update_hover(true);
 
     m_track_plane_point = get_track_position();
     return true;

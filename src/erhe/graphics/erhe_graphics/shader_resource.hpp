@@ -8,8 +8,7 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Instance;
 class Vertex_attribute;

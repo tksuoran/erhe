@@ -14,13 +14,12 @@ namespace erhe::window {
     class Context_window;
 }
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 class Imgui_window;
-class Imgui_viewport;
+class Imgui_host;
 class Imgui_renderer;
-class Window_imgui_viewport;
+class Window_imgui_host;
 
 class Imgui_windows : public erhe::window::Window_event_handler
 {
@@ -42,11 +41,11 @@ public:
     void register_imgui_window  (Imgui_window* window);
     void unregister_imgui_window(Imgui_window* window);
     void imgui_windows          ();
-    void window_menu_entries    (Imgui_viewport& imgui_viewport);
+    void window_menu_entries    (Imgui_host& imgui_host);
     auto get_windows            () -> std::vector<Imgui_window*>&;
     void save_window_state      ();
 
-    [[nodiscard]] auto get_window_viewport  () -> std::shared_ptr<Window_imgui_viewport>;
+    [[nodiscard]] auto get_window_imgui_host() -> std::shared_ptr<Window_imgui_host>;
     [[nodiscard]] auto want_capture_keyboard() const -> bool;
     [[nodiscard]] auto want_capture_mouse   () const -> bool;
 
@@ -60,16 +59,18 @@ public:
     auto on_mouse_button(uint32_t button, bool pressed, uint32_t modifier_mask) -> bool    override;
     auto on_mouse_wheel (float x, float y, uint32_t modifier_mask) -> bool                 override;
 
-private:
-    Imgui_renderer&                        m_imgui_renderer;
-    std::recursive_mutex                   m_mutex;
-    bool                                   m_iterating{false};
-    std::vector<Imgui_window*>             m_imgui_windows;
-    std::mutex                             m_queued_operations_mutex;
-    std::vector<std::function<void()>>     m_queued_operations;
-    erhe::rendergraph::Rendergraph&        m_rendergraph;
+    void debug_imgui();
 
-    std::shared_ptr<Window_imgui_viewport> m_window_imgui_viewport;
+private:
+    Imgui_renderer&                    m_imgui_renderer;
+    std::recursive_mutex               m_mutex;
+    bool                               m_iterating{false};
+    std::vector<Imgui_window*>         m_imgui_windows;
+    std::mutex                         m_queued_operations_mutex;
+    std::vector<std::function<void()>> m_queued_operations;
+    erhe::rendergraph::Rendergraph&    m_rendergraph;
+
+    std::shared_ptr<Window_imgui_host> m_window_imgui_host;
 };
 
 } // namespace erhe::imgui

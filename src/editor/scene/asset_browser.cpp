@@ -23,11 +23,9 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
-namespace editor
-{
+namespace editor {
 
-class Scene_open_operation
-    : public IOperation
+class Scene_open_operation : public IOperation
 {
 public:
     explicit Scene_open_operation(const std::filesystem::path& path);
@@ -140,10 +138,7 @@ Asset_file_other& Asset_file_other::operator=(const Asset_file_other&) = default
 Asset_file_other::~Asset_file_other() noexcept                         = default;
 Asset_file_other::Asset_file_other(const std::filesystem::path& path) : Item{path} {}
 
-auto Asset_browser::make_node(
-    const std::filesystem::path& path,
-    Asset_node* const            parent
-) -> std::shared_ptr<Asset_node>
+auto Asset_browser::make_node(const std::filesystem::path& path, Asset_node* const parent) -> std::shared_ptr<Asset_node>
 {
     std::error_code error_code;
     bool is_directory{false};
@@ -226,10 +221,7 @@ Asset_browser::Asset_browser(
     );
 }
 
-void Asset_browser::scan(
-    const std::filesystem::path& path,
-    Asset_node*                  parent
-)
+void Asset_browser::scan(const std::filesystem::path& path, Asset_node* parent)
 {
     log_asset_browser->trace("Scanning {}", erhe::file::to_string(path));
 

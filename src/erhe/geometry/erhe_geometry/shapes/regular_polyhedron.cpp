@@ -3,8 +3,7 @@
 
 #include <cmath>  // for sqrt
 
-namespace erhe::geometry::shapes
-{
+namespace erhe::geometry::shapes {
 
 auto make_cuboctahedron(const double r) -> Geometry
 {
@@ -28,20 +27,21 @@ auto make_cuboctahedron(const double r) -> Geometry
             geometry.make_point(-r / 2,  r / 2,  r * sq2 / 2);
             geometry.make_point(-r / 2,  r / 2, -r * sq2 / 2);
 
-            geometry.make_polygon( { 1, 4,  7, 10} );
-            geometry.make_polygon( { 4, 3,  5,  6} );
-            geometry.make_polygon( { 0, 2,  3,  1} );
-            geometry.make_polygon( {11, 8,  5,  2} );
-            geometry.make_polygon( {10, 9, 11,  0} );
-            geometry.make_polygon( { 7, 6,  8,  9} );
-            geometry.make_polygon( { 0, 1, 10} );
-            geometry.make_polygon( { 3, 4,  1} );
-            geometry.make_polygon( { 4, 6,  7} );
-            geometry.make_polygon( {10, 7,  9} );
-            geometry.make_polygon( {11, 2,  0} );
-            geometry.make_polygon( { 2, 5,  3} );
-            geometry.make_polygon( { 8, 6,  5} );
-            geometry.make_polygon( { 9, 8, 11} );
+            // TODO inline index reverse 
+            geometry.make_polygon_reverse( { 1, 4,  7, 10} );
+            geometry.make_polygon_reverse( { 4, 3,  5,  6} );
+            geometry.make_polygon_reverse( { 0, 2,  3,  1} );
+            geometry.make_polygon_reverse( {11, 8,  5,  2} );
+            geometry.make_polygon_reverse( {10, 9, 11,  0} );
+            geometry.make_polygon_reverse( { 7, 6,  8,  9} );
+            geometry.make_polygon_reverse( { 0, 1, 10} );
+            geometry.make_polygon_reverse( { 3, 4,  1} );
+            geometry.make_polygon_reverse( { 4, 6,  7} );
+            geometry.make_polygon_reverse( {10, 7,  9} );
+            geometry.make_polygon_reverse( {11, 2,  0} );
+            geometry.make_polygon_reverse( { 2, 5,  3} );
+            geometry.make_polygon_reverse( { 8, 6,  5} );
+            geometry.make_polygon_reverse( { 9, 8, 11} );
 
             geometry.make_point_corners();
             geometry.build_edges();
@@ -84,18 +84,19 @@ auto make_dodecahedron(const double r) -> Geometry
             geometry.make_point(-r * b,    0,        r * a  );
             geometry.make_point(-r * b,    0,       -r * a  );
 
-            geometry.make_polygon( { 6, 18, 4,  8, 10} );
-            geometry.make_polygon( {10,  8, 0, 16,  2} );
-            geometry.make_polygon( { 3, 17, 1,  9, 11} );
-            geometry.make_polygon( { 5, 19, 7, 11,  9} );
-            geometry.make_polygon( { 3, 13, 2, 16, 17} );
-            geometry.make_polygon( {17, 16, 0, 12,  1} );
-            geometry.make_polygon( {19, 18, 6, 15,  7} );
-            geometry.make_polygon( { 5, 14, 4, 18, 19} );
-            geometry.make_polygon( { 0,  8, 4, 14, 12} );
-            geometry.make_polygon( {12, 14, 5,  9,  1} );
-            geometry.make_polygon( {13, 15, 6, 10,  2} );
-            geometry.make_polygon( { 3, 11, 7, 15, 13} );
+            // TODO inline index reverse 
+            geometry.make_polygon_reverse( { 6, 18, 4,  8, 10} );
+            geometry.make_polygon_reverse( {10,  8, 0, 16,  2} );
+            geometry.make_polygon_reverse( { 3, 17, 1,  9, 11} );
+            geometry.make_polygon_reverse( { 5, 19, 7, 11,  9} );
+            geometry.make_polygon_reverse( { 3, 13, 2, 16, 17} );
+            geometry.make_polygon_reverse( {17, 16, 0, 12,  1} );
+            geometry.make_polygon_reverse( {19, 18, 6, 15,  7} );
+            geometry.make_polygon_reverse( { 5, 14, 4, 18, 19} );
+            geometry.make_polygon_reverse( { 0,  8, 4, 14, 12} );
+            geometry.make_polygon_reverse( {12, 14, 5,  9,  1} );
+            geometry.make_polygon_reverse( {13, 15, 6, 10,  2} );
+            geometry.make_polygon_reverse( { 3, 11, 7, 15, 13} );
 
             geometry.make_point_corners();
             geometry.build_edges();
@@ -130,26 +131,27 @@ auto make_icosahedron(const double r) -> Geometry
             geometry.make_point(-r / b,  0,      r * a);
             geometry.make_point(-r / b,  0,     -r * a);
 
-            geometry.make_polygon( {1,  4,  6} );
-            geometry.make_polygon( {0,  6,  4} );
-            geometry.make_polygon( {0,  2, 10} );
-            geometry.make_polygon( {0,  8,  2} );
-            geometry.make_polygon( {1,  3,  9} );
-            geometry.make_polygon( {1, 11,  3} );
-            geometry.make_polygon( {2,  5,  7} );
-            geometry.make_polygon( {3,  7,  5} );
-            geometry.make_polygon( {6, 10, 11} );
-            geometry.make_polygon( {7, 11, 10} );
-            geometry.make_polygon( {4,  9,  8} );
-            geometry.make_polygon( {5,  8,  9} );
-            geometry.make_polygon( {0, 10,  6} );
-            geometry.make_polygon( {0,  4,  8} );
-            geometry.make_polygon( {1,  6, 11} );
-            geometry.make_polygon( {1,  9,  4} );
-            geometry.make_polygon( {3, 11,  7} );
-            geometry.make_polygon( {3,  5,  9} );
-            geometry.make_polygon( {2,  7, 10} );
-            geometry.make_polygon( {2,  8,  5} );
+            // TODO inline index reverse 
+            geometry.make_polygon_reverse( {1,  4,  6} );
+            geometry.make_polygon_reverse( {0,  6,  4} );
+            geometry.make_polygon_reverse( {0,  2, 10} );
+            geometry.make_polygon_reverse( {0,  8,  2} );
+            geometry.make_polygon_reverse( {1,  3,  9} );
+            geometry.make_polygon_reverse( {1, 11,  3} );
+            geometry.make_polygon_reverse( {2,  5,  7} );
+            geometry.make_polygon_reverse( {3,  7,  5} );
+            geometry.make_polygon_reverse( {6, 10, 11} );
+            geometry.make_polygon_reverse( {7, 11, 10} );
+            geometry.make_polygon_reverse( {4,  9,  8} );
+            geometry.make_polygon_reverse( {5,  8,  9} );
+            geometry.make_polygon_reverse( {0, 10,  6} );
+            geometry.make_polygon_reverse( {0,  4,  8} );
+            geometry.make_polygon_reverse( {1,  6, 11} );
+            geometry.make_polygon_reverse( {1,  9,  4} );
+            geometry.make_polygon_reverse( {3, 11,  7} );
+            geometry.make_polygon_reverse( {3,  5,  9} );
+            geometry.make_polygon_reverse( {2,  7, 10} );
+            geometry.make_polygon_reverse( {2,  8,  5} );
 
             geometry.make_point_corners();
             geometry.build_edges();
@@ -173,14 +175,15 @@ auto make_octahedron(const double r) -> Geometry
             geometry.make_point( r,  0,  0);
             geometry.make_point( 0,  0,  r);
 
-            geometry.make_polygon( {0, 2, 3} );
-            geometry.make_polygon( {0, 3, 4} );
-            geometry.make_polygon( {0, 4, 5} );
-            geometry.make_polygon( {0, 5, 2} );
-            geometry.make_polygon( {3, 2, 1} );
-            geometry.make_polygon( {4, 3, 1} );
-            geometry.make_polygon( {5, 4, 1} );
-            geometry.make_polygon( {2, 5, 1} );
+            // TODO inline index reverse 
+            geometry.make_polygon_reverse( {0, 2, 3} );
+            geometry.make_polygon_reverse( {0, 3, 4} );
+            geometry.make_polygon_reverse( {0, 4, 5} );
+            geometry.make_polygon_reverse( {0, 5, 2} );
+            geometry.make_polygon_reverse( {3, 2, 1} );
+            geometry.make_polygon_reverse( {4, 3, 1} );
+            geometry.make_polygon_reverse( {5, 4, 1} );
+            geometry.make_polygon_reverse( {2, 5, 1} );
 
             geometry.make_point_corners();
             geometry.build_edges();
@@ -205,10 +208,11 @@ auto make_tetrahedron(double r) -> Geometry
             geometry.make_point(-r * sq3 * sq2 / 3.0, -r / 3.0, -r * sq2 / 3.0      );
             geometry.make_point( r * sq3 * sq2 / 3.0, -r / 3.0, -r * sq2 / 3.0      );
 
-            geometry.make_polygon( {0, 1, 2} );
-            geometry.make_polygon( {3, 1, 0} );
-            geometry.make_polygon( {0, 2, 3} );
-            geometry.make_polygon( {3, 2, 1} );
+            // TODO inline index reverse 
+            geometry.make_polygon_reverse( {0, 1, 2} );
+            geometry.make_polygon_reverse( {3, 1, 0} );
+            geometry.make_polygon_reverse( {0, 2, 3} );
+            geometry.make_polygon_reverse( {3, 2, 1} );
 
             geometry.make_point_corners();
             geometry.build_edges();
@@ -238,12 +242,12 @@ auto make_cube(const double r) -> Geometry
             geometry.make_point(b, a, a); // 6  |/     |/
             geometry.make_point(a, a, a); // 7  3------5
 
-            geometry.make_polygon_reverse({1, 4, 7, 5}); // x+
-            geometry.make_polygon_reverse({2, 6, 7, 4}); // y+
-            geometry.make_polygon_reverse({3, 5, 7, 6}); // z+
-            geometry.make_polygon_reverse({0, 3, 6, 2}); // x-
-            geometry.make_polygon_reverse({0, 1, 5, 3}); // y-
-            geometry.make_polygon_reverse({0, 2, 4, 1}); // z-
+            geometry.make_polygon({1, 4, 7, 5}); // x+
+            geometry.make_polygon({2, 6, 7, 4}); // y+
+            geometry.make_polygon({3, 5, 7, 6}); // z+
+            geometry.make_polygon({0, 3, 6, 2}); // x-
+            geometry.make_polygon({0, 1, 5, 3}); // y-
+            geometry.make_polygon({0, 2, 4, 1}); // z-
 
             geometry.make_point_corners();
             geometry.build_edges();

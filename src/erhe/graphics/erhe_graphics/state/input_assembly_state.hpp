@@ -2,8 +2,7 @@
 
 #include "erhe_gl/wrapper_enums.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Input_assembly_state
 {
@@ -19,15 +18,8 @@ public:
     static Input_assembly_state triangle_strip;
 };
 
-[[nodiscard]] auto operator==(
-    const Input_assembly_state& lhs,
-    const Input_assembly_state& rhs
-) noexcept -> bool;
-
-[[nodiscard]] auto operator!=(
-    const Input_assembly_state& lhs,
-    const Input_assembly_state& rhs
-) noexcept -> bool;
+[[nodiscard]] auto operator==(const Input_assembly_state& lhs, const Input_assembly_state& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(const Input_assembly_state& lhs, const Input_assembly_state& rhs) noexcept -> bool;
 
 class Input_assembly_state_tracker
 {

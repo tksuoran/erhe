@@ -5,11 +5,9 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
-class Jolt_compound_shape
-    : public Jolt_collision_shape
+class Jolt_compound_shape : public Jolt_collision_shape
 {
 public:
     explicit Jolt_compound_shape(const Compound_shape_create_info& create_info);

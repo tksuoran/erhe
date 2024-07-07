@@ -1,8 +1,7 @@
 #include "erhe_net/net_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 std::shared_ptr<spdlog::logger> log_net   ;
 std::shared_ptr<spdlog::logger> log_socket;

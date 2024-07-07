@@ -16,8 +16,7 @@ namespace spdlog::level {
     enum level_enum : int;
 }
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 class Imgui_windows;
 class Logs;

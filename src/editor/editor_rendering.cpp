@@ -14,8 +14,8 @@
 #include "rendergraph/post_processing.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "windows/viewport_config_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -28,7 +28,7 @@
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_imgui/window_imgui_viewport.hpp"
+#include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_renderer/line_renderer.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_renderer/text_renderer.hpp"
@@ -245,7 +245,7 @@ Editor_rendering::Editor_rendering(
         .require_all_bits_clear       = 0
     };
     rendertarget->allow_shader_stages_override = false;
-
+    //rendertarget->allow_shader_stages_override = true;
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
             using namespace erhe::bit;
@@ -587,7 +587,9 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         .shader_stages  = &programs.textured.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_none,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw, 
+        // Useful for debugging rendertarget meshes
+        // .rasterization  = Rasterization_state::cull_mode_none,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
@@ -697,9 +699,9 @@ void Editor_rendering::begin_frame()
         erhe::window::start_frame_capture(*m_context.context_window);
     }
 
-    auto* imgui_viewport = m_context.imgui_windows->get_window_viewport().get();
+    auto* imgui_host = m_context.imgui_windows->get_window_imgui_host().get();
 
-    m_context.viewport_windows->update_hover(imgui_viewport);
+    m_context.scene_views->update_hover(imgui_host);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_context.headset_view->is_active()) {
@@ -834,7 +836,7 @@ void Editor_rendering::render_id(const Render_context& context)
         return;
     }
 
-    const auto position_opt = context.viewport_window->get_position_in_viewport();
+    const auto position_opt = context.viewport_scene_view->get_position_in_viewport();
     if (!position_opt.has_value()) {
         return;
     }

@@ -13,8 +13,7 @@ namespace erhe::window {
     class Context_window;
 }
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Tile_size
 {

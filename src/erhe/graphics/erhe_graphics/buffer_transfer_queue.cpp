@@ -11,8 +11,7 @@
 
 #include <fmt/format.h>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 Buffer_transfer_queue::Buffer_transfer_queue()
 {

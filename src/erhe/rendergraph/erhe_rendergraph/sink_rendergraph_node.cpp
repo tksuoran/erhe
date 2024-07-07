@@ -2,10 +2,7 @@
 
 namespace erhe::rendergraph {
 
-Sink_rendergraph_node::Sink_rendergraph_node(
-    Rendergraph&           rendergraph,
-    const std::string_view name
-)
+Sink_rendergraph_node::Sink_rendergraph_node(Rendergraph& rendergraph, const std::string_view name)
     : Rendergraph_node{rendergraph, name}
 {
 }

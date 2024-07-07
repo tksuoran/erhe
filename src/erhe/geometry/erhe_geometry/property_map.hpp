@@ -9,8 +9,7 @@
 #include <typeinfo>
 #include <vector>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 // TODO Use cofactor matrix for bivectors?
 enum class Transform_mode : unsigned int {
@@ -41,8 +40,7 @@ class Property_map_base
 public:
     virtual ~Property_map_base() noexcept = default;
 
-    virtual auto constructor(const Property_map_descriptor& descriptor) const
-    -> Property_map_base* = 0;
+    virtual auto constructor(const Property_map_descriptor& descriptor) const -> Property_map_base* = 0;
 
     virtual auto descriptor() const -> Property_map_descriptor = 0;
     virtual void clear     () = 0;
@@ -66,8 +64,7 @@ protected:
 };
 
 template <typename Key_type, typename Value_type>
-class Property_map
-    : public Property_map_base<Key_type>
+class Property_map : public Property_map_base<Key_type>
 {
 public:
     explicit Property_map(const Property_map_descriptor& descriptor)

@@ -23,8 +23,7 @@ enum class Variable : unsigned int {
     rotate_z    = 5
 };
 
-class Frame_controller
-    : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Frame_controller, erhe::Item_kind::not_clonable>
+class Frame_controller : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Frame_controller, erhe::Item_kind::not_clonable>
 {
 public:
     explicit Frame_controller(const Frame_controller&);

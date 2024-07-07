@@ -7,8 +7,7 @@
 
 #include <sstream>
 
-namespace editor
-{
+namespace editor {
 
 auto c_str(Item_insert_remove_operation::Mode mode) -> const char*
 {

@@ -10,7 +10,7 @@ namespace erhe::scene {
 
 namespace editor {
 
-auto intersect(
+[[nodiscard]] auto intersect(
     const erhe::scene::Mesh&    mesh,
     const glm::vec3             origin,
     const glm::vec3             direction,

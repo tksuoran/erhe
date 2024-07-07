@@ -3,8 +3,7 @@
 
 #include <mutex>
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 auto IBuffer::create(const std::string_view debug_label, const std::size_t capacity_bytes_count) -> IBuffer*
 {
@@ -50,16 +49,12 @@ Bvh_buffer& Bvh_buffer::operator=(Bvh_buffer&& other) noexcept
 
 Bvh_buffer::~Bvh_buffer() noexcept = default;
 
-auto Bvh_buffer::capacity_byte_count() const noexcept
--> std::size_t
+auto Bvh_buffer::capacity_byte_count() const noexcept -> std::size_t
 {
     return m_capacity_byte_count;
 }
 
-auto Bvh_buffer::allocate_bytes(
-    const std::size_t byte_count,
-    const std::size_t alignment
-) noexcept -> std::size_t
+auto Bvh_buffer::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::size_t
 {
     ERHE_VERIFY(alignment > 0);
 

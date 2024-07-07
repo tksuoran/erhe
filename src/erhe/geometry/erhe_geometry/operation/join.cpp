@@ -9,8 +9,7 @@
 
 #include <sstream>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 Join::Join(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}

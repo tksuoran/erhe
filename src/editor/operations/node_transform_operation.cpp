@@ -13,8 +13,7 @@
 
 #include <sstream>
 
-namespace editor
-{
+namespace editor {
 
 //auto Node_operation::describe() const -> std::string
 //{
@@ -59,9 +58,7 @@ namespace editor
 
 // ----------------------------------------------------------------------------
 
-Node_transform_operation::Node_transform_operation(
-    const Parameters& parameters
-)
+Node_transform_operation::Node_transform_operation(const Parameters& parameters)
     : m_parameters{parameters}
 {
 }

@@ -2,8 +2,7 @@
 
 #include "erhe_net/net_os.hpp"
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 class Select_sockets
 {
@@ -32,4 +31,4 @@ public:
     FD_SET       except_fds;
 };
 
-}
+} // namespace erhe::net

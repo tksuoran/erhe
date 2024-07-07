@@ -32,8 +32,7 @@ public:
 /// add multisampling, use a separate Multisample_resolve node in
 /// front of Texture_rendergraph_node.
 /// </summary>
-class Texture_rendergraph_node
-    : public Rendergraph_node
+class Texture_rendergraph_node : public Rendergraph_node
 {
 public:
     static constexpr std::string_view c_type_name{"Texture_rendergraph_node"};

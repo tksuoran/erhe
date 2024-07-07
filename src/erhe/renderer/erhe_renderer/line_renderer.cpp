@@ -22,12 +22,9 @@
 
 #include <glm/gtx/norm.hpp>
 
+namespace erhe::renderer {
 
-namespace erhe::renderer
-{
-
-namespace
-{
+namespace {
 
 static constexpr gl::Buffer_storage_mask storage_mask_persistent{
     gl::Buffer_storage_mask::map_coherent_bit   |
@@ -199,9 +196,7 @@ Line_renderer_pipeline::Line_renderer_pipeline(
 
 static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer_set::initialize_component()"};
 
-Line_renderer_set::Line_renderer_set(
-    erhe::graphics::Instance& graphics_instance
-)
+Line_renderer_set::Line_renderer_set(erhe::graphics::Instance& graphics_instance)
     : m_graphics_instance{graphics_instance}
     , m_pipeline         {graphics_instance}
 {
@@ -246,10 +241,7 @@ void Line_renderer_set::next_frame()
     for (auto& entry : hidden ) entry->next_frame();
 }
 
-void Line_renderer_set::render(
-    const erhe::math::Viewport viewport,
-    const erhe::scene::Camera&  camera
-)
+void Line_renderer_set::render(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -258,7 +250,7 @@ void Line_renderer_set::render(
     m_graphics_instance.opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
-[[nodiscard]] auto Line_renderer::Frame_resources::make_pipeline(
+auto Line_renderer::Frame_resources::make_pipeline(
     const bool                           reverse_depth,
     erhe::graphics::Shader_stages* const shader_stages,
     const bool                           visible,
@@ -452,10 +444,7 @@ void Line_renderer::put(
 }
 
 #pragma region add
-void Line_renderer::add_lines(
-    const mat4&                       transform,
-    const std::initializer_list<Line> lines
-)
+void Line_renderer::add_lines(const mat4& transform, const std::initializer_list<Line> lines)
 {
     ERHE_VERIFY(m_inside_begin_end);
 
@@ -477,10 +466,7 @@ void Line_renderer::add_lines(
     m_line_count += lines.size();
 }
 
-void Line_renderer::add_lines(
-    const mat4&                        transform,
-    const std::initializer_list<Line4> lines
-)
+void Line_renderer::add_lines(const mat4& transform, const std::initializer_list<Line4> lines)
 {
     ERHE_VERIFY(m_inside_begin_end);
 
@@ -537,9 +523,7 @@ void Line_renderer::set_thickness(const float thickness)
     m_line_thickness = thickness;
 }
 
-void Line_renderer::add_lines(
-    const std::initializer_list<Line> lines
-)
+void Line_renderer::add_lines(const std::initializer_list<Line> lines)
 {
     ERHE_VERIFY(m_inside_begin_end);
 
@@ -1014,11 +998,7 @@ struct Torus_point
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 // f(x) = (|x|^2 + R^2 - r^2)^2 - 4R^2|xy|^2 = 0
-auto ray_torus_intersection(
-    const vec3 ro,
-    const vec3 rd,
-    const vec2 tor
-) -> float
+auto ray_torus_intersection(const vec3 ro, const vec3 rd, const vec2 tor) -> float
 {
     float po = 1.0;
 
@@ -1126,11 +1106,7 @@ auto ray_torus_intersection(
     return result;
 }
 
-auto ray_torus_intersection(
-    const glm::dvec3 ro,
-    const glm::dvec3 rd,
-    const glm::dvec2 tor
-) -> double
+auto ray_torus_intersection(const glm::dvec3 ro, const glm::dvec3 rd, const glm::dvec2 tor) -> double
 {
     double po = 1.0;
 

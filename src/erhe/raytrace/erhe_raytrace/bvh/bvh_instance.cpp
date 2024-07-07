@@ -1,4 +1,4 @@
-#include "erhe_raytrace/bvh/bvh_instance.hpp"
+ #include "erhe_raytrace/bvh/bvh_instance.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_raytrace/bvh/bvh_scene.hpp"
 #include "erhe_raytrace/iscene.hpp"

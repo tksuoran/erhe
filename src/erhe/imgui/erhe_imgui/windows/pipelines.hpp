@@ -17,14 +17,10 @@ namespace erhe::imgui {
 
 class Imgui_windows;
 
-class Pipelines
-    : public Imgui_window
+class Pipelines : public Imgui_window
 {
 public:
-    Pipelines(
-        Imgui_renderer& imgui_renderer,
-        Imgui_windows&  imgui_windows
-    );
+    Pipelines(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows);
 
     // Implements Imgui_window
     void imgui() override;

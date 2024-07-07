@@ -12,8 +12,7 @@
 
 #include <glm/gtx/matrix_decompose.hpp>
 
-namespace editor
-{
+namespace editor {
 
 using erhe::physics::IRigid_body_create_info;
 using erhe::physics::IRigid_body;
@@ -33,9 +32,7 @@ Node_physics::Node_physics(const Node_physics& src, erhe::for_clone)
 {
 }
 
-Node_physics::Node_physics(
-    const IRigid_body_create_info& create_info
-)
+Node_physics::Node_physics(const IRigid_body_create_info& create_info)
     : m_create_info{create_info}
 {
 }

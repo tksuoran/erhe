@@ -9,8 +9,7 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 using glm::mat4;
 using glm::vec2;
@@ -615,4 +614,4 @@ auto Geometry::compute_tangents(
     return true;
 }
 
-}
+} // namespace erhe::geometry

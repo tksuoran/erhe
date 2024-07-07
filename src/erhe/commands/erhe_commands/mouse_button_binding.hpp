@@ -5,8 +5,7 @@
 namespace erhe::commands {
 
 // Mouse pressed and released while not being moved
-class Mouse_button_binding
-    : public Mouse_binding
+class Mouse_button_binding : public Mouse_binding
 {
 public:
     Mouse_button_binding(

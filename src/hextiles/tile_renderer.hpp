@@ -98,9 +98,7 @@ public:
 
 private:
     auto make_prototype(erhe::graphics::Instance& graphics_instance) const -> erhe::graphics::Shader_stages_prototype;
-    auto make_program(
-        erhe::graphics::Shader_stages_prototype&& prototype
-    ) const -> erhe::graphics::Shader_stages;
+    auto make_program(erhe::graphics::Shader_stages_prototype&& prototype) const -> erhe::graphics::Shader_stages;
 
     erhe::graphics::Instance&    m_graphics_instance;
     erhe::imgui::Imgui_renderer& m_imgui_renderer;

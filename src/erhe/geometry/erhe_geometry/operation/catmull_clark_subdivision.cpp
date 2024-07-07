@@ -4,8 +4,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 // E = average of two neighboring face points and original endpoints
 //
@@ -21,10 +20,7 @@ namespace erhe::geometry::operation
 //
 // For each corner in the old polygon, add one quad
 // (centroid, previous edge 'edge midpoint', corner, next edge 'edge midpoint')
-Catmull_clark_subdivision::Catmull_clark_subdivision(
-    Geometry& src,
-    Geometry& destination
-)
+Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION();

@@ -87,9 +87,7 @@ auto Light::stable_directional_light_projection(
     };
 }
 
-auto Light::spot_light_projection(
-    const Light_projection_parameters& parameters
-) const -> Projection
+auto Light::spot_light_projection(const Light_projection_parameters& parameters) const -> Projection
 {
     static_cast<void>(parameters); // TODO ignored for now
     return Projection{

@@ -5,8 +5,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 auto glsl_token(Glsl_type attribute_type) -> const char*
 {
@@ -113,10 +112,7 @@ auto Shader_stages_create_info::interface_source() const -> std::string
     return sb.str();
 }
 
-auto Shader_stages_create_info::final_source(
-    Instance&           graphics_instance,
-    const Shader_stage& shader
-) const -> std::string
+auto Shader_stages_create_info::final_source(Instance& graphics_instance, const Shader_stage& shader) const -> std::string
 {
     std::stringstream sb;
     sb << "#version " << graphics_instance.info.glsl_version << " core\n\n";
@@ -177,9 +173,7 @@ auto Shader_stages_create_info::final_source(
     return sb.str(); // shaders.emplace_back(type, source, sb.str());
 }
 
-void Shader_stages_create_info::add_interface_block(
-    const Shader_resource* interface_block
-)
+void Shader_stages_create_info::add_interface_block(const Shader_resource* interface_block)
 {
     ERHE_VERIFY(interface_block != nullptr);
     interface_blocks.push_back(interface_block);

@@ -34,12 +34,12 @@ class Editor_message_bus;
 class Hotbar;
 class Icon_set;
 class Mesh_memory;
-class Rendertarget_imgui_viewport;
+class Rendertarget_imgui_host;
 class Rendertarget_mesh;
 class Scene_builder;
 class Scene_root;
 class Tools;
-class Viewport_windows;
+class Scene_views;
 class Headset_view;
 
 class Toggle_menu_visibility_command : public erhe::commands::Command
@@ -122,8 +122,7 @@ private:
 
     std::shared_ptr<erhe::scene::Node>              m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>              m_rendertarget_mesh;
-    std::shared_ptr<Rendertarget_imgui_viewport>    m_rendertarget_imgui_viewport;
-    //Scene_view*                                     m_hover_scene_view{nullptr};
+    std::shared_ptr<Rendertarget_imgui_host>        m_rendertarget_imgui_host;
 
     std::shared_ptr<erhe::scene::Node>              m_radial_menu_node;
     std::shared_ptr<erhe::scene::Mesh>              m_radial_menu_background_mesh;

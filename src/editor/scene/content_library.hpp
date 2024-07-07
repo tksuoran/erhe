@@ -32,8 +32,7 @@ namespace editor {
 class Brush;
 class Editor_context;
 
-class Content_library_node
-    : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Content_library_node>
+class Content_library_node : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Content_library_node>
 {
 public:
     explicit Content_library_node(const Content_library_node&);

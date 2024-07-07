@@ -4,8 +4,7 @@
 
 //#define DISABLE_CACHE 1
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 size_t Viewport_state::s_serial{0};
 
@@ -57,20 +56,14 @@ void Viewport_state_tracker::execute(Viewport_state const* state)
     m_last = state->serial;
 }
 
-auto operator==(
-    const Viewport_state& lhs,
-    const Viewport_state& rhs
-) noexcept -> bool
+auto operator==(const Viewport_state& lhs, const Viewport_state& rhs) noexcept -> bool
 {
     return
         (lhs.min_depth == rhs.min_depth) &&
         (lhs.max_depth == rhs.max_depth);
 }
 
-auto operator!=(
-    const Viewport_state& lhs,
-    const Viewport_state& rhs
-) noexcept -> bool
+auto operator!=(const Viewport_state& lhs, const Viewport_state& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }

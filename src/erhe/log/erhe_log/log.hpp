@@ -32,8 +32,7 @@ public:
 };
 
 // Sink that keeps log entries in deqeue
-class Store_log_sink final
-    : public spdlog::sinks::base_sink<std::mutex>
+class Store_log_sink final : public spdlog::sinks::base_sink<std::mutex>
 {
 public:
     Store_log_sink();

@@ -11,8 +11,7 @@
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_scene/scene.hpp"
 
-namespace editor
-{
+namespace editor {
 
 Mesh_operation::Mesh_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}

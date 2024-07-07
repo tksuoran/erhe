@@ -1,8 +1,7 @@
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 std::shared_ptr<spdlog::logger> log_buffer  ;
 std::shared_ptr<spdlog::logger> log_device  ;

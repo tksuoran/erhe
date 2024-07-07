@@ -2,8 +2,7 @@
 
 #include "erhe_net/socket.hpp"
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 class Client
 {

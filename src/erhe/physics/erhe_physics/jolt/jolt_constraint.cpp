@@ -1,11 +1,8 @@
 #include "erhe_physics/jolt/jolt_constraint.hpp"
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
-auto IConstraint::create_point_to_point_constraint(
-    const Point_to_point_constraint_settings& settings
-) -> IConstraint*
+auto IConstraint::create_point_to_point_constraint(const Point_to_point_constraint_settings& settings) -> IConstraint*
 {
     return new Jolt_point_to_point_constraint(settings);
 }

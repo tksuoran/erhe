@@ -4,8 +4,7 @@
 
 #include <cstddef>
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 Vertex_attribute_info::Vertex_attribute_info() = default;
 

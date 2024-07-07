@@ -3,8 +3,7 @@
 
 #include <cstdio>
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 auto c_str(const Socket_option option) -> const char*
 {

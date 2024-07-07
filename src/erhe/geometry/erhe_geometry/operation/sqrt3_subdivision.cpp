@@ -6,8 +6,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
-namespace erhe::geometry::operation
-{
+namespace erhe::geometry::operation {
 
 //  Sqrt(3): Replace edges with two triangles
 //  For each corner in the old polygon, add one triangle
@@ -76,6 +75,5 @@ auto sqrt3_subdivision(Geometry& source) -> Geometry
         }
     );
 }
-
 
 } // namespace erhe::geometry::operation

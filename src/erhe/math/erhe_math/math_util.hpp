@@ -449,9 +449,7 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] auto create_scale(
-    const T s
-) -> typename vector_types<T>::mat4
+[[nodiscard]] auto create_scale(const T s) -> typename vector_types<T>::mat4
 {
     return typename vector_types<T>::mat4{
         s,      T{0.0}, T{0.0}, T{0.0},

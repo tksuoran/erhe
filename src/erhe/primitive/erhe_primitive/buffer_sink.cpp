@@ -4,8 +4,7 @@
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_raytrace/ibuffer.hpp"
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 Buffer_sink::~Buffer_sink() noexcept
 {

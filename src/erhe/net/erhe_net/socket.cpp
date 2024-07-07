@@ -6,9 +6,7 @@
 
 #include <fmt/format.h>
 
-
-namespace erhe::net
-{
+namespace erhe::net {
 
 //                                            E  r  h  e
 constexpr uint32_t erhe_header_magic_u32 = 0x45'72'68'65u;
@@ -49,10 +47,7 @@ Socket::Socket()
     log_socket->trace("Socket default constructor");
 }
 
-Socket::Socket(
-    const SOCKET&      socket,
-    const sockaddr_in& address_in
-)
+Socket::Socket(const SOCKET& socket, const sockaddr_in& address_in)
     : m_socket    {socket}
     , m_address_in{address_in}
 {
@@ -589,4 +584,4 @@ auto Socket::post_select_listen(Select_sockets& select_sockets) -> std::optional
     return {};
 }
 
-}
+} // namespace erhe::net

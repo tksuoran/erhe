@@ -4,17 +4,11 @@
 
 #define DISABLE_CACHE 0
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
-namespace
-{
+namespace {
 
-auto shuffle(
-    const std::size_t x,
-    const std::size_t m,
-    const std::size_t shift
-) -> std::size_t
+auto shuffle(const std::size_t x, const std::size_t m, const std::size_t shift) -> std::size_t
 {
     const std::size_t t = ((x >> shift) ^ x) & m;
     return (x ^ t) ^ (t << shift);
@@ -23,9 +17,7 @@ auto shuffle(
 class Blend_state_component_hash
 {
 public:
-    [[nodiscard]] auto operator()(
-        const Blend_state_component& blend_state_component
-    ) const noexcept -> size_t
+    [[nodiscard]] auto operator()(const Blend_state_component& blend_state_component) const noexcept -> size_t
     {
         return
             (gl::base_zero(blend_state_component.equation_mode     ) << 0u) | // 3 bits
@@ -36,9 +28,7 @@ public:
 
 }
 
-auto Blend_state_hash::operator()(
-    const Color_blend_state& state
-) const noexcept -> std::size_t
+auto Blend_state_hash::operator()(const Color_blend_state& state) const noexcept -> std::size_t
 {
     return
         (
@@ -252,10 +242,7 @@ void Color_blend_state_tracker::execute(const Color_blend_state& state) noexcept
 #endif
 }
 
-auto operator==(
-    const Blend_state_component& lhs,
-    const Blend_state_component& rhs
-) noexcept -> bool
+auto operator==(const Blend_state_component& lhs, const Blend_state_component& rhs) noexcept -> bool
 {
     return
         (lhs.equation_mode      == rhs.equation_mode     ) &&
@@ -263,18 +250,12 @@ auto operator==(
         (lhs.destination_factor == rhs.destination_factor);
 }
 
-auto operator!=(
-    const Blend_state_component& lhs,
-    const Blend_state_component& rhs
-) noexcept -> bool
+auto operator!=(const Blend_state_component& lhs, const Blend_state_component& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }
 
-auto operator==(
-    const Color_blend_state& lhs,
-    const Color_blend_state& rhs
-) noexcept -> bool
+auto operator==(const Color_blend_state& lhs, const Color_blend_state& rhs) noexcept -> bool
 {
     return
         (lhs.enabled          == rhs.enabled         ) &&
@@ -290,10 +271,7 @@ auto operator==(
         (lhs.write_mask.alpha == rhs.write_mask.alpha);
 }
 
-auto operator!=(
-    const Color_blend_state& lhs,
-    const Color_blend_state& rhs
-) noexcept -> bool
+auto operator!=(const Color_blend_state& lhs, const Color_blend_state& rhs) noexcept -> bool
 {
     return !(lhs == rhs);
 }

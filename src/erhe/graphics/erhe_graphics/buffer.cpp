@@ -14,8 +14,7 @@
 #include <sstream>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 auto Buffer::gl_name() const noexcept -> unsigned int
 {
@@ -336,10 +335,7 @@ auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) 
     return m_map;
 }
 
-void Buffer::end_write(
-    const std::size_t byte_offset,
-    const std::size_t byte_count
-) noexcept
+void Buffer::end_write(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
     ERHE_VERIFY(!m_map.empty());
     ERHE_VERIFY(gl_name() != 0);
@@ -352,9 +348,7 @@ void Buffer::end_write(
     }
 }
 
-auto Buffer::map_all_bytes(
-    const gl::Map_buffer_access_mask access_mask
-) noexcept -> std::span<std::byte>
+auto Buffer::map_all_bytes(const gl::Map_buffer_access_mask access_mask) noexcept -> std::span<std::byte>
 {
     ERHE_VERIFY(m_map.empty());
     ERHE_VERIFY(gl_name() != 0);
@@ -511,10 +505,7 @@ void Buffer::unmap() noexcept
     ERHE_VERIFY(m_map.empty());
 }
 
-void Buffer::flush_bytes(
-    const std::size_t byte_offset,
-    const std::size_t byte_count
-) noexcept
+void Buffer::flush_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
     ERHE_VERIFY((m_map_buffer_access_mask & gl::Map_buffer_access_mask::map_flush_explicit_bit) == gl::Map_buffer_access_mask::map_flush_explicit_bit);
     ERHE_VERIFY(gl_name() != 0);
@@ -636,7 +627,7 @@ auto operator!=(const Buffer& lhs, const Buffer& rhs) noexcept -> bool
     return !(lhs == rhs);
 }
 
-[[nodiscard]] auto to_gl_index_type(erhe::dataformat::Format format) -> gl::Draw_elements_type
+auto to_gl_index_type(erhe::dataformat::Format format) -> gl::Draw_elements_type
 {
     switch (format) {
         case erhe::dataformat::Format::format_8_scalar_uint:  return gl::Draw_elements_type::unsigned_byte;

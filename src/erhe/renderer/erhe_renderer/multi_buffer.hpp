@@ -12,10 +12,7 @@ class Multi_buffer
 public:
     static constexpr std::size_t s_frame_resources_count = 4;
 
-    Multi_buffer(
-        erhe::graphics::Instance& graphics_instance,
-        const std::string_view    name
-    );
+    Multi_buffer(erhe::graphics::Instance& graphics_instance, const std::string_view name);
 
     void reset     ();
     void next_frame();

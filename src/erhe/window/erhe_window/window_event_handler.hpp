@@ -241,8 +241,7 @@ private:
     int m_priority{0};
 };
 
-class Root_window_event_handler
-    : public Window_event_handler
+class Root_window_event_handler : public Window_event_handler
 {
 public:
     // Implements Window_event_handler

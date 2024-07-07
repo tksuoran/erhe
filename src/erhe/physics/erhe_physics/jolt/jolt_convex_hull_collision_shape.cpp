@@ -1,7 +1,6 @@
 #include "erhe_physics/jolt/jolt_convex_hull_collision_shape.hpp"
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 auto ICollision_shape::create_convex_hull_shape(
     const float* points,

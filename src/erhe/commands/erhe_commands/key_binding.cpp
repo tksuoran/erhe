@@ -22,12 +22,12 @@ Key_binding::Key_binding() = default;
 
 Key_binding::~Key_binding() noexcept = default;
 
-[[nodiscard]] auto Key_binding::get_keycode() const -> erhe::window::Keycode
+auto Key_binding::get_keycode() const -> erhe::window::Keycode
 {
     return m_code;
 }
 
-[[nodiscard]] auto Key_binding::get_pressed() const -> bool
+auto Key_binding::get_pressed() const -> bool
 {
     return m_pressed;
 }

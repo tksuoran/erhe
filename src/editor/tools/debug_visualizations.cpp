@@ -9,7 +9,7 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
+#include "scene/viewport_scene_view.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/transform/transform_tool.hpp"
 
@@ -37,16 +37,14 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 using Trs_transform = erhe::scene::Trs_transform;
 
-namespace
-{
+namespace {
 
 [[nodiscard]] auto sign(const float x) -> float { return x < 0.0f ? -1.0f : 1.0f; }
 
@@ -57,10 +55,7 @@ constexpr vec3 axis_x         { 1.0f,  0.0f, 0.0f};
 constexpr vec3 axis_y         { 0.0f,  1.0f, 0.0f};
 constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 
-[[nodiscard]] auto should_visualize(
-    const Visualization_mode mode,
-    const bool               is_selected
-)
+[[nodiscard]] auto should_visualize(const Visualization_mode mode, const bool is_selected)
 {
     if (mode == Visualization_mode::All) {
         return true;
@@ -71,18 +66,12 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
     return false;
 }
 
-[[nodiscard]] auto should_visualize(
-    const Visualization_mode                mode,
-    const std::shared_ptr<erhe::Item_base>& item
-)
+[[nodiscard]] auto should_visualize(const Visualization_mode mode, const std::shared_ptr<erhe::Item_base>& item)
 {
     return should_visualize(mode, item->is_selected());
 }
 
-[[nodiscard]] auto should_visualize(
-    const Visualization_mode     mode,
-    const erhe::Item_base* const item
-)
+[[nodiscard]] auto should_visualize(const Visualization_mode mode, const erhe::Item_base* const item)
 {
     return should_visualize(mode, item->is_selected());
 }
@@ -111,9 +100,7 @@ Debug_visualizations::Debug_visualizations(
     );
 }
 
-auto Debug_visualizations::get_selected_camera(
-    const Render_context& render_context
-) -> std::shared_ptr<erhe::scene::Camera>
+auto Debug_visualizations::get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>
 {
     const auto* scene     = render_context.get_scene();
     const auto& selection = m_context.selection->get_selection();
@@ -136,10 +123,7 @@ auto Debug_visualizations::get_selected_camera(
     return {};
 }
 
-void Debug_visualizations::mesh_visualization(
-    const Render_context& render_context,
-    erhe::scene::Mesh*    mesh
-)
+void Debug_visualizations::mesh_visualization(const Render_context& render_context, erhe::scene::Mesh* mesh)
 {
     if (mesh == nullptr) {
         return;
@@ -226,10 +210,7 @@ void Debug_visualizations::mesh_visualization(
     }
 }
 
-void Debug_visualizations::skin_visualization(
-    const Render_context& render_context,
-    erhe::scene::Skin&    skin
-)
+void Debug_visualizations::skin_visualization(const Render_context& render_context, erhe::scene::Skin& skin)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -350,9 +331,7 @@ void Debug_visualizations::light_visualization(
     }
 }
 
-void Debug_visualizations::directional_light_visualization(
-    const Light_visualization_context& context
-)
+void Debug_visualizations::directional_light_visualization(const Light_visualization_context& context)
 {
     const auto shadow_render_node = m_context.editor_rendering->get_shadow_node_for_view(context.render_context.scene_view);
     if (!shadow_render_node) {
@@ -386,9 +365,7 @@ void Debug_visualizations::directional_light_visualization(
     );
 }
 
-void Debug_visualizations::point_light_visualization(
-    const Light_visualization_context& context
-)
+void Debug_visualizations::point_light_visualization(const Light_visualization_context& context)
 {
     const auto* node = context.light->get_node();
     if (node == nullptr) {
@@ -421,9 +398,7 @@ void Debug_visualizations::point_light_visualization(
     );
 }
 
-void Debug_visualizations::spot_light_visualization(
-    const Light_visualization_context& context
-)
+void Debug_visualizations::spot_light_visualization(const Light_visualization_context& context)
 {
     const auto* node = context.light->get_node();
     if (node == nullptr) {
@@ -583,14 +558,7 @@ void Debug_visualizations::spot_light_visualization(
         const vec3  v       = normalize(p - view_position);
         const float n_dot_v = dot(N, v);
 
-        cone_edges.emplace_back(
-            p,
-            N,
-            T,
-            B,
-            phi,
-            n_dot_v
-        );
+        cone_edges.emplace_back(p, N, T, B, phi, n_dot_v);
     }
 
     std::vector<Cone_edge> sign_flip_edges;
@@ -615,10 +583,7 @@ void Debug_visualizations::spot_light_visualization(
     }
 }
 
-void Debug_visualizations::camera_visualization(
-    const Render_context&       render_context,
-    const erhe::scene::Camera*  camera
-)
+void Debug_visualizations::camera_visualization(const Render_context& render_context, const erhe::scene::Camera* camera)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -657,9 +622,7 @@ void Debug_visualizations::camera_visualization(
     );
 }
 
-void Debug_visualizations::selection_visualization(
-    const Render_context& context
-)
+void Debug_visualizations::selection_visualization(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -668,10 +631,8 @@ void Debug_visualizations::selection_visualization(
         return;
     }
 
-    const auto& viewport_config = context.viewport_window->get_config();
-
+    const auto& viewport_config = context.viewport_scene_view->get_config();
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
-
     const auto& selection = m_context.selection->get_selection();
 
     m_selection_bounding_volume = erhe::math::Bounding_volume_combiner{}; // reset
@@ -793,9 +754,7 @@ void Debug_visualizations::selection_visualization(
     }
 }
 
-void Debug_visualizations::physics_nodes_visualization(
-    const Render_context& context
-)
+void Debug_visualizations::physics_nodes_visualization(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -810,105 +769,105 @@ void Debug_visualizations::physics_nodes_visualization(
     const auto      projection_transforms = camera.projection_transforms(context.viewport);
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
-    for (const auto& mesh : scene_root->layers().content()->meshes) {
-        if (!should_visualize(m_physics_visualization, mesh)) {
-            continue;
-        }
-        const auto* node = mesh->get_node();
-        if (node == nullptr) {
-            continue;
-        }
+    for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+        for (const auto& mesh : layer->meshes) {
+            if (!should_visualize(m_physics_visualization, mesh)) {
+                continue;
+            }
+            const auto* node = mesh->get_node();
+            if (node == nullptr) {
+                continue;
+            }
 
-        const auto& node_physics = get_node_physics(node);
-        if (!node_physics) {
-            continue;
-        }
+            const auto& node_physics = get_node_physics(node);
+            if (!node_physics) {
+                continue;
+            }
 
-        const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
-        if (rigid_body == nullptr) {
-            continue;
-        }
-        const glm::mat4 m = rigid_body->get_world_transform();
+            const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+            if (rigid_body == nullptr) {
+                continue;
+            }
+            const glm::mat4 m = rigid_body->get_world_transform();
 
-        const glm::vec4 p4_in_world  = m * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
-        const glm::vec3 p3_in_window = context.viewport.project_to_screen_space(
-            clip_from_world,
-            glm::vec3{p4_in_world},
-            0.0f,
-            1.0f
-        );
-        const auto label_text = "<" + node->describe() + ">"; // node_physics->describe();
-        const glm::vec2 label_size = m_context.text_renderer->measure(label_text).size();
-        const glm::vec3 p3_in_window_z_negated{
-             p3_in_window.x - label_size.x * 0.5,
-             p3_in_window.y - label_size.y * 0.5,
-            -p3_in_window.z
-        };
-        glm::vec4 label_text_color{0.3f, 1.0f, 0.3f, 1.0f};
-        const uint32_t text_color = erhe::math::convert_float4_to_uint32(label_text_color);
-
-        m_context.text_renderer->print(
-            p3_in_window_z_negated,
-            text_color,
-            label_text
-        );
-        const glm::vec3 dx{0.1f, 0.0f, 0.0f};
-        const glm::vec3 dy{0.0f, 0.1f, 0.0f};
-        const glm::vec3 dz{0.0f, 0.0f, 0.1f};
-        for (const auto& marker : node_physics->markers) {
-            const glm::vec4 blue{0.0f, 0.0f, 1.0f, 1.0f};
-            line_renderer.add_lines(
-                m,
-                blue,
-                {
-                    { marker - dx, marker + dx },
-                    { marker - dy, marker + dy },
-                    { marker - dz, marker + dz },
-                }
+            const glm::vec4 p4_in_world  = m * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
+            const glm::vec3 p3_in_window = context.viewport.project_to_screen_space(
+                clip_from_world,
+                glm::vec3{p4_in_world},
+                0.0f,
+                1.0f
             );
-        }
+            const auto label_text = "<" + node->describe() + ">"; // node_physics->describe();
+            const glm::vec2 label_size = m_context.text_renderer->measure(label_text).size();
+            const glm::vec3 p3_in_window_z_negated{
+                 p3_in_window.x - label_size.x * 0.5,
+                 p3_in_window.y - label_size.y * 0.5,
+                -p3_in_window.z
+            };
+            glm::vec4 label_text_color{0.3f, 1.0f, 0.3f, 1.0f};
+            const uint32_t text_color = erhe::math::convert_float4_to_uint32(label_text_color);
 
-        {
-            const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
-            const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
-            const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};
-            line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
-            line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
-            line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
-        }
-        {
-            const glm::vec4 cyan{0.0f, 1.0f, 1.0f, 0.5f};
-            const glm::vec3 velocity = rigid_body->get_linear_velocity();
-            line_renderer.add_lines( m, cyan, {{ O, 4.0f * velocity }} );
-        }
-
-        const auto collision_shape = rigid_body->get_collision_shape();
-        if (!collision_shape) {
-            continue;
-        }
-        {
-            const glm::vec4 purple{1.0f, 0.0f, 1.0f, 1.0f};
-            // This would return center of mass in world space
-            //const glm::vec3 center_of_mass = rigid_body->get_center_of_mass();
-            const glm::vec3 center_of_mass = collision_shape->get_center_of_mass();
-            line_renderer.add_lines(
-                m,
-                purple,
-                {
-                    { O, center_of_mass },
-                    { center_of_mass - dx, center_of_mass + dx },
-                    { center_of_mass - dy, center_of_mass + dy },
-                    { center_of_mass - dz, center_of_mass + dz },
-                }
+            m_context.text_renderer->print(
+                p3_in_window_z_negated,
+                text_color,
+                label_text
             );
+            const glm::vec3 dx{0.1f, 0.0f, 0.0f};
+            const glm::vec3 dy{0.0f, 0.1f, 0.0f};
+            const glm::vec3 dz{0.0f, 0.0f, 0.1f};
+            for (const auto& marker : node_physics->markers) {
+                const glm::vec4 blue{0.0f, 0.0f, 1.0f, 1.0f};
+                line_renderer.add_lines(
+                    m,
+                    blue,
+                    {
+                        { marker - dx, marker + dx },
+                        { marker - dy, marker + dy },
+                        { marker - dz, marker + dz },
+                    }
+                );
+            }
 
+            {
+                const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
+                const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
+                const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};
+                line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
+                line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
+                line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
+            }
+            {
+                const glm::vec4 cyan{0.0f, 1.0f, 1.0f, 0.5f};
+                const glm::vec3 velocity = rigid_body->get_linear_velocity();
+                line_renderer.add_lines( m, cyan, {{ O, 4.0f * velocity }} );
+            }
+
+            const auto collision_shape = rigid_body->get_collision_shape();
+            if (!collision_shape) {
+                continue;
+            }
+            {
+                const glm::vec4 purple{1.0f, 0.0f, 1.0f, 1.0f};
+                // This would return center of mass in world space
+                //const glm::vec3 center_of_mass = rigid_body->get_center_of_mass();
+                const glm::vec3 center_of_mass = collision_shape->get_center_of_mass();
+                line_renderer.add_lines(
+                    m,
+                    purple,
+                    {
+                        { O, center_of_mass },
+                        { center_of_mass - dx, center_of_mass + dx },
+                        { center_of_mass - dy, center_of_mass + dy },
+                        { center_of_mass - dz, center_of_mass + dz },
+                    }
+                );
+
+            }
         }
     }
 }
 
-void Debug_visualizations::raytrace_nodes_visualization(
-    const Render_context& context
-)
+void Debug_visualizations::raytrace_nodes_visualization(const Render_context& context)
 {
     if (m_raytrace_visualization == Visualization_mode::None) {
         return;
@@ -927,28 +886,27 @@ void Debug_visualizations::raytrace_nodes_visualization(
     const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
     const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
 
-    for (const auto& mesh : scene_root->layers().content()->meshes) {
-        const auto* node = mesh->get_node();
-        if (node == nullptr) {
-            continue;
-        }
-        if (!should_visualize(m_raytrace_visualization, node)) {
-            continue;
-        }
+    for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+        for (const auto& mesh : layer->meshes) {
+            const auto* node = mesh->get_node();
+            if (node == nullptr) {
+                continue;
+            }
+            if (!should_visualize(m_raytrace_visualization, node)) {
+                continue;
+            }
 
-        for (const auto& rt_primitive : mesh->get_rt_primitives()) {
-            const auto m = rt_primitive->rt_instance->get_transform();
-            line_renderer.add_lines( m, red,   {{ O, axis_x }} );
-            line_renderer.add_lines( m, green, {{ O, axis_y }} );
-            line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+            for (const auto& rt_primitive : mesh->get_rt_primitives()) {
+                const auto m = rt_primitive->rt_instance->get_transform();
+                line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+                line_renderer.add_lines( m, green, {{ O, axis_y }} );
+                line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+            }
         }
     }
 }
 
-void Debug_visualizations::mesh_labels(
-    const Render_context& context,
-    erhe::scene::Mesh*    mesh
-)
+void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scene::Mesh* mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1153,9 +1111,7 @@ void Debug_visualizations::label(
 }
 
 
-void Debug_visualizations::render(
-    const Render_context& context
-)
+void Debug_visualizations::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1198,8 +1154,10 @@ void Debug_visualizations::render(
         }
     }
 
-    for (const auto& mesh : scene_root->layers().content()->meshes) {
-        mesh_labels(context, mesh.get());
+    for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+        for (const auto& mesh : layer->meshes) {
+            mesh_labels(context, mesh.get());
+        }
     }
 
     for (const auto& light : scene_root->layers().light()->lights) {
@@ -1218,9 +1176,11 @@ void Debug_visualizations::render(
     // Skins can be shared by multiple meshes.
     // Visualize each skin only once.
     std::set<erhe::scene::Skin*> skins;
-    for (const auto& mesh : scene_root->layers().content()->meshes) {
-        if (mesh->skin && should_visualize(m_skins, mesh)) {
-            skins.insert(mesh->skin.get());
+    for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+        for (const auto& mesh : layer->meshes) {
+            if (mesh->skin && should_visualize(m_skins, mesh)) {
+                skins.insert(mesh->skin.get());
+            }
         }
     }
     for (auto* skin : skins) {

@@ -7,8 +7,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include <fmt/format.h>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 Renderbuffer::Renderbuffer(
     Instance&                 instance,
@@ -90,9 +89,9 @@ Renderbuffer::Renderbuffer(
         }
     }
 
-    gl::Texture_target texture_target = m_sample_count > 0 ?
-        gl::Texture_target::texture_2d_multisample :
-        gl::Texture_target::texture_2d;
+    gl::Texture_target texture_target = (m_sample_count > 0)
+        ? gl::Texture_target::texture_2d_multisample
+        : gl::Texture_target::texture_2d;
 
     int framebuffer_renderable_support{0};
     gl::get_internalformat_iv(
@@ -170,9 +169,7 @@ auto Renderbuffer::gl_name() const -> unsigned int
     return m_handle.gl_name();
 }
 
-auto Renderbuffer_hash::operator()(
-    const Renderbuffer& renderbuffer
-) const noexcept -> size_t
+auto Renderbuffer_hash::operator()(const Renderbuffer& renderbuffer) const noexcept -> size_t
 {
     ERHE_VERIFY(renderbuffer.gl_name() != 0);
 

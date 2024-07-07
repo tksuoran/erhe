@@ -8,8 +8,7 @@
 
 namespace editor {
 
-class Compound_operation
-    : public IOperation
+class Compound_operation : public IOperation
 {
 public:
     class Parameters

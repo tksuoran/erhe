@@ -1,6 +1,6 @@
 ﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_window/window.hpp"
@@ -133,14 +133,14 @@ void update_key_modifiers(ImGuiIO& io, const uint32_t modifier_mask)
 
 }
 
-Imgui_viewport::Imgui_viewport(
+Imgui_host::Imgui_host(
     erhe::rendergraph::Rendergraph& rendergraph,
     Imgui_renderer&                 imgui_renderer,
     const std::string_view          name,
     const bool                      imgui_ini,
     ImFontAtlas*                    font_atlas
 )
-    : Rendergraph_node{rendergraph, fmt::format("Viewport {}", name)}
+    : Rendergraph_node{rendergraph, fmt::format("Imgui_host {}", name)}
     , m_imgui_ini_path{imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
     , m_imgui_renderer{imgui_renderer}
 {
@@ -151,9 +151,9 @@ Imgui_viewport::Imgui_viewport(
     io.IniFilename = imgui_ini ? m_imgui_ini_path.c_str() : nullptr;
 
     // "window" is slot / pseudo-resource which allows use rendergraph connection
-    // to make Imgui_viewport_window a dependency for Imgui_viewport, forcing
-    // correct rendering order (Imgui_viewport_window must be rendered before
-    // Imgui_viewport).
+    // to make Imgui_window_scene_view a dependency for Imgui_host, forcing
+    // correct rendering order (Imgui_window_scene_view must be rendered before
+    // Imgui_host).
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_input(
@@ -162,66 +162,66 @@ Imgui_viewport::Imgui_viewport(
         erhe::rendergraph::Rendergraph_node_key::window
     );
 
-    imgui_renderer.register_imgui_viewport(this);
+    imgui_renderer.register_imgui_host(this);
 }
 
-Imgui_viewport::~Imgui_viewport()
+Imgui_host::~Imgui_host()
 {
-    m_imgui_renderer.unregister_imgui_viewport(this);
+    m_imgui_renderer.unregister_imgui_host(this);
 
     ImGui::DestroyContext(m_imgui_context);
     m_imgui_context = nullptr;
 }
 
-auto Imgui_viewport::get_imgui_renderer() -> Imgui_renderer&
+auto Imgui_host::get_imgui_renderer() -> Imgui_renderer&
 {
     return m_imgui_renderer;
 }
 
-auto Imgui_viewport::get_imgui_context() -> ImGuiContext*
+auto Imgui_host::get_imgui_context() -> ImGuiContext*
 {
     return m_imgui_context;
 }
 
-auto Imgui_viewport::name() const -> const std::string&
+auto Imgui_host::name() const -> const std::string&
 {
     return m_name;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-auto Imgui_viewport::want_capture_keyboard() const -> bool
+auto Imgui_host::want_capture_keyboard() const -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     return io.WantCaptureKeyboard && !m_request_keyboard;
 }
 
-auto Imgui_viewport::want_capture_mouse() const -> bool
+auto Imgui_host::want_capture_mouse() const -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     return io.WantCaptureMouse && !m_request_mouse;
 }
 
-[[nodiscard]] auto Imgui_viewport::has_cursor() const -> bool
+auto Imgui_host::has_cursor() const -> bool
 {
     return m_has_cursor;
 }
 
-[[nodiscard]] auto Imgui_viewport::imgui_context() const -> ImGuiContext*
+auto Imgui_host::imgui_context() const -> ImGuiContext*
 {
     return m_imgui_context;
 }
 
-void Imgui_viewport::set_begin_callback(const std::function<void(Imgui_viewport& viewport)>& callback)
+void Imgui_host::set_begin_callback(const std::function<void(Imgui_host& viewport)>& callback)
 {
     m_begin_callback = callback;
 }
 
-[[nodiscard]] auto Imgui_viewport::get_scale_value() const -> float
+auto Imgui_host::get_scale_value() const -> float
 {
     return 1.0f;
 }
 
-void Imgui_viewport::update_input_request(
+void Imgui_host::update_input_request(
     const bool request_keyboard,
     const bool request_mouse
 )
@@ -230,14 +230,14 @@ void Imgui_viewport::update_input_request(
     m_request_mouse    = request_mouse;
 }
 
-auto Imgui_viewport::get_mouse_position() const -> glm::vec2
+auto Imgui_host::get_mouse_position() const -> glm::vec2
 {
     ImGuiIO& io = m_imgui_context->IO;
     return glm::vec2{io.MousePos.x, io.MousePos.y};
 }
 
 #pragma region Events
-void Imgui_viewport::on_focus(const int focused)
+void Imgui_host::on_focus(const int focused)
 {
     std::lock_guard<std::mutex> lock{m_event_mutex};
     m_events.push_back(
@@ -252,13 +252,13 @@ void Imgui_viewport::on_focus(const int focused)
     );
 }
 
-void Imgui_viewport::on_event(const Focus_event& focus_event)
+void Imgui_host::on_event(const Focus_event& focus_event)
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddFocusEvent(focus_event.focused != 0);
 }
 
-void Imgui_viewport::on_cursor_enter(const int entered)
+void Imgui_host::on_cursor_enter(const int entered)
 {
     SPDLOG_LOGGER_TRACE(
         log_imgui,
@@ -280,14 +280,14 @@ void Imgui_viewport::on_cursor_enter(const int entered)
     );
 }
 
-void Imgui_viewport::on_event(const Cursor_enter_event& cursor_enter_event)
+void Imgui_host::on_event(const Cursor_enter_event& cursor_enter_event)
 {
     m_has_cursor = cursor_enter_event.entered != 0;
     ImGuiIO& io = m_imgui_context->IO;
     io.AddFocusEvent(m_has_cursor);
 }
 
-void Imgui_viewport::on_mouse_move(const float x, const float y)
+void Imgui_host::on_mouse_move(const float x, const float y)
 {
     std::lock_guard<std::mutex> lock{m_event_mutex};
     m_events.push_back(
@@ -303,16 +303,13 @@ void Imgui_viewport::on_mouse_move(const float x, const float y)
     );
 }
 
-void Imgui_viewport::on_event(const Mouse_move_event& mouse_move_event)
+void Imgui_host::on_event(const Mouse_move_event& mouse_move_event)
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMousePosEvent(mouse_move_event.x, mouse_move_event.y);
 }
 
-void Imgui_viewport::on_mouse_button(
-    const uint32_t button,
-    const bool     pressed
-)
+void Imgui_host::on_mouse_button(const uint32_t button, const bool pressed)
 {
     SPDLOG_LOGGER_TRACE(
         log_imgui,
@@ -336,16 +333,13 @@ void Imgui_viewport::on_mouse_button(
     );
 }
 
-void Imgui_viewport::on_event(const Mouse_button_event& mouse_button_event)
+void Imgui_host::on_event(const Mouse_button_event& mouse_button_event)
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMouseButtonEvent(mouse_button_event.button, mouse_button_event.pressed);
 }
 
-void Imgui_viewport::on_mouse_wheel(
-    const float x,
-    const float y
-)
+void Imgui_host::on_mouse_wheel(const float x, const float y)
 {
     SPDLOG_LOGGER_TRACE(
         log_imgui,
@@ -369,17 +363,13 @@ void Imgui_viewport::on_mouse_wheel(
     );
 }
 
-void Imgui_viewport::on_event(const Mouse_wheel_event& mouse_wheel_event)
+void Imgui_host::on_event(const Mouse_wheel_event& mouse_wheel_event)
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMouseWheelEvent(mouse_wheel_event.x, mouse_wheel_event.y);
 }
 
-void Imgui_viewport::on_key(
-    const signed int keycode,
-    const uint32_t   modifier_mask,
-    const bool       pressed
-)
+void Imgui_host::on_key(const signed int keycode, const uint32_t modifier_mask, const bool pressed)
 {
     SPDLOG_LOGGER_TRACE(
         log_imgui,
@@ -405,7 +395,7 @@ void Imgui_viewport::on_key(
     );
 }
 
-void Imgui_viewport::on_event(const Key_event& event)
+void Imgui_host::on_event(const Key_event& event)
 {
     using erhe::window::Keycode;
 
@@ -415,9 +405,7 @@ void Imgui_viewport::on_event(const Key_event& event)
     io.AddKeyEvent(from_erhe(event.keycode), event.pressed);
 }
 
-void Imgui_viewport::on_char(
-    const unsigned int codepoint
-)
+void Imgui_host::on_char(const unsigned int codepoint)
 {
     SPDLOG_LOGGER_TRACE(
         log_imgui,
@@ -439,13 +427,13 @@ void Imgui_viewport::on_char(
     );
 }
 
-void Imgui_viewport::on_event(const Char_event& char_event)
+void Imgui_host::on_event(const Char_event& char_event)
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddInputCharacter(char_event.codepoint);
 }
 
-void Imgui_viewport::flush_queud_events()
+void Imgui_host::flush_queud_events()
 {
     std::lock_guard<std::mutex> lock{m_event_mutex};
     for (const auto& event : m_events) {
@@ -466,22 +454,22 @@ void Imgui_viewport::flush_queud_events()
 #pragma endregion Events
 
 #else
-auto Imgui_viewport::want_capture_mouse() const -> bool
+auto Imgui_host::want_capture_mouse() const -> bool
 {
     return false;
 }
 
-void Imgui_viewport::on_focus(int focused)
+void Imgui_host::on_focus(int focused)
 {
     static_cast<void>(focused);
 }
 
-void Imgui_viewport::on_cursor_enter(int entered)
+void Imgui_host::on_cursor_enter(int entered)
 {
     static_cast<void>(entered);
 }
 
-void Imgui_viewport::on_mouse_button(
+void Imgui_host::on_mouse_button(
     const uint32_t button,
     const bool     pressed
 )
@@ -490,7 +478,7 @@ void Imgui_viewport::on_mouse_button(
     static_cast<void>(pressed);
 }
 
-void Imgui_viewport::on_mouse_wheel(
+void Imgui_host::on_mouse_wheel(
     const float x,
     const float y
 )
@@ -499,15 +487,15 @@ void Imgui_viewport::on_mouse_wheel(
     static_cast<void>(y);
 }
 
-void Imgui_viewport::make_imgui_context_current()
+void Imgui_host::make_imgui_context_current()
 {
 }
 
-void Imgui_viewport::make_imgui_context_uncurrent()
+void Imgui_host::make_imgui_context_uncurrent()
 {
 }
 
-void Imgui_viewport::on_key(
+void Imgui_host::on_key(
     const signed int keycode,
     const uint32_t   modifier_mask,
     const bool       pressed
@@ -518,7 +506,7 @@ void Imgui_viewport::on_key(
     static_cast<void>(pressed);
 }
 
-void Imgui_viewport::on_char(
+void Imgui_host::on_char(
     const unsigned int codepoint
 )
 {

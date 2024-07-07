@@ -17,8 +17,7 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Node_attach_operation
-    : public IOperation
+class Node_attach_operation : public IOperation
 {
 public:
     Node_attach_operation();

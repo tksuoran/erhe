@@ -12,15 +12,13 @@
 #include <sstream>
 #include <vector>
 
-namespace erhe::geometry::shapes
-{
+namespace erhe::geometry::shapes {
 
 using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 
-namespace
-{
+namespace {
 
 class Sphere_builder
 {
@@ -166,11 +164,7 @@ public:
         }
     }
 
-    auto make_corner(
-        const Polygon_id polygon_id,
-        const int        slice,
-        const int        stack
-    ) -> Corner_id
+    auto make_corner(const Polygon_id polygon_id, const int slice, const int stack) -> Corner_id
     {
         ERHE_VERIFY(slice >= 0);
 
@@ -389,7 +383,6 @@ public:
             polygon_aniso_control->put(polygon_id, anisotropic_no_texcoord);
         }
 
-        geometry.reverse_polygons(); // TODO reverse the code above and remove this
         geometry.make_point_corners();
         geometry.build_edges();
         geometry.promise_has_polygon_normals();
@@ -403,11 +396,7 @@ public:
 
 } // namespace
 
-auto make_sphere(
-    const double       radius,
-    const unsigned int slice_count,
-    const unsigned int stack_division
-) -> Geometry
+auto make_sphere(const double radius, const unsigned int slice_count, const unsigned int stack_division) -> Geometry
 {
     ERHE_PROFILE_FUNCTION();
 

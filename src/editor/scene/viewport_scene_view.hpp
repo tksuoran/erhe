@@ -22,7 +22,7 @@ namespace erhe::graphics {
     class Renderbuffer;
 }
 namespace erhe::imgui {
-    class Imgui_viewport;
+    class Imgui_host;
     class Imgui_windows;
 }
 namespace erhe::renderer {
@@ -56,25 +56,26 @@ class Selection_tool;
 class Shadow_render_node;
 class Tools;
 class Transform_tool;
-class Viewport_window;
-class Viewport_windows;
-
+class Viewport_scene_view;
+class Scene_views;
 
 // Rendergraph producer node for rendering contents of scene into output rendergraph node.
-//
+// - See execute_rendergraph_node(): render_viewport_main() is used to render to connected
+//   consumer rendergraph node, which provides viewport and framebuffer
+// 
 // Typical output rendergraph nodes are:
 //  - Multisample_resolve_node
 //  - Post_processing_node
 //  - default Rendergraph_node representing default framebuffer
 // Inputs:  "shadow_maps"
 // Outputs: "viewport"
-class Viewport_window
+class Viewport_scene_view
     : public Scene_view
     , public erhe::rendergraph::Rendergraph_node
-    , public std::enable_shared_from_this<Viewport_window>
+    , public std::enable_shared_from_this<Viewport_scene_view>
 {
 public:
-    Viewport_window(
+    Viewport_scene_view(
         Editor_context&                             editor_context,
         erhe::rendergraph::Rendergraph&             rendergraph,
         Tools&                                      tools,
@@ -83,22 +84,21 @@ public:
         const std::shared_ptr<Scene_root>&          scene_root,
         const std::shared_ptr<erhe::scene::Camera>& camera
     );
-    ~Viewport_window() noexcept override;
+    ~Viewport_scene_view() noexcept override;
 
     // Implements Scene_view
     auto get_scene_root            () const -> std::shared_ptr<Scene_root>                              override;
     auto get_camera                () const -> std::shared_ptr<erhe::scene::Camera>                     override;
     auto get_rendergraph_node      () -> erhe::rendergraph::Rendergraph_node*                           override;
     auto get_shadow_render_node    () const -> Shadow_render_node*                                      override;
-    auto as_viewport_window        () -> Viewport_window*                                               override;
-    auto as_viewport_window        () const -> const Viewport_window*                                   override;
+    auto as_viewport_scene_view    () -> Viewport_scene_view*                                           override;
+    auto as_viewport_scene_view    () const -> const Viewport_scene_view*                               override;
     auto get_closest_point_on_line (const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3> override;
     auto get_closest_point_on_plane(const glm::vec3 N , const glm::vec3 P ) -> std::optional<glm::vec3> override;
 
     // Implements Rendergraph_node
-    auto get_type_name           () const -> std::string_view override { return "Viewport_window"; }
+    auto get_type_name           () const -> std::string_view override { return "Viewport_scene_view"; }
     void execute_rendergraph_node() override;
-
 
     // Public API
     void reconfigure               (int sample_count);

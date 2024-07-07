@@ -13,7 +13,7 @@
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_imgui/window_imgui_viewport.hpp"
+#include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
@@ -115,10 +115,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     const int input_texture_width  = shadow_texture->width ();
     const int input_texture_height = shadow_texture->height();
 
-    if (
-        (input_texture_width  < 1) ||
-        (input_texture_height < 1)
-    ) {
+    if ((input_texture_width  < 1) || (input_texture_height < 1)) {
         SPDLOG_LOGGER_TRACE(
             log_render,
             "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: no shadow renderer or empty viewport"
@@ -161,18 +158,11 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     ERHE_VERIFY(output_viewport.height >= 0);
     ERHE_VERIFY(output_viewport.width < 32768);
     ERHE_VERIFY(output_viewport.height < 32768);
-    if (
-        (output_viewport.width == 0) ||
-        (output_viewport.height == 0)
-    )
-    {
+    if ((output_viewport.width == 0) || (output_viewport.height == 0)) {
         return;
     }
 
-    gl::bind_framebuffer(
-        gl::Framebuffer_target::draw_framebuffer,
-        m_framebuffer->gl_name()
-    );
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
 
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
     const auto& layers = scene_root->layers();
@@ -199,7 +189,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::render() - done");
 }
 
-[[nodiscard]] auto Depth_to_color_rendergraph_node::get_light_index() -> int&
+auto Depth_to_color_rendergraph_node::get_light_index() -> int&
 {
     return m_light_index;
 }
@@ -214,9 +204,9 @@ Debug_view_node::Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph)
     );
 
     // "window" is slot / pseudo-resource which allows use rendergraph connection
-    // to make Debug_view_window a dependency for Imgui_viewport, forcing
-    // correct rendering order (Imgui_viewport_window must be rendered before
-    // Imgui_viewport).
+    // to make Debug_view_window a dependency for Imgui_host, forcing
+    // correct rendering order (Imgui_window_scene_view must be rendered before
+    // Imgui_host).
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(
@@ -237,15 +227,8 @@ void Debug_view_node::set_area_size(const int size)
     m_area_size = size;
 }
 
-[[nodiscard]] auto Debug_view_node::get_consumer_input_viewport(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> erhe::math::Viewport
+auto Debug_view_node::get_consumer_input_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
     return erhe::math::Viewport{
         .x      = 0,
         .y      = 0,
@@ -275,12 +258,12 @@ Debug_view_window::Debug_view_window(
         &m_node
     );
 
-    const auto& window_imgui_viewport = imgui_windows.get_window_viewport();
-    if (window_imgui_viewport) {
+    const auto& window_imgui_host = imgui_windows.get_window_imgui_host();
+    if (window_imgui_host) {
         rendergraph.connect(
             erhe::rendergraph::Rendergraph_node_key::window,
             &m_node,
-            window_imgui_viewport.get()
+            window_imgui_host.get()
         );
     }
 

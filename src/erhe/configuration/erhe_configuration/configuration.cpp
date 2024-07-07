@@ -178,8 +178,7 @@ void ini_get(
 
 Ini::~Ini() noexcept = default;
 
-class Ini_impl
-    : public Ini
+class Ini_impl : public Ini
 {
 public:
     Ini_impl(const char* path, const char* section_name)

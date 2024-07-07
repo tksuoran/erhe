@@ -1,7 +1,7 @@
 #pragma once
 
 namespace erhe::imgui {
-    class Imgui_viewport;
+    class Imgui_host;
 };
 
 namespace editor {
@@ -25,7 +25,7 @@ class Editor_windows
 public:
     Editor_windows(Editor_context& m_context);
 
-    void viewport_menu(erhe::imgui::Imgui_viewport& imgui_viewport);
+    void viewport_menu(erhe::imgui::Imgui_host& imgui_host);
 
 private:
     void builtin_imgui_window_menu();

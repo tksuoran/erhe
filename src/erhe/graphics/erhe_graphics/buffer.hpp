@@ -11,8 +11,7 @@
 #include <mutex>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Instance;
 
@@ -134,8 +133,7 @@ private:
 class Buffer_hash
 {
 public:
-    [[nodiscard]]
-    auto operator()(const Buffer& buffer) const noexcept -> std::size_t
+    [[nodiscard]] auto operator()(const Buffer& buffer) const noexcept -> std::size_t
     {
         return static_cast<std::size_t>(buffer.gl_name());
     }

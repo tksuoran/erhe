@@ -8,8 +8,7 @@
 
 #include <sstream>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 template<typename T>
 class Pair_entries

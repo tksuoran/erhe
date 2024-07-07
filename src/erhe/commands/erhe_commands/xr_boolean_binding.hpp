@@ -19,8 +19,7 @@ enum class Button_trigger : unsigned int
     Any = 2
 };
 
-class Xr_boolean_binding
-    : public Command_binding
+class Xr_boolean_binding : public Command_binding
 {
 public:
     Xr_boolean_binding(

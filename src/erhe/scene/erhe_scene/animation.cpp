@@ -4,8 +4,7 @@
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 [[nodiscard]] auto get_component_count(const Animation_path path) -> std::size_t
 {

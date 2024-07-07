@@ -22,8 +22,7 @@
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 
-namespace editor
-{
+namespace editor {
 
 Rendertarget_mesh::Rendertarget_mesh(
     erhe::graphics::Instance& graphics_instance,
@@ -295,9 +294,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
     }
 }
 
-[[nodiscard]] auto Rendertarget_mesh::world_to_window(
-    const glm::vec3 position_in_world
-) const -> std::optional<glm::vec2>
+auto Rendertarget_mesh::world_to_window(const glm::vec3 position_in_world) const -> std::optional<glm::vec2>
 {
     auto const* node = get_node();
     if (node == nullptr) {
@@ -330,7 +327,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
 void Rendertarget_mesh::bind()
 {
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-    gl::viewport        (0, 0, m_texture->width(), m_texture->height());
+    gl::viewport(0, 0, m_texture->width(), m_texture->height());
 }
 
 void Rendertarget_mesh::clear(const glm::vec4 clear_color)
@@ -364,22 +361,22 @@ void Rendertarget_mesh::render_done(Editor_context&)
     }
 }
 
-[[nodiscard]] auto Rendertarget_mesh::get_pointer() const -> std::optional<glm::vec2>
+auto Rendertarget_mesh::get_pointer() const -> std::optional<glm::vec2>
 {
     return m_pointer;
 }
 
-[[nodiscard]] auto Rendertarget_mesh::width() const -> float
+auto Rendertarget_mesh::width() const -> float
 {
     return static_cast<float>(m_texture->width());
 }
 
-[[nodiscard]] auto Rendertarget_mesh::height() const -> float
+auto Rendertarget_mesh::height() const -> float
 {
     return static_cast<float>(m_texture->height());
 }
 
-[[nodiscard]] auto Rendertarget_mesh::pixels_per_meter() const -> float
+auto Rendertarget_mesh::pixels_per_meter() const -> float
 {
     return m_pixels_per_meter;
 }

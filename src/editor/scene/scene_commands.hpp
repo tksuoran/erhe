@@ -34,10 +34,11 @@ class Editor_context;
 class Headset_view;
 class Operation_stack;
 class Rendertarget_mesh;
+class Rendertarget_imgui_host;
 class Scene_commands;
 class Scene_root;
 class Selection_tool;
-class Viewport_windows;
+class Scene_views;
 
 class Create_new_camera_command : public erhe::commands::Command
 {
@@ -69,6 +70,16 @@ private:
     Editor_context& m_context;
 };
 
+class Create_new_rendertarget_command : public erhe::commands::Command
+{
+public:
+    Create_new_rendertarget_command(erhe::commands::Commands& commands, Editor_context& context);
+    auto try_call() -> bool override;
+
+private:
+    Editor_context& m_context;
+};
+
 class Scene_commands
 {
 public:
@@ -85,9 +96,13 @@ public:
 private:
     Editor_context& m_context;
 
-    Create_new_camera_command     m_create_new_camera_command;
-    Create_new_empty_node_command m_create_new_empty_node_command;
-    Create_new_light_command      m_create_new_light_command;
+    Create_new_camera_command       m_create_new_camera_command;
+    Create_new_empty_node_command   m_create_new_empty_node_command;
+    Create_new_light_command        m_create_new_light_command;
+    Create_new_rendertarget_command m_create_new_rendertarget_command;
+
+    // TODO Figure out who should have ownership of these
+    std::vector<std::shared_ptr<Rendertarget_imgui_host>> m_keep_alive;
 };
 
 } // namespace editor

@@ -18,8 +18,7 @@
 
 #include <fmt/format.h>
 
-namespace editor
-{
+namespace editor {
 
 using glm::vec3;
 
@@ -64,9 +63,7 @@ Grid_tool::Grid_tool(
     m_grids.push_back(grid);
 }
 
-void Grid_tool::tool_render(
-    const Render_context& context
-)
+void Grid_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -78,7 +75,6 @@ void Grid_tool::tool_render(
         grid->render(context);
     }
 }
-
 
 void Grid_tool::viewport_toolbar(bool& hovered)
 {
@@ -175,10 +171,7 @@ void Grid_tool::imgui()
 #endif
 }
 
-auto Grid_tool::update_hover(
-    const glm::vec3 ray_origin_in_world,
-    const glm::vec3 ray_direction_in_world
-) const -> Grid_hover_position
+auto Grid_tool::update_hover(const glm::vec3 ray_origin_in_world, const glm::vec3 ray_direction_in_world) const -> Grid_hover_position
 {
     Grid_hover_position result{
         .grid = nullptr

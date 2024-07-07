@@ -79,8 +79,7 @@ private:
     std::string   m_name;
 };
 
-class Helper_command
-    : public Command
+class Helper_command : public Command
 {
 public:
     Helper_command(Commands& commands, Command& target_command, const std::string& name);
@@ -126,8 +125,7 @@ private:
 };
 
 // Has enable/disable state independent from target command
-class Redirect_command
-    : public Helper_command
+class Redirect_command : public Helper_command
 {
 public:
     Redirect_command(Commands& commands, Command& target_command);
@@ -135,16 +133,14 @@ public:
     auto try_call () -> bool override;
 };
 
-class Drag_float_command
-    : public Helper_command
+class Drag_float_command : public Helper_command
 {
 public:
     Drag_float_command(Commands& commands, Command& target_command);
     auto try_call() -> bool override;
 };
 
-class Drag_vector2f_command
-    : public Helper_command
+class Drag_vector2f_command : public Helper_command
 {
 public:
     Drag_vector2f_command(Commands& commands, Command& target_command);
@@ -152,8 +148,7 @@ public:
     auto try_call_with_input(Input_arguments& input) -> bool override;
 };
 
-class Drag_pose_command
-    : public Helper_command
+class Drag_pose_command : public Helper_command
 {
 public:
     Drag_pose_command(Commands& commands, Command& target_command);
@@ -163,8 +158,7 @@ public:
 //
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-class Xr_float_click_command
-    : public Helper_command
+class Xr_float_click_command : public Helper_command
 {
 public:
     Xr_float_click_command(Commands& commands, Command& target_command);
@@ -176,8 +170,7 @@ private:
     erhe::xr::Xr_action_float* m_xr_action_for_value{nullptr};
 };
 
-class Xr_vector2f_click_command
-    : public Helper_command
+class Xr_vector2f_click_command : public Helper_command
 {
 public:
     Xr_vector2f_click_command(Commands& commands, Command& target_command);
@@ -189,8 +182,7 @@ private:
     erhe::xr::Xr_action_vector2f* m_xr_action_for_value{nullptr};
 };
 
-class Xr_pose_click_command
-    : public Helper_command
+class Xr_pose_click_command : public Helper_command
 {
 public:
     Xr_pose_click_command(Commands& commands, Command& target_command);

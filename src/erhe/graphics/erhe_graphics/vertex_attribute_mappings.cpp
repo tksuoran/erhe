@@ -5,8 +5,7 @@
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 using std::string;
 using std::string_view;
@@ -126,9 +125,7 @@ void format_to_gl_attribute(erhe::dataformat::Format format, gl::Vertex_attrib_t
     }
 }
 
-Vertex_attribute_mappings::Vertex_attribute_mappings(
-    erhe::graphics::Instance& instance
-)
+Vertex_attribute_mappings::Vertex_attribute_mappings(erhe::graphics::Instance& instance)
     : m_instance{instance}
 {
 }

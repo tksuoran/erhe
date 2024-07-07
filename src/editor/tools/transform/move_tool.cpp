@@ -15,16 +15,11 @@
 
 #include <bit>
 
-namespace editor
-{
+namespace editor {
 
 using namespace glm;
 
-Move_tool::Move_tool(
-    Editor_context& editor_context,
-    Icon_set&       icon_set,
-    Tools&          tools
-)
+Move_tool::Move_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools)
     : Subtool{editor_context}
 {
     set_base_priority(c_priority);
@@ -68,10 +63,7 @@ void Move_tool::imgui()
 #endif
 }
 
-auto Move_tool::begin(
-    unsigned int axis_mask,
-    Scene_view*  scene_view
-) -> bool
+auto Move_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
 {
     static_cast<void>(scene_view);
     m_axis_mask = axis_mask;

@@ -8,8 +8,7 @@
 
 #include <string>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Buffer;
 class Instance;
@@ -18,11 +17,7 @@ class Sampler;
 class Texture_create_info
 {
 public:
-    [[nodiscard]] static auto calculate_level_count(
-        int width,
-        int height = 0,
-        int depth = 0
-    ) -> int;
+    [[nodiscard]] static auto calculate_level_count(int width, int height = 0, int depth = 0) -> int;
 
     [[nodiscard]] auto calculate_level_count() const -> int;
 
@@ -43,8 +38,7 @@ public:
     std::string         debug_label;
 };
 
-class Texture
-    : public erhe::Item<erhe::Item_base, erhe::Item_base, Texture, erhe::Item_kind::not_clonable>
+class Texture : public erhe::Item<erhe::Item_base, erhe::Item_base, Texture, erhe::Item_kind::not_clonable>
 {
 public:
     Texture           (const Texture&) = delete;
@@ -151,12 +145,7 @@ public:
 [[nodiscard]] auto component_count(gl::Pixel_format pixel_format) -> size_t;
 [[nodiscard]] auto byte_count(gl::Pixel_type pixel_type) -> size_t;
 [[nodiscard]] auto get_upload_pixel_byte_count(gl::Internal_format internalformat) -> size_t;
-[[nodiscard]] auto get_format_and_type(
-    gl::Internal_format internalformat,
-    gl::Pixel_format&   format,
-    gl::Pixel_type&     type
-) -> bool;
-
+[[nodiscard]] auto get_format_and_type(gl::Internal_format internalformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool;
 [[nodiscard]] auto format_texture_handle(uint64_t handle) -> std::string;
 
 constexpr uint64_t invalid_texture_handle = 0xffffffffu;

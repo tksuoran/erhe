@@ -36,8 +36,7 @@ inline auto closesocket(const SOCKET s) -> int { return close(s); }
 #include <optional>
 #include <string>
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 auto get_net_last_error          () -> int;
 auto get_net_error_code_string   (const int error_code) -> std::string;
@@ -66,4 +65,4 @@ auto get_socket_option(SOCKET socket, Socket_option option) -> std::optional<int
 
 auto initialize_net() -> bool;
 
-}
+} // namespace erhe::net

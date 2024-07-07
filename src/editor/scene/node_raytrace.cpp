@@ -23,8 +23,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace editor
-{
+namespace editor {
 
 using erhe::raytrace::IGeometry;
 using erhe::raytrace::IInstance;
@@ -45,7 +44,7 @@ auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
 }
 
 
-[[nodiscard]] auto get_hit_node(const erhe::raytrace::Hit& hit) -> erhe::scene::Node*
+auto get_hit_node(const erhe::raytrace::Hit& hit) -> erhe::scene::Node*
 {
     if ((hit.geometry == nullptr) || (hit.instance == nullptr)) {
         return nullptr;
@@ -62,7 +61,7 @@ auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
     return mesh->get_node();
 }
 
-[[nodiscard]] auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
+auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
 {
     if ((hit.geometry == nullptr) || (hit.instance == nullptr)) {
         return {};
@@ -156,7 +155,7 @@ void draw_ray_hit(
     );
 }
 
-[[nodiscard]] auto project_ray(
+auto project_ray(
     erhe::raytrace::IScene* const raytrace_scene,
     erhe::scene::Mesh*            ignore_mesh,
     erhe::raytrace::Ray&          ray,

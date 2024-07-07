@@ -6,8 +6,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 using std::string;
 

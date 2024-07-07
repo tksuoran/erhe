@@ -1,7 +1,6 @@
 #include "erhe_primitive/renderable_mesh.hpp"
 
-namespace erhe::primitive
-{
+namespace erhe::primitive {
 
 auto Renderable_mesh::base_vertex() const -> uint32_t
 {
@@ -28,9 +27,7 @@ auto Renderable_mesh::index_range(const Primitive_mode primitive_mode) const -> 
     }
 }
 
-auto primitive_type(
-    const Primitive_mode primitive_mode
-) -> std::optional<gl::Primitive_type>
+auto primitive_type(const Primitive_mode primitive_mode) -> std::optional<gl::Primitive_type>
 {
     switch (primitive_mode) {
         //using enum Primitive_mode;

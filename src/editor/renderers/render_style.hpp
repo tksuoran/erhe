@@ -31,8 +31,7 @@ public:
     erhe::scene_renderer::Primitive_color_source corner_points_color_source    {erhe::scene_renderer::Primitive_color_source::mesh_wireframe_color};
 };
 
-class Render_style
-    : public erhe::Item<erhe::Item_base, erhe::Item_base, Render_style, erhe::Item_kind::not_clonable>
+class Render_style : public erhe::Item<erhe::Item_base, erhe::Item_base, Render_style, erhe::Item_kind::not_clonable>
 {
 public:
     Render_style();

@@ -11,8 +11,7 @@ namespace editor {
 class Render_context;
 class Renderpass;
 
-class Composer
-    : public erhe::Item<erhe::Item_base, erhe::Item_base, Composer>
+class Composer : public erhe::Item<erhe::Item_base, erhe::Item_base, Composer>
 {
 public:
     explicit Composer(const Composer&);

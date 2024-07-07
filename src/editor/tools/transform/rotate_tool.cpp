@@ -17,16 +17,11 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 using namespace glm;
 
-Rotate_tool::Rotate_tool(
-    Editor_context& editor_context,
-    Icon_set&       icon_set,
-    Tools&          tools
-)
+Rotate_tool::Rotate_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools)
     : Subtool{editor_context}
 {
     set_base_priority(c_priority);
@@ -70,10 +65,7 @@ void Rotate_tool::imgui()
 #endif
 }
 
-auto Rotate_tool::begin(
-    unsigned int axis_mask,
-    Scene_view*  scene_view
-) -> bool
+auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
 {
     m_axis_mask = axis_mask;
     m_active    = true;
@@ -99,9 +91,7 @@ auto Rotate_tool::begin(
     return true;
 }
 
-auto Rotate_tool::snap(
-    const float angle_radians
-) const -> float
+auto Rotate_tool::snap(const float angle_radians) const -> float
 {
     auto& shared = get_shared();
     if (!shared.settings.rotate_snap_enable) {

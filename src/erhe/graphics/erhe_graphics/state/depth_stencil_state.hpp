@@ -4,8 +4,7 @@
 
 #include <cstddef>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Depth_stencil_state;
 
@@ -25,20 +24,11 @@ class Stencil_state_component_hash
 {
 public:
     [[nodiscard]]
-    auto operator()(
-        const Stencil_op_state& stencil_state_component
-    ) const noexcept -> std::size_t;
+    auto operator()(const Stencil_op_state& stencil_state_component) const noexcept -> std::size_t;
 };
 
-[[nodiscard]] auto operator==(
-    const Stencil_op_state& lhs,
-    const Stencil_op_state& rhs
-) noexcept -> bool;
-
-[[nodiscard]] auto operator!=(
-    const Stencil_op_state& lhs,
-    const Stencil_op_state& rhs
-) noexcept -> bool;
+[[nodiscard]] auto operator==(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexcept -> bool;
+[[nodiscard]] auto operator!=(const Stencil_op_state& lhs, const Stencil_op_state& rhs) noexcept -> bool;
 
 class Depth_stencil_state
 {
@@ -71,15 +61,8 @@ public:
     auto operator()(const Depth_stencil_state& state) const noexcept -> size_t;
 };
 
-auto operator==(
-    const Depth_stencil_state& lhs,
-    const Depth_stencil_state& rhs
-) noexcept -> bool;
-
-auto operator!=(
-    const Depth_stencil_state& lhs,
-    const Depth_stencil_state& rhs
-) noexcept -> bool;
+auto operator==(const Depth_stencil_state& lhs, const Depth_stencil_state& rhs) noexcept -> bool;
+auto operator!=(const Depth_stencil_state& lhs, const Depth_stencil_state& rhs) noexcept -> bool;
 
 class Depth_stencil_state_tracker
 {

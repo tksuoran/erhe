@@ -7,7 +7,7 @@
 
 extern "C"
 {
-struct spng_ctx;
+    struct spng_ctx;
 };
 
 namespace mango {
@@ -17,8 +17,7 @@ namespace mango {
     }
 }
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 enum class Image_format : int {
     srgb8 = 0,
@@ -46,11 +45,7 @@ public:
     PNG_loader    (PNG_loader&&)      = delete;
     void operator=(PNG_loader&&)      = delete;
 
-    [[nodiscard]] auto open(
-        const std::filesystem::path& path,
-        Image_info&                  image_info
-    ) -> bool;
-
+    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info) -> bool;
     [[nodiscard]] auto open(
         const std::span<const std::byte>& png_encoded_buffer_view,
         Image_info&                       image_info

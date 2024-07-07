@@ -23,8 +23,7 @@ class Render_context;
 class Render_style_data;
 class Scene_root;
 
-class Renderpass
-    : public erhe::Item<erhe::Item_base, erhe::Item_base, Renderpass>
+class Renderpass : public erhe::Item<erhe::Item_base, erhe::Item_base, Renderpass>
 {
 public:
     explicit Renderpass(const Renderpass&);

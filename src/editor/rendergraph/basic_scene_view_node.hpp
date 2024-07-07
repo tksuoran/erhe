@@ -15,16 +15,16 @@ namespace erhe::window {
 
 namespace editor {
 
-class Viewport_window;
-class Viewport_windows;
+class Viewport_scene_view;
+class Scene_views;
 
-class Basic_viewport_window : public erhe::rendergraph::Sink_rendergraph_node
+class Basic_scene_view_node : public erhe::rendergraph::Sink_rendergraph_node
 {
 public:
-    Basic_viewport_window(
-        erhe::rendergraph::Rendergraph&         rendergraph,
-        const std::string_view                  name,
-        const std::shared_ptr<Viewport_window>& viewport_window
+    Basic_scene_view_node(
+        erhe::rendergraph::Rendergraph&             rendergraph,
+        const std::string_view                      name,
+        const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
     );
 
     // Implements Rendergraph_node
@@ -36,17 +36,17 @@ public:
     auto get_producer_output_framebuffer(erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
 
     // Public API
-    [[nodiscard]] auto get_viewport_window() const -> std::shared_ptr<Viewport_window>;
-    [[nodiscard]] auto get_viewport       () const -> const erhe::math::Viewport&;
+    [[nodiscard]] auto get_viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>;
+    [[nodiscard]] auto get_viewport           () const -> const erhe::math::Viewport&;
     void set_viewport  (erhe::math::Viewport viewport);
     void set_is_hovered(bool is_hovered);
 
 private:
     // Does *not* directly point to window,
-    // because layout is done by Viewport_windows.
-    std::weak_ptr<Viewport_window> m_viewport_window;
-    //Viewport_windows*              m_viewport_windows;
-    erhe::math::Viewport           m_viewport;
+    // because layout is done by Scene_views.
+    std::weak_ptr<Viewport_scene_view> m_viewport_scene_view;
+    //Scene_views*                     m_viewport_scene_views;
+    erhe::math::Viewport               m_viewport;
 };
 
 } // namespace editor

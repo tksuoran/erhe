@@ -10,15 +10,11 @@
 #include <cmath>
 #include <sstream>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 using glm::vec3;
 
-auto Polygon::compute_normal(
-    const Geometry&                          geometry,
-    const Property_map<Point_id, glm::vec3>& point_locations
-) const -> glm::vec3
+auto Polygon::compute_normal(const Geometry& geometry, const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -39,7 +35,7 @@ auto Polygon::compute_normal(
     );
 
     newell_normal = glm::normalize(newell_normal);
-    return -newell_normal; // TODO Is this correct
+    return newell_normal;
 }
 
 void Polygon::compute_normal(

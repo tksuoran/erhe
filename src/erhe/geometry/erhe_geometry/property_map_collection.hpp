@@ -5,8 +5,7 @@
 #include <memory>
 #include <string>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 template <typename Key_type>
 class Property_map_collection
@@ -18,10 +17,7 @@ private:
         Entry () = default;
         ~Entry() noexcept = default;
 
-        Entry(
-            const std::string&           key,
-            Property_map_base<Key_type>* p
-        )
+        Entry(const std::string& key, Property_map_base<Key_type>* p)
             : key  {key}
             , value{p}
         {
@@ -55,9 +51,7 @@ public:
     auto size() const -> size_t;
 
     template <typename Value_type>
-    auto create(
-        const Property_map_descriptor& descriptor
-    ) -> Property_map<Key_type, Value_type>*;
+    auto create( const Property_map_descriptor& descriptor) -> Property_map<Key_type, Value_type>*;
 
     void insert(Property_map_base<Key_type>* map);
 
@@ -66,19 +60,13 @@ public:
     template <typename Value_type>
     auto contains(const std::string& name) const -> bool;
 
-    auto find_base(
-        const Property_map_descriptor& descriptor
-    ) const -> Property_map_base<Key_type>*;
+    auto find_base(const Property_map_descriptor& descriptor) const -> Property_map_base<Key_type>*;
 
     template <typename Value_type>
-    auto find(
-        const Property_map_descriptor& descriptor
-    ) const -> Property_map<Key_type, Value_type>*;
+    auto find(const Property_map_descriptor& descriptor) const -> Property_map<Key_type, Value_type>*;
 
     template <typename Value_type>
-    auto find_or_create(
-        const Property_map_descriptor& name
-    ) -> Property_map<Key_type, Value_type>*;
+    auto find_or_create(const Property_map_descriptor& name) -> Property_map<Key_type, Value_type>*;
 
     void trim      (size_t size);
     void remap_keys(const std::vector<Key_type>& key_new_to_old);

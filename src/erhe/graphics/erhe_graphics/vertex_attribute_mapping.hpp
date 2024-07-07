@@ -4,8 +4,7 @@
 
 #include <string_view>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class Vertex_attribute_mapping
 {

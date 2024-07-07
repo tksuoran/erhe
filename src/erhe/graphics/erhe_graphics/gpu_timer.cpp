@@ -12,15 +12,13 @@
 // Comment this out disable timer queries
 #define ERHE_USE_TIME_QUERY 1
 
-namespace gl
-{
+namespace gl {
 
 extern std::shared_ptr<spdlog::logger> log_gl;
 
 }
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 std::mutex              Gpu_timer::s_mutex;
 std::vector<Gpu_timer*> Gpu_timer::s_all_gpu_timers;

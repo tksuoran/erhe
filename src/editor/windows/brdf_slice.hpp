@@ -27,8 +27,7 @@ class Brdf_slice;
 class Editor_context;
 class Programs;
 
-class Brdf_slice_rendergraph_node
-    : public erhe::rendergraph::Texture_rendergraph_node
+class Brdf_slice_rendergraph_node : public erhe::rendergraph::Texture_rendergraph_node
 {
 public:
     Brdf_slice_rendergraph_node(

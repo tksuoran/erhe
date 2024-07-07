@@ -5,10 +5,7 @@
 
 namespace erhe::commands {
 
-Xr_float_binding::Xr_float_binding(
-    Command* const                   command,
-    erhe::xr::Xr_action_float* const xr_action
-)
+Xr_float_binding::Xr_float_binding(Command* const command, erhe::xr::Xr_action_float* const xr_action)
     : Command_binding{command}
     , xr_action      {xr_action}
 {
@@ -18,14 +15,12 @@ Xr_float_binding::Xr_float_binding() = default;
 
 Xr_float_binding::~Xr_float_binding() noexcept = default;
 
-[[nodiscard]] auto Xr_float_binding::get_type() const -> Type
+auto Xr_float_binding::get_type() const -> Type
 {
     return Type::Xr_float;
 }
 
-auto Xr_float_binding::on_value_changed(
-    Input_arguments& input
-) -> bool
+auto Xr_float_binding::on_value_changed(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
 
@@ -42,7 +37,6 @@ auto Xr_float_binding::on_value_changed(
     );
     return consumed;
 }
-
 
 } // namespace erhe::commands
 

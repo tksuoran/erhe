@@ -3,8 +3,7 @@
 #include <cstddef>
 #include <cstring>
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 Ring_buffer::Ring_buffer(const std::size_t capacity)
 {
@@ -221,4 +220,4 @@ auto Ring_buffer::discard(const std::size_t byte_count) -> std::size_t
     return can_discard_count;
 }
 
-}
+} // namespace erhe::net

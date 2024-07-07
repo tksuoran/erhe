@@ -2,8 +2,7 @@
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 auto Vertex_attribute::Usage::operator==(const Usage& other) const -> bool
 {

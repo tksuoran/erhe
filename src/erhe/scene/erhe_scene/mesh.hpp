@@ -23,8 +23,7 @@ using Layer_id = uint64_t;
 class Raytrace_primitive;
 class Skin;
 
-class Mesh
-    : public erhe::Item<Item_base, Node_attachment, Mesh, erhe::Item_kind::clone_using_custom_clone_constructor>
+class Mesh : public erhe::Item<Item_base, Node_attachment, Mesh, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
     Mesh(); // default

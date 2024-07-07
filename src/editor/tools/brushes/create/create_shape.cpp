@@ -9,9 +9,7 @@
 
 namespace editor {
 
-auto Create_shape::get_line_renderer(
-    const Create_preview_settings& preview_settings
-) -> erhe::renderer::Line_renderer&
+auto Create_shape::get_line_renderer(const Create_preview_settings& preview_settings) -> erhe::renderer::Line_renderer&
 {
     return *preview_settings.render_context.editor_context.line_renderer_set->hidden.at(2).get();
 }

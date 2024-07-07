@@ -3,8 +3,7 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 void Geometry::merge(Geometry& other, const glm::mat4 transform)
 {
@@ -116,4 +115,4 @@ void Geometry::merge(Geometry& other, const glm::mat4 transform)
     m_next_polygon_corner_id    += other.get_polygon_corner_count();
 }
 
-}
+} // namespace erhe::geometry

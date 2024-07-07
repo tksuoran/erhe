@@ -23,12 +23,10 @@
 #   define SPDLOG_LOGGER_TRACE_DUMMY
 #endif
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 template <typename Key_type, typename Value_type>
-inline void
-Property_map<Key_type, Value_type>::clear()
+inline void Property_map<Key_type, Value_type>::clear()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -37,30 +35,26 @@ Property_map<Key_type, Value_type>::clear()
 }
 
 template <typename Key_type, typename Value_type>
-inline auto
-Property_map<Key_type, Value_type>::empty() const -> bool
+inline auto Property_map<Key_type, Value_type>::empty() const -> bool
 {
     return values.empty();
 }
 
 template <typename Key_type, typename Value_type>
-inline auto
-Property_map<Key_type, Value_type>::size() const -> std::size_t
+inline auto Property_map<Key_type, Value_type>::size() const -> std::size_t
 {
     return values.size();
 }
 
 template <typename Key_type, typename Value_type>
-inline void
-Property_map<Key_type, Value_type>::trim(std::size_t size)
+inline void Property_map<Key_type, Value_type>::trim(std::size_t size)
 {
     values.resize(size);
     present.resize(size);
 }
 
 template <typename Key_type, typename Value_type>
-inline void
-Property_map<Key_type, Value_type>::remap_keys(const std::vector<Key_type>& key_new_to_old)
+inline void Property_map<Key_type, Value_type>::remap_keys(const std::vector<Key_type>& key_new_to_old)
 {
     const auto old_values  = values;
     const auto old_present = present;
@@ -72,8 +66,7 @@ Property_map<Key_type, Value_type>::remap_keys(const std::vector<Key_type>& key_
 }
 
 template <typename Key_type, typename Value_type>
-inline void
-Property_map<Key_type, Value_type>::put(Key_type key, Value_type value)
+inline void Property_map<Key_type, Value_type>::put(Key_type key, Value_type value)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -87,8 +80,7 @@ Property_map<Key_type, Value_type>::put(Key_type key, Value_type value)
 }
 
 template <typename Key_type, typename Value_type>
-inline auto
-Property_map<Key_type, Value_type>::get(Key_type key) const -> Value_type
+inline auto Property_map<Key_type, Value_type>::get(Key_type key) const -> Value_type
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -100,8 +92,7 @@ Property_map<Key_type, Value_type>::get(Key_type key) const -> Value_type
 }
 
 template <typename Key_type, typename Value_type>
-inline void
-Property_map<Key_type, Value_type>::erase(Key_type key)
+inline void Property_map<Key_type, Value_type>::erase(Key_type key)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -114,8 +105,7 @@ Property_map<Key_type, Value_type>::erase(Key_type key)
 }
 
 template <typename Key_type, typename Value_type>
-inline auto
-Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_value) const -> bool
+inline auto Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_value) const -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -129,8 +119,7 @@ Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_valu
 
 
 template <typename Key_type, typename Value_type>
-inline auto
-Property_map<Key_type, Value_type>::has(Key_type key) const -> bool
+inline auto Property_map<Key_type, Value_type>::has(Key_type key) const -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -142,10 +131,7 @@ Property_map<Key_type, Value_type>::has(Key_type key) const -> bool
 }
 
 template <typename Key_type, typename Value_type>
-inline auto
-Property_map<Key_type, Value_type>::constructor(
-    const Property_map_descriptor& descriptor
-) const -> Property_map_base<Key_type>*
+inline auto Property_map<Key_type, Value_type>::constructor(const Property_map_descriptor& descriptor) const -> Property_map_base<Key_type>*
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -292,10 +278,7 @@ Property_map<Key_type, Value_type>::import_from(
 }
 
 template <typename Key_type, typename Value_type>
-inline void
-Property_map<Key_type, Value_type>::transform(
-    const glm::mat4 transform
-)
+inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transform)
 {
     ERHE_PROFILE_FUNCTION();
 

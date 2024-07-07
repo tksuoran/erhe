@@ -2,8 +2,7 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 class Transform
 {

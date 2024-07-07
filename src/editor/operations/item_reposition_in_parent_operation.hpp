@@ -13,8 +13,7 @@ namespace erhe {
 
 namespace editor {
 
-class Item_reposition_in_parent_operation
-    : public IOperation
+class Item_reposition_in_parent_operation : public IOperation
 {
 public:
     Item_reposition_in_parent_operation();

@@ -29,7 +29,7 @@ namespace erhe::window {
 
 namespace {
 
-RENDERDOC_API_1_5_0* renderdoc_api{nullptr};
+RENDERDOC_API_1_6_0* renderdoc_api{nullptr};
 bool is_initialized{false};
 
 }
@@ -68,7 +68,7 @@ void initialize_frame_capture()
             return;
         }
 
-        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_5_0, (void **)&renderdoc_api);
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void **)&renderdoc_api);
         log_renderdoc->trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}", ret);
         ERHE_VERIFY(ret == 1);
 
@@ -84,7 +84,7 @@ void initialize_frame_capture()
     void* renderdoc_so = dlopen("librenderdoc.so", RTLD_NOW);
     if (renderdoc_so != nullptr) {
         pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(renderdoc_so, "RENDERDOC_GetAPI");
-        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_5_0, (void **)&renderdoc_api);
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void **)&renderdoc_api);
         log_renderdoc->trace("Loaded RenderDoc DLL, RENDERDOC_GetAPI() return value = {}", ret);
         ERHE_VERIFY(ret == 1);
     }

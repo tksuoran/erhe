@@ -20,7 +20,7 @@ Xr_boolean_binding::Xr_boolean_binding() = default;
 
 Xr_boolean_binding::~Xr_boolean_binding() noexcept = default;
 
-[[nodiscard]] auto Xr_boolean_binding::get_type() const -> Type
+auto Xr_boolean_binding::get_type() const -> Type
 {
     return Type::Xr_boolean;
 }

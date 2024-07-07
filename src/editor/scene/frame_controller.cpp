@@ -9,8 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-namespace editor
-{
+namespace editor {
 
 using glm::mat4;
 using glm::vec3;

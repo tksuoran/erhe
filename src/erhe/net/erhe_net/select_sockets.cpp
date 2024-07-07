@@ -2,8 +2,7 @@
 
 #include <algorithm>
 
-namespace erhe::net
-{
+namespace erhe::net {
 
 Select_sockets::Select_sockets()
 {
@@ -78,4 +77,4 @@ auto Select_sockets::select(const int timeout_ms) -> int
     );
 }
 
-}
+} // namespace erhe::net

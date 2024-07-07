@@ -22,8 +22,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 
-namespace editor
-{
+namespace editor {
 
 static const std::string empty_string{};
 
@@ -32,7 +31,7 @@ void Hover_entry::reset()
     *this = Hover_entry{};
 }
 
-[[nodiscard]] auto Hover_entry::get_name() const -> const std::string&
+auto Hover_entry::get_name() const -> const std::string&
 {
     if (mesh) {
         return mesh->get_name();
@@ -51,10 +50,7 @@ Scene_view::Scene_view(Editor_context& context, Viewport_config viewport_config)
 
 Scene_view::~Scene_view() noexcept = default;
 
-void Scene_view::set_hover(
-    const std::size_t  slot,
-    const Hover_entry& entry
-)
+void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
 {
     const bool mesh_changed = m_hover_entries[slot].mesh != entry.mesh;
     const bool grid_changed = m_hover_entries[slot].grid != entry.grid;
@@ -120,9 +116,7 @@ auto Scene_view::get_control_ray_direction_in_world() const -> std::optional<glm
     return glm::vec3{m_world_from_control.value() * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 }
 
-auto Scene_view::get_control_position_in_world_at_distance(
-    const float distance
-) const -> std::optional<glm::vec3>
+auto Scene_view::get_control_position_in_world_at_distance(const float distance) const -> std::optional<glm::vec3>
 {
     if (!m_world_from_control.has_value()) {
         return {};
@@ -170,20 +164,17 @@ auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entr
     return &m_hover_entries.at(nearest_slot.value());
 }
 
-auto Scene_view::as_viewport_window() -> Viewport_window*
+auto Scene_view::as_viewport_scene_view() -> Viewport_scene_view*
 {
     return nullptr;
 }
 
-auto Scene_view::as_viewport_window() const -> const Viewport_window*
+auto Scene_view::as_viewport_scene_view() const -> const Viewport_scene_view*
 {
     return nullptr;
 }
 
-void Scene_view::set_world_from_control(
-    glm::vec3 near_position_in_world,
-    glm::vec3 far_position_in_world
-)
+void Scene_view::set_world_from_control(glm::vec3 near_position_in_world, glm::vec3 far_position_in_world)
 {
     const auto camera = get_camera();
     if (!camera) {
@@ -386,10 +377,7 @@ auto Scene_view::get_closest_point_on_line(const glm::vec3 P0, const glm::vec3 P
     return {};
 }
 
-auto Scene_view::get_closest_point_on_plane(
-    const glm::vec3 N,
-    const glm::vec3 P
-) -> std::optional<glm::vec3>
+auto Scene_view::get_closest_point_on_plane(const glm::vec3 N, const glm::vec3 P) -> std::optional<glm::vec3>
 {
     using vec3 = glm::vec3;
     const auto Q_origin_opt    = get_control_ray_origin_in_world();
@@ -413,6 +401,5 @@ auto Scene_view::get_closest_point_on_plane(
     const vec3 drag_point_new_position_in_world = Q0 + intersection.value() * v;
     return drag_point_new_position_in_world;
 }
-
 
 } // namespace editor

@@ -13,8 +13,7 @@
 
 #include <algorithm>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 class InternalFormatFormatType
 {
@@ -129,9 +128,7 @@ constexpr std::array INTERNAL_FORMAT_INFO =
     InternalFormatFormatType{ gl::Internal_format::depth_component16, gl::Pixel_format::depth_component, gl::Pixel_type::unsigned_int   }
 };
 
-auto get_upload_pixel_byte_count(
-    const gl::Internal_format internalformat
-)-> size_t
+auto get_upload_pixel_byte_count(const gl::Internal_format internalformat)-> size_t
 {
     for (const auto& entry : INTERNAL_FORMAT_INFO) {
         if (entry.internal_format == internalformat) {
@@ -282,11 +279,7 @@ auto Texture::size_level_count(int size) -> int
     return level_count;
 }
 
-auto Texture_create_info::calculate_level_count(
-    const int width,
-    const int height,
-    const int depth
-) -> int
+auto Texture_create_info::calculate_level_count(const int width, const int height, const int depth) -> int
 {
     const auto x_level_count = Texture::size_level_count(width);
     const auto y_level_count = Texture::size_level_count(height);

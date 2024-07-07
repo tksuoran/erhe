@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 class IRigid_body;
 
@@ -25,9 +24,7 @@ class IConstraint
 public:
     virtual ~IConstraint() noexcept {};
 
-    [[nodiscard]] static auto create_point_to_point_constraint(
-        const Point_to_point_constraint_settings& settings
-    ) -> IConstraint*;
+    [[nodiscard]] static auto create_point_to_point_constraint(const Point_to_point_constraint_settings& settings) -> IConstraint*;
 
     [[nodiscard]] static auto create_point_to_point_constraint_shared(
         const Point_to_point_constraint_settings& settings

@@ -5,19 +5,12 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 
+namespace erhe::physics {
 
-namespace erhe::physics
-{
-
-class Jolt_convex_hull_collision_shape
-    : public Jolt_collision_shape
+class Jolt_convex_hull_collision_shape : public Jolt_collision_shape
 {
 public:
-    Jolt_convex_hull_collision_shape(
-        const float* points,
-        int          point_count,
-        int          stride
-    );
+    Jolt_convex_hull_collision_shape(const float* points, int point_count, int stride);
 
     auto get_shape_settings() -> JPH::ShapeSettings& override;
     auto describe          () const -> std::string   override;

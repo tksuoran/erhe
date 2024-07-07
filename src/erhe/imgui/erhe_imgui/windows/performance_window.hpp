@@ -16,8 +16,7 @@ namespace erhe::time {
     class Timer;
 }
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 class Imgui_windows;
 
@@ -45,8 +44,7 @@ protected:
     std::vector<float> m_values;
 };
 
-class Gpu_timer_plot
-    : public Plot
+class Gpu_timer_plot : public Plot
 {
 public:
     explicit Gpu_timer_plot(
@@ -63,14 +61,10 @@ private:
     erhe::graphics::Gpu_timer* m_gpu_timer{nullptr};
 };
 
-class Cpu_timer_plot
-    : public Plot
+class Cpu_timer_plot : public Plot
 {
 public:
-    explicit Cpu_timer_plot(
-        erhe::time::Timer* timer,
-        std::size_t        width = 256
-    );
+    explicit Cpu_timer_plot(erhe::time::Timer* timer, std::size_t width = 256);
 
     void sample() override;
     auto label() const -> const char* override;
@@ -81,8 +75,7 @@ private:
     erhe::time::Timer* m_timer{nullptr};
 };
 
-class Frame_time_plot
-    : public Plot
+class Frame_time_plot : public Plot
 {
 public:
     explicit Frame_time_plot(std::size_t width = 256);
@@ -96,14 +89,10 @@ private:
     std::optional<std::chrono::steady_clock::time_point> m_last_frame_time_point;
 };
 
-class Performance_window
-    : public Imgui_window
+class Performance_window : public Imgui_window
 {
 public:
-    Performance_window(
-        Imgui_renderer& imgui_renderer,
-        Imgui_windows&  imgui_windows
-    );
+    Performance_window(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows);
 
     // Implements Imgui_window
     void imgui() override;

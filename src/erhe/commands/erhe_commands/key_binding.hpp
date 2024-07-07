@@ -11,8 +11,7 @@ namespace erhe::commands {
 struct Input_arguments;
 
 // Key pressesed or released
-class Key_binding
-    : public Command_binding
+class Key_binding : public Command_binding
 {
 public:
     Key_binding(

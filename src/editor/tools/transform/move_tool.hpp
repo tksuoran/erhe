@@ -12,8 +12,7 @@ class Transform_tool;
 
 enum class Handle : unsigned int;
 
-class Move_tool
-    : public Subtool
+class Move_tool : public Subtool
 {
 public:
     static constexpr int c_priority{1};

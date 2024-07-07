@@ -34,8 +34,7 @@ public:
     virtual void buffer_ready       (Index_buffer_writer&  writer) const = 0;
 };
 
-class Gl_buffer_sink
-    : public Buffer_sink
+class Gl_buffer_sink : public Buffer_sink
 {
 public:
     Gl_buffer_sink(
@@ -58,8 +57,7 @@ private:
     erhe::graphics::Buffer&                m_index_buffer;
 };
 
-class Raytrace_buffer_sink
-    : public Buffer_sink
+class Raytrace_buffer_sink : public Buffer_sink
 {
 public:
     Raytrace_buffer_sink(erhe::raytrace::IBuffer& vertex_buffer, erhe::raytrace::IBuffer& index_buffer);

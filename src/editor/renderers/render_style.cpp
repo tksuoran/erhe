@@ -1,7 +1,6 @@
 #include "renderers/render_style.hpp"
 
-namespace editor
-{
+namespace editor {
 
 auto Render_style::get_static_type() -> uint64_t
 {

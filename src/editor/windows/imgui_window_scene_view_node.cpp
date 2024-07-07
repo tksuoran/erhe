@@ -1,9 +1,9 @@
-#include "windows/imgui_viewport_window.hpp"
+#include "windows/imgui_window_scene_view_node.hpp"
 
 #include "editor_log.hpp"
-#include "scene/viewport_window.hpp"
+#include "scene/viewport_scene_view.hpp"
 
-#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/gl_helpers.hpp"
@@ -15,8 +15,7 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
@@ -59,13 +58,13 @@ using erhe::graphics::Texture;
     return gl::Internal_format::depth_component; // fallback
 }
 
-Imgui_viewport_window::Imgui_viewport_window(
-    erhe::imgui::Imgui_renderer&            imgui_renderer,
-    erhe::imgui::Imgui_windows&             imgui_windows,
-    erhe::rendergraph::Rendergraph&         rendergraph,
-    const std::string_view                  name,
-    const std::string_view                  ini_label,
-    const std::shared_ptr<Viewport_window>& viewport_window
+Imgui_window_scene_view_node::Imgui_window_scene_view_node(
+    erhe::imgui::Imgui_renderer&                imgui_renderer,
+    erhe::imgui::Imgui_windows&                 imgui_windows,
+    erhe::rendergraph::Rendergraph&             rendergraph,
+    const std::string_view                      name,
+    const std::string_view                      ini_label,
+    const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, name, ini_label}
     , erhe::rendergraph::Texture_rendergraph_node{
@@ -78,7 +77,7 @@ Imgui_viewport_window::Imgui_viewport_window(
             .depth_stencil_format = choose_depth_stencil_format()
         }
     }
-    , m_viewport_window{viewport_window}
+    , m_viewport_scene_view{viewport_scene_view}
 {
     m_viewport.x      = 0;
     m_viewport.y      = 0;
@@ -92,9 +91,9 @@ Imgui_viewport_window::Imgui_viewport_window(
     );
 
     // "rendertarget texture" is slot / pseudo-resource which allows use rendergraph
-    // connection to make Rendertarget_imgui_viewport a dependency for Imgui_viewport,
+    // connection to make Rendertarget_imgui_viewport a dependency for Imgui_host,
     // forcing correct rendering order; Rendertarget_imgui_viewport must be rendered
-    // before Imgui_viewport.
+    // before Imgui_host.
     //
     // TODO Texture dependencies should be handled in a generic way.
     register_input(
@@ -104,9 +103,9 @@ Imgui_viewport_window::Imgui_viewport_window(
     );
 
     // "window" is slot / pseudo-resource which allows use rendergraph connection
-    // to make Imgui_viewport_window a dependency for (Window) Imgui_viewport,
-    // forcing correct rendering order; Imgui_viewport_window must be rendered before
-    // (Window) Imgui_viewport.
+    // to make Imgui_window_scene_view_node a dependency for (Window) Imgui_host,
+    // forcing correct rendering order; Imgui_window_scene_view_node must be rendered before
+    // (Window) Imgui_host.
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(
@@ -118,28 +117,28 @@ Imgui_viewport_window::Imgui_viewport_window(
     show();
 }
 
-[[nodiscard]] auto Imgui_viewport_window::viewport_window() const -> std::shared_ptr<Viewport_window>
+auto Imgui_window_scene_view_node::viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>
 {
-    return m_viewport_window.lock();
+    return m_viewport_scene_view.lock();
 }
 
-[[nodiscard]] auto Imgui_viewport_window::is_hovered() const -> bool
+auto Imgui_window_scene_view_node::is_hovered() const -> bool
 {
     return m_is_hovered;
 }
 
-void Imgui_viewport_window::on_mouse_move(glm::vec2 mouse_position_in_window)
+void Imgui_window_scene_view_node::on_mouse_move(glm::vec2 mouse_position_in_window)
 {
-    auto viewport_window = m_viewport_window.lock();
-    if (!viewport_window) {
+    auto viewport_scene_view = m_viewport_scene_view.lock();
+    if (!viewport_scene_view) {
         return;
     }
-    const auto mouse_position_in_viewport = viewport_window->viewport_from_window(mouse_position_in_window);
-    viewport_window->update_pointer_2d_position(mouse_position_in_viewport);
-    viewport_window->update_hover();
+    const auto mouse_position_in_viewport = viewport_scene_view->viewport_from_window(mouse_position_in_window);
+    viewport_scene_view->update_pointer_2d_position(mouse_position_in_viewport);
+    viewport_scene_view->update_hover();
 }
 
-void Imgui_viewport_window::on_begin()
+void Imgui_window_scene_view_node::on_begin()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
@@ -147,7 +146,7 @@ void Imgui_viewport_window::on_begin()
 #endif
 }
 
-void Imgui_viewport_window::on_end()
+void Imgui_window_scene_view_node::on_end()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PopStyleColor();
@@ -155,65 +154,47 @@ void Imgui_viewport_window::on_end()
 #endif
 }
 
-void Imgui_viewport_window::set_viewport(
-    erhe::imgui::Imgui_viewport* imgui_viewport
-)
+void Imgui_window_scene_view_node::set_imgui_host(erhe::imgui::Imgui_host* imgui_host)
 {
-    Imgui_window::set_viewport(imgui_viewport);
+    Imgui_window::set_imgui_host(imgui_host);
 }
 
-[[nodiscard]] auto Imgui_viewport_window::get_consumer_input_viewport(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> erhe::math::Viewport
+auto Imgui_window_scene_view_node::get_consumer_input_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(depth);
-    static_cast<void>(key);
-    //ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::window); TODO
     return m_viewport;
 }
 
-[[nodiscard]] auto Imgui_viewport_window::get_producer_output_viewport(
-    const erhe::rendergraph::Routing resource_routing,
-    const int                        key,
-    const int                        depth
-) const -> erhe::math::Viewport
+auto Imgui_window_scene_view_node::get_producer_output_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
 {
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(depth);
-    static_cast<void>(key);
-    //ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::window); TODO
     return m_viewport;
 }
 
-void Imgui_viewport_window::toolbar(bool& hovered)
+void Imgui_window_scene_view_node::toolbar(bool& hovered)
 {
-    const auto viewport_window = m_viewport_window.lock();
-    if (!viewport_window) {
+    const auto viewport_scene_view = m_viewport_scene_view.lock();
+    if (!viewport_scene_view) {
         return;
     }
 
-    if (viewport_window->viewport_toolbar()) {
+    if (viewport_scene_view->viewport_toolbar()) {
         hovered = true;
     }
 }
 
-void Imgui_viewport_window::hidden()
+void Imgui_window_scene_view_node::hidden()
 {
     Rendergraph_node::set_enabled(false);
 }
 
-void Imgui_viewport_window::imgui()
+void Imgui_window_scene_view_node::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
     Rendergraph_node::set_enabled(true);
 
-    const auto viewport_window = m_viewport_window.lock();
-    if (!viewport_window) {
+    const auto viewport_scene_view = m_viewport_scene_view.lock();
+    if (!viewport_scene_view) {
         return;
     }
 
@@ -234,7 +215,7 @@ void Imgui_viewport_window::imgui()
         if ((texture_width >= 1) && (texture_height >= 1)) {
             SPDLOG_LOGGER_TRACE(
                 log_render,
-                "Imgui_viewport_window::imgui() rendering texture {} {}",
+                "Imgui_window_scene_view_node::imgui() rendering texture {} {}",
                 texture->gl_name(),
                 texture->debug_label()
             );
@@ -249,7 +230,7 @@ void Imgui_viewport_window::imgui()
             //ERHE_VERIFY(m_viewport.width  == static_cast<int>(rect_max.x - rect_min.x));
             //ERHE_VERIFY(m_viewport.height == static_cast<int>(rect_max.y - rect_min.y));
 
-            viewport_window->set_window_viewport(
+            viewport_scene_view->set_window_viewport(
                 erhe::math::Viewport{
                     static_cast<int>(rect_min.x),
                     static_cast<int>(rect_min.y),
@@ -260,20 +241,20 @@ void Imgui_viewport_window::imgui()
         }
     } else {
         m_is_hovered = false;
-        viewport_window->set_window_viewport(erhe::math::Viewport{});
+        viewport_scene_view->set_window_viewport(erhe::math::Viewport{});
     }
-    viewport_window->set_is_hovered(m_is_hovered);
+    viewport_scene_view->set_is_hovered(m_is_hovered);
 
     //m_viewport_config.imgui();
 #endif
 }
 
-auto Imgui_viewport_window::want_mouse_events() const -> bool
+auto Imgui_window_scene_view_node::want_mouse_events() const -> bool
 {
     return true;
 }
 
-auto Imgui_viewport_window::want_keyboard_events() const -> bool
+auto Imgui_window_scene_view_node::want_keyboard_events() const -> bool
 {
     return true;
 }

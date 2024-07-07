@@ -17,8 +17,7 @@ namespace erhe::rendergraph {
 /// </summary>
 /// Creates multisampled variant of output rendergraph node and resolves it to
 /// the target rendergraph node.
-class Multisample_resolve_node
-    : public Rendergraph_node
+class Multisample_resolve_node : public Rendergraph_node
 {
 public:
     static constexpr std::string_view c_type_name{"Multisample_resolve_node"};

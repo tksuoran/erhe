@@ -7,16 +7,14 @@
 #include <map>
 #include <memory>
 
-namespace erhe::geometry::shapes
-{
+namespace erhe::geometry::shapes {
 
 using vec2  = glm::vec2;
 using vec3  = glm::vec3;
 using ivec3 = glm::ivec3;
 using vec4  = glm::vec4;
 
-namespace
-{
+namespace {
 
 auto sign(const float x) -> float
 {
@@ -30,11 +28,7 @@ auto signed_pow(const float x, const float p) -> float
 
 } // namespace
 
-auto make_box(
-    const double x_size,
-    const double y_size,
-    const double z_size
-) -> Geometry
+auto make_box(const double x_size, const double y_size, const double z_size) -> Geometry
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -63,7 +57,6 @@ auto make_box(
             geometry.make_polygon({0, 1, 5, 3}); // y-
             geometry.make_polygon({0, 2, 4, 1}); // z-
 
-            geometry.reverse_polygons(); // TODO reverse the code above and remove this
             geometry.make_point_corners();
             geometry.build_edges();
             geometry.compute_polygon_corner_texcoords(corner_texcoords);
@@ -104,7 +97,6 @@ auto make_box(
             geometry.make_polygon({0, 1, 5, 3}); // y-
             geometry.make_polygon({0, 2, 4, 1}); // z-
 
-            geometry.reverse_polygons(); // TODO reverse the code above and remove this
             geometry.make_point_corners();
             geometry.build_edges();
             geometry.compute_polygon_corner_texcoords(corner_texcoords);
@@ -247,12 +239,7 @@ public:
         return corner_id;
     }
 
-    Box_builder(
-        Geometry&   geometry,
-        const vec3  size,
-        const ivec3 div,
-        const float p
-    )
+    Box_builder(Geometry& geometry, const vec3 size, const ivec3 div, const float p)
         : geometry{geometry}
         , size    {size}
         , div     {div}
@@ -374,7 +361,6 @@ public:
             }
         }
 
-        geometry.reverse_polygons(); // TODO reverse the code above and remove this
         geometry.make_point_corners();
         geometry.build_edges();
         geometry.compute_polygon_normals();
@@ -382,11 +368,7 @@ public:
     }
 };
 
-auto make_box(
-    const glm::vec3  size,
-    const glm::ivec3 div,
-    const float      p
-) -> Geometry
+auto make_box(const glm::vec3 size, const glm::ivec3 div, const float p) -> Geometry
 {
     ERHE_PROFILE_FUNCTION();
 

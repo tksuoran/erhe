@@ -4,8 +4,7 @@
 
 #include <utility>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 Gl_texture::Gl_texture(gl::Texture_target target)
 {

@@ -5,22 +5,17 @@
 
 #include <fmt/format.h>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
 using std::string;
 
-auto Reloadable_shader_stages::make_prototype(
-    Instance& graphics_instance
-) -> Shader_stages_prototype
+auto Reloadable_shader_stages::make_prototype(Instance& graphics_instance) -> Shader_stages_prototype
 {
     erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
     return prototype;
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(
-    const std::string& non_functional_name
-)
+Reloadable_shader_stages::Reloadable_shader_stages(const std::string& non_functional_name)
     : create_info  {}
     , shader_stages{non_functional_name}
 {
@@ -35,9 +30,7 @@ Reloadable_shader_stages::Reloadable_shader_stages(
 {
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(
-    Shader_stages_prototype&& prototype
-)
+Reloadable_shader_stages::Reloadable_shader_stages(Shader_stages_prototype&& prototype)
     : create_info  {prototype.create_info()}
     , shader_stages{std::move(prototype)}
 {
