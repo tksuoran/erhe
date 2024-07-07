@@ -1,24 +1,21 @@
-#include "rendergraph/basic_viewport_window.hpp"
+#include "rendergraph/basic_scene_view_node.hpp"
 
-#include "scene/viewport_window.hpp"
+#include "scene/viewport_scene_view.hpp"
 
 namespace editor {
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
-Basic_viewport_window::Basic_viewport_window(
-    erhe::rendergraph::Rendergraph&         rendergraph,
-    const std::string_view                  name,
-    const std::shared_ptr<Viewport_window>& viewport_window
+Basic_scene_view_node::Basic_scene_view_node(
+    erhe::rendergraph::Rendergraph&             rendergraph,
+    const std::string_view                      name,
+    const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
 )
-    : erhe::rendergraph::Sink_rendergraph_node{
-        rendergraph,
-        std::string{name}
-    }
-    , m_viewport_window{viewport_window}
+    : erhe::rendergraph::Sink_rendergraph_node{rendergraph, std::string{name}}
+    , m_viewport_scene_view{viewport_scene_view}
 {
-    // Initially empty viewport. Layout is done by Viewport_windows
+    // Initially empty viewport. Layout is done by Scene_views
     m_viewport.x      = 0;
     m_viewport.y      = 0;
     m_viewport.width  = 0;
@@ -31,9 +28,9 @@ Basic_viewport_window::Basic_viewport_window(
     );
 
     // "window" is slot / pseudo-resource which allows use rendergraph connection
-    // to make Imgui_viewport_window a dependency for Imgui_viewport, forcing
-    // correct rendering order (Imgui_viewport_window must be rendered before
-    // Imgui_viewport).
+    // to make Imgui_window_scene_view a dependency for Imgui_host, forcing
+    // correct rendering order (Imgui_window_scene_view must be rendered before
+    // Imgui_host).
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(
@@ -43,12 +40,12 @@ Basic_viewport_window::Basic_viewport_window(
     );
 }
 
-auto Basic_viewport_window::get_viewport_window() const -> std::shared_ptr<Viewport_window>
+auto Basic_scene_view_node::get_viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>
 {
-    return m_viewport_window.lock();
+    return m_viewport_scene_view.lock();
 }
 
-auto Basic_viewport_window::get_consumer_input_viewport(
+auto Basic_scene_view_node::get_consumer_input_viewport(
     const erhe::rendergraph::Routing resource_routing,
     const int                        key,
     const int                        depth
@@ -61,7 +58,7 @@ auto Basic_viewport_window::get_consumer_input_viewport(
     return get_viewport();
 }
 
-auto Basic_viewport_window::get_producer_output_viewport(
+auto Basic_scene_view_node::get_producer_output_viewport(
     const erhe::rendergraph::Routing resource_routing,
     const int                        key,
     const int                        depth
@@ -74,7 +71,7 @@ auto Basic_viewport_window::get_producer_output_viewport(
     return get_viewport();
 }
 
-auto Basic_viewport_window::get_consumer_input_texture(
+auto Basic_scene_view_node::get_consumer_input_texture(
     const erhe::rendergraph::Routing resource_routing,
     const int                        key,
     const int                        depth
@@ -86,7 +83,7 @@ auto Basic_viewport_window::get_consumer_input_texture(
     return {};
 }
 
-auto Basic_viewport_window::get_producer_output_texture(
+auto Basic_scene_view_node::get_producer_output_texture(
     const erhe::rendergraph::Routing resource_routing,
     const int                        key,
     const int                        depth
@@ -98,7 +95,7 @@ auto Basic_viewport_window::get_producer_output_texture(
     return {};
 }
 
-auto Basic_viewport_window::get_consumer_input_framebuffer(
+auto Basic_scene_view_node::get_consumer_input_framebuffer(
     const erhe::rendergraph::Routing resource_routing,
     const int                        key,
     const int                        depth
@@ -110,7 +107,7 @@ auto Basic_viewport_window::get_consumer_input_framebuffer(
     return {};
 }
 
-auto Basic_viewport_window::get_producer_output_framebuffer(
+auto Basic_scene_view_node::get_producer_output_framebuffer(
     const erhe::rendergraph::Routing resource_routing,
     const int                        key,
     const int                        depth
@@ -122,26 +119,26 @@ auto Basic_viewport_window::get_producer_output_framebuffer(
     return {};
 }
 
-auto Basic_viewport_window::get_viewport() const -> const erhe::math::Viewport&
+auto Basic_scene_view_node::get_viewport() const -> const erhe::math::Viewport&
 {
     return m_viewport;
 }
 
-void Basic_viewport_window::set_viewport(erhe::math::Viewport viewport)
+void Basic_scene_view_node::set_viewport(erhe::math::Viewport viewport)
 {
     m_viewport = viewport;
 
-    const auto viewport_window = m_viewport_window.lock();
-    if (viewport_window) {
-        viewport_window->set_window_viewport(viewport);
+    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
+    if (viewport_scene_view) {
+        viewport_scene_view->set_window_viewport(viewport);
     }
 }
 
-void Basic_viewport_window::set_is_hovered(const bool is_hovered)
+void Basic_scene_view_node::set_is_hovered(const bool is_hovered)
 {
-    const auto viewport_window = m_viewport_window.lock();
-    if (viewport_window) {
-        viewport_window->set_is_hovered(is_hovered);
+    const auto viewport_scene_view = m_viewport_scene_view.lock();
+    if (viewport_scene_view) {
+        viewport_scene_view->set_is_hovered(is_hovered);
     }
 }
 

@@ -11,8 +11,7 @@
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 [[nodiscard]] auto to_jolt(const Motion_mode motion_mode) -> JPH::EMotionType
 {

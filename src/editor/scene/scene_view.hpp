@@ -44,7 +44,7 @@ class Grid;
 class Raytrace_primitive;
 class Scene_root;
 class Shadow_render_node;
-class Viewport_window;
+class Viewport_scene_view;
 
 class Hover_entry
 {
@@ -109,8 +109,8 @@ public:
     [[nodiscard]] virtual auto get_shadow_texture    () const -> erhe::graphics::Texture*;
     [[nodiscard]] virtual auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node* = 0;
     [[nodiscard]] virtual auto get_light_projections () const -> const erhe::scene_renderer::Light_projections*;
-    [[nodiscard]] virtual auto as_viewport_window    () -> Viewport_window*;
-    [[nodiscard]] virtual auto as_viewport_window    () const -> const Viewport_window*;
+    [[nodiscard]] virtual auto as_viewport_scene_view() -> Viewport_scene_view*;
+    [[nodiscard]] virtual auto as_viewport_scene_view() const -> const Viewport_scene_view*;
 
     // "Pointing"
     void set_world_from_control(glm::vec3 near_position_in_world, glm::vec3 far_position_in_world);

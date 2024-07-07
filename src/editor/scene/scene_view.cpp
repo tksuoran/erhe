@@ -32,7 +32,7 @@ void Hover_entry::reset()
     *this = Hover_entry{};
 }
 
-[[nodiscard]] auto Hover_entry::get_name() const -> const std::string&
+auto Hover_entry::get_name() const -> const std::string&
 {
     if (mesh) {
         return mesh->get_name();
@@ -170,12 +170,12 @@ auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entr
     return &m_hover_entries.at(nearest_slot.value());
 }
 
-auto Scene_view::as_viewport_window() -> Viewport_window*
+auto Scene_view::as_viewport_scene_view() -> Viewport_scene_view*
 {
     return nullptr;
 }
 
-auto Scene_view::as_viewport_window() const -> const Viewport_window*
+auto Scene_view::as_viewport_scene_view() const -> const Viewport_scene_view*
 {
     return nullptr;
 }

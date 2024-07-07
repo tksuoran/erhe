@@ -424,22 +424,18 @@ auto Geometry::make_point(
     return make_point(float(x), float(y), float(z), float(s), float(t));
 }
 
-auto Geometry::make_polygon(
-    const std::initializer_list<Point_id> point_list
-) -> Polygon_id
+auto Geometry::make_polygon(const std::initializer_list<Point_id> point_list) -> Polygon_id
 {
     ERHE_PROFILE_FUNCTION();
 
     const Polygon_id polygon_id = make_polygon();
-    for (Point_id point_id : point_list)
-    {
+    for (Point_id point_id : point_list) {
         make_polygon_corner(polygon_id, point_id);
     }
     return polygon_id;
 }
 
-auto Geometry::make_polygon_reverse(const std::initializer_list<Point_id> point_list)
--> Polygon_id
+auto Geometry::make_polygon_reverse(const std::initializer_list<Point_id> point_list) -> Polygon_id
 {
     ERHE_PROFILE_FUNCTION();
 

@@ -47,9 +47,7 @@ void Create_box::imgui()
     ImGui::SliderFloat ("Power", &m_power, 0.0f, 10.0f);
 }
 
-[[nodiscard]] auto Create_box::create(
-    Brush_data& brush_create_info
-) const -> std::shared_ptr<Brush>
+auto Create_box::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
     brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_box(

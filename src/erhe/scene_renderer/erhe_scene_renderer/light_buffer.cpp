@@ -12,8 +12,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 [[nodiscard]] auto get_max_light_count() -> std::size_t
 {
@@ -125,7 +124,7 @@ Light_projections::Light_projections(
     );
 }
 
-[[nodiscard]] auto Light_projections::get_light_projection_transforms_for_light(
+auto Light_projections::get_light_projection_transforms_for_light(
     const erhe::scene::Light* light
 ) -> erhe::scene::Light_projection_transforms*
 {
@@ -137,7 +136,7 @@ Light_projections::Light_projections(
     return nullptr;
 }
 
-[[nodiscard]] auto Light_projections::get_light_projection_transforms_for_light(
+auto Light_projections::get_light_projection_transforms_for_light(
     const erhe::scene::Light* light
 ) const -> const erhe::scene::Light_projection_transforms*
 {

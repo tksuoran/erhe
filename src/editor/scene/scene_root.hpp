@@ -73,7 +73,7 @@ class Raytrace_primitive;
 class Rendertarget_mesh;
 class Scene_root;
 class Scene_view;
-class Viewport_window;
+class Viewport_scene_view;
 
 class Mesh_layer_id
 {

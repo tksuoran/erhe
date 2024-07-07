@@ -176,17 +176,17 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::
     }
 }
 
-[[nodiscard]] auto Icon_set::get_small_rasterization() const -> const Icon_rasterization&
+auto Icon_set::get_small_rasterization() const -> const Icon_rasterization&
 {
     return *m_small.get();
 }
 
-[[nodiscard]] auto Icon_set::get_large_rasterization() const -> const Icon_rasterization&
+auto Icon_set::get_large_rasterization() const -> const Icon_rasterization&
 {
     return *m_large.get();
 }
 
-[[nodiscard]] auto Icon_set::get_hotbar_rasterization() const -> const Icon_rasterization&
+auto Icon_set::get_hotbar_rasterization() const -> const Icon_rasterization&
 {
     return *m_hotbar.get();
 }

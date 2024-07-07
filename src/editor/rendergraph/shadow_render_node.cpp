@@ -34,7 +34,7 @@ Shadow_render_node::Shadow_render_node(
     const int                       resolution,
     const int                       light_count
 )
-    // TODO fmt::format("Shadow render {}", viewport_window->name())
+    // TODO fmt::format("Shadow render {}", viewport_scene_view->name())
     : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"} 
     , m_context   {editor_context}
     , m_scene_view{scene_view}

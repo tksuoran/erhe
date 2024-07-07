@@ -510,7 +510,7 @@ auto Handle_visualizations::make_rotate_ring(Mesh_memory& mesh_memory) -> Part
     };
 }
 
-[[nodiscard]] auto Handle_visualizations::make_material(
+auto Handle_visualizations::make_material(
     Tools&           tools,
     const char*      name,
     const glm::vec3& color,

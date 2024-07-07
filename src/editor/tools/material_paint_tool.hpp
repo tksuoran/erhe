@@ -22,7 +22,7 @@ class Headset_view;
 class Icon_set;
 class Material_paint_tool;
 class Operations;
-class Viewport_windows;
+class Scene_views;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 class Headset_view;
 #endif

@@ -9,16 +9,16 @@ erhe_target_sources_grouped(
     erhe_imgui/imgui_log.hpp
     erhe_imgui/imgui_renderer.cpp
     erhe_imgui/imgui_renderer.hpp
-    erhe_imgui/imgui_viewport.cpp
-    erhe_imgui/imgui_viewport.hpp
+    erhe_imgui/imgui_host.cpp
+    erhe_imgui/imgui_host.hpp
     erhe_imgui/imgui_window.cpp
     erhe_imgui/imgui_window.hpp
     erhe_imgui/imgui_windows.cpp
     erhe_imgui/imgui_windows.hpp
     erhe_imgui/scoped_imgui_context.cpp
     erhe_imgui/scoped_imgui_context.hpp
-    erhe_imgui/window_imgui_viewport.cpp
-    erhe_imgui/window_imgui_viewport.hpp
+    erhe_imgui/window_imgui_host.cpp
+    erhe_imgui/window_imgui_host.hpp
     erhe_imgui/ImNodes.cpp
     erhe_imgui/ImNodes.h
     erhe_imgui/ImNodesEz.cpp

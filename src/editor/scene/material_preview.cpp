@@ -308,7 +308,7 @@ void Material_preview::render_preview(
         .scene_view      = *this,
         .viewport_config = m_viewport_config,
         .camera          = *m_camera.get(),
-        .viewport_window = nullptr,
+        .viewport_scene_view = nullptr,
         .viewport        = erhe::math::Viewport{
             .x      = 0,
             .y      = 0,
@@ -364,7 +364,7 @@ auto Material_preview::get_shadow_texture() const -> erhe::graphics::Texture*
 ////    );
 ////}
 
-[[nodiscard]] auto Material_preview::get_content_library() -> std::shared_ptr<Content_library>
+auto Material_preview::get_content_library() -> std::shared_ptr<Content_library>
 {
     return m_content_library;
 }

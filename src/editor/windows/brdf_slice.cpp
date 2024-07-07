@@ -134,11 +134,7 @@ void Brdf_slice_rendergraph_node::set_area_size(const int size)
     m_area_size = size;
 }
 
-[[nodiscard]] auto Brdf_slice_rendergraph_node::get_producer_output_viewport(
-    erhe::rendergraph::Routing resource_routing,
-    int                        key,
-    int                        depth
-) const -> erhe::math::Viewport
+auto Brdf_slice_rendergraph_node::get_producer_output_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate

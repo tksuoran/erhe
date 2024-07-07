@@ -42,7 +42,7 @@ class Scene_commands;
 class Scene_message_bus;
 class Scene_root;
 class Tool;
-class Viewport_windows;
+class Scene_views;
 
 class Tools_pipeline_renderpasses
 {

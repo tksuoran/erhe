@@ -45,44 +45,44 @@ void Commands::register_command(Command* const command)
     m_commands.push_back(command);
 }
 
-[[nodiscard]] auto Commands::get_commands() const -> const std::vector<Command*>&
+auto Commands::get_commands() const -> const std::vector<Command*>&
 {
     return m_commands;
 }
 
-[[nodiscard]] auto Commands::get_key_bindings() const -> const std::vector<Key_binding>&
+auto Commands::get_key_bindings() const -> const std::vector<Key_binding>&
 {
     return m_key_bindings;
 }
 
-[[nodiscard]] auto Commands::get_mouse_bindings() const -> const std::vector<std::unique_ptr<Mouse_binding>>&
+auto Commands::get_mouse_bindings() const -> const std::vector<std::unique_ptr<Mouse_binding>>&
 {
     return m_mouse_bindings;
 }
 
-[[nodiscard]] auto Commands::get_mouse_wheel_bindings() const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&
+auto Commands::get_mouse_wheel_bindings() const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&
 {
     return m_mouse_wheel_bindings;
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-[[nodiscard]] auto Commands::get_xr_boolean_bindings() const -> const std::vector<Xr_boolean_binding>&
+auto Commands::get_xr_boolean_bindings() const -> const std::vector<Xr_boolean_binding>&
 {
     return m_xr_boolean_bindings;
 }
 
-[[nodiscard]] auto Commands::get_xr_float_bindings() const -> const std::vector<Xr_float_binding>&
+auto Commands::get_xr_float_bindings() const -> const std::vector<Xr_float_binding>&
 {
     return m_xr_float_bindings;
 }
 
-[[nodiscard]] auto Commands::get_xr_vector2f_bindings() const -> const std::vector<Xr_vector2f_binding>&
+auto Commands::get_xr_vector2f_bindings() const -> const std::vector<Xr_vector2f_binding>&
 {
     return m_xr_vector2f_bindings;
 }
 #endif
 
-[[nodiscard]] auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
+auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
 {
     return m_update_bindings;
 }

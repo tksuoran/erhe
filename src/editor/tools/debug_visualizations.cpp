@@ -9,7 +9,7 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
+#include "scene/viewport_scene_view.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/transform/transform_tool.hpp"
 
@@ -37,16 +37,14 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 using Trs_transform = erhe::scene::Trs_transform;
 
-namespace
-{
+namespace {
 
 [[nodiscard]] auto sign(const float x) -> float { return x < 0.0f ? -1.0f : 1.0f; }
 
@@ -668,10 +666,8 @@ void Debug_visualizations::selection_visualization(
         return;
     }
 
-    const auto& viewport_config = context.viewport_window->get_config();
-
+    const auto& viewport_config = context.viewport_scene_view->get_config();
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
-
     const auto& selection = m_context.selection->get_selection();
 
     m_selection_bounding_volume = erhe::math::Bounding_volume_combiner{}; // reset

@@ -4,7 +4,7 @@
 #include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
@@ -102,7 +102,7 @@ void Layers_window::imgui()
 
     m_context.editor_scenes->imgui();
 
-    m_context.viewport_windows->debug_imgui();
+    m_context.scene_views->debug_imgui();
 #endif
 }
 

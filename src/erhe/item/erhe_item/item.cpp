@@ -7,12 +7,11 @@
 
 #include <sstream>
 
-namespace erhe
-{
+namespace erhe {
 
 using namespace erhe::item;
 
-[[nodiscard]] auto Item_flags::to_string(const uint64_t flags) -> std::string
+auto Item_flags::to_string(const uint64_t flags) -> std::string
 {
     std::stringstream ss;
 

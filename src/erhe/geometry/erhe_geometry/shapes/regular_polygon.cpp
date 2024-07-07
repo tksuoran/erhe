@@ -1,10 +1,9 @@
-#include "erhe_geometry/shapes/regular_polygon.hpp"
+﻿#include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <cmath>  // for sqrt
 
-namespace erhe::geometry::shapes
-{
+namespace erhe::geometry::shapes {
 
 auto make_triangle(const double r) -> Geometry
 {
@@ -79,6 +78,13 @@ auto make_rectangle(
             geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height *  0.5), 0.0f, 0.0f, 1.0f);
             geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height * -0.5), 0.0f, 0.0f, 0.0f);
             geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height * -0.5), 0.0f, 1.0f, 0.0f);
+
+
+            //   3·······2
+            //   :   ·   :
+            //   ····+····
+            //   :   ·   :
+            //   0·······1
 
             if (front_face) {
                 geometry.make_polygon( {0, 1, 2, 3} );

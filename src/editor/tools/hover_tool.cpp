@@ -6,7 +6,7 @@
 #include "editor_message_bus.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/viewport_window.hpp"
+#include "scene/viewport_scene_view.hpp"
 #include "tools/grid.hpp"
 #include "tools/tools.hpp"
 
@@ -25,8 +25,7 @@
 
 #include <string>
 
-namespace editor
-{
+namespace editor {
 
 Hover_tool::Hover_tool(
     erhe::imgui::Imgui_renderer& imgui_renderer,
@@ -188,11 +187,11 @@ void Hover_tool::tool_render(
         }
     }
 
-    if (context.viewport_window == nullptr) {
+    if (context.viewport_scene_view == nullptr) {
         return;
     }
 
-    const auto position_in_viewport_opt = context.viewport_window->project_to_viewport(entry->position.value());
+    const auto position_in_viewport_opt = context.viewport_scene_view->project_to_viewport(entry->position.value());
     if (!position_in_viewport_opt.has_value()) {
         return;
     }

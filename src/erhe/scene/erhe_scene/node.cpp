@@ -510,7 +510,7 @@ auto Node::direction_in_world() const -> glm::vec4
     return world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f};
 }
 
-[[nodiscard]] auto Node::look_at(const Node& target) const -> glm::mat4
+auto Node::look_at(const Node& target) const -> glm::mat4
 {
     const glm::vec3 eye_position    = position_in_world();
     const glm::vec3 target_position = target.position_in_world();

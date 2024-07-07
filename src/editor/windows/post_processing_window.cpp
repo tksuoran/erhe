@@ -3,8 +3,8 @@
 #include "editor_context.hpp"
 
 #include "rendergraph/post_processing.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -62,11 +62,11 @@ void Post_processing_window::imgui()
     //    }
     //}
 
-    const auto viewport_window = m_context.viewport_windows->last_window();
-    if (!viewport_window) {
+    const auto viewport_scene_view = m_context.scene_views->last_scene_view();
+    if (!viewport_scene_view) {
         return;
     }
-    const auto  post_processing_node = viewport_window->get_post_processing_node();
+    const auto  post_processing_node = viewport_scene_view->get_post_processing_node();
     const auto& downsample_nodes     = post_processing_node->get_downsample_nodes();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});

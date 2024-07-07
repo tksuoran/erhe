@@ -21,7 +21,7 @@ Mouse_button_binding::Mouse_button_binding() = default;
 
 Mouse_button_binding::~Mouse_button_binding() noexcept = default;
 
-[[nodiscard]] auto Mouse_button_binding::get_button() const -> erhe::window::Mouse_button
+auto Mouse_button_binding::get_button() const -> erhe::window::Mouse_button
 {
     return m_button;
 }

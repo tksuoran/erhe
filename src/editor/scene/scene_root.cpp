@@ -350,12 +350,12 @@ void Scene_root::unregister_from_editor_scenes(Editor_scenes& editor_scenes)
     m_is_registered = false;
 }
 
-[[nodiscard]] auto Scene_root::get_host_name() const -> const char*
+auto Scene_root::get_host_name() const -> const char*
 {
     return "Scene_root";
 }
 
-[[nodiscard]] auto Scene_root::get_hosted_scene() -> Scene*
+auto Scene_root::get_hosted_scene() -> Scene*
 {
     return m_scene.get();
 }
@@ -594,12 +594,12 @@ void Scene_root::after_physics_simulation_steps()
     }
 }
 
-[[nodiscard]] auto Scene_root::layers() -> Scene_layers&
+auto Scene_root::layers() -> Scene_layers&
 {
     return m_layers;
 }
 
-[[nodiscard]] auto Scene_root::layers() const -> const Scene_layers&
+auto Scene_root::layers() const -> const Scene_layers&
 {
     return m_layers;
 }
@@ -628,7 +628,7 @@ auto Scene_root::get_scene() const -> const erhe::scene::Scene&
     return *m_scene.get();
 }
 
-[[nodiscard]] auto Scene_root::get_name() const -> const std::string&
+auto Scene_root::get_name() const -> const std::string&
 {
     ERHE_VERIFY(m_scene);
     return m_scene->get_name();

@@ -23,9 +23,7 @@ auto shuffle(
 class Blend_state_component_hash
 {
 public:
-    [[nodiscard]] auto operator()(
-        const Blend_state_component& blend_state_component
-    ) const noexcept -> size_t
+    [[nodiscard]] auto operator()(const Blend_state_component& blend_state_component) const noexcept -> size_t
     {
         return
             (gl::base_zero(blend_state_component.equation_mode     ) << 0u) | // 3 bits

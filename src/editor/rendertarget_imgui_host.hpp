@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 
 namespace erhe::imgui {
     class Imgui_renderer;
@@ -17,10 +17,10 @@ class Editor_context;
 class Headset_view;
 class Rendertarget_mesh;
 
-class Rendertarget_imgui_viewport : public erhe::imgui::Imgui_viewport
+class Rendertarget_imgui_host : public erhe::imgui::Imgui_host
 {
 public:
-    Rendertarget_imgui_viewport(
+    Rendertarget_imgui_host(
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::rendergraph::Rendergraph& rendergraph,
         Editor_context&                 editor_context,
@@ -28,12 +28,12 @@ public:
         const std::string_view          name,
         bool                            imgui_ini = true
     );
-    virtual ~Rendertarget_imgui_viewport() noexcept;
+    virtual ~Rendertarget_imgui_host() noexcept;
 
     [[nodiscard]] auto rendertarget_mesh() -> Rendertarget_mesh*;
     void set_clear_color(const glm::vec4& value);
 
-    // Implements Imgui_viewport
+    // Implements Imgui_host
     auto get_scale_value  () const -> float override;
     auto begin_imgui_frame() -> bool override;
     void end_imgui_frame() override;

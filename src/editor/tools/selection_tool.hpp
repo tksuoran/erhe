@@ -239,6 +239,19 @@ auto Selection::get(const std::size_t index) -> std::shared_ptr<T>
                 }
             }
         } else {
+            const auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (node) {
+                const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& attachments = node->get_attachments();
+                for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment_item : attachments) {
+                    if (!erhe::bit::test_all_rhs_bits_set(attachment_item->get_type(), T::get_static_type())) {
+                        continue;
+                    }
+                    if (i == index) {
+                        return std::dynamic_pointer_cast<T>(attachment_item);
+                    }
+                }
+            }
+
             if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
                 continue;
             }

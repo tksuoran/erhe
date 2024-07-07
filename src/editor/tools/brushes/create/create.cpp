@@ -10,8 +10,8 @@
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/brushes/brush.hpp"
 #include "tools/brushes/create/create_preview_settings.hpp"
 #include "tools/selection_tool.hpp"
@@ -73,14 +73,14 @@ void Create::brush_create_button(const char* label, Create_shape* create_shape)
 
 auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
 {
-    const auto selected_node   = m_context.selection->get<erhe::scene::Node>();
-    const auto viewport_window = m_context.viewport_windows->last_window();
+    const auto selected_node       = m_context.selection->get<erhe::scene::Node>();
+    const auto viewport_scene_view = m_context.scene_views->last_scene_view();
 
     Scene_view* scene_view = get_hover_scene_view();
     erhe::Item_host* item_host = selected_node
         ? selected_node->get_item_host()
-        : viewport_window
-            ? viewport_window->get_scene_root().get()
+        : viewport_scene_view
+            ? viewport_scene_view->get_scene_root().get()
             : (scene_view != nullptr)
                 ? scene_view->get_scene_root().get()
                 : nullptr;

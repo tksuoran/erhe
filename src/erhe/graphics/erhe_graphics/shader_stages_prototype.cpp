@@ -38,9 +38,7 @@ gl::Program_interface program_interfaces[]
     gl::Program_interface::vertex_subroutine_uniform           // GL 4.3
 };
 
-[[nodiscard]] auto member_interface(
-    const gl::Program_interface interface
-) -> std::optional<gl::Program_interface>
+[[nodiscard]] auto member_interface(const gl::Program_interface interface) -> std::optional<gl::Program_interface>
 {
     switch (interface) {
         //using enum gl::Program_interface;
@@ -94,10 +92,7 @@ gl::Program_resource_property program_resource_properties[]
 };
 
 template <typename T>
-[[nodiscard]] auto is_in_list(
-    const T&                 item,
-    std::initializer_list<T> items
-) -> bool
+[[nodiscard]] auto is_in_list(const T& item, std::initializer_list<T> items) -> bool
 {
     return std::find(
         items.begin(),
@@ -358,9 +353,7 @@ template <typename T>
 
 } // anonymous namespace
 
-[[nodiscard]] auto Shader_stages_prototype::compile(
-    const Shader_stage& shader
-) -> Gl_shader
+auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
 {
     Gl_shader gl_shader{shader.type};
 
@@ -392,10 +385,7 @@ template <typename T>
     return gl_shader;
 }
 
-[[nodiscard]] auto Shader_stages_prototype::post_compile(
-    const Shader_stage& shader,
-    Gl_shader&          gl_shader
-) -> bool
+auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool
 {
     ERHE_VERIFY(m_state == state_shader_compilation_started);
 
@@ -578,7 +568,7 @@ void Shader_stages_prototype::post_link()
     }
 }
 
-[[nodiscard]] auto Shader_stages_prototype::is_valid() -> bool
+auto Shader_stages_prototype::is_valid() -> bool
 {
     if ((m_state != state_ready) && (m_state != state_fail)) {
         post_link();

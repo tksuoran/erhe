@@ -5,8 +5,8 @@
 #include "graphics/icon_set.hpp"
 #include "scene/content_library.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe_commands/commands.hpp"
@@ -134,21 +134,21 @@ Material_paint_tool::Material_paint_tool(
 
 auto Material_paint_tool::on_paint_ready() -> bool
 {
-    const auto viewport_window = m_context.viewport_windows->hover_window();
-    if (!viewport_window) {
+    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    if (!viewport_scene_view) {
         return false;
     }
-    const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
+    const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
     return hover.valid && hover.mesh;
 }
 
 auto Material_paint_tool::on_pick_ready() -> bool
 {
-    const auto viewport_window = m_context.viewport_windows->hover_window();
-    if (viewport_window == nullptr) {
+    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    if (viewport_scene_view == nullptr) {
         return false;
     }
-    const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
+    const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
     return hover.valid && hover.mesh;
 }
 
@@ -158,11 +158,11 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
 
-    const auto viewport_window = m_context.viewport_windows->hover_window();
-    if (viewport_window == nullptr) {
+    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    if (viewport_scene_view == nullptr) {
         return false;
     }
-    const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
+    const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
     if (!hover.valid || (hover.mesh == nullptr)) {
         return false;
     }
@@ -174,11 +174,11 @@ auto Material_paint_tool::on_paint() -> bool
 
 auto Material_paint_tool::on_pick() -> bool
 {
-    const auto viewport_window = m_context.viewport_windows->hover_window();
-    if (viewport_window == nullptr) {
+    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    if (viewport_scene_view == nullptr) {
         return false;
     }
-    const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
+    const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
     if (!hover.valid || (hover.mesh == nullptr)) {
         return false;
     }

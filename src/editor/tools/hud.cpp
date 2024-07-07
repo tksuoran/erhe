@@ -8,7 +8,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 #include "rendertarget_mesh.hpp"
-#include "rendertarget_imgui_viewport.hpp"
+#include "rendertarget_imgui_host.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
@@ -181,7 +181,7 @@ Hud::Hud(
         erhe::Item_flags::show_in_ui
     );
 
-    m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
+    m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_host>(
         imgui_renderer,
         rendergraph,
         editor_context,
@@ -191,12 +191,12 @@ Hud::Hud(
     );
 
     m_rendertarget_imgui_viewport->set_begin_callback(
-        [&editor_windows](erhe::imgui::Imgui_viewport& imgui_viewport) {
-            editor_windows.viewport_menu(imgui_viewport);
+        [&editor_windows](erhe::imgui::Imgui_host& imgui_host) {
+            editor_windows.viewport_menu(imgui_host);
         }
     );
 
-    imgui_renderer.register_imgui_viewport(m_rendertarget_imgui_viewport.get());
+    imgui_renderer.register_imgui_host(m_rendertarget_imgui_viewport.get());
 
     set_visibility(m_is_visible);
 
@@ -207,7 +207,7 @@ Hud::Hud(
     );
 }
 
-[[nodiscard]] auto Hud::get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_viewport>
+auto Hud::get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_host>
 {
     return m_rendertarget_imgui_viewport;
 }

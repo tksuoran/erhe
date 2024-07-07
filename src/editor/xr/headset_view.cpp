@@ -231,7 +231,7 @@ auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view
             static_cast<std::size_t>(render_view.slot) // const std::size_t      slot
         );
         const std::string label = fmt::format(
-            "Headset Viewport_window slot {} color texture {}",
+            "Headset Viewport_scene_view slot {} color texture {}",
             render_view.slot,
             render_view.color_texture
         );

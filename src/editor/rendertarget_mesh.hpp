@@ -32,7 +32,7 @@ class Render_context;
 class Scene_root;
 class Scene_view;
 class Viewport_config_window;
-class Viewport_window;
+class Viewport_scene_view;
 
 class Rendertarget_mesh : public erhe::scene::Mesh
 {

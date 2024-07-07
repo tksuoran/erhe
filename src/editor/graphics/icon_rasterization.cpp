@@ -111,7 +111,7 @@ void Icon_rasterization::rasterize(
 #endif
 }
 
-[[nodiscard]] auto Icon_rasterization::get_size() const -> int
+auto Icon_rasterization::get_size() const -> int
 {
     return m_icon_width;
 }

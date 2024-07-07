@@ -29,11 +29,11 @@ class Editor_windows;
 class Headset_view;
 class Icon_set;
 class Mesh_memory;
-class Rendertarget_imgui_viewport;
+class Rendertarget_imgui_host;
 class Rendertarget_mesh;
 class Scene_builder;
 class Tools;
-class Viewport_windows;
+class Scene_views;
 
 class Hud;
 
@@ -100,7 +100,7 @@ public:
     void imgui() override;
 
     // Public APi
-    [[nodiscard]] auto get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_viewport>;
+    [[nodiscard]] auto get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_host>;
     auto toggle_visibility() -> bool;
     void set_visibility   (bool value);
 
@@ -130,7 +130,7 @@ private:
 
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
-    std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
+    std::shared_ptr<Rendertarget_imgui_host> m_rendertarget_imgui_viewport;
     glm::mat4                                    m_world_from_hud{1.0f};
     float m_x             {-0.09f};
     float m_y             { 0.0f};

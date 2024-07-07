@@ -23,22 +23,22 @@ Headset::Headset(
 
 Headset::~Headset() noexcept = default;
 
-[[nodiscard]] auto Headset::get_actions_left() -> Xr_actions&
+auto Headset::get_actions_left() -> Xr_actions&
 {
     return m_xr_instance->actions_left;
 }
 
-[[nodiscard]] auto Headset::get_actions_left() const -> const Xr_actions&
+auto Headset::get_actions_left() const -> const Xr_actions&
 {
     return m_xr_instance->actions_left;
 }
 
-[[nodiscard]] auto Headset::get_actions_right() -> Xr_actions&
+auto Headset::get_actions_right() -> Xr_actions&
 {
     return m_xr_instance->actions_right;
 }
 
-[[nodiscard]] auto Headset::get_actions_right() const -> const Xr_actions&
+auto Headset::get_actions_right() const -> const Xr_actions&
 {
     return m_xr_instance->actions_right;
 }
@@ -64,7 +64,7 @@ auto Headset::get_hand_tracking_active(const XrHandEXT hand) const -> bool
         : false;
 }
 
-[[nodiscard]] auto Headset::get_view_in_world() const -> glm::mat4
+auto Headset::get_view_in_world() const -> glm::mat4
 {
     if (!m_xr_session) {
         return glm::mat4{1.0f};

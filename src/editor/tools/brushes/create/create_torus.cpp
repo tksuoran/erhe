@@ -65,9 +65,7 @@ void Create_torus::imgui()
     ImGui::SliderFloat ("Epsilon",          &m_epsilon,         0.0f, 1.0f);
 }
 
-[[nodiscard]] auto Create_torus::create(
-    Brush_data& brush_create_info
-) const -> std::shared_ptr<Brush>
+auto Create_torus::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
     brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_torus(

@@ -10,14 +10,12 @@
 
 #include <memory>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Instance;
     class Texture;
 }
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 class Imgui_windows;
 

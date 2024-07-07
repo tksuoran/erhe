@@ -50,8 +50,8 @@ class Scene_root;
 class Settings_window;
 class Tools;
 class Viewport_config_window;
-class Viewport_window;
-class Viewport_windows;
+class Viewport_scene_view;
+class Scene_views;
 
 class Scene_builder
 {
@@ -100,13 +100,12 @@ public:
         Editor_settings&                editor_settings,
         Mesh_memory&                    mesh_memory,
         Tools&                          tools,
-        Viewport_windows&               viewport_windows
+        Scene_views&               scene_views
     );
 
     // Public API
     void add_rendertarget_viewports(int count);
-    [[nodiscard]] auto get_scene_root             () const -> std::shared_ptr<Scene_root>;
-    [[nodiscard]] auto get_primary_viewport_window() const -> std::shared_ptr<Viewport_window>;
+    [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root>;
 
     // Can discard return value
     auto make_camera(
@@ -164,7 +163,7 @@ private:
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings,
         Tools&                          tools,
-        Viewport_windows&               viewport_windows
+        Scene_views&               scene_views
     );
     void animate_lights     (const double time_d);
     void add_room           ();
@@ -189,8 +188,8 @@ private:
     std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
 
     // Output
-    std::shared_ptr<Viewport_window> m_primary_viewport_window;
-    std::shared_ptr<Scene_root>      m_scene_root;
+    std::shared_ptr<Viewport_scene_view> m_primary_viewport_window;
+    std::shared_ptr<Scene_root>          m_scene_root;
 };
 
 } // namespace editor

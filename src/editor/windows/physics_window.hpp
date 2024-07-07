@@ -12,7 +12,7 @@ namespace editor {
 class Editor_context;
 class Selection_tool;
 class Tools;
-class Viewport_windows;
+class Scene_views;
 
 class Physics_window : public erhe::imgui::Imgui_window
 {

@@ -258,7 +258,7 @@ void Line_renderer_set::render(
     m_graphics_instance.opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
-[[nodiscard]] auto Line_renderer::Frame_resources::make_pipeline(
+auto Line_renderer::Frame_resources::make_pipeline(
     const bool                           reverse_depth,
     erhe::graphics::Shader_stages* const shader_stages,
     const bool                           visible,

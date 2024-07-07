@@ -467,12 +467,12 @@ public:
     std::vector<erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec4>* > m_point_joint_weights;
 };
 
-[[nodiscard]] auto Triangle_soup::get_vertex_count() const -> std::size_t
+auto Triangle_soup::get_vertex_count() const -> std::size_t
 {
     return vertex_data.size() / vertex_format.stride();
 }
 
-[[nodiscard]] auto Triangle_soup::get_index_count() const -> std::size_t
+auto Triangle_soup::get_index_count() const -> std::size_t
 {
     return index_data.size();
 }

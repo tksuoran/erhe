@@ -45,7 +45,7 @@ constexpr glm::mat4 mat4_identity{1.0f};
 
 };
 
-[[nodiscard]] auto Subtool::get_shared() const -> Transform_tool_shared&
+auto Subtool::get_shared() const -> Transform_tool_shared&
 {
     return m_context.transform_tool->shared;
 }

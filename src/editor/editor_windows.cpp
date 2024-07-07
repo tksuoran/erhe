@@ -1,7 +1,7 @@
 #include "editor_windows.hpp"
 #include "editor_context.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
@@ -26,7 +26,7 @@ void Editor_windows::builtin_imgui_window_menu()
     }
 }
 
-void Editor_windows::viewport_menu(erhe::imgui::Imgui_viewport& imgui_viewport)
+void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 
@@ -34,7 +34,7 @@ void Editor_windows::viewport_menu(erhe::imgui::Imgui_viewport& imgui_viewport)
 
         if (ImGui::BeginMenu("Window")) {
 
-            m_context.imgui_windows->window_menu_entries(imgui_viewport);
+            m_context.imgui_windows->window_menu_entries(imgui_host);
 
             ImGui::Separator();
 

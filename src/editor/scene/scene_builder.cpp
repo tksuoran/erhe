@@ -12,8 +12,8 @@
 #include "renderers/mesh_memory.hpp"
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "windows/item_tree_window.hpp"
 #include "windows/settings_window.hpp"
 
@@ -54,8 +54,7 @@
 
 #define ERHE_ENABLE_SECOND_CAMERA 1
 
-namespace editor
-{
+namespace editor {
 
 using erhe::geometry::shapes::make_dodecahedron;
 using erhe::geometry::shapes::make_icosahedron;
@@ -125,7 +124,7 @@ Scene_builder::Scene_builder(
     Editor_settings&                editor_settings,
     Mesh_memory&                    mesh_memory,
     Tools&                          tools,
-    Viewport_windows&               viewport_windows
+    Scene_views&               scene_views
 )
     : m_context{editor_context}
 {
@@ -153,7 +152,7 @@ Scene_builder::Scene_builder(
         editor_rendering,
         editor_settings,
         tools,
-        viewport_windows
+        scene_views
     );
     setup_lights   ();
     make_brushes   (graphics_instance, editor_settings, mesh_memory);
@@ -186,7 +185,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
             )
         );
 
-        auto imgui_viewport_1 = std::make_shared<editor::Rendertarget_imgui_viewport>(
+        auto imgui_viewport_1 = std::make_shared<editor::Rendertarget_imgui_host>(
             rendertarget_mesh_1.get(),
             "Rendertarget ImGui Viewport 1"
         );
@@ -211,13 +210,13 @@ void Scene_builder::add_rendertarget_viewports(int count)
         //auto* camera_node_b = camera_b->get_node();
         camera_b->set_wireframe_color(glm::vec4{ 0.3f, 0.6f, 1.00f, 1.0f });
 
-        auto secondary_viewport_window = g_viewport_windows->create_viewport_window(
+        auto secondary_viewport_window = g_viewport_windows->create_viewport_scene_view(
             "Secondary Viewport",
             test_scene_root,
             camera_b,
             2 // low MSAA
         );
-        auto secondary_imgui_viewport_window = g_viewport_windows->create_imgui_viewport_window(
+        auto secondary_Imgui_window_scene_view = g_viewport_windows->create_Imgui_window_scene_view(
             secondary_viewport_window
         );
 
@@ -238,17 +237,17 @@ void Scene_builder::add_rendertarget_viewports(int count)
             )
         );
 
-        auto imgui_viewport_2 = std::make_shared<editor::Rendertarget_imgui_viewport>(
+        auto imgui_viewport_2 = std::make_shared<editor::Rendertarget_imgui_host>(
             rendertarget_mesh_2.get(),
             "Rendertarget ImGui Viewport 2"
         );
 
-        secondary_imgui_viewport_window->set_viewport(imgui_viewport_2.get());
-        secondary_imgui_viewport_window->show();
+        secondary_Imgui_window_scene_view->set_viewport(imgui_viewport_2.get());
+        secondary_Imgui_window_scene_view->show();
 
         g_rendergraph->connect(
             erhe::rendergraph::Rendergraph_node_key::window,
-            secondary_imgui_viewport_window,
+            secondary_Imgui_window_scene_view,
             imgui_viewport_2
         );
     }
@@ -291,7 +290,7 @@ void Scene_builder::setup_cameras(
     Editor_rendering&               editor_rendering,
     Editor_settings&                editor_settings,
     Tools&                          tools,
-    Viewport_windows&               viewport_windows
+    Scene_views&                    scene_views
 )
 {
     const auto& camera_a = make_camera(
@@ -326,7 +325,7 @@ void Scene_builder::setup_cameras(
     }
 
     const int msaa_sample_count = editor_settings.graphics.current_graphics_preset.msaa_sample_count;
-    m_primary_viewport_window = viewport_windows.create_viewport_window(
+    m_primary_viewport_window = scene_views.create_viewport_scene_view(
         graphics_instance,
         rendergraph,
         editor_rendering,
@@ -340,15 +339,15 @@ void Scene_builder::setup_cameras(
     );
     
     if (window_viewport) {
-        //auto primary_imgui_viewport_window =
-        viewport_windows.create_imgui_viewport_window(
+        //auto primary_Imgui_window_scene_view =
+        scene_views.create_imgui_window_scene_view_node(
             imgui_renderer,
             imgui_windows,
             rendergraph,
             m_primary_viewport_window
         );
     } else {
-        viewport_windows.create_basic_viewport_window(
+        scene_views.create_basic_viewport_scene_view_node(
             rendergraph,
             m_primary_viewport_window
         );
@@ -1286,14 +1285,9 @@ void Scene_builder::animate_lights(const double time_d)
     }
 }
 
-[[nodiscard]] auto Scene_builder::get_scene_root() const -> std::shared_ptr<Scene_root>
+auto Scene_builder::get_scene_root() const -> std::shared_ptr<Scene_root>
 {
     return m_scene_root;
-}
-
-[[nodiscard]] auto Scene_builder::get_primary_viewport_window() const -> std::shared_ptr<Viewport_window>
-{
-    return m_primary_viewport_window;
 }
 
 } // namespace editor

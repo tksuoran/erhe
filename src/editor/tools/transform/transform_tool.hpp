@@ -39,7 +39,7 @@ class Scene_root;
 class Subtool;
 class Tools;
 class Transform_tool;
-class Viewport_window;
+class Viewport_scene_view;
 
 class Transform_tool_drag_command : public erhe::commands::Command
 {

@@ -108,22 +108,22 @@ void Multi_buffer::allocate(
     }
 }
 
-[[nodiscard]] auto Multi_buffer::buffers() -> std::vector<erhe::graphics::Buffer>&
+auto Multi_buffer::buffers() -> std::vector<erhe::graphics::Buffer>&
 {
     return m_buffers;
 }
 
-[[nodiscard]] auto Multi_buffer::buffers() const -> const std::vector<erhe::graphics::Buffer>&
+auto Multi_buffer::buffers() const -> const std::vector<erhe::graphics::Buffer>&
 {
     return m_buffers;
 }
 
-[[nodiscard]] auto Multi_buffer::current_buffer() -> erhe::graphics::Buffer&
+auto Multi_buffer::current_buffer() -> erhe::graphics::Buffer&
 {
     return m_buffers.at(m_current_slot);
 }
 
-[[nodiscard]] auto Multi_buffer::name() const -> const std::string&
+auto Multi_buffer::name() const -> const std::string&
 {
     return m_name;
 }

@@ -8,12 +8,12 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
 #include "rendertarget_mesh.hpp"
-#include "rendertarget_imgui_viewport.hpp"
+#include "rendertarget_imgui_host.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -214,7 +214,7 @@ void Hotbar::init_hotbar()
         erhe::Item_flags::translucent
     );
 
-    m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
+    m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_host>(
         *m_context.imgui_renderer,
         *m_context.rendergraph,
         m_context,
@@ -237,7 +237,7 @@ void Hotbar::init_hotbar()
     style.ItemInnerSpacing = ImVec2{0.0f, 0.0f};
     style.MouseCursorScale = 2.0f;
 
-    this->Hotbar::set_viewport(m_rendertarget_imgui_viewport.get());
+    this->Hotbar::set_imgui_host(m_rendertarget_imgui_viewport.get());
 }
 
 void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
@@ -379,11 +379,11 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
         }
     }
 #endif
-    const auto viewport_window = m_context.viewport_windows->hover_window();
-    if (!viewport_window) {
+    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    if (!viewport_scene_view) {
         return {};
     }
-    return viewport_window->get_camera();
+    return viewport_scene_view->get_camera();
 }
 
 void Hotbar::update_node_transform()

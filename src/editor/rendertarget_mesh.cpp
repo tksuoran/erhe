@@ -295,9 +295,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
     }
 }
 
-[[nodiscard]] auto Rendertarget_mesh::world_to_window(
-    const glm::vec3 position_in_world
-) const -> std::optional<glm::vec2>
+auto Rendertarget_mesh::world_to_window(const glm::vec3 position_in_world) const -> std::optional<glm::vec2>
 {
     auto const* node = get_node();
     if (node == nullptr) {
@@ -364,22 +362,22 @@ void Rendertarget_mesh::render_done(Editor_context&)
     }
 }
 
-[[nodiscard]] auto Rendertarget_mesh::get_pointer() const -> std::optional<glm::vec2>
+auto Rendertarget_mesh::get_pointer() const -> std::optional<glm::vec2>
 {
     return m_pointer;
 }
 
-[[nodiscard]] auto Rendertarget_mesh::width() const -> float
+auto Rendertarget_mesh::width() const -> float
 {
     return static_cast<float>(m_texture->width());
 }
 
-[[nodiscard]] auto Rendertarget_mesh::height() const -> float
+auto Rendertarget_mesh::height() const -> float
 {
     return static_cast<float>(m_texture->height());
 }
 
-[[nodiscard]] auto Rendertarget_mesh::pixels_per_meter() const -> float
+auto Rendertarget_mesh::pixels_per_meter() const -> float
 {
     return m_pixels_per_meter;
 }

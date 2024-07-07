@@ -9,8 +9,7 @@
 #include <functional>
 #include <string_view>
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 class Imgui_renderer;
 class View;
@@ -90,30 +89,30 @@ public:
 };
 
 /// <summary>
-/// Base class for derived Imgui_viewport classes - where ImGui windows can be hosted.
+/// Base class for derived Imgui_host classes - where ImGui windows can be hosted.
 /// </summary>
-/// Current Imgui_viewport classes are Window_imgui_viewport and Rendertarget_imgui_viewport.
-/// Every Imgui_window must be hosted in exactly one Imgui_viewport.
-/// Each Imgui_viewport maintains a separate ImGui context.
-/// Each Imgui_viewport is a Rendergraph_node and as such must implement
-/// execute_rendergraph_node() method for rendering ImGui data with
-/// Imgui_renderer::render_draw_data().
-class Imgui_viewport : public erhe::rendergraph::Rendergraph_node
+/// - Current Imgui_host classes are Window_imgui_host and Rendertarget_imgui_host.
+/// - Every Imgui_window must be hosted in exactly one Imgui_host.
+/// - Each Imgui_host maintains a separate ImGui context.
+/// - Each Imgui_host is a Rendergraph_node and as such must implement
+///   execute_rendergraph_node() method for rendering ImGui data with
+///   Imgui_renderer::render_draw_data().
+class Imgui_host : public erhe::rendergraph::Rendergraph_node
 {
 public:
-    Imgui_viewport(
+    Imgui_host(
         erhe::rendergraph::Rendergraph& rendergraph,
         Imgui_renderer&                 imgui_renderer,
         const std::string_view          name,
         bool                            imgui_ini,
         ImFontAtlas*                    font_atlas
     );
-    virtual ~Imgui_viewport();
+    virtual ~Imgui_host();
 
     [[nodiscard]] virtual auto begin_imgui_frame() -> bool = 0;
     virtual void end_imgui_frame() = 0;
 
-    void set_begin_callback(const std::function<void(Imgui_viewport& viewport)>& callback);
+    void set_begin_callback(const std::function<void(Imgui_host& viewport)>& callback);
 
     [[nodiscard]] virtual auto get_scale_value() const -> float;
 
@@ -148,7 +147,7 @@ public:
 protected:
     void flush_queud_events();
 
-    std::function<void(Imgui_viewport& viewport)> m_begin_callback;
+    std::function<void(Imgui_host& viewport)> m_begin_callback;
     std::string              m_imgui_ini_path;
     double                   m_time            {0.0};
     bool                     m_has_cursor      {false};

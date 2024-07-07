@@ -694,7 +694,7 @@ auto Xr_session::get_hand_tracking_active(const XrHandEXT hand) const -> bool
     return tracker.locations.isActive;
 }
 
-[[nodiscard]] auto Xr_session::get_view_space_location() const -> const XrSpaceLocation&
+auto Xr_session::get_view_space_location() const -> const XrSpaceLocation&
 {
     return m_view_location;
 }

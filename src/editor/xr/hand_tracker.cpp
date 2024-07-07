@@ -245,9 +245,7 @@ auto Hand::get_closest_point_to_line(
 ////     return {};
 //// }
 
-[[nodiscard]] auto Hand::get_joint(
-    const XrHandJointEXT joint
-) const -> std::optional<Joint>
+auto Hand::get_joint(const XrHandJointEXT joint) const -> std::optional<Joint>
 {
     const bool valid = is_valid(joint);
     if (valid) {

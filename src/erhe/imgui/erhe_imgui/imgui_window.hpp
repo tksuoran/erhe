@@ -15,12 +15,12 @@ namespace erhe::imgui
 {
 
 class Imgui_renderer;
-class Imgui_viewport;
+class Imgui_host;
 class Imgui_windows;
 
 // Wrapper for ImGui window.
 //
-// Each Imgui_window must be hosted in exactly one Imgui_viewport.
+// Each Imgui_window must be hosted in exactly one Imgui_host.
 class Imgui_window
 {
 public:
@@ -51,8 +51,8 @@ public:
         const int                                       height
     );
 
-    auto get_viewport() const -> Imgui_viewport*;
-    virtual void set_viewport(Imgui_viewport* imgui_viewport);
+    auto get_imgui_host() const -> Imgui_host*;
+    virtual void set_imgui_host(Imgui_host* imgui_host);
 
     virtual void imgui               () = 0;
     virtual void hidden              ();
@@ -65,17 +65,17 @@ public:
     virtual auto want_mouse_events   () const -> bool;
 
 protected:
-    Imgui_renderer&   m_imgui_renderer;
-    Imgui_windows&    m_imgui_windows;
+    Imgui_renderer& m_imgui_renderer;
+    Imgui_windows&  m_imgui_windows;
 
-    std::string       m_title;
-    Imgui_viewport*   m_imgui_viewport{nullptr};
-    bool              m_is_visible    {true};
-    bool              m_is_hovered    {false};
-    bool              m_show_in_menu  {true};
-    std::string       m_ini_label     {};
-    float             m_min_size[2]{200.0f, 400.0f};
-    float             m_max_size[2]{99999.0f, 99999.0f};
+    std::string     m_title;
+    Imgui_host*     m_imgui_host  {nullptr};
+    bool            m_is_visible  {true};
+    bool            m_is_hovered  {false};
+    bool            m_show_in_menu{true};
+    std::string     m_ini_label   {};
+    float           m_min_size[2]{200.0f, 400.0f};
+    float           m_max_size[2]{99999.0f, 99999.0f};
 };
 
 } // namespace erhe::imgui

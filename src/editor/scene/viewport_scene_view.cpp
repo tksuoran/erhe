@@ -1,6 +1,6 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "scene/viewport_window.hpp"
+#include "scene/viewport_scene_view.hpp"
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
@@ -13,7 +13,7 @@
 #include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_windows.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -42,9 +42,7 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
-
+namespace editor {
 
 using erhe::graphics::Vertex_input_state;
 using erhe::graphics::Input_assembly_state;
@@ -55,9 +53,9 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
-int Viewport_window::s_serial = 0;
+int Viewport_scene_view::s_serial = 0;
 
-Viewport_window::Viewport_window(
+Viewport_scene_view::Viewport_scene_view(
     Editor_context&                             editor_context,
     erhe::rendergraph::Rendergraph&             rendergraph,
     Tools&                                      tools,
@@ -91,12 +89,12 @@ Viewport_window::Viewport_window(
     );
 }
 
-Viewport_window::~Viewport_window() noexcept
+Viewport_scene_view::~Viewport_scene_view() noexcept
 {
-    m_context.viewport_windows->erase(this);
+    m_context.scene_views->erase(this);
 }
 
-auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shader_stages*
+auto Viewport_scene_view::get_override_shader_stages() const -> erhe::graphics::Shader_stages*
 {
     auto& programs = *m_context.programs;
     switch (m_shader_stages_variant) {
@@ -129,7 +127,7 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
     }
 }
 
-void Viewport_window::execute_rendergraph_node()
+void Viewport_scene_view::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -166,7 +164,7 @@ void Viewport_window::execute_rendergraph_node()
         .scene_view             = *this,
         .viewport_config        = m_viewport_config,
         .camera                 = *m_camera.lock().get(),
-        .viewport_window        = this,
+        .viewport_scene_view        = this,
         .viewport               = output_viewport,
         .override_shader_stages = get_override_shader_stages()
     };
@@ -205,16 +203,14 @@ void Viewport_window::execute_rendergraph_node()
     gl::disable(gl::Enable_cap::scissor_test);
 }
 
-void Viewport_window::reconfigure(const int sample_count)
+void Viewport_scene_view::reconfigure(const int sample_count)
 {
     if (m_multisample_resolve_node != nullptr) {
         m_multisample_resolve_node->reconfigure(sample_count);
     }
 }
 
-void Viewport_window::set_window_viewport(
-    erhe::math::Viewport viewport
-)
+void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
 {
     m_window_viewport = viewport;
     m_projection_viewport.x      = 0;
@@ -223,60 +219,58 @@ void Viewport_window::set_window_viewport(
     m_projection_viewport.height = viewport.height;
 }
 
-void Viewport_window::set_is_hovered(const bool is_hovered)
+void Viewport_scene_view::set_is_hovered(const bool is_hovered)
 {
     m_is_hovered = is_hovered;
 }
 
-void Viewport_window::set_camera(const std::shared_ptr<erhe::scene::Camera>& camera)
+void Viewport_scene_view::set_camera(const std::shared_ptr<erhe::scene::Camera>& camera)
 {
     // TODO Add validation
     m_camera = camera;
 }
 
-auto Viewport_window::is_hovered() const -> bool
+auto Viewport_scene_view::is_hovered() const -> bool
 {
     return m_is_hovered;
 }
 
-[[nodiscard]] auto Viewport_window::get_scene_root() const -> std::shared_ptr<Scene_root>
+auto Viewport_scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
 {
     return m_scene_root.lock();
 }
 
-auto Viewport_window::window_viewport() const -> const erhe::math::Viewport&
+auto Viewport_scene_view::window_viewport() const -> const erhe::math::Viewport&
 {
     return m_window_viewport;
 }
 
-auto Viewport_window::projection_viewport() const -> const erhe::math::Viewport&
+auto Viewport_scene_view::projection_viewport() const -> const erhe::math::Viewport&
 {
     return m_projection_viewport;
 }
 
-auto Viewport_window::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
+auto Viewport_scene_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
     return m_camera.lock();
 }
 
-auto Viewport_window::get_rendergraph_node() -> erhe::rendergraph::Rendergraph_node*
+auto Viewport_scene_view::get_rendergraph_node() -> erhe::rendergraph::Rendergraph_node*
 {
     return this;
 }
 
-auto Viewport_window::as_viewport_window() -> Viewport_window*
+auto Viewport_scene_view::as_viewport_scene_view() -> Viewport_scene_view*
 {
     return this;
 }
 
-auto Viewport_window::as_viewport_window() const -> const Viewport_window*
+auto Viewport_scene_view::as_viewport_scene_view() const -> const Viewport_scene_view*
 {
     return this;
 }
 
-auto Viewport_window::viewport_from_window(
-    const glm::vec2 window_position
-) const -> glm::vec2
+auto Viewport_scene_view::viewport_from_window(const glm::vec2 window_position) const -> glm::vec2
 {
     const float content_x      = static_cast<float>(window_position.x) - m_window_viewport.x;
     const float content_y      = static_cast<float>(window_position.y) - m_window_viewport.y;
@@ -284,9 +278,7 @@ auto Viewport_window::viewport_from_window(
     return glm::vec2{content_x, content_flip_y};
 }
 
-auto Viewport_window::project_to_viewport(
-    const glm::vec3 position_in_world
-) const -> std::optional<glm::vec3>
+auto Viewport_scene_view::project_to_viewport(const glm::vec3 position_in_world) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
     if (!camera) {
@@ -307,9 +299,7 @@ auto Viewport_window::project_to_viewport(
     );
 }
 
-auto Viewport_window::unproject_to_world(
-    const glm::vec3 position_in_window
-) const -> std::optional<glm::vec3>
+auto Viewport_scene_view::unproject_to_world(const glm::vec3 position_in_window) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
     if (!camera) {
@@ -330,16 +320,14 @@ auto Viewport_window::unproject_to_world(
     );
 }
 
-void Viewport_window::update_pointer_2d_position(
-    const glm::vec2 position_in_viewport
-)
+void Viewport_scene_view::update_pointer_2d_position(const glm::vec2 position_in_viewport)
 {
     ERHE_PROFILE_FUNCTION();
 
     m_position_in_viewport = position_in_viewport;
 }
 
-void Viewport_window::update_hover(bool ray_only)
+void Viewport_scene_view::update_hover(bool ray_only)
 {
     const bool reverse_depth          = projection_viewport().reverse_depth;
     const auto near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
@@ -381,7 +369,7 @@ void Viewport_window::update_hover(bool ray_only)
 
 }
 
-void Viewport_window::update_hover_with_id_render()
+void Viewport_scene_view::update_hover_with_id_render()
 {
     if (!m_position_in_viewport.has_value()) {
         reset_hover_slots();
@@ -455,14 +443,12 @@ void Viewport_window::update_hover_with_id_render()
     set_hover(Hover_entry::rendertarget_slot, hover_rendertarget ? entry : Hover_entry{});
 }
 
-auto Viewport_window::get_position_in_viewport() const -> std::optional<glm::vec2>
+auto Viewport_scene_view::get_position_in_viewport() const -> std::optional<glm::vec2>
 {
     return m_position_in_viewport;
 }
 
-auto Viewport_window::position_in_world_viewport_depth(
-    const float viewport_depth
-) const -> std::optional<glm::vec3>
+auto Viewport_scene_view::position_in_world_viewport_depth(const float viewport_depth) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
     if (
@@ -495,7 +481,7 @@ auto Viewport_window::position_in_world_viewport_depth(
     );
 }
 
-auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
+auto Viewport_scene_view::get_shadow_render_node() const -> Shadow_render_node*
 {
     Rendergraph_node* input_node = get_consumer_input_node(
         erhe::rendergraph::Routing::Resource_provided_by_producer,
@@ -505,10 +491,10 @@ auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
     return shadow_render_node;
 }
 
-auto Viewport_window::viewport_toolbar() -> bool
+auto Viewport_scene_view::viewport_toolbar() -> bool
 {
     bool hovered = false;
-    m_context.viewport_windows->viewport_toolbar(*this, hovered);
+    m_context.scene_views->viewport_toolbar(*this, hovered);
 
     //// TODO Tool_flags::viewport_toolbar
     m_context.selection_tool->viewport_toolbar(hovered);
@@ -596,47 +582,44 @@ auto Viewport_window::viewport_toolbar() -> bool
     return hovered;
 }
 
-void Viewport_window::link_to(std::shared_ptr<erhe::rendergraph::Multisample_resolve_node> node)
+void Viewport_scene_view::link_to(std::shared_ptr<erhe::rendergraph::Multisample_resolve_node> node)
 {
     m_multisample_resolve_node = node;
 }
 
-void Viewport_window::link_to(std::shared_ptr<Post_processing_node> node)
+void Viewport_scene_view::link_to(std::shared_ptr<Post_processing_node> node)
 {
     m_post_processing_node = node;
 }
 
-auto Viewport_window::get_post_processing_node() -> Post_processing_node*
+auto Viewport_scene_view::get_post_processing_node() -> Post_processing_node*
 {
     return m_post_processing_node.get();
 }
 
-void Viewport_window::set_final_output(
+void Viewport_scene_view::set_final_output(
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> node
 )
 {
     m_final_output = node;
 }
 
-auto Viewport_window::get_final_output() -> erhe::rendergraph::Rendergraph_node*
+auto Viewport_scene_view::get_final_output() -> erhe::rendergraph::Rendergraph_node*
 {
     return m_final_output.get();
 }
 
-void Viewport_window::set_shader_stages_variant(Shader_stages_variant variant)
+void Viewport_scene_view::set_shader_stages_variant(Shader_stages_variant variant)
 {
     m_shader_stages_variant = variant;
 }
 
-auto Viewport_window::get_shader_stages_variant() const -> Shader_stages_variant
+auto Viewport_scene_view::get_shader_stages_variant() const -> Shader_stages_variant
 {
     return m_shader_stages_variant;
 }
 
-auto Viewport_window::get_closest_point_on_line(
-    const glm::vec3 P0,
-    const glm::vec3 P1
-) -> std::optional<glm::vec3>
+auto Viewport_scene_view::get_closest_point_on_line(const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3>
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -692,10 +675,7 @@ auto Viewport_window::get_closest_point_on_line(
     return {};
 }
 
-auto Viewport_window::get_closest_point_on_plane(
-    const glm::vec3 N,
-    const glm::vec3 P
-) -> std::optional<glm::vec3>
+auto Viewport_scene_view::get_closest_point_on_plane(const glm::vec3 N, const glm::vec3 P) -> std::optional<glm::vec3>
 {
     ERHE_PROFILE_FUNCTION();
 

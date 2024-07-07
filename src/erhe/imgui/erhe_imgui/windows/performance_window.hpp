@@ -16,8 +16,7 @@ namespace erhe::time {
     class Timer;
 }
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
 class Imgui_windows;
 

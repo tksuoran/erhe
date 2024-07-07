@@ -208,7 +208,7 @@ auto Material_buffer::update(
     return m_writer.range;
 }
 
-[[nodiscard]] auto Material_buffer::used_handles() const -> const std::set<uint64_t>&
+auto Material_buffer::used_handles() const -> const std::set<uint64_t>&
 {
     return m_used_handles;
 }
