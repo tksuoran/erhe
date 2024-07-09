@@ -20,8 +20,7 @@
 #include <stdexcept>
 #include <ctime>
 
-namespace gl
-{
+namespace gl {
 
 using glproc = void (*)();
 
@@ -33,11 +32,9 @@ auto get_proc_address(const char* procname) -> glproc
 
 } // namespace gl
 
-namespace erhe::window
-{
+namespace erhe::window {
 
-namespace
-{
+namespace {
 
 auto glfw_key_to_erhe(const int glfw_key) -> Keycode
 {
@@ -244,10 +241,7 @@ void key_event_callback(
     }
 }
 
-void char_event_callback(
-    GLFWwindow*        glfw_window,
-    const unsigned int codepoint
-)
+void char_event_callback(GLFWwindow* glfw_window, const unsigned int codepoint)
 {
     auto* const event_handler = get_event_handler(glfw_window);
     if (event_handler) {
@@ -379,9 +373,7 @@ Context_window::Context_window(Context_window* share)
 
 // Currently this is not thread safe.
 // For now, only call this from main thread.
-auto Context_window::open(
-    const Window_configuration& configuration
-) -> bool
+auto Context_window::open(const Window_configuration& configuration) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 

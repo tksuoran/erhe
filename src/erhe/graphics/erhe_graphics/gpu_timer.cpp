@@ -112,11 +112,7 @@ void Gpu_timer::create()
 #if defined(ERHE_USE_TIME_QUERY)
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
-    log_threads->trace(
-        "{}: create @ {}",
-        this_thread_id_ss.str(),
-        fmt::ptr(this)
-    );
+    log_threads->trace("{}: create @ {}", this_thread_id_ss.str(), fmt::ptr(this));
 
     for (auto& query : m_queries) {
         if (query.query_object.has_value()) {
@@ -136,11 +132,7 @@ void Gpu_timer::reset()
 #if defined(ERHE_USE_TIME_QUERY)
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
-    log_threads->trace(
-        "{}: reset @ {}",
-        this_thread_id_ss.str(),
-        fmt::ptr(this)
-    );
+    log_threads->trace("{}: reset @ {}", this_thread_id_ss.str(), fmt::ptr(this));
     m_owner_thread = {};
     for (auto& query : m_queries) {
         query.query_object.reset();
@@ -158,10 +150,7 @@ void Gpu_timer::begin()
 
     auto& query = m_queries[s_index % s_count];
 
-    gl::begin_query(
-        gl::Query_target::time_elapsed,
-        query.query_object.value().gl_name()
-    );
+    gl::begin_query(gl::Query_target::time_elapsed, query.query_object.value().gl_name());
 
     query.begin    = true;
     s_active_timer = this;
@@ -199,18 +188,10 @@ void Gpu_timer::read()
             continue;
         }
         GLint result_available{};
-        gl::get_query_object_iv(
-            name,
-            gl::Query_object_parameter_name::query_result_available,
-            &result_available
-        );
+        gl::get_query_object_iv(name, gl::Query_object_parameter_name::query_result_available, &result_available);
         if (result_available != 0) {
             GLuint64 time_value{};
-            gl::get_query_object_ui_64v(
-                name,
-                gl::Query_object_parameter_name::query_result,
-                &time_value
-            );
+            gl::get_query_object_ui_64v(name, gl::Query_object_parameter_name::query_result, &time_value);
             m_last_result = time_value;
             query.pending = false;
         }

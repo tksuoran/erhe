@@ -13,28 +13,21 @@
 
 #include <algorithm>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 auto Scene::get_static_type()       -> uint64_t         { return erhe::Item_type::scene; }
 auto Scene::get_type       () const -> uint64_t         { return get_static_type(); }
 auto Scene::get_type_name  () const -> std::string_view { return static_type_name; }
 
 #pragma region Layers
-Mesh_layer::Mesh_layer(
-    const std::string_view name,
-    const uint64_t         flags,
-    const Layer_id         id
-)
+Mesh_layer::Mesh_layer(const std::string_view name, const uint64_t flags, const Layer_id id)
     : name {name}
     , flags{flags}
     , id   {id}
 {
 }
 
-auto Mesh_layer::get_mesh_by_id(
-    const erhe::Unique_id<Node>::id_type mesh_id
-) const -> std::shared_ptr<Mesh>
+auto Mesh_layer::get_mesh_by_id(const erhe::Unique_id<Node>::id_type mesh_id) const -> std::shared_ptr<Mesh>
 {
     for (const auto& mesh : meshes) {
         if (mesh->get_id() == mesh_id) {
@@ -64,9 +57,7 @@ void Mesh_layer::add(const std::shared_ptr<Mesh>& mesh)
     }
 }
 
-void Mesh_layer::remove(
-    const std::shared_ptr<Mesh>& mesh
-)
+void Mesh_layer::remove(const std::shared_ptr<Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
 
@@ -78,18 +69,13 @@ void Mesh_layer::remove(
     }
 }
 
-Light_layer::Light_layer(
-    const std::string_view name,
-    const Layer_id         id
-)
+Light_layer::Light_layer(const std::string_view name, const Layer_id id)
     : name{name}
     , id  {id}
 {
 }
 
-auto Light_layer::get_light_by_id(
-    const erhe::Unique_id<Node>::id_type light_id
-) const -> std::shared_ptr<Light>
+auto Light_layer::get_light_by_id(const erhe::Unique_id<Node>::id_type light_id) const -> std::shared_ptr<Light>
 {
     for (const auto& light : lights) {
         if (light->get_id() == light_id) {
@@ -104,9 +90,7 @@ auto Light_layer::get_name() const -> const std::string&
     return name;
 }
 
-void Light_layer::add(
-    const std::shared_ptr<Light>& light
-)
+void Light_layer::add(const std::shared_ptr<Light>& light)
 {
     ERHE_VERIFY(light);
 
@@ -125,9 +109,7 @@ void Light_layer::add(
     }
 }
 
-void Light_layer::remove(
-    const std::shared_ptr<Light>& light
-)
+void Light_layer::remove(const std::shared_ptr<Light>& light)
 {
     ERHE_VERIFY(light);
 
@@ -144,9 +126,7 @@ void Light_layer::remove(
 
 #pragma endregion Layers
 
-auto Scene::get_camera_by_id(
-    const erhe::Unique_id<Node>::id_type id
-) const -> std::shared_ptr<Camera>
+auto Scene::get_camera_by_id(const erhe::Unique_id<Node>::id_type id) const -> std::shared_ptr<Camera>
 {
     for (const auto& camera : m_cameras) {
         if (camera->get_id() == id) {
@@ -156,9 +136,7 @@ auto Scene::get_camera_by_id(
     return {};
 }
 
-auto Scene::get_mesh_by_id(
-    const erhe::Unique_id<Node>::id_type id
-) const -> std::shared_ptr<Mesh>
+auto Scene::get_mesh_by_id(const erhe::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>
 {
     for (const auto& layer : m_mesh_layers) {
         const auto& mesh = layer->get_mesh_by_id(id);
@@ -169,9 +147,7 @@ auto Scene::get_mesh_by_id(
     return {};
 }
 
-auto Scene::get_light_by_id(
-    const erhe::Unique_id<Node>::id_type id
-) const -> std::shared_ptr<Light>
+auto Scene::get_light_by_id(const erhe::Unique_id<Node>::id_type id) const -> std::shared_ptr<Light>
 {
     for (const auto& layer : m_light_layers) {
         const auto& light = layer->get_light_by_id(id);
@@ -182,9 +158,7 @@ auto Scene::get_light_by_id(
     return {};
 }
 
-auto Scene::get_mesh_layer_by_id(
-    const Layer_id id
-) const -> std::shared_ptr<Mesh_layer>
+auto Scene::get_mesh_layer_by_id(const Layer_id id) const -> std::shared_ptr<Mesh_layer>
 {
     for (const auto& layer : m_mesh_layers) {
         if (layer->id == id) {
@@ -194,9 +168,7 @@ auto Scene::get_mesh_layer_by_id(
     return {};
 }
 
-auto Scene::get_light_layer_by_id(
-    const Layer_id id
-) const -> std::shared_ptr<Light_layer>
+auto Scene::get_light_layer_by_id(const Layer_id id) const -> std::shared_ptr<Light_layer>
 {
     for (const auto& layer : m_light_layers) {
         if (layer->id == id) {
@@ -355,9 +327,7 @@ void Scene::add_light_layer(const std::shared_ptr<Light_layer>& light_layer)
     m_light_layers.push_back(light_layer);
 }
 
-void Scene::register_node(
-    const std::shared_ptr<erhe::scene::Node>& node
-)
+void Scene::register_node(const std::shared_ptr<erhe::scene::Node>& node)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -387,9 +357,7 @@ void Scene::register_node(
     }
 }
 
-void Scene::unregister_node(
-    const std::shared_ptr<erhe::scene::Node>& node
-)
+void Scene::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
 {
     log->trace(
         "unregister {} depth {} child count = {}",

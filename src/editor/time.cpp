@@ -1,6 +1,7 @@
 #include "time.hpp"
 
 #include "erhe_profile/profile.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 
 namespace editor {
 
@@ -76,7 +77,7 @@ void Time::update()
 
     m_current_time = new_time;
     m_time_accumulator += frame_time;
-    const double dt = 1.0 / 100.0;
+    const double dt = 1.0 / 240.0;
     //int steps = 0;
     while (m_time_accumulator >= dt) {
         //++steps;
@@ -120,6 +121,7 @@ void Time::update_once_per_frame()
     for (auto* update : m_update_once_per_frame) {
         update->update_once_per_frame(m_last_update);
     }
+    erhe::graphics::Gpu_timer::end_frame();
     ++m_frame_number;
 }
 

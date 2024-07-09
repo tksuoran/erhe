@@ -6,6 +6,7 @@
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_time/timer.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
 
@@ -21,11 +22,7 @@ void Plot::clear()
 {
     m_offset = 0;
     m_value_count = 0;
-    std::fill(
-        m_values.begin(),
-        m_values.end(),
-        0.0f
-    );
+    std::fill(m_values.begin(), m_values.end(), 0.0f);
 }
 
 auto Plot::last_value() const -> float
@@ -447,6 +444,9 @@ void Performance_window::imgui()
         for (auto& plot : m_gpu_timer_plots) {
             plot.clear();
         }
+        for (auto* plot : m_generic_plots) {
+            plot->clear();
+        }
     }
 
     if (!m_pause) {
@@ -457,6 +457,9 @@ void Performance_window::imgui()
         for (auto& plot : m_gpu_timer_plots) {
             plot.sample();
         }
+        for (auto* plot : m_generic_plots) {
+            plot->sample();
+        }
     }
 
     m_frame_time_plot.imgui();
@@ -466,7 +469,35 @@ void Performance_window::imgui()
     for (auto& plot : m_gpu_timer_plots) {
         plot.imgui();
     }
+    for (auto* plot : m_generic_plots) {
+        plot->imgui();
+    }
 #endif
+}
+
+void Performance_window::register_plot(Plot* plot)
+{
+    ERHE_VERIFY(plot != nullptr);
+#ifndef NDEBUG
+    const auto i = std::find(m_generic_plots.begin(), m_generic_plots.end(), plot);
+    if (i != m_generic_plots.end()) {
+        ERHE_VERIFY(plot->label() != nullptr);
+        log_performance->error("Plot {} already registered in Performance_window", plot->label());
+    } else
+#endif
+    {
+        m_generic_plots.push_back(plot);
+    }
+}
+
+void Performance_window::unregister_plot(Plot* plot)
+{
+    const auto i = std::remove(m_generic_plots.begin(), m_generic_plots.end(), plot);
+    if (i == m_generic_plots.end()) {
+        log_performance->error("Plot {} not registered in Performance_window", plot->label());
+    } else {
+        m_generic_plots.erase(i, m_generic_plots.end());
+    }
 }
 
 } // namespace erhe::imgui

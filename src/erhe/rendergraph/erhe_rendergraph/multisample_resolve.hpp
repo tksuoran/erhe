@@ -6,7 +6,6 @@
 #include <string>
 
 namespace erhe::graphics {
-    class Gpu_timer;
     class Texture;
 }
 

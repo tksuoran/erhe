@@ -47,10 +47,7 @@ protected:
 class Gpu_timer_plot : public Plot
 {
 public:
-    explicit Gpu_timer_plot(
-        erhe::graphics::Gpu_timer* timer,
-        std::size_t                width = 256
-    );
+    explicit Gpu_timer_plot(erhe::graphics::Gpu_timer* timer, std::size_t width = 256);
 
     void sample() override;
     auto label() const -> const char* override;
@@ -97,10 +94,14 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
+    void register_plot(Plot* plot);
+    void unregister_plot(Plot* plot);
+
 private:
     Frame_time_plot             m_frame_time_plot;
     std::vector<Gpu_timer_plot> m_gpu_timer_plots;
     std::vector<Cpu_timer_plot> m_cpu_timer_plots;
+    std::vector<Plot*>          m_generic_plots;
     bool                        m_pause{false};
 };
 
