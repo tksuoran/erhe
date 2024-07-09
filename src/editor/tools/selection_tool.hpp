@@ -6,6 +6,7 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/node_attachment.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 
 #include <memory>

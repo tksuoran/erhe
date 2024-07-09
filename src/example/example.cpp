@@ -43,7 +43,7 @@ namespace example {
 class Example : public erhe::window::Window_event_handler
 {
 public:
-    virtual auto get_name() const -> const char* { return "Example"; }
+    virtual auto get_name() const -> const char* override { return "Example"; }
 
     Example(
         erhe::window::Context_window&           window,

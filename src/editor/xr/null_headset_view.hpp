@@ -2,7 +2,7 @@
 
 #include "renderable.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
+#include "scene/viewport_scene_view.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"

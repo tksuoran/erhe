@@ -69,7 +69,7 @@ struct Gltf_parse_arguments
     erhe::graphics::Instance&                 graphics_instance;
     Image_transfer&                           image_transfer;
     const std::shared_ptr<erhe::scene::Node>& root_node;
-    erhe::scene::Layer_id                     mesh_layer_id;
+    erhe::scene::Layer_id                     mesh_layer_id{};
     std::filesystem::path                     path;
 };
 
