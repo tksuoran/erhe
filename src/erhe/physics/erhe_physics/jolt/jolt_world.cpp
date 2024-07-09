@@ -405,10 +405,7 @@ void Jolt_world::for_each_active_body(std::function<void(IRigid_body*)> callback
     }
 }
 
-void Jolt_world::OnBodyActivated(
-    const JPH::BodyID& inBodyID,
-    JPH::uint64        inBodyUserData
-)
+void Jolt_world::OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData)
 {
     if (!m_on_body_activated_callback) {
         return;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe_commands/state.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "erhe_commands/xr_boolean_binding.hpp"
 #endif

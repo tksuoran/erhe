@@ -14,8 +14,7 @@
 # include <csignal>
 #endif
 
-namespace gl_helpers
-{
+namespace gl_helpers {
 
 std::shared_ptr<spdlog::logger> log_gl;
 
@@ -102,7 +101,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
     }
 }
 
-[[nodiscard]] auto is_indexed(const gl::Buffer_target type) -> bool
+auto is_indexed(const gl::Buffer_target type) -> bool
 {
     switch (type) {
         case gl::Buffer_target::array_buffer             : return false;
@@ -126,7 +125,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
     }
 }
 
-[[nodiscard]] auto is_compressed(const gl::Internal_format format) -> bool
+auto is_compressed(const gl::Internal_format format) -> bool
 {
     switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return true;
@@ -235,7 +234,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
     }
 }
 
-[[nodiscard]] auto is_integer(const gl::Internal_format format) -> bool
+auto is_integer(const gl::Internal_format format) -> bool
 {
     switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return false;
@@ -344,7 +343,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
     }
 }
 
-[[nodiscard]] auto has_color(const gl::Internal_format format) -> bool
+auto has_color(const gl::Internal_format format) -> bool
 {
     switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return true;
@@ -453,7 +452,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
     }
 }
 
-[[nodiscard]] auto has_alpha(const gl::Internal_format format) -> bool
+auto has_alpha(const gl::Internal_format format) -> bool
 {
     switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return false;
@@ -562,7 +561,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
     }
 }
 
-[[nodiscard]] auto has_depth(const gl::Internal_format format) -> bool
+auto has_depth(const gl::Internal_format format) -> bool
 {
     switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return false;
@@ -671,7 +670,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
     }
 }
 
-[[nodiscard]] auto has_stencil(const gl::Internal_format format) -> bool
+auto has_stencil(const gl::Internal_format format) -> bool
 {
     switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return false;

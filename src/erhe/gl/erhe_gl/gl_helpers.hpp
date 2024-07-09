@@ -4,8 +4,7 @@
 
 #include "erhe_gl/wrapper_enums.hpp"
 
-namespace gl_helpers
-{
+namespace gl_helpers {
 
 [[nodiscard]] auto size_of_type (gl::Draw_elements_type type) -> std::size_t;
 [[nodiscard]] auto size_of_type (gl::Vertex_attrib_type type) -> std::size_t;

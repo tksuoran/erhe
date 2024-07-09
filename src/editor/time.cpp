@@ -104,9 +104,7 @@ void Time::update()
     //ERHE_PROFILE_FRAME_END
 }
 
-void Time::update_fixed_step(
-    const Time_context& time_context
-)
+void Time::update_fixed_step(const Time_context& time_context)
 {
     ERHE_PROFILE_FUNCTION();
 
