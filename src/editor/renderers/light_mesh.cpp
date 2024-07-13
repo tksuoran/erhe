@@ -138,7 +138,7 @@ auto Light_mesh::point_in_light(const glm::vec3 point, const erhe::scene::Light&
     }
 }
 
-auto Light_mesh::get_light_mesh(const erhe::scene::Light& light) -> erhe::primitive::Renderable_mesh*
+auto Light_mesh::get_light_mesh(const erhe::scene::Light& light) -> erhe::primitive::Buffer_mesh*
 {
     switch (light.type) {
         //using enum erhe::scene::Light_type;

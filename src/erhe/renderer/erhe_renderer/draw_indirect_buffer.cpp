@@ -74,8 +74,8 @@ auto Draw_indirect_buffer::update(
         }
 
         for (auto& primitive : mesh->get_primitives()) {
-            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
-            const erhe::primitive::Index_range      index_range     = renderable_mesh.index_range(primitive_mode);
+            const erhe::primitive::Buffer_mesh& buffer_mesh = primitive.render_shape->get_renderable_mesh();
+            const erhe::primitive::Index_range  index_range = buffer_mesh.index_range(primitive_mode);
             if (index_range.index_count == 0) {
                 continue;
             }
@@ -91,9 +91,9 @@ auto Draw_indirect_buffer::update(
                 index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
             }
 
-            const uint32_t base_index  = renderable_mesh.base_index();
+            const uint32_t base_index  = buffer_mesh.base_index();
             const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
-            const uint32_t base_vertex = renderable_mesh.base_vertex();
+            const uint32_t base_vertex = buffer_mesh.base_vertex();
 
             const gl::Draw_elements_indirect_command draw_command{
                 index_count,
@@ -120,16 +120,5 @@ auto Draw_indirect_buffer::update(
     SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to draw indirect buffer", draw_indirect_count);
     return { m_writer.range, draw_indirect_count };
 }
-
-//// void Draw_indirect_buffer::debug_properties_window()
-//// {
-//// #if defined(ERHE_GUI_LIBRARY_IMGUI)
-////     ImGui::Begin    ("Base Renderer Debug Properties");
-////     ImGui::Checkbox ("Enable Max Index Count", &m_max_index_count_enable);
-////     ImGui::SliderInt("Max Index Count", &m_max_index_count, 0, 256);
-////     ImGui::End      ();
-//// #endif
-//// }
-//// 
 
 }

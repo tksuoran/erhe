@@ -58,7 +58,6 @@ Material_preview::Material_preview(
 #undef REVERSE_DEPTH
 {
     m_content_library = std::make_shared<Content_library>();
-    m_content_library->is_shown_in_ui = false;
 
     m_scene_root = std::make_shared<Scene_root>(
         nullptr, // No content library
@@ -86,9 +85,7 @@ void Material_preview::set_area_size(int size)
     m_height = size;
 }
 
-void Material_preview::update_rendertarget(
-    erhe::graphics::Instance& graphics_instance
-)
+void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_instance)
 {
     if (
         m_color_texture &&
@@ -174,13 +171,7 @@ void Material_preview::update_rendertarget(
     m_shadow_texture->set_debug_label("Material Preview Shadowmap");
     float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-        gl::clear_tex_image(
-            m_shadow_texture->gl_name(),
-            0,
-            gl::Pixel_format::depth_component,
-            gl::Pixel_type::float_,
-            &depth_clear_value
-        );
+        gl::clear_tex_image(m_shadow_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
     } else {
         // TODO
     }
@@ -190,9 +181,10 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
 {
     m_node = std::make_shared<erhe::scene::Node>("Material Preview Node");
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
+    erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
     m_mesh->add_primitive(
         erhe::primitive::Primitive{
-            erhe::primitive::make_renderable_mesh(
+            erhe::primitive::make_buffer_mesh(
                 erhe::geometry::shapes::make_sphere(
                     m_radius,
                     std::max(1, m_slice_count),
@@ -202,6 +194,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
                     .primitive_types = { .fill_triangles = true },
                     .buffer_info     = mesh_memory.buffer_info
                 },
+                dummy,
                 erhe::primitive::Normal_style::corner_normals
             )
         }
@@ -276,7 +269,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     m_content_library->materials->add(material);
     m_last_material = material;
 
-    m_mesh->get_mutable_primitives().front().set_material(material);
+    m_mesh->get_mutable_primitives().front().material = material;
 
     const erhe::math::Viewport viewport{0, 0, m_width, m_height};
 

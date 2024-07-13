@@ -70,18 +70,12 @@ public:
     };
 
     void render(const Render_parameters& parameters);
-
-    void render_fullscreen(
-        const Render_parameters&  parameters,
-        const erhe::scene::Light* light
-    );
-
+    void render_fullscreen(const Render_parameters& parameters, const erhe::scene::Light* light);
     void next_frame();
 
 private:
-    erhe::graphics::Instance& m_graphics_instance;
-    Program_interface&        m_program_interface;
-
+    erhe::graphics::Instance&                m_graphics_instance;
+    Program_interface&                       m_program_interface;
     int                                      m_base_texture_unit{0};
     Camera_buffer                            m_camera_buffers;
     erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffers;

@@ -1,6 +1,5 @@
 #include "erhe_log/log.hpp"
 #include "erhe_configuration/configuration.hpp"
-//#include "erhe_hash/hash.hpp"
 #include "erhe_log/timestamp.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -20,8 +19,7 @@
 
 #include <vector>
 
-namespace erhe::log
-{
+namespace erhe::log {
 
 void console_init()
 {

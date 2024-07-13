@@ -35,6 +35,7 @@ namespace editor {
 class Editor_context;
 class Editor_settings;
 class Input_state;
+class Item_tree_window;
 class Operation_stack;
 class Operations;
 class Render_context;
@@ -64,6 +65,9 @@ class Tools
 {
 public:
     Tools(
+        erhe::imgui::Imgui_renderer&    imgui_renderer,
+        erhe::imgui::Imgui_windows&     imgui_windows,
+
         erhe::graphics::Instance&       graphics_instance,
         erhe::scene::Scene_message_bus& scene_message_bus,
         Editor_context&                 editor_context,
@@ -82,13 +86,14 @@ public:
 
 
 private:
-    Editor_context&             m_context;
-    Tools_pipeline_renderpasses m_pipeline_renderpasses;
-    Tool*                       m_priority_tool{nullptr};
-    std::mutex                  m_mutex;
-    std::vector<Tool*>          m_tools;
-    std::vector<Tool*>          m_background_tools;
-    std::shared_ptr<Scene_root> m_scene_root;
+    Editor_context&                   m_context;
+    Tools_pipeline_renderpasses       m_pipeline_renderpasses;
+    Tool*                             m_priority_tool{nullptr};
+    std::mutex                        m_mutex;
+    std::vector<Tool*>                m_tools;
+    std::vector<Tool*>                m_background_tools;
+    std::shared_ptr<Scene_root>       m_scene_root;
+    std::shared_ptr<Item_tree_window> m_content_library_tree_window;
 };
 
 } // namespace editor

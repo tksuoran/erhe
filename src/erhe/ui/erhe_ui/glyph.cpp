@@ -14,9 +14,7 @@
 #include <map>
 #include <stdexcept>
 
-namespace erhe::ui
-{
-
+namespace erhe::ui {
 
 Glyph::Glyph(
     FT_Library          library,

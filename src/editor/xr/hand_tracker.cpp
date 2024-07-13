@@ -133,11 +133,7 @@ void Hand::update(erhe::xr::Headset& headset)
     m_is_active = nonzero_size_count > XR_HAND_JOINT_COUNT_EXT / 2;
 }
 
-auto Hand::get_closest_point_to_line(
-    const glm::mat4 transform,
-    const glm::vec3 p0,
-    const glm::vec3 p1
-) const -> std::optional<Finger_point>
+auto Hand::get_closest_point_to_line(const glm::mat4 transform, const glm::vec3 p0, const glm::vec3 p1) const -> std::optional<Finger_point>
 {
     if (!m_is_active) {
         return {};
@@ -149,6 +145,7 @@ auto Hand::get_closest_point_to_line(
         const auto joint = static_cast<XrHandJointEXT>(i);
         const bool valid = is_valid(joint);
         if (valid) {
+            // TODO take headset view camera offset into account
             const glm::vec3 pos{
                 m_joints[joint].location.pose.position.x,
                 m_joints[joint].location.pose.position.y,
@@ -265,6 +262,7 @@ auto Hand::get_joint(const XrHandJointEXT joint) const -> std::optional<Joint>
         };
 #endif
         return Joint{
+            // TODO take headset view into account
             .position = glm::vec3{
                 m_joints[joint].location.pose.position.x,
                 m_joints[joint].location.pose.position.y,
@@ -276,10 +274,7 @@ auto Hand::get_joint(const XrHandJointEXT joint) const -> std::optional<Joint>
     return {};
 }
 
-auto Hand::distance(
-    const XrHandJointEXT lhs,
-    const XrHandJointEXT rhs
-) const -> std::optional<float>
+auto Hand::distance(const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> std::optional<float>
 {
     const auto lhs_joint = static_cast<XrHandJointEXT>(lhs);
     const auto rhs_joint = static_cast<XrHandJointEXT>(rhs);
@@ -288,6 +283,7 @@ auto Hand::distance(
     if (!lhs_valid || !rhs_valid) {
         return {};
     }
+    // TODO take headset view into account
     const glm::vec3 lhs_pos{
         m_joints[lhs_joint].location.pose.position.x,
         m_joints[lhs_joint].location.pose.position.y,
@@ -328,10 +324,7 @@ void Hand::set_color(const std::size_t finger, const ImVec4 color)
     m_color[finger] = color;
 }
 
-void Hand::draw(
-    erhe::renderer::Line_renderer& line_renderer,
-    const glm::mat4                transform
-)
+void Hand::draw(erhe::renderer::Line_renderer& line_renderer, const glm::mat4 transform)
 {
     if (!m_is_active) {
         return;
@@ -386,6 +379,7 @@ void Hand::draw_joint_line_strip(
         if ((joint_b.location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != XR_SPACE_LOCATION_POSITION_VALID_BIT) {
             continue;
         }
+        // TODO take headset view into account
         line_renderer.add_lines(
             transform,
             {
@@ -408,14 +402,16 @@ void Hand::draw_joint_line_strip(
     }
 }
 
-Hand_tracker::Hand_tracker(
-    Editor_context&   editor_context,
-    Editor_rendering& editor_rendering
-)
+Hand_tracker::Hand_tracker(Editor_context& editor_context, Editor_rendering& editor_rendering)
     : m_context   {editor_context}
     , m_left_hand {XR_HAND_LEFT_EXT}
     , m_right_hand{XR_HAND_RIGHT_EXT}
 {
+    if (!editor_context.OpenXR) {
+        m_show_hands = false;
+        return;
+    }
+
     editor_rendering.add(this);
     //set_flags      (Tool_flags::background);
     //set_description("Hand_tracker");
@@ -451,11 +447,7 @@ void Hand_tracker::set_color(const Hand_name hand_name, const ImVec4 color)
     get_hand(hand_name).set_color(Finger_name::little, color);
 }
 
-void Hand_tracker::set_color(
-    const Hand_name   hand_name,
-    const std::size_t finger_name,
-    const ImVec4      color
-)
+void Hand_tracker::set_color(const Hand_name hand_name, const std::size_t finger_name, const ImVec4 color)
 {
     get_hand(hand_name).set_color(finger_name, color);
 }
@@ -473,8 +465,8 @@ void Hand_tracker::render(const Render_context&)
         return;
     }
 
-    const auto transform     = root_node->world_from_node();
-    auto&      line_renderer = *m_context.line_renderer_set->hidden.at(3).get();
+    const auto transform = root_node->world_from_node();
+    auto& line_renderer = *m_context.line_renderer_set->hidden.at(3).get();
 
     m_left_hand .draw(line_renderer, transform);
     m_right_hand.draw(line_renderer, transform);

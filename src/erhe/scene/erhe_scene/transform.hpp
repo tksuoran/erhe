@@ -42,5 +42,7 @@ protected:
     glm::mat4 m_inverse_matrix{1.0f};
 };
 
+Transform operator*(const Transform& lhs, const Transform& rhs);
+
 } // namespace erhe::scene
 

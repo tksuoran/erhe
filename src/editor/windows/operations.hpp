@@ -1,13 +1,14 @@
 #pragma once
 
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_commands/command.hpp"
+#include "operations/mesh_operation.hpp"
 
 namespace erhe::imgui {
     class Imgui_windows;
 }
 
-namespace editor
-{
+namespace editor {
 
 struct Tool_slot
 {
@@ -63,6 +64,7 @@ class Operations : public erhe::imgui::Imgui_window
 {
 public:
     Operations(
+        erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         Editor_context&              editor_context
@@ -71,10 +73,49 @@ public:
     // Implements Window
     void imgui() override;
 
+    void merge();
+    void triangulate();
+    void normalize();
+    void reverse();
+
+    // Subdivision
+    void catmull_clark();
+    void sqrt3();
+
+    // Conway operations
+    void dual();
+    void join();
+    void kis();
+    void meta();
+    void ortho();
+    void ambo();
+    void truncate();
+    void gyro();
+
 private:
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
+    [[nodiscard]] auto mesh_context() -> Mesh_operation_parameters;
 
     Editor_context& m_context;
+
+    erhe::commands::Lambda_command m_merge_command;
+    erhe::commands::Lambda_command m_triangulate_command;
+    erhe::commands::Lambda_command m_normalize_command;
+    erhe::commands::Lambda_command m_reverse_command;
+
+    // Subdivision
+    erhe::commands::Lambda_command m_catmull_clark_command;
+    erhe::commands::Lambda_command m_sqrt3_command;
+
+    // Conway operations
+    erhe::commands::Lambda_command m_dual_command;
+    erhe::commands::Lambda_command m_join_command;
+    erhe::commands::Lambda_command m_kis_command;
+    erhe::commands::Lambda_command m_meta_command;
+    erhe::commands::Lambda_command m_ortho_command;
+    erhe::commands::Lambda_command m_ambo_command;
+    erhe::commands::Lambda_command m_truncate_command;
+    erhe::commands::Lambda_command m_gyro_command;
 };
 
 } // namespace editor

@@ -20,8 +20,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
@@ -34,10 +33,7 @@ using erhe::graphics::Color_blend_state;
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
 
-Shadow_renderer::Shadow_renderer(
-    erhe::graphics::Instance& graphics_instance,
-    Program_interface&        program_interface
-)
+Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
     : m_graphics_instance{graphics_instance}
     , m_shader_stages{
         program_interface.make_prototype(
@@ -67,9 +63,7 @@ Shadow_renderer::Shadow_renderer(
     m_pipeline_cache_entries.resize(8);
 }
 
-auto Shadow_renderer::get_pipeline(
-    const Vertex_input_state* vertex_input_state
-) -> erhe::graphics::Pipeline&
+auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state) -> erhe::graphics::Pipeline&
 {
     ++m_pipeline_cache_serial;
     uint64_t              lru_serial{m_pipeline_cache_serial};

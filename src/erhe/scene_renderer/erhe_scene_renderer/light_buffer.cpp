@@ -22,9 +22,7 @@ namespace erhe::scene_renderer {
     return max_light_count;
 }
 
-Light_interface::Light_interface(
-    erhe::graphics::Instance& graphics_instance
-)
+Light_interface::Light_interface(erhe::graphics::Instance& graphics_instance)
     : max_light_count{get_max_light_count()}
     , light_block{
         graphics_instance,
@@ -63,10 +61,7 @@ Light_interface::Light_interface(
 {
 }
 
-Light_buffer::Light_buffer(
-    erhe::graphics::Instance& graphics_instance,
-    Light_interface&          light_interface
-)
+Light_buffer::Light_buffer(erhe::graphics::Instance& graphics_instance, Light_interface& light_interface)
     : m_light_interface{light_interface}
     , m_light_buffer   {graphics_instance, "light"}
     , m_control_buffer {graphics_instance, "light_control"}
@@ -75,14 +70,14 @@ Light_buffer::Light_buffer(
         gl::Buffer_target::uniform_buffer,
         m_light_interface.light_block.binding_point(),
         // TODO
-        8 * (m_light_interface.offsets.light_struct + m_light_interface.max_light_count * m_light_interface.light_struct.size_bytes())
+        64 * (m_light_interface.offsets.light_struct + m_light_interface.max_light_count * m_light_interface.light_struct.size_bytes())
     );
 
     m_control_buffer.allocate(
         gl::Buffer_target::uniform_buffer,
         m_light_interface.light_control_block.binding_point(),
         // TODO
-        8 * (m_light_interface.light_control_block.size_bytes())
+        64 * (m_light_interface.light_control_block.size_bytes())
     );
 }
 
@@ -124,9 +119,7 @@ Light_projections::Light_projections(
     );
 }
 
-auto Light_projections::get_light_projection_transforms_for_light(
-    const erhe::scene::Light* light
-) -> erhe::scene::Light_projection_transforms*
+auto Light_projections::get_light_projection_transforms_for_light(const erhe::scene::Light* light) -> erhe::scene::Light_projection_transforms*
 {
     for (auto& i : light_projection_transforms) {
         if (i.light == light) {
@@ -136,9 +129,7 @@ auto Light_projections::get_light_projection_transforms_for_light(
     return nullptr;
 }
 
-auto Light_projections::get_light_projection_transforms_for_light(
-    const erhe::scene::Light* light
-) const -> const erhe::scene::Light_projection_transforms*
+auto Light_projections::get_light_projection_transforms_for_light(const erhe::scene::Light* light) const -> const erhe::scene::Light_projection_transforms*
 {
     for (auto& i : light_projection_transforms) {
         if (i.light == light) {

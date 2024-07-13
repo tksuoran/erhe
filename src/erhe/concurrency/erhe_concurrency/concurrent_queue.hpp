@@ -37,11 +37,7 @@ protected:
 public:
     explicit Concurrent_queue(Thread_pool& thread_pool);
 
-    Concurrent_queue(
-        Thread_pool&           thread_pool,
-        const std::string_view name,
-        Priority               priority = Priority::NORMAL
-    );
+    Concurrent_queue(Thread_pool& thread_pool, const std::string_view name, Priority priority = Priority::NORMAL);
     ~Concurrent_queue() noexcept;
 
     Concurrent_queue(const Concurrent_queue&) = delete;

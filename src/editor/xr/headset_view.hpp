@@ -1,11 +1,13 @@
 #pragma once
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+#include "time.hpp"
+#include "scene/scene_view.hpp"
 #include "xr/hand_tracker.hpp"
 #include "xr/controller_visualization.hpp"
 #include "xr/headset_view_resources.hpp"
-#include "scene/scene_view.hpp"
 
+#include "erhe_math/simulation_variable.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_xr/headset.hpp"
 
@@ -30,9 +32,6 @@ namespace erhe::scene_renderer {
 namespace erhe::window {
     class Context_window;
 }
-//namespace erhe::xr {
-//    class Headset;
-//}
 
 namespace editor {
 
@@ -40,10 +39,12 @@ class Editor_context;
 class Editor_message_bus;
 class Editor_rendering;
 class Editor_settings;
+class Fly_camera_tool;
 class Hud;
 class Mesh_memory;
 class Scene_builder;
 class Scene_root;
+class Time;
 class Tools;
 
 class Controller_input
@@ -66,16 +67,28 @@ private:
     Headset_view& m_headset_view;
 };
 
+class Headset_camera_offset_move_command : public erhe::commands::Command
+{
+public:
+    Headset_camera_offset_move_command(erhe::commands::Commands& commands, erhe::math::Simulation_variable& variable, char axis);
+
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    erhe::math::Simulation_variable& m_variable;
+    char                             m_axis;
+};
+
 class Headset_view
     : public std::enable_shared_from_this<Headset_view>
     , public Scene_view
     , public Renderable
+    , public Update_fixed_step
 {
 public:
     class Config
     {
     public:
-        bool openxr           {false};
         bool quad_view        {false};
         bool debug            {false};
         bool depth            {false};
@@ -86,6 +99,7 @@ public:
     Config config;
 
     Headset_view(
+        erhe::commands::Commands&       commands,
         erhe::graphics::Instance&       graphics_instance,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
@@ -93,7 +107,8 @@ public:
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings,
         Mesh_memory&                    mesh_memory,
-        Scene_builder&                  scene_builder
+        Scene_builder&                  scene_builder,
+        Time&                           time
     );
 
     // Public API
@@ -102,12 +117,16 @@ public:
     void end_frame                ();
     void request_renderdoc_capture();
 
+    // Implements Update_fixed_step
+    void update_fixed_step(const Time_context&) override;
+
     void add_finger_input(const Finger_point& finger_point);
 
     [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
     [[nodiscard]] auto get_headset                          () const -> erhe::xr::Headset*;
     [[nodiscard]] auto get_root_node                        () const -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto is_active                            () const -> bool;
+    [[nodiscard]] auto get_camera_offset                    () const -> glm::vec3;
 
     void render(const Render_context&);
 
@@ -121,15 +140,25 @@ private:
     [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;
 
     void setup_root_camera();
-
+    void update_camera_node();
     void update_pointer_context_from_controller();
+
+    erhe::math::Simulation_variable    m_translate_x;
+    erhe::math::Simulation_variable    m_translate_y;
+    erhe::math::Simulation_variable    m_translate_z;
+    glm::vec3                          m_camera_offset{0.0f, 0.0f, 0.0f};
+    Headset_camera_offset_move_command m_offset_x_command;
+    Headset_camera_offset_move_command m_offset_y_command;
+    Headset_camera_offset_move_command m_offset_z_command;
 
     erhe::window::Context_window&                        m_context_window;
     std::shared_ptr<Headset_view_node>                   m_rendergraph_node;
     std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;
     std::shared_ptr<Scene_root>                          m_scene_root;
     std::unique_ptr<erhe::xr::Headset>                   m_headset;
-    std::shared_ptr<erhe::scene::Node>                   m_root_node;
+    std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node
+    std::shared_ptr<erhe::scene::Node>                   m_headset_node; // transform set by headset
+    std::shared_ptr<erhe::scene::Node>                   m_camera_node; // possibly offset from m_headset_node
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;
@@ -141,6 +170,7 @@ private:
 
     bool                                                 m_request_renderdoc_capture{false};
     bool                                                 m_renderdoc_capture_started{false};
+    uint64_t                                             m_frame_number{0};
 };
 
 } // namespace editor

@@ -95,11 +95,11 @@ public:
 private:
     void set_shadow_renderer_node(Shadow_render_node* node);
 
-    Editor_context&                 m_context;
-    Depth_to_color_rendergraph_node m_depth_to_color_node;
-    Debug_view_node                 m_node;
-    Shadow_render_node*             m_shadow_renderer_node{nullptr};
-    int                             m_selected_node{0};
+    Editor_context&                                  m_context;
+    std::unique_ptr<Depth_to_color_rendergraph_node> m_depth_to_color_node;
+    Debug_view_node                                  m_node;
+    Shadow_render_node*                              m_shadow_renderer_node{nullptr};
+    int                                              m_selected_node{0};
 };
 
 } // namespace editor

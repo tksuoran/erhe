@@ -417,12 +417,8 @@ void run_example()
         if (mesh) {
             std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
             for (erhe::primitive::Primitive& primitive : primitives) {
-                if (!primitive.has_renderable_triangles() && primitive.get_triangle_soup()) {
-                    // TODO This looks a bit awkward
-                    primitive.get_renderable_mesh() = erhe::primitive::build_renderable_mesh_from_triangle_soup(
-                        *primitive.get_triangle_soup().get(),
-                        buffer_info
-                    );
+                if (!primitive.has_renderable_triangles()) {
+                    ERHE_VERIFY(primitive.make_renderable_mesh(buffer_info));
                 }
             }
         }

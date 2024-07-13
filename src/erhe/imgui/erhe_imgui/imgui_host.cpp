@@ -221,10 +221,7 @@ auto Imgui_host::get_scale_value() const -> float
     return 1.0f;
 }
 
-void Imgui_host::update_input_request(
-    const bool request_keyboard,
-    const bool request_mouse
-)
+void Imgui_host::update_input_request(const bool request_keyboard, const bool request_mouse)
 {
     m_request_keyboard = request_keyboard;
     m_request_mouse    = request_mouse;

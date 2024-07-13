@@ -1,8 +1,7 @@
 #include "erhe_xr/xr_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace erhe::xr
-{
+namespace erhe::xr {
 
 std::shared_ptr<spdlog::logger> log_xr;
 

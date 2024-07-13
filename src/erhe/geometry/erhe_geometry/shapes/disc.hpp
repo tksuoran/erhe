@@ -2,8 +2,7 @@
 
 #include "erhe_geometry/geometry.hpp"
 
-namespace erhe::geometry::shapes
-{
+namespace erhe::geometry::shapes {
 
 [[nodiscard]] auto make_disc(double outer_radius, double inner_radius, int slice_count, int stack_count) -> Geometry;
 [[nodiscard]] auto make_disc(

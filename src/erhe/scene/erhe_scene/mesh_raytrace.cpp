@@ -20,8 +20,7 @@
 
 #include <fmt/format.h>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 using erhe::raytrace::IGeometry;
 using erhe::raytrace::IInstance;
@@ -32,11 +31,7 @@ Raytrace_primitive::Raytrace_primitive(Raytrace_primitive&&)            = defaul
 Raytrace_primitive& Raytrace_primitive::operator=(Raytrace_primitive&&) = default;
 Raytrace_primitive::~Raytrace_primitive() noexcept                      = default;
 
-Raytrace_primitive::Raytrace_primitive(
-    erhe::scene::Mesh*         mesh,
-    std::size_t                primitive_index,
-    erhe::raytrace::IGeometry* rt_geometry
-)
+Raytrace_primitive::Raytrace_primitive(erhe::scene::Mesh* mesh, std::size_t primitive_index, erhe::raytrace::IGeometry* rt_geometry)
     : mesh           {mesh}
     , primitive_index{primitive_index}
 {

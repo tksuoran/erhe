@@ -6,12 +6,9 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::gltf
-{
+namespace erhe::gltf {
 
-Image_transfer::Image_transfer(
-    erhe::graphics::Instance& graphics_instance
-)
+Image_transfer::Image_transfer(erhe::graphics::Instance& graphics_instance)
     : m_slots{
         Slot{graphics_instance},
         Slot{graphics_instance},
@@ -77,11 +74,7 @@ void Image_transfer::Slot::end(bool flush)
     unmap();
 }
 
-auto Image_transfer::Slot::begin_span_for(
-    const int                 span_width,
-    const int                 span_height,
-    const gl::Internal_format internal_format
-) -> std::span<std::byte>
+auto Image_transfer::Slot::begin_span_for(const int span_width, const int span_height, const gl::Internal_format internal_format) -> std::span<std::byte>
 {
     ERHE_VERIFY(span_width >= 1);
     ERHE_VERIFY(span_height >= 1);

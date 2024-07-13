@@ -22,7 +22,6 @@ namespace erhe::graphics {
     class Texture;
     class Vertex_input_state;
 }
-
 namespace erhe::scene {
     class Camera;
     class Light;
@@ -77,9 +76,7 @@ private:
         erhe::graphics::Pipeline pipeline{};
     };
 
-    [[nodiscard]] auto get_pipeline(
-        const erhe::graphics::Vertex_input_state* vertex_input_state
-    ) -> erhe::graphics::Pipeline&;
+    [[nodiscard]] auto get_pipeline(const erhe::graphics::Vertex_input_state* vertex_input_state) -> erhe::graphics::Pipeline&;
 
     erhe::graphics::Instance&                m_graphics_instance;
     uint64_t                                 m_pipeline_cache_serial{0};

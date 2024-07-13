@@ -15,7 +15,6 @@
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -86,13 +85,7 @@ void Rendertarget_mesh::resize_rendertarget(
     m_texture->set_debug_label("Rendertarget Node");
     const float clear_value[4] = { 0.0f, 0.0f, 0.0f, 0.85f };
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-        gl::clear_tex_image(
-            m_texture->gl_name(),
-            0,
-            gl::Pixel_format::rgba,
-            gl::Pixel_type::float_,
-            &clear_value[0]
-        );
+        gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
     } else {
         // TODO
     }
@@ -111,38 +104,33 @@ void Rendertarget_mesh::resize_rendertarget(
     m_framebuffer = std::make_shared<Framebuffer>(create_info);
     m_framebuffer->set_debug_label("Rendertarget Node");
 
-    m_material = std::make_shared<erhe::primitive::Material>(
-        "Rendertarget Node",
-        glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
-    );
+    m_material = std::make_shared<erhe::primitive::Material>("Rendertarget Node", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
     m_material->textures.base_color = m_texture;
     m_material->samplers.base_color = m_sampler;
 
     m_local_width  = static_cast<float>(m_texture->width ()) / m_pixels_per_meter;
     m_local_height = static_cast<float>(m_texture->height()) / m_pixels_per_meter;
 
-    auto geometry = erhe::geometry::shapes::make_rectangle(
-        m_local_width,
-        m_local_height,
-        true,
-        false
-    );
+    auto geometry = erhe::geometry::shapes::make_rectangle(m_local_width, m_local_height, true, false);
 
     const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
         std::move(geometry)
     );
 
+    erhe::primitive::Primitive primitive{
+        shared_geometry,
+        m_material,
+        erhe::primitive::Build_info{
+            .primitive_types{ .fill_triangles = true },
+            .buffer_info = mesh_memory.buffer_info
+        },
+        erhe::primitive::Normal_style::polygon_normals
+    };
+
+    ERHE_VERIFY(primitive.make_raytrace());
+
     clear_primitives();
-    add_primitive(
-        erhe::primitive::Primitive{
-            shared_geometry,
-            m_material,
-            erhe::primitive::Build_info{
-                .primitive_types{ .fill_triangles = true },
-                .buffer_info = mesh_memory.buffer_info
-            }
-        }
-    );
+    add_primitive(primitive);
 
     mesh_memory.gl_buffer_transfer_queue.flush();
 
@@ -248,12 +236,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
 
     const glm::vec3 origo      {0.0f, 0.0f, 0.0f};
     const glm::vec3 unit_axis_z{0.0f, 0.0f, 1.0f};
-    const auto hit = erhe::math::intersect_plane<float>(
-        unit_axis_z,
-        origo,
-        origin_in_mesh,
-        direction_in_mesh
-    );
+    const auto hit = erhe::math::intersect_plane<float>(unit_axis_z, origo, origin_in_mesh, direction_in_mesh);
 
     if (!hit.has_value()) {
         return false;
@@ -326,6 +309,7 @@ auto Rendertarget_mesh::world_to_window(const glm::vec3 position_in_world) const
 
 void Rendertarget_mesh::bind()
 {
+    m_framebuffer->check_status();
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
     gl::viewport(0, 0, m_texture->width(), m_texture->height());
 }

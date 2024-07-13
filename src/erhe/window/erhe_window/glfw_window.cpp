@@ -419,32 +419,20 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         ? reinterpret_cast<GLFWwindow*>(configuration.share->get_glfw_window())
         : nullptr;
 
-    GLFWmonitor* monitor = configuration.fullscreen ? glfwGetPrimaryMonitor() : nullptr;
+    bool fullscreen = configuration.fullscreen;
+#if defined(_WIN32)
+    if (IsDebuggerPresent() != 0) {
+        fullscreen = false;
+    }
+#endif
 
-    if (
-        configuration.fullscreen &&
-        (monitor != nullptr)
-    ) {
-        ERHE_PROFILE_SCOPE("window (fullscreen)");
+    GLFWmonitor* monitor = fullscreen ? glfwGetPrimaryMonitor() : nullptr;
 
+    if (fullscreen && (monitor != nullptr)) {
         const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-        m_glfw_window = glfwCreateWindow(
-            mode->width,
-            mode->height,
-            configuration.title.data(),
-            monitor,
-            share_window
-        );
+        m_glfw_window = glfwCreateWindow(mode->width, mode->height, configuration.title.data(), monitor, share_window);
     } else {
-        ERHE_PROFILE_SCOPE("window");
-
-        m_glfw_window = glfwCreateWindow(
-            configuration.width,
-            configuration.height,
-            configuration.title.data(),
-            monitor,
-            share_window
-        );
+        m_glfw_window = glfwCreateWindow(configuration.width, configuration.height, configuration.title.data(), monitor, share_window);
     }
 
     if (m_glfw_window == nullptr) {
@@ -535,11 +523,40 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         }
     }
 
+    for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
+        int present = glfwJoystickPresent(jid);
+        if (present) {
+            const char* name = glfwGetJoystickName(jid);
+            const char* guid = glfwGetJoystickGUID(jid);
+            int axis_count = 0;
+            const float* axes = glfwGetJoystickAxes(jid, &axis_count);
+            static_cast<void>(axes);
+            int button_count;
+            const unsigned char* buttons = glfwGetJoystickButtons(jid, &button_count);
+            static_cast<void>(buttons);
+            log_window->info(
+                "Joystick {}: name = {} GUID = {} axis_count = {} button_count = {}",
+                jid,
+                (name != nullptr) ? name : "",
+                (guid != nullptr) ? guid : "",
+                axis_count,
+                button_count
+            );
+            m_joystick = jid;
+        }
+    }
+
     glfwGetCursorPos(window, &m_last_mouse_x, &m_last_mouse_y);
 
     m_configuration = configuration;
 
     return true;
+}
+
+void Context_window::request_close()
+{
+    break_event_loop();
+    m_root_window_event_handler.on_close();
 }
 
 Context_window::~Context_window() noexcept
@@ -581,6 +598,40 @@ void Context_window::poll_events()
     } else {
         ERHE_PROFILE_SCOPE("poll");
         glfwPollEvents();
+    }
+
+    for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
+        int present = glfwJoystickPresent(jid);
+        if (present) {
+            int axis_count = 0;
+            const float* axis_values = glfwGetJoystickAxes(jid, &axis_count);
+            if (axis_count > m_controller_axis_values.size()) {
+                m_controller_axis_values.resize(axis_count);
+            }
+            for (int i = 0; i < axis_count; ++i) {
+                const float value = axis_values[i];
+                // TODO This was somewhat unexpected: At least space navigator
+                //      reports *cumulative* values for each axis, instead of
+                //      the current physical state of the controller.
+                const float delta = value - m_controller_axis_values[i];
+                if (delta != 0.0f) {
+                    m_controller_axis_values[i] = value;
+                    m_root_window_event_handler.on_controller_axis(i, delta, get_modifier_mask());
+                }
+            }
+            int button_count = 0;
+            const unsigned char* button_values = glfwGetJoystickButtons(jid, &button_count);
+            if (button_count > m_controller_button_values.size()) {
+                m_controller_button_values.resize(button_count);
+            }
+            for (int i = 0; i < button_count; ++i) {
+                const bool value = button_values[i] != 0;
+                if (value != m_controller_button_values[i]) {
+                    m_controller_button_values[i] = value;
+                    m_root_window_event_handler.on_controller_button(i, value, get_modifier_mask());
+                }
+            }
+        }
     }
 }
 
@@ -660,7 +711,6 @@ void Context_window::set_cursor(const Mouse_cursor cursor)
                 : GLFW_CURSOR_HIDDEN
         );
     }
-
 }
 
 void Context_window::capture_mouse(const bool capture)
@@ -678,7 +728,7 @@ void Context_window::capture_mouse(const bool capture)
                 window,
                 GLFW_CURSOR,
                 m_is_mouse_captured
-                    ? GLFW_CURSOR_CAPTURED
+                    ? GLFW_CURSOR_HIDDEN //GLFW_CURSOR_CAPTURED
                     : (m_current_mouse_cursor != Mouse_cursor_None)
                         ? GLFW_CURSOR_NORMAL
                         : GLFW_CURSOR_HIDDEN

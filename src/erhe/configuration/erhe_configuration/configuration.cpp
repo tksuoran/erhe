@@ -55,44 +55,28 @@ auto trim(const std::string& str, const std::string& whitespace) -> std::string
     return str.substr(strBegin, strRange);
 }
 
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    std::size_t&                     destination
-)
+void ini_get(const mINI::INIMap<std::string>& ini, std::string key, std::size_t& destination)
 {
     if (ini.has(key)) {
         destination = std::stoi(ini.get(key));
     }
 }
 
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    int&                             destination
-)
+void ini_get(const mINI::INIMap<std::string>& ini, std::string key, int& destination)
 {
     if (ini.has(key)) {
         destination = std::stoi(ini.get(key));
     }
 }
 
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    float&                           destination
-)
+void ini_get(const mINI::INIMap<std::string>& ini, std::string key, float& destination)
 {
     if (ini.has(key)) {
         destination = std::stof(ini.get(key));
     }
 }
 
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    glm::vec2&                       destination
-)
+void ini_get(const mINI::INIMap<std::string>& ini, std::string key, glm::vec2& destination)
 {
     if (ini.has(key)) {
         std::string value = ini.get(key);
@@ -106,11 +90,7 @@ void ini_get(
     }
 }
 
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    glm::vec3&                       destination
-)
+void ini_get(const mINI::INIMap<std::string>& ini, std::string key, glm::vec3& destination)
 {
     if (ini.has(key)) {
         std::string value = ini.get(key);
@@ -127,11 +107,7 @@ void ini_get(
     }
 }
 
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    glm::vec4&                       destination
-)
+void ini_get(const mINI::INIMap<std::string>& ini, std::string key, glm::vec4& destination)
 {
     if (ini.has(key)) {
         std::string value = ini.get(key);
@@ -148,22 +124,14 @@ void ini_get(
     }
 }
 
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    std::string&                     destination
-)
+void ini_get(const mINI::INIMap<std::string>& ini, std::string key, std::string& destination)
 {
     if (ini.has(key)) {
         destination = ini.get(key);
     }
 }
 
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    bool&                            destination
-)
+void ini_get(const mINI::INIMap<std::string>& ini, std::string key, bool& destination)
 {
     if (ini.has(key)) {
         const std::string value = to_lower(ini.get(key));

@@ -5,23 +5,26 @@
 namespace editor {
 
 enum class Handle : unsigned int {
-    e_handle_none         =  0,
-    e_handle_translate_x  =  1,
-    e_handle_translate_y  =  2,
-    e_handle_translate_z  =  3,
-    e_handle_translate_xy =  4,
-    e_handle_translate_xz =  5,
-    e_handle_translate_yz =  6,
-    e_handle_rotate_x     =  7,
-    e_handle_rotate_y     =  8,
-    e_handle_rotate_z     =  9,
-    e_handle_scale_x      = 10,
-    e_handle_scale_y      = 11,
-    e_handle_scale_z      = 12,
-    e_handle_scale_xy     = 13,
-    e_handle_scale_xz     = 14,
-    e_handle_scale_yz     = 15,
-    e_handle_scale_xyz    = 16
+    e_handle_none            =  0,
+    e_handle_translate_pos_x =  1,
+    e_handle_translate_neg_x =  2,
+    e_handle_translate_pos_y =  3,
+    e_handle_translate_neg_y =  4,
+    e_handle_translate_pos_z =  5,
+    e_handle_translate_neg_z =  6,
+    e_handle_translate_xy    =  7,
+    e_handle_translate_xz    =  8,
+    e_handle_translate_yz    =  9,
+    e_handle_rotate_x        = 10,
+    e_handle_rotate_y        = 11,
+    e_handle_rotate_z        = 12,
+    e_handle_scale_x         = 13,
+    e_handle_scale_y         = 14,
+    e_handle_scale_z         = 15,
+    e_handle_scale_xy        = 16,
+    e_handle_scale_xz        = 17,
+    e_handle_scale_yz        = 18,
+    e_handle_scale_xyz       = 19 
 };
 
 enum class Handle_tool : unsigned int {

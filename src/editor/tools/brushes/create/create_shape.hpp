@@ -4,7 +4,6 @@
 
 namespace erhe::renderer {
     class Line_renderer;
-    class Line_renderer_set;
 }
 
 namespace editor {

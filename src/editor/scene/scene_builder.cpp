@@ -42,7 +42,6 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_scene/transform.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -142,7 +141,6 @@ Scene_builder::Scene_builder(
         "Default Scene"
     );
     auto browser_window = m_scene_root->make_browser_window(imgui_renderer, imgui_windows, editor_context, editor_settings);
-    //browser_window->show();
 
     setup_cameras(
         graphics_instance,
@@ -310,13 +308,13 @@ void Scene_builder::setup_cameras(
     //// TODO Read these from ini
     const bool enable_post_processing = true;
     const bool window_viewport        = true;
-    bool       window_show            = true;
+    bool imgui_window_scene_view = true;
     {
-        auto ini = erhe::configuration::get_ini("erhe.ini", "window");
-        ini->get("show", window_show);
+        auto ini = erhe::configuration::get_ini("erhe.ini", "scene");
+        ini->get("imgui_window_scene_view", imgui_window_scene_view);
     }
 
-    if (!window_show) {
+    if (!imgui_window_scene_view) {
         return;
     }
 
@@ -415,11 +413,7 @@ auto Scene_builder::make_brush(
     );
 }
 
-void Scene_builder::make_brushes(
-    erhe::graphics::Instance& graphics_instance, 
-    Editor_settings&          editor_settings,
-    Mesh_memory&              mesh_memory
-)
+void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Editor_settings& editor_settings, Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -686,34 +680,36 @@ void Scene_builder::make_brushes(
 
                 constexpr bool instantiate = global_instantiate;
                 const float scale = config.object_scale;
-                auto cylinder_geometry = make_cylinder(
-                    -1.0f * scale,
-                     1.0f * scale,
-                     1.0f * scale,
-                    true,
-                    true,
-                    9 * std::max(1, config.detail),
-                    std::max(1, config.detail)
-                ); // always axis = x
-                cylinder_geometry.transform(erhe::math::mat4_swap_xy);
+                for (float h = 0.1f; h < 1.1f; h += 0.9f) {
+                    auto cylinder_geometry = make_cylinder(
+                        -h * scale,
+                         h * scale,
+                         1.0f * scale,
+                        true,
+                        true,
+                        9 * std::max(1, config.detail),
+                        std::max(1, config.detail)
+                    ); // always axis = x
+                    cylinder_geometry.transform(erhe::math::mat4_swap_xy);
 
-                make_brush(
-                    Brush_data{
-                        .context         = m_context,
-                        .editor_settings = editor_settings,
-                        .build_info      = build_info(mesh_memory),
-                        .normal_style    = Normal_style::corner_normals,
-                        .geometry        = std::make_shared<erhe::geometry::Geometry>(
-                            std::move(cylinder_geometry)
-                        ),
-                        .density         = config.mass_scale,
-                        .collision_shape = erhe::physics::ICollision_shape::create_cylinder_shape_shared(
-                            erhe::physics::Axis::Y,
-                            vec3{scale, scale, scale}
-                        )
-                    },
-                    instantiate
-                );
+                    make_brush(
+                        Brush_data{
+                            .context         = m_context,
+                            .editor_settings = editor_settings,
+                            .build_info      = build_info(mesh_memory),
+                            .normal_style    = Normal_style::corner_normals,
+                            .geometry        = std::make_shared<erhe::geometry::Geometry>(
+                                std::move(cylinder_geometry)
+                            ),
+                            .density         = config.mass_scale,
+                            .collision_shape = erhe::physics::ICollision_shape::create_cylinder_shape_shared(
+                                erhe::physics::Axis::Y,
+                                vec3{h * scale, scale, h * scale}
+                            )
+                        },
+                        instantiate
+                    );
+                }
             }
         );
     }
@@ -910,11 +906,7 @@ void Scene_builder::make_mesh_nodes()
         std::sort(
             m_scene_brushes.begin(),
             m_scene_brushes.end(),
-            [](
-                const std::shared_ptr<Brush>& lhs,
-                const std::shared_ptr<Brush>& rhs
-            )
-            {
+            [](const std::shared_ptr<Brush>& lhs, const std::shared_ptr<Brush>& rhs){
                 return lhs->get_name() < rhs->get_name();
             }
         );
@@ -1062,10 +1054,12 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
     constexpr int   y_count = 20;
     constexpr int   z_count = 20;
 
+    erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
     const erhe::primitive::Primitive primitive{
-        make_renderable_mesh(
+        make_buffer_mesh(
             make_cube(0.1f),
             build_info(mesh_memory),
+            dummy,
             Normal_style::polygon_normals
         ),
         material
@@ -1266,11 +1260,8 @@ void Scene_builder::animate_lights(const double time_d)
             r * std::cos(rel + t * 0.93f)
         };
 
-        const auto m = erhe::math::create_look_at(
-            eye,
-            center,
-            vec3{0.0f, 1.0f, 0.0f} // up
-        );
+        const glm::vec3 up{0.0f, 1.0f, 0.0f};
+        const auto m = erhe::math::create_look_at(eye, center, up);
 
         l->get_node()->set_parent_from_node(m);
 

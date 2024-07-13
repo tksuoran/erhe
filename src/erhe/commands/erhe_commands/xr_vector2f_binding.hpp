@@ -27,4 +27,4 @@ public:
     erhe::xr::Xr_action_vector2f* xr_action{nullptr};
 };
 
-} // namespace erhe/application
+} // namespace erhe::commands

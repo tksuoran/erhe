@@ -7,8 +7,7 @@
 #   include <shobjidl.h>
 #endif
 
-namespace erhe::file
-{
+namespace erhe::file {
 
 auto to_string(const std::filesystem::path& path) -> std::string
 {
@@ -77,10 +76,7 @@ auto from_string(const std::string& path) -> std::filesystem::path
     return true;
 }
 
-auto read(
-    const std::string_view       description,
-    const std::filesystem::path& path
-) -> std::optional<std::string>
+auto read(const std::string_view description, const std::filesystem::path& path) -> std::optional<std::string>
 {
     const bool file_is_ok = check_is_existing_non_empty_regular_file(description, path);
     if (!file_is_ok) {

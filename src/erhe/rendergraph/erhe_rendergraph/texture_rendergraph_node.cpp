@@ -35,11 +35,7 @@ Texture_rendergraph_node::Texture_rendergraph_node(const Texture_rendergraph_nod
 
 Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
 
-auto Texture_rendergraph_node::get_consumer_input_texture(
-    const Routing resource_routing,
-    const int     key,
-    const int     depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Texture_rendergraph_node::get_consumer_input_texture(const Routing resource_routing, const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
     if (key != m_input_key) {
@@ -60,11 +56,7 @@ auto Texture_rendergraph_node::get_consumer_input_texture(
     return get_producer_output_texture(resource_routing, m_output_key, depth + 1);
 }
 
-auto Texture_rendergraph_node::get_consumer_input_framebuffer(
-    const Routing resource_routing,
-    const int     key,
-    const int     depth
-) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Texture_rendergraph_node::get_consumer_input_framebuffer(const Routing resource_routing, const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
     if (key != m_input_key) {
@@ -138,13 +130,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
         );
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
         if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-            gl::clear_tex_image(
-                m_color_texture->gl_name(),
-                0,
-                gl::Pixel_format::rgba,
-                gl::Pixel_type::float_,
-                &clear_value[0]
-            );
+            gl::clear_tex_image(m_color_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
         } else {
             // TODO
         }
@@ -166,10 +152,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
 
         {
             Framebuffer::Create_info create_info;
-            create_info.attach(
-                gl::Framebuffer_attachment::color_attachment0,
-                m_color_texture.get()
-            );
+            create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
 
             if (m_depth_stencil_renderbuffer) {
                 if (gl_helpers::has_depth(m_depth_stencil_format)) {
@@ -191,15 +174,8 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             );
 
             gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
-            gl::named_framebuffer_draw_buffers(
-                m_framebuffer->gl_name(),
-                1,
-                &draw_buffers[0]
-            );
-            gl::named_framebuffer_read_buffer(
-                m_framebuffer->gl_name(),
-                gl::Color_buffer::color_attachment0
-            );
+            gl::named_framebuffer_draw_buffers(m_framebuffer->gl_name(), 1, &draw_buffers[0]);
+            gl::named_framebuffer_read_buffer(m_framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
 
             if (!m_framebuffer->check_status()) {
                 log_tail->error("{} Texture_rendergraph_node framebuffer not complete", get_name());

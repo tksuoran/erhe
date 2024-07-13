@@ -7,8 +7,7 @@
 #endif
 #include <ctime>
 
-namespace erhe::time
-{
+namespace erhe::time {
 
 //          111111111122
 // 123456789012345678901
@@ -70,4 +69,4 @@ auto timestamp_short() -> std::string
     );
 }
 
-}
+} // namespace erhe::time

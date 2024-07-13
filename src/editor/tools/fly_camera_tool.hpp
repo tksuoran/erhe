@@ -100,6 +100,24 @@ private:
     bool                                    m_active;
 };
 
+class Fly_camera_variable_float_command : public erhe::commands::Command
+{
+public:
+    Fly_camera_variable_float_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context,
+        Variable                  variable,
+        float                     scale
+    );
+
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Editor_context& m_context;
+    Variable        m_variable;
+    float           m_scale;
+};
+
 class Fly_camera_tool
     : public Update_fixed_step
     , public Update_once_per_frame
@@ -137,7 +155,7 @@ public:
     void update_once_per_frame(const Time_context& time_context) override;
 
     [[nodiscard]] auto get_camera() const -> erhe::scene::Camera*;
-    void set_camera (erhe::scene::Camera* camera);
+    void set_camera (erhe::scene::Camera* camera, erhe::scene::Node* node = nullptr);
     void translation(int tx, int ty, int tz);
     void rotation   (int rx, int ry, int rz);
 
@@ -145,6 +163,7 @@ public:
     void on_hover_viewport_change();
     auto try_ready       () -> bool;
     auto try_move        (Variable variable, erhe::math::Simulation_variable_control item, bool active) -> bool;
+    auto adjust          (Variable variable, float value) -> bool;
     auto turn_relative   (float dx, float dy) -> bool;
     auto try_start_tumble() -> bool;
     auto tumble_relative (float dx, float dy) -> bool;
@@ -175,6 +194,12 @@ private:
     Fly_camera_move_command           m_move_forward_inactive_command;
     Fly_camera_move_command           m_move_backward_active_command;
     Fly_camera_move_command           m_move_backward_inactive_command;
+    Fly_camera_variable_float_command m_translate_x_command;
+    Fly_camera_variable_float_command m_translate_y_command;
+    Fly_camera_variable_float_command m_translate_z_command;
+    Fly_camera_variable_float_command m_rotate_x_command;
+    Fly_camera_variable_float_command m_rotate_y_command;
+    Fly_camera_variable_float_command m_rotate_z_command;
     std::shared_ptr<Frame_controller> m_camera_controller;
     float                             m_rotate_scale_x{1.0f};
     float                             m_rotate_scale_y{1.0f};
@@ -185,6 +210,8 @@ private:
     std::mutex                        m_mutex;
     float                             m_sensitivity        {1.0f};
     bool                              m_use_viewport_camera{true};
+    erhe::scene::Camera*              m_camera{nullptr};
+    erhe::scene::Node*                m_node{nullptr};
 
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     Fly_camera_space_mouse_listener      m_space_mouse_listener;

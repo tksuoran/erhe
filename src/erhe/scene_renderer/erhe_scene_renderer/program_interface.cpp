@@ -8,19 +8,15 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Vertex_attribute;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 using erhe::graphics::Vertex_attribute;
 
-Program_interface::Program_interface(
-    erhe::graphics::Instance& graphics_instance
-)
+Program_interface::Program_interface(erhe::graphics::Instance& graphics_instance)
     : fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -202,9 +198,7 @@ auto Program_interface::make_prototype(
     return erhe::graphics::Shader_stages_prototype{graphics_instance, create_info};
 }
 
-auto Program_interface::make_program(
-    erhe::graphics::Shader_stages_prototype&& prototype
-) -> erhe::graphics::Shader_stages
+auto Program_interface::make_program(erhe::graphics::Shader_stages_prototype&& prototype) -> erhe::graphics::Shader_stages
 {
     ERHE_PROFILE_FUNCTION();
 

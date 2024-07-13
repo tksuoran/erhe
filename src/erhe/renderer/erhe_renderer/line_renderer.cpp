@@ -63,9 +63,7 @@ using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 
-Line_renderer_pipeline::Line_renderer_pipeline(
-    erhe::graphics::Instance& graphics_instance
-)
+Line_renderer_pipeline::Line_renderer_pipeline(erhe::graphics::Instance& graphics_instance)
     : fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -151,7 +149,7 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             .name             = "compute_before_line",
             .struct_types     = { line_vertex_struct.get(), triangle_vertex_struct.get() },
             .interface_blocks = { line_vertex_buffer_block.get(), triangle_vertex_buffer_block.get(), view_block.get() },
-            .shaders = { { gl::Shader_type::compute_shader, comp_path }, }
+            .shaders          = { { gl::Shader_type::compute_shader, comp_path }, }
         };
 
         erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
@@ -277,7 +275,7 @@ auto Line_renderer::Frame_resources::make_pipeline(
                     .z_pass_op       = gl::Stencil_op::replace,
                     .function        = gl::Stencil_function::gequal,
                     .reference       = stencil_reference,
-                    .test_mask       = 0x7fu,
+                    .test_mask       = visible ? 0x7fu : 0xffu,
                     .write_mask      = 0x7fu
                 },
                 .stencil_back = {
@@ -286,7 +284,7 @@ auto Line_renderer::Frame_resources::make_pipeline(
                     .z_pass_op       = gl::Stencil_op::replace,
                     .function        = gl::Stencil_function::gequal,
                     .reference       = stencil_reference,
-                    .test_mask       = 0x7fu,
+                    .test_mask       = visible ? 0x7fu : 0xffu,
                     .write_mask      = 0x7fu
                 },
             },
@@ -956,12 +954,7 @@ struct Torus_point
     vec3 n;
 };
 
-[[nodiscard]] auto torus_point(
-    const double R,
-    const double r,
-    const double rel_major,
-    const double rel_minor
-) -> Torus_point
+[[nodiscard]] auto torus_point(const double R, const double r, const double rel_major, const double rel_minor) -> Torus_point
 {
     const double theta     = (glm::pi<double>() * 2.0 * rel_major);
     const double phi       = (glm::pi<double>() * 2.0 * rel_minor);
@@ -1420,22 +1413,14 @@ void Line_renderer::render(
         const auto& pipeline = current_frame_resources().pipeline_hidden;
         m_graphics_instance.opengl_state_tracker.execute(pipeline);
 
-        gl::draw_arrays(
-            pipeline.data.input_assembly.primitive_topology,
-            draw_first,
-            draw_count
-        );
+        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, draw_first, draw_count);
     }
 
     if (show_visible_lines) {
         const auto& pipeline = current_frame_resources().pipeline_visible;
         m_graphics_instance.opengl_state_tracker.execute(pipeline);
 
-        gl::draw_arrays(
-            pipeline.data.input_assembly.primitive_topology,
-            draw_first,
-            draw_count
-        );
+        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, draw_first, draw_count);
     }
 
     gl::disable(gl::Enable_cap::sample_alpha_to_coverage);

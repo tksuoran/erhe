@@ -9,8 +9,7 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 using glm::normalize;
 using glm::cross;

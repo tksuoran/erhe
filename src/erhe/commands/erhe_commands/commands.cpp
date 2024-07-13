@@ -4,7 +4,6 @@
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/input_arguments.hpp"
-#include "erhe_commands/key_binding.hpp"
 #include "erhe_commands/mouse_button_binding.hpp"
 #include "erhe_commands/mouse_drag_binding.hpp"
 #include "erhe_commands/mouse_motion_binding.hpp"
@@ -27,9 +26,12 @@ Commands::Commands()
 Commands::~Commands() noexcept
 {
     m_commands.clear();
+    // TODO Are any of these actually needed?
     m_key_bindings.clear();
     m_mouse_bindings.clear();
     m_mouse_wheel_bindings.clear();
+    m_controller_axis_bindings.clear();
+    m_controller_button_bindings.clear();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_xr_boolean_bindings.clear();
     m_xr_float_bindings.clear();
@@ -55,6 +57,11 @@ auto Commands::get_key_bindings() const -> const std::vector<Key_binding>&
     return m_key_bindings;
 }
 
+auto Commands::get_menu_bindings() const -> const std::vector<Menu_binding>&
+{
+    return m_menu_bindings;
+}
+
 auto Commands::get_mouse_bindings() const -> const std::vector<std::unique_ptr<Mouse_binding>>&
 {
     return m_mouse_bindings;
@@ -63,6 +70,16 @@ auto Commands::get_mouse_bindings() const -> const std::vector<std::unique_ptr<M
 auto Commands::get_mouse_wheel_bindings() const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&
 {
     return m_mouse_wheel_bindings;
+}
+
+auto Commands::get_controller_axis_bindings() const -> const std::vector<Controller_axis_binding>&
+{
+    return m_controller_axis_bindings;
+}
+
+auto Commands::get_controller_button_bindings() const -> const std::vector<Controller_button_binding>&
+{
+    return m_controller_button_bindings;
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -85,6 +102,12 @@ auto Commands::get_xr_vector2f_bindings() const -> const std::vector<Xr_vector2f
 auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
 {
     return m_update_bindings;
+}
+
+void Commands::bind_command_to_menu(Command* command, std::string_view menu_path, std::function<bool()> enabled_callback)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_menu_bindings.emplace_back(command, menu_path, enabled_callback);
 }
 
 void Commands::bind_command_to_key(
@@ -140,39 +163,48 @@ void Commands::bind_command_to_mouse_drag(
     );
 }
 
+void Commands::bind_command_to_controller_axis(Command* command, const int axis, std::optional<uint32_t> modifier_mask)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_controller_axis_bindings.emplace_back(command, axis, modifier_mask);
+}
+
+void Commands::bind_command_to_controller_button(
+    Command* const                   command,
+    const erhe::window::Mouse_button button,
+    const Button_trigger             button_trigger,
+    const std::optional<uint32_t>    modifier_mask
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_controller_button_bindings.emplace_back(command, button, button_trigger, modifier_mask);
+}
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 void Commands::bind_command_to_xr_boolean_action(
     Command* const                     command,
     erhe::xr::Xr_action_boolean* const xr_action,
-    Button_trigger                     button_trigger
+    const Button_trigger               button_trigger
 )
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
     m_xr_boolean_bindings.emplace_back(command, xr_action, button_trigger);
 }
 
-void Commands::bind_command_to_xr_float_action(
-    Command* const                   command,
-    erhe::xr::Xr_action_float* const xr_action
-)
+void Commands::bind_command_to_xr_float_action(Command* const command, erhe::xr::Xr_action_float* const xr_action)
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
     m_xr_float_bindings.emplace_back(command, xr_action);
 }
 
-void Commands::bind_command_to_xr_vector2f_action(
-    Command* const                      command,
-    erhe::xr::Xr_action_vector2f* const xr_action
-)
+void Commands::bind_command_to_xr_vector2f_action(Command* const command, erhe::xr::Xr_action_vector2f* const xr_action)
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
     m_xr_vector2f_bindings.emplace_back(command, xr_action);
 }
 #endif
 
-void Commands::bind_command_to_update(
-    Command* const command
-)
+void Commands::bind_command_to_update(Command* const command)
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
     m_update_bindings.emplace_back(command);
@@ -272,11 +304,7 @@ auto Commands::has_active_mouse() const -> bool
     return m_active_mouse_command != nullptr;
 }
 
-auto Commands::on_key(
-    const erhe::window::Keycode code,
-    const uint32_t              modifier_mask,
-    const bool                  pressed
-) -> bool
+auto Commands::on_key(const erhe::window::Keycode code, const uint32_t modifier_mask, const bool pressed) -> bool
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
@@ -411,16 +439,39 @@ void Commands::sort_mouse_bindings()
     // }
 }
 
+void Commands::sort_controller_bindings()
+{
+    std::sort(
+        m_controller_axis_bindings.begin(),
+        m_controller_axis_bindings.end(),
+        [this](const Controller_axis_binding& lhs, const Controller_axis_binding& rhs) -> bool {
+            auto* const lhs_command = lhs.get_command();
+            auto* const rhs_command = rhs.get_command();
+            ERHE_VERIFY(lhs_command != nullptr);
+            ERHE_VERIFY(rhs_command != nullptr);
+            return get_command_priority(lhs_command) > get_command_priority(rhs_command);
+        }
+    );
+    std::sort(
+        m_controller_button_bindings.begin(),
+        m_controller_button_bindings.end(),
+        [this](const Controller_button_binding& lhs, const Controller_button_binding& rhs) -> bool {
+            auto* const lhs_command = lhs.get_command();
+            auto* const rhs_command = rhs.get_command();
+            ERHE_VERIFY(lhs_command != nullptr);
+            ERHE_VERIFY(rhs_command != nullptr);
+            return get_command_priority(lhs_command) > get_command_priority(rhs_command);
+        }
+    );
+}
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 void Commands::sort_xr_bindings()
 {
     std::sort(
         m_xr_boolean_bindings.begin(),
         m_xr_boolean_bindings.end(),
-        [this](
-            const Xr_boolean_binding& lhs,
-            const Xr_boolean_binding& rhs
-        ) -> bool {
+        [this](const Xr_boolean_binding& lhs, const Xr_boolean_binding& rhs) -> bool {
             auto* const lhs_command = lhs.get_command();
             auto* const rhs_command = rhs.get_command();
             ERHE_VERIFY(lhs_command != nullptr);
@@ -431,10 +482,7 @@ void Commands::sort_xr_bindings()
     std::sort(
         m_xr_float_bindings.begin(),
         m_xr_float_bindings.end(),
-        [this](
-            const Xr_float_binding& lhs,
-            const Xr_float_binding& rhs
-        ) -> bool {
+        [this](const Xr_float_binding& lhs, const Xr_float_binding& rhs) -> bool {
             auto* const lhs_command = lhs.get_command();
             auto* const rhs_command = rhs.get_command();
             ERHE_VERIFY(lhs_command != nullptr);
@@ -445,10 +493,7 @@ void Commands::sort_xr_bindings()
     std::sort(
         m_xr_vector2f_bindings.begin(),
         m_xr_vector2f_bindings.end(),
-        [this](
-            const Xr_vector2f_binding& lhs,
-            const Xr_vector2f_binding& rhs
-        ) -> bool {
+        [this]( const Xr_vector2f_binding& lhs, const Xr_vector2f_binding& rhs) -> bool {
             auto* const lhs_command = lhs.get_command();
             auto* const rhs_command = rhs.get_command();
             ERHE_VERIFY(lhs_command != nullptr);
@@ -594,6 +639,81 @@ auto Commands::on_mouse_wheel(const float x, const float y, const uint32_t modif
             return true;
         }
     }
+    return false;
+}
+
+auto Commands::on_controller_axis(const int axis, const float value, const uint32_t modifier_mask) -> bool
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    m_last_modifier_mask = modifier_mask;
+
+    sort_controller_bindings();
+
+    Input_arguments input{
+        .modifier_mask = modifier_mask,
+        .variant = {
+            .float_value = value
+        }
+    };
+
+    for (auto& binding : m_controller_axis_bindings) {
+        if (binding.get_axis() != axis) {
+            continue;
+        }
+        if (!binding.is_command_host_enabled()) {
+            continue;
+        }
+
+        auto* const command = binding.get_command();
+        ERHE_VERIFY(command != nullptr);
+        if (binding.on_value_changed(input)) {
+            return true;
+        }
+    }
+
+    log_input->trace("Controller axis input action was not consumed");
+    return false;
+}
+
+auto Commands::on_controller_button(const int button, const bool value, const uint32_t modifier_mask) -> bool
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    m_last_modifier_mask = modifier_mask;
+
+    Input_arguments input{
+        .variant = {
+            .button_pressed = value
+        }
+    };
+
+    log_input->trace("controller_button {}: {}", button, value ? "pressed" : "released");
+    for (auto& binding : m_controller_button_bindings) {
+        if (binding.get_button() != button) {
+            continue;
+        }
+        //log_input->trace(
+        //    "  {} {} {} <- {} {}",
+        //    binding.get_command()->get_priority(),
+        //    binding.is_command_host_enabled() ? "host enabled" : "host disabled",
+        //    binding.get_command()->get_name(),
+        //    binding.xr_action->name.c_str(),
+        //    Command_binding::c_type_strings[static_cast<int>(binding.get_type())]
+        //);
+        if (!binding.is_command_host_enabled()) {
+            continue;
+        }
+
+        auto* const command = binding.get_command();
+        ERHE_VERIFY(command != nullptr);
+        if (binding.on_value_changed(input)) {
+            log_input->trace("controller button {} {} consumed by {}", button, value, command->get_name());
+            return true;
+        }
+    }
+
+    log_input->trace("controller button {} {} was not consumed", button, value);
     return false;
 }
 

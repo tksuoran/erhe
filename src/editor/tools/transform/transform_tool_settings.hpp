@@ -13,7 +13,7 @@ public:
     bool  local                {false};
     bool  translate_snap_enable{false};
     float translate_snap       {0.1f};
-    bool  rotate_snap_enable   {false};
+    bool  rotate_snap_enable   {true};
     float rotate_snap          {15.0f};
 };
 

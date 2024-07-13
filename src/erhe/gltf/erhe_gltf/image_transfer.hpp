@@ -6,14 +6,12 @@
 #include <memory>
 #include <span>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Instance;
     class Scoped_gl_context;
 }
 
-namespace erhe::gltf
-{
+namespace erhe::gltf {
 
 class Image_transfer
 {
@@ -23,12 +21,7 @@ public:
     public:
         explicit Slot(erhe::graphics::Instance& graphics_instance);
 
-        [[nodiscard]] auto begin_span_for(
-            const int                 width,
-            const int                 height,
-            const gl::Internal_format internal_format
-        ) -> std::span<std::byte>;
-
+        [[nodiscard]] auto begin_span_for(int width, int height, gl::Internal_format internal_format) -> std::span<std::byte>;
         [[nodiscard]] auto gl_name() -> unsigned int
         {
             return m_pbo.gl_name();

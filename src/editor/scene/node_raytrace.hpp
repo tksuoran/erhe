@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_primitive/renderable_mesh.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_scene/node_attachment.hpp"
 #include "scene/node_raytrace_mask.hpp"
 

@@ -8,8 +8,7 @@
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
-namespace editor
-{
+namespace editor {
 
 Selection_window::Selection_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,

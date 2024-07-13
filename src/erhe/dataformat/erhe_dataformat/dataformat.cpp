@@ -2,8 +2,7 @@
 #include "erhe_verify/verify.hpp"
 #include <algorithm>
 
-namespace erhe::dataformat
-{
+namespace erhe::dataformat {
 
 int16_t float_to_snorm16(float v)
 {
@@ -73,7 +72,7 @@ float unorm8_to_float(uint8_t v)
     return static_cast<float>(v) / 255.0f;
 }
 
-[[nodiscard]] auto c_str(Format format) -> const char*
+auto c_str(Format format) -> const char*
 {
     switch (format) {
         case Format::format_8_scalar_unorm:           return "format_8_scalar_unorm";
@@ -160,7 +159,7 @@ float unorm8_to_float(uint8_t v)
     }
 }
 
-[[nodiscard]] auto get_format_kind(Format format) -> Format_kind
+auto get_format_kind(Format format) -> Format_kind
 {
     switch (format) {
         case Format::format_8_scalar_unorm:           return Format_kind::format_kind_float;
@@ -250,7 +249,7 @@ float unorm8_to_float(uint8_t v)
     }
 }
 
-[[nodiscard]] auto get_component_count(Format format) -> std::size_t
+auto get_component_count(Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_8_scalar_unorm:           return 1;
@@ -340,7 +339,7 @@ float unorm8_to_float(uint8_t v)
     }
 }
 
-[[nodiscard]] auto get_component_byte_size(Format format) -> std::size_t
+auto get_component_byte_size(Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_8_scalar_unorm:           return 1;
@@ -430,7 +429,7 @@ float unorm8_to_float(uint8_t v)
     }
 }
 
-[[nodiscard]] auto get_format_size(Format format) -> std::size_t
+auto get_format_size(Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_8_scalar_unorm:           return 1 * 1;
@@ -544,13 +543,7 @@ auto get_float_format(Format format) -> Format
     }
 }
 
-void convert(
-    const void* src,
-    Format      src_format,
-    void*       dst,
-    Format      dst_format,
-    float       scale
-)
+void convert(const void* src, Format src_format, void* dst, Format dst_format, float scale)
 {
     if (src == nullptr) {
         std::size_t size = get_format_size(dst_format);

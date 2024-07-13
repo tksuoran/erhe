@@ -33,10 +33,7 @@ Rotate_tool::Rotate_tool(Editor_context& editor_context, Icon_set& icon_set, Too
 
 Rotate_tool::~Rotate_tool() noexcept = default;
 
-void Rotate_tool::handle_priority_update(
-    const int old_priority,
-    const int new_priority
-)
+void Rotate_tool::handle_priority_update(const int old_priority, const int new_priority)
 {
     auto& shared = get_shared();
     shared.settings.show_rotate = new_priority > old_priority;

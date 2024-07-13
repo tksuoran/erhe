@@ -40,7 +40,7 @@ namespace erhe::physics {
 }
 namespace erhe::primitive {
     class Material;
-    class Renderable_mesh;
+    class Buffer_mesh;
     class Primitive;
 }
 namespace erhe::raytrace {
@@ -208,8 +208,8 @@ private:
     std::shared_ptr<erhe::scene::Camera>            m_camera;
     std::shared_ptr<Frame_controller>               m_camera_controls;
 
-    std::shared_ptr<Item_tree_window>               m_node_tree_window;             // Scene
-    std::shared_ptr<Item_tree_window>               m_content_library_tree_window;  // Content library
+    std::shared_ptr<Item_tree_window>               m_node_tree_window;
+    std::shared_ptr<Item_tree_window>               m_content_library_tree_window;
 };
 
 } // namespace editor

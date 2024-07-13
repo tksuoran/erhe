@@ -35,14 +35,24 @@ public:
 
     void update(erhe::xr::Render_view& render_view);
 
-    int                                          width;
-    int                                          height;
-    std::shared_ptr<erhe::graphics::Texture>     color_texture;
-    std::shared_ptr<erhe::graphics::Texture>     depth_stencil_texture;
-    std::shared_ptr<erhe::graphics::Framebuffer> framebuffer;
-    std::shared_ptr<erhe::scene::Node>           node;
-    std::shared_ptr<erhe::scene::Camera>         camera;
-    bool                                         is_valid{false};
+    [[nodiscard]] auto is_valid                 () const -> bool;
+    [[nodiscard]] auto get_framebuffer          () const -> erhe::graphics::Framebuffer*;
+    [[nodiscard]] auto get_camera               () const -> erhe::scene::Camera*;
+    [[nodiscard]] auto get_width                () const -> int;
+    [[nodiscard]] auto get_height               () const -> int;
+    [[nodiscard]] auto get_color_texture        () const -> erhe::graphics::Texture*;
+    [[nodiscard]] auto get_depth_stencil_texture() const -> erhe::graphics::Texture*;
+
+private:
+    Headset_view&                                m_headset_view;
+    int                                          m_width;
+    int                                          m_height;
+    std::shared_ptr<erhe::graphics::Texture>     m_color_texture;
+    std::shared_ptr<erhe::graphics::Texture>     m_depth_stencil_texture;
+    std::shared_ptr<erhe::graphics::Framebuffer> m_framebuffer;
+    std::shared_ptr<erhe::scene::Node>           m_node;
+    std::shared_ptr<erhe::scene::Camera>         m_camera;
+    bool                                         m_is_valid{false};
 };
 
 } // namespace editor

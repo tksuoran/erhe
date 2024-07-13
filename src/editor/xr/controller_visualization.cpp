@@ -13,14 +13,9 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_xr/xr_action.hpp"
 
-namespace editor
-{
+namespace editor {
 
-Controller_visualization::Controller_visualization(
-    erhe::scene::Node* view_root,
-    Mesh_memory&       mesh_memory,
-    Scene_root&        scene_root
-)
+Controller_visualization::Controller_visualization(erhe::scene::Node* view_root, Mesh_memory& mesh_memory, Scene_root& scene_root)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -29,20 +24,21 @@ Controller_visualization::Controller_visualization(
         "Controller",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
-    //constexpr float length = 0.05f;
-    //constexpr float radius = 0.02f;
+
     auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 40, 14);
     controller_geometry.transform(erhe::math::mat4_swap_yz);
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
 
+    erhe::primitive::Element_mappings dummy;
     erhe::primitive::Primitive primitive{
-        erhe::primitive::make_renderable_mesh(
+        erhe::primitive::make_buffer_mesh(
             controller_geometry,
             erhe::primitive::Build_info{
                 .primitive_types = {.fill_triangles = true },
                 .buffer_info = mesh_memory.buffer_info
             },
+            dummy, // TODO make element mappings optional
             erhe::primitive::Normal_style::corner_normals
         ),
         controller_material

@@ -20,7 +20,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_primitive/renderable_mesh.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/iinstance.hpp"
@@ -44,8 +44,7 @@
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 const float indent = 15.0f;
 
@@ -313,11 +312,96 @@ auto layer_name(const erhe::scene::Layer_id layer_id) -> const char*
     }
 }
 
+void Properties::geometry_properties(const erhe::geometry::Geometry* geometry) const
+{
+    if (geometry == nullptr) {
+        return;
+    }
+
+    if (!ImGui::TreeNodeEx("Geometry")) {
+        return;
+    }
+
+    ImGui::Indent(indent);
+    int point_count   = geometry->get_point_count();
+    int polygon_count = geometry->get_polygon_count();
+    int edge_count    = geometry->get_edge_count();
+    int corner_count  = geometry->get_corner_count();
+    ImGui::InputInt("Points",   &point_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputInt("Polygons", &polygon_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputInt("Edges",    &edge_count,    0, 0, ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputInt("Corners",  &corner_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
+    ImGui::Unindent(indent);
+    ImGui::TreePop();
+}
+
+void Properties::buffer_mesh_properties(const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh) const
+{
+    if (!buffer_mesh) {
+        return;
+    }
+
+    if (!ImGui::TreeNodeEx(label)) {
+        return;
+    }
+    ImGui::Indent(indent);
+
+    ImGui::Text("Fill Triangles: %d",  buffer_mesh->triangle_fill_indices.get_triangle_count());
+    ImGui::Text("Edge Lines: %d",      buffer_mesh->edge_line_indices.get_line_count());
+    ImGui::Text("Corner Points: %d",   buffer_mesh->corner_point_indices.get_point_count());
+    ImGui::Text("Centroid Points: %d", buffer_mesh->polygon_centroid_indices.get_point_count());
+
+    ImGui::Text("Vertices: %zu",     buffer_mesh->vertex_buffer_range.count);
+    ImGui::Text("Indices: %zu",      buffer_mesh->index_buffer_range.count);
+    ImGui::Text("Vertex Bytes: %zu", buffer_mesh->vertex_buffer_range.get_byte_size());
+    ImGui::Text("Index Bytes: %zu",  buffer_mesh->vertex_buffer_range.get_byte_size());
+
+    if (buffer_mesh->bounding_box.is_valid()) {
+        const glm::vec3 size = buffer_mesh->bounding_box.max - buffer_mesh->bounding_box.min;
+        float volume = buffer_mesh->bounding_box.volume();
+        ImGui::Text("Bounding box size: %f, %f, %f", size.x, size.y, size.z);
+        ImGui::Text("Bounding box volume: %f", volume);
+    }
+    if (buffer_mesh->bounding_sphere.radius > 0.0f) {
+        ImGui::Text("Bounding sphere radius: %f", buffer_mesh->bounding_sphere.radius);
+        ImGui::Text("Bounding box volume: %f", buffer_mesh->bounding_sphere.volume());
+    }
+
+    ImGui::Unindent(indent);
+    ImGui::TreePop();
+}
+
+void Properties::primitive_raytrace_properties(erhe::primitive::Primitive_raytrace* primitive_raytrace) const
+{
+    const erhe::primitive::Buffer_mesh& buffer_mesh = primitive_raytrace->get_raytrace_mesh();
+    buffer_mesh_properties("Raytrace Buffer Mesh", &buffer_mesh);
+}
+
+void Properties::shape_properties(const char* label, erhe::primitive::Primitive_shape* shape) const
+{
+    if (shape == nullptr) {
+        return;
+    }
+
+    if (!ImGui::TreeNodeEx(label)) {
+        return;
+    }
+
+    ImGui::Indent(indent);
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
+    if (geometry) {
+        geometry_properties(geometry.get());
+    }
+
+    primitive_raytrace_properties(&shape->get_raytrace());
+
+    ImGui::Unindent(indent);
+    ImGui::TreePop();
+}
+
 void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
     ERHE_PROFILE_FUNCTION();
-
-    //ERHE_VERIFY(mesh.node_data.host != nullptr);
 
     const auto* node = mesh.get_node();
     auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
@@ -325,14 +409,42 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
         ImGui::Text("Mesh host not set");
         return;
     }
-    auto& material_library = scene_root->content_library()->materials;
+
     ImGui::Text("Layer ID: %u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id));
 
     if (mesh.skin) {
         skin_properties(*mesh.skin.get());
     }
 
-    if (ImGui::TreeNodeEx("Mesh Raytrace", ImGuiTreeNodeFlags_DefaultOpen)) {
+    auto& material_library = scene_root->content_library()->materials;
+
+    int primitive_index = 0;
+    for (auto& primitive : mesh.get_mutable_primitives()) { // may edit material
+        std::string label = fmt::format("Primitive {}", primitive_index++);
+        if (ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Indent(indent);
+            ImGui::PushID(primitive_index);
+
+            material_library->combo(m_context, "Material", primitive.material, false);
+            if (primitive.material) {
+                ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
+            }
+            if (primitive.render_shape) {
+                shape_properties("Render shape", primitive.render_shape.get());
+                const erhe::primitive::Buffer_mesh& renderable_mesh = primitive.render_shape->get_renderable_mesh();
+                buffer_mesh_properties("Renderable Buffer Mesh", &renderable_mesh);
+            }
+            if (primitive.collision_shape) {
+                shape_properties("Collision shape", primitive.collision_shape.get());
+            }
+            ImGui::PopID();
+            ImGui::Unindent(indent);
+            ImGui::TreePop();
+        }
+    }
+
+    if (ImGui::TreeNodeEx("Mesh Raytrace")) {
+        ImGui::Indent(indent);
         const auto* mesh_rt_scene = mesh.get_rt_scene();
         ImGui::Text("RT Scene: %s", (mesh_rt_scene != nullptr) ? mesh_rt_scene->debug_label().data() : "(nullptr)");
         const auto& rt_primitives = mesh.get_rt_primitives();
@@ -347,55 +459,8 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
             }
             ImGui::TreePop();
         }
+        ImGui::Unindent(indent);
         ImGui::TreePop();
-    }
-
-    int primitive_index = 0;
-    for (auto& primitive : mesh.get_mutable_primitives()) {
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.get_geometry();
-
-        ++primitive_index;
-        ImGui::PushID(primitive_index);
-        const std::string label = geometry
-            ? fmt::format("Primitive: {}", geometry->name)
-            : fmt::format("Primitive: {}", primitive_index);
-
-        if (ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Indent(indent);
-            std::shared_ptr<erhe::primitive::Material>& material = primitive.get_mutable_material();
-            material_library->combo(m_context, "Material", material, false);
-            if (material) {
-                ImGui::Text("Material Buffer Index: %u", material->material_buffer_index);
-            } else {
-                ImGui::Text("Null material");
-            }
-            if (geometry && ImGui::TreeNodeEx("Statistics")) {
-                ImGui::Indent(indent);
-                int point_count   = geometry->get_point_count();
-                int polygon_count = geometry->get_polygon_count();
-                int edge_count    = geometry->get_edge_count();
-                int corner_count  = geometry->get_corner_count();
-                ImGui::InputInt("Points",   &point_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
-                ImGui::InputInt("Polygons", &polygon_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
-                ImGui::InputInt("Edges",    &edge_count,    0, 0, ImGuiInputTextFlags_ReadOnly);
-                ImGui::InputInt("Corners",  &corner_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
-                ImGui::Unindent(indent);
-                ImGui::TreePop();
-            }
-            if (ImGui::TreeNodeEx("Debug")) {
-                erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
-                float bbox_volume    = renderable_mesh.bounding_box.volume();
-                float bsphere_volume = renderable_mesh.bounding_sphere.volume();
-                ImGui::Indent(indent);
-                ImGui::InputFloat("BBox Volume",    &bbox_volume,    0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
-                ImGui::InputFloat("BSphere Volume", &bsphere_volume, 0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
-                ImGui::Unindent(indent);
-                ImGui::TreePop();
-            }
-            ImGui::Unindent(indent);
-            ImGui::TreePop();
-        }
-        ImGui::PopID();
     }
 }
 

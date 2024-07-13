@@ -50,6 +50,7 @@ static constexpr gl::Map_buffer_access_mask access_mask_persistent{
 static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
     gl::Map_buffer_access_mask::map_write_bit
 };
+
 inline auto access_mask(erhe::graphics::Instance& instance) -> gl::Map_buffer_access_mask
 {
     return instance.info.use_persistent_buffers
@@ -59,11 +60,7 @@ inline auto access_mask(erhe::graphics::Instance& instance) -> gl::Map_buffer_ac
 
 }
 
-void Multi_buffer::allocate(
-    const gl::Buffer_target target,
-    const unsigned int      binding_point,
-    const std::size_t       size
-)
+void Multi_buffer::allocate(const gl::Buffer_target target, const unsigned int binding_point, const std::size_t size)
 {
     ERHE_VERIFY(gl_helpers::is_indexed(target));
     m_binding_point = binding_point;
@@ -127,12 +124,7 @@ void Multi_buffer::next_frame()
 
     m_writer.reset();
 
-    SPDLOG_LOGGER_TRACE(
-        log_multi_buffer,
-        "{} next_frame() - current slot is now {}",
-        m_name,
-        m_current_slot
-    );
+    SPDLOG_LOGGER_TRACE(log_multi_buffer, "{} next_frame() - current slot is now {}", m_name, m_current_slot);
 }
 
 void Multi_buffer::bind(const erhe::renderer::Buffer_range& range)

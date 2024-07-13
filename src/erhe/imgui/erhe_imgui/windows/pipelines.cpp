@@ -1,6 +1,5 @@
 #include "erhe_imgui/windows/pipelines.hpp"
 
-//#include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 
@@ -21,13 +20,9 @@
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
 
-Pipelines::Pipelines(
-    Imgui_renderer& imgui_renderer,
-    Imgui_windows&  imgui_windows
-)
+Pipelines::Pipelines(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows)
     : Imgui_window{imgui_renderer, imgui_windows, "Pipelines", "pipelines"}
 {
 }

@@ -20,16 +20,15 @@ namespace editor {
 class Editor_context;
 class Node_physics;
 
-class Mesh_operation : public IOperation
+class Mesh_operation_parameters
 {
 public:
-    class Parameters
-    {
-    public:
-        Editor_context&             context;
-        erhe::primitive::Build_info build_info;
-    };
+    Editor_context&             context;
+    erhe::primitive::Build_info build_info;
+};
 
+class Mesh_operation : public IOperation
+{
 protected:
     class Entry
     {
@@ -46,23 +45,21 @@ protected:
         Version after{};
     };
 
-    explicit Mesh_operation(Parameters&& parameters);
+    explicit Mesh_operation(Mesh_operation_parameters&& parameters);
     ~Mesh_operation() noexcept override;
 
     // Implements IOperation
     auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
+    void execute (Editor_context& context) override;
+    void undo    (Editor_context& context) override;
 
     // Public API
-    void add_entry(Entry&& entry);
-    void make_entries(
-        const std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation
-    );
+    void add_entry   (Entry&& entry);
+    void make_entries(const std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation);
 
 protected:
-    Parameters         m_parameters;
-    std::vector<Entry> m_entries;
+    Mesh_operation_parameters m_parameters;
+    std::vector<Entry>        m_entries;
 };
 
 }

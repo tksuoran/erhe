@@ -35,7 +35,7 @@ public:
     Mesh& operator=(const Mesh&) = delete;
 
     explicit Mesh(const std::string_view name);
-    Mesh(const std::string_view name, const erhe::primitive::Primitive primitive);
+    Mesh(const std::string_view name, const erhe::primitive::Primitive& primitive);
     Mesh(const Mesh&, erhe::for_clone);
 
     // Implements Item_base
@@ -51,8 +51,8 @@ public:
 
     // Public API
     void clear_primitives    ();
-    void add_primitive       (erhe::primitive::Primitive primitive);
-    void add_primitive       (erhe::primitive::Primitive primitive, const std::shared_ptr<erhe::primitive::Material>& material);
+    void update_rt_primitives();
+    void add_primitive       (erhe::primitive::Primitive primitive, const std::shared_ptr<erhe::primitive::Material>& material = {});
     void set_primitives      (const std::vector<erhe::primitive::Primitive>& primitives);
     void set_rt_mask         (uint32_t rt_mask);
     void attach_rt_to_scene  (erhe::raytrace::IScene* rt_scene);
@@ -68,9 +68,11 @@ public:
     float                 line_width{1.0f};
 
 private:
+
     std::vector<erhe::primitive::Primitive>          m_primitives;
     erhe::raytrace::IScene*                          m_rt_scene{nullptr};
     std::vector<std::unique_ptr<Raytrace_primitive>> m_rt_primitives;
+    bool                                             m_rt_primitives_dirty{false};
 };
 
 [[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;

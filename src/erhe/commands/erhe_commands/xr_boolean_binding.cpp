@@ -5,11 +5,7 @@
 
 namespace erhe::commands {
 
-Xr_boolean_binding::Xr_boolean_binding(
-    Command* const                     command,
-    erhe::xr::Xr_action_boolean* const xr_action,
-    const Button_trigger               trigger
-)
+Xr_boolean_binding::Xr_boolean_binding(Command* const command, erhe::xr::Xr_action_boolean* const xr_action, const Button_trigger trigger)
     : Command_binding{command}
     , xr_action      {xr_action}
     , m_trigger      {trigger}
@@ -23,16 +19,6 @@ Xr_boolean_binding::~Xr_boolean_binding() noexcept = default;
 auto Xr_boolean_binding::get_type() const -> Type
 {
     return Type::Xr_boolean;
-}
-
-auto c_str(const Button_trigger value) -> const char*
-{
-    switch (value) {
-        case Button_trigger::Button_pressed:  return "button pressed";
-        case Button_trigger::Button_released: return "button released";
-        case Button_trigger::Any:             return "any";
-        default:                              return "?";
-    }
 }
 
 auto Xr_boolean_binding::test_trigger(Input_arguments& input) const -> bool

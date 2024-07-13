@@ -7,7 +7,6 @@
 namespace erhe::graphics {
     class Instance;
 }
-
 namespace erhe::scene {
     class Node;
     class Projection;

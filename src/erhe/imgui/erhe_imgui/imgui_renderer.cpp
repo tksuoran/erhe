@@ -348,10 +348,7 @@ void Imgui_program_interface::next_frame()
 }
 #pragma endregion Imgui_program_interface
 
-auto make_font_texture_create_info(
-    erhe::graphics::Instance& graphics_instance,
-    ImFontAtlas&              font_atlas
-) -> Texture::Create_info
+auto make_font_texture_create_info(erhe::graphics::Instance& graphics_instance, ImFontAtlas& font_atlas) -> Texture::Create_info
 {
     ERHE_PROFILE_FUNCTION();
 

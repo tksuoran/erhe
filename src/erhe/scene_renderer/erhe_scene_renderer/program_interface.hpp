@@ -37,9 +37,7 @@ public:
         erhe::graphics::Shader_stages_create_info& create_info
     ) -> erhe::graphics::Shader_stages_prototype;
 
-    [[nodiscard]] auto make_program(
-        erhe::graphics::Shader_stages_prototype&& prototype
-    ) -> erhe::graphics::Shader_stages;
+    [[nodiscard]] auto make_program(erhe::graphics::Shader_stages_prototype&& prototype) -> erhe::graphics::Shader_stages;
 
     void apply_default_attribute_values() const;
 

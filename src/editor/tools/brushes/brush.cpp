@@ -126,8 +126,8 @@ auto Brush::get_type_name() const -> std::string_view
 }
 
 Brush::Brush(const Brush_data& create_info)
-    : Item       {create_info.get_name()}
-    , m_data     {create_info}
+    : Item  {create_info.get_name()}
+    , m_data{create_info}
 {
 }
 
@@ -137,10 +137,13 @@ void Brush::late_initialize()
     ERHE_VERIFY(geometry);
     m_primitive = erhe::primitive::Primitive{geometry};
     if (!m_primitive.has_renderable_triangles()) {
-        m_primitive.make_renderable_mesh(m_data.build_info, m_data.normal_style);
+        ERHE_VERIFY(m_primitive.make_renderable_mesh(m_data.build_info, m_data.normal_style));
     }
-    if (!m_primitive.has_raytrace_triangles()) {
-        m_primitive.make_raytrace();
+    ERHE_VERIFY(m_primitive.render_shape);
+    const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = m_primitive.render_shape;
+
+    if (!render_shape->has_raytrace_triangles()) {
+        render_shape->make_raytrace();
     }
 
     if (
@@ -168,11 +171,7 @@ void Brush::late_initialize()
 
 Brush::Brush(Brush&& old) noexcept = default;
 
-auto Brush::get_reference_frame(
-    const uint32_t corner_count,
-    const uint32_t in_face_offset,
-    const uint32_t corner_offset
-) -> Reference_frame
+auto Brush::get_reference_frame(const uint32_t corner_count, const uint32_t in_face_offset, const uint32_t corner_offset) -> Reference_frame
 {
     for (const auto& reference_frame : m_reference_frames) {
         if (
@@ -209,10 +208,7 @@ auto Brush::get_reference_frame(
     return m_reference_frames.emplace_back(*geometry.get(), selected_polygon, in_face_offset, corner_offset);
 }
 
-auto Brush::get_reference_frame(
-    const uint32_t face_offset,
-    const uint32_t corner_offset
-) -> Reference_frame
+auto Brush::get_reference_frame(const uint32_t face_offset, const uint32_t corner_offset) -> Reference_frame
 {
     //for (const auto& reference_frame : reference_frames) {
     //    if (
@@ -250,8 +246,11 @@ auto Brush::get_scaled(const float scale) -> const Scaled&
         }
     }
     Scaled& scaled = m_scaled_entries.emplace_back(create_scaled(scale_key));
-    if (!scaled.primitive.has_renderable_triangles()) {
-        scaled.primitive.make_raytrace();
+
+    ERHE_VERIFY(m_primitive.render_shape);
+    const std::shared_ptr<erhe::primitive::Primitive_render_shape>& scaled_render_shape = scaled.primitive.render_shape;
+    if (!scaled_render_shape->has_raytrace_triangles()) {
+        scaled_render_shape->make_raytrace();
     }
     return scaled;
 }
@@ -301,7 +300,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
 
     auto scaled_geometry = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::operation::clone(
-            *m_primitive.get_geometry().get(),
+            *m_primitive.render_shape->get_geometry().get(),
             erhe::math::create_scale(scale)
         )
     );
@@ -368,9 +367,7 @@ auto Brush::get_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
     return m_data.geometry;
 }
 
-auto Brush::make_instance(
-    const Instance_create_info& instance_create_info
-) -> std::shared_ptr<erhe::scene::Node>
+auto Brush::make_instance(const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -378,7 +375,7 @@ auto Brush::make_instance(
 
     const auto& scaled = get_scaled(instance_create_info.scale);
 
-    const std::string_view name = scaled.primitive.get_name();
+    const std::string_view name = this->get_name();
 
     log_scene->trace(
         "creating {} with material {} (material buffer index {})",
@@ -422,12 +419,11 @@ auto Brush::get_bounding_box() -> erhe::math::Bounding_box
 {
     if (
         !m_primitive.has_renderable_triangles() ||
-        !m_primitive.get_renderable_mesh().bounding_box.is_valid()
+        !m_primitive.render_shape->get_renderable_mesh().bounding_box.is_valid() // TODO is this condition needed?
     ) {
         late_initialize();
     }
-    erhe::primitive::Renderable_mesh& renderable_mesh = m_primitive.get_renderable_mesh();
-    return renderable_mesh.bounding_box;
+    return m_primitive.get_bounding_box();
 }
 
 } // namespace editor

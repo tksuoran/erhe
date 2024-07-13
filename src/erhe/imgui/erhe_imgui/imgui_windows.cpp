@@ -276,19 +276,6 @@ auto Imgui_windows::on_cursor_enter(const int entered) -> bool
     return false; // does not consume
 }
 
-//auto Imgui_windows::get_imgui_capture_mouse() const -> bool
-//{
-//    //const bool viewports_hosted_in_imgui =
-//    //    g_window->config.show &&
-//    //    g_window->config.window_viewport;
-//
-//    if (!viewports_hosted_in_imgui) {
-//        return false;
-//    }
-//
-//    return want_capture_mouse();
-//}
-
 auto Imgui_windows::on_mouse_move(float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool
 {
     static_cast<float>(relative_x);
@@ -297,13 +284,6 @@ auto Imgui_windows::on_mouse_move(float absolute_x, float absolute_y, float rela
     if (!m_window_imgui_host) {
         return false;
     }
-
-    // for (auto& imgui_window : m_imgui_windows)
-    // {
-    //     if (imgui_window->is_hovered())
-    //     {
-    //     }
-    // }
 
     m_window_imgui_host->on_mouse_move(absolute_x, absolute_y);
 

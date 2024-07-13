@@ -222,5 +222,4 @@ auto Swapchain::enumerate_images() -> bool
     return true;
 }
 
-
 }

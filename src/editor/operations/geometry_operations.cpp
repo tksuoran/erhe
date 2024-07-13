@@ -25,7 +25,7 @@ auto Catmull_clark_subdivision_operation::describe() const -> std::string
     return fmt::format("Catmull_clark {}", Mesh_operation::describe());
 }
 
-Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Parameters&& context)
+Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::catmull_clark_subdivision);
@@ -36,7 +36,7 @@ auto Sqrt3_subdivision_operation::describe() const -> std::string
     return fmt::format("Sqrt3 {}", Mesh_operation::describe());
 }
 
-Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Parameters&& context)
+Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::sqrt3_subdivision);
@@ -47,7 +47,7 @@ auto Triangulate_operation::describe() const -> std::string
     return fmt::format("Triangulate {}", Mesh_operation::describe());
 }
 
-Triangulate_operation::Triangulate_operation(Parameters&& context)
+Triangulate_operation::Triangulate_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::triangulate);
@@ -58,7 +58,7 @@ auto Join_operation::describe() const -> std::string
     return fmt::format("Join {}", Mesh_operation::describe());
 }
 
-Join_operation::Join_operation(Parameters&& context)
+Join_operation::Join_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::join);
@@ -69,7 +69,7 @@ auto Kis_operation::describe() const -> std::string
     return fmt::format("Kis {}", Mesh_operation::describe());
 }
 
-Kis_operation::Kis_operation(Parameters&& context)
+Kis_operation::Kis_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::kis);
@@ -80,7 +80,7 @@ auto Subdivide_operation::describe() const -> std::string
     return fmt::format("Subdivide {}", Mesh_operation::describe());
 }
 
-Subdivide_operation::Subdivide_operation(Parameters&& context)
+Subdivide_operation::Subdivide_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::subdivide);
@@ -91,7 +91,7 @@ auto Meta_operation::describe() const -> std::string
     return fmt::format("Meta {}", Mesh_operation::describe());
 }
 
-Meta_operation::Meta_operation(Parameters&& context)
+Meta_operation::Meta_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::meta);
@@ -102,40 +102,40 @@ auto Gyro_operation::describe() const -> std::string
     return fmt::format("Gyro {}", Mesh_operation::describe());
 }
 
-Gyro_operation::Gyro_operation(Parameters&& context)
+Gyro_operation::Gyro_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::gyro);
 }
 
-auto Dual_operator::describe() const -> std::string
+auto Dual_operation::describe() const -> std::string
 {
     return fmt::format("Dual {}", Mesh_operation::describe());
 }
 
-Dual_operator::Dual_operator(Parameters&& context)
+Dual_operation::Dual_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::dual);
 }
 
-auto Ambo_operator::describe() const -> std::string
+auto Ambo_operation::describe() const -> std::string
 {
     return fmt::format("Ambo {}", Mesh_operation::describe());
 }
 
-Ambo_operator::Ambo_operator(Parameters&& context)
+Ambo_operation::Ambo_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::ambo);
 }
 
-auto Truncate_operator::describe() const -> std::string
+auto Truncate_operation::describe() const -> std::string
 {
     return fmt::format("Truncate {}", Mesh_operation::describe());
 }
 
-Truncate_operator::Truncate_operator(Parameters&& context)
+Truncate_operation::Truncate_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::truncate);
@@ -146,7 +146,7 @@ auto Reverse_operation::describe() const -> std::string
     return fmt::format("Reverse {}", Mesh_operation::describe());
 }
 
-Reverse_operation::Reverse_operation(Parameters&& context)
+Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::reverse);
@@ -157,7 +157,7 @@ auto Normalize_operation::describe() const -> std::string
     return fmt::format("Normalize {}", Mesh_operation::describe());
 }
 
-Normalize_operation::Normalize_operation(Parameters&& context)
+Normalize_operation::Normalize_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::normalize);
@@ -168,7 +168,7 @@ auto Weld_operation::describe() const -> std::string
     return fmt::format("Weld {}", Mesh_operation::describe());
 }
 
-Weld_operation::Weld_operation(Parameters&& context)
+Weld_operation::Weld_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::weld);

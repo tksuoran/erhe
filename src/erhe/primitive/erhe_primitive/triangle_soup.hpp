@@ -1,11 +1,15 @@
 #pragma once
 
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 
 #include <cstdint>
 #include <vector>
 
+namespace erhe::primitive {
+    class Element_mappings;
+}
 namespace erhe::primitive {
 
 class Triangle_soup
@@ -19,5 +23,7 @@ public:
     std::vector<uint8_t>          vertex_data;
     std::vector<uint32_t>         index_data;
 };
+
+[[nodiscard]] auto geometry_from_triangle_soup(const Triangle_soup& triangle_soup, erhe::primitive::Element_mappings& element_mappings) -> erhe::geometry::Geometry;
 
 } // namespace erhe::primitive

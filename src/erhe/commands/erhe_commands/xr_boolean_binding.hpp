@@ -12,13 +12,6 @@ namespace erhe::commands {
 
 struct Input_arguments;
 
-enum class Button_trigger : unsigned int
-{
-    Button_pressed = 0,
-    Button_released = 1,
-    Any = 2
-};
-
 class Xr_boolean_binding : public Command_binding
 {
 public:
@@ -41,4 +34,4 @@ protected:
     Button_trigger m_trigger{Button_trigger::Button_pressed};
 };
 
-} // namespace erhe/application
+} // namespace erhe::commands

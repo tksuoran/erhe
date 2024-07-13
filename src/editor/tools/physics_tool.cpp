@@ -34,8 +34,7 @@
 #   include <imgui/imgui.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 class Scene_builder;
 
@@ -438,18 +437,18 @@ auto Physics_tool::on_drag() -> bool
     } else {
         m_grab_position_world = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_grab_position_in_node, 1.0f}};
 
-        float max_radius = 0.0f;
+        erhe::math::Bounding_box mesh_bounding_box;
         for (const erhe::primitive::Primitive& primitive : m_target_mesh->get_primitives()) {
-            max_radius = std::max(
-                max_radius,
-                primitive.get_renderable_mesh().bounding_sphere.radius
-            );
+            erhe::math::Bounding_box primitive_bounding_box = primitive.get_bounding_box();
+            if (primitive_bounding_box.is_valid()) {
+                mesh_bounding_box.include(primitive_bounding_box);
+            }
         }
-        m_target_mesh_size   = max_radius;
+        m_target_mesh_size   = glm::length(mesh_bounding_box.diagonal());
         m_to_end_direction   = glm::normalize(end.value() - m_grab_position_world);
         m_to_start_direction = glm::normalize(m_grab_position_world - end.value());
         const float distance = glm::distance(end.value(), m_grab_position_world);
-        if (distance > max_radius * 4.0f) {
+        if (distance > m_target_mesh_size * 4.0f) {
             m_goal_position_in_world = m_grab_position_world + m_force_distance * distance * m_to_end_direction;
         } else {
             m_goal_position_in_world = end.value() + m_force_distance * distance * m_to_start_direction;

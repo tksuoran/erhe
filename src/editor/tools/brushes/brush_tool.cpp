@@ -43,8 +43,7 @@
 #include <optional>
 #include <vector>
 
-namespace editor
-{
+namespace editor {
 
 using glm::mat3;
 using glm::mat4;
@@ -180,19 +179,13 @@ void Brush_tool::remove_brush_mesh()
 
 auto Brush_tool::try_insert_ready() -> bool
 {
-    return is_enabled() &&
-        (m_hover.mesh || (m_hover.grid != nullptr));
+    return is_enabled() && (m_hover.mesh || (m_hover.grid != nullptr));
 }
 
 auto Brush_tool::try_insert() -> bool
 {
-    auto brush = m_context.selection->get<Brush>();
-    if (
-        !m_brush_node ||
-        !m_brush_mesh ||
-        !m_hover.position.has_value() ||
-        !brush
-    ) {
+    auto brush = m_context.selection->get_last_selected<Brush>();
+    if (!m_brush_node || !m_brush_mesh || !m_hover.position.has_value() || !brush) {
         return false;
     }
 
@@ -216,10 +209,7 @@ void Brush_tool::on_motion()
         return;
     }
 
-    const Hover_entry* nearest_hover = scene_view->get_nearest_hover(
-        Hover_entry::content_bit |
-        Hover_entry::grid_bit
-    );
+    const Hover_entry* nearest_hover = scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
     if (nearest_hover == nullptr) {
         return;
     }
@@ -241,7 +231,7 @@ void Brush_tool::on_motion()
 // Returns transform which places brush in parent (hover) mesh space.
 auto Brush_tool::get_hover_mesh_transform() -> mat4
 {
-    auto brush = m_context.selection->get<Brush>();
+    auto brush = m_context.selection->get_last_selected<Brush>();
 
     if (
         (m_hover.mesh == nullptr)                                            ||
@@ -298,7 +288,7 @@ auto Brush_tool::get_hover_grid_transform() -> mat4
     }
 
     m_transform_scale = m_scale;
-    auto brush = m_context.selection->get<Brush>();
+    auto brush = m_context.selection->get_last_selected<Brush>();
     Reference_frame brush_frame = brush->get_reference_frame(
         static_cast<uint32_t>(m_polygon_offset),
         static_cast<uint32_t>(m_corner_offset)
@@ -309,9 +299,7 @@ auto Brush_tool::get_hover_grid_transform() -> mat4
     const mat4 inverse_brush   = inverse(brush_transform);
 
     const glm::vec3 position_in_grid0 = m_hover.grid->grid_from_world() * glm::vec4{m_hover.position.value(), 1.0f};
-    const glm::vec3 position_in_grid  = m_snap_to_grid
-        ? m_hover.grid->snap_grid_position(position_in_grid0)
-        : position_in_grid0;
+    const glm::vec3 position_in_grid  = m_snap_to_grid ? m_hover.grid->snap_grid_position(position_in_grid0) : position_in_grid0;
     const glm::mat4 offset            = erhe::math::create_translation<float>(position_in_grid);
     const glm::mat4 world_from_grid   = m_hover.grid->world_from_grid() * offset;
 
@@ -321,7 +309,7 @@ auto Brush_tool::get_hover_grid_transform() -> mat4
 
 void Brush_tool::update_mesh_node_transform()
 {
-    auto brush = m_context.selection->get<Brush>();
+    auto brush = m_context.selection->get_last_selected<Brush>();
     if (
         !brush ||
         !m_hover.position.has_value() ||
@@ -339,10 +327,15 @@ void Brush_tool::update_mesh_node_transform()
     //      This is a workaround for clear_primitives() issue below
     m_brush_node->set_parent({});
 
-    const std::shared_ptr<erhe::primitive::Material>& material = m_brush_mesh->get_primitives().front().get_material();
+    const std::shared_ptr<erhe::primitive::Primitive_render_shape> shape = m_brush_mesh->get_primitives().front().render_shape;
+    ERHE_VERIFY(shape);
+
+    // TODO Brush mesh does not really need RT primitives at all
+
+    const std::shared_ptr<erhe::primitive::Material>& material = m_brush_mesh->get_primitives().front().material;
     m_brush_mesh->clear_primitives(); // TODO This is dangerous, as primitives *must* first be removed from rt_scene
-    m_brush_mesh->add_primitive(brush_scaled.primitive);
-    m_brush_mesh->get_mutable_primitives().front().set_material(material);
+    m_brush_mesh->add_primitive(brush_scaled.primitive, material);
+    // m_brush_mesh->update_rt_primitives(); TODO this should no longer be needed
 
     if (m_hover.mesh) {
         m_brush_node->set_parent(m_hover.mesh->get_node());
@@ -360,25 +353,13 @@ void Brush_tool::update_mesh_node_transform()
 
 void Brush_tool::do_insert_operation()
 {
-    const std::shared_ptr<Brush>&                     brush    = m_context.selection->get<Brush>();
-    const std::shared_ptr<erhe::primitive::Material>& material = m_context.selection->get<erhe::primitive::Material>();
-    if (
-        !m_hover.position.has_value() ||
-        !brush                        ||
-        !material
-    ) {
+    const std::shared_ptr<Brush>& brush = m_context.selection->get_last_selected<Brush>();
+    const std::shared_ptr<erhe::primitive::Material>& material = m_context.selection->get_last_selected<erhe::primitive::Material>();
+    if (!m_hover.position.has_value() || !brush || !material) {
         return;
     }
 
-    log_brush->trace(
-        "{} scale = {}",
-        __func__,
-        m_transform_scale
-    );
-
-    const auto hover_from_brush = m_hover.mesh
-        ? get_hover_mesh_transform()
-        : get_hover_grid_transform();
+    const auto hover_from_brush = m_hover.mesh ? get_hover_mesh_transform() : get_hover_grid_transform();
     const uint64_t mesh_flags =
         erhe::Item_flags::visible     |
         erhe::Item_flags::content     |
@@ -412,7 +393,7 @@ void Brush_tool::do_insert_operation()
     std::shared_ptr<erhe::scene::Node> parent = (hover_node != nullptr)
         ? std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this())
         : scene_root->get_hosted_scene()->get_root_node();
-    const auto& first_selected_node = m_context.selection->get<erhe::scene::Node>();
+    const auto& first_selected_node = m_context.selection->get_last_selected<erhe::scene::Node>();
     if (first_selected_node) {
         parent = first_selected_node;
     }
@@ -430,8 +411,8 @@ void Brush_tool::do_insert_operation()
 
 void Brush_tool::add_brush_mesh()
 {
-    const auto brush    = m_context.selection->get<Brush>();
-    const auto material = m_context.selection->get<erhe::primitive::Material>();
+    const auto brush    = m_context.selection->get_last_selected<Brush>();
+    const auto material = m_context.selection->get_last_selected<erhe::primitive::Material>();
     auto* scene_view = get_hover_scene_view();
     if (
         !brush ||
@@ -450,13 +431,8 @@ void Brush_tool::add_brush_mesh()
     const auto& brush_scaled = brush->get_scaled(m_transform_scale);
     const std::string name = fmt::format("brush-{}", brush->get_name());
     m_brush_node = std::make_shared<erhe::scene::Node>(name);
-    m_brush_mesh = std::make_shared<erhe::scene::Mesh>(
-        name,
-        erhe::primitive::Primitive{
-            brush_scaled.primitive,
-            material,
-        }
-    );
+    m_brush_mesh = std::make_shared<erhe::scene::Mesh>(name);
+    m_brush_mesh->add_primitive(brush_scaled.primitive, material);
     m_brush_node->enable_flag_bits(
         erhe::Item_flags::brush       |
         erhe::Item_flags::visible     |
@@ -479,7 +455,7 @@ void Brush_tool::add_brush_mesh()
 
 void Brush_tool::update_mesh()
 {
-    const auto brush = m_context.selection->get<Brush>();
+    const auto brush = m_context.selection->get_last_selected<Brush>();
     if (!m_brush_mesh && is_enabled()) {
         if (
             !brush ||
@@ -526,11 +502,7 @@ void Brush_tool::tool_render(const Render_context&)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (
-        !m_debug_visualization ||
-        !m_brush_mesh ||
-        !m_brush_node
-    ) {
+    if (!m_debug_visualization || !m_brush_mesh || !m_brush_node) {
         return;
     }
 

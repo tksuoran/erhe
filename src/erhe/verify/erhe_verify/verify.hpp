@@ -1,6 +1,5 @@
 #pragma once
 
-
 #if _MSC_VER && !defined(__clang__)
 
 #if defined(_WIN32)

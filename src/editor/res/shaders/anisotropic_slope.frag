@@ -45,13 +45,12 @@ vec2 get_texture_size(uvec2 texture_handle)
 #endif
 }
 
-float sample_light_visibility(
-    vec4  position,
-    uint  light_index,
-    float N_dot_L
-)
+float sample_light_visibility(vec4  position, uint  light_index, float N_dot_L)
 {
 #if defined(ERHE_SHADOW_MAPS)
+    if (light_block.shadow_texture.x == max_u32) {
+        return 1.0;
+    }
 
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture);

@@ -2,6 +2,7 @@
 
 #include "erhe_commands/state.hpp"
 
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -153,6 +154,17 @@ class Drag_pose_command : public Helper_command
 public:
     Drag_pose_command(Commands& commands, Command& target_command);
     auto try_call() -> bool override;
+};
+
+class Lambda_command : public erhe::commands::Command
+{
+public:
+    Lambda_command(Commands& commands, const std::string_view name, std::function<bool()> callback);
+
+    auto try_call() -> bool override;
+
+private:
+    std::function<bool()> m_callback;
 };
 
 //

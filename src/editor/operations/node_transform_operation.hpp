@@ -10,7 +10,6 @@
 namespace erhe {
     class Hierarchy;
 }
-
 namespace erhe::scene {
     class Node;
 }

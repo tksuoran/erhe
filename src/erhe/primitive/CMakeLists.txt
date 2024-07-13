@@ -5,6 +5,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_primitive/buffer_info.cpp
     erhe_primitive/buffer_info.hpp
+    erhe_primitive/buffer_mesh.cpp
+    erhe_primitive/buffer_mesh.hpp
     erhe_primitive/buffer_range.cpp
     erhe_primitive/buffer_range.hpp
     erhe_primitive/buffer_sink.cpp
@@ -16,8 +18,6 @@ erhe_target_sources_grouped(
     erhe_primitive/enums.hpp
     erhe_primitive/format_info.cpp
     erhe_primitive/format_info.hpp
-    erhe_primitive/renderable_mesh.cpp
-    erhe_primitive/renderable_mesh.hpp
     erhe_primitive/index_range.cpp
     erhe_primitive/index_range.hpp
     erhe_primitive/material.cpp

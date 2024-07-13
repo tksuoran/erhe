@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::dataformat
-{
+namespace erhe::dataformat {
 
 extern std::shared_ptr<spdlog::logger> log_dataformat;
 

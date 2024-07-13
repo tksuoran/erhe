@@ -12,8 +12,7 @@
 #include "erhe_scene/skin.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 void Mesh::clear_primitives()
 {
@@ -24,47 +23,38 @@ void Mesh::clear_primitives()
     m_rt_primitives.clear();
 }
 
-void Mesh::add_primitive(erhe::primitive::Primitive primitive)
-{
-    const std::size_t primitive_index = m_primitives.size();
-    m_primitives.push_back(primitive);
-
-    erhe::primitive::Primitive_raytrace& primitive_raytrace = primitive.get_geometry_raytrace();
-    const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.m_rt_geometry;
-    if (rt_geometry) {
-        m_rt_primitives.emplace_back(
-            new Raytrace_primitive(this, primitive_index, rt_geometry.get())
-        );
-    }
-}
-
-void Mesh::add_primitive(erhe::primitive::Primitive primitive, const std::shared_ptr<erhe::primitive::Material>& material)
-{
-    const std::size_t primitive_index = m_primitives.size();
-    m_primitives.push_back(primitive);
-    m_primitives.back().set_material(material);
-
-    erhe::primitive::Primitive_raytrace& primitive_raytrace = primitive.get_geometry_raytrace();
-    const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.m_rt_geometry;
-    if (rt_geometry) {
-        m_rt_primitives.emplace_back(new Raytrace_primitive(this, primitive_index, rt_geometry.get()));
-    }
-}
-
-void Mesh::set_primitives(const std::vector<erhe::primitive::Primitive>& primitives)
+void Mesh::update_rt_primitives()
 {
     m_rt_primitives.clear();
-    m_primitives = primitives;
-    for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
-        const erhe::primitive::Primitive& primitive = primitives[i];
-        const erhe::primitive::Primitive_raytrace& primitive_raytrace = primitive.get_geometry_raytrace();
-        const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.m_rt_geometry;
+    for (std::size_t i = 0, end = m_primitives.size(); i < end; ++i) {
+        const erhe::primitive::Primitive& primitive = m_primitives[i];
+        const std::shared_ptr<erhe::primitive::Primitive_shape>& shape = primitive.get_shape_for_raytrace();
+        if (!shape) {
+            continue;
+        }
+        const erhe::primitive::Primitive_raytrace& primitive_raytrace = shape->get_raytrace();
+        const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.get_raytrace_geometry();
         if (rt_geometry) {
             m_rt_primitives.emplace_back(
                 new Raytrace_primitive(this, i, rt_geometry.get())
             );
         }
     }
+}
+
+void Mesh::add_primitive(erhe::primitive::Primitive primitive, const std::shared_ptr<erhe::primitive::Material>& material)
+{
+    m_primitives.push_back(primitive);
+    if (material) {
+        m_primitives.back().material = material;
+    }
+    update_rt_primitives();
+}
+
+void Mesh::set_primitives(const std::vector<erhe::primitive::Primitive>& primitives)
+{
+    m_primitives = primitives;
+    update_rt_primitives();
 }
 
 auto Mesh::get_mutable_primitives() -> std::vector<erhe::primitive::Primitive>&
@@ -81,16 +71,15 @@ Mesh::Mesh()                  = default;
 Mesh::Mesh(Mesh&&)            = default;
 Mesh& Mesh::operator=(Mesh&&) = default;
 
-
 Mesh::Mesh(const std::string_view name)
     : Item{name}
 {
 }
 
-Mesh::Mesh(const std::string_view name, const erhe::primitive::Primitive primitive)
+Mesh::Mesh(const std::string_view name, const erhe::primitive::Primitive& primitive)
     : Item{name}
 {
-    add_primitive(primitive);
+    add_primitive(primitive, {});
 }
 
 Mesh::Mesh(const Mesh& src, erhe::for_clone)
@@ -166,10 +155,7 @@ void Mesh::detach_rt_from_scene() // erhe::raytrace::IScene* rt_scene)
     m_rt_scene = nullptr;
 }
 
-void Mesh::handle_item_host_update(
-    erhe::Item_host* const old_item_host,
-    erhe::Item_host* const new_item_host
-)
+void Mesh::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     log->info("Mesh '{}' host update", get_name());
     const auto shared_this = std::static_pointer_cast<Mesh>(shared_from_this()); // keep alive

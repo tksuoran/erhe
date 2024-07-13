@@ -211,10 +211,12 @@ void Create::imgui()
                 const auto& mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
                 if (mesh) {
                     for (const auto& primitive : mesh->get_primitives()) {
-                        source_geometry = primitive.get_geometry();
-                    }
-                    if (source_geometry) {
-                        break;
+                        if (primitive.render_shape) {
+                            source_geometry = primitive.render_shape->get_geometry();
+                            if (source_geometry) {
+                                break;
+                            }
+                        }
                     }
                 }
             }

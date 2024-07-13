@@ -21,10 +21,7 @@ Gl_buffer_sink::Gl_buffer_sink(
 {
 }
 
-auto Gl_buffer_sink::allocate_vertex_buffer(
-    const std::size_t vertex_count,
-    const std::size_t vertex_element_size
-) -> Buffer_range
+auto Gl_buffer_sink::allocate_vertex_buffer(const std::size_t vertex_count, const std::size_t vertex_element_size) -> Buffer_range
 {
     const auto byte_offset = m_vertex_buffer.allocate_bytes(
         vertex_count * vertex_element_size,
@@ -38,10 +35,7 @@ auto Gl_buffer_sink::allocate_vertex_buffer(
     };
 }
 
-auto Gl_buffer_sink::allocate_index_buffer(
-    const std::size_t index_count,
-    const std::size_t index_element_size
-) -> Buffer_range
+auto Gl_buffer_sink::allocate_index_buffer(const std::size_t index_count, const std::size_t index_element_size) -> Buffer_range
 {
     const auto index_byte_offset = m_index_buffer.allocate_bytes(index_count * index_element_size);
 

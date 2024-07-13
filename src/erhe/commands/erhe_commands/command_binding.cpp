@@ -3,6 +3,16 @@
 
 namespace erhe::commands {
 
+auto c_str(const Button_trigger value) -> const char*
+{
+    switch (value) {
+        case Button_trigger::Button_pressed:  return "button pressed";
+        case Button_trigger::Button_released: return "button released";
+        case Button_trigger::Any:             return "any";
+        default:                              return "?";
+    }
+}
+
 Command_binding::Command_binding(Command* const command)
     : m_command{command}
 {

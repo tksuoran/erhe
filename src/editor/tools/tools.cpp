@@ -4,18 +4,16 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/content_library.hpp"
 #include "tools/tool.hpp"
+#include "windows/item_tree_window.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/instance.hpp"
-#include "erhe_physics/iworld.hpp"
-#include "erhe_raytrace/iscene.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 
 namespace editor {
@@ -26,11 +24,7 @@ using Rasterization_state  = erhe::graphics::Rasterization_state;
 using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
-Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
-    erhe::graphics::Instance& graphics_instance,
-    Mesh_memory&              mesh_memory,
-    Programs&                 programs
-)
+Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instance& graphics_instance, Mesh_memory& mesh_memory, Programs& programs)
 #define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
 
     // Tool pass one: For hidden tool parts, set stencil to s_stencil_tool_mesh_hidden.
@@ -220,6 +214,8 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
 }
 
 Tools::Tools(
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::graphics::Instance&       graphics_instance,
     erhe::scene::Scene_message_bus& scene_message_bus,
     Editor_context&                 editor_context,
@@ -231,7 +227,26 @@ Tools::Tools(
     , m_pipeline_renderpasses{graphics_instance, mesh_memory, programs}
 {
     const auto tools_content_library = std::make_shared<Content_library>();
-    tools_content_library->is_shown_in_ui = false;
+
+    if (editor_context.developer_mode) {
+        m_content_library_tree_window = std::make_shared<Item_tree_window>(
+            imgui_renderer,
+            imgui_windows,
+            editor_context,
+            "Tools Library",
+            "tools_content_library",
+            tools_content_library->root
+        );
+        m_content_library_tree_window->set_item_filter(
+            erhe::Item_filter{
+                .require_all_bits_set           = 0,
+                .require_at_least_one_bit_set   = 0,
+                .require_all_bits_clear         = 0,
+                .require_at_least_one_bit_clear = 0
+            }
+        );
+    }
+
     m_scene_root = std::make_shared<Scene_root>(
         nullptr,
         nullptr,

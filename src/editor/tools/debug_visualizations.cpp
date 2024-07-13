@@ -21,7 +21,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_physics/icollision_shape.hpp"
-#include "erhe_primitive/renderable_mesh.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -150,18 +150,21 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
         : Trs_transform{};
 
     for (const auto& primitive : mesh->get_primitives()) {
-        const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
+        if (!primitive.render_shape) {
+            continue;
+        }
+        const erhe::primitive::Buffer_mesh& buffer_mesh = primitive.render_shape->get_renderable_mesh();
 
-        const float box_volume    = renderable_mesh.bounding_box.volume();
-        const float sphere_volume = renderable_mesh.bounding_sphere.volume();
+        const float box_volume    = buffer_mesh.bounding_box.volume();
+        const float sphere_volume = buffer_mesh.bounding_sphere.volume();
         //const bool  smallest_visualization = !m_viewport_config->selection_bounding_box && !m_viewport_config->selection_bounding_sphere;
         const bool  box_smaller   = box_volume < sphere_volume;
 
         if (box_smaller) {
             m_selection_bounding_volume.add_box(
                 node->world_from_node(),
-                renderable_mesh.bounding_box.min,
-                renderable_mesh.bounding_box.max
+                buffer_mesh.bounding_box.min,
+                buffer_mesh.bounding_box.max
             );
         }
         if (
@@ -175,15 +178,15 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
             line_renderer.add_cube(
                 node->world_from_node(),
                 m_selection_major_color,
-                renderable_mesh.bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
-                renderable_mesh.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
+                buffer_mesh.bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
+                buffer_mesh.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
             );
         }
         if (!box_smaller) {
             m_selection_bounding_volume.add_sphere(
                 node->world_from_node(),
-                renderable_mesh.bounding_sphere.center,
-                renderable_mesh.bounding_sphere.radius
+                buffer_mesh.bounding_sphere.center,
+                buffer_mesh.bounding_sphere.radius
             );
         }
         if (
@@ -200,8 +203,8 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
                     m_selection_minor_color,
                     m_selection_major_width,
                     m_selection_minor_width,
-                    renderable_mesh.bounding_sphere.center,
-                    renderable_mesh.bounding_sphere.radius + m_gap,
+                    buffer_mesh.bounding_sphere.center,
+                    buffer_mesh.bounding_sphere.radius + m_gap,
                     &camera_world_from_node_transform,
                     m_sphere_step_count
                 );
@@ -924,9 +927,11 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     const glm::mat4 world_from_node = node->world_from_node();
-    for (const erhe::primitive::Primitive& primitive : mesh->get_primitives()) {
-
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.get_geometry();
+    for (erhe::primitive::Primitive& primitive : mesh->get_mutable_primitives()) {
+        if (!primitive.render_shape) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.render_shape->get_geometry();
         if (!geometry) {
             continue;
         }

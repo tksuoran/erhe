@@ -45,10 +45,7 @@
 
 namespace erhe::xr {
 
-Xr_session::Xr_session(
-    Xr_instance&                   instance,
-    erhe::window::Context_window& context_window
-)
+Xr_session::Xr_session(Xr_instance& instance, erhe::window::Context_window& context_window)
     : m_instance                      {instance}
     , m_context_window                {context_window}
     , m_xr_session                    {XR_NULL_HANDLE}
@@ -841,10 +838,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
 
         const uint32_t color_texture         = acquired_color_swapchain_image.get_gl_texture();
         const uint32_t depth_stencil_texture = acquired_depth_stencil_swapchain_image.get_gl_texture();
-        if (
-            (color_texture == 0) ||
-            (depth_stencil_texture == 0)
-        ) {
+        if ((color_texture == 0) || (depth_stencil_texture == 0)) {
             log_xr->warn("invalid color / depth image for view {}", i);
             return false;
         }

@@ -117,10 +117,6 @@ void Viewport_config_window::imgui()
         ImGuiTreeNodeFlags_DefaultOpen
     };
 
-    if (ImGui::Button("Make RenderDoc Capture")) {
-        m_context.editor_rendering->request_renderdoc_capture();
-    }
-
     if (m_edit_data != nullptr) {
         ImGui::SliderFloat("Gizmo Scale", &m_edit_data->gizmo_scale, 1.0f, 8.0f, "%.2f");
         ImGui::ColorEdit4("Clear Color", &m_edit_data->clear_color.x, ImGuiColorEditFlags_Float);

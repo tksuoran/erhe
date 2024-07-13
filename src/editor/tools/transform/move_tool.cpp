@@ -31,10 +31,7 @@ Move_tool::Move_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& 
 
 Move_tool::~Move_tool() noexcept = default;
 
-void Move_tool::handle_priority_update(
-    const int old_priority,
-    const int new_priority
-)
+void Move_tool::handle_priority_update(const int old_priority, const int new_priority)
 {
     auto& shared = get_shared();
     shared.settings.show_translate = new_priority > old_priority;

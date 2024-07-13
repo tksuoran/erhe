@@ -129,11 +129,7 @@ auto Imgui_window::begin() -> bool
         ImVec2{m_min_size[0], m_min_size[1]},
         ImVec2{m_max_size[0], m_max_size[1]}
     );
-    const bool not_collapsed = ImGui::Begin(
-        m_title.c_str(),
-        &keep_visible,
-        flags()
-    );
+    const bool not_collapsed = ImGui::Begin(m_title.c_str(), &keep_visible, flags());
     if (!keep_visible) {
         hide();
     }
@@ -183,6 +179,5 @@ void Imgui_window::on_end()
 void Imgui_window::hidden()
 {
 }
-
 
 } // namespace erhe::imgui

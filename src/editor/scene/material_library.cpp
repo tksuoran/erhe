@@ -14,7 +14,7 @@ void add_default_materials(Content_library& library)
 
     auto& materials = *library.materials.get();
 
-    materials.make<erhe::primitive::Material>("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
+    //materials.make<erhe::primitive::Material>("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
     materials.make<erhe::primitive::Material>("Titanium",  glm::vec3{0.542f, 0.497f, 0.449f}, roughness, 1.0f);
     materials.make<erhe::primitive::Material>("Chromium",  glm::vec3{0.549f, 0.556f, 0.554f}, roughness, 1.0f);
     materials.make<erhe::primitive::Material>("Iron",      glm::vec3{0.562f, 0.565f, 0.578f}, roughness, 1.0f);
@@ -51,6 +51,7 @@ void add_default_materials(Content_library& library)
     // Mercury   = e5e4e4 (229, 228, 228)
     // Palladium = ded9d3 (222, 217, 211)
 
+#if 0
     for (size_t i = 0, end = 10; i < end; ++i) {
         const float rel        = static_cast<float>(i + 1) / static_cast<float>(end + 1);
         const float hue        = rel * 360.0f;
@@ -66,6 +67,7 @@ void add_default_materials(Content_library& library)
             0.95f // metalness
         );
     }
+#endif
 }
 
 } // namespace editor

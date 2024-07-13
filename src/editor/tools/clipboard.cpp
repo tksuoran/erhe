@@ -43,6 +43,7 @@ Clipboard::Clipboard(erhe::commands::Commands& commands, Editor_context& context
     commands.register_command(&m_paste_command);
     commands.bind_command_to_key(&m_paste_command, erhe::window::Key_insert, true, erhe::window::Key_modifier_bit_shift);
     commands.bind_command_to_key(&m_paste_command, erhe::window::Key_v,      true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_menu(&m_paste_command, "Edit.Paste");
     m_paste_command.set_host(this);
 }
 

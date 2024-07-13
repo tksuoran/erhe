@@ -82,9 +82,6 @@ public:
         Tools&                          tools
     );
 
-    // Implements Tool
-    void tool_render(const Render_context& context)  override;
-
     void get_all_tools();
 
     // Implements Imgui_window

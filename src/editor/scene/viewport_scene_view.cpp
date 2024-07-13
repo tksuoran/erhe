@@ -146,15 +146,10 @@ void Viewport_scene_view::execute_rendergraph_node()
         return;
     }
 
-    m_context.editor_message_bus->send_message(
-        Editor_message{
-            .update_flags = Message_flag_bit::c_flag_bit_render_scene_view,
-            .scene_view   = this
-        }
-    );
+    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
+    bool do_render = scene_root && !m_camera.expired();
 
-    const Render_context context
-    {
+    const Render_context context{
         .editor_context         = m_context,
         .scene_view             = *this,
         .viewport_config        = m_viewport_config,
@@ -164,7 +159,7 @@ void Viewport_scene_view::execute_rendergraph_node()
         .override_shader_stages = get_override_shader_stages()
     };
 
-    if (m_is_hovered && m_context.id_renderer->enabled) {
+    if (do_render && m_is_hovered && m_context.id_renderer->enabled) {
         m_context.editor_rendering->render_id(context);
     }
 
@@ -178,13 +173,23 @@ void Viewport_scene_view::execute_rendergraph_node()
     gl::enable(gl::Enable_cap::scissor_test);
     gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
 
-    auto scene_root = m_scene_root.lock();
-    if (!scene_root || m_camera.expired()) {
+    if (!do_render) {
         gl::clear_color(0.1f, 0.1f, 0.1f, 1.0f);
         gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
         gl::disable    (gl::Enable_cap::scissor_test);
         return;
     }
+
+    scene_root->get_scene().update_node_transforms();
+
+    m_context.tools->get_tool_scene_root()->get_hosted_scene()->update_node_transforms();
+
+    m_context.editor_message_bus->send_message(
+        Editor_message{
+            .update_flags = Message_flag_bit::c_flag_bit_render_scene_view,
+            .scene_view   = this
+        }
+    );
 
     m_context.editor_rendering->render_viewport_main(context);
 
@@ -394,21 +399,24 @@ void Viewport_scene_view::update_hover_with_id_render()
         const erhe::scene::Node* node = entry.mesh->get_node();
         ERHE_VERIFY(node != nullptr);
         const erhe::primitive::Primitive& primitive = entry.mesh->get_primitives()[entry.primitive_index];
-        entry.geometry = primitive.get_geometry();
-        if (entry.geometry) {
-            const auto triangle_id = static_cast<erhe::geometry::Polygon_id>(entry.triangle_id);
-            const auto polygon_id  = primitive.get_renderable_mesh().primitive_id_to_polygon_id[triangle_id];
-            ERHE_VERIFY(polygon_id < entry.geometry->get_polygon_count());
-            SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
-            auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
-            if (
-                (polygon_normals != nullptr) &&
-                polygon_normals->has(polygon_id)
-            ) {
-                const auto local_normal    = polygon_normals->get(polygon_id);
-                const auto world_from_node = node->world_from_node();
-                entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
+        const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
+        if (shape) {
+            entry.geometry = shape->get_geometry_const();
+            if (entry.geometry) {
+                const auto triangle_id = static_cast<erhe::geometry::Polygon_id>(entry.triangle_id);
+                const auto polygon_id  = shape->get_polygon_id_from_primitive_id(triangle_id);
+                ERHE_VERIFY(polygon_id < entry.geometry->get_polygon_count());
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
+                auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
+                if (
+                    (polygon_normals != nullptr) &&
+                    polygon_normals->has(polygon_id)
+                ) {
+                    const auto local_normal    = polygon_normals->get(polygon_id);
+                    const auto world_from_node = node->world_from_node();
+                    entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
+                    SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
+                }
             }
         }
     }

@@ -26,5 +26,5 @@ private:
     std::optional<uint32_t> m_modifier_mask;
 };
 
-} // namespace erhe/application
+} // namespace erhe::commands
 

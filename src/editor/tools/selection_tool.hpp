@@ -4,12 +4,12 @@
 #include "tools/tool.hpp"
 
 #include "erhe_commands/command.hpp"
-#include "erhe_imgui/imgui_window.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace erhe::commands {
@@ -146,11 +146,7 @@ private:
 class Selection : public erhe::commands::Command_host
 {
 public:
-    Selection(
-        erhe::commands::Commands& commands,
-        Editor_context&           editor_context,
-        Editor_message_bus&       editor_message_bus
-    );
+    Selection(erhe::commands::Commands& commands, Editor_context& editor_context, Editor_message_bus& editor_message_bus);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void setup_xr_bindings(erhe::commands::Commands& commands, Headset_view& headset_view);
@@ -163,6 +159,9 @@ public:
 
     template <typename T>
     [[nodiscard]] auto get(std::size_t index = 0) -> std::shared_ptr<T>;
+
+    template <typename T>
+    [[nodiscard]] auto get_last_selected() -> std::shared_ptr<T>;
 
     template <typename T>
     [[nodiscard]] auto count() -> std::size_t;
@@ -190,11 +189,8 @@ public:
     void end_selection_change();
 
 private:
-    void toggle_mesh_selection(
-        const std::shared_ptr<erhe::scene::Mesh>& mesh,
-        bool                                      was_selected,
-        bool                                      clear_others
-    );
+    void update_last_selected(const std::shared_ptr<erhe::Item_base>& item);
+    void toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& mesh, bool was_selected, bool clear_others);
 
     Editor_context&                m_context;
 
@@ -214,6 +210,7 @@ private:
 
     int                                           m_selection_change_depth{0};
     std::vector<std::shared_ptr<erhe::Item_base>> m_begin_selection_change_state;
+    std::unordered_map<uint64_t, std::weak_ptr<erhe::Item_base>> m_last_selected_by_type;
 };
 
 template <typename T>
@@ -262,6 +259,17 @@ auto Selection::get(const std::size_t index) -> std::shared_ptr<T>
         }
     }
     return {};
+}
+
+template <typename T>
+auto Selection::get_last_selected() -> std::shared_ptr<T>
+{
+    auto i = m_last_selected_by_type.find(T::get_static_type());
+    if (i == m_last_selected_by_type.end()) {
+        return {};
+    }
+    std::shared_ptr<erhe::Item_base> item = (*i).second.lock();
+    return std::dynamic_pointer_cast<T>(item);
 }
 
 template <typename T>

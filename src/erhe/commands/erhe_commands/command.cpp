@@ -389,6 +389,17 @@ auto Drag_pose_command::try_call() -> bool
     return m_target_command.try_call();
 }
 
+Lambda_command::Lambda_command(Commands& commands, const std::string_view name, std::function<bool()> callback)
+    : Command{commands, name}
+    , m_callback{callback}
+{
+}
+
+auto Lambda_command::try_call() -> bool
+{
+    return m_callback();
+}
+
 //
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

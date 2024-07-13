@@ -32,9 +32,7 @@ public:
 class Joint_interface
 {
 public:
-    explicit Joint_interface(
-        erhe::graphics::Instance& graphics_instance
-    );
+    explicit Joint_interface(erhe::graphics::Instance& graphics_instance);
 
     erhe::graphics::Shader_resource joint_block;
     erhe::graphics::Shader_resource joint_struct;

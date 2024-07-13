@@ -3,8 +3,7 @@
 #include "editor_message.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 
-namespace editor
-{
+namespace editor {
 
 Tool::Tool(Editor_context& editor_context)
     : m_context{editor_context}

@@ -13,7 +13,7 @@
 
 namespace editor {
 
-Mesh_operation::Mesh_operation(Parameters&& parameters)
+Mesh_operation::Mesh_operation(Mesh_operation_parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
 }
@@ -140,22 +140,22 @@ void Mesh_operation::make_entries(
             },
         };
 
-        for (auto& primitive : mesh->get_primitives()) {
-            const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.get_geometry();
+        for (auto& primitive : mesh->get_mutable_primitives()) {
+            const auto& render_shape = primitive.render_shape;
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry = render_shape->get_geometry();
             if (!geometry) {
                 continue;
             }
             auto after_geometry = std::make_shared<erhe::geometry::Geometry>(
                 operation(*geometry.get())
             );
-            entry.after.primitives.push_back(
-                erhe::primitive::Primitive{
-                    after_geometry,
-                    primitive.get_material(),
-                    m_parameters.build_info,
-                    primitive.get_normal_style()
-                }
-            );
+
+            erhe::primitive::Primitive after_primitive{after_geometry, primitive.material};
+            const bool renderable_ok = after_primitive.make_renderable_mesh(m_parameters.build_info, render_shape->get_normal_style());
+            const bool raytrace_ok   = after_primitive.make_raytrace();
+            ERHE_VERIFY(renderable_ok && raytrace_ok);
+            entry.after.primitives.push_back(after_primitive);
+
             if (m_parameters.context.editor_settings->physics.static_enable) {
                 auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
                     reinterpret_cast<const float*>(

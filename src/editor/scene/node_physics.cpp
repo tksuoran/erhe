@@ -70,10 +70,7 @@ auto Node_physics::get_physics_world() const -> erhe::physics::IWorld*
     return m_physics_world;
 }
 
-void Node_physics::handle_item_host_update(
-    erhe::Item_host* const old_item_host,
-    erhe::Item_host* const new_item_host
-)
+void Node_physics::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     ERHE_VERIFY(old_item_host != new_item_host);
 

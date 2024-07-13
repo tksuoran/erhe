@@ -172,6 +172,9 @@ auto Frame_controller::get_axis_z() const -> vec3
 
 void Frame_controller::update_fixed_step()
 {
+    // TODO Only do once until next update()
+    get_transform_from_node(get_node());
+
     translate_x.update();
     translate_y.update();
     translate_z.update();

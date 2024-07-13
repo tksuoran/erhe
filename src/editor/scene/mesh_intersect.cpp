@@ -88,7 +88,11 @@ auto intersect(
     out_t = std::numeric_limits<float>::max();
 
     for (auto& primitive : mesh.get_primitives()) {
-        erhe::geometry::Geometry* geometry = primitive.get_geometry().get();
+        const std::shared_ptr<erhe::primitive::Primitive_shape>& shape = primitive.get_shape_for_raytrace();
+        if (shape) {
+            continue;
+        }
+        erhe::geometry::Geometry* geometry = shape->get_geometry().get();
         if (geometry == nullptr) {
             continue;
         }

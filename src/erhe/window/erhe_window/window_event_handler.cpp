@@ -3,8 +3,7 @@
 #include "erhe_window/window.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::window
-{
+namespace erhe::window {
 
 auto c_str(const Keycode code) -> const char*
 {
@@ -147,7 +146,6 @@ auto c_str(const Mouse_button button) -> const char*
     };
 }
 
-
 Root_window_event_handler::Root_window_event_handler(Context_window* window)
     : m_window{window}
 {
@@ -250,11 +248,7 @@ auto Root_window_event_handler::on_resize(const int width, const int height) -> 
     return false;
 }
 
-auto Root_window_event_handler::on_key(
-    const Keycode           code,
-    const Key_modifier_mask mask,
-    const bool              pressed
-) -> bool
+auto Root_window_event_handler::on_key(const Keycode code, const Key_modifier_mask mask, const bool pressed) -> bool
 {
     for (auto* handler : m_handlers) {
         if (handler->on_key(code, mask, pressed)) {
@@ -366,5 +360,26 @@ auto Root_window_event_handler::on_mouse_wheel(const float x, const float y, con
     return false;
 }
 
+auto Root_window_event_handler::on_controller_axis(const int axis, const float value, const uint32_t modifier_mask) -> bool
+{
+    for (auto* handler : m_handlers) {
+        const bool consumed = handler->on_controller_axis(axis, value, modifier_mask);
+        if (consumed) {
+            return true;
+        }
+    }
+    return false;
+}
+
+auto Root_window_event_handler::on_controller_button(const int button, const bool value, const uint32_t modifier_mask) -> bool
+{
+    for (auto* handler : m_handlers) {
+        const bool consumed = handler->on_controller_button(button, value, modifier_mask);
+        if (consumed) {
+            return true;
+        }
+    }
+    return false;
+}
 
 }

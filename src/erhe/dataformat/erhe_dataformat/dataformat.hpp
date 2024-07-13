@@ -3,8 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace erhe::dataformat
-{
+namespace erhe::dataformat {
 
 int16_t float_to_snorm16(float v);
 float snorm16_to_float(int16_t v);

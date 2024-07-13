@@ -40,9 +40,8 @@ public:
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
     // Public API
-    [[nodiscard]] auto get_rigid_body     ()       ->       erhe::physics::IRigid_body*;
-    [[nodiscard]] auto get_rigid_body     () const -> const erhe::physics::IRigid_body*;
-    [[nodiscard]] auto get_world_from_node() const -> erhe::physics::Transform;
+    [[nodiscard]] auto get_rigid_body()       ->       erhe::physics::IRigid_body*;
+    [[nodiscard]] auto get_rigid_body() const -> const erhe::physics::IRigid_body*;
 
     void before_physics_simulation();
     void after_physics_simulation();

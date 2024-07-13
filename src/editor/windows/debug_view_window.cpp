@@ -26,8 +26,7 @@
 
 #include <imgui/imgui.h>
 
-namespace editor
-{
+namespace editor {
 
 Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     erhe::rendergraph::Rendergraph&         rendergraph,
@@ -63,16 +62,8 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     }
 {
     // register_input() & register_output() is done by Texture_rendergraph_node constructor
-    register_input(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        "shadow_maps",
-        erhe::rendergraph::Rendergraph_node_key::shadow_maps
-    );
-    register_output(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        "depth_visualization",
-        erhe::rendergraph::Rendergraph_node_key::depth_visualization
-    );
+    register_input(erhe::rendergraph::Routing::Resource_provided_by_producer, "shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
+    register_output(erhe::rendergraph::Routing::Resource_provided_by_producer, "depth_visualization", erhe::rendergraph::Rendergraph_node_key::depth_visualization);
 }
 
 // Implements erhe::rendergraph::Rendergraph_node
@@ -90,10 +81,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 
     ERHE_PROFILE_FUNCTION();
 
-    Rendergraph_node* input_node = get_consumer_input_node(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        erhe::rendergraph::Rendergraph_node_key::shadow_maps
-    );
+    Rendergraph_node* input_node = get_consumer_input_node(erhe::rendergraph::Routing::Resource_provided_by_producer, erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     if (input_node == nullptr) {
         SPDLOG_LOGGER_TRACE(
             log_render,
@@ -116,20 +104,14 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     const int input_texture_height = shadow_texture->height();
 
     if ((input_texture_width  < 1) || (input_texture_height < 1)) {
-        SPDLOG_LOGGER_TRACE(
-            log_render,
-            "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: no shadow renderer or empty viewport"
-        );
+        SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: no shadow renderer or empty viewport");
         return;
     }
 
     const auto& scene_view = shadow_render_node->get_scene_view();
     const auto& scene_root = scene_view.get_scene_root();
     if (!scene_root) {
-        SPDLOG_LOGGER_TRACE(
-            log_render,
-            "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: no shadow scene root"
-        );
+        SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: no shadow scene root");
         return;
     }
 
@@ -138,22 +120,14 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    if (
-        static_cast<std::size_t>(m_light_index) >= light_projections.light_projection_transforms.size()
-    ) {
-        SPDLOG_LOGGER_TRACE(
-            log_render,
-            "Depth_to_color_rendergraph_node::rendexecute_rendergraph_nodeer() - skipped: invalid selected light index"
-        );
+    if (static_cast<std::size_t>(m_light_index) >= light_projections.light_projection_transforms.size()) {
+        SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::rendexecute_rendergraph_nodeer() - skipped: invalid selected light index");
         return;
     }
 
     erhe::graphics::Scoped_debug_group pass_scope{"Debug View"};
 
-    const auto& output_viewport = get_producer_output_viewport(
-        erhe::rendergraph::Routing::Resource_provided_by_consumer,
-        m_output_key
-    );
+    const auto& output_viewport = get_producer_output_viewport(erhe::rendergraph::Routing::Resource_provided_by_consumer, m_output_key);
     ERHE_VERIFY(output_viewport.width >= 0);
     ERHE_VERIFY(output_viewport.height >= 0);
     ERHE_VERIFY(output_viewport.width < 32768);
@@ -209,11 +183,7 @@ Debug_view_node::Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph)
     // Imgui_host).
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
-    register_output(
-        erhe::rendergraph::Routing::None,
-        "window",
-        erhe::rendergraph::Rendergraph_node_key::window
-    );
+    register_output(erhe::rendergraph::Routing::None, "window", erhe::rendergraph::Rendergraph_node_key::window);
 }
 
 void Debug_view_node::execute_rendergraph_node()
@@ -249,22 +219,19 @@ Debug_view_window::Debug_view_window(
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Debug View", "debug_view"}
     , m_context                {editor_context}
-    , m_depth_to_color_node    {rendergraph, forward_renderer, mesh_memory, programs}
     , m_node                   {rendergraph}
 {
-    rendergraph.connect(
-        erhe::rendergraph::Rendergraph_node_key::depth_visualization,
-        &m_depth_to_color_node,
-        &m_node
-    );
+    if (editor_context.OpenXR) {
+        hide();
+        hidden();
+        return;
+    }
+    m_depth_to_color_node = std::make_unique<Depth_to_color_rendergraph_node>(rendergraph, forward_renderer, mesh_memory, programs);
+    rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::depth_visualization, m_depth_to_color_node.get(), &m_node);
 
     const auto& window_imgui_host = imgui_windows.get_window_imgui_host();
     if (window_imgui_host) {
-        rendergraph.connect(
-            erhe::rendergraph::Rendergraph_node_key::window,
-            &m_node,
-            window_imgui_host.get()
-        );
+        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::window, &m_node, window_imgui_host.get());
     }
 
     const auto& nodes = editor_rendering.get_all_shadow_nodes();
@@ -274,30 +241,27 @@ Debug_view_window::Debug_view_window(
     }
 }
 
-void Debug_view_window::set_shadow_renderer_node(
-    Shadow_render_node* node
-)
+void Debug_view_window::set_shadow_renderer_node(Shadow_render_node* node)
 {
+    if (m_context.OpenXR) {
+        return; // TODO
+    }
+    if (!m_depth_to_color_node) {
+        return;
+    }
+
     if (m_shadow_renderer_node) {
-        m_context.rendergraph->disconnect(
-            erhe::rendergraph::Rendergraph_node_key::shadow_maps,
-            m_shadow_renderer_node,
-            &m_depth_to_color_node
-        );
+        m_context.rendergraph->disconnect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_renderer_node, m_depth_to_color_node.get());
     }
 
     m_shadow_renderer_node = node;
 
     if (node) {
-        m_context.rendergraph->connect(
-            erhe::rendergraph::Rendergraph_node_key::shadow_maps,
-            m_shadow_renderer_node,
-            &m_depth_to_color_node
-        );
-        m_depth_to_color_node.set_enabled(true);
+        m_context.rendergraph->connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_renderer_node, m_depth_to_color_node.get());
+        m_depth_to_color_node->set_enabled(true);
         m_node.set_enabled(true);
     } else {
-        m_depth_to_color_node.set_enabled(true);
+        m_depth_to_color_node->set_enabled(true);
         m_node.set_enabled(false);
     }
 }
@@ -310,6 +274,10 @@ template <typename T>
 
 void Debug_view_window::hidden()
 {
+    if (m_context.OpenXR) {
+        return; // TODO
+    }
+
     m_node.set_enabled(false);
 
     // TODO
@@ -317,10 +285,7 @@ void Debug_view_window::hidden()
         erhe::rendergraph::Routing::Resource_provided_by_producer,
         erhe::rendergraph::Rendergraph_node_key::depth_visualization
     );
-    if (
-        (input == nullptr) ||
-        input->producer_nodes.empty()
-    ) {
+    if ((input == nullptr) || input->producer_nodes.empty()) {
         return;
     }
 
@@ -333,6 +298,9 @@ void Debug_view_window::hidden()
 
 void Debug_view_window::imgui()
 {
+    if (m_context.OpenXR) {
+        return; // TODO
+    }
     SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui()");
 
     //// Rendergraph_node::set_enabled(true);
@@ -349,7 +317,6 @@ void Debug_view_window::imgui()
             set_shadow_renderer_node(node.get());
         }
     }
-
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();

@@ -2,8 +2,7 @@
 
 #include <functional>
 
-namespace erhe::defer
-{
+namespace erhe::defer {
 
 class Defer
 {

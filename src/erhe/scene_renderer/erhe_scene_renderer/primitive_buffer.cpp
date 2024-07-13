@@ -141,22 +141,22 @@ auto Primitive_buffer::update(
                 break;
             }
 
-            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
-            const erhe::primitive::Index_range      index_range     = renderable_mesh.index_range(primitive_mode);
-            const uint32_t count         = static_cast<uint32_t>(index_range.index_count);
+            const erhe::primitive::Buffer_mesh* buffer_mesh = primitive.get_renderable_mesh();
+            ERHE_VERIFY(buffer_mesh != nullptr);
+            const erhe::primitive::Index_range  index_range = buffer_mesh->index_range(primitive_mode);
+            const uint32_t count = static_cast<uint32_t>(index_range.index_count);
             if (count == 0) {
                 continue;
             }
-            const uint32_t power_of_two  = erhe::math::next_power_of_two(count);
-            const uint32_t mask          = power_of_two - 1;
-            const uint32_t current_bits  = m_id_offset & mask;
+            const uint32_t power_of_two = erhe::math::next_power_of_two(count);
+            const uint32_t mask         = power_of_two - 1;
+            const uint32_t current_bits = m_id_offset & mask;
             if (current_bits != 0) {
                 const auto add = power_of_two - current_bits;
                 m_id_offset += add;
             }
 
-            erhe::primitive::Material* material = primitive.get_material().get();
-
+            erhe::primitive::Material* material = primitive.material.get();
             const glm::vec4 wireframe_color  = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}; //// mesh->get_wireframe_color();
             const glm::vec3 id_offset_vec3   = erhe::math::vec3_from_uint(m_id_offset);
             const glm::vec4 id_offset_vec4   = glm::vec4{id_offset_vec3, 0.0f};

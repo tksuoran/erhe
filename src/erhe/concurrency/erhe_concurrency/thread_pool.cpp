@@ -15,7 +15,6 @@ using std::chrono::milliseconds;
 // Thread_pool
 // ------------------------------------------------------------
 
-
 struct Thread_pool::Task_queue
 {
     using Task = Thread_pool::Task;

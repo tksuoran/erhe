@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_primitive/renderable_mesh.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
 
 #include <glm/glm.hpp>
 
@@ -18,12 +18,12 @@ public:
     // Public API
     [[nodiscard]] auto get_light_transform(const erhe::scene::Light& light) -> glm::mat4;
     [[nodiscard]] auto point_in_light     (const glm::vec3 point_in_world, const erhe::scene::Light& light) -> bool;
-    [[nodiscard]] auto get_light_mesh     (const erhe::scene::Light& light) -> erhe::primitive::Renderable_mesh*;
+    [[nodiscard]] auto get_light_mesh     (const erhe::scene::Light& light) -> erhe::primitive::Buffer_mesh*;
 
 private:
-    erhe::primitive::Renderable_mesh m_quad_mesh;
-    erhe::primitive::Renderable_mesh m_cone_mesh;
-    int                              m_light_cone_sides{0};
+    erhe::primitive::Buffer_mesh m_quad_mesh;
+    erhe::primitive::Buffer_mesh m_cone_mesh;
+    int                          m_light_cone_sides{0};
 };
 
 } // namespace editor

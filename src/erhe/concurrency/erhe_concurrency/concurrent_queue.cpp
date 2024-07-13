@@ -8,11 +8,7 @@ Concurrent_queue::Concurrent_queue(Thread_pool& thread_pool)
 {
 }
 
-Concurrent_queue::Concurrent_queue(
-    Thread_pool&           thread_pool,
-    const std::string_view name,
-    Priority               priority
-)
+Concurrent_queue::Concurrent_queue(Thread_pool& thread_pool, const std::string_view name, Priority priority)
     : m_pool {thread_pool}
     , m_queue{&m_pool, static_cast<int>(priority), name}
 {

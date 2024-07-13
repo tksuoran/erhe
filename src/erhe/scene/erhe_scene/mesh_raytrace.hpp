@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_primitive/renderable_mesh.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_scene/node_attachment.hpp"
 
 #include <functional>
@@ -33,11 +33,7 @@ public:
     Raytrace_primitive& operator=(Raytrace_primitive&&);
     ~Raytrace_primitive() noexcept;
 
-    Raytrace_primitive(
-        erhe::scene::Mesh*         mesh,
-        std::size_t                primitive_index,
-        erhe::raytrace::IGeometry* rt_geometry
-    );
+    Raytrace_primitive(erhe::scene::Mesh* mesh, std::size_t primitive_index, erhe::raytrace::IGeometry* rt_geometry);
     Raytrace_primitive(const Raytrace_primitive&) = delete;
     Raytrace_primitive& operator=(const Raytrace_primitive&) = delete;
 

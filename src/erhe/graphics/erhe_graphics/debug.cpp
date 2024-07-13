@@ -18,7 +18,6 @@ namespace gl {
     extern std::shared_ptr<spdlog::logger> log_gl;
 }
 
-
 namespace erhe::graphics {
 
 void erhe_opengl_callback(
@@ -87,9 +86,7 @@ void erhe_opengl_callback(
         gl::c_str(type),
         id,
         gl::c_str(severity),
-        (message != nullptr)
-            ? message
-            : ""
+        (message != nullptr) ? message : ""
     );
 
     if (severity == gl::Debug_severity::debug_severity_high) {

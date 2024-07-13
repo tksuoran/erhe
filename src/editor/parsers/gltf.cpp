@@ -6,13 +6,11 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_file/file.hpp"
-#include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
-#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -77,19 +75,14 @@ void import_gltf(
     const std::filesystem::path& path
 )
 {
-    erhe::scene::Scene* scene = scene_root.get_hosted_scene();
-    auto& layers              = scene_root.layers();
-    layers.light()->ambient_light = glm::vec4{0.17f, 0.17f, 0.17f, 0.0f};
-
-    const auto scene_root_node = scene->get_root_node();
-
-    // TODO Make importing an operation
+    erhe::scene::Scene_message_bus temp_scene_message_bus;
+    erhe::scene::Scene temp_scene{temp_scene_message_bus, "temp scene", nullptr};
+    const auto temp_scene_root_node = temp_scene.get_root_node();
     auto root_node = std::make_shared<erhe::scene::Node>(erhe::file::to_string(path.filename()));
     root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
-    root_node->set_parent(scene_root_node);
+    root_node->set_parent(temp_scene_root_node); // Will be moved to final scene later
 
     erhe::gltf::Image_transfer image_transfer{graphics_instance};
-
     erhe::gltf::Gltf_parse_arguments parse_arguments{
         .graphics_instance = graphics_instance,
         .image_transfer    = image_transfer,
@@ -99,12 +92,15 @@ void import_gltf(
     };
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 
-    for (const auto& primitive : gltf_data.primitives) {
-        primitive->make_renderable_mesh(build_info, erhe::primitive::Normal_style::corner_normals);
-    }
+    erhe::scene::Scene* scene = scene_root.get_hosted_scene();
+    auto& layers              = scene_root.layers();
+    layers.light()->ambient_light = glm::vec4{0.17f, 0.17f, 0.17f, 0.0f};
+
+    const auto scene_root_node = scene->get_root_node();
+
+    // TODO Make importing an operation
 
     std::shared_ptr<Content_library> content_library = scene_root.content_library();
-
     for (const auto& image : gltf_data.images) {
         if (image) {
             content_library->textures->add(image);
@@ -138,7 +134,7 @@ void import_gltf(
     std::unordered_map<erhe::scene::Node*, int> node_colors;
 
     bool add_default_camera = true;
-    bool add_default_light = true;
+    bool add_default_light = false;
     for (const auto& node : gltf_data.nodes) {
         if (!node) {
             continue;
@@ -158,18 +154,20 @@ void import_gltf(
 
         auto mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
-            //content_library->meshes.add(mesh);
+            // TODO Defer geometry / raytrace / renderable mesh generation
             std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
             for (erhe::primitive::Primitive& primitive : primitives) {
-                if (!primitive.has_renderable_triangles() && primitive.get_triangle_soup()) {
-                    primitive.make_renderable_mesh(build_info, erhe::primitive::Normal_style::corner_normals);
-                }
-                // TODO By the time we get here, it is too late to ask primitive to create, as Primitive has already been added to the Mesh.
-                //      Currently, raytrace scene is updated to match primitives when they are added to Mesh.
-                // if (!primitive.has_raytrace_triangles()) {
-                //     primitive.make_raytrace();
-                // }
+                // Ensure geometry exists
+                ERHE_VERIFY(primitive.make_geometry());
+
+                // Ensure raytrace exists
+                ERHE_VERIFY(primitive.make_raytrace());
+
+                // Ensure renderable mesh exists
+                ERHE_VERIFY(primitive.make_renderable_mesh(build_info, erhe::primitive::Normal_style::corner_normals));
             }
+
+            mesh->update_rt_primitives();
         }
 
         if (node->get_parent_node() == root_node) {
@@ -227,6 +225,9 @@ void import_gltf(
         );
         node->set_parent_from_node(m);
     }
+
+    // Move to final scene
+    root_node->set_parent(scene_root_node);
 
     //// for (const auto& node : gltf_data.nodes) {
     ////     auto i = node_colors.find(node.get());

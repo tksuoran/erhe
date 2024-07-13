@@ -46,8 +46,7 @@
 
 #include <unordered_map>
 
-namespace editor
-{
+namespace editor {
 
 using glm::normalize;
 using glm::cross;
@@ -378,10 +377,7 @@ void Transform_tool::adjust_translation(const vec3 translation)
     update_transforms();
 }
 
-void Transform_tool::adjust_rotation(
-    const vec3 center_of_rotation,
-    const quat rotation
-)
+void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat rotation)
 {
     if (shared.settings.local && shared.entries.size() == 1) {
         touch();
@@ -413,10 +409,7 @@ void Transform_tool::adjust_rotation(
     update_transforms();
 }
 
-void Transform_tool::adjust_scale(
-    const vec3 center_of_scale,
-    const vec3 scale
-)
+void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
 {
     if (shared.settings.local && shared.entries.size() == 1) {
         touch();
@@ -642,9 +635,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
     }
 }
 
-void Transform_tool::tool_render(
-    const Render_context& context
-)
+void Transform_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 

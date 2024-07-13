@@ -266,11 +266,11 @@ auto Fly_camera_frame_command::try_call() -> bool
         }
         const std::vector<erhe::primitive::Primitive>& primitives = mesh->get_primitives();
         for (const erhe::primitive::Primitive& primitive : primitives) {
-            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
-            if (!renderable_mesh.bounding_box.is_valid()) {
+            const auto bounding_box = primitive.get_bounding_box();
+            if (!bounding_box.is_valid()) {
                 continue;
             }
-            erhe::math::Bounding_box world_bounding_box = renderable_mesh.bounding_box.transformed_by(node->world_from_node());
+            erhe::math::Bounding_box world_bounding_box = bounding_box.transformed_by(node->world_from_node());
             bbox.include(world_bounding_box);
         }
     }
@@ -319,6 +319,25 @@ auto Fly_camera_move_command::try_call() -> bool
 }
 #pragma endregion Fly_camera_move_command
 
+#pragma region Fly_camera_variable_float_command
+Fly_camera_variable_float_command::Fly_camera_variable_float_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           context,
+    Variable                  variable,
+    float                     scale
+)
+    : Command   {commands, ""}
+    , m_context {context}
+    , m_variable{variable}
+    , m_scale   {scale}
+{
+}
+
+auto Fly_camera_variable_float_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    return m_context.fly_camera_tool->adjust(m_variable, input.variant.float_value * m_scale);
+}
+#pragma endregion Fly_camera_variable_float_command
 
 Fly_camera_tool::Fly_camera_tool(
     erhe::commands::Commands&    commands,
@@ -349,7 +368,17 @@ Fly_camera_tool::Fly_camera_tool(
     , m_move_forward_inactive_command {commands, editor_context, Variable::translate_z, erhe::math::Simulation_variable_control::less, false}
     , m_move_backward_active_command  {commands, editor_context, Variable::translate_z, erhe::math::Simulation_variable_control::more, true }
     , m_move_backward_inactive_command{commands, editor_context, Variable::translate_z, erhe::math::Simulation_variable_control::more, false}
+    , m_translate_x_command           {commands, editor_context, Variable::translate_x,  0.3f}
+    , m_translate_y_command           {commands, editor_context, Variable::translate_y, -0.3f}
+    , m_translate_z_command           {commands, editor_context, Variable::translate_z,  0.3f}
+    , m_rotate_x_command              {commands, editor_context, Variable::rotate_x,     0.6f}
+    , m_rotate_y_command              {commands, editor_context, Variable::rotate_y,    -0.6f}
+    , m_rotate_z_command              {commands, editor_context, Variable::rotate_z,     0.6f}
 {
+    if (editor_context.OpenXR) {
+        return;
+    }
+
     auto ini = erhe::configuration::get_ini("erhe.ini", "camera_controls");
     ini->get("invert_x",           config.invert_x);
     ini->get("invert_y",           config.invert_y);
@@ -375,6 +404,13 @@ Fly_camera_tool::Fly_camera_tool(
     commands.register_command(&m_move_forward_inactive_command);
     commands.register_command(&m_move_backward_active_command);
     commands.register_command(&m_move_backward_inactive_command);
+    commands.register_command(&m_translate_x_command);
+    commands.register_command(&m_translate_y_command);
+    commands.register_command(&m_translate_z_command);
+    commands.register_command(&m_rotate_x_command);
+    commands.register_command(&m_rotate_y_command);
+    commands.register_command(&m_rotate_z_command);
+
     commands.bind_command_to_key(&m_move_up_active_command,         erhe::window::Key_q, true );
     commands.bind_command_to_key(&m_move_up_inactive_command,       erhe::window::Key_q, false);
     commands.bind_command_to_key(&m_move_down_active_command,       erhe::window::Key_e, true );
@@ -412,6 +448,13 @@ Fly_camera_tool::Fly_camera_tool(
     m_rotate_scale_x = config.invert_x ? -1.0f / 1024.0f : 1.0f / 1024.f;
     m_rotate_scale_y = config.invert_y ? -1.0f / 1024.0f : 1.0f / 1024.f;
 
+    commands.bind_command_to_controller_axis(&m_translate_x_command, 0);
+    commands.bind_command_to_controller_axis(&m_translate_y_command, 2);
+    commands.bind_command_to_controller_axis(&m_translate_z_command, 1);
+    commands.bind_command_to_controller_axis(&m_rotate_x_command, 3);
+    commands.bind_command_to_controller_axis(&m_rotate_y_command, 5);
+    commands.bind_command_to_controller_axis(&m_rotate_z_command, 4);
+
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
             Tool::on_message(message);
@@ -442,6 +485,9 @@ Fly_camera_tool::Fly_camera_tool(
 
 void Fly_camera_tool::update_camera()
 {
+    if (m_context.OpenXR) {
+        return;
+    }
     if (!m_use_viewport_camera) {
         return;
     }
@@ -459,31 +505,31 @@ void Fly_camera_tool::update_camera()
     }
 }
 
-void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera)
+void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera, erhe::scene::Node* node)
 {
     // attach() below requires world from node matrix, which
     // might not be valid due to transform hierarchy.
+    if ((node == nullptr) && (camera != nullptr)) {
+        node = camera->get_node();
+    }
 
-    if (camera != nullptr) {
-        auto* scene_root = static_cast<Scene_root*>(camera->get_node()->node_data.host);
+    if (node != nullptr) {
+        auto* scene_root = static_cast<Scene_root*>(node->node_data.host);
         if (scene_root != nullptr) {
             scene_root->get_scene().update_node_transforms();
         } else {
-            log_fly_camera->warn("camera node does not have scene root");
+            log_fly_camera->warn("node does not have scene root");
         }
     }
 
-    erhe::scene::Node* node = (camera != nullptr)
-        ? camera->get_node()
-        : nullptr;
     m_camera_controller->set_node(node);
+    m_camera = camera;
+    m_node = node;
 }
 
 auto Fly_camera_tool::get_camera() const -> erhe::scene::Camera*
 {
-    return erhe::scene::get_camera(
-        m_camera_controller->get_node()
-    ).get();
+    return m_camera;
 }
 
 void Fly_camera_tool::translation(const int tx, const int ty, const int tz)
@@ -524,18 +570,30 @@ void Fly_camera_tool::on_hover_viewport_change()
     m_camera_controller->translate_z.reset();
 }
 
-auto Fly_camera_tool::try_move(
-    const Variable                                variable,
-    const erhe::math::Simulation_variable_control control,
-    const bool                                    active
-) -> bool
+auto Fly_camera_tool::adjust(Variable variable, float value) -> bool
 {
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    if (
-        (get_hover_scene_view() == nullptr) &&
-        active
-    ) {
+    if ((get_hover_scene_view() == nullptr)) {
+        m_camera_controller->translate_x.reset();
+        m_camera_controller->translate_y.reset();
+        m_camera_controller->translate_z.reset();
+        m_camera_controller->rotate_x.reset();
+        m_camera_controller->rotate_y.reset();
+        m_camera_controller->rotate_z.reset();
+        return false;
+    }
+
+    auto& controller = m_camera_controller->get_variable(variable);
+    controller.adjust(value);
+    return true;
+}
+
+auto Fly_camera_tool::try_move(const Variable variable, const erhe::math::Simulation_variable_control control, const bool active) -> bool
+{
+    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+
+    if ((get_hover_scene_view() == nullptr) && active) {
         m_camera_controller->translate_x.reset();
         m_camera_controller->translate_y.reset();
         m_camera_controller->translate_z.reset();
@@ -568,19 +626,28 @@ auto Fly_camera_tool::turn_relative(const float dx, const float dy) -> bool
 
     const float rx = m_sensitivity * dy * m_rotate_scale_y;
     const float ry = m_sensitivity * dx * m_rotate_scale_x;
-    m_camera_controller->apply_rotation(rx, ry, 0.0f);
+    if (false) {
+        m_camera_controller->apply_rotation(rx, ry, 0.0f);
+    } else {
+        m_camera_controller->get_variable(Variable::rotate_x).adjust(rx / 2.0f);
+        m_camera_controller->get_variable(Variable::rotate_y).adjust(ry / 2.0f);
+    }
 
     return true;
 }
 
 void Fly_camera_tool::capture_pointer()
 {
-    m_context.context_window->capture_mouse(true);
+    if (!m_context.OpenXR) {
+        m_context.context_window->capture_mouse(true);
+    }
 }
 
 void Fly_camera_tool::release_pointer()
 {
-    m_context.context_window->capture_mouse(false);
+    if (!m_context.OpenXR) {
+        m_context.context_window->capture_mouse(false);
+    }
 }
 
 auto Fly_camera_tool::try_start_tumble() -> bool
@@ -670,12 +737,7 @@ auto Fly_camera_tool::track() -> bool
         }
         const glm::vec3 ray_origin    = ray_origin_opt   .value();
         const glm::vec3 ray_direction = ray_direction_opt.value();
-        std::optional<float> t = erhe::math::intersect_plane<float>(
-            m_track_plane_normal.value(),
-            m_track_plane_point.value(),
-            ray_origin,
-            ray_direction
-        );
+        std::optional<float> t = erhe::math::intersect_plane<float>(m_track_plane_normal.value(), m_track_plane_point.value(), ray_origin, ray_direction);
         if (!t.has_value()) {
             return {};
         }
@@ -704,6 +766,10 @@ auto Fly_camera_tool::track() -> bool
 
 void Fly_camera_tool::update_fixed_step(const Time_context&)
 {
+    if (!m_camera_controller) { // TODO
+        return; 
+    }
+
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     m_camera_controller->update_fixed_step();
@@ -711,6 +777,10 @@ void Fly_camera_tool::update_fixed_step(const Time_context&)
 
 void Fly_camera_tool::update_once_per_frame(const Time_context&)
 {
+    if (!m_camera_controller) { // TODO
+        return; 
+    }
+
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     update_camera();

@@ -22,8 +22,7 @@
 
 #include <fmt/format.h>
 
-namespace editor
-{
+namespace editor {
 
 Commands_window::Commands_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,

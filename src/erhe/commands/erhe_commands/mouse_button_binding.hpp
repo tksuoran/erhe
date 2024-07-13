@@ -28,4 +28,4 @@ private:
     bool                       m_trigger_on_pressed;
 };
 
-} // namespace erhe/application
+} // namespace erhe::commands

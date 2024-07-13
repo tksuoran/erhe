@@ -2,7 +2,7 @@
 
 #include "tools/transform/transform_tool_settings.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_primitive/renderable_mesh.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_scene/trs_transform.hpp"
 
 #include <glm/glm.hpp>
@@ -107,24 +107,36 @@ private:
     erhe::scene::Trs_transform                       m_world_from_anchor;
     std::shared_ptr<erhe::scene::Node>               m_tool_node;
     float                                            m_view_distance{1.0f};
-    std::shared_ptr<erhe::primitive::Material>       m_x_material;
-    std::shared_ptr<erhe::primitive::Material>       m_y_material;
-    std::shared_ptr<erhe::primitive::Material>       m_z_material;
-    std::shared_ptr<erhe::primitive::Material>       m_x_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_y_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_z_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_x_active_material;
-    std::shared_ptr<erhe::primitive::Material>       m_y_active_material;
-    std::shared_ptr<erhe::primitive::Material>       m_z_active_material;
-    std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_cylinder_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_neg_cone_mesh;
+    std::shared_ptr<erhe::primitive::Material>       m_pos_x_material;
+    std::shared_ptr<erhe::primitive::Material>       m_neg_x_material;
+    std::shared_ptr<erhe::primitive::Material>       m_pos_y_material;
+    std::shared_ptr<erhe::primitive::Material>       m_neg_y_material;
+    std::shared_ptr<erhe::primitive::Material>       m_pos_z_material;
+    std::shared_ptr<erhe::primitive::Material>       m_neg_z_material;
+    std::shared_ptr<erhe::primitive::Material>       m_pos_x_hover_material;
+    std::shared_ptr<erhe::primitive::Material>       m_neg_x_hover_material;
+    std::shared_ptr<erhe::primitive::Material>       m_pos_y_hover_material;
+    std::shared_ptr<erhe::primitive::Material>       m_neg_y_hover_material;
+    std::shared_ptr<erhe::primitive::Material>       m_pos_z_hover_material;
+    std::shared_ptr<erhe::primitive::Material>       m_neg_z_hover_material;
+    std::shared_ptr<erhe::primitive::Material>       m_pos_x_active_material;
+    std::shared_ptr<erhe::primitive::Material>       m_neg_x_active_material;
+    std::shared_ptr<erhe::primitive::Material>       m_pos_y_active_material;
+    std::shared_ptr<erhe::primitive::Material>       m_neg_y_active_material;
+    std::shared_ptr<erhe::primitive::Material>       m_pos_z_active_material;
+    std::shared_ptr<erhe::primitive::Material>       m_neg_z_active_material;
+    std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_pos_cylinder_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_neg_cylinder_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_pos_cone_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_cylinder_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_neg_cone_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_neg_cone_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_pos_cylinder_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_neg_cylinder_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_pos_cone_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_cylinder_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_neg_cone_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_neg_cone_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_pos_cylinder_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_neg_cylinder_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_pos_cone_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_neg_cone_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_xy_translate_box_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_xz_translate_box_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_yz_translate_box_mesh;

@@ -78,6 +78,11 @@ class Scene_views;
 class Editor_context
 {
 public:
+    bool OpenXR        {false};
+    bool OpenXR_mirror {false};
+    bool developer_mode{false};
+    bool renderdoc     {false};
+
     erhe::commands::Commands*               commands              {nullptr};
     erhe::graphics::Instance*               graphics_instance     {nullptr};
     erhe::imgui::Imgui_renderer*            imgui_renderer        {nullptr};

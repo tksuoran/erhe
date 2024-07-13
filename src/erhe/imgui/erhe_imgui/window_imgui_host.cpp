@@ -56,19 +56,6 @@ Window_imgui_host::Window_imgui_host(
     ImGui::SetCurrentContext(nullptr);
 
     m_time = 0.0;
-
-    //bool window_viewport   = true;
-    //// {
-    ////     auto ini = erhe::configuration::get_ini("erhe.ini", "imgui");
-    ////     ini->get("window_viewport", window_viewport);
-    //// }
-    ////
-    //// if (window_viewport) {
-    ////     g_imgui_windows->register_context_window(
-    ////         get_context_window()
-    ////     );
-    //// }
-
 }
 
 Window_imgui_host::~Window_imgui_host()

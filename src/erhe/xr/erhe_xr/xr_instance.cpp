@@ -70,11 +70,7 @@ auto xr_debug_utils_messenger_callback(
 ) -> XrBool32
 {
     auto* instance = reinterpret_cast<Xr_instance*>(userData);
-    return instance->debug_utils_messenger_callback(
-        messageSeverity,
-        messageTypes,
-        callbackData
-    );
+    return instance->debug_utils_messenger_callback(messageSeverity, messageTypes, callbackData);
 }
 
 
@@ -207,23 +203,11 @@ auto Xr_instance::get_proc_addr(const char* function) const -> PFN_xrVoidFunctio
 {
     PFN_xrVoidFunction function_pointer;
 
-    XrResult result = xrGetInstanceProcAddr(
-        m_xr_instance,
-        function,
-        &function_pointer
-    );
-    if (
-        (result == XR_SUCCESS) &&
-        (function_pointer != nullptr)
-    )
-    {
+    XrResult result = xrGetInstanceProcAddr(m_xr_instance, function, &function_pointer);
+    if ((result == XR_SUCCESS) && (function_pointer != nullptr)) {
         return function_pointer;
     }
-    log_xr->log(
-        spdlog::level::level_enum::err,
-        "OpenXR returned error {}",
-        c_str(result)
-    );
+    log_xr->log(spdlog::level::level_enum::err, "OpenXR returned error {}", c_str(result));
     return nullptr;
 }
 
@@ -251,8 +235,7 @@ auto Xr_instance::get_xr_view_configuration_type() const -> XrViewConfigurationT
     return m_xr_view_configuration_type;
 }
 
-auto Xr_instance::get_xr_view_configuration_views() const
--> const std::vector<XrViewConfigurationView>&
+auto Xr_instance::get_xr_view_configuration_views() const -> const std::vector<XrViewConfigurationView>&
 {
     return m_xr_view_configuration_views;
 }
@@ -605,11 +588,7 @@ void Xr_instance::get_paths()
 void Xr_instance::get_path(const char* path, XrPath& xr_path)
 {
     check(
-        xrStringToPath(
-            m_xr_instance,
-            path,
-            &xr_path
-        )
+        xrStringToPath(m_xr_instance, path, &xr_path)
     );
 }
 
@@ -653,10 +632,7 @@ void Xr_instance::collect_bindings(const Xr_action& action)
     }
 }
 
-auto Xr_instance::create_boolean_action(
-    const unsigned int     profile_mask,
-    const std::string_view path_name
-) -> Xr_action_boolean*
+auto Xr_instance::create_boolean_action(const unsigned int profile_mask, const std::string_view path_name) -> Xr_action_boolean*
 {
     m_boolean_actions.emplace_back(m_xr_instance, m_action_set, path_name, profile_mask);
     auto& action = m_boolean_actions.back();
@@ -668,10 +644,7 @@ auto Xr_instance::create_boolean_action(
     return &action;
 }
 
-auto Xr_instance::create_float_action(
-    const unsigned int     profile_mask,
-    const std::string_view path_name
-) -> Xr_action_float*
+auto Xr_instance::create_float_action(const unsigned int profile_mask, const std::string_view path_name) -> Xr_action_float*
 {
     m_float_actions.emplace_back(m_xr_instance, m_action_set, path_name, profile_mask);
     auto& action = m_float_actions.back();
@@ -683,10 +656,7 @@ auto Xr_instance::create_float_action(
     return &action;
 }
 
-auto Xr_instance::create_vector2f_action(
-    const unsigned int     profile_mask,
-    const std::string_view path_name
-) -> Xr_action_vector2f*
+auto Xr_instance::create_vector2f_action(const unsigned int profile_mask, const std::string_view path_name) -> Xr_action_vector2f*
 {
     m_vector2f_actions.emplace_back(m_xr_instance, m_action_set, path_name, profile_mask);
     auto& action = m_vector2f_actions.back();
@@ -698,10 +668,7 @@ auto Xr_instance::create_vector2f_action(
     return &action;
 }
 
-auto Xr_instance::create_pose_action(
-    const unsigned int     profile_mask,
-    const std::string_view path_name
-) -> Xr_action_pose*
+auto Xr_instance::create_pose_action(const unsigned int profile_mask, const std::string_view path_name) -> Xr_action_pose*
 {
     m_pose_actions.emplace_back(m_xr_instance, m_action_set, path_name, profile_mask);
     auto& action = m_pose_actions.back();
@@ -853,8 +820,7 @@ auto Xr_instance::get_path_string(XrPath path) -> std::string
 void Xr_instance::update_action_bindings()
 {
     if (!m_khr_simple_bindings.empty()) {
-        const XrInteractionProfileSuggestedBinding bindings
-        {
+        const XrInteractionProfileSuggestedBinding bindings{
             .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
             .next                   = nullptr,
             .interactionProfile     = paths.interaction_profile_khr_simple_controller,
@@ -879,11 +845,7 @@ void Xr_instance::update_action_bindings()
         };
 
         for (const auto& binding : m_oculus_touch_bindings) {
-            log_xr->info(
-                "Binding action = {}, path = '{}'",
-                fmt::ptr(binding.action),
-                get_path_string(binding.binding)
-            );
+            log_xr->info("Binding action = {}, path = '{}'", fmt::ptr(binding.action), get_path_string(binding.binding));
         }
         const auto result = xrSuggestInteractionProfileBindings(m_xr_instance, &bindings);
         log_xr->info(
@@ -1105,8 +1067,7 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
                 session.set_state(session_state_changed_event.state);
                 switch (session_state_changed_event.state) {
                     case XR_SESSION_STATE_UNKNOWN:
-                    case XR_SESSION_STATE_IDLE:
-                    {
+                    case XR_SESSION_STATE_IDLE: {
                         break;
                     }
 

@@ -59,6 +59,7 @@ public:
     [[nodiscard]] auto get_glfw_window              () const -> GLFWwindow*;
 
     auto open                     (const Window_configuration& configuration) -> bool;
+    void request_close            ();
     void make_current             () const;
     void clear_current            () const;
     void swap_buffers             () const;
@@ -98,6 +99,9 @@ private:
     double                    m_mouse_virtual_xpos   {0.0};
     double                    m_mouse_virtual_ypos   {0.0};
     int                       m_glfw_key_modifiers{0};
+    int                       m_joystick{-1};
+    std::vector<float>        m_controller_axis_values;
+    std::vector<bool>         m_controller_button_values;
 
     static int s_window_count;
 };

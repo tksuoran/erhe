@@ -12,7 +12,6 @@
 namespace erhe::graphics {
     class Texture;
 }
-
 namespace erhe::primitive {
     class Material;
 }
@@ -74,13 +73,8 @@ public:
     // Warning: Returns pointer to element of member vector. That pointer
     //          should remain stable as long as Light_projections stays
     //          alive.
-    [[nodiscard]] auto get_light_projection_transforms_for_light(
-        const erhe::scene::Light* light
-    ) -> erhe::scene::Light_projection_transforms*;
-
-    [[nodiscard]] auto get_light_projection_transforms_for_light(
-        const erhe::scene::Light* light
-    ) const -> const erhe::scene::Light_projection_transforms*;
+    [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) -> erhe::scene::Light_projection_transforms*;
+    [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) const -> const erhe::scene::Light_projection_transforms*;
 
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;

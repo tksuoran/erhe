@@ -10,12 +10,9 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
-Joint_interface::Joint_interface(
-    erhe::graphics::Instance& graphics_instance
-)
+Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
     : joint_block{
         graphics_instance,
         "joint",
@@ -41,10 +38,7 @@ Joint_interface::Joint_interface(
     offsets.joint_struct = joint_block.add_struct("joints", &joint_struct, erhe::graphics::Shader_resource::unsized_array)->offset_in_parent();
 }
 
-Joint_buffer::Joint_buffer(
-    erhe::graphics::Instance& graphics_instance,
-    Joint_interface&          joint_interface
-)
+Joint_buffer::Joint_buffer(erhe::graphics::Instance& graphics_instance, Joint_interface& joint_interface)
     : Multi_buffer       {graphics_instance, "joint"}
     , m_graphics_instance{graphics_instance}
     , m_joint_interface  {joint_interface}

@@ -24,10 +24,7 @@ using glm::mat4;
 
 Geometry::Geometry() = default;
 
-Geometry::Geometry(
-    std::string_view               name,
-    std::function<void(Geometry&)> generator
-)
+Geometry::Geometry(std::string_view name, std::function<void(Geometry&)> generator)
     : name{name}
 {
     if (generator) {

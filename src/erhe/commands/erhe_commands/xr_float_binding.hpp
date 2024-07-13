@@ -24,4 +24,4 @@ public:
     erhe::xr::Xr_action_float* xr_action{nullptr};
 };
 
-} // namespace erhe/application
+} // namespace erhe::commands

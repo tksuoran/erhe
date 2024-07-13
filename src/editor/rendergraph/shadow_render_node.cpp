@@ -47,11 +47,7 @@ Shadow_render_node::Shadow_render_node(
     reconfigure(graphics_instance, resolution, light_count);
 }
 
-void Shadow_render_node::reconfigure(
-    erhe::graphics::Instance& graphics_instance,
-    const int                 resolution,
-    const int                 light_count
-)
+void Shadow_render_node::reconfigure(erhe::graphics::Instance& graphics_instance, const int resolution, const int light_count)
 {
     log_render->trace("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
 

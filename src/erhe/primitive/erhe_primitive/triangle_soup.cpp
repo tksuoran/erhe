@@ -1,6 +1,8 @@
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_primitive/primitive_log.hpp"
+#include "erhe_primitive/build_info.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_log/log_glm.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_math/math_util.hpp"
@@ -8,6 +10,7 @@
 
 #include <glm/glm.hpp>
 
+#include <numeric>
 #include <unordered_map>
 #include <set>
 
@@ -55,12 +58,31 @@ namespace erhe::primitive {
     }
 }
 
-class Triangle_soup_to_geometry
+auto Triangle_soup::get_vertex_count() const -> std::size_t
+{
+    return vertex_data.size() / vertex_format.stride();
+}
+
+auto Triangle_soup::get_index_count() const -> std::size_t
+{
+    return index_data.size();
+}
+
+class Geometry_from_triangle_soup
 {
 public:
-    Triangle_soup_to_geometry(const Triangle_soup& triangle_soup)
-        : m_triangle_soup{triangle_soup}
-        , m_geometry     {std::make_shared<erhe::geometry::Geometry>()}
+    Geometry_from_triangle_soup(
+        erhe::geometry::Geometry&          geometry,
+        const Triangle_soup&               triangle_soup,
+        erhe::primitive::Element_mappings& element_mappings
+    )
+        : m_geometry        {geometry}
+        , m_triangle_soup   {triangle_soup}
+        , m_element_mappings{element_mappings}
+    {
+    }
+
+    void build()
     {
         std::unordered_map<erhe::graphics::Vertex_attribute::Usage_type, std::size_t> attribute_max_index;
         const std::vector<erhe::graphics::Vertex_attribute>& attributes = m_triangle_soup.vertex_format.get_attributes();
@@ -88,24 +110,26 @@ public:
         for (std::size_t i = 0, end = attributes.size(); i < end; ++i) {
             const erhe::graphics::Vertex_attribute& attribute = attributes[i];
             switch (attribute.usage.type) {
-                case erhe::graphics::Vertex_attribute::Usage_type::position:      m_point_locations    [attribute.usage.index] = m_geometry->point_attributes ().create<glm::vec3 >(erhe::geometry::c_point_locations    ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::normal:        m_corner_normals     [attribute.usage.index] = m_geometry->corner_attributes().create<glm::vec3 >(erhe::geometry::c_corner_normals     ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::tangent:       m_corner_tangents    [attribute.usage.index] = m_geometry->corner_attributes().create<glm::vec4 >(erhe::geometry::c_corner_tangents    ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::tex_coord:     m_corner_texcoords   [attribute.usage.index] = m_geometry->corner_attributes().create<glm::vec2 >(erhe::geometry::c_corner_texcoords   ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::color:         m_corner_colors      [attribute.usage.index] = m_geometry->corner_attributes().create<glm::vec4 >(erhe::geometry::c_corner_colors      ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: m_point_joint_indices[attribute.usage.index] = m_geometry->point_attributes ().create<glm::uvec4>(erhe::geometry::c_point_joint_indices); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: m_point_joint_weights[attribute.usage.index] = m_geometry->point_attributes ().create<glm::vec4 >(erhe::geometry::c_point_joint_weights); break;
+                case erhe::graphics::Vertex_attribute::Usage_type::position:      m_point_locations    [attribute.usage.index] = m_geometry.point_attributes ().create<glm::vec3 >(erhe::geometry::c_point_locations    ); break;
+                case erhe::graphics::Vertex_attribute::Usage_type::normal:        m_corner_normals     [attribute.usage.index] = m_geometry.corner_attributes().create<glm::vec3 >(erhe::geometry::c_corner_normals     ); break;
+                case erhe::graphics::Vertex_attribute::Usage_type::tangent:       m_corner_tangents    [attribute.usage.index] = m_geometry.corner_attributes().create<glm::vec4 >(erhe::geometry::c_corner_tangents    ); break;
+                case erhe::graphics::Vertex_attribute::Usage_type::tex_coord:     m_corner_texcoords   [attribute.usage.index] = m_geometry.corner_attributes().create<glm::vec2 >(erhe::geometry::c_corner_texcoords   ); break;
+                case erhe::graphics::Vertex_attribute::Usage_type::color:         m_corner_colors      [attribute.usage.index] = m_geometry.corner_attributes().create<glm::vec4 >(erhe::geometry::c_corner_colors      ); break;
+                case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: m_point_joint_indices[attribute.usage.index] = m_geometry.point_attributes ().create<glm::uvec4>(erhe::geometry::c_point_joint_indices); break;
+                case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: m_point_joint_weights[attribute.usage.index] = m_geometry.point_attributes ().create<glm::vec4 >(erhe::geometry::c_point_joint_weights); break;
                 default: continue;
             }
         }
 
         get_used_indices();
         make_points();
+        parse_triangles();
         parse_vertex_data();
-        m_geometry->make_point_corners();
-        m_geometry->build_edges();
+        m_geometry.make_point_corners();
+        m_geometry.build_edges();
     }
 
+private:
     void get_used_indices()
     {
         m_used_indices = m_triangle_soup.index_data;
@@ -255,7 +279,7 @@ public:
             }
             const glm::vec3 position = m_vertex_positions[index - m_min_index];
             if (position != previous_position) {
-                point_id = m_geometry->make_point();
+                point_id = m_geometry.make_point();
                 previous_position = position;
             } else {
                 ++point_share_count;
@@ -264,13 +288,19 @@ public:
         }
         log_primitive->trace(
             "point count = {}, point share count = {}",
-            m_geometry->get_point_count(),
+            m_geometry.get_point_count(),
             point_share_count
         );
     }
     void parse_triangles()
     {
         const std::size_t triangle_count = m_triangle_soup.index_data.size() / 3;
+        auto& corner_to_vertex_id = m_element_mappings.corner_to_vertex_id;
+        corner_to_vertex_id.resize(triangle_count * 3);
+        // Fill in one to one mapping
+        auto& primitive_id_to_polygon_id = m_element_mappings.primitive_id_to_polygon_id;
+        primitive_id_to_polygon_id.resize(triangle_count);
+        std::iota(primitive_id_to_polygon_id.begin(), primitive_id_to_polygon_id.end(), 0);
 
         log_primitive->trace(
             "index count = {}, unique vertex count = {}, triangle count = {}",
@@ -279,9 +309,10 @@ public:
             triangle_count
         );
 
-        m_geometry->reserve_polygons(triangle_count);
-        m_corner_id_start = m_geometry->m_next_corner_id;
+        m_geometry.reserve_polygons(triangle_count);
+        m_corner_id_start = m_geometry.m_next_corner_id;
         m_index_from_corner_id.resize(3 * m_triangle_soup.index_data.size());
+
         for (std::size_t i = 0; i < m_triangle_soup.index_data.size();) {
             uint32_t v0 = m_triangle_soup.index_data[i++];
             uint32_t v1 = m_triangle_soup.index_data[i++];
@@ -289,18 +320,21 @@ public:
             erhe::geometry::Point_id   p0         = m_point_id_from_index.at(v0 - m_min_index);
             erhe::geometry::Point_id   p1         = m_point_id_from_index.at(v1 - m_min_index);
             erhe::geometry::Point_id   p2         = m_point_id_from_index.at(v2 - m_min_index);
-            erhe::geometry::Polygon_id polygon_id = m_geometry->make_polygon();
-            erhe::geometry::Corner_id  c0         = m_geometry->make_polygon_corner(polygon_id, p0);
-            erhe::geometry::Corner_id  c1         = m_geometry->make_polygon_corner(polygon_id, p1);
-            erhe::geometry::Corner_id  c2         = m_geometry->make_polygon_corner(polygon_id, p2);
+            erhe::geometry::Polygon_id polygon_id = m_geometry.make_polygon();
+            erhe::geometry::Corner_id  c0         = m_geometry.make_polygon_corner(polygon_id, p0);
+            erhe::geometry::Corner_id  c1         = m_geometry.make_polygon_corner(polygon_id, p1);
+            erhe::geometry::Corner_id  c2         = m_geometry.make_polygon_corner(polygon_id, p2);
             m_index_from_corner_id[c0 - m_corner_id_start] = v0;
             m_index_from_corner_id[c1 - m_corner_id_start] = v1;
             m_index_from_corner_id[c2 - m_corner_id_start] = v2;
+            corner_to_vertex_id[c0] = v0;
+            corner_to_vertex_id[c1] = v1;
+            corner_to_vertex_id[c2] = v2;
             SPDLOG_LOGGER_TRACE(log_primitive, "vertex {} corner {} for polygon {}", v0, c0, polygon_id);
             SPDLOG_LOGGER_TRACE(log_primitive, "vertex {} corner {} for polygon {}", v1, c1, polygon_id);
             SPDLOG_LOGGER_TRACE(log_primitive, "vertex {} corner {} for polygon {}", v2, c2, polygon_id);
         }
-        m_corner_id_end = m_geometry->m_next_corner_id;
+        m_corner_id_end = m_geometry.m_next_corner_id;
     }
     void parse_vertex_data()
     {
@@ -382,11 +416,7 @@ public:
     }
 
     template <typename T>
-    void put_point_attribute(
-        const erhe::graphics::Vertex_attribute& attribute,
-        erhe::geometry::Point_id                point_id,
-        T                                       value[4]
-    )
+    void put_point_attribute(const erhe::graphics::Vertex_attribute& attribute, erhe::geometry::Point_id point_id, T value[4])
     {
         switch (attribute.usage.type) {
             case erhe::graphics::Vertex_attribute::Usage_type::position: {
@@ -410,11 +440,7 @@ public:
     }
 
     template <typename T>
-    void put_corner_attribute(
-        const erhe::graphics::Vertex_attribute& attribute,
-        erhe::geometry::Corner_id               corner_id,
-        T                                       value[4]
-    )
+    void put_corner_attribute(const erhe::graphics::Vertex_attribute& attribute, erhe::geometry::Corner_id corner_id, T value[4])
     {
         switch (attribute.usage.type) {
             case erhe::graphics::Vertex_attribute::Usage_type::normal: {
@@ -444,8 +470,9 @@ public:
         }
     }
 
+    erhe::geometry::Geometry&                 m_geometry;
     const Triangle_soup&                      m_triangle_soup;
-    std::shared_ptr<erhe::geometry::Geometry> m_geometry             {};
+    erhe::primitive::Element_mappings&        m_element_mappings;
     std::size_t                               m_min_index            {0};
     std::size_t                               m_max_index            {0};
     std::vector<uint32_t>                     m_used_indices         {};
@@ -467,14 +494,20 @@ public:
     std::vector<erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec4>* > m_point_joint_weights;
 };
 
-auto Triangle_soup::get_vertex_count() const -> std::size_t
+auto geometry_from_triangle_soup(const Triangle_soup& triangle_soup, erhe::primitive::Element_mappings& element_mappings) -> erhe::geometry::Geometry
 {
-    return vertex_data.size() / vertex_format.stride();
-}
+    ERHE_PROFILE_FUNCTION();
 
-auto Triangle_soup::get_index_count() const -> std::size_t
-{
-    return index_data.size();
+    ERHE_VERIFY(element_mappings.corner_to_vertex_id.empty());
+    ERHE_VERIFY(element_mappings.primitive_id_to_polygon_id.empty());
+
+    return erhe::geometry::Geometry{
+        "triangle_soup",
+        [&](erhe::geometry::Geometry& geometry) {
+            Geometry_from_triangle_soup builder{geometry, triangle_soup, element_mappings};
+            builder.build();
+        }
+    };
 }
 
 } // amespace erhe::primitive

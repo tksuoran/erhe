@@ -11,12 +11,9 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
-Camera_interface::Camera_interface(
-    erhe::graphics::Instance& graphics_instance
-)
+Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
     : camera_block{
         graphics_instance,
         "camera",
@@ -42,10 +39,7 @@ Camera_interface::Camera_interface(
     camera_block.add_struct("cameras", &camera_struct, max_camera_count);
 }
 
-Camera_buffer::Camera_buffer(
-    erhe::graphics::Instance& graphics_instance,
-    Camera_interface&         camera_interface
-)
+Camera_buffer::Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface)
     : Multi_buffer      {graphics_instance, "camera"}
     , m_camera_interface{camera_interface}
 {

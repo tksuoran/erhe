@@ -40,8 +40,7 @@
 
 #include <string>
 
-namespace editor
-{
+namespace editor {
 
 #pragma region Commands
 Paint_vertex_command::Paint_vertex_command(erhe::commands::Commands& commands, Editor_context& context)
@@ -88,16 +87,17 @@ auto Paint_vertex_command::try_call() -> bool
 namespace {
 
 auto vertex_id_from_corner_id(
-    const erhe::scene::Mesh&        mesh,
+    erhe::scene::Mesh&              mesh,
     const erhe::geometry::Geometry& geometry,
     const erhe::geometry::Corner_id corner_id
 ) -> std::optional<uint32_t>
 {
     for (const auto& primitive : mesh.get_primitives()) {
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_primitive = primitive.get_geometry();
-        if (geometry_in_primitive.get() == &geometry) {
-            const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
-            return renderable_mesh.corner_to_vertex_id.at(corner_id);
+        if (primitive.render_shape) {
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_primitive = primitive.render_shape->get_geometry_const();
+            if (geometry_in_primitive.get() == &geometry) {
+                return primitive.render_shape->get_vertex_id_from_corner_id(corner_id);
+            }
         }
     }
     return std::nullopt;
@@ -315,7 +315,7 @@ auto Paint_tool::try_ready() -> bool
 }
 
 void Paint_tool::paint_corner(
-    const erhe::scene::Mesh&        mesh,
+    erhe::scene::Mesh&              mesh,
     const erhe::geometry::Geometry& geometry,
     erhe::geometry::Corner_id       corner_id,
     const glm::vec4                 color
@@ -329,7 +329,7 @@ void Paint_tool::paint_corner(
 }
 
 void Paint_tool::paint_vertex(
-    const erhe::scene::Mesh&        mesh,
+    erhe::scene::Mesh&              mesh,
     const erhe::geometry::Geometry& geometry,
     const uint32_t                  vertex_id,
     const glm::vec4                 color
@@ -347,13 +347,16 @@ void Paint_tool::paint_vertex(
 
     std::vector<std::uint8_t> buffer;
 
-    for (const erhe::primitive::Primitive& primitive : mesh.get_primitives()) {
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_mesh = primitive.get_geometry();
+    for (erhe::primitive::Primitive& primitive : mesh.get_mutable_primitives()) {
+        if (!primitive.render_shape) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_mesh = primitive.render_shape->get_geometry();
         if (geometry_in_mesh.get() != &geometry) {
             continue;
         }
-        const erhe::primitive::Renderable_mesh& renderable_mesh = primitive.get_renderable_mesh();
-        const std::size_t range_byte_offset = renderable_mesh.vertex_buffer_range.byte_offset;
+        const erhe::primitive::Buffer_mesh& buffer_mesh = primitive.render_shape->get_renderable_mesh();
+        const std::size_t range_byte_offset = buffer_mesh.vertex_buffer_range.byte_offset;
         if (attribute->data_type == erhe::dataformat::Format::format_32_vec4_float) {
             buffer.resize(sizeof(float) * 4);
             auto* const ptr = reinterpret_cast<float*>(buffer.data());
@@ -523,8 +526,11 @@ void Paint_tool::imgui()
                     continue;
                 }
             }
-            for (const erhe::primitive::Primitive& primitive : mesh->get_primitives()) {
-                const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.get_geometry();
+            for (erhe::primitive::Primitive& primitive : mesh->get_mutable_primitives()) {
+                if (!primitive.render_shape) {
+                    continue;
+                }
+                const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.render_shape->get_geometry();
                 if (!geometry) {
                     continue;
                 }

@@ -9,7 +9,6 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
-#include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_raytrace/ibuffer.hpp"
 #include "erhe_raytrace/igeometry.hpp"
@@ -79,22 +78,18 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
     const erhe::primitive::Primitive& primitive = mesh_primitives[raytrace_primitive->primitive_index];
 
     using namespace erhe::primitive;
-    const Renderable_mesh& renderable_mesh           = primitive.get_renderable_mesh();
-    const auto&            triangle_id_to_polygon_id = renderable_mesh.primitive_id_to_polygon_id;
-    ERHE_VERIFY(hit.triangle_id < triangle_id_to_polygon_id.size());
-    const auto polygon_id = triangle_id_to_polygon_id[hit.triangle_id];
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.get_geometry();
+    const std::shared_ptr<Primitive_shape> shape = primitive.get_shape_for_raytrace();
+    ERHE_VERIFY(shape);
+    const auto polygon_id = shape->get_polygon_id_from_primitive_id(hit.triangle_id);
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
     if (!geometry) {
-        return {};
+        return hit.normal;
     }
     ERHE_VERIFY(polygon_id < geometry->get_polygon_count());
     auto* const polygon_normals = geometry->polygon_attributes().find<glm::vec3>(
         erhe::geometry::c_polygon_normals
     );
-    if (
-        (polygon_normals == nullptr) ||
-        !polygon_normals->has(polygon_id)
-    ) {
+    if ((polygon_normals == nullptr) || !polygon_normals->has(polygon_id)) {
         return {};
     }
 

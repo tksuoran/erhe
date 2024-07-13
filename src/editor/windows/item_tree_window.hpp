@@ -4,7 +4,6 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_item/item.hpp"
-#include "erhe_item/unique_id.hpp"
 
 #include <imgui/imgui.h>
 
@@ -78,22 +77,12 @@ private:
     void clear_selection              ();
     void recursive_add_to_selection   (const std::shared_ptr<erhe::Item_base>& node);
     void select_all                   ();
-
-    void move_selection(
-        const std::shared_ptr<erhe::Item_base>& target,
-        erhe::Item_base*                        payload_item,
-        Placement                               placement
-    );
-    void attach_selection_to(
-        const std::shared_ptr<erhe::Item_base>& target_node,
-        erhe::Item_base*                        payload_item
-    );
-
-    void item_popup_menu      (const std::shared_ptr<erhe::Item_base>& item);
-    void item_icon            (const std::shared_ptr<erhe::Item_base>& item);
-    auto item_icon_and_text   (const std::shared_ptr<erhe::Item_base>& item, bool update, bool force_expand) -> Tree_node_state;
-    void item_update_selection(const std::shared_ptr<erhe::Item_base>& item);
-    void imgui_item_node      (const std::shared_ptr<erhe::Item_base>& item);
+    void move_selection               (const std::shared_ptr<erhe::Item_base>& target, erhe::Item_base* payload_item, Placement placement);
+    void attach_selection_to          (const std::shared_ptr<erhe::Item_base>& target_node, erhe::Item_base* payload_item);
+    void item_popup_menu              (const std::shared_ptr<erhe::Item_base>& item);
+    auto item_icon_and_text           (const std::shared_ptr<erhe::Item_base>& item, bool update, bool force_expand) -> Tree_node_state;
+    void item_update_selection        (const std::shared_ptr<erhe::Item_base>& item);
+    void imgui_item_node              (const std::shared_ptr<erhe::Item_base>& item);
 
     enum class Show_mode : unsigned int {
         Hide          = 0,
@@ -102,7 +91,6 @@ private:
     };
 
     [[nodiscard]] auto should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode;
-    [[nodiscard]] auto get_item_by_id(std::size_t id) const -> std::shared_ptr<erhe::Item_base>;
 
     void try_add_to_attach(
         Compound_operation::Parameters&         compound_parameters,

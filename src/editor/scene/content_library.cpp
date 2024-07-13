@@ -6,11 +6,7 @@ Content_library_node::Content_library_node(const Content_library_node&)         
 Content_library_node& Content_library_node::operator=(const Content_library_node&) = default;
 Content_library_node::~Content_library_node() noexcept                             = default;
 
-Content_library_node::Content_library_node(
-    std::string_view folder_name,
-    uint64_t         type_code,
-    std::string_view type_name
-)
+Content_library_node::Content_library_node(std::string_view folder_name, uint64_t type_code, std::string_view type_name)
     : Item     {folder_name}
     , type_code{type_code}
     , type_name{type_name}

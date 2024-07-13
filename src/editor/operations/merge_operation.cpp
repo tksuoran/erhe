@@ -48,7 +48,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     using glm::mat4;
 
     erhe::physics::Compound_shape_create_info  compound_shape_create_info;
-    erhe::geometry::Geometry                   combined_render_geometry;
+    erhe::geometry::Geometry                   combined_geometry;
     std::shared_ptr<erhe::primitive::Material> material;
     Scene_root* scene_root                = nullptr;
     bool        first_mesh                = true;
@@ -64,10 +64,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     std::sort(
         m_selection_before.begin(),
         m_selection_before.end(),
-        [](
-            const std::shared_ptr<erhe::Item_base>& lhs,
-            const std::shared_ptr<erhe::Item_base>& rhs
-        ) {
+        [](const std::shared_ptr<erhe::Item_base>& lhs, const std::shared_ptr<erhe::Item_base>& rhs) {
             auto lhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(lhs);
             auto rhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(rhs);
             if (lhs_hierarchy && !rhs_hierarchy) {
@@ -131,15 +128,19 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             }
         }
 
-        for (auto& primitive : mesh->get_primitives()) {
-            const std::shared_ptr<erhe::geometry::Geometry>& render_geometry = primitive.get_geometry();
-            if (render_geometry) {
-                combined_render_geometry.merge(*render_geometry, transform);
+        for (auto& primitive : mesh->get_mutable_primitives()) {
+            const auto& shape = primitive.render_shape;
+            if (!shape) {
+                continue;
+            }
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
+            if (geometry) {
+                combined_geometry.merge(*geometry, transform);
                 if (normal_style == Normal_style::none) {
-                    normal_style = primitive.get_normal_style();
+                    normal_style = shape->get_normal_style();
                 }
                 if (!material) {
-                    material = primitive.get_material();
+                    material = primitive.material;
                 }
             }
         }
@@ -169,19 +170,16 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
     }
 
-    std::shared_ptr<erhe::geometry::Geometry> welded_render_geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::operation::weld(combined_render_geometry)
+    std::shared_ptr<erhe::geometry::Geometry> welded_geometry = std::make_shared<erhe::geometry::Geometry>(
+        erhe::geometry::operation::weld(combined_geometry)
     );
 
-    m_first_mesh_primitives_after.push_back(
-        erhe::primitive::Primitive{
-            welded_render_geometry,
-            welded_render_geometry,
-            material,
-            parameters.build_info,
-            normal_style
-        }
-    );
+    erhe::primitive::Primitive after_primitive{welded_geometry, material};
+    const bool renderable_ok = after_primitive.make_renderable_mesh(parameters.build_info, normal_style);
+    const bool raytrace_ok   = after_primitive.make_raytrace();
+    ERHE_VERIFY(renderable_ok && raytrace_ok);
+
+    m_first_mesh_primitives_after.push_back(after_primitive);
 }
 
 void Merge_operation::execute(Editor_context& context)

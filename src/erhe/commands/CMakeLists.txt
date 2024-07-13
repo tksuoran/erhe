@@ -11,10 +11,16 @@ erhe_target_sources_grouped(
     erhe_commands/commands.hpp
     erhe_commands/commands_log.cpp
     erhe_commands/commands_log.hpp
+    erhe_commands/controller_axis_binding.cpp
+    erhe_commands/controller_axis_binding.hpp
+    erhe_commands/controller_button_binding.cpp
+    erhe_commands/controller_button_binding.hpp
     erhe_commands/input_arguments.cpp
     erhe_commands/input_arguments.hpp
     erhe_commands/key_binding.cpp
     erhe_commands/key_binding.hpp
+    erhe_commands/menu_binding.cpp
+    erhe_commands/menu_binding.hpp
     erhe_commands/mouse_binding.cpp
     erhe_commands/mouse_binding.hpp
     erhe_commands/mouse_button_binding.cpp

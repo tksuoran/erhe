@@ -119,9 +119,7 @@ Command tokenize(const std::string& text)
 // vn -1.64188e-16 -0.284002 0.958824
 // f 1/1/1 2/2/2 3/3/3 4/4/4
 
-auto parse_obj_geometry(
-    const std::filesystem::path& path
-) -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>
+auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>
 {
     ERHE_PROFILE_FUNCTION();
 

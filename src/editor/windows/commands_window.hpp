@@ -5,7 +5,6 @@
 namespace erhe::commands {
     enum class State : unsigned int;
 }
-
 namespace erhe::imgui {
     class Imgui_windows;
 }

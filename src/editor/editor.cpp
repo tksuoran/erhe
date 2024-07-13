@@ -115,7 +115,17 @@ public:
     {
         {
             auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
-            ini->get("openxr", m_openxr);
+            ini->get("openxr",        m_editor_context.OpenXR);
+            ini->get("openxr_mirror", m_editor_context.OpenXR_mirror);
+
+            ini = erhe::configuration::get_ini("erhe.ini", "developer");
+            ini->get("enable", m_editor_context.developer_mode);
+
+            ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
+            ini->get("capture_support", m_editor_context.renderdoc);
+            if (m_editor_context.renderdoc) {
+                m_editor_context.developer_mode = true;
+            }
         }
 
         erhe::window::Window_configuration configuration{
@@ -127,18 +137,15 @@ public:
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta")
         };
 
-        bool show             = true;
-        bool fullscreen       = false;
-        bool use_transparency = false;
         auto ini = erhe::configuration::get_ini("erhe.ini", "window");
-        ini->get("show",              show);
-        ini->get("fullscreen",        fullscreen);
-        ini->get("fuse_transparency", use_transparency);
-        ini->get("gl_major",          configuration.gl_major);
-        ini->get("gl_minor",          configuration.gl_minor);
-        ini->get("width",             configuration.width);
-        ini->get("height",            configuration.height);
-        ini->get("swap_interval",     configuration.swap_interval);
+        ini->get("show",             configuration.show);
+        ini->get("fullscreen",       configuration.fullscreen);
+        ini->get("use_transparency", configuration.framebuffer_transparency);
+        ini->get("gl_major",         configuration.gl_major);
+        ini->get("gl_minor",         configuration.gl_minor);
+        ini->get("width",            configuration.width);
+        ini->get("height",           configuration.height);
+        ini->get("swap_interval",    configuration.swap_interval);
 
         return erhe::window::Context_window{configuration};
     }
@@ -185,7 +192,7 @@ public:
         , m_commands_window       {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_layers_window         {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_network_window        {m_imgui_renderer, m_imgui_windows, m_editor_context, m_time}
-        , m_operations            {m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_operations            {m_commands,       m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_physics_window        {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_post_processing_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_properties            {m_imgui_renderer, m_imgui_windows, m_editor_context}
@@ -200,6 +207,7 @@ public:
         , m_pipelines             {m_imgui_renderer, m_imgui_windows}
 
         , m_tools{
+            m_imgui_renderer, m_imgui_windows,
             m_graphics_instance, m_scene_message_bus, m_editor_context,
             m_editor_rendering,  m_mesh_memory,       m_programs
         }
@@ -218,7 +226,9 @@ public:
             m_tools,
             m_viewport_scene_views
         }
+        , m_fly_camera_tool       {m_commands,       m_imgui_renderer, m_imgui_windows,      m_editor_context, m_editor_message_bus, m_time, m_tools}
         , m_headset_view{
+            m_commands,
             m_graphics_instance,
             m_rendergraph,
             m_context_window,
@@ -226,7 +236,8 @@ public:
             m_editor_rendering,
             m_editor_settings,
             m_mesh_memory,
-            m_scene_builder
+            m_scene_builder,
+            m_time
         }
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         , m_hand_tracker{m_editor_context, m_editor_rendering}
@@ -266,7 +277,6 @@ public:
 #endif
         , m_brush_tool            {m_commands,       m_editor_context, m_editor_message_bus, m_headset_view, m_icon_set, m_tools}
         , m_create                {m_imgui_renderer, m_imgui_windows,  m_editor_context,     m_tools}
-        , m_fly_camera_tool       {m_commands,       m_imgui_renderer, m_imgui_windows,      m_editor_context, m_editor_message_bus, m_time, m_tools}
         , m_grid_tool             {m_imgui_renderer, m_imgui_windows,  m_editor_context,     m_icon_set, m_tools}
         , m_material_paint_tool   {m_commands,       m_editor_context, m_headset_view,       m_icon_set, m_tools}
         , m_paint_tool{
@@ -279,7 +289,9 @@ public:
         ERHE_PROFILE_GPU_CONTEXT
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        m_selection.setup_xr_bindings(m_commands, m_headset_view);
+        if (m_editor_context.OpenXR) {
+            m_selection.setup_xr_bindings(m_commands, m_headset_view);
+        }
 #endif
 
         fill_editor_context();
@@ -299,14 +311,16 @@ public:
         auto& root_event_handler = m_context_window.get_root_window_event_handler();
         root_event_handler.attach(this, 3);
         const auto window_viewport = m_imgui_windows.get_window_imgui_host();
-        window_viewport->set_begin_callback(
-            [this](erhe::imgui::Imgui_host& imgui_host) {
-                m_editor_windows.viewport_menu(imgui_host);
-            }
-        );
+        if (!m_editor_context.OpenXR) {
+            window_viewport->set_begin_callback(
+                [this](erhe::imgui::Imgui_host& imgui_host) {
+                    m_editor_windows.viewport_menu(imgui_host);
+                }
+            );
+        }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        if (m_headset_view.config.openxr) {
+        if (m_editor_context.OpenXR) {
             // TODO Create windows directly to correct viewport?
             // Move all imgui windows that have window viewport to hud viewport
             const auto viewport = m_hud.get_rendertarget_imgui_viewport();
@@ -324,8 +338,8 @@ public:
         {
             root_event_handler.attach(&m_input_state, 4);
             root_event_handler.attach(&m_imgui_windows, 2);
-            root_event_handler.attach(&m_commands, 1);
         }
+        root_event_handler.attach(&m_commands, 1);
 
         m_tools.set_priority_tool(&m_physics_tool);
     }
@@ -406,7 +420,6 @@ public:
         m_time.update();
 
         m_editor_scenes.after_physics_simulation_steps();
-        m_editor_scenes.update_node_transforms();
 
         m_editor_rendering.begin_frame();
         m_imgui_windows.imgui_windows();
@@ -415,7 +428,7 @@ public:
         m_editor_rendering.end_frame();
         m_commands.on_idle();
         m_operation_stack.update();
-        if (!m_openxr) {
+        if (!m_editor_context.OpenXR) {
             m_context_window.swap_buffers();
         }
 
@@ -431,7 +444,6 @@ public:
     }
 
     bool m_close_requested{false};
-    bool m_openxr         {false};
 
     // No dependencies (constructors)
     erhe::commands::Commands       m_commands;
@@ -492,6 +504,7 @@ public:
 
     Tools                                   m_tools;
     Scene_builder                           m_scene_builder;
+    Fly_camera_tool                         m_fly_camera_tool;
     Headset_view                            m_headset_view;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     Hand_tracker                            m_hand_tracker;
@@ -514,7 +527,6 @@ public:
 
     Brush_tool                              m_brush_tool;
     Create                                  m_create;
-    Fly_camera_tool                         m_fly_camera_tool;
     Grid_tool                               m_grid_tool;
     Material_paint_tool                     m_material_paint_tool;
     Paint_tool                              m_paint_tool;
@@ -551,15 +563,10 @@ void run_editor()
 #endif
     editor::initialize_logging();
 
-    bool openxr{false};
     bool enable_renderdoc_capture_support{false};
     {
         auto ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
         ini->get("capture_support", enable_renderdoc_capture_support);
-    }
-    {
-        auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
-        ini->get("openxr", openxr);
     }
     if (enable_renderdoc_capture_support) {
         erhe::window::initialize_frame_capture();

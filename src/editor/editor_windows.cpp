@@ -1,9 +1,19 @@
 #include "editor_windows.hpp"
 #include "editor_context.hpp"
+#include "editor_log.hpp"
+#include "editor_rendering.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#include "xr/headset_view.hpp"
+#endif
+#include "erhe_commands/command.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_commands/menu_binding.hpp"
+#include "editor.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_window/window.hpp"
 
 namespace editor {
 
@@ -29,11 +39,82 @@ void Editor_windows::builtin_imgui_window_menu()
 void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{10.0f, 2.0f});
 
     if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Exit")) {
+                m_context.context_window->request_close();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Developer")) {
+            if (m_context.renderdoc) {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+                if (m_context.OpenXR && m_context.headset_view->is_active()) {
+                    if (ImGui::MenuItem("Make OpenXR RenderDoc Capture")) {
+                        m_context.editor_rendering->request_renderdoc_capture();
+                    }
+                }
+                else
+#endif
+                {
+                    if (ImGui::MenuItem("Make RenderDoc Capture")) {
+                        m_context.editor_rendering->trigger_capture();
+                    }
+                }
+            }
+            ImGui::EndMenu();
+        }
+
+        const auto& menu_bindings = m_context.commands->get_menu_bindings();
+        for (const erhe::commands::Menu_binding& menu_binding : menu_bindings) {
+            const std::string& menu_path = menu_binding.get_menu_path();
+            std::size_t path_end = menu_path.length();
+            std::size_t offset = 0;
+            std::vector<std::string> menu_path_entries;
+            while (true) {
+                std::size_t separator_position = menu_path.find_first_of('.', offset);
+                if (separator_position == std::string::npos) {
+                    separator_position = path_end;
+                }
+                std::size_t span_length = separator_position - offset;
+                if (span_length > 1) {
+                    const std::string menu_label = menu_path.substr(offset, span_length);
+                    menu_path_entries.emplace_back(menu_label);
+                }
+                offset = separator_position + 1;
+                if (offset >= path_end) {
+                    break;
+                }
+            }
+            bool activate = false;
+            size_t begin_menu_count = 0;
+            for (size_t i = 0, end = menu_path_entries.size(); i < end; ++i) {
+                const std::string& label = menu_path_entries[i];
+                if (i == end - 1) {
+                    activate = ImGui::MenuItem(label.c_str());
+                } else {
+                    if (!ImGui::BeginMenu(label.c_str())) {
+                        break;
+                    }
+                    ++begin_menu_count;
+                }
+            }
+            for (size_t i = 0; i < begin_menu_count; ++i) {
+                ImGui::EndMenu();
+            }
+            if (activate) {
+                erhe::commands::Command* command = menu_binding.get_command();
+                if (command != nullptr) {
+                    if (command->is_enabled()) {
+                        command->try_call();
+                    }
+                }
+            }
+        }
 
         if (ImGui::BeginMenu("Window")) {
-
             m_context.imgui_windows->window_menu_entries(imgui_host);
 
             ImGui::Separator();
@@ -53,14 +134,12 @@ void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
                     window->show();
                 }
             }
-
             ImGui::EndMenu();
         }
-
         ImGui::EndMainMenuBar();
     }
 
-    ImGui::PopStyleVar();
+    ImGui::PopStyleVar(2);
 
     if (m_imgui_builtin_windows.demo) {
         ImGui::ShowDemoWindow(&m_imgui_builtin_windows.demo);

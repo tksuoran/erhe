@@ -10,12 +10,9 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
-Material_interface::Material_interface(
-    erhe::graphics::Instance& graphics_instance
-)
+Material_interface::Material_interface(erhe::graphics::Instance& graphics_instance)
     : material_block {graphics_instance, "material", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , material_struct{graphics_instance, "Material"}
     , offsets        {
@@ -78,9 +75,7 @@ Material_buffer::Material_buffer(
 constexpr uint32_t c_texture_unused_32 = 4294967295u;
 constexpr uint32_t c_texture_unused_64 = 4294967295u;
 
-auto Material_buffer::update(
-    const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials
-) -> erhe::renderer::Buffer_range
+auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::renderer::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 

@@ -18,7 +18,7 @@ namespace erhe::primitive {
 
 class Build_context;
 class Buffer_sink;
-class Renderable_mesh;
+class Buffer_mesh;
 
 /// Writes vertex attribute values to byte buffer/memory.
 ///

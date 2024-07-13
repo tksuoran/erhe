@@ -385,10 +385,7 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] auto create_rotation(
-    const T                              angle_radians,
-    const typename vector_types<T>::vec3 axis
-) -> typename vector_types<T>::mat4
+[[nodiscard]] auto create_rotation(const T angle_radians, const typename vector_types<T>::vec3 axis) -> typename vector_types<T>::mat4
 {
     const T rsin = std::sin(angle_radians);
     const T rcos = std::cos(angle_radians);
@@ -421,12 +418,7 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] auto create_scale(
-    const T x,
-    const T y,
-    const T z
-) -> typename vector_types<T>::mat4
-{
+[[nodiscard]] auto create_scale(const T x, const T y, const T z) -> typename vector_types<T>::mat4{
     return typename vector_types<T>::mat4{
         x,      T{0.0}, T{0.0}, T{0.0},
         T{0.0}, y,      T{0.0}, T{0.0},
@@ -436,9 +428,7 @@ template <typename T>
 }
 
 template <typename T>
-[[nodiscard]] auto create_scale(
-    const typename vector_types<T>::vec3 s
-) -> typename vector_types<T>::mat4
+[[nodiscard]] auto create_scale(const typename vector_types<T>::vec3 s) -> typename vector_types<T>::mat4
 {
     return typename vector_types<T>::mat4{
         s.x,    T{0.0}, T{0.0}, T{0.0},

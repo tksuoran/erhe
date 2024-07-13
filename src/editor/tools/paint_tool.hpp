@@ -86,13 +86,13 @@ public:
 
 private:
     void paint_corner(
-        const erhe::scene::Mesh&        mesh,
+        erhe::scene::Mesh&              mesh,
         const erhe::geometry::Geometry& geometry,
         erhe::geometry::Corner_id       corner_id,
         const glm::vec4                 color
     );
     void paint_vertex(
-        const erhe::scene::Mesh&        mesh,
+        erhe::scene::Mesh&              mesh,
         const erhe::geometry::Geometry& geometry,
         uint32_t                        vertex_id,
         const glm::vec4                 color

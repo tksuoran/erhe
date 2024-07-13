@@ -237,6 +237,22 @@ public:
         return false;
     }
 
+    virtual auto on_controller_axis(const int axis, const float value, const uint32_t modifier_mask) -> bool
+    {
+        static_cast<void>(axis);
+        static_cast<void>(value);
+        static_cast<void>(modifier_mask);
+        return false;
+    }
+
+    virtual auto on_controller_button(const int button, const bool value, const uint32_t modifier_mask) -> bool
+    {
+        static_cast<void>(button);
+        static_cast<void>(value);
+        static_cast<void>(modifier_mask);
+        return false;
+    }
+
 private:
     int m_priority{0};
 };
@@ -252,17 +268,19 @@ public:
     void attach(Window_event_handler* handler, int priority);
     void detach(Window_event_handler* handler);
 
-    auto on_focus       (int focused) -> bool                                               override;
-    auto on_cursor_enter(int entered) -> bool                                               override;
-    auto on_refresh     () -> bool                                                          override;
-    auto on_idle        () -> bool                                                          override;
-    auto on_close       () -> bool                                                          override;
-    auto on_resize      (int width, int height) -> bool                                     override;
-    auto on_key         (Keycode code, Key_modifier_mask mask, bool pressed) -> bool        override;
-    auto on_char        (unsigned int codepoint) -> bool                                    override;
-    auto on_mouse_move  (float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool override;
-    auto on_mouse_button(Mouse_button button, bool pressed, uint32_t modifier_mask) -> bool override;
-    auto on_mouse_wheel (float x, float y, uint32_t modifier_mask) -> bool                  override;
+    auto on_focus            (int focused) -> bool                                               override;
+    auto on_cursor_enter     (int entered) -> bool                                               override;
+    auto on_refresh          () -> bool                                                          override;
+    auto on_idle             () -> bool                                                          override;
+    auto on_close            () -> bool                                                          override;
+    auto on_resize           (int width, int height) -> bool                                     override;
+    auto on_key              (Keycode code, Key_modifier_mask mask, bool pressed) -> bool        override;
+    auto on_char             (unsigned int codepoint) -> bool                                    override;
+    auto on_mouse_move       (float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool override;
+    auto on_mouse_button     (Mouse_button button, bool pressed, uint32_t modifier_mask) -> bool override;
+    auto on_mouse_wheel      (float x, float y, uint32_t modifier_mask) -> bool                  override;
+    auto on_controller_axis  (int axis, float value, uint32_t modifier_mask)             -> bool override;
+    auto on_controller_button(int button, bool value, uint32_t modifier_mask)            -> bool override;
 
 private:
     void sort_handlers();

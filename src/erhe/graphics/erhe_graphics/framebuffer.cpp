@@ -121,20 +121,13 @@ void dump_fbo(int fbo_name)
 std::mutex                Framebuffer::s_mutex;
 std::vector<Framebuffer*> Framebuffer::s_all_framebuffers;
 
-void Framebuffer::Create_info::attach(
-    const gl::Framebuffer_attachment attachment_point,
-    Texture*                         texture,
-    const unsigned int               level,
-    const unsigned int               layer
-)
+void Framebuffer::Create_info::attach(const gl::Framebuffer_attachment attachment_point, Texture* texture, const unsigned int level, const unsigned int layer)
 {
     ERHE_VERIFY(texture != nullptr);
     attachments.emplace_back(attachment_point, texture, level, layer);
 }
 
-void Framebuffer::Create_info::attach(
-    const gl::Framebuffer_attachment attachment_point,
-    Renderbuffer*                    renderbuffer)
+void Framebuffer::Create_info::attach(const gl::Framebuffer_attachment attachment_point, Renderbuffer* renderbuffer)
 {
     ERHE_VERIFY(renderbuffer != nullptr);
     attachments.emplace_back(attachment_point, renderbuffer);
@@ -242,16 +235,9 @@ void Framebuffer::create()
 auto Framebuffer::check_status() const -> bool
 {
 #if !defined(NDEBUG)
-    const auto status = gl::check_named_framebuffer_status(
-        gl_name(),
-        gl::Framebuffer_target::draw_framebuffer
-    );
+    const auto status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
     if (status != gl::Framebuffer_status::framebuffer_complete) {
-        log_framebuffer->warn(
-            "Framebuffer {} not complete: {}",
-            gl_name(),
-            gl::c_str(status)
-        );
+        log_framebuffer->warn("Framebuffer {} not complete: {}", gl_name(), gl::c_str(status));
         dump_fbo(gl_name());
         return false;
     }
@@ -263,9 +249,7 @@ auto Framebuffer::check_status() const -> bool
 
 auto Framebuffer::gl_name() const -> unsigned int
 {
-    return m_gl_framebuffer.has_value()
-        ? m_gl_framebuffer.value().gl_name()
-        : 0;
+    return m_gl_framebuffer.has_value() ? m_gl_framebuffer.value().gl_name() : 0;
 }
 
 void Framebuffer::set_debug_label(const std::string& label)

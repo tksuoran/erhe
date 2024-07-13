@@ -69,6 +69,8 @@ Operation_stack::Operation_stack(
     commands.register_command(&m_redo_command);
     commands.bind_command_to_key(&m_undo_command, erhe::window::Key_z, true, erhe::window::Key_modifier_bit_ctrl);
     commands.bind_command_to_key(&m_redo_command, erhe::window::Key_y, true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_menu(&m_undo_command, "Edit.Undo");
+    commands.bind_command_to_menu(&m_redo_command, "Edit.Redo");
 
     m_executor = std::make_unique<tf::Executor>();
 

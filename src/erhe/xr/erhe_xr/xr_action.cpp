@@ -19,23 +19,13 @@
 
 #include <fmt/format.h>
 
-namespace erhe::xr
-{
+namespace erhe::xr {
 
-
-Xr_action::Xr_action(
-    const XrInstance       instance,
-    const std::string_view name,
-    const unsigned int     profile_mask
-)
+Xr_action::Xr_action(const XrInstance instance, const std::string_view name, const unsigned int profile_mask)
     : name        {name}
     , profile_mask{profile_mask}
 {
-    const XrResult result = xrStringToPath(
-        instance,
-        name.data(),
-        &path
-    );
+    const XrResult result = xrStringToPath(instance, name.data(), &path);
     log_xr->info("xrStringToPath({}) = {:x}", name, path);
     if (result != XR_SUCCESS) {
         log_xr->warn("xrStringToPath({}) returned error {}", name, c_str(result));
@@ -233,11 +223,7 @@ Xr_action_vector2f::Xr_action_vector2f(
     create_info.countSubactionPaths    = 0;
     create_info.subactionPaths         = nullptr;
 
-    const XrResult result = xrCreateAction(
-        action_set,
-        &create_info,
-        &action
-    );
+    const XrResult result = xrCreateAction(action_set, &create_info, &action);
     log_xr->info(
         "xrCreateAction(.actionSet = {}, .actionType = XR_ACTION_TYPE_VECTOR2F_INPUT, .actionName = '{}', .localizedActionName = '{}') result = {}, action = {}",
         fmt::ptr(action_set),
@@ -267,18 +253,10 @@ void Xr_action_vector2f::get(const XrSession session)
         .action        = action,
         .subactionPath = XR_NULL_PATH
     };
-    const XrResult get_result = xrGetActionStateVector2f(
-        session,
-        &action_state_get_info,
-        &state
-    );
+    const XrResult get_result = xrGetActionStateVector2f(session, &action_state_get_info, &state);
     if (get_result != XR_SUCCESS) {
-        log_xr->error(
-            "xrGetActionStateVector2f() returned error {}",
-            c_str(get_result)
-        );
+        log_xr->error("xrGetActionStateVector2f() returned error {}", c_str(get_result));
     }
-
 }
 
 //
@@ -329,11 +307,7 @@ Xr_action_pose::Xr_action_pose(
     );
 
     if (result != XR_SUCCESS) {
-        log_xr->error(
-            "xrCreateAction() returned error {} for {}",
-            c_str(result),
-            name
-        );
+        log_xr->error("xrCreateAction() returned error {} for {}", c_str(result), name);
     }
 }
 
@@ -362,24 +336,13 @@ void Xr_action_pose::attach(const XrSession session)
             }
         }
     };
-    const XrResult result = xrCreateActionSpace(
-        session,
-        &create_info,
-        &space
-    );
+    const XrResult result = xrCreateActionSpace(session, &create_info, &space);
     if (result != XR_SUCCESS) {
-        log_xr->error(
-            "xrCreateActionSpace() returned error {}",
-            c_str(result)
-        );
+        log_xr->error("xrCreateActionSpace() returned error {}", c_str(result));
     }
 }
 
-void Xr_action_pose::get(
-    const XrSession session,
-    const XrTime    time,
-    const XrSpace   base_space
-)
+void Xr_action_pose::get(const XrSession session, const XrTime time, const XrSpace base_space)
 {
     if (action == nullptr) {
         return;
@@ -390,29 +353,14 @@ void Xr_action_pose::get(
         .action        = action,
         .subactionPath = XR_NULL_PATH
     };
-    const XrResult get_result = xrGetActionStatePose(
-        session,
-        &action_state_get_info,
-        &state
-    );
+    const XrResult get_result = xrGetActionStatePose(session, &action_state_get_info, &state);
     if (get_result != XR_SUCCESS) {
-        log_xr->error(
-            "xrGetActionStatePose() returned error {}",
-            c_str(get_result)
-        );
+        log_xr->error("xrGetActionStatePose() returned error {}", c_str(get_result));
     }
 
-    const XrResult locate_result = xrLocateSpace(
-        space,
-        base_space,
-        time,
-        &location
-    );
+    const XrResult locate_result = xrLocateSpace(space, base_space, time, &location);
     if (locate_result != XR_SUCCESS) {
-        log_xr->error(
-            "xrLocateSpace() returned error {}",
-            c_str(locate_result)
-        );
+        log_xr->error("xrLocateSpace() returned error {}", c_str(locate_result));
     }
 
     if ((location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) == XR_SPACE_LOCATION_POSITION_VALID_BIT) {

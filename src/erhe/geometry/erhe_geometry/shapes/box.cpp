@@ -38,7 +38,7 @@ auto make_box(const double x_size, const double y_size, const double z_size) -> 
 
     return Geometry{
         "box",
-        [=](Geometry& geometry) {
+        [x, y, z](Geometry& geometry) {
             Property_map<Corner_id, vec2>* corner_texcoords = geometry.corner_attributes().create<vec2>(c_corner_texcoords);
 
             geometry.make_point(-x, -y, -z); // 0    2------4

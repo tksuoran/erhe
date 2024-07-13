@@ -85,6 +85,7 @@ Editor_rendering::Editor_rendering(
 {
     commands.register_command(&m_capture_frame_command);
     commands.bind_command_to_key(&m_capture_frame_command, erhe::window::Key_f10);
+    commands.bind_command_to_menu(&m_capture_frame_command, "View.Frame");
 
     using Item_filter = erhe::Item_filter;
     using Item_flags  = erhe::Item_flags;

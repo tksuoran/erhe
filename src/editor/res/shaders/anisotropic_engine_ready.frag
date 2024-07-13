@@ -45,13 +45,12 @@ vec2 get_texture_size(uvec2 texture_handle)
 #endif
 }
 
-float sample_light_visibility(
-    vec4  position,
-    uint  light_index,
-    float N_dot_L
-)
+float sample_light_visibility(vec4  position, uint  light_index, float N_dot_L)
 {
 #if defined(ERHE_SHADOW_MAPS)
+    if (light_block.shadow_texture.x == max_u32) {
+        return 1.0;
+    }
 
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture);
@@ -117,13 +116,7 @@ float ggx_isotropic_ndf(float N_dot_H, float alpha)
     return k * k * m_i_pi;
 }
 
-float ggx_anisotropic_ndf(
-    float alpha_t,
-    float alpha_b,
-    float T_dot_H,
-    float B_dot_H,
-    float N_dot_H
-)
+float ggx_anisotropic_ndf(float alpha_t, float alpha_b, float T_dot_H, float B_dot_H, float N_dot_H)
 {
     vec3 v = vec3(
         alpha_b * T_dot_H,

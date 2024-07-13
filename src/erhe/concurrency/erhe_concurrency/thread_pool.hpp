@@ -35,11 +35,7 @@ private:
 #   pragma warning(pop)
 #endif
 
-        Queue(
-            Thread_pool*           pool,
-            const int              priority,
-            const std::string_view name
-        )
+        Queue(Thread_pool* pool, const int priority, const std::string_view name)
             : pool    {pool}
             , priority{priority}
             , name    {name}

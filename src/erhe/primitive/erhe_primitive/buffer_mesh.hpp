@@ -5,21 +5,12 @@
 #include "erhe_primitive/enums.hpp"
 #include "erhe_math/math_util.hpp"
 
-#include <vector>
-
-namespace erhe::graphics {
-    class Buffer;
-}
-namespace erhe::raytrace {
-    class Buffer;
-}
-namespace erhe::geometry {
-    class Geometry;
-}
+#include <cstddef>
+#include <cstdint>
 
 namespace erhe::primitive {
 
-class Renderable_mesh
+class Buffer_mesh
 {
 public:
     [[nodiscard]] auto base_vertex() const -> uint32_t;
@@ -36,10 +27,6 @@ public:
 
     Buffer_range vertex_buffer_range     {};
     Buffer_range index_buffer_range      {};
-
-    // TODO These make Renderable_mesh expensive to copy
-    std::vector<uint32_t> primitive_id_to_polygon_id;
-    std::vector<uint32_t> corner_to_vertex_id;
 };
 
 } // namespace erhe::primitive

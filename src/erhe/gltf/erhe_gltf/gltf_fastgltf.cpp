@@ -1277,12 +1277,8 @@ private:
         Primitive_entry primitive_entry;
         get_primitive_geometry(primitive, primitive_entry);
 
-        erhe_mesh->add_primitive(
-            erhe::primitive::Primitive{
-                primitive_entry.triangle_soup,
-                erhe_material
-            }
-        );
+        erhe::primitive::Primitive new_primitive{primitive_entry.triangle_soup};
+        erhe_mesh->add_primitive(new_primitive, erhe_material);
     }
     void parse_skin(const std::size_t skin_index)
     {
@@ -1391,6 +1387,7 @@ private:
         if (node.meshIndex.has_value()) {
             const std::size_t mesh_index = node.meshIndex.value();
             const erhe::scene::Mesh& template_mesh = *m_data_out.meshes[mesh_index].get();
+
             // Mesh needs to be cloned, because erhe currently puts skin into the mesh.
             std::shared_ptr<erhe::scene::Mesh> erhe_mesh = std::make_shared<erhe::scene::Mesh>(
                 template_mesh,

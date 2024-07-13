@@ -34,5 +34,4 @@ public:
 
 auto get_ini(const char* path, const char* section) -> std::unique_ptr<Ini>;
 
-
 } // namespace erhe::configuration

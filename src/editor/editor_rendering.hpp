@@ -50,11 +50,7 @@ private:
 class Pipeline_renderpasses
 {
 public:
-    Pipeline_renderpasses(
-        erhe::graphics::Instance& graphics_instance,
-        Mesh_memory&              mesh_memory,
-        Programs&                 programs
-    );
+    Pipeline_renderpasses(erhe::graphics::Instance& graphics_instance, Mesh_memory& mesh_memory, Programs& programs);
 
     erhe::graphics::Vertex_input_state  m_empty_vertex_input;
     erhe::renderer::Pipeline_renderpass polygon_fill_standard_opaque;

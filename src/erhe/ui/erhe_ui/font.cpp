@@ -23,8 +23,7 @@
 #include <stdexcept>
 #include <string_view>
 
-namespace erhe::ui
-{
+namespace erhe::ui {
 
 using erhe::graphics::Texture;
 using std::map;

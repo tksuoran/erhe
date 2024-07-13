@@ -88,6 +88,10 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, Editor_contex
     commands.bind_command_to_key(&m_create_new_empty_node_command,   erhe::window::Key_f3, true);
     commands.bind_command_to_key(&m_create_new_light_command,        erhe::window::Key_f4, true);
     commands.bind_command_to_key(&m_create_new_rendertarget_command, erhe::window::Key_f5, true);
+    commands.bind_command_to_menu(&m_create_new_camera_command,       "Create.Camera");
+    commands.bind_command_to_menu(&m_create_new_empty_node_command,   "Create.Empty Node");
+    commands.bind_command_to_menu(&m_create_new_light_command,        "Create.Light");
+    commands.bind_command_to_menu(&m_create_new_rendertarget_command, "Create.Rendertarget");
 }
 
 auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_root*

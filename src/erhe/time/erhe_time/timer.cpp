@@ -2,8 +2,7 @@
 
 #include <algorithm>
 
-namespace erhe::time
-{
+namespace erhe::time {
 
 std::mutex          Timer::s_mutex;
 std::vector<Timer*> Timer::s_all_timers;
@@ -74,4 +73,4 @@ Scoped_timer::~Scoped_timer() noexcept
 
 //static auto all_timers() -> std::vector<Timer*>;
 
-}
+} // namespace erhe::time

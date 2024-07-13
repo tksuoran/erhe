@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -52,15 +51,10 @@ public:
     auto make(Args&& ...args) -> std::shared_ptr<T>;
 
     template <typename T>
-    auto combo(
-        Editor_context&     context,
-        const char*         label,
-        std::shared_ptr<T>& in_out_selected_entry,
-        const bool          empty_option
-    ) const -> bool;
+    auto combo(Editor_context& context, const char* label, std::shared_ptr<T>& in_out_selected_entry, bool empty_option) const -> bool;
 
     template <typename T>
-    void add   (const std::shared_ptr<T>& entry);
+    void add(const std::shared_ptr<T>& entry);
 
     template <typename T>
     auto remove(const std::shared_ptr<T>& entry) -> bool;
@@ -90,7 +84,6 @@ class Content_library
 public:
     Content_library();
 
-    bool is_shown_in_ui{true};
     std::shared_ptr<Content_library_node> root;
     std::shared_ptr<Content_library_node> brushes;
     std::shared_ptr<Content_library_node> animations;

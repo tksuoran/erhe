@@ -61,12 +61,7 @@ public:
     static auto mipmap_dimensions (gl::Texture_target target) -> int;
     static auto size_level_count  (int size) -> int;
 
-    void upload(
-        gl::Internal_format internal_format,
-        int                 width,
-        int                 height = 1,
-        int                 depth = 1
-    );
+    void upload(gl::Internal_format internal_format, int width, int height = 1, int depth = 1);
 
     void upload(
         gl::Internal_format              internal_format,

@@ -19,8 +19,7 @@
 
 #include <functional>
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 using erhe::graphics::Vertex_input_state;
 using erhe::graphics::Input_assembly_state;
@@ -28,10 +27,7 @@ using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
-Forward_renderer::Forward_renderer(
-    erhe::graphics::Instance& graphics_instance,
-    Program_interface&        program_interface
-)
+Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
     : m_graphics_instance    {graphics_instance}
     , m_program_interface    {program_interface}
     , m_camera_buffers       {graphics_instance, program_interface.camera_interface}
@@ -143,11 +139,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    const auto light_range = m_light_buffers.update(
-        lights,
-        parameters.light_projections,
-        parameters.ambient_light
-    );
+    const auto light_range = m_light_buffers.update(lights, parameters.light_projections, parameters.ambient_light);
     m_light_buffers.bind_light_buffer(light_range);
 
     if (m_graphics_instance.info.use_bindless_texture) {

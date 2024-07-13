@@ -8,7 +8,6 @@
 namespace erhe::graphics {
     class Sampler;
 }
-
 namespace erhe::primitive {
     class Material;
 }
@@ -50,9 +49,7 @@ class Material_buffer : public erhe::renderer::Multi_buffer
 public:
     Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface);
 
-    auto update(
-        const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials
-    ) -> erhe::renderer::Buffer_range;
+    auto update(const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::renderer::Buffer_range;
 
     [[nodiscard]] auto used_handles() const -> const std::set<uint64_t>&;
 

@@ -6,7 +6,7 @@
 #include "erhe_primitive/buffer_writer.hpp"
 #include "erhe_primitive/index_range.hpp"
 #include "erhe_primitive/primitive_log.hpp"
-#include "erhe_primitive/renderable_mesh.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/property_map.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
@@ -41,17 +41,18 @@ using vec4 = glm::vec4;
 using uvec4 = glm::uvec4;
 using mat4 = glm::mat4;
 
-
 Build_context_root::Build_context_root(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
-    Renderable_mesh*                renderable_mesh
+    Element_mappings&               element_mappings_in,
+    Buffer_mesh*                    buffer_mesh
 )
-    : geometry       {geometry}
-    , build_info     {build_info}
-    , renderable_mesh{renderable_mesh}
-    , vertex_format  {build_info.buffer_info.vertex_format}
-    , vertex_stride  {vertex_format.stride()}
+    : geometry        {geometry}
+    , build_info      {build_info}
+    , element_mappings{element_mappings_in}
+    , buffer_mesh     {buffer_mesh}
+    , vertex_format   {build_info.buffer_info.vertex_format}
+    , vertex_stride   {vertex_format.stride()}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -82,43 +83,27 @@ void Build_context_root::get_mesh_info()
     if (primitive_types.fill_triangles) {
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} triangle fill indices", mi.index_count_fill_triangles);
         total_index_count += mi.index_count_fill_triangles;
-        allocate_index_range(
-            gl::Primitive_type::triangles,
-            mi.index_count_fill_triangles,
-            renderable_mesh->triangle_fill_indices
-        );
+        allocate_index_range(gl::Primitive_type::triangles, mi.index_count_fill_triangles, buffer_mesh->triangle_fill_indices);
         const std::size_t primitive_count = mi.index_count_fill_triangles;
-        renderable_mesh->primitive_id_to_polygon_id.resize(primitive_count);
+        element_mappings.primitive_id_to_polygon_id.resize(primitive_count);
     }
 
     if (primitive_types.edge_lines) {
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} edge line indices", mi.index_count_edge_lines);
         total_index_count += mi.index_count_edge_lines;
-        allocate_index_range(
-            gl::Primitive_type::lines,
-            mi.index_count_edge_lines,
-            renderable_mesh->edge_line_indices
-        );
+        allocate_index_range(gl::Primitive_type::lines, mi.index_count_edge_lines, buffer_mesh->edge_line_indices);
     }
 
     if (primitive_types.corner_points) {
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} corner point indices", mi.index_count_corner_points);
         total_index_count += mi.index_count_corner_points;
-        allocate_index_range(
-            gl::Primitive_type::points,
-            mi.index_count_corner_points,
-            renderable_mesh->corner_point_indices
-        );
+        allocate_index_range(gl::Primitive_type::points, mi.index_count_corner_points, buffer_mesh->corner_point_indices);
     }
 
     if (primitive_types.centroid_points) {
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} centroid point indices", mi.index_count_centroid_points);
         total_index_count += mi.index_count_centroid_points;
-        allocate_index_range(
-            gl::Primitive_type::points,
-            mi.polygon_count,
-            renderable_mesh->polygon_centroid_indices
-        );
+        allocate_index_range(gl::Primitive_type::points, mi.polygon_count, buffer_mesh->polygon_centroid_indices);
     }
 
     SPDLOG_LOGGER_INFO(log_primitive_builder, "Total {} vertices", total_vertex_count);
@@ -151,7 +136,7 @@ void Build_context_root::allocate_vertex_buffer()
 {
     ERHE_VERIFY(total_vertex_count > 0);
 
-    renderable_mesh->vertex_buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(
+    buffer_mesh->vertex_buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(
         total_vertex_count, vertex_stride
     );
 }
@@ -172,7 +157,7 @@ void Build_context_root::allocate_index_buffer()
         index_type_size
     );
 
-    renderable_mesh->index_buffer_range = build_info.buffer_info.buffer_sink.allocate_index_buffer(
+    buffer_mesh->index_buffer_range = build_info.buffer_info.buffer_sink.allocate_index_buffer(
         total_index_count,
         index_type_size
     );
@@ -223,40 +208,38 @@ void Build_context_root::calculate_bounding_volume(erhe::geometry::Property_map<
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(renderable_mesh != nullptr);
+    ERHE_VERIFY(buffer_mesh != nullptr);
 
     const Geometry_point_source point_source{geometry, point_locations};
 
-    erhe::math::calculate_bounding_volume(
-        point_source,
-        renderable_mesh->bounding_box,
-        renderable_mesh->bounding_sphere
-    );
+    erhe::math::calculate_bounding_volume(point_source, buffer_mesh->bounding_box, buffer_mesh->bounding_sphere);
 }
 
 Primitive_builder::Primitive_builder(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
+    Element_mappings&               element_mappings,
     const Normal_style              normal_style
 )
-    : m_geometry    {geometry}
-    , m_build_info  {build_info}
-    , m_normal_style{normal_style}
+    : m_geometry        {geometry}
+    , m_build_info      {build_info}
+    , m_element_mappings{element_mappings}
+    , m_normal_style    {normal_style}
 {
 }
 
-auto Primitive_builder::build() -> Renderable_mesh
+auto Primitive_builder::build() -> Buffer_mesh
 {
-    Renderable_mesh renderable_mesh;
-    build(&renderable_mesh);
-    return renderable_mesh;
+    Buffer_mesh buffer_mesh;
+    build(&buffer_mesh);
+    return buffer_mesh;
 }
 
-void Primitive_builder::build(Renderable_mesh* renderable_mesh)
+void Primitive_builder::build(Buffer_mesh* buffer_mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(renderable_mesh != nullptr);
+    ERHE_VERIFY(buffer_mesh != nullptr);
 
     SPDLOG_LOGGER_INFO(
         log_primitive_builder,
@@ -269,8 +252,9 @@ void Primitive_builder::build(Renderable_mesh* renderable_mesh)
     Build_context build_context{
         m_geometry,
         m_build_info,
+        m_element_mappings,
         m_normal_style,
-        renderable_mesh
+        buffer_mesh
     };
 
     const Primitive_types& primitive_types = m_build_info.primitive_types;
@@ -290,10 +274,11 @@ void Primitive_builder::build(Renderable_mesh* renderable_mesh)
 Build_context::Build_context(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
+    Element_mappings&               element_mappings,
     const Normal_style              normal_style,
-    Renderable_mesh*                renderable_mesh
+    Buffer_mesh*                    buffer_mesh
 )
-    : root         {geometry, build_info, renderable_mesh}
+    : root         {geometry, build_info, element_mappings, buffer_mesh}
     , normal_style {normal_style}
     , vertex_writer{*this, build_info.buffer_info.buffer_sink}
     , index_writer {*this, build_info.buffer_info.buffer_sink}
@@ -748,7 +733,7 @@ void Build_context::build_triangle_fill_index()
     if (root.build_info.primitive_types.fill_triangles) {
         if (previous_index != first_index) {
             index_writer.write_triangle(first_index, previous_index, vertex_index);
-            root.renderable_mesh->primitive_id_to_polygon_id[primitive_index] = polygon_id;
+            root.element_mappings.primitive_id_to_polygon_id[primitive_index] = polygon_id;
             ++primitive_index;
         }
     }
@@ -774,7 +759,7 @@ void Build_context::build_polygon_fill()
     //    root.build_info.format.features.normal_smooth;
 
     const Polygon_id polygon_id_end = root.geometry.get_polygon_count();
-    root.renderable_mesh->corner_to_vertex_id.resize(root.geometry.get_corner_count());
+    root.element_mappings.corner_to_vertex_id.resize(root.geometry.get_corner_count());
     for (polygon_id = 0; polygon_id < polygon_id_end; ++polygon_id) {
         const Polygon& polygon = root.geometry.polygons[polygon_id];
         first_index    = vertex_index;
@@ -798,7 +783,7 @@ void Build_context::build_polygon_fill()
             const Corner& corner = root.geometry.corners[corner_id];
             point_id             = corner.point_id;
 
-            root.renderable_mesh->corner_to_vertex_id[corner_id] = vertex_index;
+            root.element_mappings.corner_to_vertex_id[corner_id] = vertex_index;
 
             build_polygon_id          ();
             build_vertex_position     ();
@@ -915,20 +900,23 @@ void Build_context_root::allocate_index_range(
 
     // If index buffer has not yet been allocated, no check for enough room for index range
     ERHE_VERIFY(
-        (renderable_mesh->index_buffer_range.count == 0) ||
-        (next_index_range_start <= renderable_mesh->index_buffer_range.count)
+        (buffer_mesh->index_buffer_range.count == 0) ||
+        (next_index_range_start <= buffer_mesh->index_buffer_range.count)
     );
 }
 
-auto make_renderable_mesh(
+auto make_buffer_mesh(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
+    Element_mappings&               element_mappings,
     const Normal_style              normal_style
-) -> Renderable_mesh
+) -> Buffer_mesh
 {
     ERHE_PROFILE_FUNCTION();
 
-    Primitive_builder builder{geometry, build_info, normal_style};
+    ERHE_VERIFY(element_mappings.primitive_id_to_polygon_id.empty());
+    ERHE_VERIFY(element_mappings.corner_to_vertex_id.empty());
+    Primitive_builder builder{geometry, build_info, element_mappings, normal_style};
     return builder.build();
 }
 

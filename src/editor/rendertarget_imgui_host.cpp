@@ -117,7 +117,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     const auto pointer = m_rendertarget_mesh->get_pointer();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (!headset_view.config.openxr) // TODO Figure out better way to combine different input methods
+    if (!m_context.OpenXR) // TODO Figure out better way to combine different input methods
 #endif
     {
         if (pointer.has_value()) {
@@ -155,7 +155,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (headset_view.config.openxr) {
+    if (m_context.OpenXR) {
         const auto* headset = headset_view.get_headset();
         ERHE_VERIFY(headset != nullptr);
 
@@ -173,15 +173,17 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
             const auto controller_orientation = glm::mat4_cast(pose->orientation);
             const auto controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 
+            const glm::vec3 camera_offset = headset_view.get_camera_offset();
+            glm::vec3 ray_origin = pose->position + camera_offset;
             const auto intersection = erhe::math::intersect_plane<float>(
                 glm::vec3{node->direction_in_world()},
                 glm::vec3{node->position_in_world()},
-                pose->position,
+                ray_origin,
                 controller_direction
             );
             bool mouse_has_position{false};
             if (intersection.has_value()) {
-                const auto world_position      = pose->position + intersection.value() * controller_direction;
+                const auto world_position      = ray_origin + intersection.value() * controller_direction;
                 const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
                 if (window_position_opt.has_value()) {
                     if (!has_cursor()) {
@@ -273,10 +275,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
 
 void Rendertarget_imgui_host::end_imgui_frame()
 {
-    SPDLOG_LOGGER_TRACE(
-        log_rendertarget_imgui_windows,
-        "Rendertarget_imgui_host::end_imgui_frame()"
-    );
+    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_host::end_imgui_frame()");
 
     ImGui::EndFrame();
     ImGui::Render();
