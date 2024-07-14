@@ -178,6 +178,8 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 ray_origin,
                 controller_direction
             );
+
+            ImGuiIO& io = m_imgui_context->IO;
             bool mouse_has_position{false};
             if (intersection.has_value()) {
                 const auto world_position      = ray_origin + intersection.value() * controller_direction;
@@ -199,6 +201,15 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                         );
                     }
                 }
+                auto* r_thumbstick = headset->get_actions_right().thumbstick;
+                if (r_thumbstick != nullptr) {
+                    if (
+                        (r_thumbstick->state.currentState.x != 0) ||
+                        (r_thumbstick->state.currentState.y != 0)
+                    ) {
+                        io.AddMouseWheelEvent(r_thumbstick->state.currentState.x, r_thumbstick->state.currentState.y);
+                    }
+                }
             }
             if (!mouse_has_position) {
                 if (has_cursor()) {
@@ -214,7 +225,6 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 }
             }
 
-            ImGuiIO& io = m_imgui_context->IO;
             auto* trigger_click = headset->get_actions_right().trigger_click;
             auto* a_click       = headset->get_actions_right().a_click;
             if ((trigger_click != nullptr) && (trigger_click->state.changedSinceLastSync == XR_TRUE)) {
@@ -234,7 +244,6 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 io.AddMouseButtonEvent(ImGuiMouseButton_Right, r_thumbrest_touch->state.currentState == XR_TRUE);
             }
 
-            // This also does not seem to work with Rift S
             auto* r_thumbstick_click = headset->get_actions_right().thumbstick_click;
             if ((r_thumbstick_click != nullptr) && (r_thumbstick_click->state.changedSinceLastSync == XR_TRUE)) {
                 io.AddMouseButtonEvent(ImGuiMouseButton_Right, r_thumbstick_click->state.currentState == XR_TRUE);

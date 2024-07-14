@@ -62,6 +62,23 @@ private:
     Editor_context& m_context;
 };
 
+class Hotbar_thumbstick_command : public erhe::commands::Command
+{
+public:
+    Hotbar_thumbstick_command(erhe::commands::Commands& commands, Editor_context& context);
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Editor_context& m_context;
+    glm::vec2       m_last_value          {0.0f, 0.0f};
+    float           m_activate_threshold  {0.6f};
+    float           m_deactivate_threshold{0.4f};
+    bool            m_left_active         {false};
+    bool            m_right_active        {false};
+    bool            m_up_active           {false};
+    bool            m_down_active         {false};
+};
+
 class Hotbar
     : public erhe::imgui::Imgui_window
     , public Tool
@@ -87,7 +104,8 @@ public:
     void imgui   () override;
 
     // Public API
-    auto try_call              (erhe::commands::Input_arguments& input) -> bool;
+    auto try_trackpad          (erhe::commands::Input_arguments& input) -> bool;
+    void rotate_tool           (int direction);
     auto get_color             (int color) -> glm::vec4&;
     auto toggle_mesh_visibility() -> bool;
     void set_mesh_visibility   (bool value);
@@ -112,6 +130,7 @@ private:
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     Hotbar_trackpad_command                   m_trackpad_command;
     erhe::commands::Xr_vector2f_click_command m_trackpad_click_command;
+    Hotbar_thumbstick_command                 m_thumbstick_command;
 #endif
 
     std::shared_ptr<erhe::scene::Node>              m_rendertarget_node;

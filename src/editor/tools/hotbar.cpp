@@ -102,7 +102,50 @@ Hotbar_trackpad_command::Hotbar_trackpad_command(erhe::commands::Commands& comma
 
 auto Hotbar_trackpad_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
-    return m_context.hotbar->try_call(input);
+    return m_context.hotbar->try_trackpad(input);
+}
+
+Hotbar_thumbstick_command::Hotbar_thumbstick_command(erhe::commands::Commands& commands, Editor_context& context)
+    : Command  {commands, "Hotbar.thumbstick"}
+    , m_context{context}
+{
+}
+
+auto Hotbar_thumbstick_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    // Check for deactivation
+    float x = input.variant.vector2.absolute_value.x;
+    float y = input.variant.vector2.absolute_value.y;
+    if (m_left_active && x > -m_deactivate_threshold) {
+        m_left_active = false;
+    }
+    if (m_right_active && x < m_deactivate_threshold) {
+        m_right_active = false;
+    }
+    if (m_up_active && y < m_deactivate_threshold) {
+        m_up_active = false;
+    }
+    if (m_down_active && y > -m_deactivate_threshold) {
+        m_up_active = false;
+    }
+
+    // Check for activation
+    if (!m_left_active && x < -m_activate_threshold) {
+        m_left_active = true;
+        m_context.hotbar->rotate_tool(-1);
+    }
+    if (!m_right_active && x > m_activate_threshold) {
+        m_right_active = true;
+        m_context.hotbar->rotate_tool(1);
+    }
+    if (!m_down_active && y < -m_activate_threshold) {
+        m_down_active = true;
+        // TODO action
+    } else if (!m_up_active && y > m_activate_threshold) {
+        m_up_active = true;
+        // TODO action
+    }
+    return true;
 }
 #pragma endregion Commands
 
@@ -123,6 +166,7 @@ Hotbar::Hotbar(
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     , m_trackpad_command         {commands, editor_context}
     , m_trackpad_click_command   {commands, m_trackpad_command}
+    , m_thumbstick_command       {commands, editor_context}
 #endif
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "hotbar");
@@ -151,6 +195,10 @@ Hotbar::Hotbar(
         commands.bind_command_to_xr_boolean_action(&m_trackpad_click_command, xr_right.trackpad_click, erhe::commands::Button_trigger::Button_pressed);
         m_trackpad_click_command.set_host(this);
         m_trackpad_command.set_host(this);
+
+        commands.register_command(&m_thumbstick_command);
+        commands.bind_command_to_xr_vector2f_action(&m_thumbstick_command, xr_right.thumbstick);
+        m_thumbstick_command.set_host(this);
     }
 #else
     static_cast<void>(headset_view);
@@ -468,28 +516,38 @@ void Hotbar::handle_slot_update()
     }
 }
 
-auto Hotbar::try_call(erhe::commands::Input_arguments& input) -> bool
+auto Hotbar::try_trackpad(erhe::commands::Input_arguments& input) -> bool
 {
+    // TODO move most of this logic to Hotbar_trackpad_command,
+    //      should use Hotbar::rotate_tool() from there.
     if (!m_enabled) {
         return false;
     }
 
     const auto position = input.variant.vector2.absolute_value;
-
-    const auto old_slot = m_slot;
     if (position.x < -0.2f) {
+        rotate_tool(-1);
         m_slot = (m_slot == m_slot_first) ? m_slot_last : m_slot - 1;
     }
 
     if (position.x > 0.2f) {
-        m_slot = (m_slot == m_slot_last) ? m_slot_first : m_slot + 1;
-    }
-
-    if (m_slot != old_slot) {
-        handle_slot_update();
+        rotate_tool(1);
     }
 
     return true;
+}
+
+void Hotbar::rotate_tool(int direction)
+{
+    const auto old_slot = m_slot;
+    if (direction < 0) {
+        m_slot = (m_slot == m_slot_first) ? m_slot_last : m_slot - 1;
+    } else if (direction > 0) {
+        m_slot = (m_slot == m_slot_last) ? m_slot_first : m_slot + 1;
+    }
+    if (m_slot != old_slot) {
+        handle_slot_update();
+    }
 }
 
 auto Hotbar::get_color(const int color) -> glm::vec4&
