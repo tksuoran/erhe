@@ -207,7 +207,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                         (r_thumbstick->state.currentState.x != 0) ||
                         (r_thumbstick->state.currentState.y != 0)
                     ) {
-                        io.AddMouseWheelEvent(r_thumbstick->state.currentState.x, r_thumbstick->state.currentState.y);
+                        io.AddMouseWheelEvent(r_thumbstick->state.currentState.x * 0.5f, r_thumbstick->state.currentState.y * 0.5f);
                     }
                 }
             }
