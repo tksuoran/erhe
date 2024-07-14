@@ -831,6 +831,7 @@ void Scene_builder::make_mesh_nodes()
 
         Brush*    brush{nullptr};
         rbp::Rect rectangle;
+        int       instance_number{0};
     };
 
     const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
@@ -857,6 +858,7 @@ void Scene_builder::make_mesh_nodes()
                 const erhe::math::Bounding_box& bounding_box = brush->get_bounding_box();
                 ERHE_VERIFY(bounding_box.is_valid());
                 pack_entries.emplace_back(brush.get());
+                pack_entries.back().instance_number = i;
             }
         }
     }
@@ -881,15 +883,8 @@ void Scene_builder::make_mesh_nodes()
                 const vec3 size  = brush->get_bounding_box().diagonal();
                 const int  width = static_cast<int>(256.0f * (size.x + gap));
                 const int  depth = static_cast<int>(256.0f * (size.z + gap));
-                entry.rectangle = packer.Insert(
-                    width + 1,
-                    depth + 1,
-                    rbp::SkylineBinPack::LevelBottomLeft
-                );
-                if (
-                    (entry.rectangle.width  == 0) ||
-                    (entry.rectangle.height == 0)
-                ) {
+                entry.rectangle = packer.Insert(width + 1, depth + 1, rbp::SkylineBinPack::LevelBottomLeft);
+                if ((entry.rectangle.width == 0) || (entry.rectangle.height == 0)) {
                     pack_failed = true;
                     break;
                 }
@@ -932,8 +927,7 @@ void Scene_builder::make_mesh_nodes()
             // TODO this will lock up if there are no visible materials
             do {
                 material_index = (material_index + 1) % materials.size();
-            }
-            while (!materials.at(material_index)->is_shown_in_ui());
+            } while (!materials.at(material_index)->is_shown_in_ui());
 
             auto* brush = entry.brush;
             float x     = static_cast<float>(entry.rectangle.x) / 256.0f;
@@ -965,6 +959,9 @@ void Scene_builder::make_mesh_nodes()
                 .scale           = 1.0f
             };
             auto instance_node = brush->make_instance(brush_instance_create_info);
+            if (config.instance_count > 1) {
+                instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), entry.instance_number + 1));
+            }
             instance_node->set_parent(m_scene_root->get_scene().get_root_node());
 
             m_scene_root->get_scene().sanity_check();
