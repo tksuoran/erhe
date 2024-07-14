@@ -14,7 +14,7 @@ class Shader_stages;
 class Shader_monitor
 {
 public:
-    Shader_monitor(Instance& instance);
+    explicit Shader_monitor(Instance& instance);
     ~Shader_monitor() noexcept;
 
     void begin();

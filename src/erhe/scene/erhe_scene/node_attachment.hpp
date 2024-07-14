@@ -14,13 +14,7 @@ namespace erhe::scene {
 
 class Node;
 
-class Node_attachment
-    : public erhe::Item<
-        Item_base,
-        Item_base,
-        Node_attachment,
-        erhe::Item_kind::clone_using_custom_clone_constructor
-    >
+class Node_attachment : public erhe::Item<Item_base, Item_base, Node_attachment, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
     Node_attachment();
@@ -28,7 +22,7 @@ public:
 
     Node_attachment& operator=(const Node_attachment&);
     Node_attachment(const Node_attachment& src, for_clone);
-    Node_attachment(const std::string_view name);
+    explicit Node_attachment(const std::string_view name);
     virtual ~Node_attachment() noexcept;
 
     // Implements Item_base

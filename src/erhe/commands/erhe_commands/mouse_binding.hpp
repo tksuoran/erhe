@@ -15,7 +15,7 @@ struct Input_arguments;
 class Mouse_binding : public Command_binding
 {
 public:
-    Mouse_binding(Command* command, const std::optional<uint32_t> modifier_mask = {});
+    explicit Mouse_binding(Command* command, const std::optional<uint32_t> modifier_mask = {});
     Mouse_binding();
     ~Mouse_binding() noexcept override;
 

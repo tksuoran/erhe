@@ -23,7 +23,7 @@ public:
 class Editor_windows
 {
 public:
-    Editor_windows(Editor_context& m_context);
+    explicit Editor_windows(Editor_context& m_context);
 
     void viewport_menu(erhe::imgui::Imgui_host& imgui_host);
 

@@ -13,7 +13,7 @@ namespace hextiles {
 class Hextiles_settings
 {
 public:
-    Hextiles_settings(erhe::window::Context_window& context_window);
+    explicit Hextiles_settings(erhe::window::Context_window& context_window);
 
     erhe::imgui::Imgui_settings imgui;
 };

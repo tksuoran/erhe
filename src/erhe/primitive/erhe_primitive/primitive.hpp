@@ -86,10 +86,10 @@ protected:
 class Primitive_render_shape : public Primitive_shape
 {
 public:
-    Primitive_render_shape(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
+    explicit Primitive_render_shape(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
     explicit Primitive_render_shape(Buffer_mesh&& renderable_mesh);
     explicit Primitive_render_shape(const Buffer_mesh& renderable_mesh);
-    Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup);
+    explicit Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup);
 
     auto make_buffer_mesh(const Build_info& build_info, Normal_style normal_style) -> bool;
     auto make_buffer_mesh(const Buffer_info& build_info) -> bool;

@@ -25,7 +25,7 @@ public:
     explicit Asset_node(const Asset_node&);
     Asset_node& operator=(const Asset_node&);
     ~Asset_node() noexcept override;
-    Asset_node(const std::filesystem::path& path);
+    explicit Asset_node(const std::filesystem::path& path);
 };
 
 class Asset_folder : public erhe::Item<erhe::Item_base, Asset_node, Asset_folder>

@@ -223,8 +223,8 @@ class Item_base
 public:
     Item_base();
 
-    Item_base(const std::string_view name);
-    Item_base(const Item_base& other);
+    explicit Item_base(const std::string_view name);
+    explicit Item_base(const Item_base& other);
     Item_base& operator=(const Item_base& other);
     virtual ~Item_base() noexcept;
 
@@ -232,7 +232,7 @@ public:
     [[nodiscard]] virtual auto get_type_name() const -> std::string_view { return "Item_base"; };
     [[nodiscard]] virtual auto get_item_host() const -> Item_host*       { return nullptr; }
 
-    virtual void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) {
+    virtual void handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits) {
         static_cast<void>(old_flag_bits);
         static_cast<void>(new_flag_bits);
     }

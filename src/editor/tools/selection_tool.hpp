@@ -136,7 +136,7 @@ public:
 class Scoped_selection_change
 {
 public:
-    Scoped_selection_change(Selection& selection);
+    explicit Scoped_selection_change(Selection& selection);
     ~Scoped_selection_change();
 
 private:
