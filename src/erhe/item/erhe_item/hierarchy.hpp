@@ -62,33 +62,39 @@ public:
     void for_each                       (const std::function<bool(Hierarchy& hierarchy)>& fun);
 
     template <typename T>
-    void for_each(const std::function<bool(T&)>& callback)
+    auto for_each(const std::function<bool(T&)>& callback) -> bool
     {
         T* item = dynamic_cast<T*>(this);
         if (item != nullptr) {
             if (!callback(*item)) {
-                return;
+                return false;
             }
         }
 
         for (const std::shared_ptr<Hierarchy>& child : m_children) {
-            child->for_each(callback);
+            if (!child->for_each<T>(callback)) {
+                return false;
+            }
         }
+        return true;
     }
 
     template <typename T>
-    void for_each_const(const std::function<bool(const T&)>& callback) const
+    auto for_each_const(const std::function<bool(const T&)>& callback) const -> bool
     {
         const T* item = dynamic_cast<const T*>(this);
         if (item != nullptr) {
             if (!callback(*item)) {
-                return;
+                return false;
             }
         }
 
         for (const std::shared_ptr<Hierarchy>& child : m_children) {
-            child->for_each(callback);
+            if (!child->for_each_const<T>(callback)) {
+                return false;
+            }
         }
+        return true;
     }
 
 protected:

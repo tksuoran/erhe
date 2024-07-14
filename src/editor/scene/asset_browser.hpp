@@ -25,11 +25,7 @@ public:
     explicit Asset_node(const Asset_node&);
     Asset_node& operator=(const Asset_node&);
     ~Asset_node() noexcept override;
-
     Asset_node(const std::filesystem::path& path);
-
-    glm::vec2 icon      {0.0f, 0.0f};
-    glm::vec4 icon_color{1.0f, 1.0f, 1.0f, 1.0f};
 };
 
 class Asset_folder : public erhe::Item<erhe::Item_base, Asset_node, Asset_folder>

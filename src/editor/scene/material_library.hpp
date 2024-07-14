@@ -1,8 +1,8 @@
 #pragma once
 
-#include "scene/content_library.hpp"
-
 namespace editor {
+
+class Content_library;
 
 void add_default_materials(Content_library& library);
 

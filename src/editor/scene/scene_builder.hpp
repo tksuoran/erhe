@@ -37,6 +37,7 @@ namespace editor {
 
 class Brush;
 class Brush_data;
+class Content_library_node;
 class Debug_view_window;
 class Editor_context;
 class Editor_message_bus;
@@ -135,11 +136,13 @@ private:
     ) -> std::shared_ptr<erhe::scene::Light>;
 
     auto make_brush(
-        Brush_data&& brush_create_info,
-        const bool   instantiate_to_scene
+        Content_library_node& folder,
+        Brush_data&&          brush_create_info,
+        const bool            instantiate_to_scene
     ) -> std::shared_ptr<Brush>;
 
     auto make_brush(
+        Content_library_node&      folder,
         Editor_settings&           editor_settings,
         Mesh_memory&               mesh_memory,
         erhe::geometry::Geometry&& geometry,
@@ -147,6 +150,7 @@ private:
     ) -> std::shared_ptr<Brush>;
 
     auto make_brush(
+        Content_library_node&                            folder,
         Editor_settings&                                 editor_settings,
         Mesh_memory&                                     mesh_memory,
         const std::shared_ptr<erhe::geometry::Geometry>& geometry,
@@ -167,11 +171,7 @@ private:
     );
     void animate_lights     (const double time_d);
     void add_room           ();
-    void make_brushes       (
-        erhe::graphics::Instance& graphics_instance,
-        Editor_settings&          editor_settings,
-        Mesh_memory&              mesh_memory
-    );
+    void make_brushes       (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
     void make_mesh_nodes    ();
     void make_cube_benchmark(Mesh_memory& mesh_memory);
     void setup_lights       ();

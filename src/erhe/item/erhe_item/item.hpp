@@ -72,67 +72,67 @@ public:
 class Item_type
 {
 public:
-    static constexpr uint64_t index_animation            =  1;
-    static constexpr uint64_t index_animation_channel    =  2;
-    static constexpr uint64_t index_animation_sampler    =  3;
-    static constexpr uint64_t index_bone                 =  4;
-    static constexpr uint64_t index_brush                =  5;
-    static constexpr uint64_t index_camera               =  6;
-    static constexpr uint64_t index_composer             =  7;
-    static constexpr uint64_t index_frame_controller     =  8;
-    static constexpr uint64_t index_grid                 =  9;
-    static constexpr uint64_t index_light                = 10;
-    static constexpr uint64_t index_light_layer          = 11;
-    static constexpr uint64_t index_material             = 12;
-    static constexpr uint64_t index_mesh                 = 13;
-    static constexpr uint64_t index_mesh_layer           = 14;
-    static constexpr uint64_t index_renderpass           = 15;
-    static constexpr uint64_t index_rendertarget         = 16;
-    static constexpr uint64_t index_scene                = 17;
-    static constexpr uint64_t index_skin                 = 18;
-    static constexpr uint64_t index_texture              = 19;
-    static constexpr uint64_t index_node                 = 20;
-    static constexpr uint64_t index_asset_folder         = 21;
-    static constexpr uint64_t index_asset_file_gltf      = 22;
-    static constexpr uint64_t index_asset_file_png       = 23;
-    static constexpr uint64_t index_asset_file_other     = 24;
-    static constexpr uint64_t index_content_library_node = 25;
-    static constexpr uint64_t index_physics              = 26;
-    static constexpr uint64_t index_raytrace             = 27;
-    static constexpr uint64_t index_node_attachment      = 28;
-    static constexpr uint64_t index_render_style         = 29;
-    static constexpr uint64_t count                      = 30;
+    static constexpr uint64_t index_animation              =  1;
+    static constexpr uint64_t index_animation_channel      =  2;
+    static constexpr uint64_t index_animation_sampler      =  3;
+    static constexpr uint64_t index_bone                   =  4;
+    static constexpr uint64_t index_brush                  =  5;
+    static constexpr uint64_t index_camera                 =  6;
+    static constexpr uint64_t index_composer               =  7;
+    static constexpr uint64_t index_frame_controller       =  8;
+    static constexpr uint64_t index_grid                   =  9;
+    static constexpr uint64_t index_light                  = 10;
+    static constexpr uint64_t index_light_layer            = 11;
+    static constexpr uint64_t index_material               = 12;
+    static constexpr uint64_t index_mesh                   = 13;
+    static constexpr uint64_t index_mesh_layer             = 14;
+    static constexpr uint64_t index_renderpass             = 15;
+    static constexpr uint64_t index_rendertarget           = 16;
+    static constexpr uint64_t index_scene                  = 17;
+    static constexpr uint64_t index_skin                   = 18;
+    static constexpr uint64_t index_texture                = 19;
+    static constexpr uint64_t index_node                   = 20;
+    static constexpr uint64_t index_asset_folder           = 21;
+    static constexpr uint64_t index_asset_file_gltf        = 22;
+    static constexpr uint64_t index_asset_file_other       = 23;
+    static constexpr uint64_t index_content_library_folder = 24;
+    static constexpr uint64_t index_content_library_node   = 25;
+    static constexpr uint64_t index_physics                = 26;
+    static constexpr uint64_t index_raytrace               = 27;
+    static constexpr uint64_t index_node_attachment        = 28;
+    static constexpr uint64_t index_render_style           = 29;
+    static constexpr uint64_t count                        = 30;
 
-    static constexpr uint64_t none                 =  0u;
-    static constexpr uint64_t animation            = (1u << index_animation           );
-    static constexpr uint64_t animation_channel    = (1u << index_animation_channel   );
-    static constexpr uint64_t animation_sampler    = (1u << index_animation_sampler   );
-    static constexpr uint64_t bone                 = (1u << index_bone                );
-    static constexpr uint64_t brush                = (1u << index_brush               );
-    static constexpr uint64_t camera               = (1u << index_camera              );
-    static constexpr uint64_t composer             = (1u << index_composer            );
-    static constexpr uint64_t frame_controller     = (1u << index_frame_controller    );
-    static constexpr uint64_t grid                 = (1u << index_grid                );
-    static constexpr uint64_t light                = (1u << index_light               );
-    static constexpr uint64_t light_layer          = (1u << index_light_layer         );
-    static constexpr uint64_t material             = (1u << index_material            );
-    static constexpr uint64_t mesh                 = (1u << index_mesh                );
-    static constexpr uint64_t mesh_layer           = (1u << index_mesh_layer          );
-    static constexpr uint64_t renderpass           = (1u << index_renderpass          );
-    static constexpr uint64_t rendertarget         = (1u << index_rendertarget        );
-    static constexpr uint64_t scene                = (1u << index_scene               );
-    static constexpr uint64_t skin                 = (1u << index_skin                );
-    static constexpr uint64_t texture              = (1u << index_texture             );
-    static constexpr uint64_t node                 = (1u << index_node                );
-    static constexpr uint64_t asset_folder         = (1u << index_asset_folder        );
-    static constexpr uint64_t asset_file_gltf      = (1u << index_asset_file_gltf     );
-    static constexpr uint64_t asset_file_png       = (1u << index_asset_file_png      );
-    static constexpr uint64_t asset_file_other     = (1u << index_asset_file_other    );
-    static constexpr uint64_t content_library_node = (1u << index_content_library_node);
-    static constexpr uint64_t physics              = (1u << index_physics             );
-    static constexpr uint64_t raytrace             = (1u << index_raytrace            );
-    static constexpr uint64_t node_attachment      = (1u << index_node_attachment     );
-    static constexpr uint64_t render_style         = (1u << index_render_style        );
+    static constexpr uint64_t none                   =  0u;
+    static constexpr uint64_t animation              = (1u << index_animation             );
+    static constexpr uint64_t animation_channel      = (1u << index_animation_channel     );
+    static constexpr uint64_t animation_sampler      = (1u << index_animation_sampler     );
+    static constexpr uint64_t bone                   = (1u << index_bone                  );
+    static constexpr uint64_t brush                  = (1u << index_brush                 );
+    static constexpr uint64_t camera                 = (1u << index_camera                );
+    static constexpr uint64_t composer               = (1u << index_composer              );
+    static constexpr uint64_t frame_controller       = (1u << index_frame_controller      );
+    static constexpr uint64_t grid                   = (1u << index_grid                  );
+    static constexpr uint64_t light                  = (1u << index_light                 );
+    static constexpr uint64_t light_layer            = (1u << index_light_layer           );
+    static constexpr uint64_t material               = (1u << index_material              );
+    static constexpr uint64_t mesh                   = (1u << index_mesh                  );
+    static constexpr uint64_t mesh_layer             = (1u << index_mesh_layer            );
+    static constexpr uint64_t renderpass             = (1u << index_renderpass            );
+    static constexpr uint64_t rendertarget           = (1u << index_rendertarget          );
+    static constexpr uint64_t scene                  = (1u << index_scene                 );
+    static constexpr uint64_t skin                   = (1u << index_skin                  );
+    static constexpr uint64_t texture                = (1u << index_texture               );
+    static constexpr uint64_t node                   = (1u << index_node                  );
+    static constexpr uint64_t asset_folder           = (1u << index_asset_folder          );
+    static constexpr uint64_t asset_file_gltf        = (1u << index_asset_file_gltf       );
+    static constexpr uint64_t asset_file_other       = (1u << index_asset_file_other      );
+    static constexpr uint64_t content_library_folder = (1u << index_content_library_folder);
+    static constexpr uint64_t content_library_node   = (1u << index_content_library_node  );
+    static constexpr uint64_t physics                = (1u << index_physics               );
+    static constexpr uint64_t raytrace               = (1u << index_raytrace              );
+    static constexpr uint64_t node_attachment        = (1u << index_node_attachment       );
+    static constexpr uint64_t render_style           = (1u << index_render_style          );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -157,15 +157,15 @@ public:
         "Skin",
         "Texture",
         "Node",
-        "Asset Folder",
-        "Asset File Folder",
-        "Asset File glTF",
-        "Asset File Other",
+        "Asset_folder",
+        "Asset_file_gltf",
+        "Asset_file_other",
+        "Content_library_folder",
         "Content_library_node",
         "Physics",
         "Raytrace",
         "Node_attachment",
-        "Render style"
+        "Render_style"
     };
 };
 

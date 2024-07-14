@@ -188,11 +188,7 @@ void Asset_browser_window::imgui()
     Item_tree_window::imgui();
 }
 
-Asset_browser::Asset_browser(
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
-)
+Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
     : m_context{editor_context}
 {
     scan();

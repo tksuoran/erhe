@@ -6,9 +6,13 @@
 #include <memory>
 #include <mutex>
 
+namespace erhe::primitive {
+    class Material;
+}
 namespace editor {
 
 class Brush_tool;
+class Content_library;
 class Editor_message;
 class Editor_message_bus;
 class Editor_scenes;
@@ -74,6 +78,9 @@ private:
 
     [[nodiscard]] auto get_hover_mesh_transform() -> glm::mat4; // Places brush in parent (hover) mesh
     [[nodiscard]] auto get_hover_grid_transform() -> glm::mat4;
+    [[nodiscard]] auto get_scene_root          () const -> std::shared_ptr<Scene_root>;
+    [[nodiscard]] auto get_content_library     () const -> std::shared_ptr<Content_library>;
+    [[nodiscard]] auto get_material            () const -> std::shared_ptr<erhe::primitive::Material>;
 
     Brush_tool_preview_command m_preview_command;
     Brush_tool_insert_command  m_insert_command;

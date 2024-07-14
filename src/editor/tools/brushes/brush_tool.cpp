@@ -351,10 +351,55 @@ void Brush_tool::update_mesh_node_transform()
 
 }
 
+auto Brush_tool::get_scene_root() const -> std::shared_ptr<Scene_root>
+{
+    auto* scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return {};
+    }
+    return scene_view->get_scene_root();
+}
+
+auto Brush_tool::get_content_library() const -> std::shared_ptr<Content_library>
+{
+    const auto& scene_root = get_scene_root();
+    if (!scene_root) {
+        return {};
+    }
+    return scene_root->content_library();
+}
+
+auto Brush_tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>
+{
+    const std::shared_ptr<Content_library>& content_library = get_content_library();
+    if (!content_library) {
+        return {};
+    }
+    std::shared_ptr<erhe::primitive::Material> material = m_context.selection->get_last_selected<erhe::primitive::Material>();
+    if (!material) {
+        content_library->materials->for_each<Content_library_node>(
+            [&material](const Content_library_node& node) {
+                auto entry = std::dynamic_pointer_cast<erhe::primitive::Material>(node.item);
+                if (entry) {
+                    material = entry;
+                    return false;
+                }
+                return true;
+            }
+        );
+    }
+    return material;
+}
+
 void Brush_tool::do_insert_operation()
 {
+    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
     const std::shared_ptr<Brush>& brush = m_context.selection->get_last_selected<Brush>();
-    const std::shared_ptr<erhe::primitive::Material>& material = m_context.selection->get_last_selected<erhe::primitive::Material>();
+    const std::shared_ptr<erhe::primitive::Material>& material = get_material();
     if (!m_hover.position.has_value() || !brush || !material) {
         return;
     }
@@ -371,11 +416,6 @@ void Brush_tool::do_insert_operation()
         erhe::Item_flags::visible     |
         erhe::Item_flags::content     |
         erhe::Item_flags::show_in_ui;
-
-    auto* scene_view = get_hover_scene_view();
-    ERHE_VERIFY(scene_view != nullptr);
-    const auto& scene_root = scene_view->get_scene_root();
-    ERHE_VERIFY(scene_root);
 
     auto* const hover_node = m_hover.mesh ? m_hover.mesh->get_node() : nullptr;
     const Instance_create_info brush_instance_create_info {
@@ -412,7 +452,7 @@ void Brush_tool::do_insert_operation()
 void Brush_tool::add_brush_mesh()
 {
     const auto brush    = m_context.selection->get_last_selected<Brush>();
-    const auto material = m_context.selection->get_last_selected<erhe::primitive::Material>();
+    const auto material = get_material();
     auto* scene_view = get_hover_scene_view();
     if (
         !brush ||

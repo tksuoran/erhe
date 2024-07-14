@@ -749,11 +749,7 @@ void Item_tree_window::item_popup_menu(const std::shared_ptr<erhe::Item_base>& i
     ImGui::PopStyleVar(1);
 }
 
-auto Item_tree_window::item_icon_and_text(
-    const std::shared_ptr<erhe::Item_base>& item,
-    const bool                              update,
-    bool                                    force_expand
-) -> Tree_node_state
+auto Item_tree_window::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item, const bool update, bool force_expand) -> Tree_node_state
 {
     ERHE_PROFILE_FUNCTION();
 

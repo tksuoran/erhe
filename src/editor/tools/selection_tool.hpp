@@ -188,8 +188,9 @@ public:
     void begin_selection_change();
     void end_selection_change();
 
-private:
     void update_last_selected(const std::shared_ptr<erhe::Item_base>& item);
+
+private:
     void toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& mesh, bool was_selected, bool clear_others);
 
     Editor_context&                m_context;

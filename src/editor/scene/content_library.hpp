@@ -47,6 +47,8 @@ public:
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
+    auto make_folder(std::string_view folder_name) -> std::shared_ptr<Content_library_node>;
+
     template <typename T, typename ...Args>
     auto make(Args&& ...args) -> std::shared_ptr<T>;
 
@@ -74,8 +76,8 @@ public:
         return result;
     }
 
-    uint64_t                         type_code;
-    std::string                      type_name;
+    uint64_t                         type_code{};
+    std::string                      type_name{};
     std::shared_ptr<erhe::Item_base> item;
 };
 

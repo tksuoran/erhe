@@ -10,6 +10,7 @@
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "scene/content_library.hpp"
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -153,7 +154,7 @@ Scene_builder::Scene_builder(
         scene_views
     );
     setup_lights   ();
-    make_brushes   (graphics_instance, editor_settings, mesh_memory);
+    make_brushes   (editor_settings, mesh_memory);
     make_mesh_nodes();
     add_room       ();
 }
@@ -333,34 +334,28 @@ void Scene_builder::setup_cameras(
     );
     
     if (window_viewport) {
-        //auto primary_Imgui_window_scene_view =
-        scene_views.create_imgui_window_scene_view_node(
-            imgui_renderer,
-            imgui_windows,
-            rendergraph,
-            m_primary_viewport_window
-        );
+        scene_views.create_imgui_window_scene_view_node(imgui_renderer, imgui_windows, rendergraph, m_primary_viewport_window);
     } else {
-        scene_views.create_basic_viewport_scene_view_node(
-            rendergraph,
-            m_primary_viewport_window
-        );
+        scene_views.create_basic_viewport_scene_view_node(rendergraph, m_primary_viewport_window);
     }
 }
 
-auto Scene_builder::make_brush(Brush_data&& brush_create_info, const bool instantiate_to_scene) -> std::shared_ptr<Brush>
+auto Scene_builder::make_brush(
+    Content_library_node& folder,
+    Brush_data&&          brush_create_info,
+    const bool            instantiate_to_scene
+) -> std::shared_ptr<Brush>
 {
-    auto content_library = m_scene_root->content_library();
-    const auto brush = content_library->brushes->make<Brush>(brush_create_info);
+    const auto brush = folder.make<Brush>(brush_create_info);
     if (instantiate_to_scene) {
         const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
-
         m_scene_brushes.push_back(brush);
     }
     return brush;
 }
 
 auto Scene_builder::make_brush(
+    Content_library_node&      folder,
     Editor_settings&           editor_settings,
     Mesh_memory&               mesh_memory,
     erhe::geometry::Geometry&& geometry,
@@ -368,6 +363,7 @@ auto Scene_builder::make_brush(
 ) -> std::shared_ptr<Brush>
 {
     return make_brush(
+        folder,
         Brush_data{
             .context         = m_context,
             .editor_settings = editor_settings,
@@ -394,6 +390,7 @@ auto Scene_builder::build_info(Mesh_memory& mesh_memory) -> erhe::primitive::Bui
 }
 
 auto Scene_builder::make_brush(
+    Content_library_node&                            folder,
     Editor_settings&                                 editor_settings,
     Mesh_memory&                                     mesh_memory,
     const std::shared_ptr<erhe::geometry::Geometry>& geometry,
@@ -401,6 +398,7 @@ auto Scene_builder::make_brush(
 ) -> std::shared_ptr<Brush>
 {
     return make_brush(
+        folder,
         Brush_data{
             .context         = m_context,
             .editor_settings = editor_settings,
@@ -413,7 +411,7 @@ auto Scene_builder::make_brush(
     );
 }
 
-void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Editor_settings& editor_settings, Mesh_memory& mesh_memory)
+void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -467,80 +465,24 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
 
     constexpr bool anisotropic_test_object = false;
 
-    if (config.gltf_files) {
-#if !defined(ERHE_GLTF_LIBRARY_NONE)
-        //execution_queue->enqueue(
-        //    [this]()
-            {
-                ERHE_PROFILE_SCOPE("parse gltf files");
-
-                import_gltf(
-                    graphics_instance,
-                    build_info(mesh_memory),
-                    *m_scene_root.get(),
-                    "res/assets/sample_models/SimpleSkin.gltf"
-                );
-            }
-        //);
-#endif
-    }
-
-    if (config.obj_files) {
-        execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory]() {
-                ERHE_PROFILE_SCOPE("parse .obj files");
-
-                constexpr bool instantiate = true;
-
-                const char* obj_files_names[] = {
-                    "res/models/cobra_mk3.obj"
-                    //"res/models/teapot.obj",
-                    //"res/models/teacup.obj",
-                    //"res/models/spoon.obj"
-                };
-                for (auto* path : obj_files_names) {
-                    auto geometries = parse_obj_geometry(path);
-
-                    for (auto& geometry : geometries) {
-                        geometry->compute_polygon_normals();
-                        // The real teapot is ~33% taller (ratio 4:3)
-                        //const mat4 scale_t = erhe::math::create_scale(0.5f, 0.5f * 4.0f / 3.0f, 0.5f);
-                        //geometry->transform(scale_t);
-
-                        const mat4 scale_t = erhe::math::create_scale(0.01f);
-                        geometry->transform(scale_t);
-                        geometry->flip_reversed_polygons();
-                        make_brush(
-                            Brush_data {
-                                .context         = m_context,
-                                .editor_settings = editor_settings,
-                                .build_info      = build_info(mesh_memory),
-                                .normal_style    = Normal_style::polygon_normals,
-                                .geometry        = geometry,
-                                .density         = config.mass_scale
-                            },
-                            instantiate
-                        );
-                    }
-                }
-            }
-        );
-    }
+    auto content_library = m_scene_root->content_library();
+    Content_library_node& brushes = *(content_library->brushes.get());
 
     if (config.platonic_solids) {
         execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory, &brushes]() {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
                 constexpr bool instantiate = global_instantiate;
                 const auto scale = config.object_scale;
-
-                make_brush(editor_settings, mesh_memory, make_dodecahedron (scale), instantiate);
-                make_brush(editor_settings, mesh_memory, make_icosahedron  (scale), instantiate);
-                make_brush(editor_settings, mesh_memory, make_octahedron   (scale), instantiate);
-                make_brush(editor_settings, mesh_memory, make_tetrahedron  (scale), instantiate);
-                make_brush(editor_settings, mesh_memory, make_cuboctahedron(scale), instantiate);
+                auto& folder = *(brushes.make_folder("Platonic Solids").get());
+                make_brush(folder, editor_settings, mesh_memory, make_dodecahedron (scale), instantiate);
+                make_brush(folder, editor_settings, mesh_memory, make_icosahedron  (scale), instantiate);
+                make_brush(folder, editor_settings, mesh_memory, make_octahedron   (scale), instantiate);
+                make_brush(folder, editor_settings, mesh_memory, make_tetrahedron  (scale), instantiate);
+                make_brush(folder, editor_settings, mesh_memory, make_cuboctahedron(scale), instantiate);
                 make_brush(
+                    folder,
                     Brush_data{
                         .context         = m_context,
                         .editor_settings = editor_settings,
@@ -557,14 +499,13 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
             }
         );
     }
-
     if (config.sphere) {
         execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory, &brushes]() {
                 ERHE_PROFILE_SCOPE("Sphere");
                 constexpr bool instantiate = global_instantiate;
-
                 make_brush(
+                    brushes,
                     Brush_data{
                         .context         = m_context,
                         .editor_settings = editor_settings,
@@ -587,10 +528,9 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
             }
         );
     }
-
     if (config.torus) {
         execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory, &brushes]() {
                 ERHE_PROFILE_SCOPE("Torus");
 
                 constexpr bool instantiate = global_instantiate;
@@ -598,14 +538,11 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
                 const float major_radius = 1.0f  * config.object_scale;
                 const float minor_radius = 0.25f * config.object_scale;
 
-                auto torus_collision_volume_calculator = [=](float scale) -> float
-                {
+                auto torus_collision_volume_calculator = [=](float scale) -> float {
                     return torus_volume(major_radius * scale, minor_radius * scale);
                 };
 
-                auto torus_collision_shape_generator = [major_radius, minor_radius](float scale)
-                -> std::shared_ptr<erhe::physics::ICollision_shape>
-                {
+                auto torus_collision_shape_generator = [major_radius, minor_radius](float scale) -> std::shared_ptr<erhe::physics::ICollision_shape> {
                     ERHE_PROFILE_SCOPE("torus_collision_shape_generator");
 
                     erhe::physics::Compound_shape_create_info torus_shape_create_info;
@@ -656,6 +593,7 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
                     )
                 );
                 make_brush(
+                    brushes,
                     Brush_data{
                         .context                     = m_context,
                         .editor_settings             = editor_settings,
@@ -672,12 +610,9 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
             }
         );
     }
-
     if (config.cylinder) {
         execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory]() {
-                ERHE_PROFILE_SCOPE("Cylinder");
-
+            [this, &editor_settings, &mesh_memory, &brushes]() {
                 constexpr bool instantiate = global_instantiate;
                 const float scale = config.object_scale;
                 for (float h = 0.1f; h < 1.1f; h += 0.9f) {
@@ -693,6 +628,7 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
                     cylinder_geometry.transform(erhe::math::mat4_swap_xy);
 
                     make_brush(
+                        brushes,
                         Brush_data{
                             .context         = m_context,
                             .editor_settings = editor_settings,
@@ -713,10 +649,9 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
             }
         );
     }
-
     if (config.cone) {
         execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory, &brushes]() {
                 ERHE_PROFILE_SCOPE("Cone");
 
                 constexpr bool instantiate = global_instantiate;
@@ -731,6 +666,7 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
                 cone_geometry.transform(erhe::math::mat4_swap_xy); // convert to axis = y
 
                 make_brush(
+                    brushes,
                     Brush_data{
                         .context         = m_context,
                         .editor_settings = editor_settings,
@@ -808,20 +744,19 @@ void Scene_builder::make_brushes(erhe::graphics::Instance& graphics_instance, Ed
         ERHE_PROFILE_SCOPE("Johnson solids");
 
         library = Json_library("res/polyhedra/johnson.json");
+        auto& folder = *(brushes.make_folder("Johnson Solids").get());
         for (const auto& key_name : library.names) {
             execution_queue->enqueue(
-                [this, &editor_settings, &mesh_memory, &library, &key_name]() {
+                [this, &editor_settings, &mesh_memory, &library, &key_name, &folder]() {
                     auto geometry = library.make_geometry(key_name);
                     if (geometry.get_polygon_count() == 0) {
                         return;
                     }
                     geometry.compute_polygon_normals();
-
-                    const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
-                        std::move(geometry)
-                    );
+                    const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(geometry));
 
                     make_brush(
+                        folder,
                         Brush_data{
                             .context            = m_context,
                             .editor_settings    = editor_settings,
@@ -975,7 +910,6 @@ void Scene_builder::make_mesh_nodes()
             //ERHE_VERIFY(group_width <= 16384);
         }
     }
-
 
     {
         ERHE_PROFILE_SCOPE("make instances");

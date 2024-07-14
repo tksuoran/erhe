@@ -108,14 +108,11 @@ void Icon_set::load_icons(
     type_icons[erhe::Item_type::index_texture             ] = { .icon = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_asset_folder        ] = { .icon = icons.folder,      .color = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f}};
     type_icons[erhe::Item_type::index_asset_file_gltf     ] = { .icon = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_png      ] = { .icon = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
+    //type_icons[erhe::Item_type::index_asset_file_png      ] = { .icon = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
     type_icons[erhe::Item_type::index_asset_file_other    ] = { .icon = icons.file,        .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
 }
 
-void Icon_set::add_icons(
-    const uint64_t item_type,
-    const float    scale
-)
+void Icon_set::add_icons(const uint64_t item_type, const float scale)
 {
     using namespace erhe::bit;
     for (uint64_t bit_position = 0; bit_position < erhe::Item_flags::count; ++ bit_position) {
@@ -193,18 +190,24 @@ auto Icon_set::get_hotbar_rasterization() const -> const Icon_rasterization&
 
 void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const float scale)
 {
+    const auto& icon_rasterization = (scale < 1.5f)
+        ? m_context.icon_set->get_small_rasterization()
+        : m_context.icon_set->get_large_rasterization();
+
+    std::optional<glm::vec2> icon;
+    glm::vec4                color{0.8f, 0.8f, 0.8f, 1.0f}; // TODO  item->get_wireframe_color(); ?
+
     const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    if (content_node && content_node->item) {
-        item_icon(content_node->item, scale);
+    if (content_node) {
+        if (content_node->item) {
+            item_icon(content_node->item, scale);
+        } else {
+            // Content libray node without item is considered folder
+            icon_rasterization.icon(icons.folder, color);
+        }
         return;
     }
 
-    std::optional<glm::vec2> icon;
-    //// glm::vec4                color = item->get_wireframe_color();
-    glm::vec4                color{0.8f, 0.8f, 0.8f, 1.0f};
-
-    //auto&          icons      = m_context.icon_set->icons;
-    //const auto&    type_icons = m_context.icon_set->type_icons;
     const uint64_t type_mask = item->get_type();
     using namespace erhe::bit;
     for (uint64_t bit_position = 0; bit_position < erhe::Item_type::count; ++bit_position) {
@@ -242,9 +245,6 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     }
 
     if (icon.has_value()) {
-        const auto& icon_rasterization = (scale < 1.5f)
-            ? m_context.icon_set->get_small_rasterization()
-            : m_context.icon_set->get_large_rasterization();
         icon_rasterization.icon(icon.value(), color);
     }
 }
