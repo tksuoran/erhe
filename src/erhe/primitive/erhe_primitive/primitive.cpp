@@ -614,11 +614,13 @@ auto Primitive::get_renderable_mesh() const -> const Buffer_mesh*
     return &render_shape->get_renderable_mesh();
 }
 
+static std::string Primitive__get_name__empty{};
+
 auto Primitive::get_name() const -> std::string_view
 {
     const std::shared_ptr<erhe::geometry::Geometry>& render_geometry    = render_shape ? render_shape->get_geometry_const() : std::shared_ptr<erhe::geometry::Geometry>{};
     const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry = collision_shape ? collision_shape->get_geometry_const() : std::shared_ptr<erhe::geometry::Geometry>{};
-    return render_geometry ? render_geometry->name : collision_geometry ? collision_geometry->name : std::string{};
+    return render_geometry ? render_geometry->name : collision_geometry ? collision_geometry->name : Primitive__get_name__empty;
 }
 
 auto Primitive::get_bounding_box() const -> erhe::math::Bounding_box

@@ -1,9 +1,9 @@
 #include "xr/null_headset_view.hpp"
 
-namespace editor
-{
+namespace editor {
 
 Headset_view::Headset_view(
+    erhe::commands::Commands&       commands,
     erhe::graphics::Instance&       graphics_instance,
     erhe::rendergraph::Rendergraph& rendergraph,
     erhe::window::Context_window&   context_window,
@@ -11,10 +11,12 @@ Headset_view::Headset_view(
     Editor_rendering&               editor_rendering,
     Editor_settings&                editor_settings,
     Mesh_memory&                    mesh_memory,
-    Scene_builder&                  scene_builder
+    Scene_builder&                  scene_builder,
+    Time&                           time
 )
     : Scene_view{editor_context, Viewport_config{}}
 {
+    static_cast<void>(commands);
     static_cast<void>(graphics_instance);
     static_cast<void>(rendergraph);
     static_cast<void>(context_window);
@@ -22,6 +24,7 @@ Headset_view::Headset_view(
     static_cast<void>(editor_settings);
     static_cast<void>(mesh_memory);
     static_cast<void>(scene_builder);
+    static_cast<void>(time);
 }
 
 void Headset_view::render(const Render_context&)

@@ -10,6 +10,9 @@
 
 #include <array>
 
+namespace erhe::commands {
+    class Commands;
+}
 namespace erhe::graphics {
     class Instance;
 }
@@ -32,8 +35,7 @@ namespace erhe::window {
     class Context_window;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
 class Editor_message_bus;
@@ -43,6 +45,7 @@ class Hud;
 class Mesh_memory;
 class Scene_builder;
 class Scene_root;
+class Time;
 class Tools;
 
 class Controller_input
@@ -61,6 +64,7 @@ class Headset_view
 {
 public:
     Headset_view(
+        erhe::commands::Commands&       commands,
         erhe::graphics::Instance&       graphics_instance,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
@@ -68,7 +72,8 @@ public:
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings,
         Mesh_memory&                    mesh_memory,
-        Scene_builder&                  scene_builder
+        Scene_builder&                  scene_builder,
+        Time&                           time
     );
 
     // Public API
