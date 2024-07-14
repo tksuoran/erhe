@@ -21,11 +21,7 @@ namespace editor {
 
 using Light_type = erhe::scene::Light_type;
 
-Layers_window::Layers_window(
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
-)
+Layers_window::Layers_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Layers", "layers"}
     , m_context                {editor_context}
 {

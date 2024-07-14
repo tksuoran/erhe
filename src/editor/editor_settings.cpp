@@ -9,9 +9,7 @@
 
 namespace editor {
 
-Editor_settings::Editor_settings(
-    Editor_message_bus& editor_message_bus
-)
+Editor_settings::Editor_settings(Editor_message_bus& editor_message_bus)
 {
     graphics.get_limits();
     read();
@@ -158,7 +156,7 @@ void Editor_settings::read()
         ini->get("vr_font_size", imgui.vr_font_size);
     }
     {
-        auto ini = erhe::configuration::get_ini("settings.ini", "icons");
+        auto ini = erhe::configuration::get_ini("erhe.ini", "icons");
         ini->get("small_icon_size",  icons.small_icon_size);
         ini->get("large_icon_size",  icons.large_icon_size);
         ini->get("hotbar_icon_size", icons.hotbar_icon_size);

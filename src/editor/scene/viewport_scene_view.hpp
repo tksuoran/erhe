@@ -128,7 +128,7 @@ public:
     [[nodiscard]] auto get_final_output        () -> Rendergraph_node*;
 
 private:
-    [[nodiscard]] auto get_override_shader_stages() const -> erhe::graphics::Shader_stages*;
+    [[nodiscard]] auto get_override_shader_stages() const -> const erhe::graphics::Shader_stages*;
 
     void update_hover_with_id_render();
 

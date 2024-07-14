@@ -4,14 +4,24 @@
 
 #include <glm/glm.hpp>
 
+#include <memory>
 #include <optional>
+
+namespace erhe::primitive {
+    class Material;
+}
+namespace erhe::scene {
+    class Node;
+}
 
 namespace editor {
 
+class Content_library;
 class Editor_context;
 class Editor_message;
 class Render_context;
 class Scene_view;
+class Scene_root;
 class Tools;
 
 class Tool_flags
@@ -51,6 +61,11 @@ public:
     void set_priority_boost(int priority_boost);
 
 protected:
+    [[nodiscard]] auto get_node           () const -> std::shared_ptr<erhe::scene::Node>;
+    [[nodiscard]] auto get_scene_root     () const -> std::shared_ptr<Scene_root>;
+    [[nodiscard]] auto get_content_library() const -> std::shared_ptr<Content_library>;
+    [[nodiscard]] auto get_material       () const -> std::shared_ptr<erhe::primitive::Material>;
+
     void on_message          (Editor_message& message);
     void set_base_priority   (int base_priority);
     void set_flags           (uint64_t flags);

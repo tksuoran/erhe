@@ -64,20 +64,6 @@ class Hud
     , public Tool
 {
 public:
-    class Config
-    {
-    public:
-        bool  enabled{true};
-        bool  locked {false};
-        int   width  {1024};
-        int   height {1024};
-        float ppm    {5000.0f};
-        float x      {0.0f};
-        float y      {0.0f};
-        float z      {0.0f};
-    };
-    Config config;
-
     Hud(
         erhe::commands::Commands&       commands,
         erhe::graphics::Instance&       graphics_instance,
@@ -101,8 +87,8 @@ public:
 
     // Public APi
     [[nodiscard]] auto get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_host>;
-    auto toggle_visibility() -> bool;
-    void set_visibility   (bool value);
+    auto toggle_mesh_visibility() -> bool;
+    void set_mesh_visibility   (bool value);
 
     auto try_begin_drag() -> bool;
     void on_drag       ();
@@ -126,17 +112,17 @@ private:
     erhe::commands::Drag_enable_command       m_drag_bool_enable_command;
 #endif
 
-    std::weak_ptr<erhe::scene::Node>             m_drag_node;
+    std::weak_ptr<erhe::scene::Node>          m_drag_node;
+    bool                                      m_mesh_visible{true};
 
-    std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
-    std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
-    std::shared_ptr<Rendertarget_imgui_host> m_rendertarget_imgui_viewport;
-    glm::mat4                                    m_world_from_hud{1.0f};
-    float m_x             {-0.09f};
-    float m_y             { 0.0f};
-    float m_z             {-0.38f};
-    bool  m_enabled       {true};
-    bool  m_locked_to_head{false};
+    std::shared_ptr<erhe::scene::Node>        m_rendertarget_node;
+    std::shared_ptr<Rendertarget_mesh>        m_rendertarget_mesh;
+    std::shared_ptr<Rendertarget_imgui_host>  m_rendertarget_imgui_viewport;
+    glm::mat4                                 m_world_from_hud{1.0f};
+    float m_x       {-0.09f};
+    float m_y       { 0.0f};
+    float m_z       {-0.38f};
+    bool  m_enabled {true};
 
     std::optional<glm::mat4> m_node_from_control;
 };

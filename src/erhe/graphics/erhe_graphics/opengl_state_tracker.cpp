@@ -41,10 +41,7 @@ void OpenGL_state_tracker::reset()
     // dynamic
 }
 
-void OpenGL_state_tracker::execute(
-    const Pipeline& pipeline,
-    const bool      skip_shader_stages
-)
+void OpenGL_state_tracker::execute(const Pipeline& pipeline, const bool skip_shader_stages)
 {
     ERHE_PROFILE_FUNCTION();
 

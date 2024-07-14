@@ -19,14 +19,10 @@ Buffer_transfer_queue::Buffer_transfer_queue()
 
 Buffer_transfer_queue::~Buffer_transfer_queue() noexcept
 {
-    flush();
+    // flush(); TODO causes GL errors in shutdown, investigate
 }
 
-void Buffer_transfer_queue::enqueue(
-    Buffer&                buffer,
-    const std::size_t      offset,
-    std::vector<uint8_t>&& data
-)
+void Buffer_transfer_queue::enqueue(Buffer& buffer, const std::size_t offset, std::vector<uint8_t>&& data)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
 

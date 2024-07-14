@@ -35,14 +35,14 @@ public:
 
     // Implements Imgui_host
     auto get_scale_value  () const -> float override;
-    auto begin_imgui_frame() -> bool override;
-    void end_imgui_frame() override;
+    auto begin_imgui_frame() -> bool        override;
+    void end_imgui_frame  ()                override;
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;
 
     [[nodiscard]] auto get_mutable_style() -> ImGuiStyle&; // style = imgui_context->Style;
-    [[nodiscard]] auto get_style() const -> const ImGuiStyle&; // style = imgui_context->Style;
+    [[nodiscard]] auto get_style        () const -> const ImGuiStyle&; // style = imgui_context->Style;
 
     auto get_consumer_input_texture    (erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
     auto get_consumer_input_framebuffer(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;

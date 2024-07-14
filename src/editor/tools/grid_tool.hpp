@@ -32,14 +32,13 @@ public:
     class Config
     {
     public:
-        bool      enabled   {false};
         glm::vec4 major_color{1.0f, 1.0f, 1.0f, 1.0f};
         glm::vec4 minor_color{0.5f, 0.5f, 0.5f, 0.5f};
         float     major_width{4.0f};
         float     minor_width{2.0f};
-        float     cell_size {1.0f};
-        int       cell_div  {10};
-        int       cell_count{2};
+        float     cell_size  {1.0f};
+        int       cell_div   {10};
+        int       cell_count {2};
     };
     Config config;
 
@@ -58,12 +57,11 @@ public:
     void imgui() override;
 
     // Public API
-    void viewport_toolbar(bool& hovered);
+    //void viewport_toolbar(bool& hovered);
 
     auto update_hover(const glm::vec3 ray_origin, const glm::vec3 ray_direction) const -> Grid_hover_position;
 
 private:
-    bool                               m_enable{true};
     std::vector<std::shared_ptr<Grid>> m_grids;
     int                                m_grid_index{0};
 };

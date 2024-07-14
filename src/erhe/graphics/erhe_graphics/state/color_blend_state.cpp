@@ -124,10 +124,7 @@ Color_blend_state Color_blend_state::color_writes_disabled {
 void Color_blend_state_tracker::reset()
 {
     gl::blend_color(0.0f, 0.0f, 0.0f, 0.0f);
-    gl::blend_equation_separate(
-        gl::Blend_equation_mode::func_add,
-        gl::Blend_equation_mode::func_add
-    );
+    gl::blend_equation_separate(gl::Blend_equation_mode::func_add, gl::Blend_equation_mode::func_add);
     gl::blend_func_separate(
         gl::Blending_factor::one,
         gl::Blending_factor::zero,

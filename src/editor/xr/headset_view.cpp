@@ -4,6 +4,7 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "time.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
@@ -52,7 +53,6 @@ Headset_camera_offset_move_command::Headset_camera_offset_move_command(erhe::com
 
 auto Headset_camera_offset_move_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
-    log_headset->info("{} adjust by {}", m_axis, input.variant.float_value);
     m_variable.adjust(input.variant.float_value);
     return true;
 }
@@ -77,6 +77,8 @@ void Headset_view_node::execute_rendergraph_node()
 Headset_view::Headset_view(
     erhe::commands::Commands&       commands,
     erhe::graphics::Instance&       graphics_instance,
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
     erhe::window::Context_window&   context_window,
     Editor_context&                 editor_context,
@@ -86,11 +88,13 @@ Headset_view::Headset_view(
     Scene_builder&                  scene_builder,
     Time&                           time
 )
-    : Scene_view        {editor_context, Viewport_config::default_config()}
-    , Update_time_base  {time}
+    : Scene_view               {editor_context, Viewport_config::default_config()}
+    , Update_time_base         {time}
+    , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset"}
     , m_offset_x_command{commands, m_translate_x, 'x'}
     , m_offset_y_command{commands, m_translate_y, 'y'}
     , m_offset_z_command{commands, m_translate_z, 'z'}
+    , m_editor_context  {editor_context}
     , m_context_window  {context_window}
 {
     if (!editor_context.OpenXR) {
@@ -122,9 +126,6 @@ Headset_view::Headset_view(
     m_translate_z.set_max_delta(0.004f);
 
     setup_root_camera();
-
-    ///// TODO
-    ///// fly_camera_tool.set_camera(m_root_camera.get(), m_camera_node.get());
 
     const erhe::xr::Xr_configuration configuration{
         .debug             = config.debug,
@@ -158,7 +159,6 @@ Headset_view::Headset_view(
     }
 
     m_rendergraph_node = std::make_shared<Headset_view_node>(rendergraph, *this);
-    //rendergraph.register_node(m_rendergraph_node.get());
 
     m_shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(graphics_instance, rendergraph, editor_settings, *this);
     rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_render_node.get(), m_rendergraph_node.get());
@@ -169,15 +169,39 @@ void Headset_view::update_fixed_step(const Time_context&)
     m_translate_x.update();
     m_translate_y.update();
     m_translate_z.update();
-
     const float tx =  m_translate_x.current_value();
     const float ty = -m_translate_y.current_value();
     const float tz =  m_translate_z.current_value();
     if (tx != 0.0f || ty != 0.0f || tz != 0.0f) {
         const glm::vec3 translation{tx, ty, tz};
         m_camera_offset += translation;
-        log_headset->info("translation = {}, offset = {}", translation, m_camera_offset);
     }
+}
+
+void Headset_view::imgui()
+{
+    // Scene selection
+    auto                        old_scene_root = m_scene_root;
+    std::shared_ptr<Scene_root> scene_root     = get_scene_root();
+    Scene_root*                 scene_root_raw = scene_root.get();
+    ImGui::SetNextItemWidth(110.0f);
+    const bool combo_used     = m_editor_context.editor_scenes->scene_combo("##Scene", scene_root_raw, false);
+    if (combo_used) {
+        scene_root = (scene_root_raw != nullptr) 
+            ? scene_root_raw->shared_from_this()
+            : std::shared_ptr<Scene_root>{};
+        m_scene_root = scene_root;
+    }
+
+    // Shader selection
+    ImGui::Combo(
+        "##Shader",
+        reinterpret_cast<int*>(&m_shader_stages_variant),
+        c_shader_stages_variant_strings,
+        IM_ARRAYSIZE(c_shader_stages_variant_strings),
+        IM_ARRAYSIZE(c_shader_stages_variant_strings)
+    );
+
 }
 
 void Headset_view::render(const Render_context&)
@@ -375,20 +399,24 @@ void Headset_view::render_headset()
             graphics_instance.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
 
             bool render = !m_context.OpenXR_mirror || first_view;
+
+            // TODO Meta link with Quest 3 does not seem to support camera video passthrough :(
+            //      Also, this conflicts with hud grab
+            //
+            // const auto* squeeze_click = m_headset->get_actions_right().squeeze_click;
+            // const auto* squeeze_value = m_headset->get_actions_right().squeeze_value;
+            // if (
+            //     ((squeeze_click != nullptr) && (squeeze_click->state.currentState == XR_TRUE)) ||
+            //     ((squeeze_value != nullptr) && (squeeze_value->state.currentState >= 0.5f))
+            // ) {
+            //     gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
+            //     gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
+            //     render = false;
+            // }
+
             if (render) {
                 gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
                 gl::enable(gl::Enable_cap::framebuffer_srgb);
-
-                //// auto* squeeze_click = m_headset->get_actions_right().squeeze_click;
-                //// if ((squeeze_click != nullptr) && (squeeze_click->state.currentState == XR_TRUE))
-                //// {
-                ////     ERHE_PROFILE_GPU_SCOPE(c_id_headset_clear)
-                ////
-                ////     gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-                ////     gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-                //// }
-                //// else
-                //// {
 
                 gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
                 gl::clear_depth_f(*graphics_instance.depth_clear_value_pointer());
@@ -396,12 +424,14 @@ void Headset_view::render_headset()
                 gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit | gl::Clear_buffer_mask::stencil_buffer_bit);
 
                 //Viewport_config viewport_config;
+                const erhe::graphics::Shader_stages* override_shader_stages = m_context.programs->get_variant_shader_stages(m_shader_stages_variant);
                 Render_context render_context {
-                    .editor_context  = m_context,
-                    .scene_view      = *this,
-                    .viewport_config = m_viewport_config,
-                    .camera          = *view_resources->get_camera(),
-                    .viewport        = viewport
+                    .editor_context         = m_context,
+                    .scene_view             = *this,
+                    .viewport_config        = m_viewport_config,
+                    .camera                 = *view_resources->get_camera(),
+                    .viewport               = viewport,
+                    .override_shader_stages = override_shader_stages
                 };
 
                 m_context.editor_rendering ->render_composer(render_context);
@@ -474,12 +504,6 @@ void Headset_view::setup_root_camera()
     m_headset_node->set_parent(m_root_node);
     m_headset_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::visible);
 
-    m_camera_node = std::make_shared<erhe::scene::Node>("Headset Camera Node");
-    m_camera_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::visible);
-
-    m_camera_node->set_parent_from_node(m);
-    m_camera_node->set_parent(m_headset_node);
-
     m_root_camera = std::make_shared<erhe::scene::Camera>("Root Camera");
     m_root_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::visible);
     auto& projection = *m_root_camera->projection();
@@ -487,18 +511,21 @@ void Headset_view::setup_root_camera()
     projection.projection_type = erhe::scene::Projection::Type::perspective_vertical;
     projection.z_near          = 0.03f;
     projection.z_far           = 200.0f;
-    m_camera_node->attach(m_root_camera);
+    m_headset_node->attach(m_root_camera);
 }
 
 void Headset_view::update_camera_node()
 {
-    const glm::mat4 world_from_view = m_headset->get_view_in_world();
+    glm::vec3 position{};
+    glm::quat orientation{};
+    if (!m_headset->get_headset_pose(position, orientation)) {
+        return;
+    }
+    const glm::mat4 m_orientation   = glm::mat4_cast(orientation);
+    const glm::mat4 m_translation   = glm::translate(glm::mat4{1}, position + get_camera_offset());
+    const glm::mat4 world_from_view = m_translation * m_orientation;
     m_headset_node->set_world_from_node(world_from_view);
     m_headset_node->update_transform(0); // TODO
-
-    const glm::mat4 offset = erhe::math::create_translation<float>(m_camera_offset);
-    m_camera_node->set_parent_from_node(offset);
-    m_camera_node->update_transform(0); // TODO
 }
 
 auto Headset_view::get_camera_offset() const -> glm::vec3

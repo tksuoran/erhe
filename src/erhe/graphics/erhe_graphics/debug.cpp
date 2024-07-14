@@ -89,6 +89,7 @@ void erhe_opengl_callback(
         (message != nullptr) ? message : ""
     );
 
+#if !defined(NDEBUG)
     if (severity == gl::Debug_severity::debug_severity_high) {
 #if defined(WIN32)
         DebugBreak();
@@ -96,6 +97,7 @@ void erhe_opengl_callback(
         raise(SIGTRAP);
 #endif
     }
+#endif
 }
 
 Scoped_debug_group::Scoped_debug_group(const std::string_view debug_label)

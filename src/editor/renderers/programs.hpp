@@ -14,6 +14,7 @@ namespace erhe::scene_renderer {
 namespace editor {
 
 enum class Shader_stages_variant : int {
+    not_set,
     standard,
     error,
     anisotropic_slope,
@@ -43,6 +44,7 @@ enum class Shader_stages_variant : int {
 
 static constexpr const char* c_shader_stages_variant_strings[] =
 {
+    "Not Set",
     "Standard",
     "Error",
     "Anisotropic Slope",
@@ -76,6 +78,8 @@ public:
     static constexpr std::size_t s_texture_unit_count = 15; // for non bindless textures
 
     Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface);
+
+    [[nodiscard]] auto get_variant_shader_stages(Shader_stages_variant variant) const -> const erhe::graphics::Shader_stages*;
 
     // Public members
     int                              shadow_texture_unit{15};

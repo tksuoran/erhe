@@ -230,6 +230,8 @@ public:
         , m_headset_view{
             m_commands,
             m_graphics_instance,
+            m_imgui_renderer,
+            m_imgui_windows,
             m_rendergraph,
             m_context_window,
             m_editor_context,
@@ -255,9 +257,9 @@ public:
             m_scene_builder,  m_tools
         }
         , m_hotbar{
-            m_commands,    m_graphics_instance, m_imgui_renderer,     m_imgui_windows,
-            m_rendergraph, m_editor_context,    m_editor_message_bus, m_headset_view,
-            m_icon_set,    m_mesh_memory,       m_scene_builder,      m_tools
+            m_commands,       m_imgui_renderer,     m_imgui_windows,
+            m_editor_context, m_editor_message_bus, m_headset_view,
+            m_mesh_memory,    m_scene_builder,      m_tools
         }
         , m_hover_tool       {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus, m_tools}
 
@@ -429,6 +431,7 @@ public:
         m_commands.on_idle();
         m_operation_stack.update();
         if (!m_editor_context.OpenXR) {
+            gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
             m_context_window.swap_buffers();
         }
 

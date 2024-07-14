@@ -47,7 +47,7 @@ public:
     [[nodiscard]] auto get_actions_right       () const -> const Xr_actions&;
     [[nodiscard]] auto get_hand_tracking_joint (const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint;
     [[nodiscard]] auto get_hand_tracking_active(const XrHandEXT hand) const -> bool;
-    [[nodiscard]] auto get_view_in_world       () const -> glm::mat4;
+    [[nodiscard]] auto get_headset_pose        (glm::vec3& position, glm::quat& orientation) const -> bool;
     [[nodiscard]] auto get_xr_instance         () -> Xr_instance&;
     [[nodiscard]] auto get_xr_session          () -> Xr_session&;
 

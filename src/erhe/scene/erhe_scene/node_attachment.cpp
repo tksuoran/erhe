@@ -4,6 +4,21 @@
 
 namespace erhe::scene {
 
+auto Node_attachment::get_static_type() -> uint64_t
+{
+    return erhe::Item_type::node_attachment;
+}
+
+auto Node_attachment::get_type() const -> uint64_t
+{
+    return get_static_type();
+}
+
+auto Node_attachment::get_type_name() const -> std::string_view
+{
+    return static_type_name;
+}
+
 Node_attachment::Node_attachment()                       = default;
 Node_attachment::Node_attachment(const Node_attachment&) = default;
 

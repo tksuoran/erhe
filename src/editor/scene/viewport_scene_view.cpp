@@ -94,51 +94,12 @@ Viewport_scene_view::~Viewport_scene_view() noexcept
     m_context.scene_views->erase(this);
 }
 
-auto Viewport_scene_view::get_override_shader_stages() const -> erhe::graphics::Shader_stages*
-{
-    auto& programs = *m_context.programs;
-    switch (m_shader_stages_variant) {
-        case Shader_stages_variant::error:                    return &programs.error.shader_stages;
-        case Shader_stages_variant::standard:                 return &programs.standard.shader_stages;
-        case Shader_stages_variant::anisotropic_slope:        return &programs.anisotropic_slope.shader_stages;
-        case Shader_stages_variant::anisotropic_engine_ready: return &programs.anisotropic_engine_ready.shader_stages;
-        case Shader_stages_variant::circular_brushed_metal:   return &programs.circular_brushed_metal.shader_stages;
-        case Shader_stages_variant::debug_depth:              return &programs.debug_depth.shader_stages;
-        case Shader_stages_variant::debug_normal:             return &programs.debug_normal.shader_stages;
-        case Shader_stages_variant::debug_tangent:            return &programs.debug_tangent.shader_stages;
-        case Shader_stages_variant::debug_vertex_tangent_w:   return &programs.debug_vertex_tangent_w.shader_stages;
-        case Shader_stages_variant::debug_bitangent:          return &programs.debug_bitangent.shader_stages;
-        case Shader_stages_variant::debug_texcoord:           return &programs.debug_texcoord.shader_stages;
-        case Shader_stages_variant::debug_base_color_texture: return &programs.debug_base_color_texture.shader_stages;
-        case Shader_stages_variant::debug_vertex_color_rgb:   return &programs.debug_vertex_color_rgb.shader_stages;
-        case Shader_stages_variant::debug_vertex_color_alpha: return &programs.debug_vertex_color_alpha.shader_stages;
-        case Shader_stages_variant::debug_aniso_strength:     return &programs.debug_aniso_strength.shader_stages;
-        case Shader_stages_variant::debug_aniso_texcoord:     return &programs.debug_aniso_texcoord.shader_stages;
-        case Shader_stages_variant::debug_vdotn:              return &programs.debug_vdotn.shader_stages;
-        case Shader_stages_variant::debug_ldotn:              return &programs.debug_ldotn.shader_stages;
-        case Shader_stages_variant::debug_hdotv:              return &programs.debug_hdotv.shader_stages;
-        case Shader_stages_variant::debug_joint_indices:      return &programs.debug_joint_indices.shader_stages;
-        case Shader_stages_variant::debug_joint_weights:      return &programs.debug_joint_weights.shader_stages;
-        case Shader_stages_variant::debug_omega_o:            return &programs.debug_omega_o.shader_stages;
-        case Shader_stages_variant::debug_omega_i:            return &programs.debug_omega_i.shader_stages;
-        case Shader_stages_variant::debug_omega_g:            return &programs.debug_omega_g.shader_stages;
-        case Shader_stages_variant::debug_misc:               return &programs.debug_misc.shader_stages;
-        default:                                              return &programs.error.shader_stages;
-    }
-}
-
 void Viewport_scene_view::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& output_viewport = get_producer_output_viewport(
-        erhe::rendergraph::Routing::Resource_provided_by_consumer,
-        erhe::rendergraph::Rendergraph_node_key::viewport
-    );
-    const auto& output_framebuffer = get_producer_output_framebuffer(
-        erhe::rendergraph::Routing::Resource_provided_by_consumer,
-        erhe::rendergraph::Rendergraph_node_key::viewport
-    );
+    const auto& output_viewport = get_producer_output_viewport(erhe::rendergraph::Routing::Resource_provided_by_consumer, erhe::rendergraph::Rendergraph_node_key::viewport);
+    const auto& output_framebuffer = get_producer_output_framebuffer(erhe::rendergraph::Routing::Resource_provided_by_consumer, erhe::rendergraph::Rendergraph_node_key::viewport);
 
     const GLint output_framebuffer_name = output_framebuffer ? output_framebuffer->gl_name() : 0;
 
@@ -148,7 +109,6 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
     bool do_render = scene_root && !m_camera.expired();
-
     const Render_context context{
         .editor_context         = m_context,
         .scene_view             = *this,
@@ -502,7 +462,7 @@ auto Viewport_scene_view::viewport_toolbar() -> bool
     //// TODO Tool_flags::viewport_toolbar
     m_context.selection_tool->viewport_toolbar(hovered);
     m_context.transform_tool->viewport_toolbar(hovered);
-    m_context.grid_tool->viewport_toolbar(hovered);
+    //// m_context.grid_tool->viewport_toolbar(hovered);
     //// TODO m_physics_window.viewport_toolbar(hovered);
 
     const float  rounding        {3.0f};
@@ -618,6 +578,11 @@ void Viewport_scene_view::set_shader_stages_variant(Shader_stages_variant varian
 auto Viewport_scene_view::get_shader_stages_variant() const -> Shader_stages_variant
 {
     return m_shader_stages_variant;
+}
+
+auto Viewport_scene_view::get_override_shader_stages() const -> const erhe::graphics::Shader_stages*
+{
+    return m_context.programs->get_variant_shader_stages(m_shader_stages_variant);
 }
 
 auto Viewport_scene_view::get_closest_point_on_line(const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3>

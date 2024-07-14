@@ -7,6 +7,7 @@
 #include "xr/controller_visualization.hpp"
 #include "xr/headset_view_resources.hpp"
 
+#include "erhe_imgui/imgui_window.hpp"
 #include "erhe_math/simulation_variable.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_xr/headset.hpp"
@@ -84,6 +85,7 @@ class Headset_view
     , public Scene_view
     , public Renderable
     , public Update_fixed_step
+    , public erhe::imgui::Imgui_window
 {
 public:
     class Config
@@ -101,6 +103,8 @@ public:
     Headset_view(
         erhe::commands::Commands&       commands,
         erhe::graphics::Instance&       graphics_instance,
+        erhe::imgui::Imgui_renderer&    imgui_renderer,
+        erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
         Editor_context&                 editor_context,
@@ -120,6 +124,15 @@ public:
     // Implements Update_fixed_step
     void update_fixed_step(const Time_context&) override;
 
+    // Implements Scene_view
+    auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
+    auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
+    auto get_shadow_render_node() const -> Shadow_render_node*                  override;
+    auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
+
+    // Implements Imgui_window
+    void imgui() override;
+
     void add_finger_input(const Finger_point& finger_point);
 
     [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
@@ -129,12 +142,6 @@ public:
     [[nodiscard]] auto get_camera_offset                    () const -> glm::vec3;
 
     void render(const Render_context&);
-
-    // Implements Scene_view
-    auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
-    auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
-    auto get_shadow_render_node() const -> Shadow_render_node*                  override;
-    auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
 
 private:
     [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;
@@ -151,6 +158,7 @@ private:
     Headset_camera_offset_move_command m_offset_y_command;
     Headset_camera_offset_move_command m_offset_z_command;
 
+    Editor_context&                                      m_editor_context;
     erhe::window::Context_window&                        m_context_window;
     std::shared_ptr<Headset_view_node>                   m_rendergraph_node;
     std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;
@@ -158,11 +166,12 @@ private:
     std::unique_ptr<erhe::xr::Headset>                   m_headset;
     std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node
     std::shared_ptr<erhe::scene::Node>                   m_headset_node; // transform set by headset
-    std::shared_ptr<erhe::scene::Node>                   m_camera_node; // possibly offset from m_headset_node
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;
     std::vector<Finger_point>                            m_finger_inputs;
+    Shader_stages_variant                                m_shader_stages_variant{Shader_stages_variant::not_set};
+
     float                                                m_finger_to_viewport_distance_threshold{0.1f};
     bool                                                 m_head_tracking_enabled{true};
     bool                                                 m_mouse_down{false};

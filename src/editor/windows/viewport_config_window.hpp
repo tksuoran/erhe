@@ -29,7 +29,7 @@ public:
         Editor_context&              editor_context
     );
 
-    // Implements Imgui_window                     `
+    // Implements Imgui_window 
     void imgui() override;
 
     // Public API

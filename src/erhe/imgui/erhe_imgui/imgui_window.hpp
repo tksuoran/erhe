@@ -64,12 +64,14 @@ protected:
 
     std::string     m_title;
     Imgui_host*     m_imgui_host  {nullptr};
-    bool            m_is_visible  {true};
     bool            m_is_hovered  {false};
     bool            m_show_in_menu{true};
     std::string     m_ini_label   {};
     float           m_min_size[2]{200.0f, 400.0f};
     float           m_max_size[2]{99999.0f, 99999.0f};
+
+private:
+    bool            m_is_visible  {true};
 };
 
 } // namespace erhe::imgui

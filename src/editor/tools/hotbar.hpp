@@ -68,18 +68,15 @@ class Hotbar
 {
 public:
     Hotbar(
-        erhe::commands::Commands&       commands,
-        erhe::graphics::Instance&       graphics_instance,
-        erhe::imgui::Imgui_renderer&    imgui_renderer,
-        erhe::imgui::Imgui_windows&     imgui_windows,
-        erhe::rendergraph::Rendergraph& rendergraph,
-        Editor_context&                 editor_context,
-        Editor_message_bus&             editor_message_bus,
-        Headset_view&                   headset_view,
-        Icon_set&                       icon_set,
-        Mesh_memory&                    mesh_memory,
-        Scene_builder&                  scene_builder,
-        Tools&                          tools
+        erhe::commands::Commands&    commands,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context,
+        Editor_message_bus&          editor_message_bus,
+        Headset_view&                headset_view,
+        Mesh_memory&                 mesh_memory,
+        Scene_builder&               scene_builder,
+        Tools&                       tools
     );
 
     void get_all_tools();
@@ -90,14 +87,14 @@ public:
     void imgui   () override;
 
     // Public API
-    auto try_call         (erhe::commands::Input_arguments& input) -> bool;
-    auto get_color        (int color) -> glm::vec4&;
-    auto toggle_visibility() -> bool;
-    void set_visibility   (bool value);
-    auto get_position     () const -> glm::vec3;
-    void set_position     (glm::vec3 position);
-    auto get_locked       () const -> bool;
-    void set_locked       (bool value);
+    auto try_call              (erhe::commands::Input_arguments& input) -> bool;
+    auto get_color             (int color) -> glm::vec4&;
+    auto toggle_mesh_visibility() -> bool;
+    void set_mesh_visibility   (bool value);
+    auto get_position          () const -> glm::vec3;
+    void set_position          (glm::vec3 position);
+    auto get_locked            () const -> bool;
+    void set_locked            (bool value);
 
 private:
     void on_message            (Editor_message& message);
@@ -124,6 +121,7 @@ private:
     std::shared_ptr<erhe::scene::Node>              m_radial_menu_node;
     std::shared_ptr<erhe::scene::Mesh>              m_radial_menu_background_mesh;
     std::vector<std::shared_ptr<erhe::scene::Mesh>> m_radial_menu_icons;
+    bool                                            m_mesh_visible{true};
 
     bool  m_enabled   {true};
     bool  m_show      {true};

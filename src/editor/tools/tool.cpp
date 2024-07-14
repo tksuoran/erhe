@@ -1,6 +1,10 @@
 #include "tools/tool.hpp"
 #include "editor_log.hpp"
 #include "editor_message.hpp"
+#include "scene/content_library.hpp"
+#include "scene/scene_root.hpp"
+#include "scene/scene_view.hpp"
+#include "tools/selection_tool.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 
 namespace editor {
@@ -84,6 +88,98 @@ void Tool::set_flags(const uint64_t flags)
 void Tool::set_icon(const glm::vec2 icon)
 {
     m_icon = icon;
+}
+    
+auto Tool::get_scene_root() const -> std::shared_ptr<Scene_root>
+{
+    auto* scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return {};
+    }
+    return scene_view->get_scene_root();
+}
+
+auto Tool::get_content_library() const -> std::shared_ptr<Content_library>
+{
+    const auto& scene_root = get_scene_root();
+    if (!scene_root) {
+        return {};
+    }
+    return scene_root->content_library();
+}
+
+auto Tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>
+{
+    const std::shared_ptr<Content_library>& content_library = get_content_library();
+    if (!content_library) {
+        return {};
+    }
+    std::shared_ptr<erhe::primitive::Material> material = m_context.selection->get_last_selected<erhe::primitive::Material>();
+    if (!material) {
+        content_library->materials->for_each<Content_library_node>(
+            [&material](const Content_library_node& node) {
+                auto entry = std::dynamic_pointer_cast<erhe::primitive::Material>(node.item);
+                if (entry) {
+                    material = entry;
+                    return false;
+                }
+                return true;
+            }
+        );
+    }
+    return material;
+}
+
+// If Node is currently selected, returns it.
+// If Node_attachment is currently selected and it has owner node, returns the owner node.
+// If a Node was selected, and it still exists, return it
+// If Node_attachemnt was selected, and it still exists, and it has owner node, returns the owner node.
+auto Tool::get_node() const -> std::shared_ptr<erhe::scene::Node>
+{
+    Selection* selection = m_context.selection;
+    {
+        std::shared_ptr<erhe::scene::Node> node = selection->get<erhe::scene::Node>();
+        if (node) {
+            return node;
+        }
+    }
+
+    {
+        std::shared_ptr<erhe::scene::Node_attachment> attachment = selection->get<erhe::scene::Node_attachment>();
+        if (attachment) {
+            erhe::scene::Node* node = attachment->get_node();
+            if (node != nullptr) {
+                std::shared_ptr<erhe::Item_base> item = node->shared_from_this();
+                std::shared_ptr<erhe::scene::Node> shared_node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                if (shared_node) {
+                    return shared_node;
+                }
+            }
+        }
+    }
+
+    {
+        std::shared_ptr<erhe::scene::Node> node = selection->get_last_selected<erhe::scene::Node>();
+        if (node) {
+            return node;
+        }
+    }
+
+    {
+        std::shared_ptr<erhe::scene::Node_attachment> attachment = selection->get_last_selected<erhe::scene::Node_attachment>();
+        if (attachment) {
+            erhe::scene::Node* node = attachment->get_node();
+            if (node != nullptr) {
+                std::shared_ptr<erhe::Item_base> item = node->shared_from_this();
+                std::shared_ptr<erhe::scene::Node> shared_node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                if (shared_node) {
+                    return shared_node;
+                }
+            }
+        }
+    }
+
+    return {};
 }
 
 } // namespace editor

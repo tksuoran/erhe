@@ -26,8 +26,12 @@ public:
     virtual ~Node_attachment() noexcept;
 
     // Implements Item_base
+    static constexpr std::string_view static_type_name{"Node_attachment"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
     auto get_item_host() const -> erhe::Item_host* override;
-
+    
     // Public API
     virtual auto clone_attachment() const -> std::shared_ptr<Node_attachment>;
 

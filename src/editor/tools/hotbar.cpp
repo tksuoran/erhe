@@ -21,6 +21,7 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_item/item.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -89,7 +90,7 @@ Toggle_menu_visibility_command::Toggle_menu_visibility_command(erhe::commands::C
 
 auto Toggle_menu_visibility_command::try_call() -> bool
 {
-    m_context.hotbar->toggle_visibility();
+    m_context.hotbar->toggle_mesh_visibility();
     return true;
 }
 
@@ -106,18 +107,15 @@ auto Hotbar_trackpad_command::try_call_with_input(erhe::commands::Input_argument
 #pragma endregion Commands
 
 Hotbar::Hotbar(
-    erhe::commands::Commands&       commands,
-    erhe::graphics::Instance&       graphics_instance,
-    erhe::imgui::Imgui_renderer&    imgui_renderer,
-    erhe::imgui::Imgui_windows&     imgui_windows,
-    erhe::rendergraph::Rendergraph& rendergraph,
-    Editor_context&                 editor_context,
-    Editor_message_bus&             editor_message_bus,
-    Headset_view&                   headset_view,
-    Icon_set&                       icon_set,
-    Mesh_memory&                    mesh_memory,
-    Scene_builder&                  scene_builder,
-    Tools&                          tools
+    erhe::commands::Commands&    commands,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context,
+    Editor_message_bus&          editor_message_bus,
+    Headset_view&                headset_view,
+    Mesh_memory&                 mesh_memory,
+    Scene_builder&               scene_builder,
+    Tools&                       tools
 )
     : erhe::imgui::Imgui_window  {imgui_renderer, imgui_windows, "Hotbar", ""}
     , Tool                       {editor_context}
@@ -127,9 +125,6 @@ Hotbar::Hotbar(
     , m_trackpad_click_command   {commands, m_trackpad_command}
 #endif
 {
-    static_cast<void>(icon_set);
-    static_cast<void>(rendergraph);
-    static_cast<void>(graphics_instance);
     auto ini = erhe::configuration::get_ini("erhe.ini", "hotbar");
     ini->get("enabled",    m_enabled);
     ini->get("show",       m_show);
@@ -143,9 +138,9 @@ Hotbar::Hotbar(
         return;
     }
 
-    commands.register_command   (&m_toggle_visibility_command);
-    commands.bind_command_to_key(&m_toggle_visibility_command, erhe::window::Key_space, true);
-    commands.bind_command_to_menu(&m_toggle_visibility_command, "View.Hotbar", [&]() -> bool { return m_is_visible; });
+    commands.register_command    (&m_toggle_visibility_command);
+    commands.bind_command_to_key (&m_toggle_visibility_command, erhe::window::Key_space, true);
+    commands.bind_command_to_menu(&m_toggle_visibility_command, "View.Hotbar", [&]() -> bool { return m_mesh_visible; });
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     commands.register_command(&m_trackpad_command);
@@ -165,7 +160,7 @@ Hotbar::Hotbar(
     set_flags      (Tool_flags::background);
     tools.register_tool(this);
 
-    set_visibility(m_show);
+    set_mesh_visibility(m_show);
 
     auto* scene_root_ptr = scene_builder.get_scene_root().get();
     auto& scene_root = *scene_root_ptr;
@@ -231,7 +226,15 @@ void Hotbar::init_hotbar()
     style.MouseCursorScale = 2.0f;
 
     this->Hotbar::set_imgui_host(m_rendertarget_imgui_host.get());
+
+    if (m_context.developer_mode) {
+        m_rendertarget_mesh->enable_flag_bits(erhe::Item_flags::show_in_ui);
+        m_rendertarget_node->enable_flag_bits(erhe::Item_flags::show_in_ui);
+    }
+
+    set_mesh_visibility(m_show);
 }
+
 void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
 {
     const float outer_radius = 1.0f;
@@ -576,7 +579,7 @@ void Hotbar::imgui()
 #endif
 }
 
-auto Hotbar::toggle_visibility() -> bool
+auto Hotbar::toggle_mesh_visibility() -> bool
 {
     if (!m_enabled) {
         return false;
@@ -584,11 +587,11 @@ auto Hotbar::toggle_visibility() -> bool
 
     update_node_transform();
 
-    set_visibility(!m_is_visible);
-    return m_is_visible;
+    set_visibility(!m_mesh_visible);
+    return m_mesh_visible;
 }
 
-void Hotbar::set_visibility(const bool value)
+void Hotbar::set_mesh_visibility(const bool value)
 {
     Imgui_window::set_visibility(value);
 

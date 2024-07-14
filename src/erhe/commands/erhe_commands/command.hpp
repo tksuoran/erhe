@@ -110,12 +110,7 @@ class Drag_enable_float_command
     , public Command_host
 {
 public:
-    Drag_enable_float_command(
-        Commands& commands,
-        Command&  update_command,
-        float     min_to_enable,
-        float     max_to_disable
-    );
+    Drag_enable_float_command(Commands& commands, Command& update_command, float min_to_enable, float max_to_disable);
 
     auto try_call_with_input(Input_arguments& input) -> bool override;
 

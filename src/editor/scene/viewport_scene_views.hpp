@@ -59,11 +59,7 @@ private:
 class Scene_views : erhe::commands::Command_host
 {
 public:
-    Scene_views(
-        erhe::commands::Commands& commands,
-        Editor_context&           editor_context,
-        Editor_message_bus&       editor_message_bus
-    );
+    Scene_views(erhe::commands::Commands& commands, Editor_context& editor_context, Editor_message_bus& editor_message_bus);
 
     // Public API
 

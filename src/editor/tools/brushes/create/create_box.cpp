@@ -29,7 +29,7 @@ void Create_box::render_preview(const Create_preview_settings& preview_settings)
         preview_settings.transform.get_matrix(),
         preview_settings.major_color,
         -0.5f * m_size,
-            0.5f * m_size
+         0.5f * m_size
     );
 }
 
@@ -47,11 +47,7 @@ void Create_box::imgui()
 auto Create_box::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
     brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::shapes::make_box(
-            m_size,
-            m_steps,
-            m_power
-        )
+        erhe::geometry::shapes::make_box(m_size, m_steps, m_power)
     );
 
     //brush_create_info.geometry->transform(erhe::math::mat4_swap_xy);

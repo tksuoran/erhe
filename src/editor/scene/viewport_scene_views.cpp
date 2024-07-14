@@ -6,6 +6,7 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "editor_settings.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
@@ -393,6 +394,10 @@ void Scene_views::open_new_viewport_scene_view_node()
 
 void Scene_views::debug_imgui()
 {
+    if (m_hover_scene_view) {
+        const bool hovered = m_hover_scene_view->viewport_toolbar();
+        static_cast<void>(hovered);
+    }
     ImGui::TextUnformatted("Window hover stack:");
     for (auto& i : m_hover_stack) {
         auto window = i.lock();

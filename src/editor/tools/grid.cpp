@@ -38,6 +38,9 @@ auto Grid::get_type_name() const -> std::string_view
 
 auto Grid::snap_world_position(const glm::vec3& position_in_world) const -> glm::vec3
 {
+    if (!m_snap_enabled) {
+        return position_in_world;
+    }
     const float     snap_size        = m_cell_size / m_cell_div;
     const glm::vec3 position_in_grid = glm::vec3{grid_from_world() * glm::vec4{position_in_world, 1.0}};
     const glm::vec3 snapped_position_in_grid{
@@ -53,6 +56,10 @@ auto Grid::snap_world_position(const glm::vec3& position_in_world) const -> glm:
 
 auto Grid::snap_grid_position(const glm::vec3& position_in_grid) const -> glm::vec3
 {
+    if (!m_snap_enabled) {
+        return position_in_grid;
+    }
+
     const float     snap_size        = m_cell_size / m_cell_div;
     const glm::vec3 snapped_position_in_grid{
         std::floor((position_in_grid.x + snap_size * 0.5f) / snap_size) * snap_size,
@@ -162,10 +169,13 @@ void Grid::imgui(Editor_context& context)
 {
     ImGui::InputText  ("Name",             &m_name);
     ImGui::Separator();
-    bool enable = is_visible();
-    if (ImGui::Checkbox("Enable", &enable)) {
-        set_visible(enable);
+    bool visible = is_visible();
+    if (ImGui::Checkbox("Visible", &visible)) {
+        set_visible(visible);
     }
+    
+    ImGui::Checkbox   ("Intersect enable", &m_intersect_enable);
+    ImGui::Checkbox   ("Snap enable",      &m_snap_enabled);
     ImGui::Checkbox   ("See Major Hidden", &m_see_hidden_major);
     ImGui::Checkbox   ("See Minor Hidden", &m_see_hidden_minor);
     ImGui::SliderFloat("Cell Size",        &m_cell_size,       0.0f, 10.0f);
@@ -176,31 +186,12 @@ void Grid::imgui(Editor_context& context)
     ImGui::ColorEdit4 ("Major Color",      &m_major_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Minor Color",      &m_minor_color.x, ImGuiColorEditFlags_Float);
 
-    erhe::imgui::make_combo(
-        "Plane",
-        m_plane_type,
-        grid_plane_type_strings,
-        IM_ARRAYSIZE(grid_plane_type_strings)
-    );
+    erhe::imgui::make_combo("Plane", m_plane_type, grid_plane_type_strings, IM_ARRAYSIZE(grid_plane_type_strings));
     if (m_plane_type != Grid_plane_type::Node) {
-        ImGui::DragScalarN(
-            "Offset",
-            ImGuiDataType_Float,
-            &m_center.x,
-            3,
-            0.01f
-        );
+        ImGui::DragScalarN("Offset", ImGuiDataType_Float, &m_center.x, 3, 0.01f);
         const float min_rotation = -180.0;
         const float max_rotation =  180.0;
-        ImGui::DragScalarN(
-            "Rotation",
-            ImGuiDataType_Float,
-            &m_rotation,
-            1,
-            0.05f,
-            &min_rotation,
-            &max_rotation
-        );
+        ImGui::DragScalarN("Rotation", ImGuiDataType_Float, &m_rotation, 1, 0.05f, &min_rotation, &max_rotation);
 
         const float     radians      = glm::radians(m_rotation);
         const glm::mat4 orientation  = get_plane_transform(m_plane_type);
@@ -235,7 +226,7 @@ void Grid::imgui(Editor_context& context)
 
 auto Grid::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>
 {
-    if (!is_visible()) {
+    if (!m_intersect_enable) {
         return {};
     }
 

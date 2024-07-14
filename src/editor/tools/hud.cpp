@@ -82,7 +82,7 @@ Toggle_hud_visibility_command::Toggle_hud_visibility_command(erhe::commands::Com
 
 auto Toggle_hud_visibility_command::try_call() -> bool
 {
-    m_context.hud->toggle_visibility();
+    m_context.hud->toggle_mesh_visibility();
     return true;
 }
 #pragma endregion Commands
@@ -112,20 +112,17 @@ Hud::Hud(
     , m_drag_bool_enable_command          {commands, m_drag_bool_redirect_update_command}
 #endif
 {
+    int   width {1024};
+    int   height{1024};
+    float ppm   {5000.0f};
     auto ini = erhe::configuration::get_ini("erhe.ini", "hud");
-    ini->get("enabled", config.enabled);
-    ini->get("locked",  config.locked);
-    ini->get("width",   config.width);
-    ini->get("height",  config.height);
-    ini->get("ppm",     config.ppm);
-    ini->get("x",       config.x);
-    ini->get("y",       config.y);
-    ini->get("z",       config.z);
-
-    m_enabled = config.enabled;
-    m_x       = config.x;
-    m_y       = config.y;
-    m_z       = config.z;
+    ini->get("enabled", m_enabled);
+    ini->get("width",   width);
+    ini->get("height",  height);
+    ini->get("ppm",     ppm);
+    ini->get("x",       m_x);
+    ini->get("y",       m_y);
+    ini->get("z",       m_z);
 
     if (!m_enabled) {
         hide();
@@ -155,20 +152,14 @@ Hud::Hud(
     static_cast<void>(headset_view);
 #endif
 
-    m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
-        graphics_instance,
-        mesh_memory,
-        config.width,
-        config.height,
-        config.ppm
-    );
+    m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(graphics_instance, mesh_memory, width, height, ppm);
     auto scene_root = scene_builder.get_scene_root();
     m_rendertarget_mesh->layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::visible      |
         erhe::Item_flags::translucent  |
-        erhe::Item_flags::show_in_ui
+        (editor_context.developer_mode ? erhe::Item_flags::show_in_ui : 0)
     );
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
@@ -177,7 +168,7 @@ Hud::Hud(
     m_rendertarget_node->enable_flag_bits(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::visible      |
-        erhe::Item_flags::show_in_ui
+        (editor_context.developer_mode ? erhe::Item_flags::show_in_ui : 0)
     );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_host>(
@@ -197,7 +188,7 @@ Hud::Hud(
 
     imgui_renderer.register_imgui_host(m_rendertarget_imgui_viewport.get());
 
-    set_visibility(m_is_visible);
+    set_mesh_visibility(true);
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
@@ -322,16 +313,6 @@ void Hud::end_drag()
 void Hud::on_message(Editor_message& message)
 {
     Tool::on_message(message);
-
-    if (m_locked_to_head) {
-        using namespace erhe::bit;
-        if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
-            const auto& world_from_control_opt = message.scene_view->get_world_from_control();
-            if (world_from_control_opt.has_value()) {
-                update_node_transform(world_from_control_opt.value());
-            }
-        }
-    }
 }
 
 void Hud::update_node_transform(const glm::mat4& world_from_hud)
@@ -352,8 +333,7 @@ void Hud::tool_render(const Render_context&)
 
 void Hud::imgui()
 {
-    ImGui::Checkbox("Locked to Head", &m_locked_to_head);
-    ImGui::Checkbox("Visible",        &m_is_visible);
+    ImGui::Checkbox("Mesh visible", &m_mesh_visible);
 
     const bool x_changed = ImGui::DragFloat("X", &m_x, 0.0001f);
     const bool y_changed = ImGui::DragFloat("Y", &m_y, 0.0001f);
@@ -363,27 +343,25 @@ void Hud::imgui()
     }
 }
 
-auto Hud::toggle_visibility() -> bool
+auto Hud::toggle_mesh_visibility() -> bool
 {
     if (!m_enabled) {
         return false;
     }
 
-    set_visibility(!m_is_visible);
-    return m_is_visible;
+    set_mesh_visibility(!m_mesh_visible);
+    return m_mesh_visible;
 }
 
-void Hud::set_visibility(const bool value)
+void Hud::set_mesh_visibility(const bool value)
 {
-    if (!m_enabled) {
+    if (!m_enabled || !m_rendertarget_mesh) {
         return;
     }
 
-    m_is_visible = value;
+    Imgui_window::set_visibility(value);
 
-    if (!m_rendertarget_mesh) {
-        return;
-    }
+    m_mesh_visible = value;
 
     Scene_view* hover_scene_view = get_hover_scene_view();
     if (hover_scene_view != nullptr) {
@@ -393,8 +371,8 @@ void Hud::set_visibility(const bool value)
         }
     }
 
-    m_rendertarget_imgui_viewport->set_enabled(m_is_visible);
-    m_rendertarget_node->set_visible(m_is_visible);
+    m_rendertarget_imgui_viewport->set_enabled(m_mesh_visible);
+    m_rendertarget_node->set_visible(m_mesh_visible);
 }
 
 } // namespace editor

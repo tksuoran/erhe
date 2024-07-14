@@ -87,7 +87,7 @@ auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
         return {};
     }
     Scene_root* scene_root = static_cast<Scene_root*>(item_host);
-
+    ERHE_VERIFY(scene_root != nullptr);
     const auto parent = selected_node
         ? selected_node
         : scene_root->get_hosted_scene()->get_root_node();
@@ -134,7 +134,7 @@ void Create::imgui()
     brush_create_button("Torus",     &m_create_torus);
     brush_create_button("Box",       &m_create_box);
 
-    auto material = m_context.selection->get<erhe::primitive::Material>();
+    auto material = get_material();
 
     if ((m_create_shape != nullptr) && material) {
         m_create_shape->imgui();

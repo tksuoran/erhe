@@ -39,26 +39,30 @@ Grid_tool::Grid_tool(
     tools.register_tool(this);
 
     auto ini = erhe::configuration::get_ini("erhe.ini", "grid");
-    ini->get("enabled",     config.enabled);
-    ini->get("major_color", config.major_color);
-    ini->get("minor_color", config.minor_color);
-    ini->get("major_width", config.major_width);
-    ini->get("minor_width", config.minor_width);
-    ini->get("cell_size",   config.cell_size);
-    ini->get("cell_div",    config.cell_div);
-    ini->get("cell_count",  config.cell_count);
+    bool initial_snap_enable{true};
+    bool initial_grid_visible{true};
+    ini->get("snap_enabled", initial_snap_enable);
+    ini->get("visible",      initial_grid_visible);
+    ini->get("major_color",  config.major_color);
+    ini->get("minor_color",  config.minor_color);
+    ini->get("major_width",  config.major_width);
+    ini->get("minor_width",  config.minor_width);
+    ini->get("cell_size",    config.cell_size);
+    ini->get("cell_div",     config.cell_div);
+    ini->get("cell_count",   config.cell_count);
 
     std::shared_ptr<Grid> grid = std::make_shared<Grid>();
     // TODO Move config to editor ?
     // grid->name        = "Default Grid";
-    grid->set_visible    (config.enabled);
-    grid->set_cell_size  (config.cell_size);
-    grid->set_cell_div   (config.cell_div);
-    grid->set_cell_count (config.cell_count);
-    grid->set_major_color(config.major_color);
-    grid->set_minor_color(config.minor_color);
-    grid->set_major_width(config.major_width);
-    grid->set_minor_width(config.minor_width);
+    grid->set_visible     (initial_grid_visible);
+    grid->set_snap_enabled(initial_snap_enable);
+    grid->set_cell_size   (config.cell_size);
+    grid->set_cell_div    (config.cell_div);
+    grid->set_cell_count  (config.cell_count);
+    grid->set_major_color (config.major_color);
+    grid->set_minor_color (config.minor_color);
+    grid->set_major_width (config.major_width);
+    grid->set_minor_width (config.minor_width);
 
     m_grids.push_back(grid);
 }
@@ -67,38 +71,34 @@ void Grid_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_enable) {
-        return;
-    }
-
     for (const auto& grid : m_grids) {
         grid->render(context);
     }
 }
 
-void Grid_tool::viewport_toolbar(bool& hovered)
-{
-    ImGui::SameLine();
-
-    const bool grid_pressed = erhe::imgui::make_button(
-        "G",
-        (m_enable)
-            ? erhe::imgui::Item_mode::active
-            : erhe::imgui::Item_mode::normal
-    );
-    if (ImGui::IsItemHovered()) {
-        hovered = true;
-        ImGui::SetTooltip(
-            m_enable
-                ? "Toggle all grids on -> off"
-                : "Toggle all grids off -> on"
-        );
-    };
-
-    if (grid_pressed) {
-        m_enable = !m_enable;
-    }
-}
+//void Grid_tool::viewport_toolbar(bool& hovered)
+//{
+//    ImGui::SameLine();
+//
+//    const bool grid_pressed = erhe::imgui::make_button(
+//        "G",
+//        (m_enable)
+//            ? erhe::imgui::Item_mode::active
+//            : erhe::imgui::Item_mode::normal
+//    );
+//    if (ImGui::IsItemHovered()) {
+//        hovered = true;
+//        ImGui::SetTooltip(
+//            m_enable
+//                ? "Toggle all grids on -> off"
+//                : "Toggle all grids off -> on"
+//        );
+//    };
+//
+//    if (grid_pressed) {
+//        m_enable = !m_enable;
+//    }
+//}
 
 auto get_plane_transform(const Grid_plane_type plane_type) -> glm::mat4
 {
@@ -133,7 +133,7 @@ void Grid_tool::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    ImGui::Checkbox("Enable All", &m_enable);
+    //ImGui::Checkbox("Enable All", &m_enable);
 
     ImGui::NewLine();
 
@@ -141,12 +141,7 @@ void Grid_tool::imgui()
     for (auto& grid : m_grids) {
         grid_names.push_back(grid->get_name().c_str());
     }
-    ImGui::Combo(
-        "Grid",
-        &m_grid_index,
-        grid_names.data(),
-        static_cast<int>(grid_names.size())
-    );
+    ImGui::Combo("Grid", &m_grid_index, grid_names.data(), static_cast<int>(grid_names.size()));
     ImGui::NewLine();
 
     if (!m_grids.empty()) {
@@ -178,9 +173,9 @@ auto Grid_tool::update_hover(const glm::vec3 ray_origin_in_world, const glm::vec
     };
     float min_distance = std::numeric_limits<float>::max();
 
-    if (!m_enable) {
-        return result;
-    }
+    //if (!m_enable) {
+    //    return result;
+    //}
 
     for (auto& grid : m_grids) {
         const auto position_in_world_opt = grid->intersect_ray(ray_origin_in_world, ray_direction_in_world);
