@@ -60,7 +60,7 @@ public:
     [[nodiscard]] auto is_mouse_captured () const -> bool;
     [[nodiscard]] auto get_glfw_window   () const -> GLFWwindow*;
     [[nodiscard]] auto get_input_events  () -> std::vector<Input_event>&;
-    [[nodiscard]] void clear_input_events();
+    void clear_input_events();
 
     auto open                       (const Window_configuration& configuration) -> bool;
     void request_close              ();

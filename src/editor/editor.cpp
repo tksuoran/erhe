@@ -385,7 +385,9 @@ public:
             m_log_settings_window.set_developer();
             m_performance_window.set_developer();
             m_pipelines.set_developer();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
             m_theremin.set_developer();
+#endif
             m_layers_window.set_developer();
             m_network_window.set_developer();
             m_post_processing_window.set_developer();

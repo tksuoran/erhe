@@ -125,7 +125,10 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 on_event(
                     erhe::window::Mouse_move_event{
                         .x = position.x,
-                        .y = position.y
+                        .y = position.y,
+                        .dx = 0, // TODO dx and dy?
+                        .dy = 0,
+                        .modifier_mask = 0 // TODO is this needed?
                     }
                 );
             }
@@ -147,7 +150,10 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 on_event(
                     erhe::window::Mouse_move_event{
                         .x = -FLT_MAX,
-                        .y = -FLT_MAX
+                        .y = -FLT_MAX,
+                        .dx = 0,
+                        .dy = 0,
+                        .modifier_mask = 0
                     }
                 );
             }

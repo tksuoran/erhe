@@ -3,18 +3,21 @@
 namespace editor {
 
 Headset_view::Headset_view(
-    erhe::commands::Commands&       commands,
-    erhe::graphics::Instance&       graphics_instance,
-    erhe::rendergraph::Rendergraph& rendergraph,
-    erhe::window::Context_window&   context_window,
-    Editor_context&                 editor_context,
-    Editor_rendering&               editor_rendering,
-    Editor_settings&                editor_settings,
-    Mesh_memory&                    mesh_memory,
-    Scene_builder&                  scene_builder,
-    Time&                           time
+        erhe::commands::Commands&       commands,
+        erhe::graphics::Instance&       graphics_instance,
+        erhe::imgui::Imgui_renderer&    imgui_renderer,
+        erhe::imgui::Imgui_windows&     imgui_windows,
+        erhe::rendergraph::Rendergraph& rendergraph,
+        erhe::window::Context_window&   context_window,
+        Editor_context&                 editor_context,
+        Editor_rendering&               editor_rendering,
+        Editor_settings&                editor_settings,
+        Mesh_memory&                    mesh_memory,
+        Scene_builder&                  scene_builder,
+        Time&                           time
 )
     : Scene_view{editor_context, Viewport_config{}}
+    , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset"}
 {
     static_cast<void>(commands);
     static_cast<void>(graphics_instance);

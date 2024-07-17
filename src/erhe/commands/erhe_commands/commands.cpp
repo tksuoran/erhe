@@ -653,6 +653,7 @@ auto Commands::on_event(const erhe::window::Controller_button_event& controller_
     m_last_modifier_mask = controller_button_event.modifier_mask;
 
     Input_arguments input{
+        .modifier_mask = 0,
         .variant = {
             .button_pressed = controller_button_event.value
         }

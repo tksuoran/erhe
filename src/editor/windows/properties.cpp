@@ -346,10 +346,10 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
     }
     ImGui::Indent(indent);
 
-    ImGui::Text("Fill Triangles: %d",  buffer_mesh->triangle_fill_indices.get_triangle_count());
-    ImGui::Text("Edge Lines: %d",      buffer_mesh->edge_line_indices.get_line_count());
-    ImGui::Text("Corner Points: %d",   buffer_mesh->corner_point_indices.get_point_count());
-    ImGui::Text("Centroid Points: %d", buffer_mesh->polygon_centroid_indices.get_point_count());
+    ImGui::Text("Fill Triangles: %zu",  buffer_mesh->triangle_fill_indices.get_triangle_count());
+    ImGui::Text("Edge Lines: %zu",      buffer_mesh->edge_line_indices.get_line_count());
+    ImGui::Text("Corner Points: %zu",   buffer_mesh->corner_point_indices.get_point_count());
+    ImGui::Text("Centroid Points: %zu", buffer_mesh->polygon_centroid_indices.get_point_count());
 
     ImGui::Text("Vertices: %zu",     buffer_mesh->vertex_buffer_range.count);
     ImGui::Text("Indices: %zu",      buffer_mesh->index_buffer_range.count);
