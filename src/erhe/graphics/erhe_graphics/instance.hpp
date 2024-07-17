@@ -120,9 +120,6 @@ public:
         bool reverse_depth  {true};  // TODO move to editor
         bool post_processing{true};  // TODO move to editor
         bool use_time_query {true};
-        //bool force_no_bindless          {false}; // TODO move to erhe::graphics
-        //bool force_no_persistent_buffers{false}; // TODO move to erhe::graphics
-        //bool initial_clear              {true};
         //int  msaa_sample_count          {4};     // TODO move to editor
     };
 

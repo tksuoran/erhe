@@ -19,11 +19,7 @@
 namespace editor
 {
 
-Physics_window::Physics_window(
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
-)
+Physics_window::Physics_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Physics", "physics"}
     , m_context                {editor_context}
 {
@@ -36,18 +32,11 @@ void Physics_window::viewport_toolbar(bool& hovered)
     bool physics_enabled = m_context.editor_settings->physics.dynamic_enable;
 
     ImGui::SameLine();
-    const bool pressed = erhe::imgui::make_button(
-        "P",
-        (physics_enabled)
-            ? erhe::imgui::Item_mode::active
-            : erhe::imgui::Item_mode::normal
-    );
+    const bool pressed = erhe::imgui::make_button("P", (physics_enabled) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
     if (ImGui::IsItemHovered()) {
         hovered = true;
         ImGui::SetTooltip(
-            physics_enabled
-                ? "Toggle physics on -> off"
-                : "Toggle physics off -> on"
+            physics_enabled ? "Toggle physics on -> off" : "Toggle physics off -> on"
         );
     };
 
@@ -72,9 +61,13 @@ void Physics_window::imgui()
         }
     }
 
+    if (!m_context.developer_mode) {
+        return;
+    }
+
     const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {
-        if (!ImGui::TreeNodeEx(scene_root->get_name().c_str(), ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (!ImGui::TreeNodeEx(scene_root->get_name().c_str())) {
             continue;
         }
 

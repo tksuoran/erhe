@@ -35,10 +35,7 @@ void Rendergraph::sort()
     while (!unsorted_nodes.empty()) {
         bool found_node{false};
         for (const auto& node : unsorted_nodes) {
-            SPDLOG_LOGGER_TRACE(
-                log_frame,
-                "Sort: Considering node '{}'", node->get_name()
-            );
+            SPDLOG_LOGGER_TRACE(log_frame, "Sort: Considering node '{}'", node->get_name());
             {
                 bool any_missing_dependency{false};
                 for (const Rendergraph_consumer_connector& input : node->get_inputs()) {
@@ -70,11 +67,7 @@ void Rendergraph::sort()
                 }
             }
 
-            SPDLOG_LOGGER_TRACE(
-                log_frame,
-                "Sort: Selected node '{}' - all dependencies are met",
-                node->get_name()
-            );
+            SPDLOG_LOGGER_TRACE(log_frame, "Sort: Selected node '{}' - all dependencies are met", node->get_name());
             found_node = true;
 
             // Add selected node to sorted nodes
@@ -93,9 +86,7 @@ void Rendergraph::sort()
         }
 
         if (!found_node) {
-            log_frame->error(
-                "No render graph node with met dependencies found. Graph is not acyclic:"
-            );
+            log_frame->error("No render graph node with met dependencies found. Graph is not acyclic:");
             for (auto* node : m_nodes) {
                 log_frame->info("    Node: {}", node->get_name());
                 for (const Rendergraph_consumer_connector& input : node->get_inputs()) {

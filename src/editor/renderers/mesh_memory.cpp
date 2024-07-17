@@ -23,10 +23,7 @@ auto Mesh_memory::get_index_buffer_size() const -> std::size_t
     return index_buffer_size * 1024 * 1024;
 }
 
-Mesh_memory::Mesh_memory(
-    erhe::graphics::Instance&                graphics_instance,
-    erhe::scene_renderer::Program_interface& program_interface
-)
+Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface)
     : graphics_instance{graphics_instance}
     , vertex_format{
         erhe::graphics::Vertex_attribute::position_float3(),
@@ -37,25 +34,12 @@ Mesh_memory::Mesh_memory(
         erhe::graphics::Vertex_attribute::color_ubyte4(),
         erhe::graphics::Vertex_attribute::aniso_control_ubyte2(),
         erhe::graphics::Vertex_attribute::joint_indices0_ubyte4(),
-        erhe::graphics::Vertex_attribute::joint_weights0_float4()
+        erhe::graphics::Vertex_attribute::joint_weights0_float4(),
+        erhe::graphics::Vertex_attribute::vertex_valency()
     }
-    , gl_vertex_buffer{
-        graphics_instance,
-        gl::Buffer_target::array_buffer,
-        get_vertex_buffer_size(),
-        storage_mask
-    }
-    , gl_index_buffer{
-        graphics_instance,
-        gl::Buffer_target::element_array_buffer,
-        get_index_buffer_size(),
-        storage_mask
-    }
-    , gl_buffer_sink{
-        gl_buffer_transfer_queue,
-        gl_vertex_buffer,
-        gl_index_buffer
-    }
+    , gl_vertex_buffer{graphics_instance, gl::Buffer_target::array_buffer, get_vertex_buffer_size(), storage_mask}
+    , gl_index_buffer{graphics_instance, gl::Buffer_target::element_array_buffer, get_index_buffer_size(), storage_mask}
+    , gl_buffer_sink{gl_buffer_transfer_queue, gl_vertex_buffer, gl_index_buffer}
     , buffer_info{
         .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
         .vertex_format = vertex_format,
@@ -77,12 +61,7 @@ Mesh_memory::Mesh_memory(
     //    .
     //}
     , vertex_input{
-        erhe::graphics::Vertex_input_state_data::make(
-            program_interface.attribute_mappings,
-            vertex_format,
-            &gl_vertex_buffer,
-            &gl_index_buffer
-        )
+        erhe::graphics::Vertex_input_state_data::make(program_interface.attribute_mappings, vertex_format, &gl_vertex_buffer, &gl_index_buffer)
     }
 {
     gl_vertex_buffer.set_debug_label("Mesh Memory Vertex");

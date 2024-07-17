@@ -93,7 +93,8 @@ auto Node_transform_operation::describe() const -> std::string
         perspective_after
     );
     return fmt::format(
-        "Trs_transform {} translate before = {}, translate after = {}",
+        "[{}] Trs_transform {} translate before = {}, translate after = {}",
+        get_serial(),
         m_parameters.node->get_name(),
         translation_before,
         translation_after

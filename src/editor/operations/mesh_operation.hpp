@@ -27,7 +27,7 @@ public:
     erhe::primitive::Build_info build_info;
 };
 
-class Mesh_operation : public IOperation
+class Mesh_operation : public Operation
 {
 protected:
     class Entry
@@ -48,8 +48,8 @@ protected:
     explicit Mesh_operation(Mesh_operation_parameters&& parameters);
     ~Mesh_operation() noexcept override;
 
-    // Implements IOperation
-    auto describe() const -> std::string override;
+    // Implements Operation
+    auto describe() const -> std::string   override;
     void execute (Editor_context& context) override;
     void undo    (Editor_context& context) override;
 

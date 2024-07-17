@@ -16,11 +16,7 @@ class Editor_context;
 class Rendergraph_window : public erhe::imgui::Imgui_window
 {
 public:
-    Rendergraph_window(
-        erhe::imgui::Imgui_renderer& imgui_renderer,
-        erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context
-    );
+    Rendergraph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context);
     ~Rendergraph_window() noexcept override;
 
     // Implements Imgui_window

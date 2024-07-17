@@ -48,23 +48,28 @@ void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
             }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Developer")) {
-            if (m_context.renderdoc) {
+        if (m_context.developer_mode) {
+            if (ImGui::BeginMenu("Developer")) {
+                m_context.imgui_windows->window_menu_entries(imgui_host, true);
+                ImGui::Separator();
+
+                if (m_context.renderdoc) {
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-                if (m_context.OpenXR && m_context.headset_view->is_active()) {
-                    if (ImGui::MenuItem("Make OpenXR RenderDoc Capture")) {
-                        m_context.editor_rendering->request_renderdoc_capture();
+                    if (m_context.OpenXR && m_context.headset_view->is_active()) {
+                        if (ImGui::MenuItem("Make OpenXR RenderDoc Capture")) {
+                            m_context.editor_rendering->request_renderdoc_capture();
+                        }
                     }
-                }
-                else
+                    else
 #endif
-                {
-                    if (ImGui::MenuItem("Make RenderDoc Capture")) {
-                        m_context.editor_rendering->trigger_capture();
+                    {
+                        if (ImGui::MenuItem("Make RenderDoc Capture")) {
+                            m_context.editor_rendering->trigger_capture();
+                        }
                     }
                 }
+                ImGui::EndMenu();
             }
-            ImGui::EndMenu();
         }
 
         const auto& menu_bindings = m_context.commands->get_menu_bindings();
@@ -115,7 +120,7 @@ void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
         }
 
         if (ImGui::BeginMenu("Window")) {
-            m_context.imgui_windows->window_menu_entries(imgui_host);
+            m_context.imgui_windows->window_menu_entries(imgui_host, false);
 
             ImGui::Separator();
 

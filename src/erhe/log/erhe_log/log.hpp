@@ -8,8 +8,7 @@
 #include <memory>
 #include <string>
 
-namespace erhe::log
-{
+namespace erhe::log {
 
 void console_init();
 void initialize_log_sinks();

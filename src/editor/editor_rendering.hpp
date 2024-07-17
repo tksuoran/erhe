@@ -91,7 +91,6 @@ public:
 
     void set_tool_scene_root        (Scene_root* tool_scene_root);
     void trigger_capture            ();
-    void render                     ();
     void render_viewport_main       (const Render_context& context);
     void render_viewport_renderables(const Render_context& context);
     void render_composer            (const Render_context& context);

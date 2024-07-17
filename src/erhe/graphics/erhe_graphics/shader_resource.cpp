@@ -1070,7 +1070,7 @@ auto Shader_resource::add(const Vertex_attribute& attribute) -> Shader_resource*
 {
     const std::string name = fmt::format(
         "{}_{}",
-        Vertex_attribute::desc(attribute.usage.type),
+        Vertex_attribute::c_str(attribute.usage.type),
         attribute.usage.index
     );
 

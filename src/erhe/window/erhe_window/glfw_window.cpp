@@ -182,6 +182,8 @@ auto glfw_mouse_button_to_erhe(const int glfw_mouse_button) -> Mouse_button
         case GLFW_MOUSE_BUTTON_LEFT:   return Mouse_button_left;
         case GLFW_MOUSE_BUTTON_MIDDLE: return Mouse_button_middle;
         case GLFW_MOUSE_BUTTON_RIGHT:  return Mouse_button_right;
+        case GLFW_MOUSE_BUTTON_4:      return Mouse_button_x1;
+        case GLFW_MOUSE_BUTTON_5:      return Mouse_button_x2;
         default:
             // TODO
             return Mouse_button_left;
@@ -201,15 +203,6 @@ auto glfw_mouse_button_action_to_erhe(const int glfw_mouse_button_action) -> boo
     }
 }
 
-auto get_event_handler(GLFWwindow* glfw_window) -> Window_event_handler*
-{
-    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
-    if (window != nullptr) {
-        return &window->get_root_window_event_handler();
-    }
-    return nullptr;
-}
-
 [[nodiscard]] auto glfw_key_to_modifier(int key) -> int
 {
     if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL) {
@@ -227,13 +220,7 @@ auto get_event_handler(GLFWwindow* glfw_window) -> Window_event_handler*
     return 0;
 }
 
-void key_event_callback(
-    GLFWwindow* glfw_window,
-    const int   key,
-    const int   scancode,
-    const int   action,
-    int         glfw_modifiers
-)
+void key_event_callback(GLFWwindow* glfw_window, const int key, const int scancode, const int action, const int glfw_modifiers)
 {
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
@@ -243,19 +230,18 @@ void key_event_callback(
 
 void char_event_callback(GLFWwindow* glfw_window, const unsigned int codepoint)
 {
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        event_handler->on_char(codepoint);
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window != nullptr) {
+        window->handle_char_event(codepoint);
     }
 }
 
 void mouse_position_event_callback(GLFWwindow* glfw_window, double x, double y)
 {
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
-    if (window == nullptr) {
-        return;
+    if (window != nullptr) {
+        window->handle_mouse_move(x, y);
     }
-    window->handle_mouse_move(x, y);
 }
 
 void mouse_button_event_callback(GLFWwindow* glfw_window, const int button, const int action, const int mods)
@@ -276,41 +262,41 @@ void mouse_wheel_event_callback(GLFWwindow* glfw_window, const double x, const d
 
 void window_resize_event_callback(GLFWwindow* glfw_window, const int width, const int height)
 {
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        event_handler->on_resize(width, height);
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window != nullptr) {
+        window->handle_window_resize_event(width, height);
     }
 }
 
 void window_refresh_callback(GLFWwindow* glfw_window)
 {
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        event_handler->on_refresh();
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window != nullptr) {
+        window->handle_window_refresh_event();
     }
 }
 
 void window_close_event_callback(GLFWwindow* glfw_window)
 {
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        event_handler->on_close();
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window != nullptr) {
+        window->handle_window_close_event();
     }
 }
 
 void window_focus_event_callback(GLFWwindow* glfw_window, int focused)
 {
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        event_handler->on_focus(focused);
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window != nullptr) {
+        window->handle_window_focus_event(focused);
     }
 }
 
 void window_cursor_enter_callback(GLFWwindow* glfw_window, int entered)
 {
-    auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler) {
-        event_handler->on_cursor_enter(entered);
+    auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
+    if (window != nullptr) {
+        window->handle_cursor_enter_event(entered);
     }
 }
 
@@ -324,14 +310,12 @@ auto Context_window::get_glfw_window() const -> GLFWwindow*
 int Context_window::s_window_count{0};
 
 Context_window::Context_window(const Window_configuration& configuration)
-    : m_root_window_event_handler{this}
 {
     const bool ok = open(configuration);
     ERHE_VERIFY(ok);
 }
 
 Context_window::Context_window(Context_window* share)
-    : m_root_window_event_handler{this}
 {
     ERHE_VERIFY(share != nullptr);
 
@@ -359,12 +343,7 @@ Context_window::Context_window(Context_window* share)
         int monitor_width {0};
         int monitor_height{0};
         glfwGetMonitorWorkarea(monitors[i], &monitor_xpos, &monitor_ypos, &monitor_width, &monitor_height);
-        if (
-            (x >= monitor_xpos) &&
-            (y >= monitor_ypos) &&
-            (x < monitor_xpos + monitor_width) &&
-            (y < monitor_ypos + monitor_height)
-        ) {
+        if ((x >= monitor_xpos) && (y >= monitor_ypos) && (x < monitor_xpos + monitor_width) && (y < monitor_ypos + monitor_height)) {
             return monitors[i];
         }
     }
@@ -556,7 +535,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 void Context_window::request_close()
 {
     break_event_loop();
-    m_root_window_event_handler.on_close();
+    handle_window_close_event();
 }
 
 Context_window::~Context_window() noexcept
@@ -600,6 +579,7 @@ void Context_window::poll_events()
         glfwPollEvents();
     }
 
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
     for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
         int present = glfwJoystickPresent(jid);
         if (present) {
@@ -616,7 +596,19 @@ void Context_window::poll_events()
                 const float delta = value - m_controller_axis_values[i];
                 if (delta != 0.0f) {
                     m_controller_axis_values[i] = value;
-                    m_root_window_event_handler.on_controller_axis(i, delta, get_modifier_mask());
+                    m_input_events.push_back(
+                        Input_event{
+                            .type = Input_event_type::controller_axis_event,
+                            .u = {
+                                .controller_axis_event = {
+                                    .controller    = jid,
+                                    .axis          = i,
+                                    .value         = delta,
+                                    .modifier_mask = get_modifier_mask()
+                                }
+                            }
+                        }
+                    );
                 }
             }
             int button_count = 0;
@@ -628,30 +620,44 @@ void Context_window::poll_events()
                 const bool value = button_values[i] != 0;
                 if (value != m_controller_button_values[i]) {
                     m_controller_button_values[i] = value;
-                    m_root_window_event_handler.on_controller_button(i, value, get_modifier_mask());
+                    m_input_events.push_back(
+                        Input_event{
+                            .type = Input_event_type::controller_button_event,
+                            .u = {
+                                .controller_button_event = {
+                                    .controller    = jid,
+                                    .button        = i,
+                                    .value         = value,
+                                    .modifier_mask = get_modifier_mask()
+                                }
+                            }
+                        }
+                    );
                 }
             }
         }
     }
 }
 
-void Context_window::enter_event_loop()
-{
-    m_is_event_loop_running = true;
-    for (;;) {
-        if (!m_is_event_loop_running) {
-            break;
-        }
-
-        poll_events();
-
-        if (!m_is_event_loop_running) {
-            break;
-        }
-
-        m_root_window_event_handler.on_idle();
-    }
-}
+//void Context_window::enter_event_loop()
+//{
+//    m_is_event_loop_running = true;
+//    for (;;) {
+//        if (!m_is_event_loop_running) {
+//            break;
+//        }
+//
+//        poll_events();
+//
+//        if (!m_is_event_loop_running) {
+//            break;
+//        }
+//
+//        if (m_window_event_handler != nullptr) {
+//            m_window_event_handler->on_idle();
+//        }
+//    }
+//}
 
 void Context_window::get_cursor_position(float& xpos, float& ypos)
 {
@@ -751,10 +757,18 @@ void Context_window::handle_key_event(int key, int scancode, int action, int glf
     switch (action) {
         case GLFW_PRESS:
         case GLFW_RELEASE: {
-            m_root_window_event_handler.on_key(
-                glfw_key_to_erhe(key),
-                glfw_modifiers_to_erhe(glfw_modifiers),
-                (action == GLFW_PRESS)
+            std::lock_guard<std::mutex> lock{m_input_event_mutex};
+            m_input_events.push_back(
+                Input_event{
+                    .type = Input_event_type::key_event,
+                    .u = {
+                        .key_event = {
+                            .keycode       = glfw_key_to_erhe(key),
+                            .modifier_mask = glfw_modifiers_to_erhe(glfw_modifiers),
+                            .pressed       = (action == GLFW_PRESS)
+                        }
+                    }
+                }
             );
             break;
         }
@@ -765,47 +779,161 @@ void Context_window::handle_key_event(int key, int scancode, int action, int glf
     }
 }
 
+void Context_window::handle_window_resize_event(int width, int height)
+{
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
+    m_input_events.push_back(
+        Input_event{
+            .type = Input_event_type::window_resize_event,
+            .u = {
+                .window_resize_event = {
+                    .width = width,
+                    .height = height
+                }
+            }
+        }
+    );
+}
+
+void Context_window::handle_window_refresh_event()
+{
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
+    m_input_events.push_back(
+        Input_event{
+            .type = Input_event_type::window_refresh_event,
+        }
+    );
+}
+
+void Context_window::handle_window_close_event()
+{
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
+    m_input_events.push_back(
+        Input_event{
+            .type = Input_event_type::window_close_event,
+        }
+    );
+}
+
+void Context_window::handle_window_focus_event(int focused)
+{
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
+    m_input_events.push_back(
+        Input_event{
+            .type = Input_event_type::window_focus_event,
+            .u = {
+                .window_focus_event = {
+                    .focused = focused
+                }
+            }
+        }
+    );
+}
+
+void Context_window::handle_cursor_enter_event(int entered)
+{
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
+    m_input_events.push_back(
+        Input_event{
+            .type = Input_event_type::cursor_enter_event,
+            .u = {
+                .cursor_enter_event = {
+                    .entered = entered
+                }
+            }
+        }
+    );
+}
+
+void Context_window::handle_char_event(unsigned int codepoint)
+{
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
+    m_input_events.push_back(
+        Input_event{
+            .type = Input_event_type::char_event,
+            .u = {
+                .char_event = {
+                    .codepoint = codepoint
+                }
+            }
+        }
+    );
+}
+
 void Context_window::handle_mouse_button_event(int button, int action, int glfw_modifiers)
 {
     m_glfw_key_modifiers = glfw_modifiers;
 
-    m_root_window_event_handler.on_mouse_button(
-        glfw_mouse_button_to_erhe(button),
-        glfw_mouse_button_action_to_erhe(action),
-        get_modifier_mask()
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
+    m_input_events.push_back(
+        Input_event{
+            .type = Input_event_type::mouse_button_event,
+            .u = {
+                .mouse_button_event = {
+                    .button        = glfw_mouse_button_to_erhe(button),
+                    .pressed       = glfw_mouse_button_action_to_erhe(action),
+                    .modifier_mask = glfw_modifiers_to_erhe(glfw_modifiers)
+                }
+            }
+        }
     );
 }
 
 void Context_window::handle_mouse_wheel_event(double x, double y)
 {
-    m_root_window_event_handler.on_mouse_wheel(static_cast<float>(x), static_cast<float>(y), get_modifier_mask());
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
+    m_input_events.push_back(
+        Input_event{
+            .type = Input_event_type::mouse_wheel_event,
+            .u = {
+                .mouse_wheel_event = {
+                    .x             = static_cast<float>(x),
+                    .y             = static_cast<float>(y),
+                    .modifier_mask = get_modifier_mask(),
+                }
+            }
+        }
+    );
 }
 
 void Context_window::handle_mouse_move(double x, double y)
 {
-    Root_window_event_handler& event_handler = get_root_window_event_handler();
-
+    std::lock_guard<std::mutex> lock{m_input_event_mutex};
     if (m_is_mouse_captured) {
         double dx = x - m_mouse_capture_xpos;
         double dy = y - m_mouse_capture_ypos;
-        event_handler.on_mouse_move(
-            static_cast<float>(m_mouse_capture_xpos),
-            static_cast<float>(m_mouse_capture_ypos),
-            static_cast<float>(dx),
-            static_cast<float>(dy),
-            get_modifier_mask()
+        m_input_events.push_back(
+            Input_event{
+                .type = Input_event_type::mouse_move_event,
+                .u = {
+                    .mouse_move_event = {
+                        .x             = static_cast<float>(m_mouse_capture_xpos),
+                        .y             = static_cast<float>(m_mouse_capture_ypos),
+                        .dx            = static_cast<float>(dx),
+                        .dy            = static_cast<float>(dy),
+                        .modifier_mask = get_modifier_mask(),
+                    }
+                }
+            }
         );
     } else {
         double dx = x - m_last_mouse_x;
         double dy = y - m_last_mouse_y;
         m_last_mouse_x = x;
         m_last_mouse_y = y;
-        event_handler.on_mouse_move(
-            static_cast<float>(x),
-            static_cast<float>(y),
-            static_cast<float>(dx),
-            static_cast<float>(dy),
-            get_modifier_mask()
+        m_input_events.push_back(
+            Input_event{
+                .type = Input_event_type::mouse_move_event,
+                .u = {
+                    .mouse_move_event = {
+                        .x             = static_cast<float>(x),
+                        .y             = static_cast<float>(y),
+                        .dx            = static_cast<float>(dx),
+                        .dy            = static_cast<float>(dy),
+                        .modifier_mask = get_modifier_mask(),
+                    }
+                }
+            }
         );
     }
 }
@@ -848,9 +976,14 @@ auto Context_window::get_height() const -> int
     return height;
 }
 
-auto Context_window::get_root_window_event_handler() -> Root_window_event_handler&
+auto Context_window::get_input_events() -> std::vector<Input_event>&
 {
-    return m_root_window_event_handler;
+    return m_input_events;
+}
+
+void Context_window::clear_input_events()
+{
+    m_input_events.clear();
 }
 
 void Context_window::get_extensions()

@@ -1,4 +1,4 @@
-// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+//#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "scene/viewport_scene_views.hpp"
 
@@ -22,25 +22,26 @@
 #include "windows/viewport_config_window.hpp"
 #include "windows/imgui_window_scene_view_node.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/renderbuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_hash/xxhash.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/window_imgui_host.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/multisample_resolve.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
-#include "erhe_graphics/framebuffer.hpp"
-#include "erhe_graphics/renderbuffer.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_bit/bit_helpers.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
-#include "erhe_hash/xxhash.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui/imgui.h>
@@ -299,21 +300,14 @@ auto Scene_views::create_imgui_window_scene_view_node(
         imgui_renderer,
         imgui_windows,
         rendergraph,
+        m_context,
         fmt::format("Imgui_window_scene_view_node {}", m_imgui_window_scene_view_nodes.size()),
         "",
         viewport_scene_view
     );
     m_imgui_window_scene_view_nodes.push_back(node);
-    rendergraph.connect(
-        erhe::rendergraph::Rendergraph_node_key::viewport,
-        viewport_scene_view->get_final_output(),
-        node.get()
-    );
-    rendergraph.connect(
-        erhe::rendergraph::Rendergraph_node_key::window,
-        node.get(),
-        window_imgui_host.get()
-    );
+    rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport, viewport_scene_view->get_final_output(), node.get());
+    rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::window, node.get(), window_imgui_host.get());
     return node;
 }
 
@@ -406,19 +400,9 @@ void Scene_views::debug_imgui()
         }
         ImGui::BulletText("%s", window->get_name().c_str());
     }
-    ImGui::Text(
-        "Hover scene view: %s",
-        m_hover_scene_view
-            ? m_hover_scene_view->get_name().c_str()
-            : ""
-    );
+    ImGui::Text("Hover scene view: %s", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
     const auto last_scene_view = m_last_scene_view.lock();
-    ImGui::Text(
-        "Last scene view: %s",
-        last_scene_view
-            ? last_scene_view->get_name().c_str()
-            : ""
-    );
+    ImGui::Text("Last scene view: %s", last_scene_view ? last_scene_view->get_name().c_str() : "");
 
     if (ImGui::TreeNodeEx("Basic scene view nodes", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
         for (const auto& node : m_basic_scene_view_nodes) {
@@ -459,13 +443,18 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
 {
     ERHE_PROFILE_FUNCTION();
 
+    SPDLOG_LOGGER_TRACE(log_controller_ray, "update_hover()");
+
     std::shared_ptr<Viewport_scene_view> old_scene_view = m_hover_scene_view;
     m_hover_stack.clear();
 
     // Pull mouse position
     {
-        const auto mouse_position = m_context.input_state->mouse_position;
+        //const auto mouse_position = m_context.input_state->mouse_position;
+        const glm::vec2 mouse_position = imgui_host->get_mouse_position();
+        SPDLOG_LOGGER_TRACE(log_controller_ray, "m_context.input_state->mouse_position: {}, {}", mouse_position.x, mouse_position.y);
         for (auto& window : m_imgui_window_scene_view_nodes) {
+            SPDLOG_LOGGER_TRACE(log_controller_ray, "{}->is_hovered() = {}", window->get_name(), window->is_hovered());
             if (window->is_hovered()) {
                 window->on_mouse_move(mouse_position);
             }
@@ -485,18 +474,21 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
         : m_hover_stack.back().lock();
 
     if (old_scene_view != m_hover_scene_view) {
-        log_pointer->trace("Changing hover scene view to: {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
+        SPDLOG_LOGGER_TRACE(log_controller_ray, "Changing hover scene view to: {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
         m_context.editor_message_bus->send_message(
             Editor_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_viewport | Message_flag_bit::c_flag_bit_hover_scene_view,
                 .scene_view   = m_hover_scene_view.get()
             }
         );
+    } else {
+        SPDLOG_LOGGER_TRACE(log_controller_ray, "m_hover_scene_view {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
     }
 }
 
 void Scene_views::update_hover_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host)
 {
+    SPDLOG_LOGGER_TRACE(log_controller_ray, "update_hover_from_imgui_viewport_windows({})", imgui_host->get_name());
     for (const auto& window : m_imgui_window_scene_view_nodes) {
         if (window->get_imgui_host() != imgui_host) {
             continue;
@@ -508,6 +500,7 @@ void Scene_views::update_hover_from_imgui_viewport_windows(erhe::imgui::Imgui_ho
         }
 
         if (window->is_hovered()) {
+            SPDLOG_LOGGER_TRACE(log_controller_ray, "pushing {} to hover stack", viewport_scene_view->get_name());
             m_last_scene_view = viewport_scene_view;
             m_hover_stack.push_back(m_last_scene_view);
         }
@@ -539,9 +532,8 @@ void Scene_views::update_hover_from_basic_viewport_windows()
             );
             SPDLOG_LOGGER_TRACE(
                 log_pointer,
-                "mouse {}, {} hovers Viewport_scene_view {} @ {}",
-                m_mouse_x,
-                m_mouse_y,
+                "window position {} hovers Viewport_scene_view {} @ {}",
+                pointer_window_position,
                 viewport_scene_view->get_name(),
                 viewport_position
             );
@@ -580,10 +572,7 @@ void Scene_views::viewport_toolbar(Viewport_scene_view& viewport_scene_view, boo
         compiletime_xxhash::xxh32(open_config.data(), open_config.size(), {})
     };
 
-    const bool button_pressed = rasterization.icon_button(
-        ERHE_HASH("open_config"),
-        m_context.icon_set->icons.three_dots
-    );
+    const bool button_pressed = rasterization.icon_button(ERHE_HASH("open_config"), m_context.icon_set->icons.three_dots);
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }

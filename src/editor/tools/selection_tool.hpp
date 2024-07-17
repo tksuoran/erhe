@@ -153,9 +153,10 @@ public:
 #endif
 
     // Public API
-    [[nodiscard]] auto get_selection  () const -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
-    [[nodiscard]] auto is_in_selection(const std::shared_ptr<erhe::Item_base>& item) const -> bool;
-    [[nodiscard]] auto range_selection() -> Range_selection&;
+    [[nodiscard]] auto get_selection    () const -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
+    [[nodiscard]] auto is_in_selection  (const std::shared_ptr<erhe::Item_base>& item) const -> bool;
+    [[nodiscard]] auto range_selection  () -> Range_selection&;
+    [[nodiscard]] auto get_last_selected(uint64_t type) -> std::shared_ptr<erhe::Item_base>;
 
     template <typename T>
     [[nodiscard]] auto get(std::size_t index = 0) -> std::shared_ptr<T>;

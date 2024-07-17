@@ -243,8 +243,7 @@ inline void Property_map_collection<Key_type>::transform(const glm::mat4 matrix)
 }
 
 template <typename Key_type>
-inline auto
-Property_map_collection<Key_type>::clone_with_transform(const glm::mat4 transform) -> Property_map_collection<Key_type>
+inline auto Property_map_collection<Key_type>::clone_with_transform(const glm::mat4 transform) -> Property_map_collection<Key_type>
 {
     Property_map_collection<Key_type> result;
     for (auto& entry : m_entries) {

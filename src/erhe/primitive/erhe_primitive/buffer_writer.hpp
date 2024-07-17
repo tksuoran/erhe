@@ -33,6 +33,7 @@ public:
     void write(const Vertex_attribute_info& attribute, const glm::vec3 value);
     void write(const Vertex_attribute_info& attribute, const glm::vec4 value);
     void write(const Vertex_attribute_info& attribute, const uint32_t value);
+    void write(const Vertex_attribute_info& attribute, const glm::uvec2 value);
     void write(const Vertex_attribute_info& attribute, const glm::uvec4 value);
     void move (const std::size_t relative_offset);
 

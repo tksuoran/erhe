@@ -7,7 +7,7 @@ namespace erhe::defer {
 class Defer
 {
 public:
-    explicit Defer(Defer&& rvalue)
+    explicit Defer(Defer&& rvalue) noexcept
     {
         m_callback = std::move(rvalue.m_callback);
         rvalue.m_callback = nullptr;

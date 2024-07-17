@@ -41,6 +41,8 @@ Network_window::Network_window(
             m_downstream_messages.push_back("received " + std::string{reinterpret_cast<const char*>(data), length});
         }
     );
+
+    set_developer();
 }
 
 void Network_window::update_once_per_frame(const Time_context&)

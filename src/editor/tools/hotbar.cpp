@@ -147,6 +147,20 @@ auto Hotbar_thumbstick_command::try_call_with_input(erhe::commands::Input_argume
     }
     return true;
 }
+
+Hotbar_rotate_tool_command::Hotbar_rotate_tool_command(erhe::commands::Commands& commands, Editor_context& context, int rotate_direction)
+    : Command{commands, "Hotbar.rotate"}
+    , m_context{context}
+    , m_rotate_direction{rotate_direction}
+{
+}
+
+auto Hotbar_rotate_tool_command::try_call() -> bool
+{
+    m_context.hotbar->rotate_tool(m_rotate_direction);
+    return true;
+}
+
 #pragma endregion Commands
 
 Hotbar::Hotbar(
@@ -163,6 +177,8 @@ Hotbar::Hotbar(
     : erhe::imgui::Imgui_window  {imgui_renderer, imgui_windows, "Hotbar", ""}
     , Tool                       {editor_context}
     , m_toggle_visibility_command{commands, editor_context}
+    , m_prev_tool_command        {commands, editor_context, -1}
+    , m_next_tool_command        {commands, editor_context, 1}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     , m_trackpad_command         {commands, editor_context}
     , m_trackpad_click_command   {commands, m_trackpad_command}
@@ -182,9 +198,16 @@ Hotbar::Hotbar(
         return;
     }
 
-    commands.register_command    (&m_toggle_visibility_command);
-    commands.bind_command_to_key (&m_toggle_visibility_command, erhe::window::Key_space, true);
-    commands.bind_command_to_menu(&m_toggle_visibility_command, "View.Hotbar", [&]() -> bool { return m_mesh_visible; });
+    commands.register_command            (&m_toggle_visibility_command);
+    commands.register_command            (&m_prev_tool_command);
+    commands.register_command            (&m_next_tool_command);
+    commands.bind_command_to_key         (&m_toggle_visibility_command, erhe::window::Key_space, true);
+    commands.bind_command_to_menu        (&m_toggle_visibility_command, "View.Hotbar", [&]() -> bool { return m_mesh_visible; });
+    commands.bind_command_to_mouse_button(&m_prev_tool_command, erhe::window::Mouse_button_x1, true);
+    commands.bind_command_to_mouse_button(&m_next_tool_command, erhe::window::Mouse_button_x2, true);
+    m_toggle_visibility_command.set_host(this);
+    m_prev_tool_command        .set_host(this);
+    m_next_tool_command        .set_host(this);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     commands.register_command(&m_trackpad_command);

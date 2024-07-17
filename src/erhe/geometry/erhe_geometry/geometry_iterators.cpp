@@ -1,17 +1,10 @@
 #include "erhe_geometry/geometry.hpp"
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
-void Geometry::for_each_corner(
-    std::function<void(Corner_context&)> callback
-)
+void Geometry::for_each_corner(std::function<void(Corner_context&)> callback)
 {
-    for (
-        Corner_id corner_id = 0, end = get_corner_count();
-        corner_id < end;
-        ++corner_id
-    ) {
+    for (Corner_id corner_id = 0, end = get_corner_count(); corner_id < end; ++corner_id) {
         Corner& corner = corners[corner_id];
         Corner_context context{
             .corner_id = corner_id,
@@ -24,15 +17,9 @@ void Geometry::for_each_corner(
     }
 }
 
-void Geometry::for_each_corner_const(
-    std::function<void(Corner_context_const&)> callback
-) const
+void Geometry::for_each_corner_const(std::function<void(Corner_context_const&)> callback) const
 {
-    for (
-        Corner_id corner_id = 0, end = get_corner_count();
-        corner_id < end;
-        ++corner_id
-    ) {
+    for (Corner_id corner_id = 0, end = get_corner_count(); corner_id < end; ++corner_id) {
         const Corner& corner = corners[corner_id];
         Corner_context_const context{
             .corner_id = corner_id,
@@ -45,15 +32,9 @@ void Geometry::for_each_corner_const(
     }
 }
 
-void Geometry::for_each_point(
-    std::function<void(Point_context&)> callback
-)
+void Geometry::for_each_point(std::function<void(Point_context&)> callback)
 {
-    for (
-        Point_id point_id = 0, end = get_point_count();
-        point_id < end;
-        ++point_id
-    ) {
+    for (Point_id point_id = 0, end = get_point_count(); point_id < end; ++point_id) {
         Point& point = points[point_id];
         Point_context context{
             .point_id = point_id,
@@ -66,9 +47,7 @@ void Geometry::for_each_point(
     }
 }
 
-void Geometry::for_each_point_const(
-    std::function<void(Point_context_const&)> callback
-) const
+void Geometry::for_each_point_const(std::function<void(Point_context_const&)> callback) const
 {
     for (
         Point_id point_id = 0, end = get_point_count();
@@ -87,15 +66,9 @@ void Geometry::for_each_point_const(
     }
 }
 
-void Geometry::for_each_polygon(
-    std::function<void(Polygon_context&)> callback
-)
+void Geometry::for_each_polygon(std::function<void(Polygon_context&)> callback)
 {
-    for (
-        Polygon_id polygon_id = 0, end = get_polygon_count();
-        polygon_id < end;
-        ++polygon_id
-    ) {
+    for (Polygon_id polygon_id = 0, end = get_polygon_count(); polygon_id < end; ++polygon_id) {
         Polygon& polygon = polygons[polygon_id];
         Polygon_context context{
             .polygon_id = polygon_id,
@@ -108,15 +81,9 @@ void Geometry::for_each_polygon(
     }
 }
 
-void Geometry::for_each_polygon_const(
-    std::function<void(Polygon_context_const&)> callback
-) const
+void Geometry::for_each_polygon_const(std::function<void(Polygon_context_const&)> callback) const
 {
-    for (
-        Polygon_id polygon_id = 0, end = get_polygon_count();
-        polygon_id < end;
-        ++polygon_id
-    ) {
+    for (Polygon_id polygon_id = 0, end = get_polygon_count(); polygon_id < end; ++polygon_id) {
         const Polygon& polygon = polygons[polygon_id];
         Polygon_context_const context{
             .polygon_id = polygon_id,
@@ -129,15 +96,9 @@ void Geometry::for_each_polygon_const(
     }
 }
 
-void Geometry::for_each_edge(
-    std::function<void(Edge_context&)> callback
-)
+void Geometry::for_each_edge(std::function<void(Edge_context&)> callback)
 {
-    for (
-        Edge_id edge_id = 0, end = get_edge_count();
-        edge_id < end;
-        ++edge_id
-    ) {
+    for (Edge_id edge_id = 0, end = get_edge_count(); edge_id < end; ++edge_id) {
         Edge& edge = edges[edge_id];
         Edge_context context{
             .edge_id = edge_id,
@@ -150,15 +111,9 @@ void Geometry::for_each_edge(
     }
 }
 
-void Geometry::for_each_edge_const(
-    std::function<void(Edge_context_const&)> callback
-) const
+void Geometry::for_each_edge_const(std::function<void(Edge_context_const&)> callback) const
 {
-    for (
-        Edge_id edge_id = 0, end = get_edge_count();
-        edge_id < end;
-        ++edge_id
-    ) {
+    for (Edge_id edge_id = 0, end = get_edge_count(); edge_id < end; ++edge_id) {
         const Edge& edge = edges[edge_id];
         Edge_context_const context{
             .edge_id = edge_id,
@@ -171,10 +126,7 @@ void Geometry::for_each_edge_const(
     }
 }
 
-void Point::for_each_corner(
-    Geometry&                                  geometry,
-    std::function<void(Point_corner_context&)> callback
-)
+void Point::for_each_corner(Geometry& geometry, std::function<void(Point_corner_context&)> callback)
 {
     for (
         Point_corner_id point_corner_id = first_point_corner_id,
@@ -196,10 +148,7 @@ void Point::for_each_corner(
     }
 }
 
-void Point::for_each_corner_const(
-    const Geometry&                                  geometry,
-    std::function<void(Point_corner_context_const&)> callback
-) const
+void Point::for_each_corner_const(const Geometry& geometry, std::function<void(Point_corner_context_const&)> callback) const
 {
     for (
         Point_corner_id point_corner_id = first_point_corner_id,
@@ -221,10 +170,7 @@ void Point::for_each_corner_const(
     }
 }
 
-void Point::for_each_corner_neighborhood(
-    Geometry&                                               geometry,
-    std::function<void(Point_corner_neighborhood_context&)> callback
-)
+void Point::for_each_corner_neighborhood(Geometry& geometry, std::function<void(Point_corner_neighborhood_context&)> callback)
 {
     for (uint32_t i = 0; i < corner_count; ++i) {
         const Point_corner_id prev_point_corner_id = first_point_corner_id + (corner_count + i - 1) % corner_count;
@@ -252,10 +198,7 @@ void Point::for_each_corner_neighborhood(
     }
 }
 
-void Point::for_each_corner_neighborhood_const(
-    const Geometry&                                               geometry,
-    std::function<void(Point_corner_neighborhood_context_const&)> callback
-) const
+void Point::for_each_corner_neighborhood_const(const Geometry& geometry, std::function<void(Point_corner_neighborhood_context_const&)> callback) const
 {
     for (uint32_t i = 0; i < corner_count; ++i) {
         const Point_corner_id prev_point_corner_id = first_point_corner_id + (corner_count + i - 1) % corner_count;
@@ -283,10 +226,7 @@ void Point::for_each_corner_neighborhood_const(
     }
 }
 
-void Polygon::for_each_corner(
-    Geometry&                                    geometry,
-    std::function<void(Polygon_corner_context&)> callback
-)
+void Polygon::for_each_corner(Geometry& geometry, std::function<void(Polygon_corner_context&)> callback)
 {
     for (
         Polygon_corner_id polygon_corner_id = first_polygon_corner_id,
@@ -308,10 +248,7 @@ void Polygon::for_each_corner(
     }
 }
 
-void Polygon::for_each_corner_const(
-    const Geometry&                                    geometry,
-    std::function<void(Polygon_corner_context_const&)> callback
-) const
+void Polygon::for_each_corner_const(const Geometry& geometry, std::function<void(Polygon_corner_context_const&)> callback) const
 {
     for (
         Polygon_corner_id polygon_corner_id = first_polygon_corner_id,
@@ -333,10 +270,7 @@ void Polygon::for_each_corner_const(
     }
 }
 
-void Polygon::for_each_corner_neighborhood(
-    Geometry&                                                 geometry,
-    std::function<void(Polygon_corner_neighborhood_context&)> callback
-)
+void Polygon::for_each_corner_neighborhood(Geometry& geometry, std::function<void(Polygon_corner_neighborhood_context&)> callback)
 {
     for (uint32_t i = 0; i < corner_count; ++i) {
         const Polygon_corner_id prev_polygon_corner_id = first_polygon_corner_id + (corner_count + i - 1) % corner_count;
@@ -364,10 +298,7 @@ void Polygon::for_each_corner_neighborhood(
     }
 }
 
-void Polygon::for_each_corner_neighborhood_const(
-    const Geometry&                                                 geometry,
-    std::function<void(Polygon_corner_neighborhood_context_const&)> callback
-) const
+void Polygon::for_each_corner_neighborhood_const(const Geometry& geometry, std::function<void(Polygon_corner_neighborhood_context_const&)> callback) const
 {
     for (uint32_t i = 0; i < corner_count; ++i) {
         const Polygon_corner_id prev_polygon_corner_id = first_polygon_corner_id + (corner_count + i - 1) % corner_count;
@@ -395,9 +326,7 @@ void Polygon::for_each_corner_neighborhood_const(
     }
 }
 
-void Edge::for_each_polygon(
-    Geometry&                                  geometry,
-    std::function<void(Edge_polygon_context&)> callback)
+void Edge::for_each_polygon(Geometry& geometry, std::function<void(Edge_polygon_context&)> callback)
 {
     for (
         Edge_polygon_id edge_polygon_id = first_edge_polygon_id,
@@ -419,10 +348,7 @@ void Edge::for_each_polygon(
     }
 }
 
-void Edge::for_each_polygon_const(
-    const Geometry&                                  geometry,
-    std::function<void(Edge_polygon_context_const&)> callback
-) const
+void Edge::for_each_polygon_const(const Geometry& geometry, std::function<void(Edge_polygon_context_const&)> callback) const
 {
     for (
         Edge_polygon_id edge_polygon_id = first_edge_polygon_id,

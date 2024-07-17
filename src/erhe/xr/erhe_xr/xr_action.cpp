@@ -63,11 +63,7 @@ Xr_action_boolean::Xr_action_boolean(
     create_info.countSubactionPaths    = 0;
     create_info.subactionPaths         = nullptr;
 
-    const XrResult result = xrCreateAction(
-        action_set,
-        &create_info,
-        &action
-    );
+    const XrResult result = xrCreateAction(action_set, &create_info, &action);
     log_xr->info(
         "xrCreateAction(.actionSet = {} .actionType = XR_ACTION_TYPE_BOOLEAN_INPUT, .actionName = '{}', .localizedActionName = '{}') result = {}, action = {}",
         fmt::ptr(action_set),
@@ -78,11 +74,7 @@ Xr_action_boolean::Xr_action_boolean(
     );
 
     if (result != XR_SUCCESS) {
-        log_xr->error(
-            "xrCreateAction() returned error {} for {}",
-            c_str(result),
-            name
-        );
+        log_xr->error("xrCreateAction() returned error {} for {}", c_str(result), name);
     }
 }
 
@@ -97,11 +89,7 @@ void Xr_action_boolean::get(const XrSession session)
         .action        = action,
         .subactionPath = XR_NULL_PATH
     };
-    const XrResult result = xrGetActionStateBoolean(
-        session,
-        &action_state_get_info,
-        &state
-    );
+    const XrResult result = xrGetActionStateBoolean(session, &action_state_get_info, &state);
     if (result != XR_SUCCESS) {
         log_xr->error(
             "xrGetActionStateBoolean() returned error {}",
@@ -143,11 +131,7 @@ Xr_action_float::Xr_action_float(
     create_info.countSubactionPaths    = 0;
     create_info.subactionPaths         = nullptr;
 
-    const XrResult result = xrCreateAction(
-        action_set,
-        &create_info,
-        &action
-    );
+    const XrResult result = xrCreateAction(action_set, &create_info, &action);
     log_xr->info(
         "xrCreateAction(.actionSet = {}, .actionType = XR_ACTION_TYPE_FLOAT_INPUT, .actionName = '{}', .localizedActionName = '{}') result = {}, action = {}",
         fmt::ptr(action_set),
@@ -158,11 +142,7 @@ Xr_action_float::Xr_action_float(
     );
 
     if (result != XR_SUCCESS) {
-        log_xr->error(
-            "xrCreateAction() returned error {} for {}",
-            c_str(result),
-            name
-        );
+        log_xr->error("xrCreateAction() returned error {} for {}", c_str(result), name);
     }
 }
 
@@ -177,16 +157,9 @@ void Xr_action_float::get(const XrSession session)
         .action        = action,
         .subactionPath = XR_NULL_PATH
     };
-    const XrResult result = xrGetActionStateFloat(
-        session,
-        &action_state_get_info,
-        &state
-    );
+    const XrResult result = xrGetActionStateFloat(session, &action_state_get_info, &state);
     if (result != XR_SUCCESS) {
-        log_xr->error(
-            "xrGetActionStateFloat() returned error {}",
-            c_str(result)
-        );
+        log_xr->error("xrGetActionStateFloat() returned error {}", c_str(result));
     }
 }
 
@@ -213,11 +186,7 @@ Xr_action_vector2f::Xr_action_vector2f(
         s = (s == '/') ? '_' : s;
     }
     create_info.actionName[name.size()] = '\0';
-    strncpy(
-        create_info.localizedActionName,
-        create_info.actionName,
-        XR_MAX_LOCALIZED_ACTION_NAME_SIZE
-    );
+    strncpy(create_info.localizedActionName, create_info.actionName, XR_MAX_LOCALIZED_ACTION_NAME_SIZE);
     create_info.localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE - 1] = '\0';
     create_info.actionType             = XR_ACTION_TYPE_VECTOR2F_INPUT;
     create_info.countSubactionPaths    = 0;
@@ -234,11 +203,7 @@ Xr_action_vector2f::Xr_action_vector2f(
     );
 
     if (result != XR_SUCCESS) {
-        log_xr->error(
-            "xrCreateAction() returned error {} for {}",
-            c_str(result),
-            name
-        );
+        log_xr->error("xrCreateAction() returned error {} for {}", c_str(result), name);
     }
 }
 
@@ -292,11 +257,7 @@ Xr_action_pose::Xr_action_pose(
     create_info.countSubactionPaths    = 0;
     create_info.subactionPaths         = nullptr;
 
-    const XrResult result = xrCreateAction(
-        action_set,
-        &create_info,
-        &action
-    );
+    const XrResult result = xrCreateAction(action_set, &create_info, &action);
     log_xr->info(
         "xrCreateAction(.actionSet = {}, .actionType = XR_ACTION_TYPE_POSE_INPUT, .actionName = '{}', .localizedActionName = '{}') result = {}, action = {}",
         fmt::ptr(action_set),
@@ -371,4 +332,4 @@ void Xr_action_pose::get(const XrSession session, const XrTime time, const XrSpa
     }
 }
 
-} // namespace erhe::ui
+} // namespace erhe::xr

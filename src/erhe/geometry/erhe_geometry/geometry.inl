@@ -6,8 +6,7 @@
 #   define ERHE_PROFILE_FUNCTION_DUMMY
 #endif
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 template <typename T>
 void Geometry::smooth_normalize(

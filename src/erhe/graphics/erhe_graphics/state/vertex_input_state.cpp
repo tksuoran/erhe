@@ -72,11 +72,7 @@ auto Vertex_input_state_data::make(
 {
     Vertex_input_state_data result;
     result.index_buffer = index_buffer;
-    mappings.collect_attributes(
-        result.attributes,
-        vertex_buffer,
-        vertex_format
-    );
+    mappings.collect_attributes(result.attributes, vertex_buffer, vertex_format);
     return result;
 }
 
@@ -108,11 +104,7 @@ Vertex_input_state::~Vertex_input_state() noexcept
     const std::lock_guard lock{s_mutex};
 
     s_all_vertex_input_states.erase(
-        std::remove(
-            s_all_vertex_input_states.begin(),
-            s_all_vertex_input_states.end(),
-            this
-        ),
+        std::remove(s_all_vertex_input_states.begin(), s_all_vertex_input_states.end(), this),
         s_all_vertex_input_states.end()
     );
 }

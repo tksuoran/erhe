@@ -1,8 +1,7 @@
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 std::shared_ptr<spdlog::logger> log_geometry         ;
 std::shared_ptr<spdlog::logger> log_build_edges      ;

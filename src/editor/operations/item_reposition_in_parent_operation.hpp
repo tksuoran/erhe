@@ -13,7 +13,7 @@ namespace erhe {
 
 namespace editor {
 
-class Item_reposition_in_parent_operation : public IOperation
+class Item_reposition_in_parent_operation : public Operation
 {
 public:
     Item_reposition_in_parent_operation();
@@ -23,10 +23,10 @@ public:
         const std::shared_ptr<erhe::Hierarchy>  palce_after
     );
 
-    // Implements IOperation
-    auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
+    // Implements Operation
+    auto describe() const -> std::string   override;
+    void execute (Editor_context& context) override;
+    void undo    (Editor_context& context) override;
 
 private:
     std::shared_ptr<erhe::Hierarchy> m_child;

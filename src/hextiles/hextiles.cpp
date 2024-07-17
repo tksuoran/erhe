@@ -38,11 +38,9 @@
 
 namespace hextiles {
 
-class Hextiles : public erhe::window::Window_event_handler
+class Hextiles : public erhe::window::Input_event_handler
 {
 public:
-    auto get_name() const -> const char* override { return "Hextiles"; }
-
     Hextiles()
         : m_context_window{
             erhe::window::Window_configuration{
@@ -69,33 +67,46 @@ public:
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
         gl::enable      (gl::Enable_cap::framebuffer_srgb);
 
-        auto& root_event_handler = m_context_window.get_root_window_event_handler();
-        root_event_handler.attach(&m_imgui_windows, 2);
-        root_event_handler.attach(&m_commands, 1);
+        //// auto& root_event_handler = m_context_window.get_root_window_event_handler();
+        //// root_event_handler.attach(&m_imgui_windows, 2);
+        //// root_event_handler.attach(&m_commands, 1);
     }
 
     void run()
     {
         while (!m_close_requested) {
             m_context_window.poll_events();
-            on_idle();
+            auto& input_events = m_context_window.get_input_events();
+            for (erhe::window::Input_event& input_event : input_events) {
+                dispatch_input_event(input_event);
+                if (!input_event.handled) {
+                    m_imgui_windows.dispatch_input_event(input_event);
+                }
+                if (!input_event.handled) {
+                    m_commands.dispatch_input_event(input_event);
+                }
+            }
+            tick();
+            m_context_window.swap_buffers();
+            m_context_window.clear_input_events();
         }
     }
 
-    auto on_idle() -> bool override
+    void tick()
     {
         if (m_map_window.is_visible()) {
             m_map_window.render();
         }
+        auto& input_events = m_context_window.get_input_events();
         m_imgui_windows .imgui_windows();
+        m_commands.tick(input_events);
         m_rendergraph   .execute();
         m_imgui_renderer.next_frame();
         m_tile_renderer .next_frame();
         m_context_window.swap_buffers();
-        return true;
     }
 
-    auto on_close() -> bool override
+    auto on_window_close_event() -> bool override
     {
         m_close_requested = true;
         return true;

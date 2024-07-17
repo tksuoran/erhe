@@ -285,12 +285,7 @@ auto Xr_instance::enumerate_extensions() -> bool
 
     uint32_t instance_extension_count{0};
     ERHE_XR_CHECK(
-        xrEnumerateInstanceExtensionProperties(
-            nullptr,
-            0,
-            &instance_extension_count,
-            nullptr
-        )
+        xrEnumerateInstanceExtensionProperties(nullptr, 0, &instance_extension_count, nullptr)
     );
     if (instance_extension_count == 0) {
         return true; // Consider no extensions to be okay. TODO consider this be an error.
@@ -302,12 +297,7 @@ auto Xr_instance::enumerate_extensions() -> bool
     }
 
     ERHE_XR_CHECK(
-        xrEnumerateInstanceExtensionProperties(
-            nullptr,
-            instance_extension_count,
-            &instance_extension_count,
-            m_xr_extensions.data()
-        )
+        xrEnumerateInstanceExtensionProperties(nullptr, instance_extension_count, &instance_extension_count, m_xr_extensions.data())
     );
 
     log_xr->info("Supported extensions:");
@@ -438,13 +428,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
     uint32_t view_configuration_type_count;
     ERHE_XR_CHECK(
-        xrEnumerateViewConfigurations(
-            m_xr_instance,
-            m_xr_system_id,
-            0,
-            &view_configuration_type_count,
-            nullptr
-        )
+        xrEnumerateViewConfigurations(m_xr_instance, m_xr_system_id, 0, &view_configuration_type_count, nullptr)
     );
     if (view_configuration_type_count == 0) {
         return false; // Consider no views to be an error.
@@ -922,8 +906,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
                 return false;
             }
 
-            default:
-            {
+            default: {
                 log_xr->error("xrSyncActions() returned error {}", c_str(result));
                 return false;
             }
@@ -1119,4 +1102,4 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
     return true;
 }
 
-}
+} // namespace erhe::xr

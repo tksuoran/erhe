@@ -11,6 +11,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/depth_stencil_state.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_window/window.hpp"
 
 #if !defined(WIN32)
 #   include <csignal>
@@ -332,13 +333,7 @@ Instance::Instance(erhe::window::Context_window& context_window)
 
         for (const auto format : formats) {
             GLint supported{};
-            gl::get_internalformat_iv(
-                gl::Texture_target::texture_2d,
-                format,
-                gl::Internal_format_p_name::internalformat_supported,
-                1,
-                &supported
-            );
+            gl::get_internalformat_iv(gl::Texture_target::texture_2d, format, gl::Internal_format_p_name::internalformat_supported, 1, &supported);
             if (supported == GL_FALSE) {
                 continue;
             }
@@ -393,12 +388,7 @@ Instance::Instance(erhe::window::Context_window& context_window)
                 .z = static_cast<int>(z_sizes[0]),
             };
 
-            log_startup->info(
-                "    {} : num page sizes {} :{}",
-                gl::c_str(format),
-                num_virtual_page_sizes,
-                ss.str()
-            );
+            log_startup->info("    {} : num page sizes {} :{}", gl::c_str(format), num_virtual_page_sizes, ss.str());
         }
     }
     log_startup->info("GL_ARB_sparse_texture supported : {}", info.use_sparse_texture);
@@ -416,6 +406,7 @@ Instance::Instance(erhe::window::Context_window& context_window)
     bool force_no_bindless          {false};
     bool force_no_persistent_buffers{false};
     bool capture_support            {false};
+    bool initial_clear              {false};
     {
         auto ini = erhe::configuration::get_ini("erhe.ini", "graphics");
         ini->get("reverse_depth",   configuration.reverse_depth  );
@@ -423,7 +414,16 @@ Instance::Instance(erhe::window::Context_window& context_window)
         ini->get("use_time_query",  configuration.use_time_query );
         ini->get("force_no_bindless",           force_no_bindless);
         ini->get("force_no_persistent_buffers", force_no_persistent_buffers);
+        ini->get("initial_clear",               initial_clear);
     }
+    if (initial_clear) {
+        gl::clear_color(0.2f, 0.2f, 0.2f, 0.2f);
+        for (int i = 0; i < 3; ++i) {
+            gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
+            context_window.swap_buffers();
+        }
+    }
+
     {
         auto ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
         ini->get("capture_support", capture_support);
@@ -512,9 +512,7 @@ void Instance::texture_unit_cache_reset(const unsigned int base_texture_unit)
     m_texture_units.clear();
 }
 
-auto Instance::texture_unit_cache_allocate(
-    const uint64_t handle
-) -> std::optional<std::size_t>
+auto Instance::texture_unit_cache_allocate(const uint64_t handle) -> std::optional<std::size_t>
 {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
     const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
@@ -523,26 +521,14 @@ auto Instance::texture_unit_cache_allocate(
 
     for (std::size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit) {
         if (m_texture_units[texture_unit] == handle) {
-            SPDLOG_LOGGER_TRACE(
-                log_texture_frame,
-                "cache hit texture unit {} for texture {}, sampler {}",
-                texture_unit,
-                texture_name,
-                sampler_name
-            );
+            SPDLOG_LOGGER_TRACE(log_texture_frame, "cache hit texture unit {} for texture {}, sampler {}", texture_unit, texture_name, sampler_name);
             return texture_unit;
         }
     }
 
     const std::size_t result = m_texture_units.size();
     m_texture_units.push_back(handle);
-    SPDLOG_LOGGER_TRACE(
-        log_texture_frame,
-        "allocted texture unit {} for texture {}, sampler {}",
-        result,
-        texture_name,
-        sampler_name
-    );
+    SPDLOG_LOGGER_TRACE(log_texture_frame, "allocted texture unit {} for texture {}, sampler {}", result, texture_name, sampler_name);
     return result;
 }
 

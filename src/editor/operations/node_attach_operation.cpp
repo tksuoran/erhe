@@ -18,7 +18,8 @@ namespace editor {
 auto Node_attach_operation::describe() const -> std::string
 {
     return fmt::format(
-        "Node_attach_operation(attachment = {} {}, host node before = {}, host node after = {})",
+        "[{}] Node_attach_operation(attachment = {} {}, host node before = {}, host node after = {})",
+        get_serial(),
         m_attachment->get_type_name(),
         m_attachment->get_name(),
         m_host_node_before ? m_host_node_before->get_name() : "(empty)",

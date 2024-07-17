@@ -123,6 +123,18 @@ auto from_erhe(const erhe::window::Keycode keycode) -> ImGuiKey
     }
 }
 
+auto from_erhe(const erhe::window::Mouse_button button) -> int
+{
+    switch (button) {
+        case erhe::window::Mouse_button_left:   return ImGuiMouseButton_Left;
+        case erhe::window::Mouse_button_right:  return ImGuiMouseButton_Right;
+        case erhe::window::Mouse_button_middle: return ImGuiMouseButton_Middle;
+        case erhe::window::Mouse_button_x1:     return 3;
+        case erhe::window::Mouse_button_x2:     return 4;
+        default: return -1;
+    }
+}
+
 void update_key_modifiers(ImGuiIO& io, const uint32_t modifier_mask)
 {
     io.AddKeyEvent(ImGuiMod_Ctrl,  (modifier_mask & erhe::window::Key_modifier_bit_ctrl ) != 0);
@@ -156,11 +168,7 @@ Imgui_host::Imgui_host(
     // Imgui_host).
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
-    register_input(
-        erhe::rendergraph::Routing::None,
-        "window",
-        erhe::rendergraph::Rendergraph_node_key::window
-    );
+    register_input(erhe::rendergraph::Routing::None, "window", erhe::rendergraph::Rendergraph_node_key::window);
 
     imgui_renderer.register_imgui_host(this);
 }
@@ -234,218 +242,62 @@ auto Imgui_host::get_mouse_position() const -> glm::vec2
 }
 
 #pragma region Events
-void Imgui_host::on_focus(const int focused)
-{
-    std::lock_guard<std::mutex> lock{m_event_mutex};
-    m_events.push_back(
-        Imgui_event{
-            .type = Imgui_event_type::focus_event,
-            .u = {
-                .focus_event = {
-                    .focused = focused
-                }
-            }
-        }
-    );
-}
-
-void Imgui_host::on_event(const Focus_event& focus_event)
+auto Imgui_host::on_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddFocusEvent(focus_event.focused != 0);
+    io.AddFocusEvent(window_focus_event.focused != 0);
+    return false;
 }
 
-void Imgui_host::on_cursor_enter(const int entered)
-{
-    SPDLOG_LOGGER_TRACE(
-        log_imgui,
-        "imgui viewport {} on_cursor_enter(entered = {})",
-        m_name,
-        entered
-    );
-
-    std::lock_guard<std::mutex> lock{m_event_mutex};
-    m_events.push_back(
-        Imgui_event{
-            .type = Imgui_event_type::cursor_enter_event,
-            .u = {
-                .cursor_enter_event = {
-                    .entered = entered
-                }
-            }
-        }
-    );
-}
-
-void Imgui_host::on_event(const Cursor_enter_event& cursor_enter_event)
+auto Imgui_host::on_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
 {
     m_has_cursor = cursor_enter_event.entered != 0;
     ImGuiIO& io = m_imgui_context->IO;
     io.AddFocusEvent(m_has_cursor);
+    return false;
 }
 
-void Imgui_host::on_mouse_move(const float x, const float y)
-{
-    std::lock_guard<std::mutex> lock{m_event_mutex};
-    m_events.push_back(
-        Imgui_event{
-            .type = Imgui_event_type::mouse_move_event,
-            .u = {
-                .mouse_move_event = {
-                    .x = x,
-                    .y = y
-                }
-            }
-        }
-    );
-}
-
-void Imgui_host::on_event(const Mouse_move_event& mouse_move_event)
+auto Imgui_host::on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMousePosEvent(mouse_move_event.x, mouse_move_event.y);
+    return false;
 }
 
-void Imgui_host::on_mouse_button(const uint32_t button, const bool pressed)
+auto Imgui_host::on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
 {
-    SPDLOG_LOGGER_TRACE(
-        log_imgui,
-        "imgui viewport {} on_mouse_button(button = {}, action = {})",
-        m_name,
-        button,
-        pressed ? "pressed" : "released"
-    );
+    int imgui_mouse_button = from_erhe(mouse_button_event.button);
+    if (imgui_mouse_button < 0) {
+        return false;
+    }
 
-    std::lock_guard<std::mutex> lock{m_event_mutex};
-    m_events.push_back(
-        Imgui_event{
-            .type = Imgui_event_type::mouse_button_event,
-            .u = {
-                .mouse_button_event = {
-                    .button  = button,
-                    .pressed = pressed
-                }
-            }
-        }
-    );
-}
-
-void Imgui_host::on_event(const Mouse_button_event& mouse_button_event)
-{
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddMouseButtonEvent(mouse_button_event.button, mouse_button_event.pressed);
+    io.AddMouseButtonEvent(imgui_mouse_button, mouse_button_event.pressed);
+    return false;
 }
 
-void Imgui_host::on_mouse_wheel(const float x, const float y)
-{
-    SPDLOG_LOGGER_TRACE(
-        log_imgui,
-        "imgui viewport {} on_mouse_wheel(x = {}, y = {})",
-        m_name,
-        x,
-        y
-    );
-
-    std::lock_guard<std::mutex> lock{m_event_mutex};
-    m_events.push_back(
-        Imgui_event{
-            .type = Imgui_event_type::mouse_wheel_event,
-            .u = {
-                .mouse_wheel_event = {
-                    .x = x,
-                    .y = y
-                }
-            }
-        }
-    );
-}
-
-void Imgui_host::on_event(const Mouse_wheel_event& mouse_wheel_event)
+auto Imgui_host::on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMouseWheelEvent(mouse_wheel_event.x, mouse_wheel_event.y);
+    return false;
 }
 
-void Imgui_host::on_key(const signed int keycode, const uint32_t modifier_mask, const bool pressed)
-{
-    SPDLOG_LOGGER_TRACE(
-        log_imgui,
-        "imgui viewport {} on_key(keycode = {}, modifier_mask = {:04x}, pressed = {})",
-        m_name,
-        keycode,
-        modifier_mask,
-        pressed
-    );
-
-    std::lock_guard<std::mutex> lock{m_event_mutex};
-    m_events.push_back(
-        Imgui_event{
-            .type = Imgui_event_type::key_event,
-            .u = {
-                .key_event = {
-                    .keycode       = keycode,
-                    .modifier_mask = modifier_mask,
-                    .pressed       = pressed
-                }
-            }
-        }
-    );
-}
-
-void Imgui_host::on_event(const Key_event& event)
+auto Imgui_host::on_event(const erhe::window::Key_event& event) -> bool
 {
     using erhe::window::Keycode;
 
     ImGuiIO& io = m_imgui_context->IO;
-
     update_key_modifiers(io, event.modifier_mask);
     io.AddKeyEvent(from_erhe(event.keycode), event.pressed);
+    return false;
 }
 
-void Imgui_host::on_char(const unsigned int codepoint)
-{
-    SPDLOG_LOGGER_TRACE(
-        log_imgui,
-        "imgui viewport {} on_char(codepoint = {})",
-        m_name,
-        codepoint
-    );
-
-    std::lock_guard<std::mutex> lock{m_event_mutex};
-    m_events.push_back(
-        Imgui_event{
-            .type = Imgui_event_type::char_event,
-            .u = {
-                .char_event = {
-                    .codepoint = codepoint
-                }
-            }
-        }
-    );
-}
-
-void Imgui_host::on_event(const Char_event& char_event)
+auto Imgui_host::on_event(const erhe::window::Char_event& char_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddInputCharacter(char_event.codepoint);
-}
-
-void Imgui_host::flush_queud_events()
-{
-    std::lock_guard<std::mutex> lock{m_event_mutex};
-    for (const auto& event : m_events) {
-        switch (event.type) {
-            case Imgui_event_type::key_event         : on_event(event.u.key_event); break;
-            case Imgui_event_type::char_event        : on_event(event.u.char_event); break;
-            case Imgui_event_type::focus_event       : on_event(event.u.focus_event); break;
-            case Imgui_event_type::cursor_enter_event: on_event(event.u.cursor_enter_event); break;
-            case Imgui_event_type::mouse_move_event  : on_event(event.u.mouse_move_event); break;
-            case Imgui_event_type::mouse_button_event: on_event(event.u.mouse_button_event); break;
-            case Imgui_event_type::mouse_wheel_event : on_event(event.u.mouse_wheel_event); break;
-            default: break;
-        }
-    }
-    m_events.clear();
+    return false;
 }
 
 #pragma endregion Events
@@ -456,59 +308,14 @@ auto Imgui_host::want_capture_mouse() const -> bool
     return false;
 }
 
-void Imgui_host::on_focus(int focused)
-{
-    static_cast<void>(focused);
-}
-
-void Imgui_host::on_cursor_enter(int entered)
-{
-    static_cast<void>(entered);
-}
-
-void Imgui_host::on_mouse_button(
-    const uint32_t button,
-    const bool     pressed
-)
-{
-    static_cast<void>(button);
-    static_cast<void>(pressed);
-}
-
-void Imgui_host::on_mouse_wheel(
-    const float x,
-    const float y
-)
-{
-    static_cast<void>(x);
-    static_cast<void>(y);
-}
-
-void Imgui_host::make_imgui_context_current()
-{
-}
-
-void Imgui_host::make_imgui_context_uncurrent()
-{
-}
-
-void Imgui_host::on_key(
-    const signed int keycode,
-    const uint32_t   modifier_mask,
-    const bool       pressed
-)
-{
-    static_cast<void>(keycode);
-    static_cast<void>(modifier_mask);
-    static_cast<void>(pressed);
-}
-
-void Imgui_host::on_char(
-    const unsigned int codepoint
-)
-{
-    static_cast<void>(codepoint);
-}
+void Imgui_host::on_focus(int) {}
+void Imgui_host::on_cursor_enter(int) {}
+void Imgui_host::on_mouse_button(uint32_t, bool) {}
+void Imgui_host::on_mouse_wheel(float, float) {}
+void Imgui_host::make_imgui_context_current() {}
+void Imgui_host::make_imgui_context_uncurrent() {}
+void Imgui_host::on_key(signed int, uint32_t, bool) {}
+void Imgui_host::on_char(const unsigned int) {}
 
 #endif
 

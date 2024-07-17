@@ -843,9 +843,7 @@ void Selection_tool::viewport_toolbar(bool& hovered)
     const auto& icon_rasterication = m_context.icon_set->get_small_rasterization();
 
     int boost = get_priority_boost();
-    const auto mode = boost > 0
-        ? erhe::imgui::Item_mode::active
-        : erhe::imgui::Item_mode::normal;
+    const auto mode = boost > 0 ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
 
     erhe::imgui::begin_button_style(mode);
     const bool button_pressed = icon_rasterication.icon_button(
@@ -858,11 +856,7 @@ void Selection_tool::viewport_toolbar(bool& hovered)
     erhe::imgui::end_button_style(mode);
     if (ImGui::IsItemHovered()) {
         hovered = true;
-        ImGui::SetTooltip(
-            boost > 0
-                ? "De-prioritize Selection Tool"
-                : "Prioritize Selection Tool"
-        );
+        ImGui::SetTooltip(boost > 0 ? "De-prioritize Selection Tool" : "Prioritize Selection Tool");
     }
     if (button_pressed) {
         set_priority_boost(boost == 0 ? 10 : 0);
@@ -883,6 +877,16 @@ void Selection::update_last_selected(const std::shared_ptr<erhe::Item_base>& ite
     }
 
     m_last_selected_by_type[item->get_type()] = item;
+}
+
+auto Selection::get_last_selected(const uint64_t type) -> std::shared_ptr<erhe::Item_base>
+{
+    auto i = m_last_selected_by_type.find(type);
+    if (i == m_last_selected_by_type.end()) {
+        return {};
+    }
+    std::shared_ptr<erhe::Item_base> item = (*i).second.lock();
+    return item;
 }
 
 }

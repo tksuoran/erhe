@@ -214,7 +214,7 @@ auto Map_window::want_mouse_events() const -> bool
 
 auto Map_window::mouse_scroll_try_ready() const -> bool
 {
-    return m_is_hovered;
+    return is_hovered();
 }
 
 void Map_window::scroll(glm::vec2 delta)

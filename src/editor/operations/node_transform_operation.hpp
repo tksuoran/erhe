@@ -16,7 +16,7 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Node_transform_operation : public IOperation
+class Node_transform_operation : public Operation
 {
 public:
     class Parameters
@@ -29,10 +29,10 @@ public:
 
     explicit Node_transform_operation(const Parameters& parameters);
 
-    // Implements IOperation
-    auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
+    // Implements Operation
+    auto describe() const -> std::string   override;
+    void execute (Editor_context& context) override;
+    void undo    (Editor_context& context) override;
 
 private:
     Parameters m_parameters;

@@ -16,7 +16,7 @@ class Editor_context;
 class Node_physics;
 class Mesh_raytrace;
 
-class Merge_operation : public IOperation
+class Merge_operation : public Operation
 {
 public:
     class Parameters
@@ -28,10 +28,10 @@ public:
 
     explicit Merge_operation(Parameters&& parameters);
 
-    // Implements IOperation
-    auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
+    // Implements Operation
+    auto describe() const -> std::string   override;
+    void execute (Editor_context& context) override;
+    void undo    (Editor_context& context) override;
 
 private:
     class Entry

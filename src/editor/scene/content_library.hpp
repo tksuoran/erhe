@@ -4,7 +4,6 @@
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 
-#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_verify/verify.hpp"
 

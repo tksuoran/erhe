@@ -2,11 +2,16 @@
 
 #include "erhe_commands/key_binding.hpp"
 #include "erhe_commands/menu_binding.hpp"
+#include "erhe_commands/mouse_binding.hpp"
+#include "erhe_commands/mouse_wheel_binding.hpp"
 #include "erhe_commands/controller_axis_binding.hpp"
 #include "erhe_commands/controller_button_binding.hpp"
+#include "erhe_commands/update_binding.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "erhe_commands/xr_boolean_binding.hpp"
+#   include "erhe_commands/xr_float_binding.hpp"
+#   include "erhe_commands/xr_vector2f_binding.hpp"
 #endif
 
 #include "erhe_window/window_event_handler.hpp"
@@ -18,6 +23,7 @@
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 namespace erhe::xr {
+    class Xr_instance;
     class Xr_action_boolean;
     class Xr_action_float;
     class Xr_action_vector2f;
@@ -43,15 +49,9 @@ class Mouse_motion_binding;
 class Mouse_wheel_binding;
 class Update_binding;
 
-class Commands : public erhe::window::Window_event_handler
+class Commands : public erhe::window::Input_event_handler
 {
 public:
-    // Implements Window_event_handler
-    [[nodiscard]] auto get_name() const -> const char* override { return "Commands"; }
-
-    Commands();
-    ~Commands() noexcept override;
-
     // Public API
     void register_command(Command* command);
     void sort_bindings   ();
@@ -125,26 +125,30 @@ public:
     [[nodiscard]] auto last_mouse_position      () const -> glm::vec2;
     [[nodiscard]] auto last_mouse_position_delta() const -> glm::vec2;
 
-    // Implements erhe::window::Window_event_handler
-    auto has_active_mouse    () const                                                                                         -> bool override;
-    auto on_key              (erhe::window::Keycode code, uint32_t modifier_mask, bool pressed)                               -> bool override;
-    auto on_mouse_move       (float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool override;
-    auto on_mouse_button     (erhe::window::Mouse_button button, bool pressed, uint32_t modifier_mask)                        -> bool override;
-    auto on_mouse_wheel      (float x, float y, uint32_t modifier_mask)                                                       -> bool override;
-    auto on_idle             ()                                                                                               -> bool override;
-    auto on_controller_axis  (int axis, float value, uint32_t modifier_mask)                                                  -> bool override;
-    auto on_controller_button(int button, bool value, uint32_t modifier_mask)                                                 -> bool override;
+    void tick(std::vector<erhe::window::Input_event>& input_events);
+
+    // Implements Input_event_handler
+    auto on_event(const erhe::window::Key_event& key_event) -> bool override;
+    auto on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool override;
+    auto on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool override;
+    auto on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool override;
+    auto on_event(const erhe::window::Controller_axis_event& controller_axis_event) -> bool override;
+    auto on_event(const erhe::window::Controller_button_event& controller_button_event) -> bool override;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    void on_xr_action   (erhe::xr::Xr_action_boolean&  xr_action);
-    void on_xr_action   (erhe::xr::Xr_action_float&    xr_action);
-    void on_xr_action   (erhe::xr::Xr_action_vector2f& xr_action);
+    void dispatch_xr_events(erhe::xr::Xr_instance& instance, void* session);
 #endif
 
     [[nodiscard]] auto get_command_priority(Command* command) const -> int;
     [[nodiscard]] auto get_active_mouse_command() -> Command* { return m_active_mouse_command; }
 
 private:
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    void on_xr_action(erhe::xr::Xr_action_boolean&  xr_action);
+    void on_xr_action(erhe::xr::Xr_action_float&    xr_action);
+    void on_xr_action(erhe::xr::Xr_action_vector2f& xr_action);
+#endif
+
     void sort_mouse_bindings        ();
     void sort_controller_bindings   ();
     void sort_xr_bindings           ();

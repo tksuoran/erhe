@@ -351,7 +351,7 @@ private:
                 "shader type = {}, data type = {}, offset = {}",
                 attribute_index,
                 attribute.name,
-                erhe::graphics::Vertex_attribute::desc(attribute.usage.type),
+                erhe::graphics::Vertex_attribute::c_str(attribute.usage.type),
                 attribute.usage.index,
                 erhe::graphics::c_str(attribute.shader_type),
                 erhe::dataformat::c_str(attribute.data_type),
@@ -433,7 +433,7 @@ private:
                 break;
             }
             default: {
-                log_primitive->warn("Unsupported attribute {} {} {}", erhe::graphics::Vertex_attribute::desc(attribute.usage.type), attribute.usage.index, attribute.name);
+                log_primitive->warn("Unsupported attribute {} {} {}", erhe::graphics::Vertex_attribute::c_str(attribute.usage.type), attribute.usage.index, attribute.name);
                 break;
             }
         }
@@ -464,7 +464,7 @@ private:
                 break;
             }
             default: {
-                log_primitive->warn("Unsupported attribute {} {} {}", erhe::graphics::Vertex_attribute::desc(attribute.usage.type), attribute.usage.index, attribute.name);
+                log_primitive->warn("Unsupported attribute {} {} {}", erhe::graphics::Vertex_attribute::c_str(attribute.usage.type), attribute.usage.index, attribute.name);
                 break;
             }
         }

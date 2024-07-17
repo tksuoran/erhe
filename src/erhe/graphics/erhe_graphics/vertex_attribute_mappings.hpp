@@ -20,10 +20,7 @@ class Vertex_attribute_mappings final
 public:
     explicit Vertex_attribute_mappings(erhe::graphics::Instance& instance);
 
-    Vertex_attribute_mappings(
-        erhe::graphics::Instance&                             instance,
-        const std::initializer_list<Vertex_attribute_mapping> mappings
-    );
+    Vertex_attribute_mappings(erhe::graphics::Instance& instance, const std::initializer_list<Vertex_attribute_mapping> mappings);
 
     void collect_attributes(
         std::vector<Vertex_input_attribute>& attributes,

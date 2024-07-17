@@ -83,20 +83,14 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 
     Rendergraph_node* input_node = get_consumer_input_node(erhe::rendergraph::Routing::Resource_provided_by_producer, erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     if (input_node == nullptr) {
-        SPDLOG_LOGGER_TRACE(
-            log_render,
-            "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: shadow_maps input is not connected"
-        );
+        SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: shadow_maps input is not connected");
         return;
     }
 
     Shadow_render_node* shadow_render_node = static_cast<Shadow_render_node*>(input_node);
     const auto& shadow_texture = shadow_render_node->get_texture();
     if (!shadow_texture) {
-        SPDLOG_LOGGER_TRACE(
-            log_render,
-            "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: shadow render node has no texture"
-        );
+        SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: shadow render node has no texture");
         return;
     }
 
@@ -221,11 +215,12 @@ Debug_view_window::Debug_view_window(
     , m_context                {editor_context}
     , m_node                   {rendergraph}
 {
-    if (editor_context.OpenXR) {
+    if (editor_context.OpenXR || !editor_context.developer_mode) {
         hide();
         hidden();
         return;
     }
+
     m_depth_to_color_node = std::make_unique<Depth_to_color_rendergraph_node>(rendergraph, forward_renderer, mesh_memory, programs);
     rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::depth_visualization, m_depth_to_color_node.get(), &m_node);
 
@@ -308,11 +303,7 @@ void Debug_view_window::imgui()
     if (!nodes.empty()) {
         int last_node_index = static_cast<int>(nodes.size() - 1);
         const bool node_set = ImGui::SliderInt("Node", &m_selected_node, 0, last_node_index);
-        if (
-            node_set &&
-            (m_selected_node >= 0) &&
-            (m_selected_node < nodes.size())
-        ) {
+        if (node_set && (m_selected_node >= 0) && (m_selected_node < nodes.size())) {
             const auto node = nodes.at(m_selected_node);
             set_shadow_renderer_node(node.get());
         }
@@ -370,18 +361,10 @@ void Debug_view_window::imgui()
             ImGui::SameLine();
         }
         std::string label = fmt::format("{}", i);
-        if (
-            erhe::imgui::make_button(
-                label.c_str(),
-                (light_index == i)
-                    ? erhe::imgui::Item_mode::active
-                    : erhe::imgui::Item_mode::normal
-            )
-        ) {
+        if (erhe::imgui::make_button(label.c_str(), (light_index == i) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal)) {
             light_index = i;
         }
-        if (ImGui::IsItemHovered())
-        {
+        if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", light_projection_transform.light->get_name().c_str());
         }
     }
@@ -421,10 +404,7 @@ void Debug_view_window::imgui()
     const int texture_width  = texture->width();
     const int texture_height = texture->height();
 
-    if (
-        (texture_width  > 0) &&
-        (texture_height > 0)
-    ) {
+    if ((texture_width > 0) && (texture_height > 0)) {
         auto cursor_position = ImGui::GetCursorPos();
         cursor_position.x += (available_size.x - image_size) / 2.0f;
         cursor_position.y += (available_size.y - image_size) / 2.0f;

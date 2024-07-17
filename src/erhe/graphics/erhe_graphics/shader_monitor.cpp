@@ -46,10 +46,7 @@ void Shader_monitor::set_enabled(const bool enabled)
     set_run(enabled);
 }
 
-void Shader_monitor::add(
-    erhe::graphics::Shader_stages_create_info create_info,
-    erhe::graphics::Shader_stages*            shader_stages
-)
+void Shader_monitor::add(erhe::graphics::Shader_stages_create_info create_info, erhe::graphics::Shader_stages* shader_stages)
 {
     ERHE_VERIFY(shader_stages != nullptr);
     for (const auto& shader : create_info.shaders) {

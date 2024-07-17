@@ -245,6 +245,7 @@ Tools::Tools(
                 .require_at_least_one_bit_clear = 0
             }
         );
+        m_content_library_tree_window->set_developer();
     }
 
     m_scene_root = std::make_shared<Scene_root>(

@@ -116,8 +116,9 @@ public:
     );
 
     // Public API
+    [[nodiscard]] auto update_events() -> bool;
+
     void render_headset           ();
-    void begin_frame              ();
     void end_frame                ();
     void request_renderdoc_capture();
 

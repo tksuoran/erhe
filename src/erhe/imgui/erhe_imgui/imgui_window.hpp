@@ -30,12 +30,14 @@ public:
     );
     virtual ~Imgui_window() noexcept;
 
-    [[nodiscard]] auto is_visible     () const -> bool;
-    [[nodiscard]] auto is_hovered     () const -> bool;
-    [[nodiscard]] auto get_ini_label  () const -> const std::string&;
-    [[nodiscard]] auto get_title      () const -> const std::string&;
-    [[nodiscard]] auto get_scale_value() const -> float;
-    [[nodiscard]] auto show_in_menu   () const -> bool;
+    [[nodiscard]] auto is_visible            () const -> bool;
+    [[nodiscard]] auto is_hovered            () const -> bool;
+    [[nodiscard]] auto get_ini_label         () const -> const std::string&;
+    [[nodiscard]] auto get_title             () const -> const std::string&;
+    [[nodiscard]] auto get_scale_value       () const -> float;
+    [[nodiscard]] auto show_in_menu          () const -> bool;
+    [[nodiscard]] auto show_in_developer_menu() const -> bool;
+    void set_developer    ();
     void set_min_size     (float min_width, float min_height);
     auto begin            () -> bool;
     void end              ();
@@ -59,18 +61,21 @@ public:
     virtual auto want_mouse_events   () const -> bool;
 
 protected:
+    void set_is_hovered(bool hovered);
+
     Imgui_renderer& m_imgui_renderer;
     Imgui_windows&  m_imgui_windows;
 
     std::string     m_title;
     Imgui_host*     m_imgui_host  {nullptr};
-    bool            m_is_hovered  {false};
     bool            m_show_in_menu{true};
+    bool            m_developer   {false};
     std::string     m_ini_label   {};
     float           m_min_size[2]{200.0f, 400.0f};
     float           m_max_size[2]{99999.0f, 99999.0f};
 
 private:
+    bool            m_is_hovered  {false};
     bool            m_is_visible  {true};
 };
 

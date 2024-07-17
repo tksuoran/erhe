@@ -334,7 +334,7 @@ void Headset_view::render_headset()
         return;
     }
 
-    auto frame_timing = m_headset->begin_frame();
+    auto frame_timing = m_headset->begin_frame_();
     if (!frame_timing.begin_ok) {
         return;
     }
@@ -578,51 +578,33 @@ auto Headset_view::get_headset() const -> erhe::xr::Headset*
     return m_headset.get();
 }
 
-void Headset_view::begin_frame()
+auto Headset_view::update_events() -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
     if (!m_headset) {
-        return;
+        return false;
     }
 
     m_finger_inputs.clear();
+
+    if (!m_headset->update_events()) {
+        return false;
+    }
 
     update_camera_node();
 
     update_pointer_context_from_controller();
     auto& instance = m_headset->get_xr_instance();
     const XrSession xr_session = m_headset->get_xr_session().get_xr_session();
-    for (auto& action : instance.get_boolean_actions()) {
-        action.get(xr_session);
-        if (action.state.changedSinceLastSync == XR_TRUE) {
-            m_context.commands->on_xr_action(action);
-        }
-    }
-    for (auto& action : instance.get_float_actions()) {
-        action.get(xr_session);
-        if (action.state.changedSinceLastSync == XR_TRUE) {
-            m_context.commands->on_xr_action(action);
-        }
-    }
-    for (auto& action : instance.get_vector2f_actions()) {
-        action.get(xr_session);
-        if (action.state.changedSinceLastSync == XR_TRUE) {
-            m_context.commands->on_xr_action(action);
-        }
-    }
+
+    m_context.commands->dispatch_xr_events(instance, xr_session);
 
     if (m_controller_visualization) {
         // TODO both controllers
         auto* left_aim_pose  = m_headset->get_actions_left().aim_pose;
         auto* right_aim_pose = m_headset->get_actions_right().aim_pose;
-        auto* pose =
-            (
-                (right_aim_pose != nullptr) &&
-                (right_aim_pose->location.locationFlags != 0)
-            )
-                ? right_aim_pose
-                : left_aim_pose;
+        auto* pose = ((right_aim_pose != nullptr) && (right_aim_pose->location.locationFlags != 0)) ? right_aim_pose : left_aim_pose;
         if (pose != nullptr) {
             erhe::xr::Xr_action_pose pose_with_offset = *pose;
             pose_with_offset.position += get_camera_offset();
@@ -633,10 +615,7 @@ void Headset_view::begin_frame()
     //{
     //    m_hand_tracker->update_hands(*m_headset.get());
     //}
-
-    if (!m_scene_root) {
-        return;
-    }
+    return true;
 }
 
 void Headset_view::request_renderdoc_capture()

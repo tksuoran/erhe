@@ -62,6 +62,17 @@ private:
     Editor_context& m_context;
 };
 
+class Hotbar_rotate_tool_command : public erhe::commands::Command
+{
+public:
+    Hotbar_rotate_tool_command(erhe::commands::Commands& commands, Editor_context& context, int rotate_direction);
+    auto try_call() -> bool override;
+
+private:
+    Editor_context& m_context;
+    int m_rotate_direction;
+};
+
 class Hotbar_thumbstick_command : public erhe::commands::Command
 {
 public:
@@ -127,6 +138,8 @@ private:
 
     // Commands
     Toggle_menu_visibility_command            m_toggle_visibility_command;
+    Hotbar_rotate_tool_command                m_prev_tool_command;
+    Hotbar_rotate_tool_command                m_next_tool_command;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     Hotbar_trackpad_command                   m_trackpad_command;
     erhe::commands::Xr_vector2f_click_command m_trackpad_click_command;

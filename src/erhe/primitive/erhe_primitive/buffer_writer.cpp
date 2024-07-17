@@ -206,6 +206,42 @@ inline void write_low(
 inline void write_low(
     const std::span<std::uint8_t>  destination,
     const erhe::dataformat::Format format,
+    const glm::uvec2               value
+)
+{
+    switch (format) {
+        case erhe::dataformat::Format::format_8_vec2_uint: {
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
+            ERHE_VERIFY(value.x <= std::numeric_limits<uint8_t>::max());
+            ERHE_VERIFY(value.y <= std::numeric_limits<uint8_t>::max());
+            ptr[0] = static_cast<uint8_t>(value.x & 0xffu);
+            ptr[1] = static_cast<uint8_t>(value.y & 0xffu);
+            break;
+        }
+        case erhe::dataformat::Format::format_16_vec2_uint: {
+            auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
+            ERHE_VERIFY(value.x <= std::numeric_limits<uint16_t>::max());
+            ERHE_VERIFY(value.y <= std::numeric_limits<uint16_t>::max());
+            ptr[0] = static_cast<uint16_t>(value.x & 0xffffu);
+            ptr[1] = static_cast<uint16_t>(value.y & 0xffffu);
+            break;
+        }
+        case erhe::dataformat::Format::format_32_vec2_uint: {
+            auto* const ptr = reinterpret_cast<uint32_t*>(destination.data());
+            ptr[0] = value.x;
+            ptr[1] = value.y;
+            break;
+        }
+        default: {
+            ERHE_FATAL("unsupported attribute type");
+            break;
+        }
+    }
+}
+
+inline void write_low(
+    const std::span<std::uint8_t>  destination,
+    const erhe::dataformat::Format format,
     const glm::uvec4               value
 )
 {
@@ -360,6 +396,18 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 }
 
 void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const uint32_t value)
+{
+    write_low(
+        vertex_data_span.subspan(
+            vertex_write_offset + attribute.offset,
+            attribute.size
+        ),
+        attribute.data_type,
+        value
+    );
+}
+
+void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::uvec2 value)
 {
     write_low(
         vertex_data_span.subspan(

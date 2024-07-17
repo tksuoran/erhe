@@ -21,6 +21,7 @@ Mesh_operation::Mesh_operation(Mesh_operation_parameters&& parameters)
 auto Mesh_operation::describe() const -> std::string
 {
     std::stringstream ss;
+    ss << fmt::format("[{}] ", get_serial());
     bool first = true;
     for (const auto& entry : m_entries) {
         if (first) {

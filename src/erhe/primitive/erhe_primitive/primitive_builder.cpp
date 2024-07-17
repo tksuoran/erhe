@@ -113,23 +113,24 @@ void Build_context_root::get_vertex_attributes()
 {
     ERHE_PROFILE_FUNCTION();
 
-    attributes.position      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::position,      0);
-    attributes.normal        = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,        0); // content normals
-    attributes.normal_smooth = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,        1); // smooth normals
+    attributes.position       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::position,      0);
+    attributes.normal         = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,        0); // content normals
+    attributes.normal_smooth  = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,        1); // smooth normals
     //attributes.normal_flat   = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,    2); // flat normals
-    attributes.tangent       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tangent,       0);
-    attributes.bitangent     = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::bitangent,     0);
-    attributes.color         = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::color,         0);
-    attributes.aniso_control = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::aniso_control, 0);
-    attributes.texcoord      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tex_coord,     0);
-    attributes.id_vec3       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::id,            0);
+    attributes.tangent        = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tangent,       0);
+    attributes.bitangent      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::bitangent,     0);
+    attributes.color          = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::color,         0);
+    attributes.aniso_control  = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::aniso_control, 0);
+    attributes.texcoord       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tex_coord,     0);
+    attributes.id_vec3        = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::id,            0);
     //// TODO
     //// if (erhe::graphics::g_instance->info.use_integer_polygon_ids)
     //// {
     ////     attributes.attribute_id_uint = Vertex_attribute_info(vertex_format, format_info.id_uint_type, 1, Vertex_attribute::Usage_type::id, 0);
     //// }
-    attributes.joint_indices = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::joint_indices, 0);
-    attributes.joint_weights = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::joint_weights, 0);
+    attributes.joint_indices      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::joint_indices, 0);
+    attributes.joint_weights      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::joint_weights, 0);
+    attributes.valency_edge_count = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::valency_edge_count, 0);
 }
 
 void Build_context_root::allocate_vertex_buffer()
@@ -721,6 +722,16 @@ void Build_context::build_centroid_normal()
     // }
 }
 
+void Build_context::build_valency_edge_count()
+{
+    if (root.attributes.normal.is_valid()) {
+        const unsigned int vertex_valency      = static_cast<unsigned int>(root.geometry.points.at(point_id).corner_count);
+        const unsigned int polygone_edge_count = static_cast<unsigned int>(root.geometry.polygons.at(polygon_id).corner_count);
+        const glm::uvec2 valency_edge_count{vertex_valency, polygone_edge_count};
+        vertex_writer.write(root.attributes.valency_edge_count, valency_edge_count);
+    }
+}
+
 void Build_context::build_corner_point_index()
 {
     if (root.build_info.primitive_types.corner_points) {
@@ -774,11 +785,7 @@ void Build_context::build_polygon_fill()
         }
 
         const Polygon_corner_id polyon_corner_id_end = polygon.first_polygon_corner_id + polygon.corner_count;
-        for (
-            polygon_corner_id = polygon.first_polygon_corner_id;
-            polygon_corner_id < polyon_corner_id_end;
-            ++polygon_corner_id
-        ) {
+        for (polygon_corner_id = polygon.first_polygon_corner_id; polygon_corner_id < polyon_corner_id_end; ++polygon_corner_id) {
             corner_id            = root.geometry.polygon_corners[polygon_corner_id];
             const Corner& corner = root.geometry.corners[corner_id];
             point_id             = corner.point_id;
@@ -795,6 +802,7 @@ void Build_context::build_polygon_fill()
             build_vertex_aniso_control();
             build_vertex_joint_indices();
             build_vertex_joint_weights();
+            build_valency_edge_count  ();
 
             // Indices
             property_maps.corner_indices->put(corner_id, vertex_index);
@@ -831,11 +839,7 @@ void Build_context::build_edge_lines()
         return;
     }
 
-    for (
-        Edge_id edge_id = 0, end = root.geometry.get_edge_count();
-        edge_id < end;
-        ++edge_id
-    ) {
+    for (Edge_id edge_id = 0, end = root.geometry.get_edge_count(); edge_id < end; ++edge_id) {
         const Edge&           edge              = root.geometry.edges[edge_id];
         const Point&          point_a           = root.geometry.points[edge.a];
         const Point&          point_b           = root.geometry.points[edge.b];
@@ -846,10 +850,7 @@ void Build_context::build_edge_lines()
 
         ERHE_VERIFY(edge.a != edge.b);
 
-        if (
-            property_maps.corner_indices->has(corner_id_a) &&
-            property_maps.corner_indices->has(corner_id_b)
-        ) {
+        if (property_maps.corner_indices->has(corner_id_a) && property_maps.corner_indices->has(corner_id_b)) {
             const auto v0 = property_maps.corner_indices->get(corner_id_a);
             const auto v1 = property_maps.corner_indices->get(corner_id_b);
             //SPDLOG_LOGGER_TRACE(
@@ -873,11 +874,7 @@ void Build_context::build_centroid_points()
     }
 
     const Polygon_id polygon_id_end = root.geometry.get_polygon_count();
-    for (
-        polygon_id = 0;
-        polygon_id < polygon_id_end;
-        ++polygon_id
-    ) {
+    for (polygon_id = 0; polygon_id < polygon_id_end; ++polygon_id) {
         build_centroid_position();
         build_centroid_normal();
 
@@ -887,11 +884,7 @@ void Build_context::build_centroid_points()
     }
 }
 
-void Build_context_root::allocate_index_range(
-    const gl::Primitive_type primitive_type,
-    const std::size_t        index_count,
-    Index_range&             out_range
-)
+void Build_context_root::allocate_index_range(const gl::Primitive_type primitive_type, const std::size_t index_count, Index_range& out_range)
 {
     out_range.primitive_type = primitive_type;
     out_range.first_index    = next_index_range_start;

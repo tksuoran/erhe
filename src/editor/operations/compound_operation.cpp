@@ -46,7 +46,7 @@ void Compound_operation::undo(Editor_context& context)
 auto Compound_operation::describe() const -> std::string
 {
     std::stringstream ss;
-    ss << "Compound ";
+    ss << fmt::format("[{}] Compound ", get_serial());
     bool first = true;
     for (auto& operation : m_parameters.operations) {
         if (first) {

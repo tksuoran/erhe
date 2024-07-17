@@ -105,11 +105,76 @@
 
 namespace editor {
 
-class Editor : public erhe::window::Window_event_handler
+class Editor : public erhe::window::Input_event_handler
 {
 public:
-    // Implements Window_event_handler
-    auto get_name() const -> const char* override { return "Editor"; }
+    void tick()
+    {
+        std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
+
+        // Apply logic updates
+
+        if (!m_headset_view.is_active()) {
+            auto* imgui_host = m_imgui_windows.get_window_imgui_host().get(); // get glfw window hosted viewport
+            m_viewport_scene_views.update_hover(imgui_host); // updates what viewport window is being hovered
+        }
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        // - updates cameras
+        // - updates pointer context for headset scene view from controller
+        // - sends XR input events to Commands
+        // - updates controller visualization nodes
+        if (m_editor_context.OpenXR) {
+            bool headset_update_ok = m_headset_view.update_events();
+            if (headset_update_ok && m_headset_view.is_active()) {
+                m_viewport_config_window.set_edit_data(&m_headset_view.get_config());
+            } else{
+                // Throttle loop since xrWaitFrame won't be called.
+                std::this_thread::sleep_for(std::chrono::milliseconds{250});
+            }
+        }
+#endif
+
+        // - Update all ImGui hosts. glfw window host processes input events, converting them to ImGui inputs events
+        //   This may consume some input events, so that they will not get processed by m_commands.tick() below
+        // - Call all ImGui code (Imgui_window)
+        m_imgui_windows.imgui_windows();
+
+        // - Apply all command bindings (OpenXR bindings were already executed above)
+        m_commands.tick(input_events);
+
+        m_operation_stack.update();
+
+        m_editor_scenes.before_physics_simulation_steps();
+
+        // - Execute all fixes step updates
+        // - Execute all once per frame updates
+        //    - Editor_scenes (updates physics)
+        //    - Fly_camera_tool
+        //    - Network_window 
+        m_time.update();
+        m_editor_message_bus.update(); // Flushes queued messages
+
+        // Apply physics updates
+        m_editor_scenes.after_physics_simulation_steps();
+
+        // Rendering
+        m_graphics_instance.shader_monitor.update_once_per_frame();
+        m_mesh_memory.gl_buffer_transfer_queue.flush();
+
+        m_editor_rendering.begin_frame(); // tests renderdoc capture start
+
+        // Execute rendergraph
+        m_rendergraph.execute();
+
+        m_imgui_renderer.next_frame();
+        m_editor_rendering.end_frame();
+        if (!m_editor_context.OpenXR) {
+            gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
+            m_context_window.swap_buffers();
+        }
+
+        ERHE_PROFILE_FRAME_END
+    }
 
     [[nodiscard]] auto create_window() -> erhe::window::Context_window
     {
@@ -150,7 +215,9 @@ public:
         return erhe::window::Context_window{configuration};
     }
 
+#pragma region Editor()
     Editor()
+#pragma region Initialize members
         : m_commands          {}
         , m_scene_message_bus {}
         , m_editor_message_bus{}
@@ -287,6 +354,8 @@ public:
         }
         , m_physics_tool  {m_commands,       m_editor_context, m_editor_message_bus, m_headset_view, m_icon_set, m_tools}
         , m_selection_tool{m_editor_context, m_icon_set, m_tools}
+#pragma endregion Initialize members
+
     {
         ERHE_PROFILE_GPU_CONTEXT
 
@@ -305,13 +374,33 @@ public:
             m_editor_settings.physics.dynamic_enable = false;
         }
 
+        {
+            m_clipboard_window.set_developer();
+            m_commands_window.set_developer();
+            m_composer_window.set_developer();
+            m_debug_view_window.set_developer();
+            m_headset_view.set_developer();
+            m_hover_tool.set_developer();
+            m_frame_log_window.set_developer();
+            m_log_settings_window.set_developer();
+            m_performance_window.set_developer();
+            m_pipelines.set_developer();
+            m_theremin.set_developer();
+            m_layers_window.set_developer();
+            m_network_window.set_developer();
+            m_post_processing_window.set_developer();
+            m_rendergraph_window.set_developer();
+            m_selection_window.set_developer();
+            m_tail_log_window.set_developer();
+            m_hud.set_developer();
+            m_operation_stack.set_developer();
+        }
+
         m_hotbar.get_all_tools();
 
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
         gl::enable      (gl::Enable_cap::framebuffer_srgb);
 
-        auto& root_event_handler = m_context_window.get_root_window_event_handler();
-        root_event_handler.attach(this, 3);
         const auto window_viewport = m_imgui_windows.get_window_imgui_host();
         if (!m_editor_context.OpenXR) {
             window_viewport->set_begin_callback(
@@ -337,14 +426,10 @@ public:
         }
         else
 #endif
-        {
-            root_event_handler.attach(&m_input_state, 4);
-            root_event_handler.attach(&m_imgui_windows, 2);
-        }
-        root_event_handler.attach(&m_commands, 1);
 
         m_tools.set_priority_tool(&m_physics_tool);
     }
+#pragma endregion Editor()
 
     void fill_editor_context()
     {
@@ -403,58 +488,44 @@ public:
         m_editor_context.scene_views            = &m_viewport_scene_views  ;
     }
 
-    void run()
-    {
-        while (!m_close_requested) {
-            m_context_window.poll_events();
-            on_idle();
-        }
-    }
-
-    auto on_idle() -> bool override
-    {
-        m_editor_message_bus.update(); // Flushes queued messages
-        m_graphics_instance.shader_monitor.update_once_per_frame();
-        m_mesh_memory.gl_buffer_transfer_queue.flush();
-
-        m_editor_scenes.before_physics_simulation_steps();
-
-        m_time.update();
-
-        m_editor_scenes.after_physics_simulation_steps();
-
-        m_editor_rendering.begin_frame();
-        m_imgui_windows.imgui_windows();
-        m_rendergraph.execute();
-        m_imgui_renderer.next_frame();
-        m_editor_rendering.end_frame();
-        m_commands.on_idle();
-        m_operation_stack.update();
-        if (!m_editor_context.OpenXR) {
-            gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
-            m_context_window.swap_buffers();
-        }
-
-        ERHE_PROFILE_FRAME_END
-
-        return true;
-    }
-
-    auto on_close() -> bool override
+    auto on_window_close_event() -> bool override
     {
         m_close_requested = true;
         return true;
     }
+    auto on_window_refresh_event() -> bool override
+    {
+        // TODO
+        return true;
+    }
 
+    void run()
+    {
+        m_run_started = true;
+        while (!m_close_requested) {
+            m_context_window.poll_events();
+            auto& input_events = m_context_window.get_input_events();
+            for (erhe::window::Input_event& input_event : input_events) {
+                dispatch_input_event(input_event);
+            }
+            tick();
+            m_context_window.clear_input_events();
+        }
+        m_run_stopped = true;
+    }
+
+#pragma region Members
     bool m_close_requested{false};
 
     // No dependencies (constructors)
-    erhe::commands::Commands       m_commands;
-    erhe::scene::Scene_message_bus m_scene_message_bus;
-    Editor_message_bus             m_editor_message_bus;
-    Input_state                    m_input_state;
-    Time                           m_time;
-    Editor_context                 m_editor_context;
+    erhe::commands::Commands                m_commands;
+    erhe::scene::Scene_message_bus          m_scene_message_bus;
+    Editor_message_bus                      m_editor_message_bus;
+    Input_state                             m_input_state;
+    Time                                    m_time;
+    Editor_context                          m_editor_context;
+    bool                                    m_run_started{false};
+    bool                                    m_run_stopped{false};
 
     Clipboard                               m_clipboard;
     erhe::window::Context_window            m_context_window;
@@ -535,6 +606,7 @@ public:
     Paint_tool                              m_paint_tool;
     Physics_tool                            m_physics_tool;
     Selection_tool                          m_selection_tool;
+#pragma endregion Members
 };
 
 void run_editor()

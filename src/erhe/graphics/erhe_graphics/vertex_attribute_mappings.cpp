@@ -130,10 +130,7 @@ Vertex_attribute_mappings::Vertex_attribute_mappings(erhe::graphics::Instance& i
 {
 }
 
-Vertex_attribute_mappings::Vertex_attribute_mappings(
-    erhe::graphics::Instance&                       instance,
-    std::initializer_list<Vertex_attribute_mapping> mappings
-)
+Vertex_attribute_mappings::Vertex_attribute_mappings(erhe::graphics::Instance& instance, std::initializer_list<Vertex_attribute_mapping> mappings)
     : mappings  {mappings}
     , m_instance{instance}
 {
@@ -145,10 +142,7 @@ void Vertex_attribute_mappings::collect_attributes(
     const Vertex_format&                 vertex_format
 ) const
 {
-    const unsigned int max_attribute_count = std::min(
-        MAX_ATTRIBUTE_COUNT,
-        m_instance.limits.max_vertex_attribs
-    );
+    const unsigned int max_attribute_count = std::min(MAX_ATTRIBUTE_COUNT, m_instance.limits.max_vertex_attribs);
 
     if (vertex_buffer == nullptr) {
         log_vertex_attribute_mappings->error("error: vertex buffer == nullptr");
@@ -156,21 +150,13 @@ void Vertex_attribute_mappings::collect_attributes(
     }
 
     for (const auto& mapping : mappings) {
-        if (
-            vertex_format.has_attribute(
-                mapping.src_usage.type,
-                static_cast<unsigned int>(mapping.src_usage.index)
-            )
-        ) {
-            const auto& attribute = vertex_format.find_attribute(
-                mapping.src_usage.type,
-                static_cast<unsigned int>(mapping.src_usage.index)
-            );
+        if (vertex_format.has_attribute(mapping.src_usage.type, static_cast<unsigned int>(mapping.src_usage.index))) {
+            const auto& attribute = vertex_format.find_attribute(mapping.src_usage.type, static_cast<unsigned int>(mapping.src_usage.index));
             log_vertex_attribute_mappings->trace(
                 "vertex attribute: shader type = {}, name = {}, usage type = {}, usage index = {}, data_type = {}",
                 c_str(mapping.shader_type),
                 mapping.name,
-                Vertex_attribute::desc(attribute->usage.type),
+                Vertex_attribute::c_str(attribute->usage.type),
                 attribute->usage.index,
                 erhe::dataformat::c_str(attribute->data_type)
             );

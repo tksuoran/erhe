@@ -41,6 +41,7 @@ public:
     //// TODO Vertex_attribute_info attribute_id_uint;
     Vertex_attribute_info joint_indices;
     Vertex_attribute_info joint_weights;
+    Vertex_attribute_info valency_edge_count;
 };
 
 class Element_mappings;
@@ -60,11 +61,7 @@ public:
     void calculate_bounding_volume(erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec3>* point_locations);
     void allocate_vertex_buffer   ();
     void allocate_index_buffer    ();
-    void allocate_index_range(
-        const gl::Primitive_type primitive_type,
-        const std::size_t        index_count,
-        Index_range&             out_range
-    );
+    void allocate_index_range     (const gl::Primitive_type primitive_type, const std::size_t index_count, Index_range& out_range);
 
     const erhe::geometry::Geometry&      geometry;
     const Build_info&                    build_info;
@@ -112,11 +109,12 @@ private:
     void build_vertex_joint_indices();
     void build_vertex_joint_weights();
 
-    void build_centroid_position ();
-    void build_centroid_normal   ();
+    void build_centroid_position   ();
+    void build_centroid_normal     ();
+    void build_valency_edge_count  ();
 
-    void build_corner_point_index ();
-    void build_triangle_fill_index();
+    void build_corner_point_index  ();
+    void build_triangle_fill_index ();
 
     erhe::geometry::Polygon_id        polygon_id       {0};
     erhe::geometry::Polygon_corner_id polygon_corner_id{0};

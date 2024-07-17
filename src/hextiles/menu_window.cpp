@@ -21,27 +21,26 @@
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
-namespace hextiles
-{
+namespace hextiles {
 
 Menu_window::Menu_window(
-    erhe::commands::Commands&           commands,
-    erhe::imgui::Imgui_renderer&        imgui_renderer,
-    erhe::imgui::Imgui_windows&         imgui_windows,
-    erhe::window::Window_event_handler& window_event_handler,
-    Map_window&                         map_window,
-    Tiles&                              tiles,
-    Tile_renderer&                      tile_renderer
+    erhe::commands::Commands&          commands,
+    erhe::imgui::Imgui_renderer&       imgui_renderer,
+    erhe::imgui::Imgui_windows&        imgui_windows,
+    erhe::window::Input_event_handler& input_event_handler,
+    Map_window&                        map_window,
+    Tiles&                             tiles,
+    Tile_renderer&                     tile_renderer
 )
-    : Imgui_window          {imgui_renderer, imgui_windows, "Menu", "menu"}
-    , m_window_event_handler{window_event_handler}
-    , m_tiles          {tiles}
-    , m_tile_renderer  {tile_renderer}
-    , m_map_window     {map_window}
-    , m_game           {commands, imgui_renderer, imgui_windows, m_map_window, *this, m_tile_renderer, m_tiles}
-    , m_map_editor     {commands, imgui_renderer, imgui_windows, m_map_window, *this, m_tile_renderer, m_tiles}
-    , m_new_game_window{imgui_renderer, imgui_windows, m_game, m_map_editor, m_map_window, *this, m_tile_renderer, m_tiles}
-    , m_type_editor    {imgui_renderer, imgui_windows, *this, m_tile_renderer, m_tiles}
+    : Imgui_window         {imgui_renderer, imgui_windows, "Menu", "menu"}
+    , m_input_event_handler{input_event_handler}
+    , m_tiles              {tiles}
+    , m_tile_renderer      {tile_renderer}
+    , m_map_window         {map_window}
+    , m_game               {commands, imgui_renderer, imgui_windows, m_map_window, *this, m_tile_renderer, m_tiles}
+    , m_map_editor         {commands, imgui_renderer, imgui_windows, m_map_window, *this, m_tile_renderer, m_tiles}
+    , m_new_game_window    {imgui_renderer, imgui_windows, m_game, m_map_editor, m_map_window, *this, m_tile_renderer, m_tiles}
+    , m_type_editor        {imgui_renderer, imgui_windows, *this, m_tile_renderer, m_tiles}
 
 {
     show();
@@ -87,7 +86,7 @@ void Menu_window::imgui()
         m_type_editor.unit_editor_window.show();
     }
     if (ImGui::Button("Quit", button_size)) {
-        m_window_event_handler.on_close(); // hacky(ish)
+        m_input_event_handler.on_window_close_event(); // hacky(ish)?
     }
 }
 

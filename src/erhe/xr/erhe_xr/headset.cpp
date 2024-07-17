@@ -98,7 +98,29 @@ auto Headset::is_active() const -> bool
     return is_valid() && m_xr_session->is_session_running();
 }
 
-auto Headset::begin_frame() -> Frame_timing
+auto Headset::update_events() const -> bool
+{
+    if (!m_xr_instance || !m_xr_session) {
+        return false;
+    }
+    if (!m_xr_instance->poll_xr_events(*m_xr_session.get())) {
+        return false;
+    }
+    if (!m_xr_session->is_session_running()) {
+        return false;
+    }
+
+    if (!m_xr_instance->update_actions(*m_xr_session.get())) {
+        return false;
+    }
+
+    m_xr_session->update_hand_tracking();
+
+    m_xr_session->update_view_pose();
+    return true;
+}
+
+auto Headset::begin_frame_() -> Frame_timing
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -108,24 +130,6 @@ auto Headset::begin_frame() -> Frame_timing
         .begin_ok                 = false,
         .should_render            = true
     };
-
-    if (!m_xr_instance || !m_xr_session) {
-        return result;
-    }
-    if (!m_xr_instance->poll_xr_events(*m_xr_session.get())) {
-        return result;
-    }
-    if (!m_xr_session->is_session_running()) {
-        return result;
-    }
-
-    if (!m_xr_instance->update_actions(*m_xr_session.get())) {
-        return result;
-    }
-
-    m_xr_session->update_hand_tracking();
-
-    m_xr_session->update_view_pose();
 
     auto* xr_frame_state = m_xr_session->wait_frame();
     if (xr_frame_state == nullptr) {
@@ -168,4 +172,4 @@ auto Headset::end_frame(const bool rendered) -> bool
     return m_xr_session->end_frame(rendered);
 }
 
-}
+} // namespace erhe::xr

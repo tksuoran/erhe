@@ -28,10 +28,9 @@ public:
     void execute_rendergraph_node() override;
     auto get_producer_output_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
-    // Implements Imgui_vewport
+    // Implements Imgui_host
     auto begin_imgui_frame() -> bool override;
-
-    void end_imgui_frame() override;
+    void end_imgui_frame  () override;
 
 private:
     erhe::window::Context_window& m_context_window;

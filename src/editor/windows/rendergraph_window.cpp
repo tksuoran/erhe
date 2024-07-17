@@ -24,12 +24,9 @@
 #include <vector>
 #include <string>
 
+namespace editor {
 
-namespace editor
-{
-
-Rendergraph_window::Rendergraph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context
-)
+Rendergraph_window::Rendergraph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Render Graph", "rendergraph"}
     , m_context                {editor_context}
 {
@@ -188,10 +185,7 @@ void Rendergraph_window::imgui()
                     continue;
                 }
 
-                const auto& texture = node->get_producer_output_texture(
-                    output.resource_routing,
-                    output.key
-                );
+                const auto& texture = node->get_producer_output_texture(output.resource_routing, output.key);
                 if (
                     texture &&
                     (texture->target() == gl::Texture_target::texture_2d) &&
@@ -217,10 +211,7 @@ void Rendergraph_window::imgui()
                             texture->height(),
                             gl::c_str(texture->internal_format())
                         );
-                        std::string format = fmt::format(
-                            "Format: {}",
-                            gl::c_str(texture->internal_format())
-                        );
+                        std::string format = fmt::format("Format: {}", gl::c_str(texture->internal_format()));
                         ImGui::BeginTooltipEx(ImGuiTooltipFlags_OverridePrevious, ImGuiWindowFlags_None);
                         ImGui::TextUnformatted(size.c_str());
                         ImGui::TextUnformatted(format.c_str());

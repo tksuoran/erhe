@@ -39,6 +39,8 @@ enum class Shader_stages_variant : int {
     debug_omega_o,
     debug_omega_i,
     debug_omega_g,
+    debug_vertex_valency,
+    debug_polygon_edge_count,
     debug_misc
 };
 
@@ -50,25 +52,27 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Anisotropic Slope",
     "Anisotropic Engine-Ready",
     "Circular Brushed Metal",
-    "Debug Depth",
-    "Debug Normal",
-    "Debug Tangent",
-    "Debug Vertex Tangent W",
-    "Debug Bitangent",
-    "Debug TexCoord",
-    "Debug Base Color Texture",
-    "Debug Vertex Color RGB",
-    "Debug Vertex Color Alpha",
-    "Debug Aniso Strength",
-    "Debug Aniso TexCoord",
-    "Debug V.N",
-    "Debug L.N",
-    "Debug H.V",
-    "Debug Joint Indices",
-    "Debug Joint Weights",
-    "Debug Omega o",
-    "Debug Omega i",
-    "Debug Omega g",
+    "Depth",
+    "Normal",
+    "Tangent",
+    "Vertex Tangent W",
+    "Bitangent",
+    "TexCoord",
+    "Base Color Texture",
+    "Vertex Color RGB",
+    "Vertex Color Alpha",
+    "Aniso Strength",
+    "Aniso TexCoord",
+    "V.N",
+    "L.N",
+    "H.V",
+    "Joint Indices",
+    "Joint Weights",
+    "Omega o",
+    "Omega i",
+    "Omega g",
+    "Vertex Valency",
+    "Polygon Edge Count",
     "Debug Miscellaneous"
 };
 
@@ -128,6 +132,8 @@ public:
     erhe::graphics::Reloadable_shader_stages debug_omega_o;
     erhe::graphics::Reloadable_shader_stages debug_omega_i;
     erhe::graphics::Reloadable_shader_stages debug_omega_g;
+    erhe::graphics::Reloadable_shader_stages debug_vertex_valency;
+    erhe::graphics::Reloadable_shader_stages debug_polygon_edge_count;
     erhe::graphics::Reloadable_shader_stages debug_misc;
 
     class Shader_stages_builder

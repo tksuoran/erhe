@@ -1,13 +1,5 @@
 #include "windows/viewport_config_window.hpp"
-
 #include "editor_context.hpp"
-#include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
-#include "tools/hotbar.hpp"
-#include "tools/hud.hpp"
-#include "rendertarget_mesh.hpp"
-
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
@@ -19,11 +11,7 @@
 
 namespace editor {
 
-Viewport_config_window::Viewport_config_window(
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
-)
+Viewport_config_window::Viewport_config_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Viewport config", "viewport_config"}
     , m_context                {editor_context}
 {
@@ -118,27 +106,6 @@ void Viewport_config_window::imgui()
         ImGuiTreeNodeFlags_DefaultOpen
     };
 
-    if (ImGui::TreeNodeEx("Hotbar", flags)) {
-        auto& hotbar = *m_context.hotbar;
-        auto& color_inactive = hotbar.get_color(0);
-        auto& color_hover    = hotbar.get_color(1);
-        auto& color_active   = hotbar.get_color(2);
-        ImGui::ColorEdit4("Inactive", &color_inactive.x, ImGuiColorEditFlags_Float);
-        ImGui::ColorEdit4("Hover",    &color_hover.x,    ImGuiColorEditFlags_Float);
-        ImGui::ColorEdit4("Active",   &color_active.x,   ImGuiColorEditFlags_Float);
-
-        auto position = hotbar.get_position();
-        if (ImGui::DragFloat3("Position", &position.x, 0.01f, -1.0f, 1.0f)) {
-            hotbar.set_position(position);
-        }
-        ImGui::TreePop();
-
-        bool locked = hotbar.get_locked();
-        if (ImGui::Checkbox("Locked", &locked)) {
-            hotbar.set_locked(locked);
-        }
-    }
-
     if (m_edit_data != nullptr) {
         ImGui::SliderFloat("Gizmo Scale", &m_edit_data->gizmo_scale, 1.0f, 8.0f, "%.2f");
         ImGui::ColorEdit4("Clear Color", &m_edit_data->clear_color.x, ImGuiColorEditFlags_Float);
@@ -167,22 +134,6 @@ void Viewport_config_window::imgui()
             erhe::imgui::make_combo("Camera", m_edit_data->debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
             ImGui::TreePop();
         }
-    }
-
-    ImGui::Separator();
-
-    float rendertarget_mesh_lod_bias = Rendertarget_mesh::get_mesh_lod_bias();
-    ImGui::SliderFloat("LoD Bias", &rendertarget_mesh_lod_bias, -8.0f, 8.0f);
-    if (ImGui::IsItemEdited()) {
-        Rendertarget_mesh::set_mesh_lod_bias(rendertarget_mesh_lod_bias);
-    }
-
-    m_context.editor_rendering->imgui();
-
-    if (ImGui::TreeNodeEx("Hud", flags)) {
-        auto& hud = *m_context.hud;
-        hud.imgui();
-        ImGui::TreePop();
     }
 #endif
 }

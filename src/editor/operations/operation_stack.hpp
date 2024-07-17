@@ -20,7 +20,7 @@ namespace editor {
 
 class Editor_context;
 class Editor_message_bus;
-class IOperation;
+class Operation;
 class Editor_context;
 class Operation_stack;
 class Selection_tool;
@@ -60,7 +60,7 @@ public:
 
     [[nodiscard]] auto can_undo() const -> bool;
     [[nodiscard]] auto can_redo() const -> bool;
-    void queue(const std::shared_ptr<IOperation>& operation);
+    void queue(const std::shared_ptr<Operation>& operation);
     void undo();
     void redo();
 
@@ -72,7 +72,7 @@ public:
     [[nodiscard]] auto get_executor() -> tf::Executor&;
 
 private:
-    void imgui(const char* stack_label, const std::vector<std::shared_ptr<IOperation>>& operations);
+    void imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations);
 
     Editor_context& m_context;
 
@@ -81,9 +81,9 @@ private:
 
     std::unique_ptr<tf::Executor> m_executor;
 
-    std::vector<std::shared_ptr<IOperation>> m_executed;
-    std::vector<std::shared_ptr<IOperation>> m_undone;
-    std::vector<std::shared_ptr<IOperation>> m_queued;
+    std::vector<std::shared_ptr<Operation>> m_executed;
+    std::vector<std::shared_ptr<Operation>> m_undone;
+    std::vector<std::shared_ptr<Operation>> m_queued;
 };
 
 } // namespace editor

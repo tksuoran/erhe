@@ -23,7 +23,7 @@ auto Item_insert_remove_operation::describe() const -> std::string
 {
     ERHE_VERIFY(m_item);
     bool before_parent = m_before_parent.operator bool();
-    bool after_parent = m_after_parent.operator bool();
+    bool after_parent  = m_after_parent.operator bool();
     const erhe::Hierarchy* parent = before_parent ? m_before_parent.get() : m_after_parent.get();
     std::stringstream ss;
     bool first = true;
@@ -35,7 +35,8 @@ auto Item_insert_remove_operation::describe() const -> std::string
     }
 
     return fmt::format(
-        "{} {}, {}{}, {} parent changes: {}",
+        "[{}] {} {}, {}{}, {} parent changes: {}",
+        get_serial(),
         c_str(m_mode),
         m_item->get_name(),
         before_parent ? "before parent = " : after_parent ? "after parent = " : "no parent",

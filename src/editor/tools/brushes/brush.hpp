@@ -133,28 +133,22 @@ public:
     // Public API
     void late_initialize();
 
-    [[nodiscard]] auto get_reference_frame(
-        uint32_t corner_count,
-        uint32_t face_offset,
-        uint32_t corner_offset
-    ) -> Reference_frame;
-
-    [[nodiscard]] auto get_reference_frame(
-        uint32_t face_offset,
-        uint32_t corner_offset
-    ) -> Reference_frame;
-
-    [[nodiscard]] auto get_scaled      (float scale) -> const Scaled&;
-    [[nodiscard]] auto create_scaled   (int scale_key) -> Scaled;
-    [[nodiscard]] auto make_instance   (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
-    [[nodiscard]] auto get_bounding_box() -> erhe::math::Bounding_box;
-    [[nodiscard]] auto get_geometry    () -> std::shared_ptr<erhe::geometry::Geometry>;
+    [[nodiscard]] auto get_reference_frame         (uint32_t corner_count, uint32_t face_offset, uint32_t corner_offset) -> Reference_frame;
+    [[nodiscard]] auto get_scaled                  (float scale) -> const Scaled&;
+    [[nodiscard]] auto create_scaled               (int scale_key) -> Scaled;
+    [[nodiscard]] auto make_instance               (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
+    [[nodiscard]] auto get_bounding_box            () -> erhe::math::Bounding_box;
+    [[nodiscard]] auto get_geometry                () -> std::shared_ptr<erhe::geometry::Geometry>;
+    [[nodiscard]] auto get_corner_count_to_polygons() -> const std::map<std::size_t, std::vector<erhe::geometry::Polygon_id>>&;
 
 private:
+    void update_polygon_statistics();
+
     Brush_data                   m_data;
     erhe::primitive::Primitive   m_primitive;
     std::vector<Reference_frame> m_reference_frames;
     std::vector<Scaled>          m_scaled_entries;
+    std::map<std::size_t, std::vector<erhe::geometry::Polygon_id>> m_corner_count_to_polygons;
 };
 
 }

@@ -26,7 +26,7 @@ namespace editor {
 class Editor_scenes;
 class Editor_settings;
 class Icon_set;
-class IOperation;
+class Operation;
 class Operation_stack;
 class Scene_commands;
 class Selection_tool;
@@ -114,7 +114,7 @@ private:
     std::shared_ptr<erhe::Hierarchy>                             m_root;
     std::function<bool(const std::shared_ptr<erhe::Item_base>&)> m_item_callback;
 
-    std::shared_ptr<IOperation>        m_operation;
+    std::shared_ptr<Operation>         m_operation;
     std::vector<std::function<void()>> m_operations;
 
     bool                               m_toggled_open{false};

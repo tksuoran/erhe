@@ -5,13 +5,8 @@
 
 namespace example {
 
-Programs::Programs(
-    erhe::graphics::Instance&                graphics_instance,
-    erhe::scene_renderer::Program_interface& program_interface
-)
-    : shader_path{
-        std::filesystem::path("res") / std::filesystem::path("shaders")
-    }
+Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface)
+    : shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , default_uniform_block{graphics_instance}
     , shadow_sampler{
         graphics_instance.info.use_bindless_texture

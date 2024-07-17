@@ -55,11 +55,7 @@ auto Geometry_operation::find_or_make_point_from_edge(const Point_id point_a, co
     const Point_id a = std::min(point_a, point_b);
     const Point_id b = std::max(point_a, point_b);
 
-    for (
-        uint32_t slot = a * s_max_edge_point_slots,
-        end = slot + s_max_edge_point_slots;
-        slot < end;
-    ) {
+    for (uint32_t slot = a * s_max_edge_point_slots, end = slot + s_max_edge_point_slots; slot < end;) {
         Point_id& edge_b       = m_old_edge_to_new_points[slot++];
         Point_id& new_point_id = m_old_edge_to_new_points[slot++];
         if (edge_b == std::numeric_limits<uint32_t>::max()) {
@@ -132,12 +128,7 @@ void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> 
     });
 }
 
-auto Geometry_operation::get_edge_new_point(
-    const Point_id point_a,
-    const Point_id point_b,
-    const Point_id split_position,
-    const Point_id split_count
-) const -> Point_id
+auto Geometry_operation::get_edge_new_point(const Point_id point_a, const Point_id point_b, const Point_id split_position, const Point_id split_count) const -> Point_id
 {
     const bool     in_order = point_a < point_b;
     const Point_id a        = std::min(point_a, point_b);
@@ -237,11 +228,7 @@ auto Geometry_operation::make_new_point_from_polygon_centroid(const Polygon_id o
     return new_point;
 }
 
-void Geometry_operation::add_polygon_centroid(
-    const Point_id   new_point_id,
-    const float      polygon_weight,
-    const Polygon_id old_polygon_id
-)
+void Geometry_operation::add_polygon_centroid(const Point_id new_point_id, const float polygon_weight, const Polygon_id old_polygon_id)
 {
     const Polygon& old_polygon = source.polygons[old_polygon_id];
     // log_operation.trace(
@@ -255,11 +242,7 @@ void Geometry_operation::add_polygon_centroid(
     });
 }
 
-void Geometry_operation::add_point_ring(
-    const Point_id new_point_id,
-    const float    point_weight,
-    const Point_id old_point_id
-)
+void Geometry_operation::add_point_ring(const Point_id new_point_id, const float point_weight, const Point_id old_point_id)
 {
     // log_operation.trace(
     //     "add_point_ring (new_point_id = {}, weight = {}, old_point_id = {})\n",
@@ -294,10 +277,7 @@ auto Geometry_operation::make_new_polygon_from_polygon(const Polygon_id old_poly
     return new_polygon_id;
 }
 
-auto Geometry_operation::make_new_corner_from_polygon_centroid(
-    const Polygon_id new_polygon_id,
-    const Polygon_id old_polygon_id
-) -> Corner_id
+auto Geometry_operation::make_new_corner_from_polygon_centroid(const Polygon_id new_polygon_id, const Polygon_id old_polygon_id) -> Corner_id
 {
     // log_operation.trace(
     //     "make_new_corner_from_polygon_centroid (new_polygon_id = {}, old_polygon_id = {})\n",
@@ -314,10 +294,7 @@ auto Geometry_operation::make_new_corner_from_polygon_centroid(
     return new_corner_id;
 }
 
-auto Geometry_operation::make_new_corner_from_point(
-    const Polygon_id new_polygon_id,
-    const Point_id   new_point_id
-) -> Corner_id
+auto Geometry_operation::make_new_corner_from_point(const Polygon_id new_polygon_id, const Point_id new_point_id) -> Corner_id
 {
     // log_operation.trace(
     //     "make_new_corner_from_point (new_polygon_id = {}, new_point_id = {})\n",
@@ -329,10 +306,7 @@ auto Geometry_operation::make_new_corner_from_point(
     return new_corner_id;
 }
 
-auto Geometry_operation::make_new_corner_from_corner(
-    const Polygon_id new_polygon_id,
-    const Corner_id  old_corner_id
-) -> Corner_id
+auto Geometry_operation::make_new_corner_from_corner(const Polygon_id new_polygon_id, const Corner_id old_corner_id) -> Corner_id
 {
     // const log_operation.trace(
     //     "make_new_corner_from_corner (new_polygon_id = {}, old_corner_id = {})\n",
@@ -351,10 +325,7 @@ auto Geometry_operation::make_new_corner_from_corner(
     return new_corner_id;
 }
 
-void Geometry_operation::add_polygon_corners(
-    const Polygon_id new_polygon_id,
-    const Polygon_id old_polygon_id
-)
+void Geometry_operation::add_polygon_corners(const Polygon_id new_polygon_id, const Polygon_id old_polygon_id)
 {
     // log_operation.trace(
     //     "add_polygon_corners (new_polygon_id = {}, old_polygon_id = {})\n",
@@ -370,11 +341,7 @@ void Geometry_operation::add_polygon_corners(
     });
 }
 
-void Geometry_operation::add_point_source(
-    const Point_id new_point_id,
-    const float    point_weight,
-    const Point_id old_point_id
-)
+void Geometry_operation::add_point_source(const Point_id new_point_id, const float point_weight, const Point_id old_point_id)
 {
     // log_operation.trace(
     //     "add_point_source (new_point_id = {}, weight = {}, old_point_id = {})\n",
@@ -388,11 +355,7 @@ void Geometry_operation::add_point_source(
     new_point_sources[i].emplace_back(point_weight, old_point_id);
 }
 
-void Geometry_operation::add_point_corner_source(
-    const Point_id  new_point_id,
-    const float     corner_weight,
-    const Corner_id old_corner_id
-)
+void Geometry_operation::add_point_corner_source(const Point_id new_point_id, const float corner_weight, const Corner_id old_corner_id)
 {
     // log_operation.trace(
     //     "add_point_corner_source (new_point_id = {}, weight = {}, old_corner_id = {})\n",
@@ -406,11 +369,7 @@ void Geometry_operation::add_point_corner_source(
     new_point_corner_sources[new_point_id].emplace_back(corner_weight, old_corner_id);
 }
 
-void Geometry_operation::add_corner_source(
-    const Corner_id new_corner_id,
-    const float     corner_weight,
-    const Corner_id old_corner_id
-)
+void Geometry_operation::add_corner_source(const Corner_id new_corner_id, const float corner_weight, const Corner_id old_corner_id)
 {
     // log_operation.trace(
     //     "add_corner_source (new_corner_id = {}, weight = {}, old_corner_id = {})\n",
@@ -424,11 +383,7 @@ void Geometry_operation::add_corner_source(
     new_corner_sources[i].emplace_back(corner_weight, old_corner_id);
 }
 
-void Geometry_operation::distribute_corner_sources(
-    const Corner_id new_corner_id,
-    const float     point_weight,
-    const Point_id  new_point_id
-)
+void Geometry_operation::distribute_corner_sources(const Corner_id new_corner_id, const float point_weight, const Point_id new_point_id)
 {
     // log_operation.trace(
     //     "distribute_corner_sources (new_corner_id = {}, weight = {}, new_point_id = {})\n",
@@ -443,11 +398,7 @@ void Geometry_operation::distribute_corner_sources(
     }
 }
 
-void Geometry_operation::add_polygon_source(
-    const Polygon_id new_polygon_id,
-    const float      polygon_weight,
-    const Polygon_id old_polygon_id
-)
+void Geometry_operation::add_polygon_source(const Polygon_id new_polygon_id, const float polygon_weight, const Polygon_id old_polygon_id)
 {
     // log_operation.trace(
     //     "add_polygon_source (new_polygon_id = {}, weight = {}, old_polygon_id = {})\n",
@@ -461,11 +412,7 @@ void Geometry_operation::add_polygon_source(
     new_polygon_sources[i].emplace_back(polygon_weight, old_polygon_id);
 }
 
-void Geometry_operation::add_edge_source(
-    const Edge_id new_edge_id,
-    const float   edge_weight,
-    const Edge_id old_edge_id
-)
+void Geometry_operation::add_edge_source(const Edge_id new_edge_id, const float edge_weight, const Edge_id old_edge_id)
 {
     // log_operation.trace(
     //     "add_edge_source (new_edge_id = {}, weight = {}, old_edge_id = {})\n",

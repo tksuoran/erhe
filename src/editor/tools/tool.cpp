@@ -160,19 +160,19 @@ auto Tool::get_node() const -> std::shared_ptr<erhe::scene::Node>
 
     {
         std::shared_ptr<erhe::scene::Node> node = selection->get_last_selected<erhe::scene::Node>();
-        if (node) {
+        if (node && (node->get_item_host() != nullptr)) {
             return node;
         }
     }
 
     {
         std::shared_ptr<erhe::scene::Node_attachment> attachment = selection->get_last_selected<erhe::scene::Node_attachment>();
-        if (attachment) {
+        if (attachment && (attachment->get_item_host() != nullptr)) {
             erhe::scene::Node* node = attachment->get_node();
             if (node != nullptr) {
                 std::shared_ptr<erhe::Item_base> item = node->shared_from_this();
                 std::shared_ptr<erhe::scene::Node> shared_node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                if (shared_node) {
+                if (shared_node && (shared_node->get_item_host() != nullptr)) {
                     return shared_node;
                 }
             }

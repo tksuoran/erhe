@@ -17,19 +17,16 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Node_attach_operation : public IOperation
+class Node_attach_operation : public Operation
 {
 public:
     Node_attach_operation();
-    Node_attach_operation(
-        const std::shared_ptr<erhe::scene::Node_attachment>& attachment,
-        const std::shared_ptr<erhe::scene::Node>&            host_node
-    );
+    Node_attach_operation(const std::shared_ptr<erhe::scene::Node_attachment>& attachment, const std::shared_ptr<erhe::scene::Node>& host_node);
 
-    // Implements IOperation
-    auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
+    // Implements Operation
+    auto describe() const -> std::string   override;
+    void execute (Editor_context& context) override;
+    void undo    (Editor_context& context) override;
 
 private:
     std::shared_ptr<erhe::scene::Node_attachment> m_attachment;

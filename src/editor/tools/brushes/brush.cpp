@@ -5,6 +5,7 @@
 #include "scene/node_physics.hpp"
 #include "editor_log.hpp"
 
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/clone.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -129,6 +130,36 @@ Brush::Brush(const Brush_data& create_info)
     : Item  {create_info.get_name()}
     , m_data{create_info}
 {
+    if (m_data.geometry) {
+        update_polygon_statistics();
+    }
+}
+
+void Brush::update_polygon_statistics()
+{
+    const auto geometry = get_geometry();
+    ERHE_VERIFY(geometry);
+
+    m_corner_count_to_polygons.clear();
+    geometry->for_each_polygon_const(
+        [this](erhe::geometry::Geometry::Polygon_context_const& i){
+            const uint32_t corner_count = i.polygon.corner_count;
+            auto j = m_corner_count_to_polygons.find(corner_count);
+            if (j == m_corner_count_to_polygons.end()) {
+                m_corner_count_to_polygons.insert({corner_count, {i.polygon_id}});
+                return;
+            }
+            j->second.push_back(i.polygon_id);
+        }
+    );
+}
+
+auto Brush::get_corner_count_to_polygons() -> const std::map<std::size_t, std::vector<erhe::geometry::Polygon_id>>&
+{
+    if (!m_data.geometry) {
+        late_initialize();
+    }
+    return m_corner_count_to_polygons;
 }
 
 void Brush::late_initialize()
@@ -187,11 +218,7 @@ auto Brush::get_reference_frame(const uint32_t corner_count, const uint32_t in_f
 
     uint32_t face_offset = 0;
     Polygon_id selected_polygon = 0;
-    for (
-        Polygon_id polygon_id = 0, end = geometry->get_polygon_count();
-        polygon_id < end;
-        ++polygon_id
-    ) {
+    for (Polygon_id polygon_id = 0, end = geometry->get_polygon_count(); polygon_id < end; ++polygon_id) {
         const auto& polygon = geometry->polygons[polygon_id];
         if (
             (corner_count == 0) ||
@@ -206,34 +233,6 @@ auto Brush::get_reference_frame(const uint32_t corner_count, const uint32_t in_f
         }
     }
     return m_reference_frames.emplace_back(*geometry.get(), selected_polygon, in_face_offset, corner_offset);
-}
-
-auto Brush::get_reference_frame(const uint32_t face_offset, const uint32_t corner_offset) -> Reference_frame
-{
-    //for (const auto& reference_frame : reference_frames) {
-    //    if (
-    //        (reference_frame.corner_count  == 0            ) &&
-    //        (reference_frame.face_offset   == face_offset  ) &&
-    //        (reference_frame.corner_offset == corner_offset)
-    //    ) {
-    //        return reference_frame;
-    //    }
-    //}
-
-    const auto geometry = get_geometry();
-
-    //return reference_frames.emplace_back(
-    //    *geometry.get(),
-    //    face_offset,
-    //    face_offset,
-    //    corner_offset
-    //);
-    return Reference_frame{
-        *geometry.get(),
-        face_offset,
-        face_offset,
-        corner_offset
-    };
 }
 
 auto Brush::get_scaled(const float scale) -> const Scaled&
@@ -363,6 +362,7 @@ auto Brush::get_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
     if (!m_data.geometry) {
         m_data.geometry = m_data.geometry_generator();
         m_data.geometry_generator = {};
+        update_polygon_statistics();
     }
     return m_data.geometry;
 }

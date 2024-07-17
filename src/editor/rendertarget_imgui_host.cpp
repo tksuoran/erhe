@@ -20,6 +20,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+#include "erhe_window/window.hpp"
 
 #include <GLFW/glfw3.h> // TODO Fix dependency ?
 
@@ -46,11 +47,7 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     , m_context          {editor_context}
     , m_rendertarget_mesh{rendertarget_mesh}
 {
-    register_output(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        "rendertarget texture",
-        erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
-    );
+    register_output(erhe::rendergraph::Routing::Resource_provided_by_producer, "rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
 
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);
 
@@ -60,7 +57,7 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     io.DisplaySize             = ImVec2{m_rendertarget_mesh->width(), m_rendertarget_mesh->height()};
     io.FontDefault             = imgui_renderer.vr_primary_font();
     io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
-    io.MouseDrawCursor         = true;
+    io.MouseDrawCursor         = editor_context.OpenXR;
     io.BackendPlatformUserData = this;
     io.BackendPlatformName     = "erhe rendertarget";
     io.MousePos                = ImVec2{-FLT_MAX, -FLT_MAX};
@@ -119,30 +116,36 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     {
         if (pointer.has_value()) {
             if (!has_cursor()) {
-                on_event(erhe::imgui::Cursor_enter_event{.entered = true});
+                on_event(erhe::window::Cursor_enter_event{.entered = true});
             }
             const auto position = pointer.value();
-            if (
-                (m_last_mouse_x != position.x) ||
-                (m_last_mouse_y != position.y)
-            ) {
+            if ((m_last_mouse_x != position.x) || (m_last_mouse_y != position.y)) {
                 m_last_mouse_x = position.x;
                 m_last_mouse_y = position.y;
                 on_event(
-                    erhe::imgui::Mouse_move_event{
+                    erhe::window::Mouse_move_event{
                         .x = position.x,
                         .y = position.y
                     }
                 );
-
             }
+
+            // TODO Is there better way to route mouse button and other events here?
+            // Process input events from the context window
+            std::vector<erhe::window::Input_event>& input_events = m_context.context_window->get_input_events();
+            for (erhe::window::Input_event& input_event : input_events) {
+                if (!input_event.handled) {
+                    dispatch_input_event(input_event);
+                }
+            }
+
         } else {
             if (has_cursor()) {
-                on_event(erhe::imgui::Cursor_enter_event{.entered = false});
+                on_event(erhe::window::Cursor_enter_event{.entered = false});
                 m_last_mouse_x = -FLT_MAX;
                 m_last_mouse_y = -FLT_MAX;
                 on_event(
-                    erhe::imgui::Mouse_move_event{
+                    erhe::window::Mouse_move_event{
                         .x = -FLT_MAX,
                         .y = -FLT_MAX
                     }
@@ -160,10 +163,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
         ERHE_VERIFY(node != nullptr);
         auto* left_aim_pose  = headset->get_actions_left().aim_pose;
         auto* right_aim_pose = headset->get_actions_right().aim_pose;
-        const bool use_right = (
-            (right_aim_pose != nullptr) &&
-            (right_aim_pose->location.locationFlags != 0)
-        );
+        const bool use_right = (right_aim_pose != nullptr) && (right_aim_pose->location.locationFlags != 0);
 
         auto* pose = use_right ? right_aim_pose : left_aim_pose;
         if (pose != nullptr) {
@@ -186,7 +186,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
                 if (window_position_opt.has_value()) {
                     if (!has_cursor()) {
-                        on_event(erhe::imgui::Cursor_enter_event{.entered = true});
+                        on_event(erhe::window::Cursor_enter_event{.entered = true});
                     }
                     mouse_has_position = true;
                     const auto position = window_position_opt.value();
@@ -194,7 +194,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                         m_last_mouse_x = position.x;
                         m_last_mouse_y = position.y;
                         on_event(
-                            erhe::imgui::Mouse_move_event{
+                            erhe::window::Mouse_move_event{
                                 .x = position.x,
                                 .y = position.y
                             }
@@ -203,21 +203,18 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 }
                 auto* r_thumbstick = headset->get_actions_right().thumbstick;
                 if (r_thumbstick != nullptr) {
-                    if (
-                        (r_thumbstick->state.currentState.x != 0) ||
-                        (r_thumbstick->state.currentState.y != 0)
-                    ) {
+                    if ((r_thumbstick->state.currentState.x != 0) || (r_thumbstick->state.currentState.y != 0)) {
                         io.AddMouseWheelEvent(r_thumbstick->state.currentState.x * 0.5f, r_thumbstick->state.currentState.y * 0.5f);
                     }
                 }
             }
             if (!mouse_has_position) {
                 if (has_cursor()) {
-                    on_event(erhe::imgui::Cursor_enter_event{.entered = false});
+                    on_event(erhe::window::Cursor_enter_event{.entered = false});
                     m_last_mouse_x = -FLT_MAX;
                     m_last_mouse_y = -FLT_MAX;
                     on_event(
-                        erhe::imgui::Mouse_move_event{
+                        erhe::window::Mouse_move_event{
                             .x = -FLT_MAX,
                             .y = -FLT_MAX
                         }
@@ -270,8 +267,6 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     if (m_begin_callback) {
         m_begin_callback(*this);
     }
-
-    flush_queud_events();
 
     return true;
 }

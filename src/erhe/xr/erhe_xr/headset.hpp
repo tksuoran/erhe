@@ -36,11 +36,12 @@ public:
     Headset(erhe::window::Context_window& context_window, const Xr_configuration& configuration);
     ~Headset() noexcept;
 
-    auto is_valid   () const -> bool;
-    auto is_active  () const -> bool;
-    auto begin_frame() -> Frame_timing;
-    auto render     (std::function<bool(Render_view&)> render_view_callback) -> bool;
-    auto end_frame  (bool rendered) -> bool;
+    auto is_valid     () const -> bool;
+    auto is_active    () const -> bool;
+    auto update_events() const -> bool;
+    auto begin_frame_ () -> Frame_timing;
+    auto render       (std::function<bool(Render_view&)> render_view_callback) -> bool;
+    auto end_frame    (bool rendered) -> bool;
     [[nodiscard]] auto get_actions_left        ()       ->       Xr_actions&;
     [[nodiscard]] auto get_actions_left        () const -> const Xr_actions&;
     [[nodiscard]] auto get_actions_right       ()       ->       Xr_actions&;

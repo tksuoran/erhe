@@ -14,11 +14,9 @@
 #include "rendergraph/post_processing.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
-#include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/transform/transform_tool.hpp"
-#include "windows/viewport_config_window.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -119,7 +117,7 @@ void Viewport_scene_view::execute_rendergraph_node()
         .override_shader_stages = get_override_shader_stages()
     };
 
-    if (do_render && m_is_hovered && m_context.id_renderer->enabled) {
+    if (do_render && m_is_scene_view_hovered && m_context.id_renderer->enabled) {
         m_context.editor_rendering->render_id(context);
     }
 
@@ -181,7 +179,8 @@ void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
 
 void Viewport_scene_view::set_is_hovered(const bool is_hovered)
 {
-    m_is_hovered = is_hovered;
+    SPDLOG_LOGGER_TRACE(log_controller_ray, "{}->set_is_hovered({})", get_name(), m_is_scene_view_hovered);
+    m_is_scene_view_hovered = is_hovered;
 }
 
 void Viewport_scene_view::set_camera(const std::shared_ptr<erhe::scene::Camera>& camera)
@@ -192,7 +191,8 @@ void Viewport_scene_view::set_camera(const std::shared_ptr<erhe::scene::Camera>&
 
 auto Viewport_scene_view::is_hovered() const -> bool
 {
-    return m_is_hovered;
+    SPDLOG_LOGGER_TRACE(log_controller_ray, "{}->is_hovered() = {}", get_name(), m_is_scene_view_hovered);
+    return m_is_scene_view_hovered;
 }
 
 auto Viewport_scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
@@ -294,21 +294,13 @@ void Viewport_scene_view::update_hover(bool ray_only)
     const auto far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
 
     const auto camera = m_camera.lock();
-    if (
-        !near_position_in_world.has_value() ||
-        !far_position_in_world.has_value() ||
-        !camera ||
-        !m_is_hovered
-    ) {
+    if (!near_position_in_world.has_value() || !far_position_in_world.has_value() || !camera || !m_is_scene_view_hovered) {
         reset_control_transform();
         reset_hover_slots();
         return;
     }
 
-    set_world_from_control(
-        near_position_in_world.value(),
-        far_position_in_world.value()
-    );
+    set_world_from_control(near_position_in_world.value(), far_position_in_world.value());
 
     if (ray_only) {
         return;
@@ -414,10 +406,7 @@ auto Viewport_scene_view::get_position_in_viewport() const -> std::optional<glm:
 auto Viewport_scene_view::position_in_world_viewport_depth(const float viewport_depth) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
-    if (
-        !m_position_in_viewport.has_value() ||
-        !camera
-    ) {
+    if (!m_position_in_viewport.has_value() || !camera) {
         return {};
     }
 

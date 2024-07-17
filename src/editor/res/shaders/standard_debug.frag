@@ -7,6 +7,7 @@ in flat uint v_material_index;
 in float     v_tangent_scale;
 in float     v_line_width;
 in vec4      v_bone_color;
+in flat uvec2 v_valency_edge_count;
 
 const uint  max_u32 = 4294967295u;
 
@@ -78,6 +79,33 @@ vec2 srgb_to_linear(vec2 V)
 
 void main()
 {
+    const vec3 palette[24] = vec3[24](
+        vec3(0.0, 0.0, 0.0), //  0
+        vec3(1.0, 0.0, 0.0), //  1
+        vec3(0.0, 1.0, 0.0), //  2
+        vec3(0.0, 0.0, 1.0), //  3
+        vec3(1.0, 1.0, 0.0), //  4
+        vec3(0.0, 1.0, 1.0), //  5
+        vec3(1.0, 0.0, 1.0), //  6
+        vec3(1.0, 1.0, 1.0), //  7
+        vec3(0.5, 0.0, 0.0), //  8
+        vec3(0.0, 0.5, 0.0), //  9
+        vec3(0.0, 0.0, 0.5), // 10
+        vec3(0.5, 0.5, 0.0), // 11
+        vec3(0.0, 0.5, 0.5), // 12
+        vec3(0.5, 0.0, 0.5), // 13
+        vec3(0.5, 0.5, 0.5), // 14
+        vec3(1.0, 0.5, 0.0), // 15
+        vec3(1.0, 0.0, 0.5), // 16
+        vec3(0.5, 1.0, 0.0), // 17
+        vec3(0.0, 1.0, 0.5), // 18
+        vec3(0.5, 0.0, 1.0), // 19
+        vec3(0.0, 0.5, 1.0), // 20
+        vec3(1.0, 1.0, 0.5), // 21
+        vec3(0.5, 1.0, 1.0), // 22
+        vec3(1.0, 0.5, 1.0)  // 23
+    );
+
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],
@@ -185,35 +213,14 @@ void main()
 #if defined(ERHE_DEBUG_ANISO_TEXCOORD)
     out_color.rgb = srgb_to_linear(vec3(v_aniso_control.y));
 #endif
+#if defined(ERHE_DEBUG_VERTEX_VALENCY)
+    out_color.rgb = srgb_to_linear(palette[v_valency_edge_count.x % 24]);
+#endif
+#if defined(ERHE_DEBUG_POLYGON_EDGE_COUNT)
+    out_color.rgb = srgb_to_linear(palette[v_valency_edge_count.y % 24]);
+#endif
 #if defined(ERHE_DEBUG_MISC)
     // Show Draw ID
-    const vec3 palette[24] = vec3[24](
-        vec3(0.0, 0.0, 0.0), // 0
-        vec3(1.0, 0.0, 0.0), // 1
-        vec3(0.0, 1.0, 0.0), // 2
-        vec3(0.0, 0.0, 1.0), // 3
-        vec3(1.0, 1.0, 0.0), // 4
-        vec3(0.0, 1.0, 1.0), // 5
-        vec3(1.0, 0.0, 1.0), // 6
-        vec3(1.0, 1.0, 1.0), // 7
-        vec3(0.5, 0.0, 0.0), // 8
-        vec3(0.0, 0.5, 0.0), // 9
-        vec3(0.0, 0.0, 0.5), // 10
-        vec3(0.5, 0.5, 0.0), // 11
-        vec3(0.0, 0.5, 0.5), // 12
-        vec3(0.5, 0.0, 0.5), // 13
-        vec3(0.5, 0.5, 0.5), // 14
-        vec3(1.0, 0.5, 0.0), // 15
-        vec3(1.0, 0.0, 0.5), // 16
-        vec3(0.5, 1.0, 0.0), // 17
-        vec3(0.0, 1.0, 0.5), // 18
-        vec3(0.5, 0.0, 1.0), // 19
-        vec3(0.0, 0.5, 1.0), // 20
-        vec3(1.0, 1.0, 0.5), // 21
-        vec3(0.5, 1.0, 1.0), // 22
-        vec3(1.0, 0.5, 1.0)  // 23
-    );
-
 
     // Show Directional light L . N
     out_color.rgb = srgb_to_linear(palette[v_material_index % 24]);

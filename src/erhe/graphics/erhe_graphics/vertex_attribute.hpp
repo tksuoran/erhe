@@ -39,20 +39,21 @@ class Vertex_attribute
 {
 public:
     enum class Usage_type : unsigned int {
-        none          =  0,
-        automatic     = (1 <<  0u),
-        position      = (1 <<  1u),
-        tangent       = (1 <<  2u),
-        bitangent     = (1 <<  3u),
-        normal        = (1 <<  4u),
-        color         = (1 <<  5u),
-        joint_indices = (1 <<  6u),
-        joint_weights = (1 <<  7u),
-        tex_coord     = (1 <<  8u),
-        id            = (1 <<  9u),
-        material      = (1 << 10u), // metallic roughess_x roughness_y
-        aniso_control = (1 << 11u), // anisotropy tangent_space
-        custom        = (1 << 12u)
+        none               =  0,
+        automatic          = (1 <<  0u),
+        position           = (1 <<  1u),
+        tangent            = (1 <<  2u),
+        bitangent          = (1 <<  3u),
+        normal             = (1 <<  4u),
+        color              = (1 <<  5u),
+        joint_indices      = (1 <<  6u),
+        joint_weights      = (1 <<  7u),
+        tex_coord          = (1 <<  8u),
+        id                 = (1 <<  9u),
+        material           = (1 << 10u), // metallic roughess_x roughness_y
+        aniso_control      = (1 << 11u), // anisotropy tangent_space
+        valency_edge_count = (1 << 12u), // uvec2 vertex valency and polygon edge count
+        custom             = (1 << 13u)
     };
 
     // for example tex_coord 0
@@ -66,7 +67,7 @@ public:
         std::size_t index{0};
     };
 
-    [[nodiscard]] static auto desc(Usage_type usage) -> const char*;
+    [[nodiscard]] static auto c_str(Usage_type usage) -> const char*;
 
     [[nodiscard]] auto size      () const -> std::size_t;
     [[nodiscard]] auto operator==(const Vertex_attribute& other) const -> bool;
@@ -221,6 +222,14 @@ public:
             .usage       = { Usage_type::joint_weights },
             .shader_type = Glsl_type::float_vec4,
             .data_type   = erhe::dataformat::Format::format_32_vec4_float
+        };
+    }
+    [[nodiscard]] static auto vertex_valency() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage       = { Usage_type::valency_edge_count},
+            .shader_type = Glsl_type::unsigned_int_vec2,
+            .data_type   = erhe::dataformat::Format::format_16_vec2_uint
         };
     }
 };

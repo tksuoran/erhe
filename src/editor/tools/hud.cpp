@@ -12,7 +12,7 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -186,8 +186,6 @@ Hud::Hud(
         }
     );
 
-    imgui_renderer.register_imgui_host(m_rendertarget_imgui_viewport.get());
-
     set_mesh_visibility(true);
 
     editor_message_bus.add_receiver(
@@ -334,6 +332,12 @@ void Hud::tool_render(const Render_context&)
 void Hud::imgui()
 {
     ImGui::Checkbox("Mesh visible", &m_mesh_visible);
+
+    float rendertarget_mesh_lod_bias = Rendertarget_mesh::get_mesh_lod_bias();
+    ImGui::SliderFloat("Hud LoD Bias", &rendertarget_mesh_lod_bias, -8.0f, 8.0f);
+    if (ImGui::IsItemEdited()) {
+        Rendertarget_mesh::set_mesh_lod_bias(rendertarget_mesh_lod_bias);
+    }
 
     const bool x_changed = ImGui::DragFloat("X", &m_x, 0.0001f);
     const bool y_changed = ImGui::DragFloat("Y", &m_y, 0.0001f);

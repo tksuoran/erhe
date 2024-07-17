@@ -22,7 +22,7 @@ namespace editor {
 auto Merge_operation::describe() const -> std::string
 {
     std::stringstream ss;
-    ss << "Merge ";
+    ss << fmt::format("[{}] Merge ", get_serial());
     bool first = true;
     for (const auto& entry : m_sources) {
         if (first) {
@@ -109,7 +109,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             reference_node_from_world = node->node_from_world();
             transform                 = mat4{1};
             first_mesh                = false;
-            m_selection_after.push_back(mesh);
+            m_selection_after.push_back(shared_node);
             m_first_mesh_primitives_before = mesh->get_primitives();
         } else {
             transform = reference_node_from_world * node->world_from_node();

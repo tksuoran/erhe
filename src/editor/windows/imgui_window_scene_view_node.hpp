@@ -18,6 +18,7 @@ namespace erhe::rendergraph {
 
 namespace editor {
 
+class Editor_context;
 class Post_processing_node;
 class Viewport_scene_view;
 
@@ -31,6 +32,7 @@ public:
         erhe::imgui::Imgui_renderer&                imgui_renderer,
         erhe::imgui::Imgui_windows&                 imgui_windows,
         erhe::rendergraph::Rendergraph&             rendergraph,
+        Editor_context&                             editor_context,
         const std::string_view                      name,
         const std::string_view                      ini_label,
         const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
@@ -56,9 +58,11 @@ public:
 
     // Public API
     [[nodiscard]] auto viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>;
-    [[nodiscard]] auto is_hovered         () const -> bool;
 
 private:
+    void drag_and_drop_target(float min_x, float min_y, float max_x, float max_y);
+
+    Editor_context&                    m_editor_context;
     std::weak_ptr<Viewport_scene_view> m_viewport_scene_view;
     erhe::math::Viewport               m_viewport;
 };

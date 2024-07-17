@@ -18,7 +18,8 @@ namespace editor {
 auto Item_parent_change_operation::describe() const -> std::string
 {
     return fmt::format(
-        "Item_parent_change_operation(child_node = {}, parent before = {}, parent after = {})",
+        "[{}] Item_parent_change_operation(child_node = {}, parent before = {}, parent after = {})",
+        get_serial(),
         m_child->get_name(),
         m_parent_before ? m_parent_before->get_name() : "(empty)",
         m_parent_after  ? m_parent_after ->get_name() : "(empty)"

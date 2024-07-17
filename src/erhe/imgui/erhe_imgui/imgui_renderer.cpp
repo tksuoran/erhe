@@ -122,12 +122,7 @@ void Multi_pipeline::next_frame()
 {
     m_current_slot = (m_current_slot + 1) % s_frame_resources_count;
 
-    SPDLOG_LOGGER_TRACE(
-        log_multi_buffer,
-        "{} next_frame() - current slot is now {}",
-        m_name,
-        m_current_slot
-    );
+    SPDLOG_LOGGER_TRACE(log_multi_buffer, "{} next_frame() - current slot is now {}", m_name, m_current_slot);
 }
 
 void Multi_pipeline::allocate(
@@ -206,19 +201,11 @@ auto get_shader_defines(erhe::graphics::Instance& graphics_instance)
     return defines;
 }
 
-auto get_shader_default_uniform_block(
-    erhe::graphics::Instance& graphics_instance,
-    const int                 dedicated_texture_unit
-) -> erhe::graphics::Shader_resource
+auto get_shader_default_uniform_block(erhe::graphics::Instance& graphics_instance, const int dedicated_texture_unit) -> erhe::graphics::Shader_resource
 {
     erhe::graphics::Shader_resource default_uniform_block{graphics_instance};
     if (!graphics_instance.info.use_bindless_texture) {
-        default_uniform_block.add_sampler(
-            "s_textures",
-            gl::Uniform_type::sampler_2d,
-            0,
-            dedicated_texture_unit
-        );
+        default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, 0, dedicated_texture_unit);
     }
     return default_uniform_block;
 }
@@ -325,17 +312,8 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Instance& graph
         draw_parameter_block.binding_point(),
         block_offsets.draw_parameter_struct_array + s_max_draw_count * draw_parameter_struct.size_bytes()
     );
-    draw_indirect_buffer.allocate(
-        gl::Buffer_target::draw_indirect_buffer,
-        s_max_draw_count * sizeof(gl::Draw_elements_indirect_command)
-    );
-    pipeline.allocate(
-        attribute_mappings,
-        vertex_format,
-        &shader_stages,
-        vertex_buffer,
-        index_buffer
-    );
+    draw_indirect_buffer.allocate(gl::Buffer_target::draw_indirect_buffer, s_max_draw_count * sizeof(gl::Draw_elements_indirect_command));
+    pipeline.allocate(attribute_mappings, vertex_format, &shader_stages, vertex_buffer, index_buffer);
 }
 
 void Imgui_program_interface::next_frame()
@@ -714,16 +692,8 @@ auto Imgui_renderer::image(
         linear
     );
     const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
-    const uint64_t handle = m_graphics_instance.get_handle(
-        *texture.get(),
-        sampler
-    );
-    SPDLOG_LOGGER_TRACE(
-        log_imgui,
-        "sampler = {}, handle = {:16x}",
-        sampler->gl_name(),
-        handle
-    );
+    const uint64_t handle = m_graphics_instance.get_handle(*texture.get(), sampler);
+    SPDLOG_LOGGER_TRACE(log_imgui, "sampler = {}, handle = {:16x}", sampler->gl_name(), handle);
     ImGui::Image(
         handle,
         ImVec2{
@@ -792,10 +762,7 @@ auto Imgui_renderer::image_button(
     return ImGui::IsItemClicked();
 }
 
-void Imgui_renderer::use(
-    const std::shared_ptr<erhe::graphics::Texture>& texture,
-    const uint64_t                                  handle
-)
+void Imgui_renderer::use(const std::shared_ptr<erhe::graphics::Texture>& texture, const uint64_t handle)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -823,10 +790,7 @@ void Imgui_renderer::render_draw_data()
 
     // Also make font texture handle resident
     {
-        const uint64_t handle = m_graphics_instance.get_handle(
-            *m_font_texture.get(),
-            m_linear_sampler
-        );
+        const uint64_t handle = m_graphics_instance.get_handle(*m_font_texture.get(),m_linear_sampler);
         use(m_font_texture, handle);
     }
 
@@ -1130,10 +1094,7 @@ void Imgui_renderer::render_draw_data()
             static_cast<GLsizeiptr>(draw_parameter_writer.range.byte_count)
         );
 
-        gl::bind_buffer(
-            gl::Buffer_target::draw_indirect_buffer,
-            static_cast<GLuint>(draw_indirect_buffer.gl_name())
-        );
+        gl::bind_buffer(gl::Buffer_target::draw_indirect_buffer, static_cast<GLuint>(draw_indirect_buffer.gl_name()));
 
         gl::multi_draw_elements_indirect(
             pipeline.data.input_assembly.primitive_topology,

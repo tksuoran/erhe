@@ -108,6 +108,8 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
     , debug_omega_o           {"debug_omega_o-not_loaded"}
     , debug_omega_i           {"debug_omega_i-not_loaded"}
     , debug_omega_g           {"debug_omega_g-not_loaded"}
+    , debug_vertex_valency    {"debug_vertex_valency-not_loaded"}
+    , debug_polygon_edge_count{"debug_polygon_edge_count_g-not_loaded"}
     , debug_misc              {"debug_misc-not_loaded"}
 {
     // Not available on Dell laptop.
@@ -117,12 +119,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
 
     using CI = erhe::graphics::Shader_stages_create_info;
 
-    auto add_shader = [
-        this,
-        &graphics_instance,
-        &program_interface,
-        &prototypes
-    ](
+    auto add_shader = [this, &graphics_instance, &program_interface, &prototypes](
         erhe::graphics::Reloadable_shader_stages&   reloadable_shader_stages,
         erhe::graphics::Shader_stages_create_info&& create_info
     ) {
@@ -173,6 +170,8 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
     add_shader(debug_omega_o           , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_OMEGA_O",            "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_omega_i           , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_OMEGA_I",            "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_omega_g           , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_OMEGA_G",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_vertex_valency    , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_VERTEX_VALENCY",     "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_polygon_edge_count, CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_POLYGON_EDGE_COUNT", "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_misc              , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = &default_uniform_block } );
 
     // Compile shaders
@@ -231,6 +230,8 @@ auto Programs::get_variant_shader_stages(Shader_stages_variant variant) const ->
         case Shader_stages_variant::debug_omega_o:            return &debug_omega_o.shader_stages;
         case Shader_stages_variant::debug_omega_i:            return &debug_omega_i.shader_stages;
         case Shader_stages_variant::debug_omega_g:            return &debug_omega_g.shader_stages;
+        case Shader_stages_variant::debug_vertex_valency:     return &debug_vertex_valency.shader_stages;
+        case Shader_stages_variant::debug_polygon_edge_count: return &debug_polygon_edge_count.shader_stages;
         case Shader_stages_variant::debug_misc:               return &debug_misc.shader_stages;
         default:                                              return &error.shader_stages;
     }

@@ -1,10 +1,13 @@
 #include "windows/layers_window.hpp"
 
 #include "editor_context.hpp"
+#include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "tools/hotbar.hpp"
+#include "tools/hud.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
@@ -25,6 +28,7 @@ Layers_window::Layers_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Layers", "layers"}
     , m_context                {editor_context}
 {
+    set_developer();
 }
 
 void Layers_window::imgui()
@@ -100,6 +104,36 @@ void Layers_window::imgui()
     m_context.scene_views->debug_imgui();
 
     m_context.imgui_windows->debug_imgui();
+
+    if (ImGui::TreeNodeEx("Hotbar")) {
+        auto& hotbar = *m_context.hotbar;
+        auto& color_inactive = hotbar.get_color(0);
+        auto& color_hover    = hotbar.get_color(1);
+        auto& color_active   = hotbar.get_color(2);
+        ImGui::ColorEdit4("Inactive", &color_inactive.x, ImGuiColorEditFlags_Float);
+        ImGui::ColorEdit4("Hover",    &color_hover.x,    ImGuiColorEditFlags_Float);
+        ImGui::ColorEdit4("Active",   &color_active.x,   ImGuiColorEditFlags_Float);
+
+        auto position = hotbar.get_position();
+        if (ImGui::DragFloat3("Position", &position.x, 0.01f, -1.0f, 1.0f)) {
+            hotbar.set_position(position);
+        }
+        ImGui::TreePop();
+
+        bool locked = hotbar.get_locked();
+        if (ImGui::Checkbox("Locked", &locked)) {
+            hotbar.set_locked(locked);
+        }
+    }
+
+    m_context.editor_rendering->imgui();
+
+    if (ImGui::TreeNodeEx("Hud")) {
+        auto& hud = *m_context.hud;
+        hud.imgui();
+        ImGui::TreePop();
+    }
+
 #endif
 }
 

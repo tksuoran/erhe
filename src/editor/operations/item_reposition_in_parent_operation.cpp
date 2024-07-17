@@ -33,7 +33,8 @@ Item_reposition_in_parent_operation::Item_reposition_in_parent_operation(
 auto Item_reposition_in_parent_operation::describe() const -> std::string
 {
     return fmt::format(
-        "Item_reposition_in_parent_operation(child = {}, place_before = {}, place_after = {})",
+        "[{}] Item_reposition_in_parent_operation(child = {}, place_before = {}, place_after = {})",
+        get_serial(),
         m_child->get_name(),
         m_place_before ? m_place_before->get_name() : "()",
         m_place_after  ? m_place_after ->get_name() : "()"

@@ -1,6 +1,4 @@
 #include "erhe_window/window_event_handler.hpp"
-#include "erhe_window/window_log.hpp"
-#include "erhe_window/window.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::window {
@@ -146,240 +144,26 @@ auto c_str(const Mouse_button button) -> const char*
     };
 }
 
-Root_window_event_handler::Root_window_event_handler(Context_window* window)
-    : m_window{window}
+auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_event) -> bool
 {
-}
-
-void Root_window_event_handler::sort_handlers()
-{
-    std::sort(
-        m_handlers.begin(),
-        m_handlers.end(),
-        [](const Window_event_handler* lhs, const Window_event_handler* rhs) {
-            return lhs->get_priority() > rhs->get_priority();
-        }
-    );
-}
-
-void Root_window_event_handler::attach(Window_event_handler* window_event_handler, int priority)
-{
-    ERHE_VERIFY(window_event_handler != nullptr);
-    window_event_handler->set_priority(priority);
-    {
-        std::lock_guard<std::mutex> lock{m_mutex};
-        m_handlers.push_back(window_event_handler);
-        sort_handlers();
+    ERHE_VERIFY(input_event.handled == false);
+    switch (input_event.type) {
+        case Input_event_type::no_event               : break;
+        case Input_event_type::key_event              : input_event.handled = on_event(input_event.u.key_event); break;
+        case Input_event_type::char_event             : input_event.handled = on_event(input_event.u.char_event); break;
+        case Input_event_type::window_focus_event     : input_event.handled = on_event(input_event.u.window_focus_event); break;
+        case Input_event_type::cursor_enter_event     : input_event.handled = on_event(input_event.u.cursor_enter_event); break;
+        case Input_event_type::mouse_move_event       : input_event.handled = on_event(input_event.u.mouse_move_event); break;
+        case Input_event_type::mouse_button_event     : input_event.handled = on_event(input_event.u.mouse_button_event); break;
+        case Input_event_type::mouse_wheel_event      : input_event.handled = on_event(input_event.u.mouse_wheel_event); break;
+        case Input_event_type::controller_axis_event  : input_event.handled = on_event(input_event.u.controller_axis_event); break;
+        case Input_event_type::controller_button_event: input_event.handled = on_event(input_event.u.controller_button_event); break;
+        case Input_event_type::window_resize_event    : input_event.handled = on_event(input_event.u.window_resize_event); break;
+        case Input_event_type::window_refresh_event   : input_event.handled = on_window_refresh_event(); break;
+        case Input_event_type::window_close_event     : input_event.handled = on_window_close_event  (); break;
+        default: break;
     }
-    window_event_handler->on_resize(m_window->get_width(), m_window->get_height());
-}
+    return input_event.handled;
+} 
 
-void Root_window_event_handler::detach(Window_event_handler* window_event_handler)
-{
-    ERHE_VERIFY(window_event_handler != nullptr);
-    std::lock_guard<std::mutex> lock{m_mutex};
-    const auto i = std::remove(m_handlers.begin(), m_handlers.end(), window_event_handler);
-    if (i == m_handlers.end()) {
-        log_window->error("Window_event_handler was not attached");
-    } else {
-        m_handlers.erase(i, m_handlers.end());
-    }
-}
-
-auto Root_window_event_handler::on_idle() -> bool 
-{
-    for (auto* handler : m_handlers) {
-        if (handler->on_idle()) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_close() -> bool
-{
-    for (auto* handler : m_handlers) {
-        if (handler->on_close()) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_focus(const int focused) -> bool
-{
-    for (auto* handler : m_handlers) {
-        if (handler->on_focus(focused)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_cursor_enter(const int entered) -> bool
-{
-    for (auto* handler : m_handlers) {
-        if (handler->on_cursor_enter(entered)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_refresh() -> bool
-{
-    for (auto* handler : m_handlers) {
-        if (handler->on_refresh()) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_resize(const int width, const int height) -> bool
-{
-    m_width  = width;
-    m_height = height;
-    for (auto* handler : m_handlers) {
-        if (handler->on_resize(width, height)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_key(const Keycode code, const Key_modifier_mask mask, const bool pressed) -> bool
-{
-    for (auto* handler : m_handlers) {
-        if (handler->on_key(code, mask, pressed)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_char(const unsigned int codepoint) -> bool
-{
-    for (auto* handler : m_handlers) {
-        if (handler->on_char(codepoint)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void Root_window_event_handler::set_active_mouse_handler(Window_event_handler* handler)
-{
-    if (m_active_mouse_handler == handler) {
-        return;
-    }
-    log_window_event->trace(
-        "active mouse event handler set to '{}'",
-        (handler != nullptr) ? handler->get_name() : ""
-    );
-
-    m_active_mouse_handler = handler;
-}
-
-auto Root_window_event_handler::on_mouse_move(const float absolute_x, const float absolute_y, const float relative_x, const float relative_y, const uint32_t modifier_mask) -> bool
-{
-    if (m_active_mouse_handler != nullptr) {
-        if (m_active_mouse_handler->has_active_mouse()) {
-            if (m_active_mouse_handler->on_mouse_move(absolute_x, absolute_y, relative_x, relative_y, modifier_mask)) {
-                return true;
-            }
-        } else {
-            set_active_mouse_handler(nullptr);
-        }
-    }
-
-    for (auto* handler : m_handlers) {
-        const bool consumed = handler->on_mouse_move(absolute_x, absolute_y, relative_x, relative_y, modifier_mask);
-        if (m_active_mouse_handler == nullptr) {
-            if (handler->has_active_mouse()) {
-                set_active_mouse_handler(handler);
-            }
-        }
-        if (consumed) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_mouse_button(const Mouse_button button, const bool pressed, const uint32_t modifier_mask) -> bool
-{
-    if (m_active_mouse_handler != nullptr) {
-        if (m_active_mouse_handler->has_active_mouse()) {
-            const bool handled = m_active_mouse_handler->on_mouse_button(button, pressed, modifier_mask);
-            if (handled) {
-                return true;
-            }
-        } else {
-            set_active_mouse_handler(nullptr);
-        }
-    }
-
-    for (auto* handler : m_handlers) {
-        const bool consumed = handler->on_mouse_button(button, pressed, modifier_mask);
-        if (m_active_mouse_handler == nullptr) {
-            if (handler->has_active_mouse()) {
-                set_active_mouse_handler(handler);
-            }
-        }
-        if (consumed) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_mouse_wheel(const float x, const float y, const uint32_t modifier_mask) -> bool
-{
-    if (m_active_mouse_handler != nullptr) {
-        if (m_active_mouse_handler->has_active_mouse()) {
-            if (m_active_mouse_handler->on_mouse_wheel(x, y, modifier_mask)) {
-                return true;
-            }
-        } else {
-            set_active_mouse_handler(nullptr);
-        }
-    }
-
-    for (auto* handler : m_handlers) {
-        const bool consumed = handler->on_mouse_wheel(x, y, modifier_mask);
-        if (m_active_mouse_handler == nullptr) {
-            if (handler->has_active_mouse()) {
-                set_active_mouse_handler(handler);
-            }
-        }
-        if (consumed) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_controller_axis(const int axis, const float value, const uint32_t modifier_mask) -> bool
-{
-    for (auto* handler : m_handlers) {
-        const bool consumed = handler->on_controller_axis(axis, value, modifier_mask);
-        if (consumed) {
-            return true;
-        }
-    }
-    return false;
-}
-
-auto Root_window_event_handler::on_controller_button(const int button, const bool value, const uint32_t modifier_mask) -> bool
-{
-    for (auto* handler : m_handlers) {
-        const bool consumed = handler->on_controller_button(button, value, modifier_mask);
-        if (consumed) {
-            return true;
-        }
-    }
-    return false;
-}
-
-}
+} // namespace erhe::window

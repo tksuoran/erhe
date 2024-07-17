@@ -1,8 +1,6 @@
 #pragma once
 
-#include <memory>
-#include <mutex>
-#include <vector>
+#include <cstdint>
 
 namespace erhe::window {
 
@@ -154,144 +152,134 @@ constexpr Mouse_button Mouse_button_none   = 0xffffffff;
 extern auto c_str(Mouse_button button) -> const char*;
 #pragma endregion Keycode
 
-class Window_event_handler;
-class Root_window_event_handler;
-
-// Window_event_handler can process input events from window
-class Window_event_handler
-{
-public:
-    virtual ~Window_event_handler() noexcept = default;
-
-    void set_priority(int priority) { m_priority = priority; }
-    [[nodiscard]] auto get_priority() const -> int { return m_priority; }
-    [[nodiscard]] virtual auto get_name        () const -> const char* = 0;
-
-    [[nodiscard]] virtual auto has_active_mouse() const -> bool { return false; }
-
-    virtual auto on_idle() -> bool { return false; }
-
-    virtual auto on_close() -> bool { return false; }
-
-    virtual auto on_focus(const int focused) -> bool
-    {
-        static_cast<void>(focused);
-        return false;
-    }
-
-    virtual auto on_cursor_enter(const int entered) -> bool
-    {
-        static_cast<void>(entered);
-        return false;
-    }
-
-    virtual auto on_refresh() -> bool
-    {
-        return false;
-    }
-
-    virtual auto on_resize(const int width, const int height) -> bool
-    {
-        static_cast<void>(width);
-        static_cast<void>(height);
-        return false;
-    }
-
-    virtual auto on_key(const Keycode code, const Key_modifier_mask modifier_mask, const bool pressed) -> bool
-    {
-        static_cast<void>(code);
-        static_cast<void>(modifier_mask);
-        static_cast<void>(pressed);
-        return false;
-    }
-
-    virtual auto on_char(const unsigned int c) -> bool
-    {
-        static_cast<void>(c);
-        return false;
-    }
-
-    virtual auto on_mouse_move(const float absolute_x, const float absolute_y, const float relative_x, const float relative_y, const uint32_t modifier_mask) -> bool
-    {
-        static_cast<void>(absolute_x);
-        static_cast<void>(absolute_y);
-        static_cast<void>(relative_x);
-        static_cast<void>(relative_y);
-        static_cast<void>(modifier_mask);
-        return false;
-    }
-
-    virtual auto on_mouse_button(const Mouse_button button, const bool pressed, const uint32_t modifier_mask) -> bool
-    {
-        static_cast<void>(button);
-        static_cast<void>(pressed);
-        static_cast<void>(modifier_mask);
-        return false;
-    }
-
-    virtual auto on_mouse_wheel(const float x, const float y, const uint32_t modifier_mask) -> bool
-    {
-        static_cast<void>(x);
-        static_cast<void>(y);
-        static_cast<void>(modifier_mask);
-        return false;
-    }
-
-    virtual auto on_controller_axis(const int axis, const float value, const uint32_t modifier_mask) -> bool
-    {
-        static_cast<void>(axis);
-        static_cast<void>(value);
-        static_cast<void>(modifier_mask);
-        return false;
-    }
-
-    virtual auto on_controller_button(const int button, const bool value, const uint32_t modifier_mask) -> bool
-    {
-        static_cast<void>(button);
-        static_cast<void>(value);
-        static_cast<void>(modifier_mask);
-        return false;
-    }
-
-private:
-    int m_priority{0};
+enum class Input_event_type : unsigned int {
+    no_event                =  0,
+    key_event               =  1,
+    char_event              =  2,
+    window_focus_event      =  3,
+    cursor_enter_event      =  4,
+    mouse_move_event        =  5,
+    mouse_button_event      =  6,
+    mouse_wheel_event       =  7,
+    controller_axis_event   =  8,
+    controller_button_event =  9,
+    window_resize_event     = 10,
+    window_refresh_event    = 11,
+    window_close_event      = 12
 };
 
-class Root_window_event_handler : public Window_event_handler
+class Key_event
 {
 public:
-    // Implements Window_event_handler
-    [[nodiscard]] auto get_name() const -> const char* override { return "Root_window_event_handler"; }
+    signed int keycode;
+    uint32_t   modifier_mask;
+    bool       pressed;
+};
 
-    explicit Root_window_event_handler(Context_window* window);
+class Char_event
+{
+public:
+    unsigned int codepoint;
+};
 
-    void attach(Window_event_handler* handler, int priority);
-    void detach(Window_event_handler* handler);
+class Cursor_enter_event
+{
+public:
+    int entered;
+};
 
-    auto on_focus            (int focused) -> bool                                               override;
-    auto on_cursor_enter     (int entered) -> bool                                               override;
-    auto on_refresh          () -> bool                                                          override;
-    auto on_idle             () -> bool                                                          override;
-    auto on_close            () -> bool                                                          override;
-    auto on_resize           (int width, int height) -> bool                                     override;
-    auto on_key              (Keycode code, Key_modifier_mask mask, bool pressed) -> bool        override;
-    auto on_char             (unsigned int codepoint) -> bool                                    override;
-    auto on_mouse_move       (float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool override;
-    auto on_mouse_button     (Mouse_button button, bool pressed, uint32_t modifier_mask) -> bool override;
-    auto on_mouse_wheel      (float x, float y, uint32_t modifier_mask) -> bool                  override;
-    auto on_controller_axis  (int axis, float value, uint32_t modifier_mask)             -> bool override;
-    auto on_controller_button(int button, bool value, uint32_t modifier_mask)            -> bool override;
+class Mouse_move_event
+{
+public:
+    float    x;
+    float    y;
+    float    dx;
+    float    dy;
+    uint32_t modifier_mask;
+};
 
-private:
-    void sort_handlers();
-    void set_active_mouse_handler(Window_event_handler* handler);
+class Mouse_button_event
+{
+public:
+    uint32_t button;
+    bool     pressed;
+    uint32_t modifier_mask;
+};
 
-    Context_window*                    m_window{nullptr};
-    int                                m_width {0};
-    int                                m_height{0};
-    std::mutex                         m_mutex;
-    std::vector<Window_event_handler*> m_handlers;
-    Window_event_handler*              m_active_mouse_handler{nullptr};
+class Mouse_wheel_event
+{
+public:
+    float    x;
+    float    y;
+    uint32_t modifier_mask;
+};
+
+class Controller_axis_event
+{
+public:
+    int      controller;
+    int      axis;
+    float    value;
+    uint32_t modifier_mask;
+};
+
+class Controller_button_event
+{
+public:
+    int      controller;
+    int      button;
+    bool     value;
+    uint32_t modifier_mask;
+};
+
+class Window_resize_event
+{
+public:
+    int width;
+    int height;
+};
+
+class Window_focus_event
+{
+public:
+    int focused;
+};
+
+class Input_event
+{
+public:
+    Input_event_type type;
+    bool handled{false};
+    union Imgui_event_union {
+        Key_event               key_event;
+        Char_event              char_event;
+        Window_focus_event      window_focus_event;
+        Cursor_enter_event      cursor_enter_event;
+        Mouse_move_event        mouse_move_event;
+        Mouse_button_event      mouse_button_event;
+        Mouse_wheel_event       mouse_wheel_event;
+        Controller_axis_event   controller_axis_event;
+        Controller_button_event controller_button_event;
+        Window_resize_event     window_resize_event;
+    } u;
+};
+
+class Input_event_handler
+{
+public:
+    virtual auto dispatch_input_event   (Input_event& input_event) -> bool;
+    virtual auto on_event               (const Key_event&              ) -> bool { return false; }
+    virtual auto on_event               (const Char_event&             ) -> bool { return false; }
+    virtual auto on_event               (const Window_focus_event&     ) -> bool { return false; }
+    virtual auto on_event               (const Cursor_enter_event&     ) -> bool { return false; }
+    virtual auto on_event               (const Mouse_move_event&       ) -> bool { return false; }
+    virtual auto on_event               (const Mouse_button_event&     ) -> bool { return false; }
+    virtual auto on_event               (const Mouse_wheel_event&      ) -> bool { return false; }
+    virtual auto on_event               (const Controller_axis_event&  ) -> bool { return false; }
+    virtual auto on_event               (const Controller_button_event&) -> bool { return false; }
+    virtual auto on_event               (const Window_resize_event&    ) -> bool { return false; }
+    virtual auto on_window_close_event  () -> bool { return false; }
+    virtual auto on_window_refresh_event() -> bool { return false; }
 };
 
 } // namespace erhe::window

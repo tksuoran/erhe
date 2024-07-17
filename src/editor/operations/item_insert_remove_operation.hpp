@@ -9,7 +9,7 @@ namespace editor {
 
 class Item_parent_change_operation;
 
-class Item_insert_remove_operation : public IOperation
+class Item_insert_remove_operation : public Operation
 {
 public:
     enum class Mode : unsigned int {
@@ -41,10 +41,10 @@ public:
 
     explicit Item_insert_remove_operation(const Parameters& parameters);
 
-    // Implements IOperation
-    auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
+    // Implements Operation
+    auto describe() const -> std::string   override;
+    void execute (Editor_context& context) override;
+    void undo    (Editor_context& context) override;
 
 private:
     Mode                                                       m_mode;

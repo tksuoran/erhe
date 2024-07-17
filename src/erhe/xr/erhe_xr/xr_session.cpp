@@ -259,12 +259,7 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
     std::vector<int64_t> swapchain_formats(swapchain_format_count);
 
     ERHE_XR_CHECK(
-        xrEnumerateSwapchainFormats(
-            m_xr_session,
-            swapchain_format_count,
-            &swapchain_format_count,
-            swapchain_formats.data()
-        )
+        xrEnumerateSwapchainFormats(m_xr_session, swapchain_format_count, &swapchain_format_count, swapchain_formats.data())
     );
 
     log_xr->info("Swapchain formats:");
@@ -292,22 +287,12 @@ auto Xr_session::enumerate_reference_spaces() -> bool
 
     uint32_t reference_space_type_count{0};
     ERHE_XR_CHECK(
-        xrEnumerateReferenceSpaces(
-            m_xr_session,
-            0,
-            &reference_space_type_count,
-            nullptr
-        )
+        xrEnumerateReferenceSpaces(m_xr_session, 0, &reference_space_type_count, nullptr)
     );
 
     m_xr_reference_space_types.resize(reference_space_type_count);
     ERHE_XR_CHECK(
-        xrEnumerateReferenceSpaces(
-            m_xr_session,
-            reference_space_type_count,
-            &reference_space_type_count,
-            m_xr_reference_space_types.data()
-        )
+        xrEnumerateReferenceSpaces(m_xr_session, reference_space_type_count, &reference_space_type_count, m_xr_reference_space_types.data())
     );
     log_xr->info("Reference space types:");
     for (const auto reference_space_type : m_xr_reference_space_types) {
@@ -816,19 +801,13 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
 
         auto& swapchain = m_view_swapchains[i];
         auto acquired_color_swapchain_image_opt = swapchain.color_swapchain.acquire();
-        if (
-            !acquired_color_swapchain_image_opt.has_value() ||
-            !swapchain.color_swapchain.wait()
-        ) {
+        if (!acquired_color_swapchain_image_opt.has_value() || !swapchain.color_swapchain.wait()) {
             log_xr->warn("no swapchain color image for view {}", i);
             return false;
         }
 
         auto acquired_depth_stencil_swapchain_image_opt = swapchain.depth_stencil_swapchain.acquire();
-        if (
-            !acquired_depth_stencil_swapchain_image_opt.has_value() ||
-            !swapchain.depth_stencil_swapchain.wait()
-        ) {
+        if (!acquired_depth_stencil_swapchain_image_opt.has_value() || !swapchain.depth_stencil_swapchain.wait()) {
             log_xr->warn("no swapchain depth stencilimage for view {}", i);
             return false;
         }
@@ -979,4 +958,4 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     return true;
 }
 
-}
+} // namespace erhe::xr

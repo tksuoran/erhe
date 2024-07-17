@@ -75,20 +75,12 @@ auto Window_imgui_host::begin_imgui_frame() -> bool
     const bool visible   = glfwGetWindowAttrib(glfw_window, GLFW_VISIBLE  ) == GLFW_TRUE;
     const bool iconified = glfwGetWindowAttrib(glfw_window, GLFW_ICONIFIED) == GLFW_TRUE;
 
-    if (
-        (w < 1) ||
-        (h < 1) ||
-        !visible ||
-        iconified
-    ) {
+    if ((w < 1) || (h < 1) || !visible || iconified) {
         return false;
     }
 
     ImGuiIO& io = m_imgui_context->IO;
-    io.DisplaySize = ImVec2{
-        static_cast<float>(w),
-        static_cast<float>(h)
-    };
+    io.DisplaySize = ImVec2{static_cast<float>(w), static_cast<float>(h)};
 
     // Setup time step
     const auto current_time = glfwGetTime();
@@ -96,6 +88,14 @@ auto Window_imgui_host::begin_imgui_frame() -> bool
         ? static_cast<float>(current_time - m_time)
         : static_cast<float>(1.0 / 60.0);
     m_time = current_time;
+
+    // Process input events from the context window
+    std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
+    for (erhe::window::Input_event& input_event : input_events) {
+        if (!input_event.handled) {
+            dispatch_input_event(input_event);
+        }
+    }
 
     // ImGui_ImplGlfw_UpdateMouseCursor
     const auto cursor = static_cast<erhe::window::Mouse_cursor>(ImGui::GetMouseCursor());
@@ -108,8 +108,6 @@ auto Window_imgui_host::begin_imgui_frame() -> bool
     if (m_begin_callback) {
         m_begin_callback(*this);
     }
-
-    flush_queud_events();
 
     return true;
 }

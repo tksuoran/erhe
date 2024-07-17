@@ -255,10 +255,7 @@ template <>           struct transform_properties<glm::vec3> { static const bool
 template <>           struct transform_properties<glm::vec4> { static const bool is_transformable = true;  };
 
 template <typename Key_type, typename Value_type>
-inline void
-Property_map<Key_type, Value_type>::import_from(
-    Property_map_base<Key_type>* source_base
-)
+inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Key_type>* source_base)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -323,13 +320,7 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
                     for (std::size_t i = 0, end = values.size(); i < end; ++i) {
                         values[i] = glm::vec4{
                             glm::normalize(
-                                apply_transform(
-                                    glm::vec3{
-                                        values[i]
-                                    },
-                                    inverse_transpose_transform,
-                                    0.0f
-                                )
+                                apply_transform(glm::vec3{values[i]}, inverse_transpose_transform, 0.0f)
                             ),
                             values[i].w
                         };
@@ -342,11 +333,7 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
 }
 
 template <typename Key_type, typename Value_type>
-inline void
-Property_map<Key_type, Value_type>::import_from(
-    Property_map_base<Key_type>* source_base,
-    const glm::mat4              transform
-)
+inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Key_type>* source_base, const glm::mat4 transform)
 {
     ERHE_PROFILE_FUNCTION();
 

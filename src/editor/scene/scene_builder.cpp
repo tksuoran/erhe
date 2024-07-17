@@ -80,8 +80,6 @@ using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 
-constexpr bool global_instantiate = true;
-
 Scene_builder::Config::Config()
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "scene");
@@ -326,7 +324,7 @@ void Scene_builder::setup_cameras(
         editor_rendering,
         editor_settings,
         tools,
-        "Primary Viewport",
+        "Primary Viewport_scene_view",
         m_scene_root,
         camera_a,
         std::max(2, msaa_sample_count), //// TODO Fix rendergraph
@@ -468,19 +466,18 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
     auto content_library = m_scene_root->content_library();
     Content_library_node& brushes = *(content_library->brushes.get());
 
-    if (config.platonic_solids) {
+    {
         execution_queue->enqueue(
             [this, &editor_settings, &mesh_memory, &brushes]() {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
-                constexpr bool instantiate = global_instantiate;
                 const auto scale = config.object_scale;
                 auto& folder = *(brushes.make_folder("Platonic Solids").get());
-                make_brush(folder, editor_settings, mesh_memory, make_dodecahedron (scale), instantiate);
-                make_brush(folder, editor_settings, mesh_memory, make_icosahedron  (scale), instantiate);
-                make_brush(folder, editor_settings, mesh_memory, make_octahedron   (scale), instantiate);
-                make_brush(folder, editor_settings, mesh_memory, make_tetrahedron  (scale), instantiate);
-                make_brush(folder, editor_settings, mesh_memory, make_cuboctahedron(scale), instantiate);
+                make_brush(folder, editor_settings, mesh_memory, make_dodecahedron (scale), config.platonic_solids);
+                make_brush(folder, editor_settings, mesh_memory, make_icosahedron  (scale), config.platonic_solids);
+                make_brush(folder, editor_settings, mesh_memory, make_octahedron   (scale), config.platonic_solids);
+                make_brush(folder, editor_settings, mesh_memory, make_tetrahedron  (scale), config.platonic_solids);
+                make_brush(folder, editor_settings, mesh_memory, make_cuboctahedron(scale), config.platonic_solids);
                 make_brush(
                     folder,
                     Brush_data{
@@ -494,7 +491,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
                             vec3{scale * 0.5f}
                         )
                     },
-                    instantiate
+                    config.platonic_solids
                 );
             }
         );
@@ -503,7 +500,6 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
         execution_queue->enqueue(
             [this, &editor_settings, &mesh_memory, &brushes]() {
                 ERHE_PROFILE_SCOPE("Sphere");
-                constexpr bool instantiate = global_instantiate;
                 make_brush(
                     brushes,
                     Brush_data{
@@ -523,7 +519,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
                             config.object_scale
                         )
                     },
-                    instantiate
+                    true
                 );
             }
         );
@@ -532,8 +528,6 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
         execution_queue->enqueue(
             [this, &editor_settings, &mesh_memory, &brushes]() {
                 ERHE_PROFILE_SCOPE("Torus");
-
-                constexpr bool instantiate = global_instantiate;
 
                 const float major_radius = 1.0f  * config.object_scale;
                 const float minor_radius = 0.25f * config.object_scale;
@@ -604,16 +598,14 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
                         .collision_volume_calculator = torus_collision_volume_calculator,
                         .collision_shape_generator   = torus_collision_shape_generator,
                     },
-                    instantiate
+                    true
                 );
-
             }
         );
     }
     if (config.cylinder) {
         execution_queue->enqueue(
             [this, &editor_settings, &mesh_memory, &brushes]() {
-                constexpr bool instantiate = global_instantiate;
                 const float scale = config.object_scale;
                 for (float h = 0.1f; h < 1.1f; h += 0.9f) {
                     auto cylinder_geometry = make_cylinder(
@@ -643,7 +635,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
                                 vec3{h * scale, scale, h * scale}
                             )
                         },
-                        instantiate
+                        true
                     );
                 }
             }
@@ -654,7 +646,6 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
             [this, &editor_settings, &mesh_memory, &brushes]() {
                 ERHE_PROFILE_SCOPE("Cone");
 
-                constexpr bool instantiate = global_instantiate;
                 auto cone_geometry = make_cone( // always axis = x
                     -config.object_scale,             // min x
                     config.object_scale,              // max x
@@ -683,7 +674,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
                         //    2.0f * object_scale
                         //)
                     },
-                    instantiate
+                    true
                 );
             }
         );
@@ -739,7 +730,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
     }
 
     Json_library library;//("res/polyhedra/johnson.json");
-    if (config.johnson_solids) {
+    {
         // TODO When tasks can have dependencies we could queue this as well
         ERHE_PROFILE_SCOPE("Johnson solids");
 
@@ -766,7 +757,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
                             .geometry_generator = [shared_geometry](){ return shared_geometry; },
                             .density            = config.mass_scale
                         },
-                        false
+                        config.johnson_solids
                     );
                 }
             );

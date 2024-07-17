@@ -25,15 +25,15 @@
 
 namespace editor {
 
-class Scene_open_operation : public IOperation
+class Scene_open_operation : public Operation
 {
 public:
     explicit Scene_open_operation(const std::filesystem::path& path);
 
-    // Implements IOperation
-    auto describe() const -> std::string override;
-    void execute(Editor_context& context) override;
-    void undo   (Editor_context& context) override;
+    // Implements Operation
+    auto describe() const -> std::string   override;
+    void execute (Editor_context& context) override;
+    void undo    (Editor_context& context) override;
 
 private:
     std::filesystem::path            m_path;
@@ -48,7 +48,7 @@ Scene_open_operation::Scene_open_operation(const std::filesystem::path& path)
 
 auto Scene_open_operation::describe() const -> std::string
 {
-    return fmt::format("Scene_open_operation(path = {})", m_path.string());
+    return fmt::format("[{}] Scene_open_operation(path = {})", get_serial(), m_path.string());
 }
 
 void Scene_open_operation::execute(Editor_context& context)

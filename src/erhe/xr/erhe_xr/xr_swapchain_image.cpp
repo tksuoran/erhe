@@ -117,15 +117,7 @@ auto Swapchain::acquire() -> std::optional<Swapchain_image>
     uint32_t image_index = 0;
 
     check_gl_context_in_current_in_this_thread();
-    if (
-        !check(
-            xrAcquireSwapchainImage(
-                m_xr_swapchain,
-                &swapchain_image_acquire_info,
-                &image_index
-            )
-        )
-    ) {
+    if (!check(xrAcquireSwapchainImage(m_xr_swapchain, &swapchain_image_acquire_info, &image_index))) {
         return {};
     }
 
@@ -222,4 +214,4 @@ auto Swapchain::enumerate_images() -> bool
     return true;
 }
 
-}
+} // namespace erhe::xr

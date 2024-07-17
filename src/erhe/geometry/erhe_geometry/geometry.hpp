@@ -215,15 +215,8 @@ public:
         const Property_map<Point_id, glm::vec3>& point_locations
     ) const;
 
-    auto compute_normal(
-        const Geometry&                          geometry,
-        const Property_map<Point_id, glm::vec3>& point_locations
-    ) const -> glm::vec3;
-
-    auto compute_centroid(
-        const Geometry&                          geometry,
-        const Property_map<Point_id, glm::vec3>& point_locations
-    ) const -> glm::vec3;
+    auto compute_normal  (const Geometry& geometry, const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3;
+    auto compute_centroid(const Geometry& geometry, const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3;
 
     auto compute_edge_midpoint(
         const Geometry&                          geometry,
@@ -248,20 +241,9 @@ public:
         const bool                                 overwrite = false
     ) const;
 
-    [[nodiscard]] auto corner(
-        const Geometry& geometry,
-        const Point_id  point_id
-    ) const -> Corner_id;
-
-    [[nodiscard]] auto next_corner(
-        const Geometry& geometry,
-        const Corner_id anchor_corner_id
-    ) const -> Corner_id;
-
-    [[nodiscard]] auto prev_corner(
-        const Geometry& geometry,
-        const Corner_id corner_id
-    ) const -> Corner_id;
+    [[nodiscard]] auto corner     (const Geometry& geometry, const Point_id point_id) const -> Corner_id;
+    [[nodiscard]] auto next_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id;
+    [[nodiscard]] auto prev_corner(const Geometry& geometry, const Corner_id corner_id) const -> Corner_id;
 
     void reverse(Geometry& geometry);
 
@@ -298,15 +280,9 @@ public:
         }
     };
 
-    void for_each_corner(
-        Geometry&                                            geometry,
-        std::function<void(Polygon_corner_context& context)> callback
-    );
+    void for_each_corner(Geometry& geometry, std::function<void(Polygon_corner_context& context)> callback);
 
-    void for_each_corner_const(
-        const Geometry&                                            geometry,
-        std::function<void(Polygon_corner_context_const& context)> callback
-    ) const;
+    void for_each_corner_const(const Geometry& geometry, std::function<void(Polygon_corner_context_const& context)> callback) const;
 
     class Polygon_corner_neighborhood_context
     {
@@ -350,15 +326,9 @@ public:
         }
     };
 
-    void for_each_corner_neighborhood(
-        Geometry&                                                         geometry,
-        std::function<void(Polygon_corner_neighborhood_context& context)> callback
-    );
+    void for_each_corner_neighborhood(Geometry& geometry, std::function<void(Polygon_corner_neighborhood_context& context)> callback);
 
-    void for_each_corner_neighborhood_const(
-        const Geometry&                                                         geometry,
-        std::function<void(Polygon_corner_neighborhood_context_const& context)> callback
-    ) const;
+    void for_each_corner_neighborhood_const(const Geometry& geometry, std::function<void(Polygon_corner_neighborhood_context_const& context)> callback) const;
 };
 
 class Edge

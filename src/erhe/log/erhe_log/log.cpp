@@ -156,10 +156,7 @@ auto make_frame_logger(const std::string& name) -> std::shared_ptr<spdlog::logge
     return make_logger(name, false);
 }
 
-auto make_logger(
-    const std::string& name,
-    const bool         tail
-) -> std::shared_ptr<spdlog::logger>
+auto make_logger(const std::string& name, const bool tail) -> std::shared_ptr<spdlog::logger>
 {
     ERHE_VERIFY(!name.empty());
     const auto groupname = get_groupname(name);

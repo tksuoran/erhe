@@ -77,6 +77,7 @@ public:
     );
 
     // Public API
+    void tick_
     void render_headset();
     void begin_frame   ();
     void end_frame     ();

@@ -13,11 +13,7 @@
 
 namespace erhe::imgui {
 
-Imgui_windows::Imgui_windows(
-    Imgui_renderer&                 imgui_renderer,
-    erhe::window::Context_window*   context_window,
-    erhe::rendergraph::Rendergraph& rendergraph
-)
+Imgui_windows::Imgui_windows(Imgui_renderer& imgui_renderer, erhe::window::Context_window* context_window, erhe::rendergraph::Rendergraph& rendergraph)
     : m_imgui_renderer{imgui_renderer}
     , m_rendergraph   {rendergraph}
 {
@@ -155,15 +151,8 @@ void Imgui_windows::imgui_windows()
                     const auto window_size        = ImGui::GetWindowSize();
                     const auto content_region_min = ImGui::GetWindowContentRegionMin();
                     const auto content_region_max = ImGui::GetWindowContentRegionMin();
-                    const ImVec2 content_region_size{
-                        content_region_max.x - content_region_min.x,
-                        content_region_max.y - content_region_min.y
-                    };
-                    const ImVec2 toolbar_window_position
-                    {
-                        window_position.x + content_region_min.x,
-                        window_position.y + content_region_min.y
-                    };
+                    const ImVec2 content_region_size{content_region_max.x - content_region_min.x, content_region_max.y - content_region_min.y};
+                    const ImVec2 toolbar_window_position{window_position.x + content_region_min.x, window_position.y + content_region_min.y};
                     const bool window_hovered = ImGui::IsWindowHovered();
                     if (!toolbar_hovered && window_hovered) {
                         window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
@@ -212,13 +201,16 @@ void Imgui_windows::debug_imgui()
     }
 }
 
-void Imgui_windows::window_menu_entries(Imgui_host& imgui_host)
+void Imgui_windows::window_menu_entries(Imgui_host& imgui_host, bool developer)
 {
     bool was_iterating = m_iterating;
     m_iterating = true;
 
     for (const auto& window : m_imgui_windows) {
         if (!window->show_in_menu()) {
+            continue;
+        }
+        if (window->show_in_developer_menu() != developer) {
             continue;
         }
         bool enabled = window->is_visible();
@@ -243,61 +235,53 @@ auto Imgui_windows::get_windows() -> std::vector<Imgui_window*>&
 
 auto Imgui_windows::want_capture_keyboard() const -> bool
 {
-    return m_window_imgui_host
-        ? m_window_imgui_host->want_capture_keyboard()
-        : false;
+    return m_window_imgui_host ? m_window_imgui_host->want_capture_keyboard() : false;
 }
 
 auto Imgui_windows::want_capture_mouse() const -> bool
 {
-    return m_window_imgui_host
-        ? m_window_imgui_host->want_capture_mouse()
-        : false;
+    return m_window_imgui_host ? m_window_imgui_host->want_capture_mouse() : false;
 }
 
-auto Imgui_windows::on_focus(const int focused) -> bool
+auto Imgui_windows::on_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
 {
     if (!m_window_imgui_host) {
         return false;
     }
 
-    m_window_imgui_host->on_focus(focused);
+    m_window_imgui_host->on_event(window_focus_event);
 
     return false; // does not consume
 }
 
-auto Imgui_windows::on_cursor_enter(const int entered) -> bool
+auto Imgui_windows::on_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
 {
     if (!m_window_imgui_host) {
         return false;
     }
 
-    m_window_imgui_host->on_cursor_enter(entered);
+    m_window_imgui_host->on_event(cursor_enter_event);
     return false; // does not consume
 }
 
-auto Imgui_windows::on_mouse_move(float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool
+auto Imgui_windows::on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
 {
-    static_cast<float>(relative_x);
-    static_cast<float>(relative_y);
-    static_cast<float>(modifier_mask);
     if (!m_window_imgui_host) {
         return false;
     }
 
-    m_window_imgui_host->on_mouse_move(absolute_x, absolute_y);
+    m_window_imgui_host->on_event(mouse_move_event);
 
     // If ImGui wants to capture mouse, the mouse event is not passed
     // to lower priority Window_event_handlers (Commands).
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_mouse_button(const uint32_t button, const bool pressed, const uint32_t modifier_mask) -> bool
+auto Imgui_windows::on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
 {
-    static_cast<void>(modifier_mask);
-    const auto& imgui_viewports = m_imgui_renderer.get_imgui_hosts();
-    for (const auto& viewport : imgui_viewports) {
-        viewport->on_mouse_button(button, pressed);
+    const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
+    for (const auto& host : imgui_hosts) {
+        host->on_event(mouse_button_event);
     }
 
     // If ImGui wants to capture mouse, the mouse event is not passed
@@ -305,11 +289,11 @@ auto Imgui_windows::on_mouse_button(const uint32_t button, const bool pressed, c
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_mouse_wheel(const float x, const float y, uint32_t) -> bool
+auto Imgui_windows::on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
 {
-    const auto& imgui_viewports = m_imgui_renderer.get_imgui_hosts();
-    for (const auto& viewport : imgui_viewports) {
-        viewport->on_mouse_wheel(x, y);
+    const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
+    for (const auto& host : imgui_hosts) {
+        host->on_event(mouse_wheel_event);
     }
 
     // If ImGui wants to capture mouse, the mouse event is not passed
@@ -317,21 +301,21 @@ auto Imgui_windows::on_mouse_wheel(const float x, const float y, uint32_t) -> bo
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_key(const signed int keycode, const uint32_t modifier_mask, const bool pressed) -> bool
+auto Imgui_windows::on_event(const erhe::window::Key_event& key_event) -> bool
 {
-    const auto& imgui_viewports = m_imgui_renderer.get_imgui_hosts();
-    for (const auto& viewport : imgui_viewports) {
-        viewport->on_key(keycode, modifier_mask, pressed);
+    const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
+    for (const auto& host : imgui_hosts) {
+        host->on_event(key_event);
     }
 
     return want_capture_keyboard();
 }
 
-auto Imgui_windows::on_char(const unsigned int codepoint) -> bool
+auto Imgui_windows::on_event(const erhe::window::Char_event& char_event) -> bool
 {
-    const auto& imgui_viewports = m_imgui_renderer.get_imgui_hosts();
-    for (const auto& viewport : imgui_viewports) {
-        viewport->on_char(codepoint);
+    const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
+    for (const auto& host : imgui_hosts) {
+        host->on_event(char_event);
     }
 
     return want_capture_keyboard();

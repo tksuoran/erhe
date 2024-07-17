@@ -40,11 +40,9 @@
 
 namespace example {
 
-class Example : public erhe::window::Window_event_handler
+class Example : public erhe::window::Input_event_handler
 {
 public:
-    virtual auto get_name() const -> const char* override { return "Example"; }
-
     Example(
         erhe::window::Context_window&           window,
         erhe::scene::Scene&                     scene,
@@ -62,13 +60,8 @@ public:
         , m_mesh_memory      {mesh_memory}
         , m_programs         {programs}
     {
-        m_camera = make_camera(
-            "Camera",
-            glm::vec3{0.0f, 0.0f, 10.0f},
-            glm::vec3{0.0f, 0.0f, -1.0f}
-        );
-        m_light = make_point_light(
-            "Light",
+        m_camera = make_camera("Camera", glm::vec3{0.0f, 0.0f, 10.0f}, glm::vec3{0.0f, 0.0f, -1.0f});
+        m_light = make_point_light("Light",
             glm::vec3{0.0f, 0.0f, 4.0f}, // position
             glm::vec3{1.0f, 1.0f, 1.0f}, // color
             40.0f
@@ -76,9 +69,56 @@ public:
 
         m_camera_controller = std::make_shared<Frame_controller>();
         m_camera_controller->set_node(m_camera->get_node());
+    }
 
-        auto& root_event_handler = m_window.get_root_window_event_handler();
-        root_event_handler.attach(this, 3);
+    auto on_window_close_event() -> bool override
+    {
+        m_close_requested = true;
+        return true;
+    }
+
+    auto on_event(const erhe::window::Key_event& key_event) -> bool override
+    {
+        switch (key_event.keycode) {
+            case erhe::window::Key_w: m_camera_controller->translate_z.set_less(key_event.pressed); return true;
+            case erhe::window::Key_s: m_camera_controller->translate_z.set_more(key_event.pressed); return true;
+            case erhe::window::Key_a: m_camera_controller->translate_x.set_less(key_event.pressed); return true;
+            case erhe::window::Key_d: m_camera_controller->translate_x.set_more(key_event.pressed); return true;
+            default: return false;
+        }
+    }
+
+    auto on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool override
+    {
+        if (m_mouse_pressed) {
+            if (mouse_move_event.dx != 0.0f) {
+                m_camera_controller->rotate_y.adjust(mouse_move_event.dx * (-1.0f / 1024.0f));
+            }
+
+            if (mouse_move_event.dy != 0.0f) {
+                m_camera_controller->rotate_x.adjust(mouse_move_event.dy * (-1.0f / 1024.0f));
+            }
+            return true;
+        }
+        return false;
+    }
+
+    auto on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool override
+    {
+        if (mouse_button_event.button == erhe::window::Mouse_button_left) {
+            m_mouse_pressed = mouse_button_event.pressed;
+            return true;
+        }
+        return false;
+    }
+    
+    auto on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool override
+    {
+        glm::vec3 position = m_camera_controller->get_position();
+        const float l = glm::length(position);
+        const float k = (-1.0f / 16.0f) * l * l * mouse_wheel_event.y;
+        m_camera_controller->get_controller(Control::translate_z).adjust(k);
+        return true;
     }
 
     void run()
@@ -86,12 +126,17 @@ public:
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
             m_window.poll_events();
-            update();
+            auto& input_events = m_window.get_input_events();
+            for (erhe::window::Input_event& input_event : input_events) {
+                static_cast<void>(this->dispatch_input_event(input_event));
+            }
+            tick();
             m_window.swap_buffers();
+            m_window.clear_input_events();
         }
     }
 
-    void update()
+    void tick()
     {
         // Update fixed steps
         {
@@ -196,63 +241,8 @@ public:
         m_camera_controller->update_fixed_step();
     }
 
-    // Implements erhe::window::Window_event_handler
-    auto on_close() -> bool override
-    {
-        m_close_requested = true;
-        return true;
-    }
-
-    auto on_key(erhe::window::Keycode code, uint32_t, bool pressed) -> bool override
-    {
-        switch (code) {
-            case erhe::window::Key_w: m_camera_controller->translate_z.set_less(pressed); return true;
-            case erhe::window::Key_s: m_camera_controller->translate_z.set_more(pressed); return true;
-            case erhe::window::Key_a: m_camera_controller->translate_x.set_less(pressed); return true;
-            case erhe::window::Key_d: m_camera_controller->translate_x.set_more(pressed); return true;
-            default: return false;
-        }
-    }
-
-    auto on_mouse_move(float, float, float relative_x, float relative_y, uint32_t) -> bool override
-    {
-        if (!m_mouse_pressed) {
-            return false;
-        }
-        if (relative_x != 0.0f) {
-            m_camera_controller->rotate_y.adjust(relative_x * (-1.0f / 1024.0f));
-        }
-
-        if (relative_y != 0.0f) {
-            m_camera_controller->rotate_x.adjust(relative_y * (-1.0f / 1024.0f));
-        }
-        return true;
-    }
-
-    auto on_mouse_button(erhe::window::Mouse_button button, bool pressed, uint32_t) -> bool override
-    {
-        if (button != erhe::window::Mouse_button_left) {
-            return false;
-        }
-        m_mouse_pressed = pressed;
-        return true;
-    }
-
-    auto on_mouse_wheel(float, float y, uint32_t) -> bool override
-    {
-        glm::vec3 position = m_camera_controller->get_position();
-        const float l = glm::length(position);
-        const float k = (-1.0f / 16.0f) * l * l * y;
-        m_camera_controller->get_controller(Control::translate_z).adjust(k);
-        return true;
-    }
-
 private:
-    auto make_camera(
-        const std::string_view name,
-        const glm::vec3        position,
-        const glm::vec3        look_at
-    ) -> std::shared_ptr<erhe::scene::Camera>
+    auto make_camera(const std::string_view name, const glm::vec3 position, const glm::vec3 look_at) -> std::shared_ptr<erhe::scene::Camera>
     {
         using Item_flags = erhe::Item_flags;
 

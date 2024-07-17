@@ -1,8 +1,15 @@
-#include "windows/imgui_window_scene_view_node.hpp"
+//#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
+#include "windows/imgui_window_scene_view_node.hpp"
+#include "scene/content_library.hpp"
+#include "tools/brushes/brush.hpp"
+#include "tools/brushes/brush_tool.hpp"
+
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "scene/viewport_scene_view.hpp"
 
+#include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
@@ -10,6 +17,7 @@
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_primitive/material.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui/imgui.h>
@@ -62,6 +70,7 @@ Imgui_window_scene_view_node::Imgui_window_scene_view_node(
     erhe::imgui::Imgui_renderer&                imgui_renderer,
     erhe::imgui::Imgui_windows&                 imgui_windows,
     erhe::rendergraph::Rendergraph&             rendergraph,
+    Editor_context&                             editor_context,
     const std::string_view                      name,
     const std::string_view                      ini_label,
     const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
@@ -77,6 +86,7 @@ Imgui_window_scene_view_node::Imgui_window_scene_view_node(
             .depth_stencil_format = choose_depth_stencil_format()
         }
     }
+    , m_editor_context{editor_context}
     , m_viewport_scene_view{viewport_scene_view}
 {
     m_viewport.x      = 0;
@@ -84,11 +94,7 @@ Imgui_window_scene_view_node::Imgui_window_scene_view_node(
     m_viewport.width  = 0;
     m_viewport.height = 0;
 
-    register_input(
-        erhe::rendergraph::Routing::Resource_provided_by_consumer,
-        "viewport",
-        erhe::rendergraph::Rendergraph_node_key::viewport
-    );
+    register_input(erhe::rendergraph::Routing::Resource_provided_by_consumer, "imgui_window_scene_view_node", erhe::rendergraph::Rendergraph_node_key::viewport);
 
     // "rendertarget texture" is slot / pseudo-resource which allows use rendergraph
     // connection to make Rendertarget_imgui_viewport a dependency for Imgui_host,
@@ -96,11 +102,7 @@ Imgui_window_scene_view_node::Imgui_window_scene_view_node(
     // before Imgui_host.
     //
     // TODO Texture dependencies should be handled in a generic way.
-    register_input(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        "rendertarget texture",
-        erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
-    );
+    register_input(erhe::rendergraph::Routing::Resource_provided_by_producer, "rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
 
     // "window" is slot / pseudo-resource which allows use rendergraph connection
     // to make Imgui_window_scene_view_node a dependency for (Window) Imgui_host,
@@ -108,11 +110,7 @@ Imgui_window_scene_view_node::Imgui_window_scene_view_node(
     // (Window) Imgui_host.
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
-    register_output(
-        erhe::rendergraph::Routing::None,
-        "window",
-        erhe::rendergraph::Rendergraph_node_key::window
-    );
+    register_output(erhe::rendergraph::Routing::None, "window", erhe::rendergraph::Rendergraph_node_key::window);
 
     show();
 }
@@ -122,13 +120,9 @@ auto Imgui_window_scene_view_node::viewport_scene_view() const -> std::shared_pt
     return m_viewport_scene_view.lock();
 }
 
-auto Imgui_window_scene_view_node::is_hovered() const -> bool
-{
-    return m_is_hovered;
-}
-
 void Imgui_window_scene_view_node::on_mouse_move(glm::vec2 mouse_position_in_window)
 {
+    SPDLOG_LOGGER_TRACE(log_controller_ray, "{} on_mouse_move({}, {})", get_name(), mouse_position_in_window.x, mouse_position_in_window.y);
     auto viewport_scene_view = m_viewport_scene_view.lock();
     if (!viewport_scene_view) {
         return;
@@ -186,6 +180,42 @@ void Imgui_window_scene_view_node::hidden()
     Rendergraph_node::set_enabled(false);
 }
 
+void Imgui_window_scene_view_node::drag_and_drop_target(float min_x, float min_y, float max_x, float max_y)
+{
+    const ImGuiID drag_target_id = ImGui::GetID(static_cast<const void*>(this));
+    ImRect rect{min_x, min_y, max_x, max_y};
+    if (ImGui::BeginDragDropTargetCustom(rect, drag_target_id)) {
+        ERHE_DEFER( ImGui::EndDragDropTarget(); );
+
+        const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+        if (payload == nullptr) {
+            return;
+        }
+
+        const erhe::Item_base* item_base = *(static_cast<erhe::Item_base**>(payload->Data));
+        const Content_library_node* node = dynamic_cast<const Content_library_node*>(item_base);
+        if (node == nullptr) {
+            return;
+        }
+
+        erhe::Item_base* item = node->item.get();
+        if (item == nullptr) {
+            return;
+        }
+
+        Brush* brush = dynamic_cast<Brush*>(item);
+        if (brush != nullptr) {
+            if (payload->Preview) {
+                // TODO preview
+            }
+            if (payload->Delivery) {
+                m_editor_context.brush_tool->try_insert(brush);
+            }
+        }
+        //// const erhe::primitive::Material* material = dynamic_cast<const erhe::primitive::Material*>(item);
+    }
+}
+
 void Imgui_window_scene_view_node::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -219,14 +249,14 @@ void Imgui_window_scene_view_node::imgui()
                 texture->gl_name(),
                 texture->debug_label()
             );
-            image(
-                color_texture,
-                static_cast<int>(size.x),
-                static_cast<int>(size.y)
-            );
-            m_is_hovered = ImGui::IsItemHovered();
+            image(color_texture, static_cast<int>(size.x), static_cast<int>(size.y));
+            bool is_hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+            set_is_hovered(is_hovered);
+            viewport_scene_view->set_is_hovered(is_hovered);
+            SPDLOG_LOGGER_TRACE(log_controller_ray, "{} ImGui::IsItemHovered() = {}", get_name(), is_hovered);
             const auto rect_min = ImGui::GetItemRectMin();
             const auto rect_max = ImGui::GetItemRectMax();
+            drag_and_drop_target(rect_min.x, rect_min.y, rect_max.x, rect_max.y);
             //ERHE_VERIFY(m_viewport.width  == static_cast<int>(rect_max.x - rect_min.x));
             //ERHE_VERIFY(m_viewport.height == static_cast<int>(rect_max.y - rect_min.y));
 
@@ -240,10 +270,11 @@ void Imgui_window_scene_view_node::imgui()
             );
         }
     } else {
-        m_is_hovered = false;
+        SPDLOG_LOGGER_TRACE(log_controller_ray, "{} no color texture", get_name());
+        set_is_hovered(false);
+        viewport_scene_view->set_is_hovered(false);
         viewport_scene_view->set_window_viewport(erhe::math::Viewport{});
     }
-    viewport_scene_view->set_is_hovered(m_is_hovered);
 
     //m_viewport_config.imgui();
 #endif

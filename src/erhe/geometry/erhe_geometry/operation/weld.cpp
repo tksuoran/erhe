@@ -270,18 +270,13 @@ void Weld::scan_for_equal_and_opposite_polygons()
 // Collect points that are used be polygons that are not removed.
 void Weld::mark_used_points()
 {
-    for (
-        std::size_t sort_index = 0, end = m_polygon_id_sorted.size();
-        sort_index < end;
-        ++sort_index
-    ) {
+    for (std::size_t sort_index = 0, end = m_polygon_id_sorted.size(); sort_index < end; ++sort_index) {
         const Polygon_id polygon_id = m_polygon_id_sorted[sort_index];
         if (m_polygon_id_remove[polygon_id]) {
             continue;
         }
         const Polygon& polygon = source.polygons[polygon_id];
-        for (uint32_t corner_index = 0; corner_index < polygon.corner_count; ++corner_index)
-        {
+        for (uint32_t corner_index = 0; corner_index < polygon.corner_count; ++corner_index) {
             const Corner_id corner_id = source.polygon_corners[polygon.first_polygon_corner_id + corner_index];
             const Corner&   corner    = source.corners        [corner_id];
             const Point_id  point_id0 = corner.point_id;

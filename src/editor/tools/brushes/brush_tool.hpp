@@ -8,6 +8,7 @@
 
 namespace editor {
 
+class Brush;
 class Brush_tool;
 class Content_library;
 class Editor_message;
@@ -62,19 +63,19 @@ public:
 
     // Commands
     auto try_insert_ready() -> bool;
-    auto try_insert      () -> bool;
+    auto try_insert      (Brush* brush = nullptr) -> bool;
     void on_motion       ();
 
 private:
-    void on_message                (Editor_message& editor_message);
-    void update_mesh               ();
-    void do_insert_operation       ();
-    void add_brush_mesh            ();
-    void remove_brush_mesh         ();
-    void update_mesh_node_transform();
+    void on_message                        (Editor_message& editor_message);
+    void update_preview_mesh               ();
+    void do_insert_operation               (Brush& brush);
+    void add_preview_mesh                  ();
+    void remove_preview_mesh               ();
+    void update_preview_mesh_node_transform();
 
-    [[nodiscard]] auto get_hover_mesh_transform() -> glm::mat4; // Places brush in parent (hover) mesh
-    [[nodiscard]] auto get_hover_grid_transform() -> glm::mat4;
+    [[nodiscard]] auto get_hover_mesh_transform(Brush& brush) -> glm::mat4; // Places brush in parent (hover) mesh
+    [[nodiscard]] auto get_hover_grid_transform(Brush& brush) -> glm::mat4;
 
     Brush_tool_preview_command m_preview_command;
     Brush_tool_insert_command  m_insert_command;
@@ -82,15 +83,19 @@ private:
     std::mutex                         m_brush_mutex;
     bool                               m_snap_to_hover_polygon{true};
     bool                               m_snap_to_grid         {true};
+    bool                               m_scale_to_match       {true};
+    bool                               m_use_matching_face    {true};
+    bool                               m_use_selected_face    {false};
     bool                               m_debug_visualization  {false};
     Hover_entry                        m_hover;
-    std::shared_ptr<erhe::scene::Mesh> m_brush_mesh;
-    std::shared_ptr<erhe::scene::Node> m_brush_node;
+    std::shared_ptr<erhe::scene::Mesh> m_preview_mesh;
+    std::shared_ptr<erhe::scene::Node> m_preview_node;
     bool                               m_with_physics   {true};
     float                              m_scale          {1.0f};
     float                              m_transform_scale{1.0f};
     int                                m_polygon_offset {0};
     int                                m_corner_offset  {0};
+    std::optional<std::size_t>         m_selected_corner_count{};
 };
 
 } // namespace editor

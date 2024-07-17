@@ -16,7 +16,7 @@
 
 namespace editor {
 
-IOperation::~IOperation() noexcept
+Operation::~Operation() noexcept
 {
 }
 
@@ -85,7 +85,7 @@ auto Operation_stack::get_executor() -> tf::Executor&
     return *m_executor.get();
 }
 
-void Operation_stack::queue(const std::shared_ptr<IOperation>& operation)
+void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
 {
     m_queued.push_back(operation);
 }
@@ -137,10 +137,7 @@ auto Operation_stack::can_redo() const -> bool
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Operation_stack::imgui(
-    const char*                                     stack_label,
-    const std::vector<std::shared_ptr<IOperation>>& operations
-)
+void Operation_stack::imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations)
 {
     const ImGuiTreeNodeFlags parent_flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |

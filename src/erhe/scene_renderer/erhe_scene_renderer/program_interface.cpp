@@ -108,6 +108,12 @@ Program_interface::Program_interface(erhe::graphics::Instance& graphics_instance
                 .shader_type     = erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_weights",
                 .src_usage       = { Vertex_attribute::Usage_type::joint_weights }
+            },
+            erhe::graphics::Vertex_attribute_mapping{
+                .layout_location = 12,
+                .shader_type     = erhe::graphics::Glsl_type::unsigned_int_vec2,
+                .name            = "a_valency_edge_count",
+                .src_usage       = { Vertex_attribute::Usage_type::valency_edge_count}
             }
         }
     }

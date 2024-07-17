@@ -11,20 +11,14 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/operation_stack.hpp"
-#include "scene/asset_browser.hpp"
-#include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
-#include "windows/item_tree_window.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_scene/light.hpp"
-#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_scene/scene.hpp"
-#include "erhe_scene/skin.hpp"
 #include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -32,8 +26,7 @@
 #   include <imgui/imgui_internal.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 using Light_type = erhe::scene::Light_type;
 
@@ -104,18 +97,10 @@ void Item_tree_window::select_all()
 template <typename T, typename U>
 [[nodiscard]] auto is_in(const T& item, const std::vector<U>& items) -> bool
 {
-    return std::find(
-        items.begin(),
-        items.end(),
-        item
-    ) != items.end();
+    return std::find(items.begin(), items.end(), item) != items.end();
 }
 
-void Item_tree_window::move_selection(
-    const std::shared_ptr<erhe::Item_base>& target_node,
-    erhe::Item_base*                        payload_item,
-    const Placement                         placement
-)
+void Item_tree_window::move_selection(const std::shared_ptr<erhe::Item_base>& target_node, erhe::Item_base* payload_item, const Placement placement)
 {
     log_tree->trace(
         "move_selection(anchor = {}, {})",
@@ -165,10 +150,7 @@ void Item_tree_window::move_selection(
 
 namespace {
 
-[[nodiscard]] auto get_ancestor_in(
-    const std::shared_ptr<erhe::Item_base>&              item,
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selection
-) -> std::shared_ptr<erhe::Item_base>
+[[nodiscard]] auto get_ancestor_in(const std::shared_ptr<erhe::Item_base>& item, const std::vector<std::shared_ptr<erhe::Item_base>>& selection) -> std::shared_ptr<erhe::Item_base>
 {
     const auto hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
     if (!hierarchy) {
@@ -339,15 +321,9 @@ void Item_tree_window::try_add_to_attach(
     );
 }
 
-void Item_tree_window::attach_selection_to(
-    const std::shared_ptr<erhe::Item_base>& target,
-    erhe::Item_base*                        payload_item
-)
+void Item_tree_window::attach_selection_to(const std::shared_ptr<erhe::Item_base>& target, erhe::Item_base* payload_item)
 {
-    SPDLOG_LOGGER_TRACE(
-        log_tree,
-        "attach_selection_to()"
-    );
+    SPDLOG_LOGGER_TRACE(log_tree, "attach_selection_to()");
 
     //// log_tools->trace(
     ////     "attach_selection_to(target_node = {}, payload_id = {})",
@@ -372,9 +348,7 @@ void Item_tree_window::attach_selection_to(
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Item_tree_window::drag_and_drop_source(
-    const std::shared_ptr<erhe::Item_base>& item
-)
+void Item_tree_window::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& item)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -657,10 +631,7 @@ void Item_tree_window::item_update_selection(const std::shared_ptr<erhe::Item_ba
     if (ctrl_down) {
         const bool a_pressed = ImGui::IsKeyPressed(ImGuiKey_A);
         if (a_pressed) {
-            SPDLOG_LOGGER_TRACE(
-                log_tree,
-                "ctrl a pressed - select all"
-            );
+            SPDLOG_LOGGER_TRACE(log_tree, "ctrl a pressed - select all");
             select_all();
         }
     }
@@ -778,25 +749,38 @@ auto Item_tree_window::item_icon_and_text(const std::shared_ptr<erhe::Item_base>
         force_expand = true;
     }
 
+    bool is_last_selected = false;
+    if (!item->is_selected()) {
+        std::shared_ptr<erhe::Item_base> item_for_last_selected = (content_library_node && content_library_node->item) ? content_library_node->item : item;
+        std::shared_ptr<erhe::Item_base> last_selected_item = m_context.selection->get_last_selected(item_for_last_selected->get_type() );
+        if (item_for_last_selected == last_selected_item) {
+            is_last_selected = true;
+            ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
+            ImVec4 not_selected_color  = style.Colors[ImGuiCol_WindowBg];
+            ImVec4 selected_color      = style.Colors[ImGuiCol_Header];
+            ImVec4 last_selected_color{
+                0.5f * (not_selected_color.x + selected_color.x),
+                0.5f * (not_selected_color.y + selected_color.y),
+                0.5f * (not_selected_color.z + selected_color.z),
+                0.5f * (not_selected_color.w + selected_color.w)
+            };
+            ImGui::PushStyleColor(ImGuiCol_Header, last_selected_color);
+        }
+    }
+
     const ImGuiTreeNodeFlags flags =
         ImGuiTreeNodeFlags_SpanAvailWidth |
-        (force_expand
-            ? ImGuiTreeNodeFlags_DefaultOpen
-            : ImGuiTreeNodeFlags_None
-        ) |
+        (force_expand ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None) |
         (is_leaf
             ? (ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf)
             : ImGuiTreeNodeFlags_OpenOnArrow
         ) |
-        (update && item->is_selected()
-            ? ImGuiTreeNodeFlags_Selected
-            : ImGuiTreeNodeFlags_None
-        );
+        (update && (item->is_selected() || is_last_selected) ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
 
-    const bool item_node_open = ImGui::TreeNodeEx(
-        item->get_label().c_str(),
-        flags
-    );
+    const bool item_node_open = ImGui::TreeNodeEx(item->get_label().c_str(), flags);
+    if (is_last_selected) {
+        ImGui::PopStyleColor();
+    }
 
     const bool consumed = m_item_callback ? m_item_callback(item) : false;
 
@@ -898,11 +882,7 @@ void Item_tree_window::imgui_item_node(const std::shared_ptr<erhe::Item_base>& i
 
     m_context.selection->range_selection().entry(item);
 
-    const auto tree_node_state = item_icon_and_text(
-        item,
-        true,
-        show == Show_mode::Show_expanded
-    );
+    const auto tree_node_state = item_icon_and_text(item, true, show == Show_mode::Show_expanded);
     if (tree_node_state.is_open) {
         if (m_context.editor_settings->node_tree_expand_attachments) {
             const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);

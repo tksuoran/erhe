@@ -12,6 +12,7 @@ namespace erhe::rendergraph {
 }
 namespace erhe::window {
     class Context_window;
+    class Input_event;
 }
 
 namespace erhe::imgui {
@@ -21,17 +22,10 @@ class Imgui_host;
 class Imgui_renderer;
 class Window_imgui_host;
 
-class Imgui_windows : public erhe::window::Window_event_handler
+class Imgui_windows : public erhe::window::Input_event_handler
 {
 public:
-    // Implements Window_event_handler
-    auto get_name() const -> const char* override { return "Imgui_windows"; }
-
-    Imgui_windows(
-        Imgui_renderer&                 imgui_renderer,
-        erhe::window::Context_window*   context_window,
-        erhe::rendergraph::Rendergraph& rendergraph
-    );
+    Imgui_windows(Imgui_renderer& imgui_renderer, erhe::window::Context_window* context_window, erhe::rendergraph::Rendergraph& rendergraph);
 
     // Public API
     void lock_mutex             ();
@@ -41,7 +35,7 @@ public:
     void register_imgui_window  (Imgui_window* window);
     void unregister_imgui_window(Imgui_window* window);
     void imgui_windows          ();
-    void window_menu_entries    (Imgui_host& imgui_host);
+    void window_menu_entries    (Imgui_host& imgui_host, bool developer);
     auto get_windows            () -> std::vector<Imgui_window*>&;
     void save_window_state      ();
 
@@ -49,15 +43,15 @@ public:
     [[nodiscard]] auto want_capture_keyboard() const -> bool;
     [[nodiscard]] auto want_capture_mouse   () const -> bool;
 
-    // Implements erhe::window::Window_event_handler
+    // Implements Input_event_han
     // Forwards events to each window
-    auto on_key         (signed int keycode, uint32_t modifier_mask, bool pressed) -> bool override;
-    auto on_char        (unsigned int codepoint) -> bool                                   override;
-    auto on_focus       (int focused) -> bool                                              override;
-    auto on_cursor_enter(int entered) -> bool                                              override;
-    auto on_mouse_move  (float absolute_x, float absolute_y, float relative_x, float relative_y, uint32_t modifier_mask) -> bool override;
-    auto on_mouse_button(uint32_t button, bool pressed, uint32_t modifier_mask) -> bool    override;
-    auto on_mouse_wheel (float x, float y, uint32_t modifier_mask) -> bool                 override;
+    auto on_event(const erhe::window::Key_event& key_event) -> bool override;
+    auto on_event(const erhe::window::Char_event& char_event) -> bool override;
+    auto on_event(const erhe::window::Window_focus_event& window_focus_event) -> bool override;
+    auto on_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool override;
+    auto on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool override;
+    auto on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool override;
+    auto on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool override;
 
     void debug_imgui();
 

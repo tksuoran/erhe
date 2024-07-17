@@ -7,7 +7,8 @@ out flat uint v_material_index;
 out float     v_tangent_scale;
 out float     v_line_width;
 
-out vec4      v_bone_color;
+out vec4       v_bone_color;
+out flat uvec2 v_valency_edge_count;
 
 void main()
 {
@@ -52,4 +53,5 @@ void main()
     v_color          = a_color;
     v_aniso_control  = a_aniso_control;
     v_line_width     = primitive.primitives[gl_DrawID].size;
+    v_valency_edge_count = a_valency_edge_count;
 }

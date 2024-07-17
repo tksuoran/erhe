@@ -150,7 +150,7 @@ private:
     erhe::math::Viewport               m_projection_viewport  {0, 0, 0, 0, true};
     //Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::standard};
     Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::circular_brushed_metal};
-    bool                               m_is_hovered           {false};
+    bool                               m_is_scene_view_hovered{false};
 };
 
 } // namespace editor

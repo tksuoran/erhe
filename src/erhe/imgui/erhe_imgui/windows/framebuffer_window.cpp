@@ -1,14 +1,9 @@
 #include "erhe_imgui/windows/framebuffer_window.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_graphics/gl_context_provider.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/framebuffer.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
-#include "erhe_graphics/sampler.hpp"
-#include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -30,9 +25,7 @@ Framebuffer_window::Framebuffer_window(
     , m_graphics_instance       {graphics_instance}
     , m_debug_label             {ini_label}
     , m_empty_attribute_mappings{graphics_instance, {}}
-    , m_vertex_input{
-        erhe::graphics::Vertex_input_state_data{}
-    }
+    , m_vertex_input            {erhe::graphics::Vertex_input_state_data{}}
 {
 }
 
@@ -64,10 +57,7 @@ void Framebuffer_window::update_framebuffer()
     const auto win_min = ImGui::GetWindowContentRegionMin();
     const auto win_max = ImGui::GetWindowContentRegionMax();
 
-    const ImVec2 win_size{
-        win_max.x - win_min.x,
-        win_max.y - win_min.y
-    };
+    const ImVec2 win_size{win_max.x - win_min.x, win_max.y - win_min.y};
 
     const auto imgui_available_size = win_size;
 
@@ -92,11 +82,7 @@ void Framebuffer_window::update_framebuffer()
     const glm::vec2  texture_size = source_size * ratio_min;
     const glm::ivec2 size{texture_size};
 
-    if (
-        m_texture &&
-        (m_texture->width()  == size.x) &&
-        (m_texture->height() == size.y)
-    ) {
+    if (m_texture && (m_texture->width() == size.x) && (m_texture->height() == size.y)) {
         return;
     }
 
@@ -117,13 +103,7 @@ void Framebuffer_window::update_framebuffer()
     m_texture->set_debug_label(m_debug_label);
     const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-        gl::clear_tex_image(
-            m_texture->gl_name(),
-            0,
-            gl::Pixel_format::rgba,
-            gl::Pixel_type::float_,
-            &clear_value[0]
-        );
+        gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
     } else {
         // TODO
     }
@@ -138,18 +118,10 @@ void Framebuffer_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (
-        m_texture &&
-        (m_texture->width() > 0) &&
-        (m_texture->height() > 0)
-    ) {
+    if (m_texture && (m_texture->width() > 0) && (m_texture->height() > 0)) {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-        image(
-            m_texture,
-            m_viewport.width,
-            m_viewport.height
-        );
-        m_is_hovered = ImGui::IsItemHovered();
+        image(m_texture, m_viewport.width, m_viewport.height);
+        set_is_hovered(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem));
         const ImVec2 rect_min = ImGui::GetItemRectMin();
         const ImVec2 rect_max = ImGui::GetItemRectMax();
         m_content_rect_x      = rect_min.x;

@@ -1,7 +1,10 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
+#include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include <imgui/imgui.h>
@@ -32,21 +35,9 @@ Imgui_window::~Imgui_window() noexcept
     m_imgui_windows.unregister_imgui_window(this);
 }
 
-void Imgui_window::image(
-    const std::shared_ptr<erhe::graphics::Texture>& texture,
-    const int                                       width,
-    const int                                       height
-)
+void Imgui_window::image(const std::shared_ptr<erhe::graphics::Texture>& texture, const int width, const int height)
 {
-    m_imgui_renderer.image(
-        texture,
-        width,
-        height,
-        glm::vec2{0.0f, 1.0f},
-        glm::vec2{1.0f, 0.0f},
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        true
-    );
+    m_imgui_renderer.image(texture, width, height, glm::vec2{0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}, glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, true);
 }
 
 auto Imgui_window::get_imgui_host() const -> Imgui_host*
@@ -68,6 +59,12 @@ void Imgui_window::set_visibility(const bool visible)
     if (!m_ini_label.empty()) {
         m_imgui_windows.save_window_state();
     }
+}
+
+void Imgui_window::set_is_hovered(const bool hovered)
+{
+    SPDLOG_LOGGER_TRACE(log_frame, "{} set_is_hovered({})", m_title, hovered);
+    m_is_hovered = hovered;
 }
 
 void Imgui_window::show()
@@ -97,6 +94,7 @@ auto Imgui_window::is_visible() const -> bool
 
 auto Imgui_window::is_hovered() const -> bool
 {
+    SPDLOG_LOGGER_TRACE(log_frame, "{} is_hovered() = {}", m_title, m_is_hovered);
     return m_is_hovered;
 }
 
@@ -178,6 +176,16 @@ void Imgui_window::on_end()
 
 void Imgui_window::hidden()
 {
+}
+
+auto Imgui_window::show_in_developer_menu() const -> bool
+{
+    return m_developer;
+}
+
+void Imgui_window::set_developer()
+{
+    m_developer = true;
 }
 
 } // namespace erhe::imgui

@@ -72,11 +72,9 @@ Editor_rendering::Editor_rendering(
     Programs&                 programs
 )
     : m_context              {editor_context}
-
     , m_capture_frame_command{commands, editor_context}
     , m_pipeline_renderpasses{graphics_instance, mesh_memory, programs}
     , m_composer             {"Main Composer"}
-
     , m_content_timer        {"content"}
     , m_selection_timer      {"selection"}
     , m_gui_timer            {"gui"}
@@ -632,12 +630,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         [](){ gl::depth_range(0.0f, 0.0f); },
         [](){ gl::depth_range(0.0f, 1.0f); }
     }
-
-    // m_content_timer   = std::make_unique<erhe::graphics::Gpu_timer>("Content");
-    //m_selection_timer = std::make_unique<erhe::graphics::Gpu_timer>("Selection");
-    //m_gui_timer       = std::make_unique<erhe::graphics::Gpu_timer>("Gui");
-    //m_brush_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Brush");
-    //m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
 #undef REVERSE_DEPTH
 {
 }
@@ -678,11 +670,7 @@ void Editor_rendering::imgui()
         ImGui::SliderInt("Debug Joint Index", &index, 0, 200); // TODO correct range
         debug_joint_indices.x = index;
 
-        for (
-            int joint_index = 0, end = static_cast<int>(debug_joint_colors.size());
-            joint_index < end;
-            ++joint_index
-        ) {
+        for (int joint_index = 0, end = static_cast<int>(debug_joint_colors.size()); joint_index < end; ++joint_index) {
             std::string label = fmt::format("Joint {}", joint_index);
             ImGui::ColorEdit4(label.c_str(), &debug_joint_colors[joint_index].x, ImGuiColorEditFlags_Float);
         }
@@ -699,18 +687,6 @@ void Editor_rendering::begin_frame()
     if (m_trigger_capture) {
         erhe::window::start_frame_capture(*m_context.context_window);
     }
-
-    auto* imgui_host = m_context.imgui_windows->get_window_imgui_host().get();
-
-    m_context.scene_views->update_hover(imgui_host);
-
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_context.headset_view->is_active()) {
-        m_context.viewport_config_window->set_edit_data(&m_context.headset_view->get_config());
-    }
-
-    m_context.headset_view->begin_frame();
-#endif
 }
 
 void Editor_rendering::request_renderdoc_capture()
@@ -777,13 +753,6 @@ void Editor_rendering::remove(Renderable* renderable)
         return;
     }
     m_renderables.erase(i);
-}
-
-void Editor_rendering::render()
-{
-    ERHE_PROFILE_FUNCTION();
-
-    begin_frame();
 }
 
 void Editor_rendering::render_viewport_main(const Render_context& context)

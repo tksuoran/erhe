@@ -114,12 +114,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     if (camera != nullptr) {
-        const auto range = m_camera_buffers.update(
-            *camera->projection(),
-            *camera->get_node(),
-            viewport,
-            camera->get_exposure()
-        );
+        const auto range = m_camera_buffers.update(*camera->projection(), *camera->get_node(), viewport, camera->get_exposure());
         m_camera_buffers.bind(range);
     }
 
@@ -130,11 +125,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const auto naterial_range = m_material_buffers.update(materials);
     m_material_buffers.bind(naterial_range);
 
-    const auto joint_range = m_joint_buffers.update(
-        parameters.debug_joint_indices,
-        parameters.debug_joint_colors,
-        skins
-    );
+    const auto joint_range = m_joint_buffers.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
     m_joint_buffers.bind(joint_range);
 
     // This must be done even if lights is empty.

@@ -50,9 +50,7 @@ void Commands_window::imgui()
     auto* active_mouse_command = commands.get_active_mouse_command();
     ImGui::Text(
         "Active mouse command: %s",
-        (active_mouse_command != nullptr)
-            ? active_mouse_command->get_name()
-            : "(none)"
+        (active_mouse_command != nullptr) ? active_mouse_command->get_name() : "(none)"
     );
 
     if (ImGui::TreeNodeEx("Commands", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -96,9 +94,7 @@ void Commands_window::imgui()
                 binding.get_command()->get_name(),
                 Command_binding::c_type_strings[static_cast<int>(binding.get_type())],
                 erhe::window::c_str(binding.get_keycode()),
-                binding.get_pressed()
-                    ? "pressed"
-                    : "released"
+                binding.get_pressed() ? "pressed" : "released"
             );
         }
         ImGui::TreePop();
@@ -235,11 +231,7 @@ void Commands_window::filtered_commands(const erhe::commands::State filter)
                 host ? host->get_priority() : 0,
                 host ? (host->is_enabled() ? "Enabled" : "Disabled") : "No host"
             );
-            ImGui::TreeNodeEx(
-                label.c_str(),
-                ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                ImGuiTreeNodeFlags_Leaf
-            );
+            ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf);
         }
     }
 }
