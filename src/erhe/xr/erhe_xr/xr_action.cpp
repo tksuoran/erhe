@@ -1,4 +1,6 @@
 #include "erhe_xr/xr_action.hpp"
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 #include "erhe_xr/xr_log.hpp"
 #include "erhe_xr/xr.hpp"
 #include "erhe_verify/verify.hpp"
@@ -16,6 +18,7 @@
 #define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+#endif
 
 #include <fmt/format.h>
 
@@ -25,11 +28,15 @@ Xr_action::Xr_action(const XrInstance instance, const std::string_view name, con
     : name        {name}
     , profile_mask{profile_mask}
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     const XrResult result = xrStringToPath(instance, name.data(), &path);
     log_xr->info("xrStringToPath({}) = {:x}", name, path);
     if (result != XR_SUCCESS) {
         log_xr->warn("xrStringToPath({}) returned error {}", name, c_str(result));
     }
+#else
+    static_cast<void>(instance);
+#endif
 }
 
 Xr_action_boolean::Xr_action_boolean(
@@ -40,6 +47,7 @@ Xr_action_boolean::Xr_action_boolean(
 )
     : Xr_action{instance, name, profile_mask}
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     if (name.length() >= XR_MAX_ACTION_NAME_SIZE) {
         ERHE_FATAL("name too long");
         return;
@@ -76,8 +84,10 @@ Xr_action_boolean::Xr_action_boolean(
     if (result != XR_SUCCESS) {
         log_xr->error("xrCreateAction() returned error {} for {}", c_str(result), name);
     }
+#endif
 }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 void Xr_action_boolean::get(const XrSession session)
 {
     if (action == nullptr) {
@@ -97,6 +107,7 @@ void Xr_action_boolean::get(const XrSession session)
         );
     }
 }
+#endif
 
 //
 
@@ -108,6 +119,7 @@ Xr_action_float::Xr_action_float(
 )
     : Xr_action{instance, name, profile_mask}
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     if (name.length() >= XR_MAX_ACTION_NAME_SIZE) {
         ERHE_FATAL("name too long");
         return;
@@ -144,8 +156,12 @@ Xr_action_float::Xr_action_float(
     if (result != XR_SUCCESS) {
         log_xr->error("xrCreateAction() returned error {} for {}", c_str(result), name);
     }
+#else
+    static_cast<void>(action_set);
+#endif
 }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 void Xr_action_float::get(const XrSession session)
 {
     if (action == nullptr) {
@@ -162,6 +178,7 @@ void Xr_action_float::get(const XrSession session)
         log_xr->error("xrGetActionStateFloat() returned error {}", c_str(result));
     }
 }
+#endif
 
 //
 
@@ -173,6 +190,7 @@ Xr_action_vector2f::Xr_action_vector2f(
 )
     : Xr_action{instance, name, profile_mask}
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     if (name.length() >= XR_MAX_ACTION_NAME_SIZE) {
         ERHE_FATAL("name too long");
         return;
@@ -205,8 +223,12 @@ Xr_action_vector2f::Xr_action_vector2f(
     if (result != XR_SUCCESS) {
         log_xr->error("xrCreateAction() returned error {} for {}", c_str(result), name);
     }
+#else
+    static_cast<void>(action_set);
+#endif
 }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 void Xr_action_vector2f::get(const XrSession session)
 {
     if (action == nullptr) {
@@ -223,6 +245,7 @@ void Xr_action_vector2f::get(const XrSession session)
         log_xr->error("xrGetActionStateVector2f() returned error {}", c_str(get_result));
     }
 }
+#endif
 
 //
 
@@ -234,6 +257,7 @@ Xr_action_pose::Xr_action_pose(
 )
     : Xr_action{instance, name, profile_mask}
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     if (name.length() >= XR_MAX_ACTION_NAME_SIZE) {
         ERHE_FATAL("name too long");
         return;
@@ -270,8 +294,12 @@ Xr_action_pose::Xr_action_pose(
     if (result != XR_SUCCESS) {
         log_xr->error("xrCreateAction() returned error {} for {}", c_str(result), name);
     }
+#else
+    static_cast<void>(action_set);
+#endif
 }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 void Xr_action_pose::attach(const XrSession session)
 {
     if (action == nullptr) {
@@ -331,5 +359,6 @@ void Xr_action_pose::get(const XrSession session, const XrTime time, const XrSpa
         orientation = to_glm(location.pose.orientation);
     }
 }
+#endif
 
 } // namespace erhe::xr

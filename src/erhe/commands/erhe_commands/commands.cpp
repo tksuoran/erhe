@@ -11,9 +11,7 @@
 #include "erhe_commands/xr_boolean_binding.hpp"
 #include "erhe_commands/xr_float_binding.hpp"
 #include "erhe_commands/xr_vector2f_binding.hpp"
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "erhe_xr/xr_action.hpp"
-#endif
+#include "erhe_xr/xr_action.hpp"
 #include "erhe_commands/update_binding.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -445,7 +443,6 @@ void Commands::sort_controller_bindings()
     );
 }
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
 void Commands::sort_xr_bindings()
 {
     std::sort(
@@ -482,7 +479,6 @@ void Commands::sort_xr_bindings()
         }
     );
 }
-#endif
 
 void Commands::inactivate_ready_commands()
 {

@@ -35,19 +35,16 @@ erhe_target_sources_grouped(
     erhe_commands/state.hpp
     erhe_commands/update_binding.cpp
     erhe_commands/update_binding.hpp
+    erhe_commands/xr_boolean_binding.cpp
+    erhe_commands/xr_boolean_binding.hpp
+    erhe_commands/xr_float_binding.cpp
+    erhe_commands/xr_float_binding.hpp
+    erhe_commands/xr_vector2f_binding.cpp
+    erhe_commands/xr_vector2f_binding.hpp
 )
-
+target_link_libraries(${_target} PUBLIC erhe::xr)
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_commands/xr_boolean_binding.cpp
-        erhe_commands/xr_boolean_binding.hpp
-        erhe_commands/xr_float_binding.cpp
-        erhe_commands/xr_float_binding.hpp
-        erhe_commands/xr_vector2f_binding.cpp
-        erhe_commands/xr_vector2f_binding.hpp
-    )
-    target_link_libraries(${_target} PUBLIC erhe::xr openxr_loader)
+    target_link_libraries(${_target} PUBLIC openxr_loader)
 endif ()
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})

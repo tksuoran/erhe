@@ -1,6 +1,91 @@
 #pragma once
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 #include <openxr/openxr.h>
+#else
+#define XR_DEFINE_HANDLE(object) typedef struct object##_T* object;
+#define XR_DEFINE_ATOM(object) typedef uint64_t object;
+typedef int64_t XrTime;
+typedef uint32_t XrBool32;
+typedef uint64_t XrFlags64;
+typedef XrFlags64 XrSpaceLocationFlags;
+XR_DEFINE_ATOM(XrPath);
+XR_DEFINE_HANDLE(XrInstance)
+XR_DEFINE_HANDLE(XrSession)
+XR_DEFINE_HANDLE(XrSpace)
+XR_DEFINE_HANDLE(XrAction)
+XR_DEFINE_HANDLE(XrSwapchain)
+XR_DEFINE_HANDLE(XrActionSet)
+#define XR_NULL_PATH 0
+#define XR_NULL_HANDLE nullptr
+#define XR_TRUE                           1
+#define XR_FALSE                          0
+#define XR_MAY_ALIAS
+
+typedef enum XrStructureType {
+    XR_TYPE_ACTION_STATE_BOOLEAN = 23,
+    XR_TYPE_ACTION_STATE_FLOAT = 24,
+    XR_TYPE_ACTION_STATE_VECTOR2F = 25,
+    XR_TYPE_ACTION_STATE_POSE = 27,
+    XR_TYPE_SPACE_LOCATION = 42,
+    XR_STRUCTURE_TYPE_MAX_ENUM = 0x7FFFFFFF
+} XrStructureType;
+typedef struct XrQuaternionf {
+    float    x;
+    float    y;
+    float    z;
+    float    w;
+} XrQuaternionf;
+typedef struct XrVector3f {
+    float    x;
+    float    y;
+    float    z;
+} XrVector3f;
+typedef struct XrPosef {
+    XrQuaternionf    orientation;
+    XrVector3f       position;
+} XrPosef;
+typedef struct XrActionStateBoolean {
+    XrStructureType       type;
+    void* XR_MAY_ALIAS    next;
+    XrBool32              currentState;
+    XrBool32              changedSinceLastSync;
+    XrTime                lastChangeTime;
+    XrBool32              isActive;
+} XrActionStateBoolean;
+
+typedef struct XrActionStateFloat {
+    XrStructureType       type;
+    void* XR_MAY_ALIAS    next;
+    float                 currentState;
+    XrBool32              changedSinceLastSync;
+    XrTime                lastChangeTime;
+    XrBool32              isActive;
+} XrActionStateFloat;
+typedef struct XrVector2f {
+    float    x;
+    float    y;
+} XrVector2f;
+typedef struct XrActionStateVector2f {
+    XrStructureType       type;
+    void* XR_MAY_ALIAS    next;
+    XrVector2f            currentState;
+    XrBool32              changedSinceLastSync;
+    XrTime                lastChangeTime;
+    XrBool32              isActive;
+} XrActionStateVector2f;
+typedef struct XrActionStatePose {
+    XrStructureType       type;
+    void* XR_MAY_ALIAS    next;
+    XrBool32              isActive;
+} XrActionStatePose;
+typedef struct XrSpaceLocation {
+    XrStructureType         type;
+    void* XR_MAY_ALIAS      next;
+    XrSpaceLocationFlags    locationFlags;
+    XrPosef                 pose;
+} XrSpaceLocation;
+#endif
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>

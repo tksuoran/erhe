@@ -18,7 +18,6 @@
 #include <mutex>
 #include <optional>
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
 namespace erhe::xr {
     class Xr_instance;
     class Xr_action_boolean;
@@ -26,7 +25,6 @@ namespace erhe::xr {
     class Xr_action_vector2f;
     class Xr_action_pose;
 }
-#endif
 
 namespace erhe::commands {
 
