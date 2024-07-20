@@ -44,10 +44,10 @@ Type_editor::Type_editor(
 
 void Type_editor::hide_windows()
 {
-    terrain_editor_window                 .hide();
-    terrain_group_editor_window           .hide();
-    terrain_replacement_rule_editor_window.hide();
-    unit_editor_window                    .hide();
+    terrain_editor_window                 .hide_window();
+    terrain_group_editor_window           .hide_window();
+    terrain_replacement_rule_editor_window.hide_window();
+    unit_editor_window                    .hide_window();
 }
 
 void Type_editor::make_def(const char* tooltip_text, bool& value)

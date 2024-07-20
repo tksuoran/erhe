@@ -136,7 +136,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     const auto& layers = scene_root->layers();
     auto texture = shadow_render_node->get_texture();
 
-    log_frame->trace("Depth to color from texture '{}'", texture->debug_label());
+    log_render->trace("Depth to color from texture '{}'", texture->debug_label());
 
     m_forward_renderer.render_fullscreen(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
@@ -216,7 +216,7 @@ Debug_view_window::Debug_view_window(
     , m_node                   {rendergraph}
 {
     if (editor_context.OpenXR || !editor_context.developer_mode) {
-        hide();
+        hide_window();
         hidden();
         return;
     }
@@ -411,7 +411,7 @@ void Debug_view_window::imgui()
         ImGui::SetCursorPos(cursor_position);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
         SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui() - drawing image using texture {}", m_texture->gl_name());
-        image(texture, area_size, area_size);
+        draw_image(texture, area_size, area_size);
         // bool is_hovered = ImGui::IsItemHovered();
         ImGui::PopStyleVar();
     } else {

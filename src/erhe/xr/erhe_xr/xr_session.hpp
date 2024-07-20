@@ -18,7 +18,7 @@ class Xr_instance;
 class Xr_session
 {
 public:
-    Xr_session    (Xr_instance& instance, erhe::window::Context_window& context_window);
+    Xr_session    (Xr_instance& instance, erhe::window::Context_window& context_window, bool mirror_mode);
     ~Xr_session   () noexcept;
     Xr_session    (const Xr_session&) = delete;
     void operator=(const Xr_session&) = delete;
@@ -47,6 +47,7 @@ public:
     [[nodiscard]] auto get_state               () const -> XrSessionState;
 
 private:
+    [[nodiscard]] auto color_format_score(const gl::Internal_format image_format) const -> int;
     [[nodiscard]] auto create_session             () -> bool;
     [[nodiscard]] auto enumerate_swapchain_formats() -> bool;
     [[nodiscard]] auto enumerate_reference_spaces () -> bool;
@@ -79,8 +80,9 @@ private:
     };
 
     Xr_instance&                                  m_instance;
-    erhe::window::Context_window&                m_context_window;
+    erhe::window::Context_window&                 m_context_window;
     XrSession                                     m_xr_session;
+    bool                                          m_mirror_mode{false};
     gl::Internal_format                           m_swapchain_color_format;
     gl::Internal_format                           m_swapchain_depth_stencil_format;
     std::vector<Swapchains>                       m_view_swapchains;

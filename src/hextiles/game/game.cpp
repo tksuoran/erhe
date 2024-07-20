@@ -69,7 +69,7 @@ Game::Game(
     commands.bind_command_to_key(&m_select_previous_unit_command, erhe::window::Key_left,      false);
     commands.bind_command_to_key(&m_select_next_unit_command    , erhe::window::Key_right,     false);
 
-    hide();
+    hide_window();
 }
 
 auto Game::flags() -> ImGuiWindowFlags
@@ -88,10 +88,10 @@ void Game::imgui()
     }
 
     if (ImGui::Button("Back to Menu", button_size)) {
-        hide();
+        hide_window();
         m_map_window.set_map(nullptr);
-        m_map_window.hide();
-        m_menu_window.show();
+        m_map_window.hide_window();
+        m_menu_window.show_window();
     }
 
     player_imgui();
@@ -369,7 +369,7 @@ auto Game::move_unit(const direction_t direction) -> bool
         return false;
     }
 
-    if (is_visible() == false) {
+    if (is_window_visible() == false) {
         return false;
     }
 
@@ -383,7 +383,7 @@ auto Game::select_unit(const int direction) -> bool
         return false;
     }
 
-    if (is_visible() == false) {
+    if (is_window_visible() == false) {
         return false;
     }
 

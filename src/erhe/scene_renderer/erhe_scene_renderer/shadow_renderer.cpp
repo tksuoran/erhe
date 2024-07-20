@@ -112,10 +112,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         m_nearest_sampler.debug_label(),
         erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle)
     );
-    const auto shadow_texture_handle = m_graphics_instance.get_handle(
-        *parameters.texture.get(),
-        m_nearest_sampler
-    );
+    const auto shadow_texture_handle = m_graphics_instance.get_handle(*parameters.texture.get(), m_nearest_sampler);
 
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections = Light_projections{

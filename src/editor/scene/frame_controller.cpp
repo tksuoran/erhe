@@ -253,10 +253,7 @@ auto is_frame_controller(const erhe::Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(
-        item->get_type(),
-        erhe::Item_type::frame_controller
-    );
+    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::frame_controller);
 }
 
 auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool
@@ -269,12 +266,7 @@ auto as_frame_controller(erhe::Item_base* item) -> Frame_controller*
     if (item == nullptr) {
         return nullptr;
     }
-    if (
-        !erhe::bit::test_all_rhs_bits_set(
-            item->get_type(),
-            erhe::Item_type::frame_controller
-        )
-    ) {
+    if (!erhe::bit::test_all_rhs_bits_set(item->get_type(),erhe::Item_type::frame_controller)) {
         return nullptr;
     }
     return static_cast<Frame_controller*>(item);

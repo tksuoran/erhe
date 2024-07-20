@@ -6,7 +6,7 @@
 
 namespace erhe::scene {
 
-[[nodiscard]] auto get_component_count(const Animation_path path) -> std::size_t
+auto get_component_count(const Animation_path path) -> std::size_t
 {
     switch (path) {
         case Animation_path::TRANSLATION: return 3; // T_x, T_y, T_z
@@ -26,7 +26,7 @@ namespace erhe::scene {
     }
 }
 
-[[nodiscard]] auto c_str(const Animation_path path) -> const char*
+auto c_str(const Animation_path path) -> const char*
 {
     switch (path) {
         case Animation_path::INVALID:     return "Invalid";
@@ -38,7 +38,7 @@ namespace erhe::scene {
     }
 }
 
-[[nodiscard]] auto c_str(const Animation_interpolation_mode interpolation_mode) -> const char*
+auto c_str(const Animation_interpolation_mode interpolation_mode) -> const char*
 {
     switch (interpolation_mode) {
         case Animation_interpolation_mode::STEP:        return "Step";
@@ -59,10 +59,7 @@ Animation_sampler::Animation_sampler(
 
 Animation_sampler::~Animation_sampler() noexcept = default;
 
-void Animation_sampler::set(
-    std::vector<float>&& timestamps_in,
-    std::vector<float>&& values_in
-)
+void Animation_sampler::set(std::vector<float>&& timestamps_in, std::vector<float>&& values_in)
 {
     timestamps = std::move(timestamps_in);
     data       = std::move(values_in);
@@ -252,10 +249,7 @@ auto Animation_sampler::evaluate(Animation_channel& channel, float time_current)
     return vec4{0.0f, 0.0f, 0.0f, 0.0f};
 }
 
-void Animation_sampler::apply(
-    Animation_channel& channel,
-    const float        time_current
-) const
+void Animation_sampler::apply(Animation_channel& channel, const float time_current) const
 {
     seek(channel, time_current);
 
@@ -312,11 +306,7 @@ auto Animation::get_type_name() const -> std::string_view
     return static_type_name;
 }
 
-auto Animation::evaluate(
-    const float       time_current,
-    const std::size_t channel_index,
-    const std::size_t component
-) -> float
+auto Animation::evaluate(const float time_current, const std::size_t channel_index, const std::size_t component) -> float
 {
     auto& channel = channels.at(channel_index);
     auto& sampler = samplers.at(channel.sampler_index);

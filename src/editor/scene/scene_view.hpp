@@ -15,6 +15,7 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -49,18 +50,18 @@ class Viewport_scene_view;
 class Hover_entry
 {
 public:
-    static constexpr std::size_t content_slot      = 0;
-    static constexpr std::size_t tool_slot         = 1;
-    static constexpr std::size_t brush_slot        = 2;
-    static constexpr std::size_t rendertarget_slot = 3;
-    static constexpr std::size_t grid_slot         = 4;
-    static constexpr std::size_t slot_count        = 5;
-    static constexpr std::size_t content_bit       = (1 << 0u);
-    static constexpr std::size_t tool_bit          = (1 << 1u);
-    static constexpr std::size_t brush_bit         = (1 << 2u);
-    static constexpr std::size_t rendertarget_bit  = (1 << 3u);
-    static constexpr std::size_t grid_bit          = (1 << 4u);
-    static constexpr std::size_t all_bits          = 0xffffffffu;
+    static constexpr uint32_t content_slot      = 0;
+    static constexpr uint32_t tool_slot         = 1;
+    static constexpr uint32_t brush_slot        = 2;
+    static constexpr uint32_t rendertarget_slot = 3;
+    static constexpr uint32_t grid_slot         = 4;
+    static constexpr uint32_t slot_count        = 5;
+    static constexpr uint32_t content_bit       = (1 << 0u);
+    static constexpr uint32_t tool_bit          = (1 << 1u);
+    static constexpr uint32_t brush_bit         = (1 << 2u);
+    static constexpr uint32_t rendertarget_bit  = (1 << 3u);
+    static constexpr uint32_t grid_bit          = (1 << 4u);
+    static constexpr uint32_t all_bits          = 0xffffffffu;
 
     static constexpr std::array<uint32_t, slot_count> raytrace_slot_masks = {
         Raytrace_node_mask::content,

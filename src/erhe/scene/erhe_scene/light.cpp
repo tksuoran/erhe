@@ -10,8 +10,7 @@
 #include "erhe_item/unique_id.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 Light::Light(const Light&)            = default;
 Light& Light::operator=(const Light&) = default;
@@ -37,10 +36,7 @@ auto Light::get_type_name() const -> std::string_view
     return static_type_name;
 }
 
-void Light::handle_item_host_update(
-    erhe::Item_host* const old_item_host,
-    erhe::Item_host* const new_item_host
-)
+void Light::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     const auto shared_this = std::static_pointer_cast<Light>(shared_from_this()); // keep alive
 
@@ -64,9 +60,7 @@ auto Light::projection(const Light_projection_parameters& parameters) const -> P
     }
 }
 
-auto Light::stable_directional_light_projection(
-    const Light_projection_parameters& parameters
-) const -> Projection
+auto Light::stable_directional_light_projection(const Light_projection_parameters& parameters) const -> Projection
 {
     ERHE_VERIFY(parameters.view_camera != nullptr);
 
@@ -99,9 +93,7 @@ auto Light::spot_light_projection(const Light_projection_parameters& parameters)
     };
 }
 
-auto Light::projection_transforms(
-    const Light_projection_parameters& parameters
-) const -> Light_projection_transforms
+auto Light::projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
 {
     switch (type) {
         case Light_type::directional: {
@@ -201,39 +193,14 @@ auto Light::stable_directional_light_projection_transforms(
     //  - clip from world
     const auto clip_from_light = light_projection.clip_from_node_transform(parameters.shadow_map_viewport);
 
-    SPDLOG_LOGGER_TRACE(
-        log,
-        "view camera position in world {}",
-        view_camera_position
-    );
-    SPDLOG_LOGGER_TRACE(
-        log,
-        "view camera position in light {}",
-        view_camera_position_in_light
-    );
-    SPDLOG_LOGGER_TRACE(
-        log,
-        "texel size {}",
-        texel_size
-    );
-    SPDLOG_LOGGER_TRACE(
-        log,
-        "snap adjustment {}",
-        snap_adjustment
-    );
-    SPDLOG_LOGGER_TRACE(
-        log,
-        "snapped view camera position in light {}",
-        snapped_view_camera_position_in_light
-    );
-    SPDLOG_LOGGER_TRACE(
-        log,
-        "snapped view camera position in world {}",
-        snapped_view_camera_position
-    );
+    SPDLOG_LOGGER_TRACE(log, "view camera position in world {}", view_camera_position);
+    SPDLOG_LOGGER_TRACE(log, "view camera position in light {}", view_camera_position_in_light);
+    SPDLOG_LOGGER_TRACE(log, "texel size {}", texel_size);
+    SPDLOG_LOGGER_TRACE(log, "snap adjustment {}", snap_adjustment);
+    SPDLOG_LOGGER_TRACE(log, "snapped view camera position in light {}", snapped_view_camera_position_in_light);
+    SPDLOG_LOGGER_TRACE(log, "snapped view camera position in world {}", snapped_view_camera_position);
 
-    const Transform world_from_light_camera
-    {
+    const Transform world_from_light_camera{
         snapped_world_from_light,
         snapped_light_from_world
     };
@@ -384,9 +351,7 @@ auto Light::stable_directional_light_projection_transforms(
 }
 #endif
 
-[[nodiscard]] auto Light::spot_light_projection_transforms(
-    const Light_projection_parameters& parameters
-) const -> Light_projection_transforms
+auto Light::spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
 {
     const Projection light_projection = projection(parameters);
     const auto clip_from_light_camera = light_projection.clip_from_node_transform(parameters.shadow_map_viewport);

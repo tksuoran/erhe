@@ -1,8 +1,7 @@
 #include "erhe_window/window_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace erhe::window
-{
+namespace erhe::window {
 
 std::shared_ptr<spdlog::logger> log_space_mouse;
 std::shared_ptr<spdlog::logger> log_window;

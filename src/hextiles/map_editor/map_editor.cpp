@@ -101,22 +101,22 @@ Map_editor::Map_editor(
 void Map_editor::hide_windows()
 {
     m_map_window.set_map(nullptr);
-    m_map_generator         .hide();
-    m_map_tool_window       .hide();
-    m_terrain_palette_window.hide();
+    m_map_generator         .hide_window();
+    m_map_tool_window       .hide_window();
+    m_terrain_palette_window.hide_window();
 }
 
 void Map_editor::show_windows()
 {
     m_map_window.set_map(m_map);
-    m_map_generator         .show();
-    m_map_tool_window       .show();
-    m_terrain_palette_window.show();
+    m_map_generator         .show_window();
+    m_map_tool_window       .show_window();
+    m_terrain_palette_window.show_window();
 }
 
 void Map_editor::hover(glm::vec2 position_in_root)
 {
-    if (m_map_window.is_visible()) {
+    if (m_map_window.is_window_visible()) {
         return;
     }
     const glm::vec2 window_position = m_map_window.to_content(position_in_root);

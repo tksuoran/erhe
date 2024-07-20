@@ -6,6 +6,7 @@
 #include "graphics/icon_set.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "tools/brushes/brush_tool.hpp"
 #include "tools/hotbar.hpp"
 #include "tools/hud.hpp"
 #include "tools/selection_tool.hpp"
@@ -35,6 +36,12 @@ void Layers_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
+
+    if (ImGui::TreeNodeEx("Brush tool")) {
+        m_context.brush_tool->tool_properties(*this);
+        ImGui::TreePop();
+    }
+    m_context.imgui_windows->debug_imgui();
 
     const ImGuiTreeNodeFlags parent_flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |
@@ -67,9 +74,7 @@ void Layers_window::imgui()
                             mesh->get_name().c_str(),
                             leaf_flags |
                             (
-                                mesh->is_selected()
-                                    ? ImGuiTreeNodeFlags_Selected
-                                    : ImGuiTreeNodeFlags_None
+                                mesh->is_selected() ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None
                             )
                         );
                         if (ImGui::IsItemClicked()) {
@@ -99,11 +104,9 @@ void Layers_window::imgui()
         }
     }
 
-    m_context.editor_scenes->imgui();
+    //m_context.editor_scenes->imgui();
 
     m_context.scene_views->debug_imgui();
-
-    m_context.imgui_windows->debug_imgui();
 
     if (ImGui::TreeNodeEx("Hotbar")) {
         auto& hotbar = *m_context.hotbar;
@@ -126,7 +129,7 @@ void Layers_window::imgui()
         }
     }
 
-    m_context.editor_rendering->imgui();
+    //m_context.editor_rendering->imgui();
 
     if (ImGui::TreeNodeEx("Hud")) {
         auto& hud = *m_context.hud;

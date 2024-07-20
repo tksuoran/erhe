@@ -200,6 +200,7 @@ void Logs::log_settings_ui()
 
     std::string current_group{};
     bool group_open = false;
+    int logger_id = 0;
     for (const auto& logger : loggers) {
         const auto& name = logger->name();
         const auto group_name = erhe::log::get_groupname(name);
@@ -215,9 +216,12 @@ void Logs::log_settings_ui()
         }
         ImGui::SetNextItemWidth(100.0f);
         auto level = logger->level();
+
+        ImGui::PushID(logger_id++);
         if (log_level_combo(erhe::log::get_basename(name).c_str(), level)) {
             logger->set_level(level);
         }
+        ImGui::PopID();
     }
     if (group_open) {
         ImGui::TreePop();

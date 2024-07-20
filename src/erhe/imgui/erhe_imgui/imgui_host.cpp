@@ -242,14 +242,14 @@ auto Imgui_host::get_mouse_position() const -> glm::vec2
 }
 
 #pragma region Events
-auto Imgui_host::on_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
+auto Imgui_host::on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddFocusEvent(window_focus_event.focused != 0);
     return false;
 }
 
-auto Imgui_host::on_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
+auto Imgui_host::on_cursor_enter_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
 {
     m_has_cursor = cursor_enter_event.entered != 0;
     ImGuiIO& io = m_imgui_context->IO;
@@ -257,14 +257,14 @@ auto Imgui_host::on_event(const erhe::window::Cursor_enter_event& cursor_enter_e
     return false;
 }
 
-auto Imgui_host::on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
+auto Imgui_host::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMousePosEvent(mouse_move_event.x, mouse_move_event.y);
     return false;
 }
 
-auto Imgui_host::on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
+auto Imgui_host::on_mouse_button_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
 {
     int imgui_mouse_button = from_erhe(mouse_button_event.button);
     if (imgui_mouse_button < 0) {
@@ -276,14 +276,14 @@ auto Imgui_host::on_event(const erhe::window::Mouse_button_event& mouse_button_e
     return false;
 }
 
-auto Imgui_host::on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
+auto Imgui_host::on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMouseWheelEvent(mouse_wheel_event.x, mouse_wheel_event.y);
     return false;
 }
 
-auto Imgui_host::on_event(const erhe::window::Key_event& event) -> bool
+auto Imgui_host::on_key_event(const erhe::window::Key_event& event) -> bool
 {
     using erhe::window::Keycode;
 
@@ -293,7 +293,7 @@ auto Imgui_host::on_event(const erhe::window::Key_event& event) -> bool
     return false;
 }
 
-auto Imgui_host::on_event(const erhe::window::Char_event& char_event) -> bool
+auto Imgui_host::on_char_event(const erhe::window::Char_event& char_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddInputCharacter(char_event.codepoint);

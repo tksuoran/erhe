@@ -30,22 +30,22 @@ public:
     );
     virtual ~Imgui_window() noexcept;
 
-    [[nodiscard]] auto is_visible            () const -> bool;
-    [[nodiscard]] auto is_hovered            () const -> bool;
+    [[nodiscard]] auto is_window_visible     () const -> bool;
+    [[nodiscard]] auto is_window_hovered     () const -> bool;
     [[nodiscard]] auto get_ini_label         () const -> const std::string&;
     [[nodiscard]] auto get_title             () const -> const std::string&;
     [[nodiscard]] auto get_scale_value       () const -> float;
     [[nodiscard]] auto show_in_menu          () const -> bool;
     [[nodiscard]] auto show_in_developer_menu() const -> bool;
-    void set_developer    ();
-    void set_min_size     (float min_width, float min_height);
-    auto begin            () -> bool;
-    void end              ();
-    void set_visibility   (bool visible);
-    void show             ();
-    void hide             ();
-    void toggle_visibility();
-    void image            (const std::shared_ptr<erhe::graphics::Texture>& texture, int width, int height);
+    void set_developer           ();
+    void set_min_size            (float min_width, float min_height);
+    auto begin                   () -> bool;
+    void end                     ();
+    void set_window_visibility   (bool visible);
+    void show_window             ();
+    void hide_window             ();
+    void toggle_window_visibility();
+    void draw_image              (const std::shared_ptr<erhe::graphics::Texture>& texture, int width, int height);
 
     auto get_imgui_host() const -> Imgui_host*;
     virtual void set_imgui_host(Imgui_host* imgui_host);
@@ -61,7 +61,7 @@ public:
     virtual auto want_mouse_events   () const -> bool;
 
 protected:
-    void set_is_hovered(bool hovered);
+    void set_is_window_hovered(bool hovered);
 
     Imgui_renderer& m_imgui_renderer;
     Imgui_windows&  m_imgui_windows;

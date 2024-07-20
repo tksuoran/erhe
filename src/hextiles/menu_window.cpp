@@ -43,17 +43,17 @@ Menu_window::Menu_window(
     , m_type_editor        {imgui_renderer, imgui_windows, *this, m_tile_renderer, m_tiles}
 
 {
-    show();
+    show_window();
 }
 
 void Menu_window::show_menu()
 {
-    m_game           .hide();
+    m_game           .hide_window();
     m_map_editor     .hide_windows();
-    m_map_window     .hide();
-    m_new_game_window.hide();
+    m_map_window     .hide_window();
+    m_new_game_window.hide_window();
     m_type_editor    .hide_windows();
-    show();
+    show_window();
 }
 
 void Menu_window::imgui()
@@ -61,29 +61,29 @@ void Menu_window::imgui()
     constexpr ImVec2 button_size{130.0f, 0.0f};
 
     if (ImGui::Button("New Game", button_size)) {
-        hide();
-        m_new_game_window.show();
+        hide_window();
+        m_new_game_window.show_window();
     }
     //if (ImGui::Button("Load Game")) {
     //    hide();
     //    get<Map_window>()->show();
     //}
     if (ImGui::Button("Map Editor", button_size)) {
-        hide();
+        hide_window();
         m_map_window.set_map(m_map_editor.get_map());
         //get<Map_editor>()->get_map();
-        m_map_window.show();
+        m_map_window.show_window();
         m_map_editor.show_windows();
     }
     if (ImGui::Button("Terrain Editor", button_size)) {
-        hide();
-        m_type_editor.terrain_editor_window                 .show();
-        m_type_editor.terrain_group_editor_window           .show();
-        m_type_editor.terrain_replacement_rule_editor_window.show();
+        hide_window();
+        m_type_editor.terrain_editor_window                 .show_window();
+        m_type_editor.terrain_group_editor_window           .show_window();
+        m_type_editor.terrain_replacement_rule_editor_window.show_window();
     }
     if (ImGui::Button("Unit Editor", button_size)) {
-        hide();
-        m_type_editor.unit_editor_window.show();
+        hide_window();
+        m_type_editor.unit_editor_window.show_window();
     }
     if (ImGui::Button("Quit", button_size)) {
         m_input_event_handler.on_window_close_event(); // hacky(ish)?

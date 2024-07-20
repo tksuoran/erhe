@@ -23,7 +23,7 @@ Terrain_editor_window::Terrain_editor_window(
     , m_tiles      {tiles}
     , m_type_editor{type_editor}
 {
-    hide();
+    hide_window();
 }
 
 void Terrain_editor_window::imgui()

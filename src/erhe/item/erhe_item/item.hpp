@@ -100,8 +100,9 @@ public:
     static constexpr uint64_t index_physics                = 26;
     static constexpr uint64_t index_raytrace               = 27;
     static constexpr uint64_t index_node_attachment        = 28;
-    static constexpr uint64_t index_render_style           = 29;
-    static constexpr uint64_t count                        = 30;
+    static constexpr uint64_t index_brush_placement        = 29;
+    static constexpr uint64_t index_render_style           = 30;
+    static constexpr uint64_t count                        = 31;
 
     static constexpr uint64_t none                   =  0u;
     static constexpr uint64_t animation              = (1u << index_animation             );
@@ -132,6 +133,7 @@ public:
     static constexpr uint64_t physics                = (1u << index_physics               );
     static constexpr uint64_t raytrace               = (1u << index_raytrace              );
     static constexpr uint64_t node_attachment        = (1u << index_node_attachment       );
+    static constexpr uint64_t brush_placement        = (1u << index_brush_placement       );
     static constexpr uint64_t render_style           = (1u << index_render_style          );
 
     // NOTE: The names here must match the C++ class names
@@ -165,6 +167,7 @@ public:
         "Physics",
         "Raytrace",
         "Node_attachment",
+        "Brush_placement",
         "Render_style"
     };
 };

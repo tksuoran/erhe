@@ -77,7 +77,7 @@ public:
         return true;
     }
 
-    auto on_event(const erhe::window::Key_event& key_event) -> bool override
+    auto on_key_event(const erhe::window::Key_event& key_event) -> bool override
     {
         switch (key_event.keycode) {
             case erhe::window::Key_w: m_camera_controller->translate_z.set_less(key_event.pressed); return true;
@@ -88,7 +88,7 @@ public:
         }
     }
 
-    auto on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool override
+    auto on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool override
     {
         if (m_mouse_pressed) {
             if (mouse_move_event.dx != 0.0f) {
@@ -103,7 +103,7 @@ public:
         return false;
     }
 
-    auto on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool override
+    auto on_mouse_button_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool override
     {
         if (mouse_button_event.button == erhe::window::Mouse_button_left) {
             m_mouse_pressed = mouse_button_event.pressed;
@@ -112,7 +112,7 @@ public:
         return false;
     }
     
-    auto on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool override
+    auto on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool override
     {
         glm::vec3 position = m_camera_controller->get_position();
         const float l = glm::length(position);
@@ -173,7 +173,6 @@ public:
 
         std::vector<erhe::renderer::Pipeline_renderpass*> passes;
 
-
         const bool reverse_depth = m_graphics_instance.configuration.reverse_depth;
         erhe::renderer::Pipeline_renderpass standard_pipeline_renderpass{ 
             erhe::graphics::Pipeline{
@@ -213,6 +212,15 @@ public:
             0
         };
 
+        std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
+        for (const auto& node : m_gltf_data.nodes) {
+            std::shared_ptr<erhe::scene::Mesh> mesh = get_mesh(node.get());
+            if (!mesh) {
+                continue;
+            }
+            meshes.push_back(mesh);
+        }
+
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
@@ -222,7 +230,7 @@ public:
                 .lights                 = lights,
                 .skins                  = m_gltf_data.skins,
                 .materials              = m_gltf_data.materials,
-                .mesh_spans             = { m_gltf_data.meshes },
+                .mesh_spans             = { meshes },
                 .passes                 = passes,
                 .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
                 .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},

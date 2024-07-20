@@ -183,9 +183,7 @@ auto Command::get_base_priority() const -> int
 
 auto Command::get_host_priority() const -> int
 {
-   return (m_host != nullptr)
-        ? m_host->get_priority()
-        : 0;
+   return (m_host != nullptr) ? m_host->get_priority() : 0;
  }
 
 auto Command::get_priority() const -> int
@@ -225,10 +223,7 @@ auto Helper_command::get_target_command() -> Command&
 //
 
 Drag_enable_command::Drag_enable_command(Commands& commands, Command& update_command)
-    : Command{
-        commands,
-        fmt::format("Drag_enable_command({})", update_command.get_name())
-    }
+    : Command{commands, fmt::format("Drag_enable_command({})", update_command.get_name())}
     , m_update_command{update_command}
 {
     update_command.set_host(this);
@@ -260,10 +255,7 @@ Drag_enable_float_command::Drag_enable_float_command(
     const float min_to_enable,
     const float max_to_disable
 )
-    : Command{
-        commands,
-        fmt::format("Drag_enable_float_command({})", update_command.get_name())
-    }
+    : Command         {commands, fmt::format("Drag_enable_float_command({})", update_command.get_name())}
     , m_update_command{update_command}
     , m_min_to_enable {min_to_enable}
     , m_max_to_disable{max_to_disable}
@@ -276,8 +268,6 @@ Drag_enable_float_command::Drag_enable_float_command(
 
 auto Drag_enable_float_command::try_call_with_input(Input_arguments& input) -> bool
 {
-    static_cast<void>(input);
-
     const bool enable  = !Command_host::is_enabled() && (input.variant.float_value >= m_min_to_enable);
     const bool disable =  Command_host::is_enabled() && (input.variant.float_value <= m_max_to_disable);
 
@@ -300,17 +290,35 @@ auto Drag_enable_float_command::try_call_with_input(Input_arguments& input) -> b
     return is_target_ready;
 }
 
+Float_threshold_command::Float_threshold_command(Commands& commands, Command& target_command, float min_to_activate, float max_to_deactivate)
+    : Command            {commands, fmt::format("Float_threshold_command({})", target_command.get_name())}
+    , m_target_command   {target_command}
+    , m_min_to_activate  {min_to_activate}
+    , m_max_to_deactivate{max_to_deactivate}
+{
+    ERHE_VERIFY(min_to_activate > max_to_deactivate);
+    set_description(Command::get_name());
+}
+
+auto Float_threshold_command::try_call_with_input(Input_arguments& input) -> bool
+{
+    if (!m_is_active) {
+        if (input.variant.float_value >= m_min_to_activate) {
+            m_target_command.try_call();
+            m_is_active = true;
+        }
+    } else {
+        if (input.variant.float_value <= m_max_to_deactivate) {
+            m_is_active = false;
+        }
+    }
+    return false; // TODO
+}
+
 //
 
-Redirect_command::Redirect_command(
-    Commands& commands,
-    Command&  target_command
-)
-    : Helper_command{
-        commands,
-        target_command,
-        fmt::format("Redirect_command({})", target_command.get_name())
-    }
+Redirect_command::Redirect_command(Commands& commands, Command& target_command)
+    : Helper_command{commands, target_command, fmt::format("Redirect_command({})", target_command.get_name())}
 {
 }
 
@@ -327,11 +335,7 @@ auto Redirect_command::try_call() -> bool
 //
 
 Drag_float_command::Drag_float_command(Commands& commands, Command& target_command)
-    : Helper_command{
-        commands,
-        target_command,
-        fmt::format("Drag_float_command({})", target_command.get_name())
-    }
+    : Helper_command{commands, target_command, fmt::format("Drag_float_command({})", target_command.get_name())}
 {
 }
 
@@ -346,11 +350,7 @@ auto Drag_float_command::try_call() -> bool
 //
 
 Drag_vector2f_command::Drag_vector2f_command(Commands& commands, Command& target_command)
-    : Helper_command{
-        commands,
-        target_command,
-        fmt::format("Drag_vector2f_command({})", target_command.get_name())
-    }
+    : Helper_command{commands, target_command, fmt::format("Drag_vector2f_command({})", target_command.get_name())}
 {
 }
 
@@ -373,11 +373,7 @@ auto Drag_vector2f_command::try_call_with_input(Input_arguments& input) -> bool
 //
 
 Drag_pose_command::Drag_pose_command(Commands& commands, Command& target_command)
-    : Helper_command{
-        commands,
-        target_command,
-        fmt::format("Drag_pose_command({})", target_command.get_name())
-    }
+    : Helper_command{commands, target_command, fmt::format("Drag_pose_command({})", target_command.get_name())}
 {
 }
 
@@ -404,11 +400,7 @@ auto Lambda_command::try_call() -> bool
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 Xr_float_click_command::Xr_float_click_command(Commands& commands, Command& target_command)
-    : Helper_command{
-        commands,
-        target_command,
-        fmt::format("Xr_float_click_command({})", target_command.get_name())
-    }
+    : Helper_command{commands, target_command, fmt::format("Xr_float_click_command({})", target_command.get_name())}
 {
 }
 
@@ -435,11 +427,7 @@ auto Xr_float_click_command::try_call() -> bool
 //
 
 Xr_vector2f_click_command::Xr_vector2f_click_command(Commands& commands, Command& target_command)
-    : Helper_command{
-        commands,
-        target_command,
-        fmt::format("Xr_vector2f_click_command({})", target_command.get_name())
-    }
+    : Helper_command{commands, target_command, fmt::format("Xr_vector2f_click_command({})", target_command.get_name())}
 {
 }
 
@@ -455,8 +443,7 @@ void Xr_vector2f_click_command::try_ready()
 
 auto Xr_vector2f_click_command::try_call() -> bool
 {
-    Input_arguments input
-    {
+    Input_arguments input{
         .variant = {
             .vector2 = {
                 .absolute_value = glm::vec2{
@@ -472,11 +459,7 @@ auto Xr_vector2f_click_command::try_call() -> bool
 //
 
 Xr_pose_click_command::Xr_pose_click_command(Commands& commands, Command& target_command)
-    : Helper_command{
-        commands,
-        target_command,
-        fmt::format("Xr_pose_click_command({})", target_command.get_name())
-    }
+    : Helper_command{commands, target_command, fmt::format("Xr_pose_click_command({})", target_command.get_name())}
 {
 }
 

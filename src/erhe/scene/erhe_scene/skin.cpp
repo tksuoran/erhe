@@ -3,9 +3,7 @@
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_item/unique_id.hpp"
 
-namespace erhe::scene
-{
-
+namespace erhe::scene {
 
 Skin::Skin()                       = default;
 Skin::Skin(const Skin&)            = default;

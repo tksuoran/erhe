@@ -112,6 +112,7 @@ public:
     // Implements Imgui_window
     auto flags   () -> ImGuiWindowFlags override;
     void on_begin() override;
+    void on_end  () override;
     void imgui   () override;
 
     // Public API
@@ -130,6 +131,7 @@ private:
     void update_node_transform ();
     void tool_button           (uint32_t id, Tool* tool);
     void handle_slot_update    ();
+    void update_slot_from_tool (Tool* tool);
 
     void init_hotbar();
     void init_radial_menu(Mesh_memory& mesh_memory, Scene_root& scene_root);

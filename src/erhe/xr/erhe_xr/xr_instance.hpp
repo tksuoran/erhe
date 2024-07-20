@@ -39,6 +39,7 @@ public:
     bool visibility_mask  {false};
     bool hand_tracking    {false};
     bool composition_alpha{false};
+    bool mirror_mode      {false};
 };
 
 class Xr_instance

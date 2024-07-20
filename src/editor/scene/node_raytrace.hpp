@@ -1,10 +1,6 @@
 #pragma once
 
-#include "erhe_primitive/buffer_mesh.hpp"
-#include "erhe_scene/node_attachment.hpp"
-#include "scene/node_raytrace_mask.hpp"
-
-#include <functional>
+#include "erhe_item/item.hpp"
 
 namespace erhe::geometry {
     class Geometry;
@@ -24,6 +20,7 @@ namespace erhe::renderer {
 }
 namespace erhe::scene {
     class Mesh;
+    class Node;
 }
 
 namespace editor {

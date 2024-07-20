@@ -48,11 +48,7 @@ class Scene_views;
 class Tools_pipeline_renderpasses
 {
 public:
-    Tools_pipeline_renderpasses(
-        erhe::graphics::Instance& graphics_instance,
-        Mesh_memory&              mesh_memory,
-        Programs&                 programs
-    );
+    Tools_pipeline_renderpasses(erhe::graphics::Instance& graphics_instance, Mesh_memory& mesh_memory, Programs& programs);
     erhe::renderer::Pipeline_renderpass tool1_hidden_stencil;
     erhe::renderer::Pipeline_renderpass tool2_visible_stencil;
     erhe::renderer::Pipeline_renderpass tool3_depth_clear;
@@ -83,7 +79,6 @@ public:
     [[nodiscard]] auto get_priority_tool  () const -> Tool*;
     [[nodiscard]] auto get_tools          () const -> const std::vector<Tool*>&;
     [[nodiscard]] auto get_tool_scene_root() -> std::shared_ptr<Scene_root>;
-
 
 private:
     Editor_context&                   m_context;

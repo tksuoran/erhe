@@ -54,40 +54,18 @@ class Viewport_config_window;
 class Viewport_scene_view;
 class Scene_views;
 
+class Make_mesh_config
+{
+public:
+    int   instance_count{1};
+    float instance_gap  {0.4f};
+    float object_scale  {1.0f};
+    int   detail        {2};
+};
+
 class Scene_builder
 {
 public:
-    class Config
-    {
-    public:
-        Config();
-        float camera_exposure            {1.0f};
-        float directional_light_intensity{20.0f};
-        float directional_light_radius   {6.0f};
-        float directional_light_height   {10.0f};
-        int   directional_light_count    {4};
-        float spot_light_intensity       {150.0f};
-        float spot_light_radius          {20.0f};
-        float spot_light_height          {10.0f};
-        int   spot_light_count           {3};
-        float floor_size                 {40.0f};
-        int   instance_count             {1};
-        float instance_gap               {0.4f};
-        float object_scale               {1.0f};
-        float mass_scale                 {1.0f};
-        int   detail                     {2};
-        bool  floor                      {true};
-        bool  gltf_files                 {false};
-        bool  obj_files                  {false};
-        bool  sphere                     {false};
-        bool  torus                      {false};
-        bool  cylinder                   {false};
-        bool  cone                       {false};
-        bool  platonic_solids            {true};
-        bool  johnson_solids             {false};
-    };
-    Config config;
-
     Scene_builder(
         erhe::graphics::Instance&       graphics_instance,
         erhe::imgui::Imgui_renderer&    imgui_renderer,
@@ -115,8 +93,9 @@ public:
         const glm::vec3        look_at = glm::vec3{0.0f, 0.0f, 0.0f}
     ) -> std::shared_ptr<erhe::scene::Camera>;
 
-    // TODO Something nicer, do not expose here
-    //[[nodiscard]] auto buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
+    void add_platonic_solids(const Make_mesh_config& config);
+    void add_curved_shapes  (const Make_mesh_config& config);
+    void add_torus_chain    (const Make_mesh_config& config);
 
 private:
     auto make_directional_light(
@@ -135,26 +114,20 @@ private:
         const glm::vec2        spot_cone_angle
     ) -> std::shared_ptr<erhe::scene::Light>;
 
-    auto make_brush(
-        Content_library_node& folder,
-        Brush_data&&          brush_create_info,
-        const bool            instantiate_to_scene
-    ) -> std::shared_ptr<Brush>;
+    auto make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>;
 
     auto make_brush(
         Content_library_node&      folder,
         Editor_settings&           editor_settings,
         Mesh_memory&               mesh_memory,
-        erhe::geometry::Geometry&& geometry,
-        const bool                 instantiate_to_scene
+        erhe::geometry::Geometry&& geometry
     ) -> std::shared_ptr<Brush>;
 
     auto make_brush(
         Content_library_node&                            folder,
         Editor_settings&                                 editor_settings,
         Mesh_memory&                                     mesh_memory,
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-        const bool                                       instantiate_to_scene
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry
     ) -> std::shared_ptr<Brush>;
 
     [[nodiscard]] auto build_info(Mesh_memory& mesh_memory) -> erhe::primitive::Build_info;
@@ -171,19 +144,43 @@ private:
     );
     void animate_lights     (const double time_d);
     void add_room           ();
+
     void make_brushes       (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
-    void make_mesh_nodes    ();
+    void make_mesh_nodes    (const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes);
     void make_cube_benchmark(Mesh_memory& mesh_memory);
     void setup_lights       ();
 
     Editor_context& m_context;
 
+    class Config
+    {
+    public:
+        Config();
+        float camera_exposure            {1.0f};
+        float directional_light_intensity{20.0f};
+        float directional_light_radius   {6.0f};
+        float directional_light_height   {10.0f};
+        int   directional_light_count    {4};
+        float spot_light_intensity       {150.0f};
+        float spot_light_radius          {20.0f};
+        float spot_light_height          {10.0f};
+        int   spot_light_count           {3};
+        float floor_size                 {40.0f};
+        float mass_scale                 {1.0f};
+        int   detail                     {1};
+        bool  floor                      {true};
+    };
+    Config m_config;
+
     // Self owned parts
     std::mutex                          m_brush_mutex;
     std::unique_ptr<Brush>              m_floor_brush;
     std::unique_ptr<Brush>              m_table_brush;
-    std::mutex                          m_scene_brushes_mutex;
-    std::vector<std::shared_ptr<Brush>> m_scene_brushes;
+    std::vector<std::shared_ptr<Brush>> m_platonic_solids;
+    std::shared_ptr<Brush>              m_sphere_brush;
+    std::shared_ptr<Brush>              m_torus_brush;
+    std::shared_ptr<Brush>              m_cylinder_brush[2];
+    std::shared_ptr<Brush>              m_cone_brush;
 
     std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
 

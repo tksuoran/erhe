@@ -61,10 +61,12 @@ public:
 
 private:
     void drag_and_drop_target(float min_x, float min_y, float max_x, float max_y);
+    void cancel_brush_drag_and_drop();
 
     Editor_context&                    m_editor_context;
     std::weak_ptr<Viewport_scene_view> m_viewport_scene_view;
     erhe::math::Viewport               m_viewport;
+    bool                               m_brush_drag_and_drop_active{false};
 };
 
 } // namespace editor

@@ -175,11 +175,7 @@ Scene_root::Scene_root(
         register_to_editor_scenes(*editor_scenes);
     }
 
-    if (
-        (imgui_renderer != nullptr) &&
-        (imgui_windows  != nullptr) &&
-        (editor_context != nullptr)
-    ) {
+    if ((imgui_renderer != nullptr) && (imgui_windows  != nullptr) && (editor_context != nullptr)) {
         m_content_library_tree_window = std::make_shared<Item_tree_window>(
             *imgui_renderer,
             *imgui_windows,

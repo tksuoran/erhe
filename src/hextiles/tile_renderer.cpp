@@ -767,11 +767,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
 
     erhe::graphics::Scoped_debug_group pass_scope{c_tile_renderer_render};
 
-    const auto handle = m_graphics_instance.get_handle(
-        *m_tileset_texture.get(),
-        m_nearest_sampler
-    );
-    //m_tileset_texture->get_handle();
+    const auto handle = m_graphics_instance.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
 
     // TODO byte_count
     auto* const               projection_buffer   = &current_frame_resources().projection_buffer;

@@ -116,8 +116,24 @@ public:
 
 private:
     Command& m_update_command;
-    float    m_min_to_enable {0.10f};
+    float    m_min_to_enable {0.20f};
     float    m_max_to_disable{0.10f};
+};
+
+class Float_threshold_command
+    : public Command
+    , public Command_host
+{
+public:
+    Float_threshold_command(Commands& commands, Command& target_command, float min_to_activate, float max_to_deactivate);
+
+    auto try_call_with_input(Input_arguments& input) -> bool override;
+
+private:
+    Command& m_target_command;
+    float    m_min_to_activate  {0.20f};
+    float    m_max_to_deactivate{0.10f};
+    bool     m_is_active        {false};
 };
 
 // Has enable/disable state independent from target command

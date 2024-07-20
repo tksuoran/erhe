@@ -15,7 +15,7 @@ Headset::Headset(erhe::window::Context_window& context_window, const Xr_configur
         return;
     }
 
-    m_xr_session = std::make_unique<Xr_session>(*m_xr_instance.get(), context_window);
+    m_xr_session = std::make_unique<Xr_session>(*m_xr_instance.get(), context_window, configuration.mirror_mode);
 }
 
 Headset::~Headset() noexcept = default;

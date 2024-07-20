@@ -265,11 +265,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
             m_texture->height() * b.y
         };
 
-        SPDLOG_LOGGER_TRACE(
-            log_pointer,
-            "rt ray hit position {}",
-            hit_position_in_viewport
-        );
+        SPDLOG_LOGGER_TRACE(log_pointer, "rt ray hit position {}", hit_position_in_viewport);
 
         m_pointer = hit_position_in_viewport;
 

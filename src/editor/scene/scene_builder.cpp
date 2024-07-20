@@ -1,3 +1,4 @@
+
 #include "scene/scene_builder.hpp"
 
 #include "editor_rendering.hpp"
@@ -93,20 +94,9 @@ Scene_builder::Config::Config()
     ini->get("spot_light_height",           spot_light_height);
     ini->get("spot_light_count",            spot_light_count);
     ini->get("floor_size",                  floor_size);
-    ini->get("instance_count",              instance_count);
-    ini->get("instance_gap",                instance_gap);
-    ini->get("object_scale",                object_scale);
     ini->get("mass_scale",                  mass_scale);
     ini->get("detail",                      detail);
-    ini->get("gltf_files",                  gltf_files);
-    ini->get("obj_files",                   obj_files);
     ini->get("floor",                       floor);
-    ini->get("sphere",                      sphere);
-    ini->get("torus",                       torus);
-    ini->get("cylinder",                    cylinder);
-    ini->get("cone",                        cone);
-    ini->get("platonic_solids",             platonic_solids);
-    ini->get("johnson_solids",              johnson_solids);
 }
 
 Scene_builder::Scene_builder(
@@ -153,7 +143,6 @@ Scene_builder::Scene_builder(
     );
     setup_lights   ();
     make_brushes   (editor_settings, mesh_memory);
-    make_mesh_nodes();
     add_room       ();
 }
 
@@ -260,7 +249,7 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 80.0f;
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    camera->set_exposure(config.camera_exposure);
+    camera->set_exposure(m_config.camera_exposure);
     node->attach(camera);
     node->set_parent(m_scene_root->get_scene().get_root_node());
 
@@ -332,32 +321,22 @@ void Scene_builder::setup_cameras(
     );
     
     if (window_viewport) {
-        scene_views.create_imgui_window_scene_view_node(imgui_renderer, imgui_windows, rendergraph, m_primary_viewport_window);
+        scene_views.create_imgui_window_scene_view_node(imgui_renderer, imgui_windows, rendergraph, m_primary_viewport_window, "Scene", "");
     } else {
-        scene_views.create_basic_viewport_scene_view_node(rendergraph, m_primary_viewport_window);
+        scene_views.create_basic_viewport_scene_view_node(rendergraph, m_primary_viewport_window, "Scene");
     }
 }
 
-auto Scene_builder::make_brush(
-    Content_library_node& folder,
-    Brush_data&&          brush_create_info,
-    const bool            instantiate_to_scene
-) -> std::shared_ptr<Brush>
+auto Scene_builder::make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>
 {
-    const auto brush = folder.make<Brush>(brush_create_info);
-    if (instantiate_to_scene) {
-        const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
-        m_scene_brushes.push_back(brush);
-    }
-    return brush;
+    return folder.make<Brush>(brush_create_info);
 }
 
 auto Scene_builder::make_brush(
     Content_library_node&      folder,
     Editor_settings&           editor_settings,
     Mesh_memory&               mesh_memory,
-    erhe::geometry::Geometry&& geometry,
-    const bool                 instantiate_to_scene
+    erhe::geometry::Geometry&& geometry
 ) -> std::shared_ptr<Brush>
 {
     return make_brush(
@@ -368,9 +347,8 @@ auto Scene_builder::make_brush(
             .build_info      = build_info(mesh_memory),
             .normal_style    = Normal_style::polygon_normals,
             .geometry        = std::make_shared<erhe::geometry::Geometry>(std::move(geometry)),
-            .density         = config.mass_scale,
-        },
-        instantiate_to_scene
+            .density         = m_config.mass_scale,
+        }
     );
 }
 
@@ -391,8 +369,7 @@ auto Scene_builder::make_brush(
     Content_library_node&                            folder,
     Editor_settings&                                 editor_settings,
     Mesh_memory&                                     mesh_memory,
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-    const bool                                       instantiate_to_scene
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry
 ) -> std::shared_ptr<Brush>
 {
     return make_brush(
@@ -403,9 +380,8 @@ auto Scene_builder::make_brush(
             .build_info      = build_info(mesh_memory),
             .normal_style    = Normal_style::polygon_normals,
             .geometry        = geometry,
-            .density         = config.mass_scale,
-        },
-        instantiate_to_scene
+            .density         = m_config.mass_scale,
+        }
     );
 }
 
@@ -427,9 +403,9 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
     }
 
     // Floor
-    if (config.floor) {
+    if (m_config.floor) {
         auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
-            0.5f * vec3{config.floor_size, 1.0f, config.floor_size}
+            0.5f * vec3{m_config.floor_size, 1.0f, m_config.floor_size}
         );
 
         // Otherwise it will be destructed when leave add_floor() scope
@@ -440,7 +416,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
                 ERHE_PROFILE_SCOPE("Floor brush");
 
                 auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
-                    make_box(config.floor_size, 1.0f, config.floor_size)
+                    make_box(m_config.floor_size, 1.0f, m_config.floor_size)
                 );
                 floor_geometry->name = "floor";
                 floor_geometry->build_edges();
@@ -461,202 +437,165 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
         );
     }
 
-    constexpr bool anisotropic_test_object = false;
-
     auto content_library = m_scene_root->content_library();
     Content_library_node& brushes = *(content_library->brushes.get());
 
-    {
-        execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory, &brushes]() {
-                ERHE_PROFILE_SCOPE("Platonic solids");
+#pragma region Platonic Solids
+    execution_queue->enqueue(
+        [this, &editor_settings, &mesh_memory, &brushes]() {
+            ERHE_PROFILE_SCOPE("Platonic solids");
 
-                const auto scale = config.object_scale;
-                auto& folder = *(brushes.make_folder("Platonic Solids").get());
-                make_brush(folder, editor_settings, mesh_memory, make_dodecahedron (scale), config.platonic_solids);
-                make_brush(folder, editor_settings, mesh_memory, make_icosahedron  (scale), config.platonic_solids);
-                make_brush(folder, editor_settings, mesh_memory, make_octahedron   (scale), config.platonic_solids);
-                make_brush(folder, editor_settings, mesh_memory, make_tetrahedron  (scale), config.platonic_solids);
-                make_brush(folder, editor_settings, mesh_memory, make_cuboctahedron(scale), config.platonic_solids);
-                make_brush(
-                    folder,
-                    Brush_data{
-                        .context         = m_context,
-                        .editor_settings = editor_settings,
-                        .build_info      = build_info(mesh_memory),
-                        .normal_style    = Normal_style::polygon_normals,
-                        .geometry        = std::make_shared<erhe::geometry::Geometry>(make_cube(scale)),
-                        .density         = config.mass_scale,
-                        .collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
-                            vec3{scale * 0.5f}
-                        )
-                    },
-                    config.platonic_solids
-                );
-            }
-        );
-    }
-    if (config.sphere) {
-        execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory, &brushes]() {
-                ERHE_PROFILE_SCOPE("Sphere");
-                make_brush(
-                    brushes,
-                    Brush_data{
-                        .context         = m_context,
-                        .editor_settings = editor_settings,
-                        .build_info      = build_info(mesh_memory),
-                        .normal_style    = Normal_style::corner_normals,
-                        .geometry        = std::make_shared<erhe::geometry::Geometry>(
-                            make_sphere(
-                                config.object_scale,
-                                8 * std::max(1, config.detail), // slice count
-                                6 * std::max(1, config.detail)  // stack count
-                            )
-                        ),
-                        .density         = config.mass_scale,
-                        .collision_shape = erhe::physics::ICollision_shape::create_sphere_shape_shared(
-                            config.object_scale
-                        )
-                    },
-                    true
-                );
-            }
-        );
-    }
-    if (config.torus) {
-        execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory, &brushes]() {
-                ERHE_PROFILE_SCOPE("Torus");
-
-                const float major_radius = 1.0f  * config.object_scale;
-                const float minor_radius = 0.25f * config.object_scale;
-
-                auto torus_collision_volume_calculator = [=](float scale) -> float {
-                    return torus_volume(major_radius * scale, minor_radius * scale);
-                };
-
-                auto torus_collision_shape_generator = [major_radius, minor_radius](float scale) -> std::shared_ptr<erhe::physics::ICollision_shape> {
-                    ERHE_PROFILE_SCOPE("torus_collision_shape_generator");
-
-                    erhe::physics::Compound_shape_create_info torus_shape_create_info;
-
-                    const double     subdivisions        = 16.0;
-                    const double     scaled_major_radius = major_radius * scale;
-                    const double     scaled_minor_radius = minor_radius * scale;
-                    const double     major_circumference = glm::two_pi<double>() * scaled_major_radius;
-                    const double     capsule_length      = major_circumference / subdivisions;
-                    const glm::dvec3 forward{0.0, 1.0, 0.0};
-                    const glm::dvec3 side   {scaled_major_radius, 0.0, 0.0};
-
-                    auto capsule = erhe::physics::ICollision_shape::create_capsule_shape_shared(
-                        erhe::physics::Axis::Z,
-                        static_cast<float>(scaled_minor_radius),
-                        static_cast<float>(capsule_length)
-                    );
-                    for (int i = 0; i < static_cast<int>(subdivisions); i++) {
-                        const double     rel      = static_cast<double>(i) / subdivisions;
-                        const double     theta    = rel * glm::two_pi<double>();
-                        const glm::dvec3 position = glm::rotate(side, theta, forward);
-                        const glm::dquat q        = glm::angleAxis(theta, forward);
-                        const glm::dmat3 m        = glm::toMat3(q);
-
-                        torus_shape_create_info.children.emplace_back(
-                            erhe::physics::Compound_child{
-                                .shape = capsule,
-                                .transform = erhe::physics::Transform{
-                                    mat3{m},
-                                    vec3{position}
-                                }
-                            }
-                            //capsule,
-                            //erhe::physics::Transform{
-                            //    mat3{m},
-                            //    vec3{position}
-                            //}
-                        );
-                    }
-                    return erhe::physics::ICollision_shape::create_compound_shape_shared(torus_shape_create_info);
-                };
-                const auto torus_geometry = std::make_shared<erhe::geometry::Geometry>(
-                    make_torus(
-                        major_radius,
-                        minor_radius,
-                        10 * std::max(1, config.detail),
-                        8 * std::max(1, config.detail)
+            const auto scale = 1.0f; //m_config.object_scale;
+            auto platonic_solids = brushes.make_folder("Platonic Solids");
+            auto& folder = *platonic_solids.get();
+            m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, make_dodecahedron (scale)));
+            m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, make_icosahedron  (scale)));
+            m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, make_octahedron   (scale)));
+            m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, make_tetrahedron  (scale)));
+            m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, make_cuboctahedron(scale)));
+            m_platonic_solids.push_back(make_brush(
+                folder,
+                Brush_data{
+                    .context         = m_context,
+                    .editor_settings = editor_settings,
+                    .build_info      = build_info(mesh_memory),
+                    .normal_style    = Normal_style::polygon_normals,
+                    .geometry        = std::make_shared<erhe::geometry::Geometry>(make_cube(scale)),
+                    .density         = m_config.mass_scale,
+                    .collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
+                        vec3{scale * 0.5f}
                     )
-                );
-                make_brush(
-                    brushes,
-                    Brush_data{
-                        .context                     = m_context,
-                        .editor_settings             = editor_settings,
-                        .build_info                  = build_info(mesh_memory),
-                        .normal_style                = Normal_style::corner_normals,
-                        .geometry                    = torus_geometry,
-                        .density                     = config.mass_scale,
-                        .collision_volume_calculator = torus_collision_volume_calculator,
-                        .collision_shape_generator   = torus_collision_shape_generator,
-                    },
-                    true
-                );
-            }
-        );
-    }
-    if (config.cylinder) {
-        execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory, &brushes]() {
-                const float scale = config.object_scale;
-                for (float h = 0.1f; h < 1.1f; h += 0.9f) {
-                    auto cylinder_geometry = make_cylinder(
-                        -h * scale,
-                         h * scale,
-                         1.0f * scale,
-                        true,
-                        true,
-                        9 * std::max(1, config.detail),
-                        std::max(1, config.detail)
-                    ); // always axis = x
-                    cylinder_geometry.transform(erhe::math::mat4_swap_xy);
+                }
+            ));
+        }
+    );
+#pragma endregion Platonic Solids
 
-                    make_brush(
-                        brushes,
-                        Brush_data{
-                            .context         = m_context,
-                            .editor_settings = editor_settings,
-                            .build_info      = build_info(mesh_memory),
-                            .normal_style    = Normal_style::corner_normals,
-                            .geometry        = std::make_shared<erhe::geometry::Geometry>(
-                                std::move(cylinder_geometry)
-                            ),
-                            .density         = config.mass_scale,
-                            .collision_shape = erhe::physics::ICollision_shape::create_cylinder_shape_shared(
-                                erhe::physics::Axis::Y,
-                                vec3{h * scale, scale, h * scale}
-                            )
-                        },
-                        true
+#pragma region Sphere
+    execution_queue->enqueue(
+        [this, &editor_settings, &mesh_memory, &brushes]() {
+            ERHE_PROFILE_SCOPE("Sphere");
+            m_sphere_brush = make_brush(
+                brushes,
+                Brush_data{
+                    .context         = m_context,
+                    .editor_settings = editor_settings,
+                    .build_info      = build_info(mesh_memory),
+                    .normal_style    = Normal_style::corner_normals,
+                    .geometry        = std::make_shared<erhe::geometry::Geometry>(
+                        make_sphere(
+                            1.0f, //config.object_scale,
+                            8 * std::max(1, m_config.detail), // slice count
+                            6 * std::max(1, m_config.detail)  // stack count
+                        )
+                    ),
+                    .density         = m_config.mass_scale,
+                    .collision_shape = erhe::physics::ICollision_shape::create_sphere_shape_shared(
+                        1.0f // config.object_scale
+                    )
+                }
+            );
+        }
+    );
+#pragma endregion Sphere
+
+#pragma region Torus
+    execution_queue->enqueue(
+        [this, &editor_settings, &mesh_memory, &brushes]() {
+            ERHE_PROFILE_SCOPE("Torus");
+
+            const float major_radius = 1.0f ; // * config.object_scale;
+            const float minor_radius = 0.25f; // * config.object_scale;
+
+            auto torus_collision_volume_calculator = [=](float scale) -> float {
+                return torus_volume(major_radius * scale, minor_radius * scale);
+            };
+
+            auto torus_collision_shape_generator = [major_radius, minor_radius](float scale) -> std::shared_ptr<erhe::physics::ICollision_shape> {
+                ERHE_PROFILE_SCOPE("torus_collision_shape_generator");
+
+                erhe::physics::Compound_shape_create_info torus_shape_create_info;
+
+                const double     subdivisions        = 16.0;
+                const double     scaled_major_radius = major_radius * scale;
+                const double     scaled_minor_radius = minor_radius * scale;
+                const double     major_circumference = glm::two_pi<double>() * scaled_major_radius;
+                const double     capsule_length      = major_circumference / subdivisions;
+                const glm::dvec3 forward{0.0, 1.0, 0.0};
+                const glm::dvec3 side   {scaled_major_radius, 0.0, 0.0};
+
+                auto capsule = erhe::physics::ICollision_shape::create_capsule_shape_shared(
+                    erhe::physics::Axis::Z,
+                    static_cast<float>(scaled_minor_radius),
+                    static_cast<float>(capsule_length)
+                );
+                for (int i = 0; i < static_cast<int>(subdivisions); i++) {
+                    const double     rel      = static_cast<double>(i) / subdivisions;
+                    const double     theta    = rel * glm::two_pi<double>();
+                    const glm::dvec3 position = glm::rotate(side, theta, forward);
+                    const glm::dquat q        = glm::angleAxis(theta, forward);
+                    const glm::dmat3 m        = glm::toMat3(q);
+
+                    torus_shape_create_info.children.emplace_back(
+                        erhe::physics::Compound_child{
+                            .shape = capsule,
+                            .transform = erhe::physics::Transform{
+                                mat3{m},
+                                vec3{position}
+                            }
+                        }
+                        //capsule,
+                        //erhe::physics::Transform{
+                        //    mat3{m},
+                        //    vec3{position}
+                        //}
                     );
                 }
-            }
-        );
-    }
-    if (config.cone) {
-        execution_queue->enqueue(
-            [this, &editor_settings, &mesh_memory, &brushes]() {
-                ERHE_PROFILE_SCOPE("Cone");
+                return erhe::physics::ICollision_shape::create_compound_shape_shared(torus_shape_create_info);
+            };
+            const auto torus_geometry = std::make_shared<erhe::geometry::Geometry>(
+                make_torus(
+                    major_radius,
+                    minor_radius,
+                    10 * std::max(1, m_config.detail),
+                     8 * std::max(1, m_config.detail)
+                )
+            );
+            m_torus_brush = make_brush(
+                brushes,
+                Brush_data{
+                    .context                     = m_context,
+                    .editor_settings             = editor_settings,
+                    .build_info                  = build_info(mesh_memory),
+                    .normal_style                = Normal_style::corner_normals,
+                    .geometry                    = torus_geometry,
+                    .density                     = m_config.mass_scale,
+                    .collision_volume_calculator = torus_collision_volume_calculator,
+                    .collision_shape_generator   = torus_collision_shape_generator,
+                }
+            );
+        }
+    );
+#pragma endregion Torus
 
-                auto cone_geometry = make_cone( // always axis = x
-                    -config.object_scale,             // min x
-                    config.object_scale,              // max x
-                    config.object_scale,              // bottom radius
-                    true,                             // use bottm
-                    10 * std::max(1, config.detail),  // slice count
-                     5 * std::max(1, config.detail)   // stack count
-                );
-                cone_geometry.transform(erhe::math::mat4_swap_xy); // convert to axis = y
+#pragma region Cylinder
+    execution_queue->enqueue(
+        [this, &editor_settings, &mesh_memory, &brushes]() {
+            const float scale = 1.0f; //config.object_scale;
+            std::size_t index = 0;
+            for (float h = 0.1f; h < 1.1f; h += 0.9f) {
+                auto cylinder_geometry = make_cylinder(
+                    -h * scale,
+                        h * scale,
+                        1.0f * scale,
+                    true,
+                    true,
+                    9 * std::max(1, m_config.detail),
+                    1 * std::max(1, m_config.detail)
+                ); // always axis = x
+                cylinder_geometry.transform(erhe::math::mat4_swap_xy);
 
-                make_brush(
+                m_cylinder_brush[index++] = make_brush(
                     brushes,
                     Brush_data{
                         .context         = m_context,
@@ -664,70 +603,57 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
                         .build_info      = build_info(mesh_memory),
                         .normal_style    = Normal_style::corner_normals,
                         .geometry        = std::make_shared<erhe::geometry::Geometry>(
-                            std::move(cone_geometry)
+                            std::move(cylinder_geometry)
                         ),
-                        .density         = config.mass_scale
-                        // Sadly, Jolt does not have cone shape
-                        //erhe::physics::ICollision_shape::create_cone_shape_shared(
-                        //    erhe::physics::Axis::Y,
-                        //    object_scale,
-                        //    2.0f * object_scale
-                        //)
-                    },
-                    true
+                        .density         = m_config.mass_scale,
+                        .collision_shape = erhe::physics::ICollision_shape::create_cylinder_shape_shared(
+                            erhe::physics::Axis::Y,
+                            vec3{h * scale, scale, h * scale}
+                        )
+                    }
                 );
             }
-        );
-    }
+        }
+    );
+#pragma endregion Cylinder
 
-    if constexpr (anisotropic_test_object) {
-        ERHE_PROFILE_SCOPE("test scene for anisotropic debugging");
+#pragma region Cone
+    execution_queue->enqueue(
+        [this, &editor_settings, &mesh_memory, &brushes]() {
+            ERHE_PROFILE_SCOPE("Cone");
 
-        auto& material_library = m_scene_root->content_library()->materials;
-        auto aniso_material = material_library->make<erhe::primitive::Material>(
-            "aniso", vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.8f, 0.2f}, 0.0f
-        );
-        const float ring_major_radius = 4.0f;
-        const float ring_minor_radius = 0.55f; // 0.15f;
-        auto        ring_geometry     = make_torus(
-            ring_major_radius,
-            ring_minor_radius,
-            20 * std::max(1, config.detail),
-             8 * std::max(1, config.detail)
-        );
-        ring_geometry.transform(erhe::math::mat4_swap_xy);
-        const auto ring_geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-            std::move(ring_geometry)
-        );
-        using erhe::scene::Transform;
-        auto make_mesh_node = [&](const char* name, const Transform& transform) {
-            auto mesh = std::make_shared<erhe::scene::Mesh>(name);
-            mesh->add_primitive(
-                erhe::primitive::Primitive{
-                    ring_geometry_shared,
-                    aniso_material,
-                    build_info(mesh_memory),
-                    erhe::primitive::Normal_style::point_normals
+            auto cone_geometry = make_cone( // always axis = x
+                -1.0f, // * config.object_scale,             // min x
+                 1.0f, // * config.object_scale,              // max x
+                 1.0f, // * config.object_scale,              // bottom radius
+                true,                             // use bottm
+                10 * std::max(1, m_config.detail),  // slice count
+                 5 * std::max(1, m_config.detail)   // stack count
+            );
+            cone_geometry.transform(erhe::math::mat4_swap_xy); // convert to axis = y
+
+            m_cone_brush = make_brush(
+                brushes,
+                Brush_data{
+                    .context         = m_context,
+                    .editor_settings = editor_settings,
+                    .build_info      = build_info(mesh_memory),
+                    .normal_style    = Normal_style::corner_normals,
+                    .geometry        = std::make_shared<erhe::geometry::Geometry>(
+                        std::move(cone_geometry)
+                    ),
+                    .density         = m_config.mass_scale
+                    // Sadly, Jolt does not have cone shape
+                    //erhe::physics::ICollision_shape::create_cone_shape_shared(
+                    //    erhe::physics::Axis::Y,
+                    //    object_scale,
+                    //    2.0f * object_scale
+                    //)
                 }
             );
-            mesh->enable_flag_bits(
-                Item_flags::visible |
-                Item_flags::content |
-                Item_flags::opaque
-            );
-            mesh->layer_id = m_scene_root->layers().content()->id;
-
-            auto node = std::make_shared<erhe::scene::Node>(name);
-            node->attach              (mesh);
-            node->set_parent_from_node(transform);
-            node->set_parent          (m_scene_root->get_scene().get_root_node());
-        };
-
-        using namespace erhe::math;
-        make_mesh_node("X ring", Transform{} );
-        make_mesh_node("Y ring", Transform{create_rotation<float>( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f})});
-        make_mesh_node("Z ring", Transform{create_rotation<float>(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f})});
-    }
+        }
+    );
+#pragma endregion Cone
 
     Json_library library;//("res/polyhedra/johnson.json");
     {
@@ -755,9 +681,8 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
                             .build_info         = build_info(mesh_memory),
                             .normal_style       = Normal_style::polygon_normals,
                             .geometry_generator = [shared_geometry](){ return shared_geometry; },
-                            .density            = config.mass_scale
-                        },
-                        config.johnson_solids
+                            .density            = m_config.mass_scale
+                        }
                     );
                 }
             );
@@ -804,7 +729,59 @@ void Scene_builder::add_room()
     floor_instance_node->set_parent(m_scene_root->get_scene().get_root_node());
 }
 
-void Scene_builder::make_mesh_nodes()
+void Scene_builder::add_platonic_solids(const Make_mesh_config& config)
+{
+    make_mesh_nodes(config, m_platonic_solids);
+}
+
+void Scene_builder::add_curved_shapes(const Make_mesh_config& config)
+{
+    std::vector<std::shared_ptr<Brush>> brushes;
+    brushes.push_back(m_sphere_brush);
+    brushes.push_back(m_cylinder_brush[0]);
+    brushes.push_back(m_cylinder_brush[1]);
+    brushes.push_back(m_cone_brush);
+    brushes.push_back(m_torus_brush);
+    make_mesh_nodes(config, brushes);
+}
+
+void Scene_builder::add_torus_chain(const Make_mesh_config& config)
+{
+    const float major_radius = 1.0f;  // * config.object_scale;
+    const float minor_radius = 0.25f; // * config.object_scale;
+
+    auto&       material_library = m_scene_root->content_library()->materials;
+    const auto  materials        = material_library->get_all<erhe::primitive::Material>();
+    std::size_t material_index   = 0;
+
+    float x = 0.0f;
+    float y = major_radius + minor_radius;
+    float z = 0.0f;
+
+    float x_stride = major_radius - 2.0f * minor_radius + major_radius;
+    glm::mat4 alternate_rotate[2] = {
+        glm::mat4{1.0f},
+        erhe::math::create_rotation<float>(glm::pi<float>() / 2.0f, glm::vec3{1.0f, 0.0f, 0.0f})
+    };
+
+    const std::shared_ptr<Brush>& brush = m_torus_brush;
+    for (int i = 0; i < config.instance_count; ++i) {
+        const Instance_create_info brush_instance_create_info{
+            .node_flags      = Item_flags::show_in_ui | Item_flags::visible | Item_flags::content,
+            .mesh_flags      = Item_flags::show_in_ui | Item_flags::visible | Item_flags::opaque | Item_flags::content | Item_flags::id | Item_flags::shadow_cast,
+            .scene_root      = m_scene_root.get(),
+            .world_from_node = erhe::math::create_translation(x, y, z) * alternate_rotate[i & 1],
+            .material        = materials.at(material_index),
+            .scale           = 1.0f
+        };
+        auto instance_node = brush->make_instance(brush_instance_create_info);
+        instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), i + 1));
+        instance_node->set_parent(m_scene_root->get_scene().get_root_node());
+        x = x + x_stride;
+    }
+}
+
+void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -825,14 +802,12 @@ void Scene_builder::make_mesh_nodes()
         int       instance_number{0};
     };
 
-    const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
-
     {
         ERHE_PROFILE_SCOPE("sort");
 
         std::sort(
-            m_scene_brushes.begin(),
-            m_scene_brushes.end(),
+            brushes.begin(),
+            brushes.end(),
             [](const std::shared_ptr<Brush>& lhs, const std::shared_ptr<Brush>& rhs){
                 return lhs->get_name() < rhs->get_name();
             }
@@ -844,7 +819,7 @@ void Scene_builder::make_mesh_nodes()
     {
         ERHE_PROFILE_SCOPE("emplace pack");
 
-        for (const auto& brush : m_scene_brushes) {
+        for (const auto& brush : brushes) {
             for (int i = 0; i < config.instance_count; ++i) {
                 const erhe::math::Bounding_box& bounding_box = brush->get_bounding_box();
                 ERHE_VERIFY(bounding_box.is_valid());
@@ -1102,42 +1077,42 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    for (int i = 0; i < config.directional_light_count; ++i) {
-        const float rel = static_cast<float>(i) / static_cast<float>(config.directional_light_count);
-        const float R   = config.directional_light_radius;
+    for (int i = 0; i < m_config.directional_light_count; ++i) {
+        const float rel = static_cast<float>(i) / static_cast<float>(m_config.directional_light_count);
+        const float R   = m_config.directional_light_radius;
         const float h   = rel * 360.0f;
-        const float s   = (config.directional_light_count > 1) ? 0.5f : 0.0f;
+        const float s   = (m_config.directional_light_count > 1) ? 0.5f : 0.0f;
         const float v   = 1.0f;
         float r, g, b;
 
         erhe::math::hsv_to_rgb(h, s, v, r, g, b);
 
         const vec3        color     = vec3{r, g, b};
-        const float       intensity = config.directional_light_intensity / static_cast<float>(config.directional_light_count);
+        const float       intensity = m_config.directional_light_intensity / static_cast<float>(m_config.directional_light_count);
         const std::string name      = fmt::format("Directional light {}", i);
         const float       x_pos     = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f);
         const float       z_pos     = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f);
-        const vec3        position  = vec3{x_pos, config.directional_light_height, z_pos};
+        const vec3        position  = vec3{x_pos, m_config.directional_light_height, z_pos};
         make_directional_light(name, position, color, intensity);
     }
 
-    for (int i = 0; i < config.spot_light_count; ++i) {
-        const float rel   = static_cast<float>(i) / static_cast<float>(config.spot_light_count);
+    for (int i = 0; i < m_config.spot_light_count; ++i) {
+        const float rel   = static_cast<float>(i) / static_cast<float>(m_config.spot_light_count);
         const float theta = rel * glm::two_pi<float>();
-        const float R     = config.spot_light_radius;
+        const float R     = m_config.spot_light_radius;
         const float h     = rel * 360.0f;
-        const float s     = (config.spot_light_count > 1) ? 0.9f : 0.0f;
+        const float s     = (m_config.spot_light_count > 1) ? 0.9f : 0.0f;
         const float v     = 1.0f;
         float r, g, b;
 
         erhe::math::hsv_to_rgb(h, s, v, r, g, b);
 
         const vec3        color           = vec3{r, g, b};
-        const float       intensity       = config.spot_light_intensity;
+        const float       intensity       = m_config.spot_light_intensity;
         const std::string name            = fmt::format("Spot {}", i);
         const float       x_pos           = R * std::sin(theta);
         const float       z_pos           = R * std::cos(theta);
-        const vec3        position        = vec3{x_pos, config.spot_light_height, z_pos};
+        const vec3        position        = vec3{x_pos, m_config.spot_light_height, z_pos};
         const vec3        target          = vec3{x_pos * 0.1f, 0.0f, z_pos * 0.1f};
         const vec2        spot_cone_angle = vec2{
             glm::pi<float>() / 5.0f,
@@ -1170,17 +1145,8 @@ void Scene_builder::animate_lights(const double time_d)
         const float R   = 4.0f;
         const float r   = 8.0f;
 
-        const auto eye = vec3{
-            R * std::sin(rel + t * 0.52f),
-            8.0f,
-            R * std::cos(rel + t * 0.71f)
-        };
-
-        const auto center = vec3{
-            r * std::sin(rel + t * 0.35f),
-            0.0f,
-            r * std::cos(rel + t * 0.93f)
-        };
+        const auto eye    = vec3{R * std::sin(rel + t * 0.52f), 8.0f, R * std::cos(rel + t * 0.71f)};
+        const auto center = vec3{r * std::sin(rel + t * 0.35f), 0.0f, r * std::cos(rel + t * 0.93f)};
 
         const glm::vec3 up{0.0f, 1.0f, 0.0f};
         const auto m = erhe::math::create_look_at(eye, center, up);

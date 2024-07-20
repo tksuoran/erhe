@@ -45,10 +45,11 @@
 
 namespace erhe::xr {
 
-Xr_session::Xr_session(Xr_instance& instance, erhe::window::Context_window& context_window)
+Xr_session::Xr_session(Xr_instance& instance, erhe::window::Context_window& context_window, bool mirror_mode)
     : m_instance                      {instance}
     , m_context_window                {context_window}
     , m_xr_session                    {XR_NULL_HANDLE}
+    , m_mirror_mode                   {mirror_mode}
     , m_swapchain_color_format        {gl::Internal_format::srgb8_alpha8}
     , m_swapchain_depth_stencil_format{gl::Internal_format::depth24_stencil8}
     , m_xr_reference_space_local      {XR_NULL_HANDLE}
@@ -233,12 +234,12 @@ auto Xr_session::get_xr_frame_state() const -> const XrFrameState&
     return m_xr_frame_state;
 }
 
-int color_format_score(const gl::Internal_format image_format)
+auto Xr_session::color_format_score(const gl::Internal_format image_format) const -> int
 {
     switch (image_format) {
         //using enum gl::Internal_format;
         case gl::Internal_format::rgba8:          return 1;
-        case gl::Internal_format::srgb8_alpha8:   return 2;
+        case gl::Internal_format::srgb8_alpha8:   return 2 + m_mirror_mode ? 10 : 0;
         case gl::Internal_format::rgb10_a2:       return 3;
         case gl::Internal_format::r11f_g11f_b10f: return 4;
         case gl::Internal_format::rgba16f:        return 5;
@@ -717,6 +718,26 @@ auto Xr_session::wait_frame() -> XrFrameState*
     if (m_xr_session == XR_NULL_HANDLE) {
         return nullptr;
     }
+
+    if (!m_session_running) {
+        return nullptr;
+    }
+    switch (m_xr_session_state) {
+        // Proceed with xrWaitFrame in these states
+        case XR_SESSION_STATE_READY:        break;
+        case XR_SESSION_STATE_SYNCHRONIZED: break;
+        case XR_SESSION_STATE_VISIBLE:      break;
+        case XR_SESSION_STATE_FOCUSED:      break;
+
+        // Do not call xrWaitFrame() in these states
+        case XR_SESSION_STATE_UNKNOWN:      return nullptr;
+        case XR_SESSION_STATE_IDLE:         return nullptr;
+        case XR_SESSION_STATE_STOPPING:     return nullptr;
+        case XR_SESSION_STATE_LOSS_PENDING: return nullptr;
+        case XR_SESSION_STATE_EXITING:      return nullptr;
+        default: return nullptr;
+    }
+
 
     const XrFrameWaitInfo frame_wait_info{
         .type = XR_TYPE_FRAME_WAIT_INFO,

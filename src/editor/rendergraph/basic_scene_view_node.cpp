@@ -94,7 +94,7 @@ void Basic_scene_view_node::set_is_hovered(const bool is_hovered)
 {
     const auto viewport_scene_view = m_viewport_scene_view.lock();
     if (viewport_scene_view) {
-        viewport_scene_view->set_is_hovered(is_hovered);
+        viewport_scene_view->set_is_scene_view_hovered(is_hovered);
     }
 }
 

@@ -1459,7 +1459,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 
     timer.end();
     if (timer.duration().has_value()) {
-        log_geometry->info("glTF loaded {} in {}", arguments.path.string(), format_duration(timer.duration().value()));
+        log_gltf->info("glTF loaded {} in {}", arguments.path.string(), format_duration(timer.duration().value()));
     }
 
     return result;

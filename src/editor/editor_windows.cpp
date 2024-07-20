@@ -131,12 +131,12 @@ void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
             const auto& windows = m_context.imgui_windows->get_windows();
             if (ImGui::MenuItem("Close All")) {
                 for (const auto& window : windows) {
-                    window->hide();
+                    window->hide_window();
                 }
             }
             if (ImGui::MenuItem("Open All")) {
                 for (const auto& window : windows) {
-                    window->show();
+                    window->show_window();
                 }
             }
             ImGui::EndMenu();

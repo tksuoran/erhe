@@ -105,7 +105,7 @@ void Imgui_windows::save_window_state()
         if (label.empty()) {
             continue;
         }
-        ini["windows"][label.c_str()] = imgui_window->is_visible() ? "true" : "false";
+        ini["windows"][label.c_str()] = imgui_window->is_window_visible() ? "true" : "false";
     }
     file.generate(ini);
 }
@@ -133,7 +133,7 @@ void Imgui_windows::imgui_windows()
                     continue;
                 }
                 bool hidden = true;
-                if (imgui_window->is_visible()) {
+                if (imgui_window->is_window_visible()) {
                     bool toolbar_hovered = false;
                     auto window_id = fmt::format("##window-{}", ++i);
                     ImGui::PushID(window_id.c_str());
@@ -181,16 +181,18 @@ void Imgui_windows::debug_imgui()
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& imgui_host : imgui_hosts) {
         if (ImGui::TreeNodeEx(imgui_host->name().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Want capture mouse: %s",    imgui_host->want_capture_mouse()    ? "Yes" : "No");
+            ImGui::Text("Want capture keyboard: %s", imgui_host->want_capture_keyboard() ? "Yes" : "No");
             for (auto& imgui_window : m_imgui_windows) {
                 if (imgui_window->get_imgui_host() != imgui_host) {
                     continue;
                 }
                 if (ImGui::TreeNodeEx(imgui_window->get_title().c_str())) {
-                    ImGui::Text("Visible: %s",       imgui_window->is_visible()   ? "Yes" : "No");
-                    ImGui::Text("Hovered: %s",       imgui_window->is_hovered()   ? "Yes" : "No");
-                    ImGui::Text("Show in menu: %s",  imgui_window->show_in_menu() ? "Yes" : "No");
-                    ImGui::Text("Has toolbar: %s",   imgui_window->has_toolbar()  ? "Yes" : "No");
-                    ImGui::Text("Want mouse: %s",    imgui_window->want_mouse_events() ? "Yes" : "No");
+                    ImGui::Text("Visible: %s",       imgui_window->is_window_visible()    ? "Yes" : "No");
+                    ImGui::Text("Hovered: %s",       imgui_window->is_window_hovered()    ? "Yes" : "No");
+                    ImGui::Text("Show in menu: %s",  imgui_window->show_in_menu()         ? "Yes" : "No");
+                    ImGui::Text("Has toolbar: %s",   imgui_window->has_toolbar()          ? "Yes" : "No");
+                    ImGui::Text("Want mouse: %s",    imgui_window->want_mouse_events()    ? "Yes" : "No");
                     ImGui::Text("Want keyboard: %s", imgui_window->want_keyboard_events() ? "Yes" : "No");
                     ImGui::Text("Scale: %f",         imgui_window->get_scale_value());
                     ImGui::TreePop();
@@ -213,13 +215,13 @@ void Imgui_windows::window_menu_entries(Imgui_host& imgui_host, bool developer)
         if (window->show_in_developer_menu() != developer) {
             continue;
         }
-        bool enabled = window->is_visible();
+        bool enabled = window->is_window_visible();
         if (ImGui::MenuItem(window->get_title().data(), "", &enabled)) {
             if (enabled) {
-                window->show();
+                window->show_window();
                 window->set_imgui_host(&imgui_host);
             } else {
-                window->hide();
+                window->hide_window();
             }
         }
     }
@@ -243,79 +245,76 @@ auto Imgui_windows::want_capture_mouse() const -> bool
     return m_window_imgui_host ? m_window_imgui_host->want_capture_mouse() : false;
 }
 
-auto Imgui_windows::on_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
+auto Imgui_windows::on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
 {
     if (!m_window_imgui_host) {
         return false;
     }
 
-    m_window_imgui_host->on_event(window_focus_event);
+    m_window_imgui_host->on_window_focus_event(window_focus_event);
 
     return false; // does not consume
 }
 
-auto Imgui_windows::on_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
+auto Imgui_windows::on_cursor_enter_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
 {
     if (!m_window_imgui_host) {
         return false;
     }
 
-    m_window_imgui_host->on_event(cursor_enter_event);
+    m_window_imgui_host->on_cursor_enter_event(cursor_enter_event);
     return false; // does not consume
 }
 
-auto Imgui_windows::on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
+auto Imgui_windows::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
 {
     if (!m_window_imgui_host) {
         return false;
     }
 
-    m_window_imgui_host->on_event(mouse_move_event);
+    m_window_imgui_host->on_mouse_move_event(mouse_move_event);
 
-    // If ImGui wants to capture mouse, the mouse event is not passed
-    // to lower priority Window_event_handlers (Commands).
+    // If ImGui wants to capture mouse, the mouse event is marked as handled
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
+auto Imgui_windows::on_mouse_button_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
 {
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& host : imgui_hosts) {
-        host->on_event(mouse_button_event);
+        host->on_mouse_button_event(mouse_button_event);
     }
 
-    // If ImGui wants to capture mouse, the mouse event is not passed
-    // to lower priority Window_event_handlers (Commands).
+    // If ImGui wants to capture mouse, the mouse event is marked as handled
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
+auto Imgui_windows::on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
 {
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& host : imgui_hosts) {
-        host->on_event(mouse_wheel_event);
+        host->on_mouse_wheel_event(mouse_wheel_event);
     }
 
-    // If ImGui wants to capture mouse, the mouse event is not passed
-    // to lower priority Window_event_handlers (Commands).
+    // If ImGui wants to capture mouse, the mouse event is marked as handled
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_event(const erhe::window::Key_event& key_event) -> bool
+auto Imgui_windows::on_key_event(const erhe::window::Key_event& key_event) -> bool
 {
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& host : imgui_hosts) {
-        host->on_event(key_event);
+        host->on_key_event(key_event);
     }
 
     return want_capture_keyboard();
 }
 
-auto Imgui_windows::on_event(const erhe::window::Char_event& char_event) -> bool
+auto Imgui_windows::on_char_event(const erhe::window::Char_event& char_event) -> bool
 {
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& host : imgui_hosts) {
-        host->on_event(char_event);
+        host->on_char_event(char_event);
     }
 
     return want_capture_keyboard();

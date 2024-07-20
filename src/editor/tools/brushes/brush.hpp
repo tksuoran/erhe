@@ -2,6 +2,7 @@
 
 #include "scene/collision_generator.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/brushes/reference_frame.hpp"
 
 #include "erhe_geometry/types.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -24,45 +25,11 @@ namespace erhe::primitive {
 }
 namespace erhe::scene {
     class Mesh;
-    class Mesh_layer;
     class Node;
     class Scene;
 }
 
 namespace editor {
-
-class Editor_context;
-class Editor_settings;
-class Node_physics;
-class Raytrace_primitive;
-
-class Reference_frame
-{
-public:
-    Reference_frame();
-
-    Reference_frame(
-        const erhe::geometry::Geometry& geometry,
-        erhe::geometry::Polygon_id      polygon_id,
-        uint32_t                        face_offset,
-        uint32_t                        corner_offset
-    );
-
-    void transform_by(const glm::mat4& m);
-
-    [[nodiscard]] auto transform() const -> glm::mat4;
-    [[nodiscard]] auto scale    () const -> float;
-
-    uint32_t                   corner_count {0};
-    uint32_t                   face_offset  {0};
-    uint32_t                   corner_offset{0};
-    erhe::geometry::Polygon_id polygon_id   {0};
-    glm::vec3                  centroid     {0.0f, 0.0f, 0.0f}; // polygon centroid
-    glm::vec3                  position     {1.0f, 0.0f, 0.0f}; // one of polygon corner points
-    glm::vec3                  B            {0.0f, 0.0f, 1.0f};
-    glm::vec3                  T            {1.0f, 0.0f, 0.0f};
-    glm::vec3                  N            {0.0f, 1.0f, 0.0f};
-};
 
 using Geometry_generator = std::function<std::shared_ptr<erhe::geometry::Geometry>()>;
 
@@ -140,6 +107,7 @@ public:
     [[nodiscard]] auto get_bounding_box            () -> erhe::math::Bounding_box;
     [[nodiscard]] auto get_geometry                () -> std::shared_ptr<erhe::geometry::Geometry>;
     [[nodiscard]] auto get_corner_count_to_polygons() -> const std::map<std::size_t, std::vector<erhe::geometry::Polygon_id>>&;
+    [[nodiscard]] auto get_max_corner_count        () const -> std::size_t;
 
 private:
     void update_polygon_statistics();
@@ -149,6 +117,7 @@ private:
     std::vector<Reference_frame> m_reference_frames;
     std::vector<Scaled>          m_scaled_entries;
     std::map<std::size_t, std::vector<erhe::geometry::Polygon_id>> m_corner_count_to_polygons;
+    std::size_t                  m_max_corner_count{0};
 };
 
 }

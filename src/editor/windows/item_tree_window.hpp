@@ -49,27 +49,17 @@ public:
     bool need_tree_pop{false};
 };
 
-class Item_tree_window : public erhe::imgui::Imgui_window
+class Item_tree
 {
 public:
-    Item_tree_window(
-        erhe::imgui::Imgui_renderer&            imgui_renderer,
-        erhe::imgui::Imgui_windows&             imgui_windows,
-        Editor_context&                         context,
-        const std::string_view                  window_title,
-        const std::string_view                  ini_label,
-        const std::shared_ptr<erhe::Hierarchy>& root
-    );
-
-    // Implements Imgui_window
-    void imgui   () override;
-    void on_begin() override;
-    void on_end  () override;
+    Item_tree(Editor_context& context, const std::shared_ptr<erhe::Hierarchy>& root);
 
     void set_item_filter  (const erhe::Item_filter& filter);
     void set_item_callback(std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
 
     auto drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& node) -> bool;
+
+    void imgui_tree(float ui_scale);
 
 private:
     void set_item_selection_terminator(const std::shared_ptr<erhe::Item_base>& item);
@@ -123,6 +113,25 @@ private:
     std::string                        m_popup_id_string;
     unsigned int                       m_popup_id{0};
     bool                               m_shift_down_range_selection_started{false};
+    float                              m_ui_scale{1.0f};
+};
+
+class Item_tree_window : public Item_tree, public erhe::imgui::Imgui_window
+{
+public:
+    Item_tree_window(
+        erhe::imgui::Imgui_renderer&            imgui_renderer,
+        erhe::imgui::Imgui_windows&             imgui_windows,
+        Editor_context&                         context,
+        const std::string_view                  window_title,
+        const std::string_view                  ini_label,
+        const std::shared_ptr<erhe::Hierarchy>& root
+    );
+
+    // Implements Imgui_window
+    void imgui   () override;
+    void on_begin() override;
+    void on_end  () override;
 };
 
 } // namespace editor

@@ -8,14 +8,14 @@
 #include "erhe_commands/mouse_drag_binding.hpp"
 #include "erhe_commands/mouse_motion_binding.hpp"
 #include "erhe_commands/mouse_wheel_binding.hpp"
+#include "erhe_commands/xr_boolean_binding.hpp"
+#include "erhe_commands/xr_float_binding.hpp"
+#include "erhe_commands/xr_vector2f_binding.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "erhe_commands/xr_boolean_binding.hpp"
-#   include "erhe_commands/xr_float_binding.hpp"
-#   include "erhe_commands/xr_vector2f_binding.hpp"
-#   include "erhe_xr/xr_instance.hpp"
 #   include "erhe_xr/xr_action.hpp"
 #endif
 #include "erhe_commands/update_binding.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::commands {
@@ -62,7 +62,6 @@ auto Commands::get_controller_button_bindings() const -> const std::vector<Contr
     return m_controller_button_bindings;
 }
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
 auto Commands::get_xr_boolean_bindings() const -> const std::vector<Xr_boolean_binding>&
 {
     return m_xr_boolean_bindings;
@@ -77,7 +76,6 @@ auto Commands::get_xr_vector2f_bindings() const -> const std::vector<Xr_vector2f
 {
     return m_xr_vector2f_bindings;
 }
-#endif
 
 auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
 {
@@ -160,7 +158,6 @@ void Commands::bind_command_to_controller_button(
     m_controller_button_bindings.emplace_back(command, button, button_trigger, modifier_mask);
 }
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
 void Commands::bind_command_to_xr_boolean_action(
     Command* const                     command,
     erhe::xr::Xr_action_boolean* const xr_action,
@@ -182,7 +179,6 @@ void Commands::bind_command_to_xr_vector2f_action(Command* const command, erhe::
     std::lock_guard<std::mutex> lock{m_command_mutex};
     m_xr_vector2f_bindings.emplace_back(command, xr_action);
 }
-#endif
 
 void Commands::bind_command_to_update(Command* const command)
 {
@@ -279,12 +275,7 @@ void Commands::command_inactivated(Command* const command)
     }
 }
 
-//// auto Commands::has_active_mouse() const -> bool
-//// {
-////     return m_active_mouse_command != nullptr;
-//// }
-
-auto Commands::on_event(const erhe::window::Key_event& key_event) -> bool
+auto Commands::on_key_event(const erhe::window::Key_event& key_event) -> bool
 {
     m_last_modifier_mask = key_event.modifier_mask;
 
@@ -305,11 +296,22 @@ auto Commands::on_event(const erhe::window::Key_event& key_event) -> bool
 
 void Commands::tick(std::vector<erhe::window::Input_event>& input_events)
 {
+    ERHE_PROFILE_FUNCTION();
+
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
+    //if (input_events.empty()) {
+    //    SPDLOG_LOGGER_TRACE(log_input_frame, "Commands - no input events");
+    //}
+    sort_xr_bindings();
     for (erhe::window::Input_event& input_event : input_events) {
         if (!input_event.handled) {
             dispatch_input_event(input_event);
+            SPDLOG_LOGGER_TRACE(log_input_frame, "Commands processed {} - {}", input_event.describe(), input_event.handled ? "handled" : "stays unhandled");
+            SPDLOG_LOGGER_TRACE(log_input      , "Commands processed {} - {}", input_event.describe(), input_event.handled ? "handled" : "stays unhandled");
+        } else {
+            SPDLOG_LOGGER_TRACE(log_input_frame, "Commands skipped already handled {}", input_event.describe());
+            SPDLOG_LOGGER_TRACE(log_input      , "Commands skipped already handled {}", input_event.describe());
         }
     }
 
@@ -360,7 +362,7 @@ auto Commands::get_command_priority(Command* const command) const -> int
         return 0; // Disabled command host -> minimum priority for command
     }
 
-    // Give priority for active mouse / cpntroller trigger commands
+    // Give priority for active mouse / controller trigger commands
     if (command == m_active_mouse_command) {
         return 10000; // TODO max priority
     }
@@ -528,7 +530,7 @@ void Commands::update_active_mouse_command(Command* const command)
     }
 }
 
-auto Commands::on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
+auto Commands::on_mouse_button_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
 {
     m_last_modifier_mask = mouse_button_event.modifier_mask;
 
@@ -586,7 +588,7 @@ auto Commands::on_event(const erhe::window::Mouse_button_event& mouse_button_eve
     return false;
 }
 
-auto Commands::on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
+auto Commands::on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
 {
     m_last_modifier_mask = mouse_wheel_event.modifier_mask;
 
@@ -616,7 +618,7 @@ auto Commands::on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event
     return false;
 }
 
-auto Commands::on_event(const erhe::window::Controller_axis_event& controller_axis_event) -> bool
+auto Commands::on_controller_axis_event(const erhe::window::Controller_axis_event& controller_axis_event) -> bool
 {
     m_last_modifier_mask = controller_axis_event.modifier_mask;
 
@@ -648,7 +650,7 @@ auto Commands::on_event(const erhe::window::Controller_axis_event& controller_ax
     return false;
 }
 
-auto Commands::on_event(const erhe::window::Controller_button_event& controller_button_event) -> bool
+auto Commands::on_controller_button_event(const erhe::window::Controller_button_event& controller_button_event) -> bool
 {
     m_last_modifier_mask = controller_button_event.modifier_mask;
 
@@ -688,7 +690,7 @@ auto Commands::on_event(const erhe::window::Controller_button_event& controller_
     return false;
 }
 
-auto Commands::on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
+auto Commands::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
 {
     m_last_modifier_mask = mouse_move_event.modifier_mask;
 
@@ -724,56 +726,23 @@ auto Commands::on_event(const erhe::window::Mouse_move_event& mouse_move_event) 
     return false;
 }
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-void Commands::dispatch_xr_events(erhe::xr::Xr_instance& instance, void* session_)
+auto Commands::on_xr_boolean_event(const erhe::window::Xr_boolean_event& xr_boolean_event) -> bool
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    XrSession session = static_cast<XrSession>(session_);
-
-    sort_xr_bindings();
-
-    for (auto& action : instance.get_boolean_actions()) {
-        action.get(session);
-        if (action.state.changedSinceLastSync == XR_TRUE) {
-            on_xr_action(action);
-        }
-    }
-    for (auto& action : instance.get_float_actions()) {
-        action.get(session);
-        if (action.state.changedSinceLastSync == XR_TRUE) {
-            on_xr_action(action);
-        }
-    }
-    for (auto& action : instance.get_vector2f_actions()) {
-        action.get(session);
-        if (action.state.changedSinceLastSync == XR_TRUE) {
-            on_xr_action(action);
-        }
-    }
-}
-
-void Commands::on_xr_action(erhe::xr::Xr_action_boolean& xr_action)
-{
-    const bool state = xr_action.state.currentState == XR_TRUE;
     Input_arguments input{
         .variant = {
-            .button_pressed = state
+            .button_pressed = xr_boolean_event.value
         }
     };
 
-    log_input->trace("{}: {}", xr_action.name, state);
     for (auto& binding : m_xr_boolean_bindings) {
-        if (binding.xr_action != &xr_action) {
+        if (binding.xr_action != xr_boolean_event.action) {
             continue;
         }
         log_input->trace(
-            "  {} {} {} <- {} {}",
+            " P: {} C: {} E: {}",
             binding.get_command()->get_priority(),
-            binding.is_command_host_enabled() ? "host enabled" : "host disabled",
             binding.get_command()->get_name(),
-            binding.xr_action->name.c_str(),
-            Command_binding::c_type_strings[static_cast<int>(binding.get_type())]
+            binding.is_command_host_enabled() ? "host enabled" : "host disabled"
         );
         if (!binding.is_command_host_enabled()) {
             continue;
@@ -782,24 +751,23 @@ void Commands::on_xr_action(erhe::xr::Xr_action_boolean& xr_action)
         auto* const command = binding.get_command();
         ERHE_VERIFY(command != nullptr);
         if (binding.on_value_changed(input)) {
-            log_input->trace("XR bool {} consumed by {}", state, command->get_name());
-            return;
+            return true;
         }
     }
 
-    log_input->trace("OpenXR bool {} was not consumed", state);
+    return false;
 }
 
-void Commands::on_xr_action(erhe::xr::Xr_action_float& xr_action)
+auto Commands::on_xr_float_event(const erhe::window::Xr_float_event& xr_float_event) -> bool
 {
     Input_arguments input{
         .variant = {
-            .float_value = xr_action.state.currentState
+            .float_value = xr_float_event.value
         }
     };
 
     for (auto& binding : m_xr_float_bindings) {
-        if (binding.xr_action != &xr_action) {
+        if (binding.xr_action != xr_float_event.action) {
             continue;
         }
         if (!binding.is_command_host_enabled()) {
@@ -809,21 +777,21 @@ void Commands::on_xr_action(erhe::xr::Xr_action_float& xr_action)
         auto* const command = binding.get_command();
         ERHE_VERIFY(command != nullptr);
         if (binding.on_value_changed(input)) {
-            return;
+            return true;
         }
     }
 
-    log_input->trace("OpenXR float input action was not consumed");
+    return false;
 }
 
-void Commands::on_xr_action(erhe::xr::Xr_action_vector2f& xr_action)
+auto Commands::on_xr_vector2f_event(const erhe::window::Xr_vector2f_event& xr_vector2f_event) -> bool
 {
     Input_arguments context{
         .variant = {
             .vector2{
                 .absolute_value = glm::vec2{
-                    xr_action.state.currentState.x,
-                    xr_action.state.currentState.y
+                    xr_vector2f_event.x,
+                    xr_vector2f_event.y
                 },
                 .relative_value = glm::vec2{0.0f, 0.0f}
             }
@@ -831,7 +799,7 @@ void Commands::on_xr_action(erhe::xr::Xr_action_vector2f& xr_action)
     };
 
     for (auto& binding : m_xr_vector2f_bindings) {
-        if (binding.xr_action != &xr_action) {
+        if (binding.xr_action != xr_vector2f_event.action) {
             continue;
         }
         if (!binding.is_command_host_enabled()) {
@@ -841,14 +809,12 @@ void Commands::on_xr_action(erhe::xr::Xr_action_vector2f& xr_action)
         auto* const command = binding.get_command();
         ERHE_VERIFY(command != nullptr);
         if (binding.on_value_changed(context)) {
-            log_input->trace("XR vector2f consumed by {}", command->get_name());
-            return;
+            return true;
         }
     }
 
-    log_input->trace("OpenXR vector2f input action was not consumed");
+    return false;
 }
-#endif
 
 void Commands::sort_bindings()
 {

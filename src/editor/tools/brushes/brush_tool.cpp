@@ -9,6 +9,7 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/render_context.hpp"
+#include "scene/brush_placement.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/brushes/brush.hpp"
@@ -16,6 +17,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
+#include "windows/item_tree_window.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
@@ -60,10 +62,7 @@ Brush_tool_preview_command::Brush_tool_preview_command(erhe::commands::Commands&
 
 auto Brush_tool_preview_command::try_call() -> bool
 {
-    if (
-        (get_command_state() != erhe::commands::State::Active) ||
-        !m_context.brush_tool->is_enabled()
-    ) {
+    if ((get_command_state() != erhe::commands::State::Active) || !m_context.brush_tool->is_enabled()) {
         return false;
     }
     m_context.brush_tool->on_motion();
@@ -92,6 +91,18 @@ auto Brush_tool_insert_command::try_call() -> bool
     set_inactive();
     return consumed;
 }
+
+Brush_tool_pick_command::Brush_tool_pick_command(erhe::commands::Commands& commands, Editor_context& context)
+    : Command  {commands, "Brush_tool.pick"}
+    , m_context{context}
+{
+}
+
+auto Brush_tool_pick_command::try_call() -> bool
+{
+    return m_context.brush_tool->try_pick();
+}
+
 #pragma endregion Commands
 
 Brush_tool::Brush_tool(
@@ -102,9 +113,11 @@ Brush_tool::Brush_tool(
     Icon_set&                 icon_set,
     Tools&                    tools
 )
-    : Tool             {editor_context}
-    , m_preview_command{commands, editor_context}
-    , m_insert_command {commands, editor_context}
+    : Tool                            {editor_context}
+    , m_preview_command               {commands, editor_context}
+    , m_insert_command                {commands, editor_context}
+    , m_pick_command                  {commands, editor_context}
+    , m_pick_using_float_input_command{commands, m_pick_command, 0.6f, 0.4f}
 {
     set_base_priority(Brush_tool::c_priority);
     set_description  ("Brush Tool");
@@ -113,8 +126,10 @@ Brush_tool::Brush_tool(
 
     commands.register_command(&m_preview_command);
     commands.register_command(&m_insert_command);
-    commands.bind_command_to_update      (&m_preview_command);
-    commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right, true);
+    commands.register_command(&m_pick_using_float_input_command);
+    commands.bind_command_to_update         (&m_preview_command);
+    commands.bind_command_to_mouse_button   (&m_insert_command, erhe::window::Mouse_button_right, true);
+    commands.bind_command_to_mouse_button   (&m_pick_command,   erhe::window::Mouse_button_middle, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = headset_view.get_headset();
@@ -122,6 +137,8 @@ Brush_tool::Brush_tool(
         auto& xr_right = headset->get_actions_right();
         commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right.trigger_click, erhe::commands::Button_trigger::Button_pressed);
         commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right.a_click,       erhe::commands::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_float_action  (&m_pick_using_float_input_command, xr_right.squeeze_value);
+        //commands.bind_command_to_xr_boolean_action(&m_pick_command,   xr_right.b_click,       erhe::commands::Button_trigger::Button_pressed);
     }
 #else
     static_cast<void>(headset_view);
@@ -141,10 +158,20 @@ Brush_tool::Brush_tool(
 
 void Brush_tool::on_message(Editor_message& message)
 {
+    Scene_view* const old_scene_view = get_hover_scene_view();
+
     Tool::on_message(message);
     using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
         on_motion();
+    }
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+        if (message.scene_view != old_scene_view) {
+            bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
+            if (!visible) {
+                remove_preview_mesh();
+            }
+        }
     }
 }
 
@@ -180,6 +207,33 @@ void Brush_tool::remove_preview_mesh()
 auto Brush_tool::try_insert_ready() -> bool
 {
     return is_enabled() && (m_hover.mesh || (m_hover.grid != nullptr));
+}
+
+auto Brush_tool::get_hover_brush() const -> std::shared_ptr<Brush>
+{
+    if (m_hover.mesh == nullptr) {
+        return {};
+    }
+    erhe::scene::Node* node = m_hover.mesh->get_node();
+    if (node == nullptr) {
+        return {};
+    }
+    std::shared_ptr<Brush_placement> brush_placement = get_brush_placement(node);
+    if (!brush_placement) {
+        return {};
+    }
+    std::shared_ptr<Brush> brush = brush_placement->get_brush();
+    return brush;
+}
+
+auto Brush_tool::try_pick() -> bool
+{
+    std::shared_ptr<Brush> brush = get_hover_brush();
+    if (!brush) {
+        return false;
+    }
+    m_context.selection->set_selection({brush});
+    return true;
 }
 
 auto Brush_tool::try_insert(Brush* brush) -> bool
@@ -223,11 +277,7 @@ void Brush_tool::on_motion()
     }
     m_hover = *nearest_hover;
 
-    if (
-        m_hover.mesh &&
-        (m_hover.mesh->get_node() != nullptr) &&
-        m_hover.position.has_value()
-    ) {
+    if (m_hover.mesh && (m_hover.mesh->get_node() != nullptr) && m_hover.position.has_value()) {
         m_hover.position = m_hover.mesh->get_node()->transform_direction_from_world_to_local(
             m_hover.position.value()
         );
@@ -236,11 +286,25 @@ void Brush_tool::on_motion()
     update_preview_mesh();
 }
 
+void Brush_tool::preview_drag_and_drop(std::shared_ptr<Brush> brush)
+{
+    m_drag_and_drop_brush = brush;
+    on_motion();
+}
+
+auto Brush_tool::get_placement_polygon_id() const -> erhe::geometry::Polygon_id
+{
+    return m_brush_placement_frame.polygon_id;
+}
+
+auto Brush_tool::get_placement_corner_id() const -> erhe::geometry::Corner_id
+{
+    return m_brush_placement_frame.corner_id;
+}
+
 // Returns transform which places brush in parent (hover) mesh space.
 auto Brush_tool::get_hover_mesh_transform(Brush& brush) -> mat4
 {
-    //auto brush = m_context.selection->get_last_selected<Brush>();
-
     if (
         (m_hover.mesh == nullptr)                                            ||
         (m_hover.primitive_index == std::numeric_limits<std::size_t>::max()) ||
@@ -256,18 +320,19 @@ auto Brush_tool::get_hover_mesh_transform(Brush& brush) -> mat4
     const Polygon&  polygon    = geometry->polygons[polygon_id];
     Reference_frame hover_frame{*geometry, polygon_id, 0, 0};
 
-    Reference_frame brush_frame;
-    if (m_use_matching_face || !m_selected_corner_count.has_value()) {
-        brush_frame = brush.get_reference_frame(
+    m_brush_placement_frame = Reference_frame{};
+    if (m_use_matching_face) {
+        m_brush_placement_frame = brush.get_reference_frame(
             polygon.corner_count,
             static_cast<uint32_t>(m_polygon_offset),
             static_cast<uint32_t>(m_corner_offset)
         );
         hover_frame.N *= -1.0f;
         hover_frame.B *= -1.0f;
-    } else if (m_use_selected_face && m_selected_corner_count.has_value()) {
-        brush_frame = brush.get_reference_frame(
-            static_cast<uint32_t>(m_selected_corner_count.value()),
+    } else if (m_use_selected_face) {
+        size_t corner_count = m_selected_corner_count.has_value() ? m_selected_corner_count.value() : brush.get_max_corner_count();
+        m_brush_placement_frame = brush.get_reference_frame(
+            static_cast<uint32_t>(corner_count),
             static_cast<uint32_t>(m_polygon_offset),
             static_cast<uint32_t>(m_corner_offset)
         );
@@ -275,17 +340,17 @@ auto Brush_tool::get_hover_mesh_transform(Brush& brush) -> mat4
         hover_frame.B *= -1.0f;
     }
 
-    ERHE_VERIFY(brush_frame.scale() != 0.0f);
+    ERHE_VERIFY(m_brush_placement_frame.scale() != 0.0f);
 
     if (m_scale_to_match) {
         const float hover_scale = hover_frame.scale();
-        const float brush_scale = brush_frame.scale();
+        const float brush_scale = m_brush_placement_frame.scale();
         const float scale       = hover_scale / brush_scale;
 
         m_transform_scale = m_scale * scale;
         if (m_transform_scale != 1.0f) {
             const mat4 scale_transform = erhe::math::create_scale(m_transform_scale);
-            brush_frame.transform_by(scale_transform);
+            m_brush_placement_frame.transform_by(scale_transform);
         }
     }
 
@@ -294,7 +359,7 @@ auto Brush_tool::get_hover_mesh_transform(Brush& brush) -> mat4
     }
 
     const mat4 hover_transform = hover_frame.transform();
-    const mat4 brush_transform = brush_frame.transform();
+    const mat4 brush_transform = m_brush_placement_frame.transform();
     const mat4 inverse_brush   = inverse(brush_transform);
     const mat4 align           = hover_transform * inverse_brush;
     return align;
@@ -302,21 +367,20 @@ auto Brush_tool::get_hover_mesh_transform(Brush& brush) -> mat4
 
 auto Brush_tool::get_hover_grid_transform(Brush& brush) -> mat4
 {
-    if (m_hover.grid == nullptr) {
-        return mat4{1};
-    }
-
     m_transform_scale = m_scale;
-    //// auto brush = m_context.selection->get_last_selected<Brush>();
-    Reference_frame brush_frame = brush.get_reference_frame(
-        static_cast<uint32_t>(m_selected_corner_count.has_value() ? m_selected_corner_count.value() : 0),
+    m_brush_placement_frame = brush.get_reference_frame(
+        static_cast<uint32_t>(m_selected_corner_count.has_value() ? m_selected_corner_count.value() : brush.get_max_corner_count()),
         static_cast<uint32_t>(m_polygon_offset),
         static_cast<uint32_t>(m_corner_offset)
     );
     const mat4 scale_transform = erhe::math::create_scale(m_scale);
-    brush_frame.transform_by(scale_transform);
-    const mat4 brush_transform = brush_frame.transform();
+    m_brush_placement_frame.transform_by(scale_transform);
+    const mat4 brush_transform = m_brush_placement_frame.transform();
     const mat4 inverse_brush   = inverse(brush_transform);
+
+    if (m_hover.grid == nullptr) {
+        return mat4{1};
+    }
 
     const glm::vec3 position_in_grid0 = m_hover.grid->grid_from_world() * glm::vec4{m_hover.position.value(), 1.0f};
     const glm::vec3 position_in_grid  = m_snap_to_grid ? m_hover.grid->snap_grid_position(position_in_grid0) : position_in_grid0;
@@ -329,7 +393,7 @@ auto Brush_tool::get_hover_grid_transform(Brush& brush) -> mat4
 
 void Brush_tool::update_preview_mesh_node_transform()
 {
-    auto shared_brush = m_context.selection->get_last_selected<Brush>();
+    auto shared_brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : m_context.selection->get_last_selected<Brush>();
     if (
         !shared_brush ||
         !m_hover.position.has_value() ||
@@ -368,7 +432,6 @@ void Brush_tool::update_preview_mesh_node_transform()
         m_preview_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
         m_preview_node->set_parent_from_node(transform);
     }
-
 }
 
 void Brush_tool::do_insert_operation(Brush& brush)
@@ -410,6 +473,10 @@ void Brush_tool::do_insert_operation(Brush& brush)
     };
     const auto instance_node = brush.make_instance(brush_instance_create_info);
 
+    std::shared_ptr<Brush> shared_brush = std::dynamic_pointer_cast<Brush>(brush.shared_from_this());
+    std::shared_ptr<Brush_placement> brush_placement = std::make_shared<Brush_placement>(shared_brush, get_placement_polygon_id(), get_placement_corner_id());
+    instance_node->attach(brush_placement);
+
     std::shared_ptr<erhe::scene::Node> parent = (hover_node != nullptr)
         ? std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this())
         : scene_root->get_hosted_scene()->get_root_node();
@@ -431,27 +498,20 @@ void Brush_tool::do_insert_operation(Brush& brush)
     m_context.operation_stack->queue(op);
 }
 
-void Brush_tool::add_preview_mesh()
+void Brush_tool::add_preview_mesh(Brush& brush)
 {
-    const auto brush    = m_context.selection->get_last_selected<Brush>();
     const auto material = get_material();
     auto* scene_view = get_hover_scene_view();
-    if (
-        !brush ||
-        !material ||
-        !m_hover.position.has_value() ||
-        (!m_hover.mesh && (m_hover.grid == nullptr)) ||
-        (scene_view == nullptr)
-    ) {
+    if (!material || !m_hover.position.has_value() || (!m_hover.mesh && (m_hover.grid == nullptr)) || (scene_view == nullptr)) {
         return;
     }
 
     const auto& scene_root = scene_view->get_scene_root();
     ERHE_VERIFY(scene_root);
 
-    brush->late_initialize();
-    const auto& brush_scaled = brush->get_scaled(m_transform_scale);
-    const std::string name = fmt::format("brush-{}", brush->get_name());
+    brush.late_initialize();
+    const auto& brush_scaled = brush.get_scaled(m_transform_scale);
+    const std::string name = fmt::format("brush-{}", brush.get_name());
     m_preview_node = std::make_shared<erhe::scene::Node>(name);
     m_preview_mesh = std::make_shared<erhe::scene::Mesh>(name);
     m_preview_mesh->add_primitive(brush_scaled.primitive, material);
@@ -479,25 +539,23 @@ void Brush_tool::add_preview_mesh()
 
 void Brush_tool::update_preview_mesh()
 {
-    const auto brush = m_context.selection->get_last_selected<Brush>();
-    if (!m_preview_mesh && is_enabled()) {
-        if (
-            !brush ||
-            !m_hover.position.has_value() ||
-            (!m_hover.mesh && (m_hover.grid == nullptr))
-        ) {
+    const auto brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : m_context.selection->get_last_selected<Brush>();
+    if (!m_preview_mesh && (is_enabled() || m_drag_and_drop_brush)) {
+        if (!brush || !m_hover.position.has_value() || (!m_hover.mesh && (m_hover.grid == nullptr))) {
             return;
         }
 
-        add_preview_mesh();
+        add_preview_mesh(*brush.get());
         return;
     }
 
     if (
-        !is_enabled() ||
+        (!m_drag_and_drop_brush && !is_enabled()) ||
         !brush ||
         !m_hover.position.has_value() ||
-        (!m_hover.mesh && (m_hover.grid == nullptr))
+        (
+            !m_hover.mesh && (m_hover.grid == nullptr)
+        )
     ) {
         remove_preview_mesh();
     }
@@ -505,10 +563,25 @@ void Brush_tool::update_preview_mesh()
     update_preview_mesh_node_transform();
 }
 
-void Brush_tool::tool_properties()
+void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
+
+    const std::shared_ptr<Brush> last_selected_brush = m_context.selection->get_last_selected<Brush>();
+    const std::shared_ptr<Brush> hover_brush = get_hover_brush();
+    ImGui::Text("Brush: %s", last_selected_brush ? last_selected_brush->get_name().c_str() : "");
+    //ImGui::Text("Hover Brush: %s", hover_brush ? hover_brush->get_name().c_str() : "");
+    //ImGui::Text("Drag and Drop Brush: %s", m_drag_and_drop_brush ? m_drag_and_drop_brush->get_name().c_str() : "");
+    ImGui::Text("Enabled: %s", is_enabled() ? "yes" : "no");
+    if (m_hover.position.has_value()) {
+        const glm::vec3& p = m_hover.position.value();
+        ImGui::Text("Hover position: %.2f, %.2f, %.2f", p.x, p.y, p.z);
+    } else {
+        ImGui::Text("Hover position: -");
+    }
+    //ImGui::Text("Hover mesh: %s", m_hover.mesh ? m_hover.mesh->get_name().c_str() : "");
+    //ImGui::Text("Hover grid: %s", m_hover.grid ? m_hover.grid->get_name().c_str() : "");
 
     const auto brush = m_context.selection->get_last_selected<Brush>();
     if (brush && ImGui::TreeNodeEx(brush->get_name().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -556,6 +629,24 @@ void Brush_tool::tool_properties()
 
     ImGui::NewLine    ();
     ImGui::Checkbox   ("Debug visualization", &m_debug_visualization);
+
+    if (!m_brush_item_tree) {
+        std::shared_ptr<Content_library> content_library = get_content_library();
+        if (content_library) {
+            m_brush_item_tree = std::make_unique<Item_tree>(m_context, content_library->brushes);
+            m_brush_item_tree->set_item_filter(
+                erhe::Item_filter{
+                    .require_all_bits_set           = 0,
+                    .require_at_least_one_bit_set   = 0,
+                    .require_all_bits_clear         = 0,
+                    .require_at_least_one_bit_clear = 0
+                }
+            );
+        }
+    }
+    if (m_brush_item_tree) {
+        m_brush_item_tree->imgui_tree(imgui_window.get_scale_value());
+    }
 #endif
 }
 

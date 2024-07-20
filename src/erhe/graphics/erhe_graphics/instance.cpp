@@ -459,10 +459,7 @@ auto Instance::depth_function(const gl::Depth_function depth_function) const -> 
 auto Instance::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
     if (info.use_bindless_texture) {
-        return gl::get_texture_sampler_handle_arb(
-            texture.gl_name(),
-            sampler.gl_name()
-        );
+        return gl::get_texture_sampler_handle_arb(texture.gl_name(), sampler.gl_name());
     } else {
         const uint64_t texture_name  = static_cast<uint64_t>(texture.gl_name());
         const uint64_t sampler_name  = static_cast<uint64_t>(sampler.gl_name());

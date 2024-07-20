@@ -64,7 +64,7 @@ public:
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
-    void tool_properties       () override;
+    void tool_properties       (erhe::imgui::Imgui_window&) override;
 
     // Commands
     void set_active_command(const int command);

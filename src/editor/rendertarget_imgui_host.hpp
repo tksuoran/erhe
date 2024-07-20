@@ -41,6 +41,13 @@ public:
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;
 
+    // Implements Input_event_handler
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    auto on_xr_boolean_event (const erhe::window::Xr_boolean_event& ) -> bool override;
+    auto on_xr_float_event   (const erhe::window::Xr_float_event&   ) -> bool override;
+    auto on_xr_vector2f_event(const erhe::window::Xr_vector2f_event&) -> bool override;
+#endif
+
     [[nodiscard]] auto get_mutable_style() -> ImGuiStyle&; // style = imgui_context->Style;
     [[nodiscard]] auto get_style        () const -> const ImGuiStyle&; // style = imgui_context->Style;
 

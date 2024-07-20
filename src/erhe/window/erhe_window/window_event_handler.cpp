@@ -1,6 +1,8 @@
 #include "erhe_window/window_event_handler.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 namespace erhe::window {
 
 auto c_str(const Keycode code) -> const char*
@@ -149,21 +151,112 @@ auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_
     ERHE_VERIFY(input_event.handled == false);
     switch (input_event.type) {
         case Input_event_type::no_event               : break;
-        case Input_event_type::key_event              : input_event.handled = on_event(input_event.u.key_event); break;
-        case Input_event_type::char_event             : input_event.handled = on_event(input_event.u.char_event); break;
-        case Input_event_type::window_focus_event     : input_event.handled = on_event(input_event.u.window_focus_event); break;
-        case Input_event_type::cursor_enter_event     : input_event.handled = on_event(input_event.u.cursor_enter_event); break;
-        case Input_event_type::mouse_move_event       : input_event.handled = on_event(input_event.u.mouse_move_event); break;
-        case Input_event_type::mouse_button_event     : input_event.handled = on_event(input_event.u.mouse_button_event); break;
-        case Input_event_type::mouse_wheel_event      : input_event.handled = on_event(input_event.u.mouse_wheel_event); break;
-        case Input_event_type::controller_axis_event  : input_event.handled = on_event(input_event.u.controller_axis_event); break;
-        case Input_event_type::controller_button_event: input_event.handled = on_event(input_event.u.controller_button_event); break;
-        case Input_event_type::window_resize_event    : input_event.handled = on_event(input_event.u.window_resize_event); break;
-        case Input_event_type::window_refresh_event   : input_event.handled = on_window_refresh_event(); break;
-        case Input_event_type::window_close_event     : input_event.handled = on_window_close_event  (); break;
+        case Input_event_type::key_event              : input_event.handled = on_key_event              (input_event.u.key_event); break;
+        case Input_event_type::char_event             : input_event.handled = on_char_event             (input_event.u.char_event); break;
+        case Input_event_type::window_focus_event     : input_event.handled = on_window_focus_event     (input_event.u.window_focus_event); break;
+        case Input_event_type::cursor_enter_event     : input_event.handled = on_cursor_enter_event     (input_event.u.cursor_enter_event); break;
+        case Input_event_type::mouse_move_event       : input_event.handled = on_mouse_move_event       (input_event.u.mouse_move_event); break;
+        case Input_event_type::mouse_button_event     : input_event.handled = on_mouse_button_event     (input_event.u.mouse_button_event); break;
+        case Input_event_type::mouse_wheel_event      : input_event.handled = on_mouse_wheel_event      (input_event.u.mouse_wheel_event); break;
+        case Input_event_type::controller_axis_event  : input_event.handled = on_controller_axis_event  (input_event.u.controller_axis_event); break;
+        case Input_event_type::controller_button_event: input_event.handled = on_controller_button_event(input_event.u.controller_button_event); break;
+        case Input_event_type::window_resize_event    : input_event.handled = on_window_resize_event    (input_event.u.window_resize_event); break;
+        case Input_event_type::window_refresh_event   : input_event.handled = on_window_refresh_event   (); break;
+        case Input_event_type::window_close_event     : input_event.handled = on_window_close_event     (); break;
+        case Input_event_type::xr_boolean_event       : input_event.handled = on_xr_boolean_event       (input_event.u.xr_boolean_event); break;
+        case Input_event_type::xr_float_event         : input_event.handled = on_xr_float_event         (input_event.u.xr_float_event); break;
+        case Input_event_type::xr_vector2f_event      : input_event.handled = on_xr_vector2f_event      (input_event.u.xr_vector2f_event); break;
         default: break;
     }
     return input_event.handled;
 } 
+
+[[nodiscard]] auto Input_event::describe() const -> std::string
+{
+    switch (type) {
+        case Input_event_type::no_event               : return {};
+        case Input_event_type::key_event              : return u.key_event.describe();
+        case Input_event_type::char_event             : return u.char_event.describe();
+        case Input_event_type::window_focus_event     : return u.window_focus_event.describe();
+        case Input_event_type::cursor_enter_event     : return u.cursor_enter_event.describe();
+        case Input_event_type::mouse_move_event       : return u.mouse_move_event.describe();
+        case Input_event_type::mouse_button_event     : return u.mouse_button_event.describe();
+        case Input_event_type::mouse_wheel_event      : return u.mouse_wheel_event.describe();
+        case Input_event_type::controller_axis_event  : return u.controller_axis_event.describe();
+        case Input_event_type::controller_button_event: return u.controller_button_event.describe();
+        case Input_event_type::window_resize_event    : return u.window_resize_event.describe();
+        case Input_event_type::window_refresh_event   : return {"window_refresh"}; break;
+        case Input_event_type::window_close_event     : return {"window_close"}; break;
+        case Input_event_type::xr_boolean_event       : return u.xr_boolean_event.describe();
+        case Input_event_type::xr_float_event         : return u.xr_float_event.describe();
+        case Input_event_type::xr_vector2f_event      : return u.xr_vector2f_event.describe();
+        default:                                        return {"?"};
+    }
+}
+
+[[nodiscard]] auto Key_event::describe() const -> std::string
+{
+    return fmt::format("Key_event keycode = {}, modifier_mask = {:x}, pressed = {}", keycode, modifier_mask, pressed);
+}
+
+[[nodiscard]] auto Char_event::describe() const -> std::string
+{
+    return fmt::format("Char_event codepoint = {}", codepoint);
+}
+
+[[nodiscard]] auto Cursor_enter_event::describe() const -> std::string
+{
+    return fmt::format("Cursor_enter_event entered = {}", entered);
+}
+
+[[nodiscard]] auto Mouse_move_event::describe() const -> std::string
+{
+    return fmt::format("Mouse_move_event x = {}, y = {}, dx = {}, dy = {}, modifier_mask = {}", x, y, dx, dy, modifier_mask);
+}
+
+[[nodiscard]] auto Mouse_button_event::describe() const -> std::string
+{
+    return fmt::format("Mouse_button_event button = {}, pressed = {}, modifier_mask = {}", button, pressed, modifier_mask);
+}
+
+[[nodiscard]] auto Mouse_wheel_event::describe() const -> std::string
+{
+    return fmt::format("Mouse_wheel_event x = {}, y = {}, modifier_mask = {}", x, y, modifier_mask);
+}
+
+[[nodiscard]] auto Controller_axis_event::describe() const -> std::string
+{
+    return fmt::format("Controller_axis_event controller = {}, axis = {}, value = {}, modifier_mask", controller, axis, value, modifier_mask);
+}
+
+[[nodiscard]] auto Controller_button_event::describe() const -> std::string
+{
+    return fmt::format("Controller_button_event controller = {}, button = {}, value = {}, modifier_mask", controller, button, value, modifier_mask);
+}
+
+[[nodiscard]] auto Window_resize_event::describe() const -> std::string
+{
+    return fmt::format("Window_resize_event width = {}, height = {}", width, height);
+}
+
+[[nodiscard]] auto Window_focus_event::describe() const -> std::string
+{
+    return fmt::format("Window_focus_event focused = {}", focused);
+}
+
+[[nodiscard]] auto Xr_boolean_event::describe() const -> std::string
+{
+    return fmt::format("Xr_boolean_event value = {}", value);
+}
+
+[[nodiscard]] auto Xr_float_event::describe() const -> std::string
+{
+    return fmt::format("Xr_float_event value = {}", value);
+}
+
+[[nodiscard]] auto Xr_vector2f_event::describe() const -> std::string
+{
+    return fmt::format("Xr_vector2f_event x = {}, y = {}", x, y);
+}
 
 } // namespace erhe::window

@@ -120,8 +120,8 @@ void Framebuffer_window::imgui()
 
     if (m_texture && (m_texture->width() > 0) && (m_texture->height() > 0)) {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-        image(m_texture, m_viewport.width, m_viewport.height);
-        set_is_hovered(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem));
+        draw_image(m_texture, m_viewport.width, m_viewport.height);
+        set_is_window_hovered(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem));
         const ImVec2 rect_min = ImGui::GetItemRectMin();
         const ImVec2 rect_max = ImGui::GetItemRectMax();
         m_content_rect_x      = rect_min.x;

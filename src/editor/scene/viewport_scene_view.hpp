@@ -103,7 +103,7 @@ public:
     // Public API
     void reconfigure               (int sample_count);
     void set_window_viewport       (erhe::math::Viewport viewport);
-    void set_is_hovered            (bool is_hovered);
+    void set_is_scene_view_hovered (bool is_hovered);
     void set_camera                (const std::shared_ptr<erhe::scene::Camera>& camera);
     void update_pointer_2d_position(glm::vec2 position_in_viewport);
     void update_hover              (bool ray_only = false);
@@ -114,18 +114,18 @@ public:
     void set_shader_stages_variant(Shader_stages_variant variant);
     auto get_shader_stages_variant() const -> Shader_stages_variant;
 
-    [[nodiscard]] auto ini_label               () const -> const char* { return m_ini_label; }
-    [[nodiscard]] auto viewport_from_window    (const glm::vec2 position_in_window) const -> glm::vec2;
-    [[nodiscard]] auto project_to_viewport     (const glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto unproject_to_world      (const glm::vec3 position_in_window) const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto is_hovered              () const -> bool;
-    [[nodiscard]] auto window_viewport         () const -> const erhe::math::Viewport&;
-    [[nodiscard]] auto projection_viewport     () const -> const erhe::math::Viewport&;
-    [[nodiscard]] auto get_position_in_viewport() const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto ini_label                       () const -> const char* { return m_ini_label; }
+    [[nodiscard]] auto viewport_from_window            (const glm::vec2 position_in_window) const -> glm::vec2;
+    [[nodiscard]] auto project_to_viewport             (const glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto unproject_to_world              (const glm::vec3 position_in_window) const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto is_scene_view_hovered           () const -> bool;
+    [[nodiscard]] auto window_viewport                 () const -> const erhe::math::Viewport&;
+    [[nodiscard]] auto projection_viewport             () const -> const erhe::math::Viewport&;
+    [[nodiscard]] auto get_position_in_viewport        () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto viewport_toolbar        () -> bool;
-    [[nodiscard]] auto get_post_processing_node() -> Post_processing_node*;
-    [[nodiscard]] auto get_final_output        () -> Rendergraph_node*;
+    [[nodiscard]] auto viewport_toolbar                () -> bool;
+    [[nodiscard]] auto get_post_processing_node        () -> Post_processing_node*;
+    [[nodiscard]] auto get_final_output                () -> Rendergraph_node*;
 
 private:
     [[nodiscard]] auto get_override_shader_stages() const -> const erhe::graphics::Shader_stages*;

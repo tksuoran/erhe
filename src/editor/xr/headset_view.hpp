@@ -171,12 +171,9 @@ private:
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;
     std::vector<Finger_point>                            m_finger_inputs;
-    Shader_stages_variant                                m_shader_stages_variant{Shader_stages_variant::not_set};
+    Shader_stages_variant                                m_shader_stages_variant{Shader_stages_variant::not_set};    
 
     float                                                m_finger_to_viewport_distance_threshold{0.1f};
-    bool                                                 m_head_tracking_enabled{true};
-    bool                                                 m_mouse_down{false};
-    bool                                                 m_menu_down {false};
 
     bool                                                 m_request_renderdoc_capture{false};
     bool                                                 m_renderdoc_capture_started{false};

@@ -1,4 +1,4 @@
-//#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "scene/viewport_scene_views.hpp"
 
@@ -6,7 +6,6 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
 #include "editor_settings.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
@@ -15,10 +14,8 @@
 #include "rendergraph/post_processing.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
-#include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
-#include "windows/settings_window.hpp"
 #include "windows/viewport_config_window.hpp"
 #include "windows/imgui_window_scene_view_node.hpp"
 
@@ -37,7 +34,6 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/multisample_resolve.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
-#include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_verify/verify.hpp"
@@ -237,23 +233,14 @@ auto Scene_views::create_viewport_scene_view(
 
 auto Scene_views::create_basic_viewport_scene_view_node(
     erhe::rendergraph::Rendergraph&             rendergraph,
-    const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
+    const std::shared_ptr<Viewport_scene_view>& viewport_scene_view,
+    std::string_view                            name
 ) -> std::shared_ptr<Basic_scene_view_node>
 {
-    auto node = std::make_shared<Basic_scene_view_node>(
-        rendergraph,
-        fmt::format("Basic_scene_view_node for '{}'", viewport_scene_view->get_name()),
-        viewport_scene_view
-    );
+    auto node = std::make_shared<Basic_scene_view_node>(rendergraph, name, viewport_scene_view);
     m_basic_scene_view_nodes.push_back(node);
-    rendergraph.connect(
-        erhe::rendergraph::Rendergraph_node_key::viewport,
-        viewport_scene_view->get_final_output(),
-        node.get()
-    );
-
+    rendergraph.connect( erhe::rendergraph::Rendergraph_node_key::viewport, viewport_scene_view->get_final_output(), node.get());
     layout_basic_viewport_windows();
-
     return node;
 }
 
@@ -291,7 +278,9 @@ auto Scene_views::create_imgui_window_scene_view_node(
     erhe::imgui::Imgui_renderer&                imgui_renderer,
     erhe::imgui::Imgui_windows&                 imgui_windows,
     erhe::rendergraph::Rendergraph&             rendergraph,
-    const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
+    const std::shared_ptr<Viewport_scene_view>& viewport_scene_view,
+    std::string_view                            name,
+    std::string_view                            ini_name
 ) -> std::shared_ptr<Imgui_window_scene_view_node>
 {
     const auto& window_imgui_host = imgui_windows.get_window_imgui_host();
@@ -301,8 +290,8 @@ auto Scene_views::create_imgui_window_scene_view_node(
         imgui_windows,
         rendergraph,
         m_context,
-        fmt::format("Imgui_window_scene_view_node {}", m_imgui_window_scene_view_nodes.size()),
-        "",
+        name, //fmt::format("Imgui_window_scene_view_node {}", m_imgui_window_scene_view_nodes.size()),
+        ini_name,
         viewport_scene_view
     );
     m_imgui_window_scene_view_nodes.push_back(node);
@@ -376,13 +365,12 @@ void Scene_views::open_new_viewport_scene_view_node()
             *m_context.imgui_renderer,
             *m_context.imgui_windows,
             *m_context.rendergraph,
-            viewport_scene_view
+            viewport_scene_view,
+            "w scene view",
+            ""
         );
     } else {
-        create_basic_viewport_scene_view_node(
-            *m_context.rendergraph,
-            viewport_scene_view
-        );
+        create_basic_viewport_scene_view_node(*m_context.rendergraph, viewport_scene_view, "b scene view");
     }
 }
 
@@ -443,7 +431,9 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
 {
     ERHE_PROFILE_FUNCTION();
 
-    SPDLOG_LOGGER_TRACE(log_controller_ray, "update_hover()");
+    //SPDLOG_LOGGER_TRACE(log_scene_view, "Scene_views::update_hover(host = {})", imgui_host->get_name());
+
+    ERHE_VERIFY(imgui_host != nullptr);
 
     std::shared_ptr<Viewport_scene_view> old_scene_view = m_hover_scene_view;
     m_hover_stack.clear();
@@ -452,18 +442,20 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
     {
         //const auto mouse_position = m_context.input_state->mouse_position;
         const glm::vec2 mouse_position = imgui_host->get_mouse_position();
-        SPDLOG_LOGGER_TRACE(log_controller_ray, "m_context.input_state->mouse_position: {}, {}", mouse_position.x, mouse_position.y);
+        if (mouse_position.x >= 0.0f && mouse_position.y >= 0.0f) {
+            SPDLOG_LOGGER_TRACE(log_scene_view, "mouse_position: {}, {}", mouse_position.x, mouse_position.y);
+        }
         for (auto& window : m_imgui_window_scene_view_nodes) {
-            SPDLOG_LOGGER_TRACE(log_controller_ray, "{}->is_hovered() = {}", window->get_name(), window->is_hovered());
-            if (window->is_hovered()) {
-                window->on_mouse_move(mouse_position);
+            if (window->get_imgui_host() == imgui_host) {
+                if (window->is_window_hovered()) {
+                    window->on_mouse_move(mouse_position);
+                }
             }
         }
     }
 
-    if (imgui_host != nullptr) {
-        update_hover_from_imgui_viewport_windows(imgui_host);
-    }
+    update_hover_from_imgui_viewport_windows(imgui_host);
+
     if (!m_basic_scene_view_nodes.empty()) {
         layout_basic_viewport_windows();
         update_hover_from_basic_viewport_windows();
@@ -474,7 +466,7 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
         : m_hover_stack.back().lock();
 
     if (old_scene_view != m_hover_scene_view) {
-        SPDLOG_LOGGER_TRACE(log_controller_ray, "Changing hover scene view to: {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
+        SPDLOG_LOGGER_TRACE(log_scene_view, "Changing hover scene view to: {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
         m_context.editor_message_bus->send_message(
             Editor_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_viewport | Message_flag_bit::c_flag_bit_hover_scene_view,
@@ -482,13 +474,13 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
             }
         );
     } else {
-        SPDLOG_LOGGER_TRACE(log_controller_ray, "m_hover_scene_view {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
+        SPDLOG_LOGGER_TRACE(log_scene_view, "m_hover_scene_view {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
     }
 }
 
 void Scene_views::update_hover_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host)
 {
-    SPDLOG_LOGGER_TRACE(log_controller_ray, "update_hover_from_imgui_viewport_windows({})", imgui_host->get_name());
+    SPDLOG_LOGGER_TRACE(log_scene_view, "update_hover_from_imgui_viewport_windows({})", imgui_host->get_name());
     for (const auto& window : m_imgui_window_scene_view_nodes) {
         if (window->get_imgui_host() != imgui_host) {
             continue;
@@ -499,8 +491,8 @@ void Scene_views::update_hover_from_imgui_viewport_windows(erhe::imgui::Imgui_ho
             continue;
         }
 
-        if (window->is_hovered()) {
-            SPDLOG_LOGGER_TRACE(log_controller_ray, "pushing {} to hover stack", viewport_scene_view->get_name());
+        if (window->is_window_hovered()) {
+            SPDLOG_LOGGER_TRACE(log_scene_view, "pushing {} to hover stack", viewport_scene_view->get_name());
             m_last_scene_view = viewport_scene_view;
             m_hover_stack.push_back(m_last_scene_view);
         }
@@ -524,7 +516,7 @@ void Scene_views::update_hover_from_basic_viewport_windows()
             static_cast<int>(std::round(pointer_window_position.y))
         );
 
-        viewport_scene_view->set_is_hovered(is_hoverered);
+        viewport_scene_view->set_is_scene_view_hovered(is_hoverered);
 
         if (is_hoverered) {
             const glm::vec2 viewport_position = viewport_scene_view->viewport_from_window(
@@ -577,7 +569,7 @@ void Scene_views::viewport_toolbar(Viewport_scene_view& viewport_scene_view, boo
         hovered = true;
     }
     if (button_pressed) {
-        m_context.viewport_config_window->show();
+        m_context.viewport_config_window->show_window();
         m_context.viewport_config_window->set_edit_data(&viewport_scene_view.get_config());
     }
     ImGui::PopID();

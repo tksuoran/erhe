@@ -521,6 +521,24 @@ void Line_renderer::set_thickness(const float thickness)
     m_line_thickness = thickness;
 }
 
+void Line_renderer::add_line(const glm::vec4& color0, float width0, glm::vec3 p0, const glm::vec4& color1, float width1, glm::vec3 p1)
+{
+    ERHE_VERIFY(m_inside_begin_end);
+
+    const std::size_t      vertex_byte_count = 2 * m_pipeline.line_vertex_format.stride();
+    const auto             vertex_gpu_data   = m_vertex_writer.subspan(vertex_byte_count);
+    std::byte* const       start             = vertex_gpu_data.data();
+    const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count        = byte_count / sizeof(float);
+    const std::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
+
+    std::size_t word_offset = 0;
+    put(p0, width0, color0, gpu_float_data, word_offset);
+    put(p1, width1, color1, gpu_float_data, word_offset);
+
+    ++m_line_count;
+}
+
 void Line_renderer::add_lines(const std::initializer_list<Line> lines)
 {
     ERHE_VERIFY(m_inside_begin_end);

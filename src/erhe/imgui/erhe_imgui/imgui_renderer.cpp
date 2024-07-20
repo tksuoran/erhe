@@ -497,19 +497,11 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
         reinterpret_cast<const std::byte*>(pixel_data.data()),
         pixel_data.size()
     };
-    m_font_texture->upload(
-        gl::Internal_format::rgba8,
-        image_data,
-        m_font_texture->width(),
-        m_font_texture->height()
-    );
+    m_font_texture->upload(gl::Internal_format::rgba8, image_data, m_font_texture->width(), m_font_texture->height());
     m_font_texture->set_debug_label("ImGui Font");
 
     // Store our handle
-    const uint64_t handle = m_graphics_instance.get_handle(
-        *m_font_texture.get(),
-        m_linear_sampler
-    );
+    const uint64_t handle = m_graphics_instance.get_handle(*m_font_texture.get(), m_linear_sampler);
     m_font_atlas.SetTexID(handle);
 }
 
@@ -540,6 +532,8 @@ void Imgui_renderer::at_end_of_frame(std::function<void()>&& func)
 
 void Imgui_renderer::next_frame()
 {
+    ERHE_PROFILE_FUNCTION();
+
     for (auto& operation : m_at_end_of_frame) {
         operation();
     }
@@ -742,10 +736,7 @@ auto Imgui_renderer::image_button(
     }
 
     const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
-    const uint64_t handle = m_graphics_instance.get_handle(
-        *texture.get(),
-        sampler
-    );
+    const uint64_t handle = m_graphics_instance.get_handle(*texture.get(), sampler);
     ImGui::ImageButtonEx(
         id,
         handle,
@@ -949,8 +940,7 @@ void Imgui_renderer::render_draw_data()
                     // Write texture indices
                     if (m_graphics_instance.info.use_bindless_texture) {
                         const uint64_t handle = pcmd->TextureId;
-                        const uint32_t texture_handle[2] =
-                        {
+                        const uint32_t texture_handle[2] = {
                             static_cast<uint32_t>((handle & 0xffffffffu)),
                             static_cast<uint32_t>(handle >> 32u)
                         };
@@ -962,11 +952,7 @@ void Imgui_renderer::render_draw_data()
                             texture_handle_cpu_data
                         );
 
-                        const uint32_t extra[2] =
-                        {
-                            0u,
-                            0u
-                        };
+                        const uint32_t extra[2] = { 0u, 0u };
                         const std::span<const uint32_t> extra_cpu_data{&extra[0], 2};
 
                         write(
@@ -1070,12 +1056,7 @@ void Imgui_renderer::render_draw_data()
                 SPDLOG_LOGGER_TRACE(log_imgui, "used sampler: {}", sampler_name);
             }
 #endif
-
-            const auto dummy_handle = m_graphics_instance.get_handle(
-                *m_dummy_texture.get(),
-                m_nearest_sampler
-            );
-
+            const auto dummy_handle = m_graphics_instance.get_handle(*m_dummy_texture.get(), m_nearest_sampler);
             const auto texture_unit_use_count = m_graphics_instance.texture_unit_cache_bind(dummy_handle);
 
             for (size_t i = texture_unit_use_count; i < Imgui_program_interface::s_texture_unit_count; ++i) {

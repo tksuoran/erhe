@@ -218,7 +218,7 @@ void Material_paint_tool::handle_priority_update(const int old_priority, const i
     }
 }
 
-void Material_paint_tool::tool_properties()
+void Material_paint_tool::tool_properties(erhe::imgui::Imgui_window&)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     auto* hover_scene_view = Tool::get_hover_scene_view();

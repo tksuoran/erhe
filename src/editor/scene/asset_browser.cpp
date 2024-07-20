@@ -73,7 +73,7 @@ void Scene_open_operation::execute(Editor_context& context)
             context,
             *context.editor_settings
         );
-        browser_window->show();
+        browser_window->show_window();
 
         import_gltf(
             *context.graphics_instance,

@@ -15,9 +15,7 @@
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
-namespace hextiles
-{
-
+namespace hextiles {
 
 New_game_window::New_game_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
@@ -40,11 +38,10 @@ New_game_window::New_game_window(
     m_player_names.clear();
     m_player_names.push_back("Player 1");
     m_player_names.push_back("Player 2");
-    hide();
+    hide_window();
 }
 
-namespace
-{
+namespace {
 
 auto random_coordinate(coordinate_t w, coordinate_t h) -> Tile_coordinate
 {
@@ -300,9 +297,9 @@ void New_game_window::imgui()
 
     if (ImGui::Button("Start", button_size)) {
         create();
-        hide();
-        m_map_window.show();
-        m_game.show();
+        hide_window();
+        m_map_window.show_window();
+        m_game.show_window();
     }
 
     if (ImGui::Button("Back to Menu", button_size)) {

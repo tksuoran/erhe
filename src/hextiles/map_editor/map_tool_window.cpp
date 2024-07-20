@@ -36,7 +36,7 @@ Map_tool_window::Map_tool_window(
     , m_tile_renderer{tile_renderer}
     , m_tiles        {tiles}
 {
-    hide();
+    hide_window();
 }
 
 void Map_tool_window::imgui()
@@ -47,7 +47,7 @@ void Map_tool_window::imgui()
         m_menu_window.show_menu();
     }
     if (ImGui::Button("Generator", button_size)) {
-        m_map_generator.show();
+        m_map_generator.show_window();
     }
     if (ImGui::Button("Load Map")) {
         const auto path_opt = erhe::file::select_file();

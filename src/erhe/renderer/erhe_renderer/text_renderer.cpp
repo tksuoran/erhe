@@ -281,11 +281,7 @@ void Text_renderer::next_frame()
     m_index_count       = 0;
 }
 
-void Text_renderer::print(
-    const glm::vec3        text_position,
-    const uint32_t         text_color,
-    const std::string_view text
-)
+void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_color, const std::string_view text)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -330,16 +326,12 @@ auto Text_renderer::font_size() -> float
 
 auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rectangle
 {
-    return m_font
-        ? m_font->measure(text)
-        : erhe::ui::Rectangle{};
+    return m_font ? m_font->measure(text) : erhe::ui::Rectangle{};
 }
 
 static constexpr std::string_view c_text_renderer_render{"Text_renderer::render()"};
 
-void Text_renderer::render(
-    erhe::math::Viewport viewport
-)
+void Text_renderer::render(erhe::math::Viewport viewport)
 {
     if (m_index_count == 0) {
         return;
@@ -349,10 +341,7 @@ void Text_renderer::render(
 
     //ERHE_PROFILE_GPU_SCOPE(c_text_renderer_render)
 
-    const auto handle = m_graphics_instance.get_handle(
-        *m_font->texture(),
-        m_nearest_sampler
-    );
+    const auto handle = m_graphics_instance.get_handle(*m_font->texture(), m_nearest_sampler);
 
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 

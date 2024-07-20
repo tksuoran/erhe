@@ -39,10 +39,7 @@ Icon_rasterization::Icon_rasterization(
     );
     m_texture->set_debug_label("Icon_set");
 
-    m_texture_handle = graphics_instance.get_handle(
-        *m_texture.get(),
-        programs.linear_sampler
-    );
+    m_texture_handle = graphics_instance.get_handle(*m_texture.get(), programs.linear_sampler);
 }
 
 void Icon_rasterization::rasterize(lunasvg::Document& document, const int column, const int row)

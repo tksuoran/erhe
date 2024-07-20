@@ -2,6 +2,7 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_commands/command.hpp"
+#include "scene/scene_builder.hpp"
 #include "operations/mesh_operation.hpp"
 
 namespace erhe::imgui {
@@ -116,6 +117,8 @@ private:
     erhe::commands::Lambda_command m_ambo_command;
     erhe::commands::Lambda_command m_truncate_command;
     erhe::commands::Lambda_command m_gyro_command;
+
+    Make_mesh_config m_make_mesh_config{};
 };
 
 } // namespace editor

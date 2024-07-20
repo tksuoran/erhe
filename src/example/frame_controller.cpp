@@ -10,8 +10,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
-namespace example
-{
+namespace example {
 
 using glm::mat4;
 using glm::vec3;
@@ -40,9 +39,7 @@ Frame_controller::Frame_controller()
     update();
 }
 
-auto Frame_controller::get_controller(
-    const Control control
-) -> erhe::math::Simulation_variable&
+auto Frame_controller::get_controller(const Control control) -> erhe::math::Simulation_variable&
 {
     switch (control) {
         case Control::translate_x: return translate_x;
@@ -72,10 +69,7 @@ void Frame_controller::set_elevation(const float value)
 void Frame_controller::set_heading(const float value)
 {
     m_heading = value;
-    m_heading_matrix = erhe::math::create_rotation(
-        m_heading,
-        erhe::math::vector_types<float>::vec3_unit_y()
-    );
+    m_heading_matrix = erhe::math::create_rotation(m_heading, erhe::math::vector_types<float>::vec3_unit_y());
     update();
 }
 
@@ -124,10 +118,7 @@ void Frame_controller::get_transform_from_node(erhe::scene::Node* node)
     m_elevation = elevation;
     m_heading   = heading;
 
-    m_heading_matrix = erhe::math::create_rotation(
-        m_heading,
-        erhe::math::vector_types<float>::vec3_unit_y()
-    );
+    m_heading_matrix = erhe::math::create_rotation(m_heading, erhe::math::vector_types<float>::vec3_unit_y());
 }
 
 void Frame_controller::handle_node_update(erhe::scene::Node* old_node, erhe::scene::Node* new_node)
@@ -170,10 +161,7 @@ void Frame_controller::update()
         return;
     }
 
-    const mat4 elevation_matrix = erhe::math::create_rotation(
-        m_elevation,
-        erhe::math::vector_types<float>::vec3_unit_x()
-    );
+    const mat4 elevation_matrix = erhe::math::create_rotation(m_elevation, erhe::math::vector_types<float>::vec3_unit_x());
     m_rotation_matrix = m_heading_matrix * elevation_matrix;
 
     mat4 parent_from_local = m_rotation_matrix;
@@ -254,10 +242,7 @@ auto is_frame_controller(const erhe::Item_base* const item) -> bool
         return false;
     }
     using namespace erhe::bit;
-    return test_all_rhs_bits_set(
-        item->get_type(),
-        erhe::Item_type::frame_controller
-    );
+    return test_all_rhs_bits_set(item->get_type(), erhe::Item_type::frame_controller);
 }
 
 auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool
@@ -265,9 +250,7 @@ auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool
     return is_frame_controller(item.get());
 }
 
-auto get_frame_controller(
-    const erhe::scene::Node* node
-) -> std::shared_ptr<Frame_controller>
+auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>
 {
     for (const auto& attachment : node->get_attachments()) {
         const auto frame_controller = std::dynamic_pointer_cast<Frame_controller>(attachment);

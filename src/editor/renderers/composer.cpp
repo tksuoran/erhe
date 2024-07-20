@@ -29,9 +29,9 @@ auto Composer::get_type_name() const -> std::string_view
 
 void Composer::render(const Render_context& context) const
 {
-    log_frame->trace("Composer::render()");
+    log_composer->trace("Composer::render()");
     for (const auto& renderpass : renderpasses) {
-        log_frame->trace("  rp: {}", renderpass->describe());
+        log_composer->trace("  rp: {}", renderpass->describe());
         renderpass->render(context);
     }
 }

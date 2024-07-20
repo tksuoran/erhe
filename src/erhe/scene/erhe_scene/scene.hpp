@@ -1,7 +1,7 @@
 #pragma once
 
-#include "erhe_item/hierarchy.hpp"
 #include "erhe_scene/scene_message_bus.hpp"
+#include "erhe_item/item.hpp"
 #include "erhe_item/unique_id.hpp"
 
 #include <glm/glm.hpp>
@@ -61,11 +61,7 @@ public:
 class Scene : public erhe::Item<erhe::Item_base, erhe::Item_base, Scene>
 {
 public:
-    Scene(
-        erhe::scene::Scene_message_bus& scene_message_bus,
-        const std::string_view          name,
-        Scene_host*                     host = nullptr
-    );
+    Scene(erhe::scene::Scene_message_bus& scene_message_bus, const std::string_view name, Scene_host* host = nullptr);
     explicit Scene(const Scene& src);
     Scene& operator=(const Scene& src);
     ~Scene() noexcept override;

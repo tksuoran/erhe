@@ -194,7 +194,7 @@ Hotbar::Hotbar(
     ini->get("z",          m_z);
 
     if (!m_enabled) {
-        hide();
+        hide_window();
         return;
     }
 
@@ -236,7 +236,7 @@ Hotbar::Hotbar(
     auto* scene_root_ptr = scene_builder.get_scene_root().get();
     auto& scene_root = *scene_root_ptr;
     if (m_use_radial) {
-        hide();
+        hide_window();
         init_radial_menu(mesh_memory, scene_root);
     } else {
         this->Imgui_window::m_show_in_menu = false;
@@ -396,6 +396,10 @@ void Hotbar::on_message(Editor_message& message)
     }
 
     using namespace erhe::bit;
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_tool_select)) {
+        update_slot_from_tool(m_context.tools->get_priority_tool());
+    }
+
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         if (message.scene_view != old_scene_view) {
             if (m_use_radial) {
@@ -408,7 +412,7 @@ void Hotbar::on_message(Editor_message& message)
                     if (old_node) {
                         m_context.rendergraph->disconnect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), old_node);
                     }
-                    set_visibility(static_cast<bool>(new_node));
+                    set_mesh_visibility(static_cast<bool>(new_node));
                     if (new_node) {
                         m_context.rendergraph->connect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), new_node);
                     }
@@ -421,7 +425,7 @@ void Hotbar::on_message(Editor_message& message)
     // This is used only for horizontal hotbar, not for radial menu.
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
         bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
-        set_visibility(visible);
+        set_mesh_visibility(visible);
         if (!m_use_radial) {
             update_node_transform();
         }
@@ -516,8 +520,10 @@ auto Hotbar::flags() -> ImGuiWindowFlags
         ImGuiWindowFlags_NoScrollbar       |
         ImGuiWindowFlags_NoScrollWithMouse |
         ImGuiWindowFlags_NoSavedSettings   |
+        ImGuiWindowFlags_NoCollapse        |
         ImGuiWindowFlags_NoNavInputs       |
-        ImGuiWindowFlags_NoNavFocus;
+        ImGuiWindowFlags_NoNavFocus        |
+        ImGuiWindowFlags_NoDocking;
 }
 
 void Hotbar::on_begin()
@@ -529,6 +535,15 @@ void Hotbar::on_begin()
         m_max_size[1] = m_min_size[1];
     }
     ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{0.0f, 0.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+}
+
+void Hotbar::on_end()
+{
+    ImGui::PopStyleVar(4);
 }
 
 void Hotbar::handle_slot_update()
@@ -636,6 +651,19 @@ void Hotbar::tool_button(const uint32_t id, Tool* tool)
     }
 }
 
+void Hotbar::update_slot_from_tool(Tool* tool)
+{
+    if (tool == nullptr) {
+        return;
+    }
+    for (size_t i = 0, end = m_slots.size(); i < end; ++i) {
+        if (m_slots.at(i) == tool) {
+            m_slot = i;
+            return;
+        }
+    }
+}
+
 void Hotbar::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -648,6 +676,8 @@ void Hotbar::imgui()
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  m_color_active);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_color_hover);
     ImGui::PushStyleColor(ImGuiCol_Button,        m_color_inactive);
+    ImVec2 cursor_position = ImGui::GetCursorPos();
+    static_cast<void>(cursor_position);
 
     uint32_t id = 0;
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
@@ -668,13 +698,16 @@ auto Hotbar::toggle_mesh_visibility() -> bool
 
     update_node_transform();
 
-    set_visibility(!m_mesh_visible);
+    set_mesh_visibility(!m_mesh_visible);
     return m_mesh_visible;
 }
 
 void Hotbar::set_mesh_visibility(const bool value)
 {
-    Imgui_window::set_visibility(value);
+    if (m_rendertarget_node) {
+        m_rendertarget_node->set_visible(value);
+    }
+    Imgui_window::set_window_visibility(value);
 
     if (m_rendertarget_mesh) {
         m_rendertarget_imgui_host->set_enabled(value);

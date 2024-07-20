@@ -177,9 +177,9 @@ void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
     m_projection_viewport.height = viewport.height;
 }
 
-void Viewport_scene_view::set_is_hovered(const bool is_hovered)
+void Viewport_scene_view::set_is_scene_view_hovered(const bool is_hovered)
 {
-    SPDLOG_LOGGER_TRACE(log_controller_ray, "{}->set_is_hovered({})", get_name(), m_is_scene_view_hovered);
+    SPDLOG_LOGGER_TRACE(log_scene_view, "{}->set_is_scene_view_hovered({})", get_name(), m_is_scene_view_hovered);
     m_is_scene_view_hovered = is_hovered;
 }
 
@@ -189,9 +189,9 @@ void Viewport_scene_view::set_camera(const std::shared_ptr<erhe::scene::Camera>&
     m_camera = camera;
 }
 
-auto Viewport_scene_view::is_hovered() const -> bool
+auto Viewport_scene_view::is_scene_view_hovered() const -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_controller_ray, "{}->is_hovered() = {}", get_name(), m_is_scene_view_hovered);
+    SPDLOG_LOGGER_TRACE(log_scene_view, "{}->is_scene_view_hovered() = {}", get_name(), m_is_scene_view_hovered);
     return m_is_scene_view_hovered;
 }
 
@@ -333,7 +333,7 @@ void Viewport_scene_view::update_hover_with_id_render()
         static_cast<int>(position_in_viewport.y)
     );
     if (!id_query.valid) {
-        SPDLOG_LOGGER_TRACE(log_controller_ray, "pointer context hover not valid");
+        SPDLOG_LOGGER_TRACE(log_scene_view, "pointer context hover not valid");
         return;
     }
 

@@ -361,8 +361,6 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
             fputs("Failed to initialize GLFW\n", stderr);
             return false;
         }
-
-        erhe::time::sleep_initialize();
     }
 
     const bool primary = (configuration.share == nullptr);
@@ -372,7 +370,9 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     glfwWindowHint(GLFW_GREEN_BITS,       8);
     glfwWindowHint(GLFW_BLUE_BITS,        8);
     glfwWindowHint(GLFW_ALPHA_BITS,       8);
-    //glfwWindowHint(GLFW_DEPTH_BITS,     24);
+    glfwWindowHint(GLFW_DEPTH_BITS,     configuration.use_depth   ? 24 : 0);
+    glfwWindowHint(GLFW_STENCIL_BITS,   configuration.use_stencil ?  8 : 0);
+
     glfwWindowHint(GLFW_SRGB_CAPABLE,     GLFW_TRUE);
     glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
     glfwWindowHint(GLFW_CENTER_CURSOR,    GLFW_TRUE); // Fullscreen only
@@ -460,6 +460,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     glfwSetWindowFocusCallback  (window, window_focus_event_callback);
     glfwSetCursorEnterCallback  (window, window_cursor_enter_callback);
 
+    m_configuration = configuration;
     if (primary) {
         GLFWerrorfun prev_error_callback = glfwSetErrorCallback(nullptr);
         m_mouse_cursor[Mouse_cursor_Arrow     ] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
@@ -487,11 +488,21 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
-        if (configuration.show) {
+        if (m_configuration.show) {
             glfwShowWindow(window);
         }
         glfwMakeContextCurrent(window);
-        log_window->info("Setting swap interval to {}", configuration.swap_interval);
+
+        bool is_swap_control_tear_supported = 
+            (glfwExtensionSupported("WGL_EXT_swap_control_tear") == GLFW_TRUE) ||
+            (glfwExtensionSupported("GLX_EXT_swap_control_tear") == GLFW_TRUE);
+        if (is_swap_control_tear_supported) {
+            log_window->info("EXT_swap_control_tear is supported");
+        } else {
+            log_window->info("EXT_swap_control_tear is not supported");
+            m_configuration.swap_interval = std::min(0, m_configuration.swap_interval);
+        }
+        log_window->info("Setting swap interval to {}", m_configuration.swap_interval);
         glfwSwapInterval(configuration.swap_interval);
         if (s_window_count == 1) {
             get_extensions();
@@ -527,8 +538,6 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
     glfwGetCursorPos(window, &m_last_mouse_x, &m_last_mouse_y);
 
-    m_configuration = configuration;
-
     return true;
 }
 
@@ -559,27 +568,22 @@ void Context_window::break_event_loop()
     m_is_event_loop_running = false;
 }
 
-void Context_window::poll_events()
+void Context_window::poll_events(float wait_time)
 {
     ERHE_PROFILE_FUNCTION();
-    if (m_configuration.sleep_time > 0.0f) {
-        ERHE_PROFILE_SCOPE("sleep");
-        erhe::time::sleep_for(std::chrono::duration<float, std::milli>(m_configuration.sleep_time * 1000.0f));
-    }
 
     if (m_is_mouse_captured) {
         glfwSetCursorPos(m_glfw_window, m_mouse_capture_xpos, m_mouse_capture_ypos);
     }
 
-    if (m_configuration.wait_time > 0.0f) {
+    if (wait_time > 0.0f) {
         ERHE_PROFILE_SCOPE("wait");
-        glfwWaitEventsTimeout(m_configuration.wait_time);
+        glfwWaitEventsTimeout(wait_time);
     } else {
         ERHE_PROFILE_SCOPE("poll");
         glfwPollEvents();
     }
 
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
     for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
         int present = glfwJoystickPresent(jid);
         if (present) {
@@ -596,7 +600,7 @@ void Context_window::poll_events()
                 const float delta = value - m_controller_axis_values[i];
                 if (delta != 0.0f) {
                     m_controller_axis_values[i] = value;
-                    m_input_events.push_back(
+                    m_input_events[m_input_event_queue_write].push_back(
                         Input_event{
                             .type = Input_event_type::controller_axis_event,
                             .u = {
@@ -620,7 +624,7 @@ void Context_window::poll_events()
                 const bool value = button_values[i] != 0;
                 if (value != m_controller_button_values[i]) {
                     m_controller_button_values[i] = value;
-                    m_input_events.push_back(
+                    m_input_events[m_input_event_queue_write].push_back(
                         Input_event{
                             .type = Input_event_type::controller_button_event,
                             .u = {
@@ -757,8 +761,7 @@ void Context_window::handle_key_event(int key, int scancode, int action, int glf
     switch (action) {
         case GLFW_PRESS:
         case GLFW_RELEASE: {
-            std::lock_guard<std::mutex> lock{m_input_event_mutex};
-            m_input_events.push_back(
+            m_input_events[m_input_event_queue_write].push_back(
                 Input_event{
                     .type = Input_event_type::key_event,
                     .u = {
@@ -781,8 +784,7 @@ void Context_window::handle_key_event(int key, int scancode, int action, int glf
 
 void Context_window::handle_window_resize_event(int width, int height)
 {
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
-    m_input_events.push_back(
+    m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_resize_event,
             .u = {
@@ -797,8 +799,7 @@ void Context_window::handle_window_resize_event(int width, int height)
 
 void Context_window::handle_window_refresh_event()
 {
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
-    m_input_events.push_back(
+    m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_refresh_event,
         }
@@ -807,8 +808,7 @@ void Context_window::handle_window_refresh_event()
 
 void Context_window::handle_window_close_event()
 {
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
-    m_input_events.push_back(
+    m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_close_event,
         }
@@ -817,8 +817,7 @@ void Context_window::handle_window_close_event()
 
 void Context_window::handle_window_focus_event(int focused)
 {
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
-    m_input_events.push_back(
+    m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_focus_event,
             .u = {
@@ -832,8 +831,7 @@ void Context_window::handle_window_focus_event(int focused)
 
 void Context_window::handle_cursor_enter_event(int entered)
 {
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
-    m_input_events.push_back(
+    m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::cursor_enter_event,
             .u = {
@@ -847,8 +845,7 @@ void Context_window::handle_cursor_enter_event(int entered)
 
 void Context_window::handle_char_event(unsigned int codepoint)
 {
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
-    m_input_events.push_back(
+    m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::char_event,
             .u = {
@@ -864,8 +861,7 @@ void Context_window::handle_mouse_button_event(int button, int action, int glfw_
 {
     m_glfw_key_modifiers = glfw_modifiers;
 
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
-    m_input_events.push_back(
+    m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::mouse_button_event,
             .u = {
@@ -881,8 +877,7 @@ void Context_window::handle_mouse_button_event(int button, int action, int glfw_
 
 void Context_window::handle_mouse_wheel_event(double x, double y)
 {
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
-    m_input_events.push_back(
+    m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::mouse_wheel_event,
             .u = {
@@ -898,11 +893,10 @@ void Context_window::handle_mouse_wheel_event(double x, double y)
 
 void Context_window::handle_mouse_move(double x, double y)
 {
-    std::lock_guard<std::mutex> lock{m_input_event_mutex};
     if (m_is_mouse_captured) {
         double dx = x - m_mouse_capture_xpos;
         double dy = y - m_mouse_capture_ypos;
-        m_input_events.push_back(
+        m_input_events[m_input_event_queue_write].push_back(
             Input_event{
                 .type = Input_event_type::mouse_move_event,
                 .u = {
@@ -921,7 +915,7 @@ void Context_window::handle_mouse_move(double x, double y)
         double dy = y - m_last_mouse_y;
         m_last_mouse_x = x;
         m_last_mouse_y = y;
-        m_input_events.push_back(
+        m_input_events[m_input_event_queue_write].push_back(
             Input_event{
                 .type = Input_event_type::mouse_move_event,
                 .u = {
@@ -978,12 +972,15 @@ auto Context_window::get_height() const -> int
 
 auto Context_window::get_input_events() -> std::vector<Input_event>&
 {
-    return m_input_events;
+    return m_input_events[1 - m_input_event_queue_write];
 }
 
 void Context_window::clear_input_events()
 {
-    m_input_events.clear();
+    // Clear events processed by app
+    m_input_events[1 - m_input_event_queue_write].clear();
+    // Swap input event buffers
+    m_input_event_queue_write = 1 - m_input_event_queue_write;
 }
 
 void Context_window::get_extensions()

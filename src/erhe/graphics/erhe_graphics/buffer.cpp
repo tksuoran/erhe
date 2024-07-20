@@ -60,19 +60,8 @@ void Buffer::allocate_storage()
     capability_check(m_storage_mask);
     capability_check(m_access_mask);
 
-    gl::named_buffer_storage(
-        gl_name(),
-        static_cast<GLintptr>(m_capacity_byte_count),
-        nullptr,
-        m_storage_mask
-    );
-
-    if (
-        erhe::bit::test_all_rhs_bits_set(
-            m_storage_mask,
-            gl::Buffer_storage_mask::map_persistent_bit
-        )
-    ) {
+    gl::named_buffer_storage(gl_name(), static_cast<GLintptr>(m_capacity_byte_count), nullptr, m_storage_mask);
+    if (erhe::bit::test_all_rhs_bits_set(m_storage_mask, gl::Buffer_storage_mask::map_persistent_bit)) {
         map_bytes(0, m_capacity_byte_count, m_access_mask);
     }
 

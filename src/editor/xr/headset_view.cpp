@@ -15,6 +15,7 @@
 #include "xr/controller_visualization.hpp"
 #include "xr/hand_tracker.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -133,7 +134,8 @@ Headset_view::Headset_view(
         .depth             = config.depth,
         .visibility_mask   = config.visibility_mask,
         .hand_tracking     = config.hand_tracking,
-        .composition_alpha = config.composition_alpha
+        .composition_alpha = config.composition_alpha,
+        .mirror_mode       = editor_context.OpenXR_mirror
     };
 
     {
@@ -184,8 +186,7 @@ void Headset_view::imgui()
     auto                        old_scene_root = m_scene_root;
     std::shared_ptr<Scene_root> scene_root     = get_scene_root();
     Scene_root*                 scene_root_raw = scene_root.get();
-    ImGui::SetNextItemWidth(110.0f);
-    const bool combo_used     = m_editor_context.editor_scenes->scene_combo("##Scene", scene_root_raw, false);
+    const bool combo_used = m_editor_context.editor_scenes->scene_combo("##Scene", scene_root_raw, false);
     if (combo_used) {
         scene_root = (scene_root_raw != nullptr) 
             ? scene_root_raw->shared_from_this()
@@ -195,7 +196,7 @@ void Headset_view::imgui()
 
     // Shader selection
     ImGui::Combo(
-        "##Shader",
+        "Render Mode",
         reinterpret_cast<int*>(&m_shader_stages_variant),
         c_shader_stages_variant_strings,
         IM_ARRAYSIZE(c_shader_stages_variant_strings),
@@ -223,7 +224,7 @@ void Headset_view::render(const Render_context&)
 
     line_renderer.set_thickness(4.0f);
     for (const auto& finger_input : m_finger_inputs) {
-        const glm::vec4 color = m_mouse_down ? green : red;
+        const glm::vec4 color = green;
         line_renderer.set_line_color(color);
         line_renderer.add_lines({{finger_input.finger_point, finger_input.point}});
     }
@@ -239,30 +240,54 @@ void Headset_view::render(const Render_context&)
             : nullptr;
 
     if (pose != nullptr) {
-        const auto* trigger_value_action = (pose == right_aim_pose) ? m_headset->get_actions_right().trigger_value : m_headset->get_actions_left().trigger_value;
+        const auto* trigger_value_action = (pose == right_aim_pose) 
+            ? m_headset->get_actions_right().trigger_value 
+            : m_headset->get_actions_left().trigger_value;
+        const auto* click_action = (pose == right_aim_pose) 
+            ? m_headset->get_actions_right().a_click
+            : m_headset->get_actions_left().x_click;
         const float trigger_value = (trigger_value_action != nullptr) ? trigger_value_action->state.currentState : 0.0f;
-        const auto position    = pose->position + get_camera_offset();
-        const auto orientation = glm::mat4_cast(pose->orientation);
-        const auto direction   = glm::vec3{orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+        const bool click = (click_action != nullptr) && (click_action->state.currentState == XR_TRUE);
 
-        line_renderer.add_lines(
-            m_mouse_down ? cyan : blue,
-            {
-                {
-                    position,
-                    position + trigger_value * direction
-                }
-            }
+        const auto* nearest = get_nearest_hover(Hover_entry::all_bits);
+        bool use_hover = 
+            (nearest != nullptr) &&
+            nearest->position.has_value() &&
+            get_control_ray_origin_in_world().has_value() &&
+            get_control_ray_direction_in_world().has_value();
+
+        const auto position = use_hover
+            ? get_control_ray_origin_in_world().value()
+            : pose->position + get_camera_offset();
+
+        const auto orientation = glm::mat4_cast(pose->orientation);
+
+        const auto direction = use_hover
+            ? get_control_ray_direction_in_world().value() 
+            : glm::vec3{orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+
+        const auto tip = use_hover
+            ? nearest->position.value() 
+            : position + trigger_value * direction;
+
+        bool is_content      = (nearest != nullptr) && erhe::bit::test_all_rhs_bits_set(nearest->mask, Hover_entry::content_bit);
+        bool is_tool         = (nearest != nullptr) && erhe::bit::test_all_rhs_bits_set(nearest->mask, Hover_entry::tool_bit);
+        bool is_rendertarget = (nearest != nullptr) && erhe::bit::test_all_rhs_bits_set(nearest->mask, Hover_entry::rendertarget_bit);
+        glm::vec4 type_color =
+            is_content      ? glm::vec4{0.8f, 0.5f, 0.3f, 1.0f} :
+            is_tool         ? glm::vec4{1.0f, 0.0f, 1.0f, 1.0f} :
+            is_rendertarget ? glm::vec4{0.6f, 0.6f, 0.6f, 1.0f} :
+                              glm::vec4{0.4f, 0.4f, 0.4f, 1.0f};
+        glm::vec4 near_color = click ? glm::vec4{1.0f, 1.0f, 1.0f, 1.0f} : type_color;
+        glm::vec4 far_color  = glm::vec4{type_color.x, type_color.y, type_color.z, 0.4f};
+        line_renderer.add_line(
+            near_color, 0.0f, position,
+            near_color, 2.0f, tip
         );
-        if (trigger_value < 1.0f) {
-            line_renderer.add_lines(
-                orange,
-                {
-                    {
-                        position + trigger_value * direction,
-                        position + 100.0f * direction
-                    }
-                }
+        if ((trigger_value < 1.0f) && !is_rendertarget) {
+            line_renderer.add_line(
+                far_color, 2.0f, tip,
+                far_color, 8.0f, position + 100.0f * direction
             );
         }
     }
@@ -353,8 +378,34 @@ void Headset_view::render_headset()
                 m_request_renderdoc_capture = false;
             }
 
-            if (m_head_tracking_enabled) {
-                view_resources->update(render_view);
+            erhe::scene::Projection::Fov_sides fov_sides{render_view.fov_left, render_view.fov_right, render_view.fov_up, render_view.fov_down};
+            if (m_context.OpenXR_mirror) {
+                erhe::window::Context_window* window = m_context.context_window;
+                //constexpr float near_value = 1.0f;
+                float left_over_near  = std::tan(render_view.fov_left );
+                float right_over_near = std::tan(render_view.fov_right);
+                float up_over_near    = std::tan(render_view.fov_up   );
+                float down_over_near  = std::tan(render_view.fov_down );
+                float left            = /* near_value * */ left_over_near;
+                float right           = /* near_value * */ right_over_near;
+                float up              = /* near_value * */ up_over_near;
+                float down            = /* near_value * */ down_over_near;
+                float desired_aspect  = static_cast<float>(window->get_width()) / static_cast<float>(window->get_height());
+                // (expansion + right - left) / (up - down) = desired_aspect   || * (up - down)
+                // expansion + right - left = desired_aspect * (up - down)     || -right +left
+                // expansion = desired_aspect * (up - donw) - right + left
+                float expansion       = desired_aspect * (up - down) - right + left;
+                float expanded_left   = left - 0.5f * expansion;
+                float expanded_right  = right + 0.5f * expansion;
+                erhe::scene::Projection::Fov_sides expanded_fov_sides{
+                    std::atan(expanded_left),
+                    std::atan(expanded_right),
+                    render_view.fov_up,
+                    render_view.fov_down
+                };
+                view_resources->update(render_view, expanded_fov_sides);
+            } else {
+                view_resources->update(render_view, fov_sides);
             }
 
             // Update scene node transforms
@@ -378,22 +429,33 @@ void Headset_view::render_headset()
             }
 
             auto& graphics_instance = *m_context.graphics_instance;
+            auto* openxr_framebuffer = view_resources->get_framebuffer();
+            erhe::math::Viewport viewport;
 
-            auto* framebuffer = view_resources->get_framebuffer();
-            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
+            if (m_context.OpenXR_mirror) {
+                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+                viewport = erhe::math::Viewport{
+                    .x             = 0,
+                    .y             = 0,
+                    .width         = m_context.context_window->get_width(),
+                    .height        = m_context.context_window->get_height(),
+                    .reverse_depth = graphics_instance.configuration.reverse_depth
+                };
+            } else {
+                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, openxr_framebuffer->gl_name());
 
-            auto status = gl::check_named_framebuffer_status(framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
-            if (status != gl::Framebuffer_status::framebuffer_complete) {
-                log_headset->error("view framebuffer status = {}", gl::c_str(status));
+                auto status = gl::check_named_framebuffer_status(openxr_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
+                if (status != gl::Framebuffer_status::framebuffer_complete) {
+                    log_headset->error("OpenXR framebuffer status = {}", gl::c_str(status));
+                }
+                viewport = erhe::math::Viewport{
+                    .x             = 0,
+                    .y             = 0,
+                    .width         = static_cast<int>(render_view.width),
+                    .height        = static_cast<int>(render_view.height),
+                    .reverse_depth = graphics_instance.configuration.reverse_depth
+                };
             }
-
-            const erhe::math::Viewport viewport {
-                .x             = 0,
-                .y             = 0,
-                .width         = static_cast<int>(render_view.width),
-                .height        = static_cast<int>(render_view.height),
-                .reverse_depth = graphics_instance.configuration.reverse_depth
-            };
 
             graphics_instance.opengl_state_tracker.shader_stages.reset();
             graphics_instance.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
@@ -447,6 +509,37 @@ void Headset_view::render_headset()
                 }
 
                 if (m_context.OpenXR_mirror) {
+                    int src_width  = m_context.context_window->get_width();
+                    int src_height = m_context.context_window->get_height();
+                    int dst_width  = view_resources->get_width();
+                    int dst_height = view_resources->get_height();
+
+                    // - fit all one to one if possible
+                    // - pad if not enough in src
+                    // - crop if too much in src
+                    int width_diff = std::abs(src_width - dst_width);
+                    int src_x0 = (src_width > dst_width ) ? width_diff / 2     : 0;
+                    int src_x1 = (src_width > dst_width ) ? src_x0 + dst_width : src_width;
+                    int dst_x0 = (src_width > dst_width ) ? 0                  : width_diff / 2;
+                    int dst_x1 = (src_width > dst_width ) ? dst_width          : dst_x0 + src_width;
+
+                    int height_diff = std::abs(src_height - dst_height);
+                    int src_y0 = (src_height > dst_height) ? height_diff / 2     : 0;
+                    int src_y1 = (src_height > dst_height) ? src_y0 + dst_height : src_height;
+                    int dst_y0 = (src_height > dst_height) ? 0                   : height_diff / 2;
+                    int dst_y1 = (src_height > dst_height) ? dst_height          : dst_y0 + src_height;
+                    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
+                    gl::read_buffer(gl::Read_buffer_mode::back);
+                    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, openxr_framebuffer->gl_name());
+                    gl::disable(gl::Enable_cap::framebuffer_srgb);
+                    gl::blit_framebuffer(
+                        src_x0, src_y0, src_x1, src_y1, 
+                        dst_x0, dst_y0, dst_x1, dst_y1,
+                        gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
+                    );
+                    gl::enable(gl::Enable_cap::framebuffer_srgb);
+                    m_context_window.swap_buffers();
+#if 0
                     int src_width  = view_resources->get_width();
                     int src_height = view_resources->get_height();
                     int dst_width  = m_context.context_window->get_width();
@@ -466,7 +559,7 @@ void Headset_view::render_headset()
                     int src_y1 = (src_height > dst_height) ? src_y0 + dst_height : src_height;
                     int dst_y0 = (src_height > dst_height) ? 0                   : height_diff / 2;
                     int dst_y1 = (src_height > dst_height) ? dst_height          : src_y0 + src_height;
-                    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, framebuffer->gl_name());
+                    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, openxr_framebuffer->gl_name());
                     gl::read_buffer(gl::Read_buffer_mode::color_attachment0);
                     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
                     gl::blit_framebuffer(
@@ -476,6 +569,7 @@ void Headset_view::render_headset()
                     );
                     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
                     m_context_window.swap_buffers();
+#endif
                 }
                 first_view = false;
             }
@@ -598,7 +692,57 @@ auto Headset_view::update_events() -> bool
     auto& instance = m_headset->get_xr_instance();
     const XrSession xr_session = m_headset->get_xr_session().get_xr_session();
 
-    m_context.commands->dispatch_xr_events(instance, xr_session);
+    // Inject XR input events
+    std::vector<erhe::window::Input_event>& input_events = m_context.context_window->get_input_events();
+    for (auto& action : instance.get_boolean_actions()) {
+        action.get(xr_session);
+        if (action.state.changedSinceLastSync == XR_TRUE) {
+            input_events.push_back(
+                erhe::window::Input_event{
+                    .type = erhe::window::Input_event_type::xr_boolean_event,
+                    .u = {
+                        .xr_boolean_event = {
+                            .action = &action,
+                            .value  = action.state.currentState == XR_TRUE
+                        }
+                    }
+                }
+            );
+        }
+    }
+    for (auto& action : instance.get_float_actions()) {
+        action.get(xr_session);
+        if (action.state.changedSinceLastSync == XR_TRUE) {
+            input_events.push_back(
+                erhe::window::Input_event{
+                    .type = erhe::window::Input_event_type::xr_float_event,
+                    .u = {
+                        .xr_float_event = {
+                            .action = &action,
+                            .value  = action.state.currentState
+                        }
+                    }
+                }
+            );
+        }
+    }
+    for (auto& action : instance.get_vector2f_actions()) {
+        action.get(xr_session);
+        if (action.state.changedSinceLastSync == XR_TRUE) {
+            input_events.push_back(
+                erhe::window::Input_event{
+                    .type = erhe::window::Input_event_type::xr_vector2f_event,
+                    .u = {
+                        .xr_vector2f_event = {
+                            .action = &action,
+                            .x = action.state.currentState.x,
+                            .y = action.state.currentState.y
+                        }
+                    }
+                }
+            );
+        }
+    }
 
     if (m_controller_visualization) {
         // TODO both controllers
@@ -643,15 +787,6 @@ void Headset_view::end_frame()
         action.state.changedSinceLastSync = XR_FALSE;
     }
 }
-
-//// TODO
-//// 
-//// void Headset_view::imgui()
-//// {
-////     m_mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-//// 
-////     ImGui::Checkbox("Head Tracking Enabled", &m_head_tracking_enabled);
-//// }
 
 } // namespace editor
 

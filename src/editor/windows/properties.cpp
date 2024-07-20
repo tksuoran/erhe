@@ -3,7 +3,9 @@
 #include "editor_context.hpp"
 #include "editor_message_bus.hpp"
 #include "rendertarget_mesh.hpp"
+#include "tools/brushes/brush.hpp"
 #include "tools/selection_tool.hpp"
+#include "scene/brush_placement.hpp"
 #include "scene/content_library.hpp"
 #include "scene/frame_controller.hpp"
 #include "scene/material_preview.hpp"
@@ -48,11 +50,7 @@ namespace editor {
 
 const float indent = 15.0f;
 
-Properties::Properties(
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
-)
+Properties::Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
     : Imgui_window{imgui_renderer, imgui_windows, "Properties", "properties"}
     , m_context   {editor_context}
 {
@@ -471,6 +469,13 @@ void Properties::rendertarget_properties(Rendertarget_mesh& rendertarget) const
     ImGui::Text("Pixels per Meter: %f", static_cast<float>(rendertarget.pixels_per_meter()));
 }
 
+void Properties::brush_placement_properties(Brush_placement& brush_placement) const
+{
+    ImGui::Text("Brush: %s", brush_placement.get_brush()->get_name().c_str());
+    ImGui::Text("Polygon: %u", brush_placement.get_polygon());
+    ImGui::Text("Corner: %u", brush_placement.get_corner());
+}
+
 #endif
 
 void Properties::on_begin()
@@ -624,6 +629,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item)
     const auto& light                = std::dynamic_pointer_cast<erhe::scene::Light  >(item);
     const auto& mesh                 = std::dynamic_pointer_cast<erhe::scene::Mesh   >(item);
     const auto& node                 = std::dynamic_pointer_cast<erhe::scene::Node   >(item);
+    const auto& brush_placement      = std::dynamic_pointer_cast<Brush_placement     >(item);
 
     const bool default_open = !node_physics && !content_library_node && !node;
 
@@ -684,6 +690,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item)
 
     if (rendertarget) {
         rendertarget_properties(*rendertarget);
+    }
+
+    if (brush_placement) {
+        brush_placement_properties(*brush_placement);
     }
 
     ImGui::TreePop();

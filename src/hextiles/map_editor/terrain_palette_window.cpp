@@ -15,7 +15,7 @@ Terrain_palette_window::Terrain_palette_window(
     : Imgui_window{imgui_renderer, imgui_windows, "Terrain Palette", "terrain_palete"}
     , m_map_editor{map_editor}
 {
-    hide();
+    hide_window();
 }
 
 void Terrain_palette_window::imgui()

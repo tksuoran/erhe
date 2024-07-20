@@ -333,7 +333,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         *m_context.editor_rendering,
         *m_context.editor_settings,
         *m_context.tools,
-        "new viewport window",
+        "rt scene view",
         scene_root->shared_from_this(),
         camera,
         4,
@@ -345,7 +345,9 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         *m_context.imgui_renderer,
         *m_context.imgui_windows,
         *m_context.rendergraph,
-        scene_view
+        scene_view,
+        "rt scene view node",
+        ""
     );
 
     // Make imgui window show in rendertarget imgui host 

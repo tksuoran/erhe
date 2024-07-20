@@ -94,7 +94,7 @@ public:
 
     void tick()
     {
-        if (m_map_window.is_visible()) {
+        if (m_map_window.is_window_visible()) {
             m_map_window.render();
         }
         auto& input_events = m_context_window.get_input_events();
@@ -103,7 +103,6 @@ public:
         m_rendergraph   .execute();
         m_imgui_renderer.next_frame();
         m_tile_renderer .next_frame();
-        m_context_window.swap_buffers();
     }
 
     auto on_window_close_event() -> bool override

@@ -8,12 +8,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <fmt/format.h>
-
-#include <sstream>
-
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 using namespace erhe;
 
@@ -197,10 +192,7 @@ auto Node::get_attachment_count(const erhe::Item_filter& filter) const -> std::s
     return result;
 }
 
-void Node::handle_add_attachment(
-    const std::shared_ptr<Node_attachment>& attachment,
-    std::size_t                             position
-)
+void Node::handle_add_attachment(const std::shared_ptr<Node_attachment>& attachment, std::size_t position)
 {
     ERHE_VERIFY(attachment);
 
@@ -217,9 +209,7 @@ void Node::handle_add_attachment(
     node_data.attachments.insert(node_data.attachments.begin() + position, attachment);
 }
 
-void Node::handle_remove_attachment(
-    Node_attachment* const attachment_to_remove
-)
+void Node::handle_remove_attachment(Node_attachment* const attachment_to_remove)
 {
     ERHE_VERIFY(attachment_to_remove != nullptr);
 
@@ -242,10 +232,7 @@ void Node::handle_remove_attachment(
     }
 }
 
-void Node::handle_flag_bits_update(
-    const uint64_t old_flag_bits,
-    const uint64_t new_flag_bits
-)
+void Node::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
     for (const auto& attachment : get_attachments()) {
         attachment->handle_node_flag_bits_update(old_flag_bits, new_flag_bits);
@@ -271,10 +258,7 @@ auto Node::get_scene() const -> Scene*
         : nullptr;
 }
 
-void Node::handle_parent_update(
-    erhe::Hierarchy* const old_parent_item,
-    erhe::Hierarchy* const new_parent_item
-)
+void Node::handle_parent_update(erhe::Hierarchy* const old_parent_item, erhe::Hierarchy* const new_parent_item)
 {
     // Keep this alive to make it simple to call node_sanity_check()
     auto shared_this = weak_from_this().lock();
@@ -293,10 +277,7 @@ void Node::handle_parent_update(
     hierarchy_sanity_check();
 }
 
-void Node::handle_item_host_update(
-    erhe::Item_host* const old_item_host,
-    erhe::Item_host* const new_item_host
-)
+void Node::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     ERHE_VERIFY(old_item_host != new_item_host);
 
@@ -642,8 +623,7 @@ void Node::set_node_from_world(const Transform& node_from_world)
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs)
--> unsigned int
+auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs)-> unsigned int
 {
     unsigned int mask{0};
 
@@ -664,6 +644,5 @@ auto is_node(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     return is_node(item.get());
 }
-
 
 } // namespace erhe::scene

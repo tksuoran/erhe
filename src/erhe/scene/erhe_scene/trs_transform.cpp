@@ -3,8 +3,7 @@
 
 #include <glm/gtx/matrix_decompose.hpp>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 using glm::vec3;
 using glm::mat4;
@@ -88,10 +87,7 @@ void Trs_transform::compose()
     m_inverse_matrix = erhe::math::compose_inverse(m_scale, m_rotation, m_translation, m_skew);
 }
 
-auto translate(
-    const Trs_transform& t,
-    const glm::vec3      translation
-) -> Trs_transform
+auto translate(const Trs_transform& t, const glm::vec3 translation) -> Trs_transform
 {
     return Trs_transform{
         translation + t.get_translation(),
@@ -107,10 +103,7 @@ void Trs_transform::translate_by(glm::vec3 translation)
     compose();
 }
 
-auto rotate(
-    const Trs_transform& t,
-    const glm::quat      rotation
-) -> Trs_transform
+auto rotate(const Trs_transform& t, const glm::quat rotation) -> Trs_transform
 {
     return Trs_transform{
         t.get_translation(),
@@ -126,10 +119,7 @@ void Trs_transform::rotate_by(glm::quat rotation)
     compose();
 }
 
-auto scale(
-    const Trs_transform& t,
-    const glm::vec3      scale
-) -> Trs_transform
+auto scale(const Trs_transform& t, const glm::vec3 scale) -> Trs_transform
 {
     return Trs_transform{
         t.get_translation(),
@@ -169,10 +159,7 @@ void Trs_transform::set_skew(const glm::vec3 skew)
     compose();
 }
 
-void Trs_transform::set_translation_and_rotation(
-    const glm::vec3 translation,
-    const glm::quat rotation
-)
+void Trs_transform::set_translation_and_rotation(const glm::vec3 translation, const glm::quat rotation)
 {
     m_rotation    = rotation;
     m_translation = translation;

@@ -281,11 +281,7 @@ Scene& Scene::operator=(const Scene&)
     ERHE_FATAL("This probably won't work");
 }
 
-Scene::Scene(
-    Scene_message_bus&     message_bus,
-    const std::string_view name,
-    Scene_host* const      host
-)
+Scene::Scene(Scene_message_bus& message_bus, const std::string_view name, Scene_host* const host)
     : Item         {name}
     , m_message_bus{message_bus}
     , m_host       {host}

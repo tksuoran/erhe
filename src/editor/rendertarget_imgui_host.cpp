@@ -95,10 +95,81 @@ auto Rendertarget_imgui_host::get_scale_value() const -> float
     return 2.0f;
 }
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+auto Rendertarget_imgui_host::on_xr_boolean_event(const erhe::window::Xr_boolean_event& xr_boolean_event) -> bool
+{
+    if (!m_has_cursor) {
+        return false; // TODO Is this needed? Should not be.
+    }
+    auto& headset_view = *m_context.headset_view;
+    const auto* headset = headset_view.get_headset();
+    ERHE_VERIFY(headset != nullptr);
+
+    ImGuiIO& io = m_imgui_context->IO;
+
+    auto* trigger_click = headset->get_actions_right().trigger_click;
+    auto* a_click       = headset->get_actions_right().a_click;
+    if ((trigger_click != nullptr) && (xr_boolean_event.action == trigger_click)) {
+        io.AddMouseButtonEvent(ImGuiMouseButton_Left, xr_boolean_event.value);
+        return true;
+    }
+    if ((a_click != nullptr) && (xr_boolean_event.action == a_click)) {
+        io.AddMouseButtonEvent(ImGuiMouseButton_Left, xr_boolean_event.value);
+        return true;
+    }
+    auto* menu_click = headset->get_actions_left().menu_click;
+    if ((menu_click != nullptr) && (xr_boolean_event.action == menu_click)) {
+        io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
+        return true;
+    }
+
+    // The thumbrest is not present for the second edition of the Oculus Touch (Rift S and Quest)
+    auto* r_thumbrest_touch = headset->get_actions_right().thumbrest_touch;
+    if ((r_thumbrest_touch != nullptr) && (xr_boolean_event.action == r_thumbrest_touch)) {
+        io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
+        return true;
+    }
+
+    auto* r_thumbstick_click = headset->get_actions_right().thumbstick_click;
+    if ((r_thumbstick_click != nullptr) && (xr_boolean_event.action == r_thumbstick_click)) {
+        io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
+        return true;
+    }
+    return false;
+}
+
+auto Rendertarget_imgui_host::on_xr_float_event(const erhe::window::Xr_float_event& xr_float_event) -> bool
+{
+    static_cast<void>(xr_float_event); // TODO
+    return false;
+}
+
+auto Rendertarget_imgui_host::on_xr_vector2f_event(const erhe::window::Xr_vector2f_event& xr_vector2f_event) -> bool
+{
+    if (!m_has_cursor) {
+        return false; // TODO Is this needed? Should not be.
+    }
+
+    auto& headset_view = *m_context.headset_view;
+    const auto* headset = headset_view.get_headset();
+    ERHE_VERIFY(headset != nullptr);
+
+    auto* r_thumbstick = headset->get_actions_right().thumbstick;
+    if (r_thumbstick == nullptr) {
+        return false;
+    }
+    if (xr_vector2f_event.action != r_thumbstick) {
+        return false;
+    }
+    if (xr_vector2f_event.x != 0.0f || xr_vector2f_event.y != 0.0f) {
+        on_mouse_wheel_event({xr_vector2f_event.x * 0.25f, xr_vector2f_event.y * 0.25f, 0});
+    }
+    return true;
+}
+#endif
+
 auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_host::begin_imgui_frame()");
-
     if (m_rendertarget_mesh == nullptr) {
         return false;
     }
@@ -109,6 +180,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     auto& headset_view = *m_context.headset_view;
 #endif
     const auto pointer = m_rendertarget_mesh->get_pointer();
+    ImGuiIO& io = m_imgui_context->IO;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (!m_context.OpenXR) // TODO Figure out better way to combine different input methods
@@ -116,21 +188,13 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     {
         if (pointer.has_value()) {
             if (!has_cursor()) {
-                on_event(erhe::window::Cursor_enter_event{.entered = true});
+                on_cursor_enter_event(erhe::window::Cursor_enter_event{.entered = true});
             }
             const auto position = pointer.value();
             if ((m_last_mouse_x != position.x) || (m_last_mouse_y != position.y)) {
                 m_last_mouse_x = position.x;
                 m_last_mouse_y = position.y;
-                on_event(
-                    erhe::window::Mouse_move_event{
-                        .x = position.x,
-                        .y = position.y,
-                        .dx = 0, // TODO dx and dy?
-                        .dy = 0,
-                        .modifier_mask = 0 // TODO is this needed?
-                    }
-                );
+                on_mouse_move_event({position.x, position.y});
             }
 
             // TODO Is there better way to route mouse button and other events here?
@@ -144,18 +208,10 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
 
         } else {
             if (has_cursor()) {
-                on_event(erhe::window::Cursor_enter_event{.entered = false});
+                on_cursor_enter_event(erhe::window::Cursor_enter_event{.entered = false});
                 m_last_mouse_x = -FLT_MAX;
                 m_last_mouse_y = -FLT_MAX;
-                on_event(
-                    erhe::window::Mouse_move_event{
-                        .x = -FLT_MAX,
-                        .y = -FLT_MAX,
-                        .dx = 0,
-                        .dy = 0,
-                        .modifier_mask = 0
-                    }
-                );
+                on_mouse_move_event({-FLT_MAX, -FLT_MAX});
             }
         }
     }
@@ -172,7 +228,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
         const bool use_right = (right_aim_pose != nullptr) && (right_aim_pose->location.locationFlags != 0);
 
         auto* pose = use_right ? right_aim_pose : left_aim_pose;
-        if (pose != nullptr) {
+        if ((pose != nullptr) && node->is_visible()) {
             const auto controller_orientation = glm::mat4_cast(pose->orientation);
             const auto controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 
@@ -185,83 +241,54 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 controller_direction
             );
 
-            ImGuiIO& io = m_imgui_context->IO;
             bool mouse_has_position{false};
             if (intersection.has_value()) {
                 const auto world_position      = ray_origin + intersection.value() * controller_direction;
                 const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
                 if (window_position_opt.has_value()) {
                     if (!has_cursor()) {
-                        on_event(erhe::window::Cursor_enter_event{.entered = true});
+                        on_cursor_enter_event(erhe::window::Cursor_enter_event{.entered = true});
                     }
                     mouse_has_position = true;
                     const auto position = window_position_opt.value();
                     if ((m_last_mouse_x != position.x) || (m_last_mouse_y != position.y)) {
                         m_last_mouse_x = position.x;
                         m_last_mouse_y = position.y;
-                        on_event(
-                            erhe::window::Mouse_move_event{
-                                .x = position.x,
-                                .y = position.y
-                            }
-                        );
+                        on_mouse_move_event({position.x, position.y});
                     }
-                }
-                auto* r_thumbstick = headset->get_actions_right().thumbstick;
-                if (r_thumbstick != nullptr) {
-                    if ((r_thumbstick->state.currentState.x != 0) || (r_thumbstick->state.currentState.y != 0)) {
-                        io.AddMouseWheelEvent(r_thumbstick->state.currentState.x * 0.5f, r_thumbstick->state.currentState.y * 0.5f);
+
+                    // Process input events from the context window
+                    // Here we are interested in the XR input events
+                    std::vector<erhe::window::Input_event>& input_events = m_context.context_window->get_input_events();
+                    //if (input_events.empty()) {
+                    //    SPDLOG_LOGGER_TRACE(log_frame, "Rendertarget_imgui_host - no input events");
+                    //}
+                    for (erhe::window::Input_event& input_event : input_events) {
+                        if (!input_event.handled) {
+                            dispatch_input_event(input_event);
+                            SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_host processed {} - {}", input_event.describe(), input_event.handled ? "handled" : "stays unhandled");
+                            SPDLOG_LOGGER_TRACE(log_input,                      "Rendertarget_imgui_host processed {} - {}", input_event.describe(), input_event.handled ? "handled" : "stays unhandled");
+                        } else {
+                            SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_host skipped already handled {}", input_event.describe());
+                            SPDLOG_LOGGER_TRACE(log_input,                      "Rendertarget_imgui_host skipped already handled {}", input_event.describe());
+                        }
                     }
+
                 }
             }
             if (!mouse_has_position) {
                 if (has_cursor()) {
-                    on_event(erhe::window::Cursor_enter_event{.entered = false});
+                    on_cursor_enter_event(erhe::window::Cursor_enter_event{.entered = false});
                     m_last_mouse_x = -FLT_MAX;
                     m_last_mouse_y = -FLT_MAX;
-                    on_event(
-                        erhe::window::Mouse_move_event{
-                            .x = -FLT_MAX,
-                            .y = -FLT_MAX
-                        }
-                    );
+                    on_mouse_move_event({-FLT_MAX, -FLT_MAX});
                 }
             }
-
-            auto* trigger_click = headset->get_actions_right().trigger_click;
-            auto* a_click       = headset->get_actions_right().a_click;
-            if ((trigger_click != nullptr) && (trigger_click->state.changedSinceLastSync == XR_TRUE)) {
-                io.AddMouseButtonEvent(ImGuiMouseButton_Left, trigger_click->state.currentState == XR_TRUE);
-            }
-            if ((a_click != nullptr) && (a_click->state.changedSinceLastSync == XR_TRUE)) {
-                io.AddMouseButtonEvent(ImGuiMouseButton_Left, a_click->state.currentState == XR_TRUE);
-            }
-            auto* menu_click = headset->get_actions_left().menu_click;
-            if ((menu_click != nullptr) && (menu_click->state.changedSinceLastSync == XR_TRUE)) {
-                io.AddMouseButtonEvent(ImGuiMouseButton_Right, menu_click->state.currentState == XR_TRUE);
-            }
-
-            // The thumbrest is not present for the second edition of the Oculus Touch (Rift S and Quest)
-            auto* r_thumbrest_touch = headset->get_actions_right().thumbrest_touch;
-            if ((r_thumbrest_touch != nullptr) && (r_thumbrest_touch->state.changedSinceLastSync == XR_TRUE)) {
-                io.AddMouseButtonEvent(ImGuiMouseButton_Right, r_thumbrest_touch->state.currentState == XR_TRUE);
-            }
-
-            auto* r_thumbstick_click = headset->get_actions_right().thumbstick_click;
-            if ((r_thumbstick_click != nullptr) && (r_thumbstick_click->state.changedSinceLastSync == XR_TRUE)) {
-                io.AddMouseButtonEvent(ImGuiMouseButton_Right, r_thumbstick_click->state.currentState == XR_TRUE);
-            }
-
-            //auto* system_click  = headset->get_actions_right().system_click;
-            //if ((system_click != nullptr) && (system_click->state.changedSinceLastSync == XR_TRUE)) {
-            //    io.AddMouseButtonEvent(ImGuiMouseButton_Right, a_click->state.currentState == XR_TRUE);
-            //}
         }
     }
 #endif
 
     const auto current_time = glfwGetTime();
-    ImGuiIO& io = m_imgui_context->IO;
     io.DeltaTime = m_time > 0.0
         ? static_cast<float>(current_time - m_time)
         : static_cast<float>(1.0 / 60.0);
@@ -279,7 +306,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
 
 void Rendertarget_imgui_host::end_imgui_frame()
 {
-    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_host::end_imgui_frame()");
+    //SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_host::end_imgui_frame()");
 
     ImGui::EndFrame();
     ImGui::Render();

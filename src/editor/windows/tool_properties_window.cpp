@@ -16,13 +16,13 @@ Tool_properties_window::Tool_properties_window(erhe::imgui::Imgui_renderer& imgu
 
 void Tool_properties_window::imgui()
 {
-    m_context.hotbar->imgui();
+    //m_context.hotbar->imgui();
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     auto* const tool = m_context.tools->get_priority_tool();
     if (tool == nullptr) {
         return;
     }
-    tool->tool_properties();
+    tool->tool_properties(*this);
 #endif
 }
 

@@ -67,8 +67,8 @@ public:
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
-    void tool_render    (const Render_context& context) override;
-    void tool_properties()                              override;
+    void tool_render    (const Render_context& context)             override;
+    void tool_properties(erhe::imgui::Imgui_window&)                override;
 
     // Public API
     auto acquire_target() -> bool;

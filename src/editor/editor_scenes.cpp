@@ -74,10 +74,9 @@ void Editor_scenes::update_physics_simulation_fixed_step(const Time_context& tim
 
 void Editor_scenes::before_physics_simulation_steps()
 {
-    if (
-        !m_context.editor_settings->physics.static_enable ||
-        !m_context.editor_settings->physics.dynamic_enable
-    ) {
+    ERHE_PROFILE_FUNCTION();
+
+    if (!m_context.editor_settings->physics.static_enable || !m_context.editor_settings->physics.dynamic_enable) {
         return;
     }
 
@@ -103,10 +102,9 @@ void Editor_scenes::update_fixed_step(const Time_context& time_context)
 
 void Editor_scenes::after_physics_simulation_steps()
 {
-    if (
-        !m_context.editor_settings->physics.static_enable ||
-        !m_context.editor_settings->physics.dynamic_enable
-    ) {
+    ERHE_PROFILE_FUNCTION();
+
+    if (!m_context.editor_settings->physics.static_enable || !m_context.editor_settings->physics.dynamic_enable) {
         return;
     }
 

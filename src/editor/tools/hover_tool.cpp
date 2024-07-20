@@ -208,16 +208,17 @@ void Hover_tool::tool_render(const Render_context& context)
     };
 
     add_line(entry->get_name());
-    add_line(fmt::format(
-        "Position in world: {}",
-        entry->position.value()
-    ));
+
+#if 0
+    add_line(fmt::format("Position in world: {}", entry->position.value()));
+#endif
 
     const glm::vec3 position_at_fixed_depth_line_3{
         position_in_viewport.x + 50.0f,
         position_in_viewport.y + 16.0f * 2,
         -0.5f
     };
+#if 0
     if (entry->mesh != nullptr) {
         const auto* node = entry->mesh->get_node();
         const glm::vec3 node_position_in_world = glm::vec3{node->position_in_world()};
@@ -226,13 +227,13 @@ void Hover_tool::tool_render(const Render_context& context)
             const glm::vec3 local_position = node->transform_point_from_world_to_local(entry->position.value());
             add_line(fmt::format("Position in {}: {}", entry->mesh->get_name(), local_position));
         }
-
     } else if (entry->grid != nullptr) {
         const glm::vec3 local_position = glm::vec3{
             entry->grid->grid_from_world() * glm::vec4{entry->position.value(), 1.0f}
         };
         add_line(fmt::format("Position in {}: {}", entry->grid->get_name(), local_position));
     }
+#endif
 
     for (const auto& text_line : m_text_lines) {
         m_context.text_renderer->print(

@@ -512,11 +512,11 @@ void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item_base>
     for (auto& item : m_selection) {
         if (item->is_selected() && !is_in(item, selection)) {
             item->set_selected(false);
-            update_last_selected(item);
         }
     }
     for (auto& item : selection) {
         item->set_selected(true);
+        update_last_selected(item);
     }
 
     m_selection = selection;

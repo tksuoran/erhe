@@ -45,13 +45,13 @@ public:
 
     // Implements Input_event_han
     // Forwards events to each window
-    auto on_event(const erhe::window::Key_event& key_event) -> bool override;
-    auto on_event(const erhe::window::Char_event& char_event) -> bool override;
-    auto on_event(const erhe::window::Window_focus_event& window_focus_event) -> bool override;
-    auto on_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool override;
-    auto on_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool override;
-    auto on_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool override;
-    auto on_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool override;
+    auto on_key_event         (const erhe::window::Key_event&          key_event         ) -> bool override;
+    auto on_char_event        (const erhe::window::Char_event&         char_event        ) -> bool override;
+    auto on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool override;
+    auto on_cursor_enter_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool override;
+    auto on_mouse_move_event  (const erhe::window::Mouse_move_event&   mouse_move_event  ) -> bool override;
+    auto on_mouse_button_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool override;
+    auto on_mouse_wheel_event (const erhe::window::Mouse_wheel_event&  mouse_wheel_event ) -> bool override;
 
     void debug_imgui();
 

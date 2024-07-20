@@ -30,16 +30,8 @@ namespace editor {
 
 using Light_type = erhe::scene::Light_type;
 
-Item_tree_window::Item_tree_window(
-    erhe::imgui::Imgui_renderer&            imgui_renderer,
-    erhe::imgui::Imgui_windows&             imgui_windows,
-    Editor_context&                         context,
-    const std::string_view                  window_title,
-    const std::string_view                  ini_label,
-    const std::shared_ptr<erhe::Hierarchy>& root
-)
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, window_title, ini_label}
-    , m_context                {context}
+Item_tree::Item_tree(Editor_context& context, const std::shared_ptr<erhe::Hierarchy>& root)
+    : m_context{context}
     , m_filter{
         .require_all_bits_set           = erhe::Item_flags::show_in_ui,
         .require_at_least_one_bit_set   = 0,
@@ -50,24 +42,24 @@ Item_tree_window::Item_tree_window(
 {
 }
 
-void Item_tree_window::set_item_filter(const erhe::Item_filter& filter)
+void Item_tree::set_item_filter(const erhe::Item_filter& filter)
 {
     m_filter = filter;
 }
 
-void Item_tree_window::set_item_callback(std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun)
+void Item_tree::set_item_callback(std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun)
 {
     m_item_callback = fun;
 }
 
-void Item_tree_window::clear_selection()
+void Item_tree::clear_selection()
 {
     SPDLOG_LOGGER_TRACE(log_tree, "clear_selection()");
 
     m_context.selection->clear_selection();
 }
 
-void Item_tree_window::recursive_add_to_selection(const std::shared_ptr<erhe::Item_base>& item)
+void Item_tree::recursive_add_to_selection(const std::shared_ptr<erhe::Item_base>& item)
 {
     m_context.selection->add_to_selection(item);
     auto hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
@@ -80,7 +72,7 @@ void Item_tree_window::recursive_add_to_selection(const std::shared_ptr<erhe::It
     }
 }
 
-void Item_tree_window::select_all()
+void Item_tree::select_all()
 {
     SPDLOG_LOGGER_TRACE(log_tree, "select_all()");
 
@@ -100,7 +92,7 @@ template <typename T, typename U>
     return std::find(items.begin(), items.end(), item) != items.end();
 }
 
-void Item_tree_window::move_selection(const std::shared_ptr<erhe::Item_base>& target_node, erhe::Item_base* payload_item, const Placement placement)
+void Item_tree::move_selection(const std::shared_ptr<erhe::Item_base>& target_node, erhe::Item_base* payload_item, const Placement placement)
 {
     log_tree->trace(
         "move_selection(anchor = {}, {})",
@@ -170,7 +162,7 @@ namespace {
 
 } // anonymous namespace
 
-void Item_tree_window::reposition(
+void Item_tree::reposition(
     Compound_operation::Parameters&         compound_parameters,
     const std::shared_ptr<erhe::Item_base>& anchor,
     const std::shared_ptr<erhe::Item_base>& item,
@@ -253,7 +245,7 @@ void Item_tree_window::reposition(
     );
 }
 
-void Item_tree_window::try_add_to_attach(
+void Item_tree::try_add_to_attach(
     Compound_operation::Parameters&         compound_parameters,
     const std::shared_ptr<erhe::Item_base>& target,
     const std::shared_ptr<erhe::Item_base>& item,
@@ -321,7 +313,7 @@ void Item_tree_window::try_add_to_attach(
     );
 }
 
-void Item_tree_window::attach_selection_to(const std::shared_ptr<erhe::Item_base>& target, erhe::Item_base* payload_item)
+void Item_tree::attach_selection_to(const std::shared_ptr<erhe::Item_base>& target, erhe::Item_base* payload_item)
 {
     SPDLOG_LOGGER_TRACE(log_tree, "attach_selection_to()");
 
@@ -348,7 +340,7 @@ void Item_tree_window::attach_selection_to(const std::shared_ptr<erhe::Item_base
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Item_tree_window::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& item)
+void Item_tree::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& item)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -417,7 +409,7 @@ void drag_and_drop_gradient_preview(
 
 }
 
-auto Item_tree_window::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& item) -> bool
+auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -503,13 +495,13 @@ auto Item_tree_window::drag_and_drop_target(const std::shared_ptr<erhe::Item_bas
     return false;
 }
 
-void Item_tree_window::set_item_selection_terminator(const std::shared_ptr<erhe::Item_base>& item)
+void Item_tree::set_item_selection_terminator(const std::shared_ptr<erhe::Item_base>& item)
 {
     auto& range_selection = m_context.selection->range_selection();
     range_selection.set_terminator(item);
 }
 
-void Item_tree_window::set_item_selection(const std::shared_ptr<erhe::Item_base>& item, bool selected)
+void Item_tree::set_item_selection(const std::shared_ptr<erhe::Item_base>& item, bool selected)
 {
     if (selected) {
         m_context.selection->add_to_selection(item);
@@ -518,7 +510,7 @@ void Item_tree_window::set_item_selection(const std::shared_ptr<erhe::Item_base>
     }
 }
 
-void Item_tree_window::item_update_selection(const std::shared_ptr<erhe::Item_base>& item)
+void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& item)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -637,7 +629,7 @@ void Item_tree_window::item_update_selection(const std::shared_ptr<erhe::Item_ba
     }
 }
 
-void Item_tree_window::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
+void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 {
     const auto& node       = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     Scene_root* scene_root = static_cast<Scene_root*>(item->get_item_host());
@@ -720,22 +712,21 @@ void Item_tree_window::item_popup_menu(const std::shared_ptr<erhe::Item_base>& i
     ImGui::PopStyleVar(1);
 }
 
-auto Item_tree_window::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item, const bool update, bool force_expand) -> Tree_node_state
+auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item, const bool update, bool force_expand) -> Tree_node_state
 {
     ERHE_PROFILE_FUNCTION();
 
-    const float scale = get_scale_value();
-    m_context.icon_set->item_icon(item, scale);
+    m_context.icon_set->item_icon(item, m_ui_scale);
 
     const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     if (!m_context.editor_settings->node_tree_expand_attachments && node) {
         for (const auto& node_attachment : node->get_attachments()) {
-            m_context.icon_set->item_icon(node_attachment, scale);
+            m_context.icon_set->item_icon(node_attachment, m_ui_scale);
         }
     }
 
     const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    const auto& hierarchy            = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    const auto& hierarchy            = std::dynamic_pointer_cast<erhe::Hierarchy     >(item);
     const auto& scene                = std::dynamic_pointer_cast<erhe::scene::Scene  >(item);
 
     bool is_leaf = true;
@@ -825,7 +816,7 @@ auto Item_tree_window::item_icon_and_text(const std::shared_ptr<erhe::Item_base>
     };
 }
 
-auto Item_tree_window::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode
+auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode
 {
     const bool show_by_type = m_filter(item->get_flag_bits());
     const bool show_by_name = m_text_filter.PassFilter(item->get_name().c_str());
@@ -859,7 +850,7 @@ auto Item_tree_window::should_show(const std::shared_ptr<erhe::Item_base>& item)
     return Show_mode::Hide;
 }
 
-void Item_tree_window::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
+void Item_tree::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
 {
     // Special handling for invisible parents (scene root)
     if (erhe::bit::test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
@@ -908,25 +899,12 @@ void Item_tree_window::imgui_item_node(const std::shared_ptr<erhe::Item_base>& i
 }
 #endif
 
-void Item_tree_window::on_begin()
-{
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2{0.0f, 0.0f});
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2{3.0f, 3.0f});
-#endif
-}
-
-void Item_tree_window::on_end()
-{
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ImGui::PopStyleVar(2);
-#endif
-}
-
-void Item_tree_window::imgui()
+void Item_tree::imgui_tree(float ui_scale)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
+
+    m_ui_scale = ui_scale;
 
     m_text_filter.Draw("?");
 
@@ -1009,6 +987,41 @@ void Item_tree_window::imgui()
 
     //// m_context.editor_scenes->sanity_check();
 #endif
+}
+
+////////////////////////////
+
+Item_tree_window::Item_tree_window(
+    erhe::imgui::Imgui_renderer&            imgui_renderer,
+    erhe::imgui::Imgui_windows&             imgui_windows,
+    Editor_context&                         context,
+    const std::string_view                  window_title,
+    const std::string_view                  ini_label,
+    const std::shared_ptr<erhe::Hierarchy>& root
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, window_title, ini_label}
+, Item_tree{context, root}
+{
+}
+
+void Item_tree_window::on_begin()
+{
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2{0.0f, 0.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2{3.0f, 3.0f});
+#endif
+}
+
+void Item_tree_window::on_end()
+{
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    ImGui::PopStyleVar(2);
+#endif
+}
+
+void Item_tree_window::imgui()
+{
+    imgui_tree(get_scale_value());
 }
 
 }

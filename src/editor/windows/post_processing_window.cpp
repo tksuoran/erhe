@@ -70,22 +70,14 @@ void Post_processing_window::imgui()
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
     for (auto& node : downsample_nodes) {
-        if (
-            !node.texture                ||
-            (node.texture->width () < 1) ||
-            (node.texture->height() < 1)
-        ) {
+        if (!node.texture || (node.texture->width() < 1) || (node.texture->height() < 1)) {
             continue;
         }
 
         if (node.axis == 0) {
             ImGui::SameLine();
         }
-        image(
-            node.texture,
-            node.texture->width (),
-            node.texture->height()
-        );
+        draw_image(node.texture, node.texture->width(), node.texture->height());
     }
     ImGui::PopStyleVar();
 #endif

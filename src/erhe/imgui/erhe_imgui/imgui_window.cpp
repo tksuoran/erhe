@@ -35,7 +35,7 @@ Imgui_window::~Imgui_window() noexcept
     m_imgui_windows.unregister_imgui_window(this);
 }
 
-void Imgui_window::image(const std::shared_ptr<erhe::graphics::Texture>& texture, const int width, const int height)
+void Imgui_window::draw_image(const std::shared_ptr<erhe::graphics::Texture>& texture, const int width, const int height)
 {
     m_imgui_renderer.image(texture, width, height, glm::vec2{0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}, glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, true);
 }
@@ -50,7 +50,7 @@ void Imgui_window::set_imgui_host(Imgui_host* imgui_host)
     m_imgui_host = imgui_host;
 }
 
-void Imgui_window::set_visibility(const bool visible)
+void Imgui_window::set_window_visibility(const bool visible)
 {
     if (m_is_visible == visible) {
         return;
@@ -61,25 +61,25 @@ void Imgui_window::set_visibility(const bool visible)
     }
 }
 
-void Imgui_window::set_is_hovered(const bool hovered)
+void Imgui_window::set_is_window_hovered(const bool hovered)
 {
-    SPDLOG_LOGGER_TRACE(log_frame, "{} set_is_hovered({})", m_title, hovered);
+    SPDLOG_LOGGER_TRACE(log_frame, "{} set_is_window_hovered({})", m_title, hovered);
     m_is_hovered = hovered;
 }
 
-void Imgui_window::show()
+void Imgui_window::show_window()
 {
-    set_visibility(true);
+    set_window_visibility(true);
 }
 
-void Imgui_window::hide()
+void Imgui_window::hide_window()
 {
-    set_visibility(false);
+    set_window_visibility(false);
 }
 
-void Imgui_window::toggle_visibility()
+void Imgui_window::toggle_window_visibility()
 {
-    set_visibility(!m_is_visible);
+    set_window_visibility(!m_is_visible);
 }
 
 auto Imgui_window::show_in_menu() const -> bool
@@ -87,14 +87,14 @@ auto Imgui_window::show_in_menu() const -> bool
     return m_show_in_menu;
 }
 
-auto Imgui_window::is_visible() const -> bool
+auto Imgui_window::is_window_visible() const -> bool
 {
     return m_is_visible;
 }
 
-auto Imgui_window::is_hovered() const -> bool
+auto Imgui_window::is_window_hovered() const -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_frame, "{} is_hovered() = {}", m_title, m_is_hovered);
+    SPDLOG_LOGGER_TRACE(log_frame, "{} is_window_hovered() = {}", m_title, m_is_hovered);
     return m_is_hovered;
 }
 
@@ -129,7 +129,7 @@ auto Imgui_window::begin() -> bool
     );
     const bool not_collapsed = ImGui::Begin(m_title.c_str(), &keep_visible, flags());
     if (!keep_visible) {
-        hide();
+        hide_window();
     }
     return not_collapsed;
 }
@@ -137,7 +137,9 @@ auto Imgui_window::begin() -> bool
 void Imgui_window::end()
 {
     on_end();
-    m_is_hovered = ImGui::IsWindowHovered();
+    const bool new_is_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+    SPDLOG_LOGGER_TRACE(log_frame, "{}.end() is_hovered {} -> {}", m_title, m_is_hovered, new_is_hovered);
+    m_is_hovered = new_is_hovered;
     ImGui::End();
 }
 

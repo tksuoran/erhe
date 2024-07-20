@@ -1,9 +1,9 @@
+
 #pragma once
 
 #include "tools/tool.hpp"
 
 #include "erhe_commands/command.hpp"
-#include "erhe_imgui/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 
@@ -11,7 +11,7 @@ namespace erhe::graphics {
     class Instance;
 }
 namespace erhe::imgui {
-    class Imgui_windows;
+    class Imgui_renderer;
 }
 namespace erhe::rendergraph {
     class Rendergraph;
@@ -60,15 +60,13 @@ private:
 };
 
 class Hud
-    : public erhe::imgui::Imgui_window
-    , public Tool
+    : public Tool
 {
 public:
     Hud(
         erhe::commands::Commands&       commands,
         erhe::graphics::Instance&       graphics_instance,
         erhe::imgui::Imgui_renderer&    imgui_renderer,
-        erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
         Editor_context&                 editor_context,
         Editor_message_bus&             editor_message_bus,
@@ -82,8 +80,7 @@ public:
     // Implements Tool
     void tool_render(const Render_context& context) override;
 
-    // Implements Imgui_window
-    void imgui() override;
+    void imgui();
 
     // Public APi
     [[nodiscard]] auto get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_host>;
@@ -96,7 +93,7 @@ public:
 
     [[nodiscard]] auto world_from_node() const -> glm::mat4;
     [[nodiscard]] auto node_from_world() const -> glm::mat4;
-    [[nodiscard]] auto intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>;
+    [[nodiscard]] auto intersect_ray  (const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>;
 
 private:
     void on_message           (Editor_message& message);

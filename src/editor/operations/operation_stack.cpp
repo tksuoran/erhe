@@ -92,6 +92,8 @@ void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
 
 void Operation_stack::update()
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (m_queued.empty()) {
         return;
     }

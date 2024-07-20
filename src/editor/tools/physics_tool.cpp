@@ -534,7 +534,7 @@ void Physics_tool::tool_render(const Render_context& context)
     }
 }
 
-void Physics_tool::tool_properties()
+void Physics_tool::tool_properties(erhe::imgui::Imgui_window&)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 

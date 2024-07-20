@@ -1,6 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+
+namespace erhe::xr {
+    class Xr_action;
+    class Xr_action_boolean;
+    class Xr_action_float;
+    class Xr_action_vector2f;
+}
 
 namespace erhe::window {
 
@@ -165,7 +173,10 @@ enum class Input_event_type : unsigned int {
     controller_button_event =  9,
     window_resize_event     = 10,
     window_refresh_event    = 11,
-    window_close_event      = 12
+    window_close_event      = 12,
+    xr_boolean_event        = 13,
+    xr_float_event          = 14,
+    xr_vector2f_event       = 15
 };
 
 class Key_event
@@ -174,18 +185,24 @@ public:
     signed int keycode;
     uint32_t   modifier_mask;
     bool       pressed;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Char_event
 {
 public:
     unsigned int codepoint;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Cursor_enter_event
 {
 public:
     int entered;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Mouse_move_event
@@ -196,6 +213,8 @@ public:
     float    dx;
     float    dy;
     uint32_t modifier_mask;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Mouse_button_event
@@ -204,6 +223,8 @@ public:
     uint32_t button;
     bool     pressed;
     uint32_t modifier_mask;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Mouse_wheel_event
@@ -212,6 +233,8 @@ public:
     float    x;
     float    y;
     uint32_t modifier_mask;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Controller_axis_event
@@ -221,6 +244,8 @@ public:
     int      axis;
     float    value;
     uint32_t modifier_mask;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Controller_button_event
@@ -230,6 +255,8 @@ public:
     int      button;
     bool     value;
     uint32_t modifier_mask;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Window_resize_event
@@ -237,12 +264,44 @@ class Window_resize_event
 public:
     int width;
     int height;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Window_focus_event
 {
 public:
     int focused;
+
+    [[nodiscard]] auto describe() const -> std::string;
+};
+
+class Xr_boolean_event
+{
+public:
+    erhe::xr::Xr_action_boolean* action;
+    bool                         value;
+
+    [[nodiscard]] auto describe() const -> std::string;
+};
+
+class Xr_float_event
+{
+public:
+    erhe::xr::Xr_action_float* action;
+    float value;
+
+    [[nodiscard]] auto describe() const -> std::string;
+};
+
+class Xr_vector2f_event
+{
+public:
+    erhe::xr::Xr_action_vector2f* action;
+    float x;
+    float y;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Input_event
@@ -261,25 +320,33 @@ public:
         Controller_axis_event   controller_axis_event;
         Controller_button_event controller_button_event;
         Window_resize_event     window_resize_event;
+        Xr_boolean_event        xr_boolean_event;
+        Xr_float_event          xr_float_event;
+        Xr_vector2f_event       xr_vector2f_event;
     } u;
+
+    [[nodiscard]] auto describe() const -> std::string;
 };
 
 class Input_event_handler
 {
 public:
-    virtual auto dispatch_input_event   (Input_event& input_event) -> bool;
-    virtual auto on_event               (const Key_event&              ) -> bool { return false; }
-    virtual auto on_event               (const Char_event&             ) -> bool { return false; }
-    virtual auto on_event               (const Window_focus_event&     ) -> bool { return false; }
-    virtual auto on_event               (const Cursor_enter_event&     ) -> bool { return false; }
-    virtual auto on_event               (const Mouse_move_event&       ) -> bool { return false; }
-    virtual auto on_event               (const Mouse_button_event&     ) -> bool { return false; }
-    virtual auto on_event               (const Mouse_wheel_event&      ) -> bool { return false; }
-    virtual auto on_event               (const Controller_axis_event&  ) -> bool { return false; }
-    virtual auto on_event               (const Controller_button_event&) -> bool { return false; }
-    virtual auto on_event               (const Window_resize_event&    ) -> bool { return false; }
-    virtual auto on_window_close_event  () -> bool { return false; }
-    virtual auto on_window_refresh_event() -> bool { return false; }
+    virtual auto dispatch_input_event      (Input_event& input_event) -> bool;
+    virtual auto on_key_event              (const Key_event&              ) -> bool { return false; }
+    virtual auto on_char_event             (const Char_event&             ) -> bool { return false; }
+    virtual auto on_window_focus_event     (const Window_focus_event&     ) -> bool { return false; }
+    virtual auto on_cursor_enter_event     (const Cursor_enter_event&     ) -> bool { return false; }
+    virtual auto on_mouse_move_event       (const Mouse_move_event&       ) -> bool { return false; }
+    virtual auto on_mouse_button_event     (const Mouse_button_event&     ) -> bool { return false; }
+    virtual auto on_mouse_wheel_event      (const Mouse_wheel_event&      ) -> bool { return false; }
+    virtual auto on_controller_axis_event  (const Controller_axis_event&  ) -> bool { return false; }
+    virtual auto on_controller_button_event(const Controller_button_event&) -> bool { return false; }
+    virtual auto on_window_resize_event    (const Window_resize_event&    ) -> bool { return false; }
+    virtual auto on_window_close_event     () -> bool { return false; }
+    virtual auto on_window_refresh_event   () -> bool { return false; }
+    virtual auto on_xr_boolean_event       (const Xr_boolean_event&       ) -> bool { return false; }
+    virtual auto on_xr_float_event         (const Xr_float_event&         ) -> bool { return false; }
+    virtual auto on_xr_vector2f_event      (const Xr_vector2f_event&      ) -> bool { return false; }
 };
 
 } // namespace erhe::window

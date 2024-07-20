@@ -133,16 +133,16 @@ auto Headset_view_resources::get_depth_stencil_texture() const -> erhe::graphics
     return m_depth_stencil_texture.get();
 }
 
-void Headset_view_resources::update(erhe::xr::Render_view& render_view)
+void Headset_view_resources::update(erhe::xr::Render_view& render_view, erhe::scene::Projection::Fov_sides fov_sides)
 {
     *m_camera->projection() = erhe::scene::Projection{
         .projection_type = erhe::scene::Projection::Type::perspective_xr,
         .z_near          = 0.03f,
         .z_far           = 200.0f,
-        .fov_left        = render_view.fov_left,
-        .fov_right       = render_view.fov_right,
-        .fov_up          = render_view.fov_up,
-        .fov_down        = render_view.fov_down,
+        .fov_left        = fov_sides.left,  // render_view.fov_left,
+        .fov_right       = fov_sides.right, // render_view.fov_right,
+        .fov_up          = fov_sides.up,    // render_view.fov_up,
+        .fov_down        = fov_sides.down   // render_view.fov_down,
     };
 
     render_view.near_depth = 0.03f;

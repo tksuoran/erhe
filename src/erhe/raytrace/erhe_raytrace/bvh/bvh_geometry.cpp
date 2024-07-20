@@ -295,9 +295,7 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
         return false;
     }
 
-    const auto transform = (instance != nullptr)
-        ? instance->get_transform()
-        : glm::mat4{1.0};
+    const auto transform = (instance != nullptr) ? instance->get_transform() : glm::mat4{1.0};
     bvh::v2::Ray<Scalar, 3> bvh_ray{
         to_bvh(ray.origin),
         to_bvh(ray.direction),
@@ -319,8 +317,7 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
         bvh_ray,
         m_bvh.get_root().index,
         stack,
-        [&] (const size_t begin, const size_t end)
-        {
+        [&] (const size_t begin, const size_t end) {
             for (size_t i = begin; i < end; ++i) {
                 size_t j = should_permute ? i : m_bvh.prim_ids[i];
                 if (auto hit = m_precomputed_triangles[j].intersect(bvh_ray)) {
@@ -332,6 +329,7 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
         }
     );
 
+    // TODO Would this be ever needed? if (prim_id != invalid_id && (bvh_ray.tmax > 0.0f)) {
     if (prim_id != invalid_id) {
         const auto triangle_index = should_permute ? prim_id : m_bvh.prim_ids[prim_id];
         const auto& triangle = m_precomputed_triangles.at(triangle_index);

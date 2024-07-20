@@ -177,7 +177,7 @@ Map_window::Map_window(
     commands.bind_command_to_key(&m_zoom_out_command,     erhe::window::Key_comma,  false);
     commands.bind_command_to_key(&m_grid_cycle_command,   erhe::window::Key_g,  false);
 
-    hide();
+    hide_window();
 }
 
 void Map_window::imgui()
@@ -214,7 +214,7 @@ auto Map_window::want_mouse_events() const -> bool
 
 auto Map_window::mouse_scroll_try_ready() const -> bool
 {
-    return is_hovered();
+    return is_window_hovered();
 }
 
 void Map_window::scroll(glm::vec2 delta)

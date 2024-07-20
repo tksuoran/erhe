@@ -87,11 +87,14 @@ auto Primitive_buffer::update(
         ERHE_VERIFY(mesh);
         ++mesh_index;
         const auto* node = mesh->get_node();
-        ERHE_VERIFY(node != nullptr);
-        //if (node == nullptr) {
-        //    SPDLOG_LOGGER_TRACE(log_primitive_buffer, "{} does not have node", mesh->get_name());
-        //    continue;
-        //}
+
+        // TODO Re-enable this after fixing example to use nodes
+        //ERHE_VERIFY(node != nullptr); 
+
+        if (node == nullptr) {
+            SPDLOG_LOGGER_TRACE(log_primitive_buffer, "{} does not have node", mesh->get_name());
+            continue;
+        }
 
         if (!filter(mesh->get_flag_bits())) {
             // SPDLOG_LOGGER_TRACE(log_primitive_buffer, "node = {}, mesh = {} does not pass filter", node->get_name(), mesh->get_name());

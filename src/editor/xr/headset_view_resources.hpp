@@ -1,11 +1,12 @@
 #pragma once
 
+#include "erhe_scene/projection.hpp"
+
 #include <memory>
 
 namespace erhe::xr {
     class Render_view;
 }
-
 namespace erhe::graphics {
     class Framebuffer;
     class Instance;
@@ -33,7 +34,7 @@ public:
         const std::size_t         slot
     );
 
-    void update(erhe::xr::Render_view& render_view);
+    void update(erhe::xr::Render_view& render_view, erhe::scene::Projection::Fov_sides fov_sides);
 
     [[nodiscard]] auto is_valid                 () const -> bool;
     [[nodiscard]] auto get_framebuffer          () const -> erhe::graphics::Framebuffer*;

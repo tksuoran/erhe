@@ -1,8 +1,7 @@
 #include "erhe_scene/scene_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 std::shared_ptr<spdlog::logger> log;
 std::shared_ptr<spdlog::logger> log_frame;

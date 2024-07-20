@@ -83,13 +83,9 @@ private:
     ////[[nodiscard]] auto tight_directional_light_projection_transforms(
     ////    const Light_projection_parameters& parameters
     ////) const -> Light_projection_transforms;
-    [[nodiscard]] auto stable_directional_light_projection_transforms(
-        const Light_projection_parameters& parameters
-    ) const -> Light_projection_transforms;
+    [[nodiscard]] auto stable_directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
-    [[nodiscard]] auto spot_light_projection_transforms(
-        const Light_projection_parameters& parameters
-    ) const -> Light_projection_transforms;
+    [[nodiscard]] auto spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
     static constexpr glm::mat4 texture_from_clip{
         0.5f, 0.0f, 0.0f, 0.0f,

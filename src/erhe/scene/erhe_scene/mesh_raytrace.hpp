@@ -1,25 +1,11 @@
 #pragma once
 
 #include "erhe_primitive/buffer_mesh.hpp"
-#include "erhe_scene/node_attachment.hpp"
 
-#include <functional>
-
-namespace erhe::geometry {
-    class Geometry;
-}
 namespace erhe::raytrace {
     class IGeometry;
     class IInstance;
     class IScene;
-    class Hit;
-    class Ray;
-}
-namespace erhe::primitive {
-    class Primitive;
-}
-namespace erhe::renderer {
-    class Line_renderer;
 }
 
 namespace erhe::scene {

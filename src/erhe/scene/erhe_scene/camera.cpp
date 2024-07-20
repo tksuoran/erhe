@@ -4,14 +4,12 @@
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::scene
-{
+namespace erhe::scene {
 
 Camera::Camera()                         = default;
 Camera::Camera(const Camera&)            = default;
 Camera& Camera::operator=(const Camera&) = default;
 Camera::~Camera() noexcept               = default;
-
 
 Camera::Camera(const std::string_view name)
     : erhe::Item<Item_base, Node_attachment, Camera>{name}
@@ -33,10 +31,7 @@ auto Camera::get_type_name() const -> std::string_view
     return static_type_name;
 }
 
-void Camera::handle_item_host_update(
-    Item_host* const old_item_host,
-    Item_host* const new_item_host
-)
+void Camera::handle_item_host_update(Item_host* const old_item_host, Item_host* const new_item_host)
 {
     const auto shared_this = std::static_pointer_cast<Camera>(shared_from_this()); // keep alive
 

@@ -115,13 +115,7 @@ Editor_rendering::Editor_rendering(
     opaque_fill_not_selected->primitive_mode   = Primitive_mode::polygon_fill;
     opaque_fill_not_selected->filter           = opaque_not_selected_filter;
     opaque_fill_not_selected->get_render_style = render_style_not_selected;
-    opaque_fill_not_selected->passes           = {
-        get_pipeline_renderpass(
-            *opaque_fill_not_selected.get(),
-            Blend_mode::opaque,
-            false
-        )
-    };
+    opaque_fill_not_selected->passes           = { get_pipeline_renderpass(*opaque_fill_not_selected.get(), Blend_mode::opaque, false) };
 
     const auto& render_style_selected = [](const Render_context& context) -> const Render_style_data& {
         return context.viewport_config.render_style_selected;
@@ -132,13 +126,7 @@ Editor_rendering::Editor_rendering(
     opaque_fill_selected->primitive_mode   = Primitive_mode::polygon_fill;
     opaque_fill_selected->filter           = opaque_selected_filter;
     opaque_fill_selected->get_render_style = render_style_selected;
-    opaque_fill_selected->passes           = {
-        get_pipeline_renderpass(
-            *opaque_fill_selected.get(),
-            Blend_mode::opaque,
-            true
-        )
-    };
+    opaque_fill_selected->passes           = { get_pipeline_renderpass(*opaque_fill_selected.get(), Blend_mode::opaque, true)};
 
     auto opaque_edge_lines_not_selected = make_renderpass("Content edge lines opaque not selected");
     opaque_edge_lines_not_selected->mesh_layers      = { Mesh_layer_id::content };
@@ -147,13 +135,7 @@ Editor_rendering::Editor_rendering(
     opaque_edge_lines_not_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_not_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_not_selected->get_render_style = render_style_not_selected;
-    opaque_edge_lines_not_selected->passes           = {
-        get_pipeline_renderpass(
-            *opaque_edge_lines_not_selected.get(),
-            Blend_mode::opaque,
-            false
-        )
-    };
+    opaque_edge_lines_not_selected->passes           = { get_pipeline_renderpass(*opaque_edge_lines_not_selected.get(), Blend_mode::opaque, false) };
     opaque_edge_lines_not_selected->allow_shader_stages_override = false;
 
     auto opaque_edge_lines_selected = make_renderpass("Content edge lines opaque selected");
@@ -163,13 +145,7 @@ Editor_rendering::Editor_rendering(
     opaque_edge_lines_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_selected->get_render_style = render_style_selected;
-    opaque_edge_lines_selected->passes           = {
-        get_pipeline_renderpass(
-            *opaque_edge_lines_selected.get(),
-            Blend_mode::opaque,
-            true
-        )
-    };
+    opaque_edge_lines_selected->passes           = { get_pipeline_renderpass(*opaque_edge_lines_selected.get(), Blend_mode::opaque, true) };
     opaque_edge_lines_selected->allow_shader_stages_override = false;
 
     selection_outline = make_renderpass("Content outline opaque selected");
@@ -201,13 +177,7 @@ Editor_rendering::Editor_rendering(
     translucent_fill->mesh_layers    = { Mesh_layer_id::content };
     translucent_fill->primitive_mode = Primitive_mode::polygon_fill;
     translucent_fill->filter         = translucent_filter;
-    translucent_fill->passes         = {
-        get_pipeline_renderpass(
-            *translucent_fill.get(),
-            Blend_mode::translucent,
-            false
-        )
-    };
+    translucent_fill->passes         = { get_pipeline_renderpass(*translucent_fill.get(), Blend_mode::translucent, false) };
 
     auto translucent_outline = make_renderpass("Content outline translucent");
     translucent_outline->mesh_layers    = { Mesh_layer_id::content };
@@ -215,13 +185,7 @@ Editor_rendering::Editor_rendering(
     translucent_outline->filter         = translucent_filter;
     translucent_outline->begin          = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     translucent_outline->end            = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
-    translucent_outline->passes         = {
-        get_pipeline_renderpass(
-            *translucent_outline.get(),
-            Blend_mode::translucent,
-            false
-        )
-    };
+    translucent_outline->passes         = { get_pipeline_renderpass(*translucent_outline.get(), Blend_mode::translucent, false) };
 
     auto brush = make_renderpass("Brush");
     brush->mesh_layers    = { Mesh_layer_id::brush };
@@ -376,11 +340,7 @@ using Rasterization_state  = erhe::graphics::Rasterization_state;
 using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
-Pipeline_renderpasses::Pipeline_renderpasses(
-    erhe::graphics::Instance& graphics_instance,
-    Mesh_memory&              mesh_memory,
-    Programs&                 programs
-)
+Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_instance, Mesh_memory&mesh_memory, Programs& programs)
     //const bool reverse_depth = graphics_instance.configuration.reverse_depth;
 
 #define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
@@ -698,6 +658,8 @@ void Editor_rendering::request_renderdoc_capture()
 
 void Editor_rendering::end_frame()
 {
+    ERHE_PROFILE_FUNCTION();
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_context.headset_view->end_frame();
 #endif

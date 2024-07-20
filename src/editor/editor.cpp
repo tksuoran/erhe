@@ -92,6 +92,7 @@
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
+#include "erhe_time/sleep.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window_log.hpp"
@@ -110,6 +111,8 @@ class Editor : public erhe::window::Input_event_handler
 public:
     void tick()
     {
+        ERHE_PROFILE_FUNCTION();
+
         std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
 
         // Apply logic updates
@@ -124,10 +127,12 @@ public:
         // - sends XR input events to Commands
         // - updates controller visualization nodes
         if (m_editor_context.OpenXR) {
+            ERHE_PROFILE_SCOPE("OpenXR update events");
             bool headset_update_ok = m_headset_view.update_events();
             if (headset_update_ok && m_headset_view.is_active()) {
                 m_viewport_config_window.set_edit_data(&m_headset_view.get_config());
             } else{
+                ERHE_PROFILE_SCOPE("OpenXR sleep");
                 // Throttle loop since xrWaitFrame won't be called.
                 std::this_thread::sleep_for(std::chrono::milliseconds{250});
             }
@@ -170,10 +175,24 @@ public:
         m_editor_rendering.end_frame();
         if (!m_editor_context.OpenXR) {
             gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
-            m_context_window.swap_buffers();
+            if (m_editor_context.use_sleep) {
+                std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+                {
+                    ERHE_PROFILE_SCOPE("swap_buffers");
+                    m_context_window.swap_buffers();
+                }
+                std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
+                const std::chrono::duration<float> swap_duration = start_time - end_time;
+                const std::chrono::duration<float> sleep_margin{m_editor_context.sleep_margin};
+                if (swap_duration > sleep_margin) {
+                    ERHE_PROFILE_SCOPE("sleep");
+                    erhe::time::sleep_for(swap_duration - sleep_margin);
+                }
+            } else {
+                ERHE_PROFILE_SCOPE("swap_buffers");
+                m_context_window.swap_buffers();
+            }
         }
-
-        ERHE_PROFILE_FRAME_END
     }
 
     [[nodiscard]] auto create_window() -> erhe::window::Context_window
@@ -191,14 +210,20 @@ public:
             if (m_editor_context.renderdoc) {
                 m_editor_context.developer_mode = true;
             }
+
+            ini = erhe::configuration::get_ini("erhe.ini", "window");
+            ini->get("use_sleep", m_editor_context.use_sleep);
+            ini->get("sleep_margin", m_editor_context.sleep_margin);
         }
 
         erhe::window::Window_configuration configuration{
+            .use_depth         = m_editor_context.OpenXR_mirror,
+            .use_stencil       = m_editor_context.OpenXR_mirror,
             .gl_major          = 4,
             .gl_minor          = 6,
             .width             = 1920,
             .height            = 1080,
-            .msaa_sample_count = 0,
+            .msaa_sample_count = m_editor_context.OpenXR_mirror ? 0 : 0,
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta")
         };
 
@@ -216,8 +241,8 @@ public:
     }
 
 #pragma region Editor()
-    Editor()
 #pragma region Initialize members
+    Editor()
         : m_commands          {}
         , m_scene_message_bus {}
         , m_editor_message_bus{}
@@ -319,7 +344,7 @@ public:
             m_editor_message_bus, m_headset_view,    m_mesh_memory,   m_tools
         }
         , m_hud{
-            m_commands,       m_graphics_instance,  m_imgui_renderer, m_imgui_windows, m_rendergraph,
+            m_commands,       m_graphics_instance,  m_imgui_renderer, m_rendergraph,
             m_editor_context, m_editor_message_bus, m_editor_windows, m_headset_view,  m_mesh_memory,
             m_scene_builder,  m_tools
         }
@@ -342,7 +367,7 @@ public:
         , m_material_preview      {m_graphics_instance, m_scene_message_bus, m_editor_context, m_mesh_memory, m_programs}
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        , m_theremin              {m_imgui_renderer, m_imgui_windows,  m_hand_tracker,       m_editor_context}
+        ////, m_theremin              {m_imgui_renderer, m_imgui_windows,  m_hand_tracker,       m_editor_context}
 #endif
         , m_brush_tool            {m_commands,       m_editor_context, m_editor_message_bus, m_headset_view, m_icon_set, m_tools}
         , m_create                {m_imgui_renderer, m_imgui_windows,  m_editor_context,     m_tools}
@@ -354,9 +379,8 @@ public:
         }
         , m_physics_tool  {m_commands,       m_editor_context, m_editor_message_bus, m_headset_view, m_icon_set, m_tools}
         , m_selection_tool{m_editor_context, m_icon_set, m_tools}
-#pragma endregion Initialize members
-
     {
+#pragma endregion Initialize members
         ERHE_PROFILE_GPU_CONTEXT
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -379,14 +403,13 @@ public:
             m_commands_window.set_developer();
             m_composer_window.set_developer();
             m_debug_view_window.set_developer();
-            m_headset_view.set_developer();
             m_hover_tool.set_developer();
             m_frame_log_window.set_developer();
             m_log_settings_window.set_developer();
             m_performance_window.set_developer();
             m_pipelines.set_developer();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-            m_theremin.set_developer();
+            ////m_theremin.set_developer();
 #endif
             m_layers_window.set_developer();
             m_network_window.set_developer();
@@ -394,7 +417,6 @@ public:
             m_rendergraph_window.set_developer();
             m_selection_window.set_developer();
             m_tail_log_window.set_developer();
-            m_hud.set_developer();
             m_operation_stack.set_developer();
         }
 
@@ -426,9 +448,7 @@ public:
                 }
             }
         }
-        else
 #endif
-
         m_tools.set_priority_tool(&m_physics_tool);
     }
 #pragma endregion Editor()
@@ -490,6 +510,13 @@ public:
         m_editor_context.scene_views            = &m_viewport_scene_views  ;
     }
 
+    auto on_key_event(const erhe::window::Key_event& key_event) -> bool override
+    {
+        m_input_state.shift   = erhe::bit::test_all_rhs_bits_set(key_event.modifier_mask, erhe::window::Key_modifier_bit_shift);
+        m_input_state.control = erhe::bit::test_all_rhs_bits_set(key_event.modifier_mask, erhe::window::Key_modifier_bit_ctrl);
+        m_input_state.alt     = erhe::bit::test_all_rhs_bits_set(key_event.modifier_mask, erhe::window::Key_modifier_bit_menu);
+        return false;
+    }
     auto on_window_close_event() -> bool override
     {
         m_close_requested = true;
@@ -504,14 +531,25 @@ public:
     void run()
     {
         m_run_started = true;
+        float wait_time = m_editor_context.use_sleep ? m_editor_context.sleep_margin : 0.0f;
+        // TODO: https://registry.khronos.org/OpenGL/extensions/NV/GLX_NV_delay_before_swap.txt
+        // Also:
+        //  - Measure time since first swapbuffers
+        //  - Count number of swapbuffers
+        //  - Wait to avoid presenting frames faster than display refreshrate
         while (!m_close_requested) {
-            m_context_window.poll_events();
-            auto& input_events = m_context_window.get_input_events();
-            for (erhe::window::Input_event& input_event : input_events) {
-                dispatch_input_event(input_event);
+            m_context_window.poll_events(wait_time);
+            {
+                ERHE_PROFILE_SCOPE("dispatch events");
+                auto& input_events = m_context_window.get_input_events();
+                for (erhe::window::Input_event& input_event : input_events) {
+                    dispatch_input_event(input_event);
+                }
             }
             tick();
             m_context_window.clear_input_events();
+
+            ERHE_PROFILE_FRAME_END
         }
         m_run_stopped = true;
     }
@@ -598,7 +636,7 @@ public:
     Debug_visualizations                    m_debug_visualizations;
     Material_preview                        m_material_preview;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    Theremin                                m_theremin;
+    ////Theremin                                m_theremin;
 #endif
 
     Brush_tool                              m_brush_tool;
@@ -639,6 +677,7 @@ void run_editor()
     erhe::xr::initialize_logging();
 #endif
     editor::initialize_logging();
+    erhe::time::sleep_initialize();
 
     bool enable_renderdoc_capture_support{false};
     {

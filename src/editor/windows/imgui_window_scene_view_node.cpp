@@ -1,4 +1,4 @@
-//#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "windows/imgui_window_scene_view_node.hpp"
 #include "scene/content_library.hpp"
@@ -112,7 +112,7 @@ Imgui_window_scene_view_node::Imgui_window_scene_view_node(
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(erhe::rendergraph::Routing::None, "window", erhe::rendergraph::Rendergraph_node_key::window);
 
-    show();
+    show_window();
 }
 
 auto Imgui_window_scene_view_node::viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>
@@ -122,7 +122,7 @@ auto Imgui_window_scene_view_node::viewport_scene_view() const -> std::shared_pt
 
 void Imgui_window_scene_view_node::on_mouse_move(glm::vec2 mouse_position_in_window)
 {
-    SPDLOG_LOGGER_TRACE(log_controller_ray, "{} on_mouse_move({}, {})", get_name(), mouse_position_in_window.x, mouse_position_in_window.y);
+    SPDLOG_LOGGER_TRACE(log_scene_view, "{} on_mouse_move({}, {})", get_name(), mouse_position_in_window.x, mouse_position_in_window.y);
     auto viewport_scene_view = m_viewport_scene_view.lock();
     if (!viewport_scene_view) {
         return;
@@ -180,6 +180,12 @@ void Imgui_window_scene_view_node::hidden()
     Rendergraph_node::set_enabled(false);
 }
 
+void Imgui_window_scene_view_node::cancel_brush_drag_and_drop()
+{
+    m_brush_drag_and_drop_active = false;
+    m_editor_context.brush_tool->preview_drag_and_drop({});
+}
+
 void Imgui_window_scene_view_node::drag_and_drop_target(float min_x, float min_y, float max_x, float max_y)
 {
     const ImGuiID drag_target_id = ImGui::GetID(static_cast<const void*>(this));
@@ -189,30 +195,38 @@ void Imgui_window_scene_view_node::drag_and_drop_target(float min_x, float min_y
 
         const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
         if (payload == nullptr) {
+            cancel_brush_drag_and_drop();
             return;
         }
 
         const erhe::Item_base* item_base = *(static_cast<erhe::Item_base**>(payload->Data));
         const Content_library_node* node = dynamic_cast<const Content_library_node*>(item_base);
         if (node == nullptr) {
+            cancel_brush_drag_and_drop();
             return;
         }
 
-        erhe::Item_base* item = node->item.get();
-        if (item == nullptr) {
+        std::shared_ptr<erhe::Item_base> item = node->item;
+        if (!item) {
+            cancel_brush_drag_and_drop();
             return;
         }
 
-        Brush* brush = dynamic_cast<Brush*>(item);
-        if (brush != nullptr) {
+        std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(item);
+        if (brush) {
             if (payload->Preview) {
                 // TODO preview
+                m_editor_context.brush_tool->preview_drag_and_drop(brush);
             }
             if (payload->Delivery) {
-                m_editor_context.brush_tool->try_insert(brush);
+                m_editor_context.brush_tool->try_insert(brush.get());
             }
+        } else {
+            cancel_brush_drag_and_drop();
         }
         //// const erhe::primitive::Material* material = dynamic_cast<const erhe::primitive::Material*>(item);
+    } else {
+        cancel_brush_drag_and_drop();
     }
 }
 
@@ -246,14 +260,14 @@ void Imgui_window_scene_view_node::imgui()
             SPDLOG_LOGGER_TRACE(
                 log_render,
                 "Imgui_window_scene_view_node::imgui() rendering texture {} {}",
-                texture->gl_name(),
-                texture->debug_label()
+                color_texture->gl_name(),
+                color_texture->debug_label()
             );
-            image(color_texture, static_cast<int>(size.x), static_cast<int>(size.y));
+            draw_image(color_texture, static_cast<int>(size.x), static_cast<int>(size.y));
             bool is_hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup);
-            set_is_hovered(is_hovered);
-            viewport_scene_view->set_is_hovered(is_hovered);
-            SPDLOG_LOGGER_TRACE(log_controller_ray, "{} ImGui::IsItemHovered() = {}", get_name(), is_hovered);
+            SPDLOG_LOGGER_TRACE(log_scene_view, "{} ImGui::IsItemHovered() = {}", get_name(), is_hovered);
+            set_is_window_hovered(is_hovered);
+            viewport_scene_view->set_is_scene_view_hovered(is_hovered);
             const auto rect_min = ImGui::GetItemRectMin();
             const auto rect_max = ImGui::GetItemRectMax();
             drag_and_drop_target(rect_min.x, rect_min.y, rect_max.x, rect_max.y);
@@ -270,9 +284,9 @@ void Imgui_window_scene_view_node::imgui()
             );
         }
     } else {
-        SPDLOG_LOGGER_TRACE(log_controller_ray, "{} no color texture", get_name());
-        set_is_hovered(false);
-        viewport_scene_view->set_is_hovered(false);
+        SPDLOG_LOGGER_TRACE(log_scene_view, "{} no color texture", get_name());
+        set_is_window_hovered(false);
+        viewport_scene_view->set_is_scene_view_hovered(false);
         viewport_scene_view->set_window_viewport(erhe::math::Viewport{});
     }
 

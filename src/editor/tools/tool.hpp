@@ -7,6 +7,9 @@
 #include <memory>
 #include <optional>
 
+namespace erhe::imgui {
+    class Imgui_window;
+}
 namespace erhe::primitive {
     class Material;
 }
@@ -45,7 +48,7 @@ public:
 
     virtual void tool_render           (const Render_context& context) { static_cast<void>(context); }
     virtual void cancel_ready          () {}
-    virtual void tool_properties       () {}
+    virtual void tool_properties       (erhe::imgui::Imgui_window& imgui_window) { static_cast<void>(imgui_window); }
     virtual void handle_priority_update(int old_priority, int new_priority)
     {
         static_cast<void>(old_priority);

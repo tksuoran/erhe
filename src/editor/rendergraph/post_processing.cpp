@@ -462,10 +462,7 @@ void Post_processing::downsample(
     const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
-    const uint64_t handle = m_context.graphics_instance->get_handle(
-        *source_texture,
-        m_linear_sampler
-    );
+    const uint64_t handle = m_context.graphics_instance->get_handle(*source_texture, m_linear_sampler );
     const uint32_t texture_handle[2] = {
         static_cast<uint32_t>((handle & 0xffffffffu)),
         static_cast<uint32_t>(handle >> 32u)

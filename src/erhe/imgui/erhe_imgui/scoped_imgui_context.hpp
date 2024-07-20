@@ -1,8 +1,5 @@
 #pragma once
 
-#include <cstdint>
-#include <mutex>
-
 struct ImGuiContext;
 
 namespace erhe::imgui {
@@ -10,6 +7,7 @@ namespace erhe::imgui {
 class Imgui_host;
 class Imgui_renderer;
 
+// TODO Is this actually needed any more / at all?
 class Scoped_imgui_context
 {
 public:

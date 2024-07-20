@@ -12,7 +12,6 @@
 #include "scene/scene_view.hpp"
 
 #include "erhe_imgui/windows/pipelines.hpp"
-#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -78,11 +77,9 @@ void Renderpass::render(const Render_context& context) const
         )
     };
 
-    const auto scene_root = this->override_scene_root
-        ? override_scene_root
-        : context.scene_view.get_scene_root();
+    const auto scene_root = this->override_scene_root ? override_scene_root : context.scene_view.get_scene_root();
     if (!scene_root) {
-        log_frame->error("Missing scene root - cannot render");
+        log_composer->error("Missing scene root - cannot render");
         return;
     }
 
@@ -104,7 +101,7 @@ void Renderpass::render(const Render_context& context) const
         !render_style->is_primitive_mode_enabled(this->primitive_mode)
     ) {
         //// XXX TODO
-        log_frame->trace("primitive mode is not enabled - skipping");
+        log_composer->warn("primitive mode is not enabled - skipping");
         return;
     }
 
@@ -120,7 +117,7 @@ void Renderpass::render(const Render_context& context) const
     //}
 
     if (this->mesh_layers.empty()) {
-        log_frame->trace("render_fullscreen");
+        log_composer->debug("render_fullscreen");
         context.editor_context.forward_renderer->render_fullscreen(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .camera                 = &context.camera,
@@ -152,21 +149,21 @@ void Renderpass::render(const Render_context& context) const
             const auto mesh_layer = scene->get_mesh_layer_by_id(id);
             if (mesh_layer) {
                 mesh_spans.push_back(mesh_layer->meshes);
-                log_frame->trace("adding mesh layer {} with {} meshes", mesh_layer->name, mesh_layer->meshes.size());
+                log_composer->trace("adding mesh layer {} with {} meshes", mesh_layer->name, mesh_layer->meshes.size());
             } else {
-                log_frame->warn("mesh layer not found for id {}", id);
+                log_composer->warn("mesh layer not found for id {}", id);
             }
         }
         if (mesh_spans.empty()) {
             return;
         }
 
-        log_frame->trace("calling render with {} passes", passes.size());
+        log_composer->debug("calling render with {} passes", passes.size());
         for (const auto& pass : passes) {
-            log_frame->trace("pass using pipeline = {}", pass->pipeline.data.name);
+            log_composer->trace("pass using pipeline = {}", pass->pipeline.data.name);
         }
-        log_frame->trace("primitive_mode = {}", c_str(primitive_mode));
-        log_frame->trace("filter = {}", filter.describe());
+        log_composer->trace("primitive_mode = {}", c_str(primitive_mode));
+        log_composer->trace("filter = {}", filter.describe());
 
         context.editor_context.forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{

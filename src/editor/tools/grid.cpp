@@ -238,7 +238,7 @@ auto Grid::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& 
         ray_origin_in_grid,
         ray_direction_in_grid
     );
-    if (!intersection.has_value()) {
+    if (!intersection.has_value() || intersection.value() < 0.0f) {
         return {};
     }
     const glm::vec3 position_in_grid = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;

@@ -91,14 +91,17 @@ public:
 
     auto create_basic_viewport_scene_view_node(
         erhe::rendergraph::Rendergraph&             rendergraph,
-        const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
+        const std::shared_ptr<Viewport_scene_view>& viewport_scene_view,
+        std::string_view                            name
     ) -> std::shared_ptr<Basic_scene_view_node>;
 
     auto create_imgui_window_scene_view_node(
         erhe::imgui::Imgui_renderer&                imgui_renderer,
         erhe::imgui::Imgui_windows&                 imgui_windows,
         erhe::rendergraph::Rendergraph&             rendergraph,
-        const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
+        const std::shared_ptr<Viewport_scene_view>& viewport_scene_view,
+        std::string_view                            name,
+        std::string_view                            ini_name
     ) -> std::shared_ptr<Imgui_window_scene_view_node>;
 
     void open_new_viewport_scene_view_node();

@@ -23,7 +23,7 @@ Map_generator::Map_generator(
     , m_map_editor{map_editor}
     , m_tiles     {tiles}
 {
-    hide();
+    hide_window();
 }
 
 void Map_generator::update_elevation_terrains()

@@ -314,7 +314,7 @@ void Scene_view::update_hover_with_raytrace()
             rt_scene.intersect(ray, hit);
         }
         entry.valid = (hit.instance != nullptr);
-        if (entry.valid) {
+        if (entry.valid && (ray.t_far > 0.0f)) {
             void* node_instance_user_data = hit.instance->get_user_data();
             auto* raytrace_primitive      = static_cast<erhe::scene::Raytrace_primitive*>(node_instance_user_data);
             ERHE_VERIFY(raytrace_primitive != nullptr);
@@ -382,10 +382,7 @@ auto Scene_view::get_closest_point_on_plane(const glm::vec3 N, const glm::vec3 P
     using vec3 = glm::vec3;
     const auto Q_origin_opt    = get_control_ray_origin_in_world();
     const auto Q_direction_opt = get_control_ray_direction_in_world();
-    if (
-        !Q_origin_opt.has_value() ||
-        !Q_direction_opt.has_value()
-    ) {
+    if (!Q_origin_opt.has_value() || !Q_direction_opt.has_value()) {
         return {};
     }
 

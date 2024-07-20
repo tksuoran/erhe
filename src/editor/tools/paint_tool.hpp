@@ -79,7 +79,8 @@ public:
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
-    void tool_render(const Render_context& context) override;
+    void tool_render           (const Render_context& context)      override;
+    void tool_properties       (erhe::imgui::Imgui_window&)         override;
 
     auto try_ready() -> bool;
     void paint();
@@ -103,11 +104,13 @@ private:
     erhe::commands::Drag_enable_command m_drag_enable_command;
 
     Paint_mode              m_paint_mode{Paint_mode::Point};
-    glm::vec4               m_color     {1.0f, 1.0f, 1.0f, 1.0f};
+    size_t                  m_selected_palette_slot{0};
 
     std::optional<uint32_t> m_point_id;
     std::optional<uint32_t> m_corner_id;
     std::vector<glm::vec4>  m_ngon_colors;
+    bool                    m_edit_palette{false};
+    std::vector<glm::vec4>  m_palette;
 };
 
 } // namespace editor

@@ -100,10 +100,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const uint64_t shadow_texture_handle = enable_shadows
         ? parameters.light_projections->shadow_map_texture_handle
         : erhe::graphics::invalid_texture_handle;
-    const uint64_t fallback_texture_handle = m_graphics_instance.get_handle(
-        *m_dummy_texture.get(),
-        m_nearest_sampler
-    );
+    const uint64_t fallback_texture_handle = m_graphics_instance.get_handle(*m_dummy_texture.get(), m_nearest_sampler);
 
     log_forward_renderer->trace(
         "render({}) shadow T '{}' handle {}",
@@ -156,10 +153,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     for (auto& pass : passes) {
         const auto& pipeline = pass->pipeline;
         bool use_override_shader_stages = (parameters.override_shader_stages != nullptr);
-        if (
-            (pipeline.data.shader_stages == nullptr) &&
-            !use_override_shader_stages
-        ) {
+        if ((pipeline.data.shader_stages == nullptr) && !use_override_shader_stages) {
             continue;
         }
 
@@ -246,11 +240,7 @@ void Forward_renderer::render_fullscreen(const Render_parameters&  parameters, c
         (parameters.shadow_texture != nullptr);
 
     const uint64_t shadow_texture_handle = enable_shadows
-        ?
-            m_graphics_instance.get_handle(
-                *parameters.shadow_texture,
-                m_nearest_sampler
-            )
+        ? m_graphics_instance.get_handle(*parameters.shadow_texture, m_nearest_sampler)
         : 0;
 
     erhe::graphics::Scoped_debug_group forward_renderer_render{c_forward_renderer_render};

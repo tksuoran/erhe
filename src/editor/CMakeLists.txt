@@ -142,6 +142,8 @@ erhe_target_sources_grouped(
     res/shaders/wide_lines.vert
     scene/asset_browser.cpp
     scene/asset_browser.hpp
+    scene/brush_placement.cpp
+    scene/brush_placement.hpp
     scene/content_library.cpp
     scene/content_library.hpp
     scene/debug_draw.cpp
@@ -179,6 +181,8 @@ erhe_target_sources_grouped(
     tools/brushes/brush.hpp
     tools/brushes/brush_tool.cpp
     tools/brushes/brush_tool.hpp
+    tools/brushes/reference_frame.cpp
+    tools/brushes/reference_frame.hpp
     tools/brushes/create/create.cpp
     tools/brushes/create/create.hpp
     tools/brushes/create/create_box.cpp

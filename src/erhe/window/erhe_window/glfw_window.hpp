@@ -30,21 +30,21 @@ constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
 class Window_configuration
 {
 public:
-    bool             show                    {true};
-    bool             fullscreen              {false};
-    bool             use_finish              {false};
-    bool             framebuffer_transparency{false};
-    int              gl_major                {4};
-    int              gl_minor                {6};
-    int              width                   {1920};
-    int              height                  {1080};
-    int              msaa_sample_count       {0};
-    int              swap_interval           {1};
-    float            sleep_time              {0.0f};
-    float            wait_time               {0.0f};
-    std::string      title                   {};
-    Context_window*  share                   {nullptr};
-    int              initial_clear           {3};
+    bool            show                    {true};
+    bool            fullscreen              {false};
+    bool            use_finish              {false};
+    bool            framebuffer_transparency{false};
+    bool            use_depth               {false};
+    bool            use_stencil             {false};
+    int             gl_major                {4};
+    int             gl_minor                {6};
+    int             width                   {1920};
+    int             height                  {1080};
+    int             msaa_sample_count       {0};
+    int             swap_interval           {1};
+    std::string     title                   {};
+    Context_window* share                   {nullptr};
+    int             initial_clear           {3};
 };
 
 class Context_window
@@ -68,8 +68,7 @@ public:
     void clear_current              () const;
     void swap_buffers               () const;
     void break_event_loop           ();
-    //void enter_event_loop           ();
-    void poll_events                ();
+    void poll_events                (float wait_time = 0.0f);
     void get_cursor_position        (float& xpos, float& ypos);
     void get_capture_position       (float& xpos, float& ypos);
     void set_visible                (bool visible);
@@ -111,8 +110,8 @@ private:
     int                      m_joystick{-1};
     std::vector<float>       m_controller_axis_values;
     std::vector<bool>        m_controller_button_values;
-    std::mutex               m_input_event_mutex;
-    std::vector<Input_event> m_input_events;
+    int                      m_input_event_queue_write{0};
+    std::vector<Input_event> m_input_events[2];
 
     static int s_window_count;
 };
