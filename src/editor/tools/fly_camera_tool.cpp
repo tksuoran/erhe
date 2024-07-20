@@ -803,15 +803,17 @@ void Fly_camera_tool::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    float speed = m_camera_controller->translate_z.max_delta();
-
     ImGui::Checkbox   ("Use Viewport Camera", &m_use_viewport_camera);
     ImGui::SliderFloat("Sensitivity", &m_sensitivity, 0.2f,   2.0f);
-    ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
 
-    m_camera_controller->translate_x.set_max_delta(speed);
-    m_camera_controller->translate_y.set_max_delta(speed);
-    m_camera_controller->translate_z.set_max_delta(speed);
+    if (m_camera_controller) {
+        float speed = m_camera_controller->translate_z.max_delta();
+        ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
+
+        m_camera_controller->translate_x.set_max_delta(speed);
+        m_camera_controller->translate_y.set_max_delta(speed);
+        m_camera_controller->translate_z.set_max_delta(speed);
+    }
 #endif
 }
 

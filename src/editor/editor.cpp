@@ -195,6 +195,14 @@ public:
         }
     }
 
+    [[nodiscard]] static auto get_windows_ini_path() -> std::string
+    {
+        bool openxr{false};
+        auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
+        ini->get("openxr", openxr);
+        return openxr ? "openxr_windows.ini" : "windows.ini";
+    }
+
     [[nodiscard]] auto create_window() -> erhe::window::Context_window
     {
         {
@@ -265,7 +273,7 @@ public:
         , m_shadow_renderer       {m_graphics_instance, m_program_interface}
         , m_mesh_memory           {m_graphics_instance, m_program_interface}
 
-        , m_imgui_windows         {m_imgui_renderer,    &m_context_window,   m_rendergraph}
+        , m_imgui_windows         {m_imgui_renderer,    &m_context_window,   m_rendergraph, get_windows_ini_path()}
         , m_editor_scenes         {m_editor_context,    m_time}
         , m_editor_windows        {m_editor_context}
         , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}

@@ -23,8 +23,7 @@ Imgui_window::Imgui_window(
     , m_ini_label     {ini_label}
 {
     if (!ini_label.empty()) {
-        auto ini = erhe::configuration::get_ini("windows.ini", "windows");
-        ini->get(ini_label.data(), m_is_visible);
+        m_is_visible = imgui_windows.get_persistent_window_open(ini_label);
     }
 
     imgui_windows.register_imgui_window(this);

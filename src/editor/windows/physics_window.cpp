@@ -23,8 +23,6 @@ Physics_window::Physics_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Physics", "physics"}
     , m_context                {editor_context}
 {
-    m_min_size[0] = 120.0f;
-    m_min_size[1] = 120.0f;
 }
 
 void Physics_window::viewport_toolbar(bool& hovered)

@@ -71,7 +71,7 @@ protected:
     bool            m_show_in_menu{true};
     bool            m_developer   {false};
     std::string     m_ini_label   {};
-    float           m_min_size[2]{200.0f, 400.0f};
+    float           m_min_size[2]{200.0f, 100.0f};
     float           m_max_size[2]{99999.0f, 99999.0f};
 
 private:

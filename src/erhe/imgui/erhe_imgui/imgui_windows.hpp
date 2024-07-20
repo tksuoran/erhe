@@ -5,6 +5,8 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace erhe::rendergraph {
@@ -25,7 +27,12 @@ class Window_imgui_host;
 class Imgui_windows : public erhe::window::Input_event_handler
 {
 public:
-    Imgui_windows(Imgui_renderer& imgui_renderer, erhe::window::Context_window* context_window, erhe::rendergraph::Rendergraph& rendergraph);
+    Imgui_windows(
+        Imgui_renderer& imgui_renderer,
+        erhe::window::Context_window*   context_window,
+        erhe::rendergraph::Rendergraph& rendergraph,
+        std::string_view                windows_ini_path
+    );
 
     // Public API
     void lock_mutex             ();
@@ -39,9 +46,10 @@ public:
     auto get_windows            () -> std::vector<Imgui_window*>&;
     void save_window_state      ();
 
-    [[nodiscard]] auto get_window_imgui_host() -> std::shared_ptr<Window_imgui_host>;
-    [[nodiscard]] auto want_capture_keyboard() const -> bool;
-    [[nodiscard]] auto want_capture_mouse   () const -> bool;
+    [[nodiscard]] auto get_window_imgui_host     () -> std::shared_ptr<Window_imgui_host>;
+    [[nodiscard]] auto want_capture_keyboard     () const -> bool;
+    [[nodiscard]] auto want_capture_mouse        () const -> bool;
+    [[nodiscard]] auto get_persistent_window_open(std::string_view ini_label) const -> bool;
 
     // Implements Input_event_han
     // Forwards events to each window
@@ -63,6 +71,7 @@ private:
     std::mutex                         m_queued_operations_mutex;
     std::vector<std::function<void()>> m_queued_operations;
     erhe::rendergraph::Rendergraph&    m_rendergraph;
+    std::string                        m_windows_ini_path;
 
     std::shared_ptr<Window_imgui_host> m_window_imgui_host;
 };

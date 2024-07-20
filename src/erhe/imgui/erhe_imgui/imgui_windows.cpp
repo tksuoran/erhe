@@ -13,9 +13,15 @@
 
 namespace erhe::imgui {
 
-Imgui_windows::Imgui_windows(Imgui_renderer& imgui_renderer, erhe::window::Context_window* context_window, erhe::rendergraph::Rendergraph& rendergraph)
-    : m_imgui_renderer{imgui_renderer}
-    , m_rendergraph   {rendergraph}
+Imgui_windows::Imgui_windows(
+    Imgui_renderer&                 imgui_renderer,
+    erhe::window::Context_window*   context_window,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    std::string_view                windows_ini_path
+)
+    : m_imgui_renderer  {imgui_renderer}
+    , m_rendergraph     {rendergraph}
+    , m_windows_ini_path{windows_ini_path}
 {
     if (context_window != nullptr) {
         m_window_imgui_host = std::make_shared<erhe::imgui::Window_imgui_host>(
@@ -96,9 +102,22 @@ void Imgui_windows::unregister_imgui_window(Imgui_window* window)
     }
 }
 
+auto Imgui_windows::get_persistent_window_open(std::string_view ini_label) const -> bool
+{
+    bool result = true;
+    if (!m_windows_ini_path.empty()) {
+        auto ini = erhe::configuration::get_ini(m_windows_ini_path.c_str(), "windows");
+        ini->get(ini_label.data(), result);
+    }
+    return result;
+}
+
 void Imgui_windows::save_window_state()
 {
-    mINI::INIFile file("windows.ini");
+    if (m_windows_ini_path.empty()) {
+        return;
+    }
+    mINI::INIFile file(m_windows_ini_path);
     mINI::INIStructure ini;
     for (auto& imgui_window : m_imgui_windows) {
         const auto label = imgui_window->get_ini_label();

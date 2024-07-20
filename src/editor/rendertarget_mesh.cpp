@@ -6,7 +6,6 @@
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_view.hpp"
-#include "windows/viewport_config_window.hpp"
 
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
@@ -217,10 +216,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
     }
     const auto opt_origin_in_world    = scene_view->get_control_ray_origin_in_world();
     const auto opt_direction_in_world = scene_view->get_control_ray_direction_in_world();
-    if (
-        !opt_origin_in_world.has_value() ||
-        !opt_direction_in_world.has_value()
-    ) {
+    if (!opt_origin_in_world.has_value() || !opt_direction_in_world.has_value()) {
         return false;
     }
 
