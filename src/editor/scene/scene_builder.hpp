@@ -57,10 +57,11 @@ class Scene_views;
 class Make_mesh_config
 {
 public:
-    int   instance_count{1};
-    float instance_gap  {0.4f};
-    float object_scale  {1.0f};
-    int   detail        {2};
+    std::shared_ptr<erhe::primitive::Material> material      {};
+    int                                        instance_count{1};
+    float                                      instance_gap  {0.2f};
+    float                                      object_scale  {0.4f};
+    int                                        detail        {4};
 };
 
 class Scene_builder

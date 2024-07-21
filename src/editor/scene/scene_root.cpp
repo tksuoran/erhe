@@ -791,11 +791,7 @@ public:
 
 void Scene_root::sort_lights()
 {
-    std::sort(
-        m_layers.light()->lights.begin(),
-        m_layers.light()->lights.end(),
-        Light_comparator()
-    );
+    std::sort(m_layers.light()->lights.begin(), m_layers.light()->lights.end(), Light_comparator());
 }
 
 void Scene_root::update_pointer_for_rendertarget_meshes(Scene_view* scene_view)

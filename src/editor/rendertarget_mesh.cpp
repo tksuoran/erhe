@@ -143,7 +143,7 @@ auto Rendertarget_mesh::framebuffer() const -> std::shared_ptr<erhe::graphics::F
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-void Rendertarget_mesh::update_headset()
+void Rendertarget_mesh::update_headset_hand_tracking()
 {
 #if 0
     auto* hand_tracker = headset_view.get_hand_tracker();
@@ -196,6 +196,7 @@ void Rendertarget_mesh::update_headset()
 
 auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
 {
+    // TODO Duplication with Rendertarget_imgui_host::begin_imgui_frame()
     m_pointer.reset();
 
     if (scene_view == nullptr) {
@@ -225,39 +226,37 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
     const glm::vec3 unit_axis_z{0.0f, 0.0f, 1.0f};
     const auto hit = erhe::math::intersect_plane<float>(unit_axis_z, origo, origin_in_mesh, direction_in_mesh);
 
-    if (!hit.has_value()) {
+    if (!hit.has_value() || hit.value() < 0.0f) {
         return false;
     }
 
-    {
-        const glm::vec3 hit_position_in_mesh = origin_in_mesh + hit.value() * direction_in_mesh;
-        const glm::vec2 a{
-            hit_position_in_mesh.x / m_local_width,
-            hit_position_in_mesh.y / m_local_height
-        };
-        const glm::vec2 b{
-            a.x + 0.5f,
-            0.5f - a.y
-        };
-        if (
-            (b.x < 0.0f) ||
-            (b.y < 0.0f) ||
-            (b.x > 1.0f) ||
-            (b.y > 1.0f)
-        ) {
-            return false;
-        }
-        const glm::vec2 hit_position_in_viewport{
-            m_texture->width() * b.x,
-            m_texture->height() * b.y
-        };
-
-        SPDLOG_LOGGER_TRACE(log_pointer, "rt ray hit position {}", hit_position_in_viewport);
-
-        m_pointer = hit_position_in_viewport;
-
-        return true;
+    const glm::vec3 hit_position_in_mesh = origin_in_mesh + hit.value() * direction_in_mesh;
+    const glm::vec2 a{
+        hit_position_in_mesh.x / m_local_width,
+        hit_position_in_mesh.y / m_local_height
+    };
+    const glm::vec2 b{
+         a.x + 0.5f,
+        -a.y + 0.5f
+    };
+    if (
+        (b.x < 0.0f) ||
+        (b.y < 0.0f) ||
+        (b.x > 1.0f) ||
+        (b.y > 1.0f)
+    ) {
+        return false;
     }
+    const glm::vec2 hit_position_in_viewport{
+        m_texture->width()  * b.x,
+        m_texture->height() * b.y
+    };
+
+    SPDLOG_LOGGER_TRACE(log_pointer, "rt ray hit position {}", hit_position_in_viewport);
+
+    m_pointer = hit_position_in_viewport;
+
+    return true;
 }
 
 auto Rendertarget_mesh::world_to_window(const glm::vec3 position_in_world) const -> std::optional<glm::vec2>
@@ -273,8 +272,8 @@ auto Rendertarget_mesh::world_to_window(const glm::vec3 position_in_world) const
         position_in_mesh.y / m_local_height
     };
     const glm::vec2 b{
-        a.x + 0.5f,
-        0.5f - a.y
+         a.x + 0.5f,
+        -a.y + 0.5f
     };
     if (
         (b.x < 0.0f) ||

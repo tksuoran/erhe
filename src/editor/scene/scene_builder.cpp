@@ -747,8 +747,8 @@ void Scene_builder::add_curved_shapes(const Make_mesh_config& config)
 
 void Scene_builder::add_torus_chain(const Make_mesh_config& config)
 {
-    const float major_radius = 1.0f;  // * config.object_scale;
-    const float minor_radius = 0.25f; // * config.object_scale;
+    const float major_radius = 1.0f  * config.object_scale;
+    const float minor_radius = 0.25f * config.object_scale;
 
     auto&       material_library = m_scene_root->content_library()->materials;
     const auto  materials        = material_library->get_all<erhe::primitive::Material>();
@@ -771,8 +771,8 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config)
             .mesh_flags      = Item_flags::show_in_ui | Item_flags::visible | Item_flags::opaque | Item_flags::content | Item_flags::id | Item_flags::shadow_cast,
             .scene_root      = m_scene_root.get(),
             .world_from_node = erhe::math::create_translation(x, y, z) * alternate_rotate[i & 1],
-            .material        = materials.at(material_index),
-            .scale           = 1.0f
+            .material        = config.material ? config.material : materials.at(material_index),
+            .scale           = config.object_scale
         };
         auto instance_node = brush->make_instance(brush_instance_create_info);
         instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), i + 1));
@@ -821,7 +821,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
         }
     }
 
-    constexpr float bottom_y_pos = 0.01f;
+    constexpr float bottom_y_pos = 0.001f;
 
     glm::ivec2 max_corner;
     {
@@ -892,7 +892,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
                   z    += 0.5f * static_cast<float>(entry.rectangle.height) / 256.0f;
                   x    -= 0.5f * static_cast<float>(max_corner.x) / 256.0f;
                   z    -= 0.5f * static_cast<float>(max_corner.y) / 256.0f;
-            float y     = bottom_y_pos - brush->get_bounding_box().min.y;
+            float y     = bottom_y_pos - (brush->get_bounding_box().min.y * config.object_scale);
             //x -= 0.5f * static_cast<float>(group_width);
             //z -= 0.5f * static_cast<float>(group_depth);
             //const auto& material = m_scene_root->materials().at(material_index);

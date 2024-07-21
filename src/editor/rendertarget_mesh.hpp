@@ -61,7 +61,7 @@ public:
     [[nodiscard]] auto world_to_window (glm::vec3 world_position) const -> std::optional<glm::vec2>;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    void update_headset();
+    void update_headset_hand_tracking();
 #endif
 
     auto update_pointer(Scene_view* scene_view) -> bool;

@@ -13,6 +13,7 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -127,17 +128,26 @@ void Operations::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
+    const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
+
     if (ImGui::TreeNodeEx("Scenes", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragInt  ("Instance Count", &m_make_mesh_config.instance_count, 0.1f, 1, 8);
-        ImGui::DragFloat("Gap",            &m_make_mesh_config.instance_gap, 0.1f, 0.0f, 2.0f);
-        ImGui::DragFloat("Scale",          &m_make_mesh_config.object_scale, 0.1f, 0.1f, 10.0f);
-        if (erhe::imgui::make_button("Platonic Solids", erhe::imgui::Item_mode::normal)) {
+
+        std::shared_ptr<erhe::primitive::Material> material = m_context.selection->get_last_selected<erhe::primitive::Material>();
+        if (material) {
+            ImGui::Text("Material: %s", material->get_name().c_str());
+        }
+        m_make_mesh_config.material = material;
+
+        ImGui::DragInt  ("Count", &m_make_mesh_config.instance_count, 0.1f, 1, 32);
+        ImGui::DragFloat("Gap",   &m_make_mesh_config.instance_gap,   0.02f, 0.0f,  2.0f, "%.2f");
+        ImGui::DragFloat("Scale", &m_make_mesh_config.object_scale,   0.02f, 0.1f, 10.0f, "%.2f");
+        if (erhe::imgui::make_button("Platonic Solids", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_platonic_solids(m_make_mesh_config);
         }
-        if (erhe::imgui::make_button("Curved Shapes", erhe::imgui::Item_mode::normal)) {
+        if (erhe::imgui::make_button("Curved Shapes", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_curved_shapes(m_make_mesh_config);
         }
-        if (erhe::imgui::make_button("Chain", erhe::imgui::Item_mode::normal)) {
+        if (erhe::imgui::make_button("Chain", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_torus_chain(m_make_mesh_config);
         }
         ImGui::TreePop();
@@ -145,7 +155,6 @@ void Operations::imgui()
 
     ImGui::Separator();
 
-    const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     auto& selection       = *m_context.selection;
     auto& operation_stack = *m_context.operation_stack;
 
@@ -189,6 +198,14 @@ void Operations::imgui()
     const auto multi_select_nodes  = (selected_node_count >= 2)
         ? erhe::imgui::Item_mode::normal
         : erhe::imgui::Item_mode::disabled;
+
+    const auto delete_mode = (selected_mesh_count + selected_node_count) > 0
+        ? erhe::imgui::Item_mode::normal
+        : erhe::imgui::Item_mode::disabled;
+    if (erhe::imgui::make_button("Delete", delete_mode, button_size)) {
+        m_context.selection->delete_selection();
+    }
+
     if (erhe::imgui::make_button("Attach", multi_select_nodes, button_size)) {
         const auto& node0 = selection.get<erhe::scene::Node>(0);
         const auto& node1 = selection.get<erhe::scene::Node>(1);

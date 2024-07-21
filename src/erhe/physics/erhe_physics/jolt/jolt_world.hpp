@@ -126,8 +126,8 @@ private:
     JPH::PhysicsSystem                             m_physics_system;
     //std::unique_ptr<Jolt_debug_renderer>           m_debug_renderer;
 
-    std::function<void(Jolt_rigid_body*)> m_on_body_activated_callback;
-    std::function<void(Jolt_rigid_body*)> m_on_body_deactivated_callback;
+    std::function<void(Jolt_rigid_body*)>          m_on_body_activated_callback;
+    std::function<void(Jolt_rigid_body*)>          m_on_body_deactivated_callback;
 
     std::vector<Jolt_rigid_body*>                  m_rigid_bodies;
     std::vector<Jolt_constraint*>                  m_constraints;

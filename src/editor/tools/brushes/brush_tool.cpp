@@ -152,8 +152,10 @@ Brush_tool::Brush_tool(
         }
     );
 
-    m_preview_command.set_host(this);
-    m_insert_command .set_host(this);
+    m_preview_command               .set_host(this);
+    m_insert_command                .set_host(this);
+    m_pick_command                  .set_host(this);
+    m_pick_using_float_input_command.set_host(this);
 }
 
 void Brush_tool::on_message(Editor_message& message)

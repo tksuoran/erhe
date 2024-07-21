@@ -29,20 +29,9 @@ static void TraceImpl(const char* inFMT, ...)
 #ifdef JPH_ENABLE_ASSERTS
 
 // Callback for asserts, connect this to your own assert handler if you have one
-static auto AssertFailedImpl(
-    const char*  inExpression,
-    const char*  inMessage,
-    const char*  inFile,
-    unsigned int inLine
-) -> bool
+static auto AssertFailedImpl(const char* inExpression, const char* inMessage, const char* inFile, unsigned int inLine) -> bool
 {
-    log_physics->error(
-        "{}:{} ({}) {}",
-        inFile,
-        inLine,
-        inExpression,
-        (inMessage != nullptr) ? inMessage : ""
-    );
+    log_physics->error("{}:{} ({}) {}", inFile, inLine, inExpression, (inMessage != nullptr) ? inMessage : "");
     // Breakpoint
     return true;
 };

@@ -175,7 +175,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_rendertarget_mesh->update_headset();
+    m_rendertarget_mesh->update_headset_hand_tracking();
 
     auto& headset_view = *m_context.headset_view;
 #endif
@@ -242,7 +242,8 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
             );
 
             bool mouse_has_position{false};
-            if (intersection.has_value()) {
+            // TODO Duplication with Rendertarget_mesh::update_pointer()
+            if (intersection.has_value() && intersection.value() > 0.0f) {
                 const auto world_position      = ray_origin + intersection.value() * controller_direction;
                 const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
                 if (window_position_opt.has_value()) {

@@ -105,7 +105,7 @@ private:
 
     std::mutex                         m_brush_mutex;
     std::shared_ptr<Brush>             m_drag_and_drop_brush   {};
-    float                              m_preview_hover_distance{0.01f};
+    float                              m_preview_hover_distance{0.001f};
     bool                               m_snap_to_hover_polygon {true};
     bool                               m_snap_to_grid          {true};
     bool                               m_scale_to_match        {true};
