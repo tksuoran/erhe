@@ -555,7 +555,6 @@ public:
                 }
             }
             tick();
-            m_context_window.clear_input_events();
 
             ERHE_PROFILE_FRAME_END
         }

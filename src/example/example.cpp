@@ -132,7 +132,6 @@ public:
             }
             tick();
             m_window.swap_buffers();
-            m_window.clear_input_events();
         }
     }
 

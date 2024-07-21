@@ -399,11 +399,11 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         : nullptr;
 
     bool fullscreen = configuration.fullscreen;
-#if defined(_WIN32)
-    if (IsDebuggerPresent() != 0) {
-        fullscreen = false;
-    }
-#endif
+/// YOLO #if defined(_WIN32)
+/// YOLO     if (IsDebuggerPresent() != 0) {
+/// YOLO         fullscreen = false;
+/// YOLO     }
+/// YOLO #endif
 
     GLFWmonitor* monitor = fullscreen ? glfwGetPrimaryMonitor() : nullptr;
 
@@ -641,6 +641,19 @@ void Context_window::poll_events(float wait_time)
             }
         }
     }
+
+    // Swap input event buffers
+    int old_read_buffer = 1 - m_input_event_queue_write;
+    // for (const Input_event& input_event : m_input_events[old_read_buffer]) {
+    //     if (input_event.handled) {
+    //         continue;
+    //     }
+    //     if (input_event.type == Input_event_type::window_focus_event) {
+    //         log_window_event->trace("Not handled: {}", input_event.describe());
+    //     }
+    // }
+    m_input_events[old_read_buffer].clear();
+    m_input_event_queue_write = old_read_buffer;
 }
 
 //void Context_window::enter_event_loop()
@@ -822,11 +835,12 @@ void Context_window::handle_window_focus_event(int focused)
             .type = Input_event_type::window_focus_event,
             .u = {
                 .window_focus_event = {
-                    .focused = focused
+                    .focused = (focused != 0)
                 }
             }
         }
     );
+    log_window_event->trace(m_input_events[m_input_event_queue_write].back().describe());
 }
 
 void Context_window::handle_cursor_enter_event(int entered)
@@ -841,6 +855,7 @@ void Context_window::handle_cursor_enter_event(int entered)
             }
         }
     );
+    log_window_event->trace(m_input_events[m_input_event_queue_write].back().describe());
 }
 
 void Context_window::handle_char_event(unsigned int codepoint)
@@ -973,14 +988,6 @@ auto Context_window::get_height() const -> int
 auto Context_window::get_input_events() -> std::vector<Input_event>&
 {
     return m_input_events[1 - m_input_event_queue_write];
-}
-
-void Context_window::clear_input_events()
-{
-    // Clear events processed by app
-    m_input_events[1 - m_input_event_queue_write].clear();
-    // Swap input event buffers
-    m_input_event_queue_write = 1 - m_input_event_queue_write;
 }
 
 void Context_window::get_extensions()

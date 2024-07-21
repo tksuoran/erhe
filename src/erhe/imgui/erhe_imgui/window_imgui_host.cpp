@@ -64,9 +64,24 @@ Window_imgui_host::~Window_imgui_host()
 
 auto Window_imgui_host::begin_imgui_frame() -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::begin_imgui_frame()");
+    //SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::begin_imgui_frame()");
 
     ERHE_PROFILE_FUNCTION();
+
+    // Process input events from the context window
+    std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
+    if (input_events.empty()) {
+        SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host - no input events");
+    }
+    for (erhe::window::Input_event& input_event : input_events) {
+        if (!input_event.handled) {
+            dispatch_input_event(input_event);
+            SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host handled {}", input_event.describe());
+            SPDLOG_LOGGER_TRACE(log_input_events, "Window_imgui_host handled {}", input_event.describe());
+        } else {
+            SPDLOG_LOGGER_TRACE(log_input_events, "Window_imgui_host skipped already handled {}", input_event.describe());
+        }
+    }
 
     auto* glfw_window    = m_context_window.get_glfw_window();
 
@@ -86,20 +101,6 @@ auto Window_imgui_host::begin_imgui_frame() -> bool
     const auto current_time = glfwGetTime();
     io.DeltaTime = m_time > 0.0 ? static_cast<float>(current_time - m_time) : static_cast<float>(1.0 / 60.0);
     m_time = current_time;
-
-    // Process input events from the context window
-    std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
-    if (input_events.empty()) {
-        SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host - no input events");
-    }
-    for (erhe::window::Input_event& input_event : input_events) {
-        if (!input_event.handled) {
-            dispatch_input_event(input_event);
-            SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host handled {}", input_event.describe());
-        } else {
-            SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host skipped already handled {}", input_event.describe());
-        }
-    }
 
     // ImGui_ImplGlfw_UpdateMouseCursor
     const auto cursor = static_cast<erhe::window::Mouse_cursor>(ImGui::GetMouseCursor());

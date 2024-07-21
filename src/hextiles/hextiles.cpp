@@ -88,7 +88,6 @@ public:
             }
             tick();
             m_context_window.swap_buffers();
-            m_context_window.clear_input_events();
         }
     }
 

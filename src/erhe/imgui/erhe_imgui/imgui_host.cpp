@@ -3,7 +3,6 @@
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_log.hpp"
-#include "erhe_window/window.hpp"
 
 #include <imgui/imgui_internal.h>
 
@@ -248,10 +247,21 @@ auto Imgui_host::get_mouse_position() const -> glm::vec2
 //       these events as well.
 auto Imgui_host::on_cursor_enter_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
 {
+    SPDLOG_LOGGER_TRACE(log_input_events, "on_cursor_enter_event({})", cursor_enter_event.entered);
     m_has_cursor = cursor_enter_event.entered != 0;
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddFocusEvent(m_has_cursor);
-    return false;
+    if (!m_has_cursor) {
+        io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+    }
+    return true;
+}
+
+auto Imgui_host::on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
+{
+    SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_window_focus_event({})", window_focus_event.focused);
+    ImGuiIO& io = m_imgui_context->IO;
+    io.AddFocusEvent(window_focus_event.focused);
+    return true;
 }
 
 auto Imgui_host::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
@@ -277,15 +287,6 @@ auto Imgui_host::on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mou
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMouseWheelEvent(mouse_wheel_event.x, mouse_wheel_event.y);
-    return false;
-}
-
-auto Imgui_host::on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
-{
-    ImGuiIO& io = m_imgui_context->IO;
-    if (!window_focus_event.focused) {
-        io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
-    }
     return false;
 }
 

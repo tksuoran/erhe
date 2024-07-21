@@ -271,7 +271,7 @@ public:
 class Window_focus_event
 {
 public:
-    int focused;
+    bool focused;
 
     [[nodiscard]] auto describe() const -> std::string;
 };

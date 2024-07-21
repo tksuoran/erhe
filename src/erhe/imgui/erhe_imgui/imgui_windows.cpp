@@ -1,4 +1,6 @@
-﻿#include "erhe_imgui/imgui_windows.hpp"
+﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
+#include "erhe_imgui/imgui_windows.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_log.hpp"
@@ -266,7 +268,9 @@ auto Imgui_windows::want_capture_mouse() const -> bool
 
 auto Imgui_windows::on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
 {
+    SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_window_focus_event({})", window_focus_event.focused);
     if (!m_window_imgui_host) {
+        SPDLOG_LOGGER_TRACE(log_input_events, "  m_window_imgui_host");
         return false;
     }
 
