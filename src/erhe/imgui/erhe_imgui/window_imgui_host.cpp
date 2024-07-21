@@ -62,12 +62,8 @@ Window_imgui_host::~Window_imgui_host()
 {
 }
 
-auto Window_imgui_host::begin_imgui_frame() -> bool
+void Window_imgui_host::process_input_events_from_context_window()
 {
-    //SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::begin_imgui_frame()");
-
-    ERHE_PROFILE_FUNCTION();
-
     // Process input events from the context window
     std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
     if (input_events.empty()) {
@@ -82,6 +78,17 @@ auto Window_imgui_host::begin_imgui_frame() -> bool
             SPDLOG_LOGGER_TRACE(log_input_events, "Window_imgui_host skipped already handled {}", input_event.describe());
         }
     }
+}
+
+auto Window_imgui_host::begin_imgui_frame() -> bool
+{
+    //SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::begin_imgui_frame()");
+
+    ERHE_PROFILE_FUNCTION();
+
+#if 1 // TODO Enable only this path permanently
+    process_input_events_from_context_window();
+#endif
 
     auto* glfw_window    = m_context_window.get_glfw_window();
 
@@ -101,6 +108,10 @@ auto Window_imgui_host::begin_imgui_frame() -> bool
     const auto current_time = glfwGetTime();
     io.DeltaTime = m_time > 0.0 ? static_cast<float>(current_time - m_time) : static_cast<float>(1.0 / 60.0);
     m_time = current_time;
+
+#if 0 // TODO Temp old path for OpenXR compatibility when Window_imgui_host was used with OpenXR
+    process_input_events_from_context_window();
+#endif
 
     // ImGui_ImplGlfw_UpdateMouseCursor
     const auto cursor = static_cast<erhe::window::Mouse_cursor>(ImGui::GetMouseCursor());

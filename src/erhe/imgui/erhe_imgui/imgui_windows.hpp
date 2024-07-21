@@ -28,7 +28,7 @@ class Imgui_windows : public erhe::window::Input_event_handler
 {
 public:
     Imgui_windows(
-        Imgui_renderer& imgui_renderer,
+        Imgui_renderer&                 imgui_renderer,
         erhe::window::Context_window*   context_window,
         erhe::rendergraph::Rendergraph& rendergraph,
         std::string_view                windows_ini_path

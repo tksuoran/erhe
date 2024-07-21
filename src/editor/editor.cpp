@@ -117,9 +117,11 @@ public:
 
         // Apply logic updates
 
-        if (!m_headset_view.is_active()) {
+        if (m_editor_context.OpenXR) { //if (!m_headset_view.is_active()) {
             auto* imgui_host = m_imgui_windows.get_window_imgui_host().get(); // get glfw window hosted viewport
-            m_viewport_scene_views.update_hover(imgui_host); // updates what viewport window is being hovered
+            if (imgui_host != nullptr) {
+                m_viewport_scene_views.update_hover(imgui_host); // updates what viewport window is being hovered
+            }
         }
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         // - updates cameras
@@ -203,6 +205,14 @@ public:
         return openxr ? "openxr_windows.ini" : "windows.ini";
     }
 
+    [[nodiscard]] static auto conditionally_enable_window_imgui_host(erhe::window::Context_window* context_window)
+    {
+        bool openxr{false};
+        auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
+        ini->get("openxr", openxr);
+        return openxr ? nullptr : context_window;
+    }
+
     [[nodiscard]] auto create_window() -> erhe::window::Context_window
     {
         {
@@ -273,7 +283,7 @@ public:
         , m_shadow_renderer       {m_graphics_instance, m_program_interface}
         , m_mesh_memory           {m_graphics_instance, m_program_interface}
 
-        , m_imgui_windows         {m_imgui_renderer,    &m_context_window,   m_rendergraph, get_windows_ini_path()}
+        , m_imgui_windows         {m_imgui_renderer,    conditionally_enable_window_imgui_host(&m_context_window), m_rendergraph, get_windows_ini_path()}
         , m_editor_scenes         {m_editor_context,    m_time}
         , m_editor_windows        {m_editor_context}
         , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
@@ -326,7 +336,7 @@ public:
             m_tools,
             m_viewport_scene_views
         }
-        , m_fly_camera_tool       {m_commands,       m_imgui_renderer, m_imgui_windows,      m_editor_context, m_editor_message_bus, m_time, m_tools}
+        , m_fly_camera_tool       {m_commands, m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus, m_time, m_tools}
         , m_headset_view{
             m_commands,
             m_graphics_instance,

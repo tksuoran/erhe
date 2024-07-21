@@ -33,6 +33,8 @@ public:
     void end_imgui_frame  () override;
 
 private:
+    void process_input_events_from_context_window();
+
     erhe::window::Context_window& m_context_window;
 };
 
