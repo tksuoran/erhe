@@ -785,7 +785,9 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
 {
     ERHE_PROFILE_FUNCTION();
 
+#if !defined(NDEBUG)
     m_scene_root->get_scene().sanity_check();
+#endif
 
     class Pack_entry
     {
@@ -920,7 +922,9 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
             }
             instance_node->set_parent(m_scene_root->get_scene().get_root_node());
 
+#if !defined(NDEBUG)
             m_scene_root->get_scene().sanity_check();
+#endif
         }
     }
 }
@@ -929,7 +933,9 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
+#if !defined(NDEBUG)
     m_scene_root->get_scene().sanity_check();
+#endif
 
     auto& material_library = m_scene_root->content_library()->materials;
     auto material = material_library->make<erhe::primitive::Material>(
@@ -969,7 +975,9 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
         }
     }
 
+#if !defined(NDEBUG)
     m_scene_root->get_scene().sanity_check();
+#endif
 }
 
 auto Scene_builder::make_directional_light(

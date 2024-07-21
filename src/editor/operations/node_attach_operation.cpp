@@ -40,11 +40,11 @@ Node_attach_operation::Node_attach_operation(
 
 void Node_attach_operation::execute(Editor_context& context)
 {
+    static_cast<void>(context);
     log_operations->trace("Op Execute {}", describe());
 
     auto* node = m_attachment->get_node();
-    m_host_node_before =
-        (node != nullptr)
+    m_host_node_before = (node != nullptr)
         ? std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this())
         : std::shared_ptr<erhe::scene::Node>{};
     if (m_host_node_before) {
@@ -55,11 +55,14 @@ void Node_attach_operation::execute(Editor_context& context)
         m_host_node_after->attach(m_attachment);
     }
 
+#if !defined(NDEBUG)
     context.selection->sanity_check();
+#endif
 }
 
 void Node_attach_operation::undo(Editor_context& context)
 {
+    static_cast<void>(context);
     log_operations->trace("Op Undo {}", describe());
 
     auto* node = m_attachment->get_node();
@@ -75,7 +78,9 @@ void Node_attach_operation::undo(Editor_context& context)
         m_host_node_before->attach(m_attachment);
     }
 
+#if !defined(NDEBUG)
     context.selection->sanity_check();
+#endif
 }
 
 }

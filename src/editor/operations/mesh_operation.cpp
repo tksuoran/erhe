@@ -115,8 +115,10 @@ void Mesh_operation::make_entries(
         return;
     }
 
+#if !defined(NDEBUG)
     const auto& scene = scene_root->get_scene();
     scene.sanity_check();
+#endif
 
     for (auto& item : selected_items) {
         auto* node = std::dynamic_pointer_cast<erhe::scene::Node>(item).get();
@@ -178,7 +180,9 @@ void Mesh_operation::make_entries(
         add_entry(std::move(entry));
     }
 
+#if !defined(NDEBUG)
     scene.sanity_check();
+#endif
 }
 
 void Mesh_operation::add_entry(Entry&& entry)

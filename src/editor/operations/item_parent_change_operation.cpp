@@ -46,6 +46,7 @@ Item_parent_change_operation::Item_parent_change_operation(
 
 void Item_parent_change_operation::execute(Editor_context& context)
 {
+    static_cast<void>(context);
     log_operations->trace("Op Execute {}", describe());
 
     ERHE_VERIFY(m_child->get_parent().lock() == m_parent_before);
@@ -63,11 +64,14 @@ void Item_parent_change_operation::execute(Editor_context& context)
         m_child->set_parent({});
     }
 
+#if !defined(NDEBUG)
     context.selection->sanity_check();
+#endif
 }
 
 void Item_parent_change_operation::undo(Editor_context& context)
 {
+    static_cast<void>(context);
     log_operations->trace("Op Undo {}", describe());
 
     ERHE_VERIFY(m_child->get_parent().lock() == m_parent_after);
@@ -78,7 +82,9 @@ void Item_parent_change_operation::undo(Editor_context& context)
         m_child->set_parent({});
     }
 
+#if !defined(NDEBUG)
     context.selection->sanity_check();
+#endif
 }
 
 } // namespace editor

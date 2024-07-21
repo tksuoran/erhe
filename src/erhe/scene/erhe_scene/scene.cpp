@@ -370,7 +370,9 @@ void Scene::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
         m_flat_node_vector.erase(i, m_flat_node_vector.end());
     }
 
+#if !defined(NDEBUG)
     sanity_check();
+#endif
 
     if ((node->get_flag_bits() & erhe::Item_flags::no_message) == 0) {
         m_message_bus.send_message(

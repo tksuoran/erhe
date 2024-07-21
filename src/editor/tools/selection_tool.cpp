@@ -656,7 +656,9 @@ auto Selection::clear_selection() -> bool
     log_selection->trace("Clearing selection ({} items were selected)", m_selection.size());
     m_selection.clear();
     m_range_selection.reset();
+#if !defined(NDEBUG)
     sanity_check();
+#endif
 
     return true;
 }

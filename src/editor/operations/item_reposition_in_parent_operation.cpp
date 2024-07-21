@@ -43,6 +43,7 @@ auto Item_reposition_in_parent_operation::describe() const -> std::string
 
 void Item_reposition_in_parent_operation::execute(Editor_context& context)
 {
+    static_cast<void>(context);
     log_operations->trace("Op Execute {}", describe());
 
     auto parent = m_child->get_parent().lock();
@@ -63,11 +64,14 @@ void Item_reposition_in_parent_operation::execute(Editor_context& context)
 
     parent_children.insert(parent_children.begin() + after_index, m_child);
 
+#if !defined(NDEBUG)
     context.selection->sanity_check();
+#endif
 }
 
 void Item_reposition_in_parent_operation::undo(Editor_context& context)
 {
+    static_cast<void>(context);
     log_operations->trace("Op Undo {}", describe());
 
     auto parent = m_child->get_parent().lock();
@@ -83,7 +87,9 @@ void Item_reposition_in_parent_operation::undo(Editor_context& context)
     parent_children.erase(parent_children.begin() + after_index);
     parent_children.insert(parent_children.begin() + m_before_index, m_child);
 
+#if !defined(NDEBUG)
     context.selection->sanity_check();
+#endif
 }
 
 

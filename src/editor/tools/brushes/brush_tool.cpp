@@ -1,4 +1,3 @@
-
 #include "tools/brushes/brush_tool.hpp"
 
 #include "editor_context.hpp"
@@ -253,15 +252,21 @@ auto Brush_tool::try_insert(Brush* brush) -> bool
         return false;
     }
 
+#if !defined(NDEBUG)
         m_context.editor_scenes->sanity_check();
+#endif
 
     do_insert_operation(*brush);
 
+#if !defined(NDEBUG)
         m_context.editor_scenes->sanity_check();
+#endif
 
     remove_preview_mesh();
 
+#if !defined(NDEBUG)
         m_context.editor_scenes->sanity_check();
+#endif
 
     return true;
 }

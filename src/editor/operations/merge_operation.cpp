@@ -184,6 +184,8 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
 void Merge_operation::execute(Editor_context& context)
 {
+    ERHE_PROFILE_FUNCTION();
+
     log_operations->trace("begin Op Execute {}", describe());
 
     if (m_sources.empty()) {
@@ -194,9 +196,11 @@ void Merge_operation::execute(Editor_context& context)
     if (scene_root == nullptr) {
         return;
     }
-    auto& scene = scene_root->get_scene();
 
+#if !defined(NDEBUG)
+    auto& scene = scene_root->get_scene();
     scene.sanity_check();
+#endif
 
     // First node should have a mesh
     ERHE_VERIFY(m_sources.front().mesh);
@@ -232,11 +236,15 @@ void Merge_operation::execute(Editor_context& context)
     }
     context.selection->set_selection(m_selection_after);
 
+#if !defined(NDEBUG)
     scene.sanity_check();
+#endif
 }
 
 void Merge_operation::undo(Editor_context& context)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (m_sources.empty()) {
         return;
     }
@@ -246,8 +254,10 @@ void Merge_operation::undo(Editor_context& context)
         return;
     }
 
+#if !defined(NDEBUG)
     auto& scene = scene_root->get_scene();
     scene.sanity_check();
+#endif
 
     bool first_entry = true;
     for (const auto& entry : m_sources) {
@@ -280,7 +290,9 @@ void Merge_operation::undo(Editor_context& context)
     }
     context.selection->set_selection(m_selection_before);
 
+#if !defined(NDEBUG)
     scene.sanity_check();
+#endif
 }
 
 } // namespace editor

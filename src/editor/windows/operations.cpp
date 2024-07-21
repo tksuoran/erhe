@@ -128,8 +128,6 @@ void Operations::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
-
     if (ImGui::TreeNodeEx("Scenes", ImGuiTreeNodeFlags_DefaultOpen)) {
 
         std::shared_ptr<erhe::primitive::Material> material = m_context.selection->get_last_selected<erhe::primitive::Material>();
@@ -138,9 +136,10 @@ void Operations::imgui()
         }
         m_make_mesh_config.material = material;
 
-        ImGui::DragInt  ("Count", &m_make_mesh_config.instance_count, 0.1f, 1, 32);
-        ImGui::DragFloat("Gap",   &m_make_mesh_config.instance_gap,   0.02f, 0.0f,  2.0f, "%.2f");
-        ImGui::DragFloat("Scale", &m_make_mesh_config.object_scale,   0.02f, 0.1f, 10.0f, "%.2f");
+        ImGui::SliderInt  ("Count", &m_make_mesh_config.instance_count, 1, 32);
+        ImGui::SliderFloat("Gap",   &m_make_mesh_config.instance_gap,   0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat("Scale", &m_make_mesh_config.object_scale,   0.2f, 2.0f, "%.2f");
+        const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
         if (erhe::imgui::make_button("Platonic Solids", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_platonic_solids(m_make_mesh_config);
         }
@@ -176,6 +175,7 @@ void Operations::imgui()
     ////     }
     //// }
 
+    const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     const auto undo_mode = operation_stack.can_undo()
         ? erhe::imgui::Item_mode::normal
         : erhe::imgui::Item_mode::disabled;
