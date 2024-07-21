@@ -303,7 +303,7 @@ auto Brush_tool::get_placement_corner_id() const -> erhe::geometry::Corner_id
 }
 
 // Returns transform which places brush in parent (hover) mesh space.
-auto Brush_tool::get_hover_mesh_transform(Brush& brush) -> mat4
+auto Brush_tool::get_hover_mesh_transform(Brush& brush, const float hover_distance) -> mat4
 {
     if (
         (m_hover.mesh == nullptr)                                            ||
@@ -358,14 +358,14 @@ auto Brush_tool::get_hover_mesh_transform(Brush& brush) -> mat4
         hover_frame.centroid = m_hover.position.value();
     }
 
-    const mat4 hover_transform = hover_frame.transform();
-    const mat4 brush_transform = m_brush_placement_frame.transform();
+    const mat4 hover_transform = hover_frame.transform(0.0f);
+    const mat4 brush_transform = m_brush_placement_frame.transform(hover_distance);
     const mat4 inverse_brush   = inverse(brush_transform);
     const mat4 align           = hover_transform * inverse_brush;
     return align;
 }
 
-auto Brush_tool::get_hover_grid_transform(Brush& brush) -> mat4
+auto Brush_tool::get_hover_grid_transform(Brush& brush, const float hover_distance) -> mat4
 {
     m_transform_scale = m_scale;
     m_brush_placement_frame = brush.get_reference_frame(
@@ -375,7 +375,7 @@ auto Brush_tool::get_hover_grid_transform(Brush& brush) -> mat4
     );
     const mat4 scale_transform = erhe::math::create_scale(m_scale);
     m_brush_placement_frame.transform_by(scale_transform);
-    const mat4 brush_transform = m_brush_placement_frame.transform();
+    const mat4 brush_transform = m_brush_placement_frame.transform(hover_distance);
     const mat4 inverse_brush   = inverse(brush_transform);
 
     if (m_hover.grid == nullptr) {
@@ -404,8 +404,10 @@ void Brush_tool::update_preview_mesh_node_transform()
         return;
     }
 
-    Brush&      brush        = *shared_brush.get();
-    const auto  transform    = m_hover.mesh ? get_hover_mesh_transform(brush) : get_hover_grid_transform(brush);
+    Brush& brush = *shared_brush.get();
+    const auto transform = m_hover.mesh 
+        ? get_hover_mesh_transform(brush, m_preview_hover_distance) 
+        : get_hover_grid_transform(brush, m_preview_hover_distance);
     const auto& brush_scaled = brush.get_scaled(m_transform_scale);
 
     // TODO Unparent, to remove raytrace primitives to raytrace scene.
@@ -447,7 +449,7 @@ void Brush_tool::do_insert_operation(Brush& brush)
         return;
     }
 
-    const auto hover_from_brush = m_hover.mesh ? get_hover_mesh_transform(brush) : get_hover_grid_transform(brush);
+    const auto hover_from_brush = m_hover.mesh ? get_hover_mesh_transform(brush, 0.0f) : get_hover_grid_transform(brush, 0.0f);
     const uint64_t mesh_flags =
         erhe::Item_flags::visible     |
         erhe::Item_flags::content     |
@@ -573,13 +575,14 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
     ImGui::Text("Brush: %s", last_selected_brush ? last_selected_brush->get_name().c_str() : "");
     //ImGui::Text("Hover Brush: %s", hover_brush ? hover_brush->get_name().c_str() : "");
     //ImGui::Text("Drag and Drop Brush: %s", m_drag_and_drop_brush ? m_drag_and_drop_brush->get_name().c_str() : "");
-    ImGui::Text("Enabled: %s", is_enabled() ? "yes" : "no");
-    if (m_hover.position.has_value()) {
-        const glm::vec3& p = m_hover.position.value();
-        ImGui::Text("Hover position: %.2f, %.2f, %.2f", p.x, p.y, p.z);
-    } else {
-        ImGui::Text("Hover position: -");
-    }
+    ImGui::SliderFloat("Preview Hover", &m_preview_hover_distance, -0.1f, 0.1f, "%.4f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
+    //ImGui::Text("Enabled: %s", is_enabled() ? "yes" : "no");
+    //if (m_hover.position.has_value()) {
+    //    const glm::vec3& p = m_hover.position.value();
+    //    ImGui::Text("Hover position: %.2f, %.2f, %.2f", p.x, p.y, p.z);
+    //} else {
+    //    ImGui::Text("Hover position: -");
+    //}
     //ImGui::Text("Hover mesh: %s", m_hover.mesh ? m_hover.mesh->get_name().c_str() : "");
     //ImGui::Text("Hover grid: %s", m_hover.grid ? m_hover.grid->get_name().c_str() : "");
 

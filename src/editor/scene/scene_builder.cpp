@@ -802,30 +802,22 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
         int       instance_number{0};
     };
 
-    {
-        ERHE_PROFILE_SCOPE("sort");
-
-        std::sort(
-            brushes.begin(),
-            brushes.end(),
-            [](const std::shared_ptr<Brush>& lhs, const std::shared_ptr<Brush>& rhs){
-                return lhs->get_name() < rhs->get_name();
-            }
-        );
-    }
+    std::sort(
+        brushes.begin(),
+        brushes.end(),
+        [](const std::shared_ptr<Brush>& lhs, const std::shared_ptr<Brush>& rhs){
+            return lhs->get_name() < rhs->get_name();
+        }
+    );
 
     std::vector<Pack_entry> pack_entries;
 
-    {
-        ERHE_PROFILE_SCOPE("emplace pack");
-
-        for (const auto& brush : brushes) {
-            for (int i = 0; i < config.instance_count; ++i) {
-                const erhe::math::Bounding_box& bounding_box = brush->get_bounding_box();
-                ERHE_VERIFY(bounding_box.is_valid());
-                pack_entries.emplace_back(brush.get());
-                pack_entries.back().instance_number = i;
-            }
+    for (const auto& brush : brushes) {
+        for (int i = 0; i < config.instance_count; ++i) {
+            const erhe::math::Bounding_box& bounding_box = brush->get_bounding_box();
+            ERHE_VERIFY(bounding_box.is_valid());
+            pack_entries.emplace_back(brush.get());
+            pack_entries.back().instance_number = i;
         }
     }
 
@@ -837,9 +829,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
         const float gap = config.instance_gap;
         int group_width = 2;
         int group_depth = 2;
-        ERHE_PROFILE_SCOPE("pack");
         for (;;) {
-            ERHE_PROFILE_SCOPE("iteration");
             max_corner = glm::ivec2{0, 0};
             packer.Init(group_width, group_depth, false);
 
@@ -922,7 +912,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
                 .scene_root      = m_scene_root.get(),
                 .world_from_node = erhe::math::create_translation(x, y, z),
                 .material        = materials.at(material_index),
-                .scale           = 1.0f
+                .scale           = config.object_scale
             };
             auto instance_node = brush->make_instance(brush_instance_create_info);
             if (config.instance_count > 1) {

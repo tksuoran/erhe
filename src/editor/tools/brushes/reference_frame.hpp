@@ -19,7 +19,7 @@ public:
 
     void transform_by(const glm::mat4& m);
 
-    [[nodiscard]] auto transform() const -> glm::mat4;
+    [[nodiscard]] auto transform(float hover_distance) const -> glm::mat4;
     [[nodiscard]] auto scale    () const -> float;
 
     uint32_t                   corner_count {0};

@@ -81,13 +81,13 @@ auto Reference_frame::scale() const -> float
     return glm::distance(centroid, position);
 }
 
-auto Reference_frame::transform() const -> mat4
+auto Reference_frame::transform(float hover_distance) const -> mat4
 {
     return mat4{
         vec4{-T, 0.0f},
         vec4{-N, 0.0f},
         vec4{-B, 0.0f},
-        vec4{centroid, 1.0f}
+        vec4{centroid + hover_distance * N, 1.0f}
     };
 }
 

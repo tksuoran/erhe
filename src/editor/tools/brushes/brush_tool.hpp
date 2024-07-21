@@ -93,8 +93,8 @@ private:
     void remove_preview_mesh               ();
     void update_preview_mesh_node_transform();
 
-    [[nodiscard]] auto get_hover_mesh_transform(Brush& brush) -> glm::mat4; // Places brush in parent (hover) mesh
-    [[nodiscard]] auto get_hover_grid_transform(Brush& brush) -> glm::mat4;
+    [[nodiscard]] auto get_hover_mesh_transform(Brush& brush, float hover_distance) -> glm::mat4; // Places brush in parent (hover) mesh
+    [[nodiscard]] auto get_hover_grid_transform(Brush& brush, float hover_distance) -> glm::mat4;
     [[nodiscard]] auto get_placement_polygon_id() const -> erhe::geometry::Polygon_id;
     [[nodiscard]] auto get_placement_corner_id () const -> erhe::geometry::Corner_id;
 
@@ -104,13 +104,14 @@ private:
     erhe::commands::Float_threshold_command m_pick_using_float_input_command;
 
     std::mutex                         m_brush_mutex;
-    std::shared_ptr<Brush>             m_drag_and_drop_brush  {};
-    bool                               m_snap_to_hover_polygon{true};
-    bool                               m_snap_to_grid         {true};
-    bool                               m_scale_to_match       {true};
-    bool                               m_use_matching_face    {true};
-    bool                               m_use_selected_face    {false};
-    bool                               m_debug_visualization  {false};
+    std::shared_ptr<Brush>             m_drag_and_drop_brush   {};
+    float                              m_preview_hover_distance{0.01f};
+    bool                               m_snap_to_hover_polygon {true};
+    bool                               m_snap_to_grid          {true};
+    bool                               m_scale_to_match        {true};
+    bool                               m_use_matching_face     {true};
+    bool                               m_use_selected_face     {false};
+    bool                               m_debug_visualization   {false};
     Hover_entry                        m_hover;
     std::shared_ptr<erhe::scene::Mesh> m_preview_mesh;
     std::shared_ptr<erhe::scene::Node> m_preview_node;

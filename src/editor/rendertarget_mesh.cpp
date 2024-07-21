@@ -39,10 +39,7 @@ Rendertarget_mesh::Rendertarget_mesh(
 
 auto Rendertarget_mesh::get_static_type() -> uint64_t
 {
-    return
-        erhe::Item_type::node_attachment |
-        erhe::Item_type::mesh            |
-        erhe::Item_type::rendertarget;
+    return erhe::Item_type::node_attachment | erhe::Item_type::mesh | erhe::Item_type::rendertarget;
 }
 
 auto Rendertarget_mesh::get_type() const -> uint64_t
@@ -55,12 +52,7 @@ auto Rendertarget_mesh::get_type_name() const -> std::string_view
     return static_type_name;
 }
 
-void Rendertarget_mesh::resize_rendertarget(
-    erhe::graphics::Instance& graphics_instance,
-    Mesh_memory&              mesh_memory,
-    const int                 width,
-    const int                 height
-)
+void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Instance& graphics_instance, Mesh_memory& mesh_memory, const int width, const int height)
 {
     if (m_texture && m_texture->width() == width && m_texture->height() == height) {
         return;
@@ -106,14 +98,13 @@ void Rendertarget_mesh::resize_rendertarget(
     m_material = std::make_shared<erhe::primitive::Material>("Rendertarget Node", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
     m_material->textures.base_color = m_texture;
     m_material->samplers.base_color = m_sampler;
+    m_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
 
     m_local_width  = static_cast<float>(m_texture->width ()) / m_pixels_per_meter;
     m_local_height = static_cast<float>(m_texture->height()) / m_pixels_per_meter;
 
-    auto geometry = erhe::geometry::shapes::make_rectangle(m_local_width, m_local_height, true, false);
-
     const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
-        std::move(geometry)
+        erhe::geometry::shapes::make_rectangle(m_local_width, m_local_height, true, false)
     );
 
     erhe::primitive::Primitive primitive{
