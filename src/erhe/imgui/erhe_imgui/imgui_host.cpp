@@ -242,13 +242,10 @@ auto Imgui_host::get_mouse_position() const -> glm::vec2
 }
 
 #pragma region Events
-auto Imgui_host::on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
-{
-    ImGuiIO& io = m_imgui_context->IO;
-    io.AddFocusEvent(window_focus_event.focused != 0);
-    return false;
-}
 
+// Note: All handlers here return false, in order to
+//       let other, later event handlers to process
+//       these events as well.
 auto Imgui_host::on_cursor_enter_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
 {
     m_has_cursor = cursor_enter_event.entered != 0;
@@ -280,6 +277,15 @@ auto Imgui_host::on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mou
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMouseWheelEvent(mouse_wheel_event.x, mouse_wheel_event.y);
+    return false;
+}
+
+auto Imgui_host::on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
+{
+    ImGuiIO& io = m_imgui_context->IO;
+    if (!window_focus_event.focused) {
+        io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+    }
     return false;
 }
 
