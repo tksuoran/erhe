@@ -28,7 +28,6 @@ Debug_draw::Debug_draw(Editor_context& editor_context)
         IDebug_draw::c_Draw_text                |
         //IDebug_draw::c_Profile_timings        |
         //IDebug_draw::c_Enable_sat-comparison  |
-        //IDebug_draw::c_Disable_bullet_lcp     |
         //IDebug_draw::c_Enable_ccd             |
         //IDebug_draw::c_Draw_constraints       |
         //IDebug_draw::c_Draw_constraint_limits |

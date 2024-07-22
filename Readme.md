@@ -105,7 +105,7 @@ erhe with CMake:
 | ERHE_FONT_RASTERIZATION_LIBRARY | Font rasterization library | freetype, none                  |
 | ERHE_GLTF_LIBRARY               | GLTF library               | cgltf, fastgltf, none           |
 | ERHE_GUI_LIBRARY                | GUI library                | imgui, none                     |
-| ERHE_PHYSICS_LIBRARY            | Physics library            | bullet, jolt, none              |
+| ERHE_PHYSICS_LIBRARY            | Physics library            | jolt, none                      |
 | ERHE_PNG_LIBRARY                | PNG loading library        | mango, none                     |
 | ERHE_PROFILE_LIBRARY            | Profile library            | nvtx, superluminal, tracy, none |
 | ERHE_RAYTRACE_LIBRARY           | Raytrace library           | embree, bvh, none               |
@@ -121,8 +121,7 @@ Main purposes of these configuration options are
 
 ### ERHE_PHYSICS_LIBRARY
 
-The main physics backend is currently `jolt`. The `bullet` physics backend has been
-rotting for a while, it would require some work to get it back to working.
+The main physics backend is currently `jolt`.
 
 ### ERHE_RAYTRACE_LIBRARY
 
@@ -315,8 +314,7 @@ which can be used in place of `assert()` and unrecoverable error.
 
 ## erhe::physics
 
-`erhe::physics` provides minimal abstraction / wrappers for Jolt / Bullet physics libraries.
-The Jolt physics backend is more complete. The Bullet physics backend has been rotting for some time.
+`erhe::physics` provides minimal abstraction / wrappers for Jolt physics library.
 
 ## erhe
 

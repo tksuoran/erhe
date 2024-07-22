@@ -1,15 +1,6 @@
 include(FetchContent)
 
 FetchContent_Declare(
-    bullet3
-    #GIT_REPOSITORY https://github.com/bulletphysics/bullet3.git
-    GIT_REPOSITORY https://github.com/tksuoran/bullet3.git
-    GIT_TAG        origin/cmake-fetchcontent
-    GIT_SHALLOW    TRUE
-    GIT_PROGRESS   TRUE
-)
-
-FetchContent_Declare(
     bvh
     GIT_REPOSITORY https://github.com/madmann91/bvh.git
     GIT_TAG        origin/master

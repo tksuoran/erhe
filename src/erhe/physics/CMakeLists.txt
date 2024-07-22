@@ -1,35 +1,6 @@
 set(_target "erhe_physics")
 add_library(${_target})
 add_library(erhe::physics ALIAS ${_target})
-if (${ERHE_PHYSICS_LIBRARY} STREQUAL "bullet")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}/erhe_physics" FILES
-        bullet/bullet_collision_shape.cpp
-        bullet/bullet_collision_shape.hpp
-        bullet/bullet_compound_shape.cpp
-        bullet/bullet_compound_shape.hpp
-        bullet/bullet_constraint.cpp
-        bullet/bullet_constraint.hpp
-        bullet/bullet_convex_hull_collision_shape.cpp
-        bullet/bullet_convex_hull_collision_shape.hpp
-        bullet/bullet_rigid_body.cpp
-        bullet/bullet_rigid_body.hpp
-        bullet/bullet_uniform_scaling_shape.cpp
-        bullet/bullet_uniform_scaling_shape.hpp
-        bullet/bullet_world.cpp
-        bullet/bullet_world.hpp
-        bullet/glm_conversions.hpp
-    )
-    set(impl_link_libraries
-        Bullet3Collision
-        Bullet3Common
-        Bullet3Dynamics
-        Bullet3Geometry
-        BulletDynamics
-        BulletCollision
-        LinearMath
-    )
-endif ()
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
