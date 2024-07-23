@@ -258,3 +258,11 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
+
+FetchContent_Declare(
+    wuffs
+    GIT_REPOSITORY https://github.com/google/wuffs.git
+    GIT_TAG        v0.4.0-alpha.5
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)

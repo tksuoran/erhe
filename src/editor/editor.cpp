@@ -116,8 +116,7 @@ public:
         std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
 
         // Apply logic updates
-
-        if (m_editor_context.OpenXR) { //if (!m_headset_view.is_active()) {
+        if (!m_editor_context.OpenXR) { //if (!m_headset_view.is_active()) {
             auto* imgui_host = m_imgui_windows.get_window_imgui_host().get(); // get glfw window hosted viewport
             if (imgui_host != nullptr) {
                 m_viewport_scene_views.update_hover(imgui_host); // updates what viewport window is being hovered
