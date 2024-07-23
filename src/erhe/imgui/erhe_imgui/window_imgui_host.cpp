@@ -24,13 +24,7 @@ Window_imgui_host::Window_imgui_host(
     erhe::rendergraph::Rendergraph& rendergraph,
     const std::string_view          name
 )
-    : Imgui_host{
-        rendergraph,
-        imgui_renderer,
-        name,
-        true,
-        imgui_renderer.get_font_atlas()
-    }
+    : Imgui_host{rendergraph, imgui_renderer, name, true, imgui_renderer.get_font_atlas()}
     , m_context_window{context_window}
 {
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);

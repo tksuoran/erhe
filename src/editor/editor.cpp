@@ -22,7 +22,6 @@
 #include "scene/material_preview.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
-#include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/brushes/brush.hpp"
 #include "tools/clipboard.hpp"
@@ -37,7 +36,6 @@
 #include "windows/debug_view_window.hpp"
 #include "windows/layers_window.hpp"
 #include "windows/network_window.hpp"
-#include "windows/item_tree_window.hpp"
 #include "windows/operations.hpp"
 #include "windows/physics_window.hpp"
 #include "windows/post_processing_window.hpp"
@@ -51,7 +49,7 @@
 #include "xr/headset_view.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/hand_tracker.hpp"
-#   include "xr/theremin.hpp"
+//#   include "xr/theremin.hpp"
 #   include "erhe_xr/xr_log.hpp"
 #endif
 
@@ -80,7 +78,6 @@
 #include "erhe_log/log.hpp"
 #include "erhe_net/net_log.hpp"
 #include "erhe_physics/physics_log.hpp"
-#include "erhe_physics/iworld.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_renderer/line_renderer.hpp"

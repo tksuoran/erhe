@@ -485,17 +485,9 @@ auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
         0xee, 0x11, 0xdd, 0xff,
         0xcc, 0x11, 0xbb, 0xff
     };
-    const std::span<const std::byte> image_data{
-        reinterpret_cast<const std::byte*>(&dummy_pixel[0]),
-        dummy_pixel.size()
-    };
+    const std::span<const std::uint8_t> image_data{&dummy_pixel[0], dummy_pixel.size()};
 
-    texture->upload(
-        create_info.internal_format,
-        image_data,
-        create_info.width,
-        create_info.height
-    );
+    texture->upload(create_info.internal_format, image_data, create_info.width, create_info.height);
 
     return texture;
 }

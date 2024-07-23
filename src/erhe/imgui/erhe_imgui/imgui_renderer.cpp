@@ -493,8 +493,8 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
     }
 
     const auto pixel_data = get_font_atlas_pixel_data(m_font_atlas);
-    const std::span<const std::byte> image_data{
-        reinterpret_cast<const std::byte*>(pixel_data.data()),
+    const std::span<const std::uint8_t> image_data{
+        pixel_data.data(),
         pixel_data.size()
     };
     m_font_texture->upload(gl::Internal_format::rgba8, image_data, m_font_texture->width(), m_font_texture->height());
@@ -688,16 +688,7 @@ auto Imgui_renderer::image(
     const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
     const uint64_t handle = m_graphics_instance.get_handle(*texture.get(), sampler);
     SPDLOG_LOGGER_TRACE(log_imgui, "sampler = {}, handle = {:16x}", sampler->gl_name(), handle);
-    ImGui::Image(
-        handle,
-        ImVec2{
-            static_cast<float>(width),
-            static_cast<float>(height)
-        },
-        uv0,
-        uv1,
-        tint_color
-    );
+    ImGui::Image(handle, ImVec2{static_cast<float>(width), static_cast<float>(height)}, uv0, uv1, tint_color);
     use(texture, handle);
     return ImGui::IsItemClicked();
 }

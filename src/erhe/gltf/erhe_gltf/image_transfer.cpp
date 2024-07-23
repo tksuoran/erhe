@@ -46,24 +46,16 @@ Image_transfer::Slot::Slot(erhe::graphics::Instance& graphics_instance)
 
 void Image_transfer::Slot::map()
 {
-    auto* map_pointer = gl::map_named_buffer_range(
-        m_pbo.gl_name(),
-        0,
-        m_capacity,
-        m_access_mask
-    );
+    auto* map_pointer = gl::map_named_buffer_range(m_pbo.gl_name(), 0, m_capacity, m_access_mask);
     ERHE_VERIFY(map_pointer != nullptr);
 
-    m_span = std::span(
-        static_cast<std::byte*>(map_pointer),
-        m_capacity
-    );
+    m_span = std::span(static_cast<std::uint8_t*>(map_pointer), m_capacity);
 }
 
 void Image_transfer::Slot::unmap()
 {
     gl::unmap_named_buffer(m_pbo.gl_name());
-    m_span = std::span<std::byte>{};
+    m_span = std::span<std::uint8_t>{};
 }
 
 void Image_transfer::Slot::end(bool flush)
@@ -74,7 +66,7 @@ void Image_transfer::Slot::end(bool flush)
     unmap();
 }
 
-auto Image_transfer::Slot::begin_span_for(const int span_width, const int span_height, const gl::Internal_format internal_format) -> std::span<std::byte>
+auto Image_transfer::Slot::begin_span_for(const int span_width, const int span_height, const gl::Internal_format internal_format) -> std::span<std::uint8_t>
 {
     ERHE_VERIFY(span_width >= 1);
     ERHE_VERIFY(span_height >= 1);

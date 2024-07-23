@@ -15,11 +15,14 @@
 #include "windows/animation_curve.hpp"
 #include "windows/brdf_slice.hpp"
 
+#include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
@@ -310,13 +313,36 @@ auto layer_name(const erhe::scene::Layer_id layer_id) -> const char*
     }
 }
 
+void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Texture>& texture) const
+{
+    if (!texture) {
+        return;
+    }
+
+    if (!ImGui::TreeNodeEx("Texture", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    ImGui::Indent(indent);
+
+    ImGui::TextUnformatted(texture->get_name().c_str());
+    ImGui::Text("Width: %d", texture->width());
+    ImGui::Text("Height: %d", texture->height());
+    ImGui::Text("Format: %s", gl::c_str(texture->internal_format()));
+
+    m_context.imgui_renderer->image(texture, texture->width(), texture->height());
+
+    ImGui::Unindent(indent);
+    ImGui::TreePop();
+}
+
 void Properties::geometry_properties(const erhe::geometry::Geometry* geometry) const
 {
     if (geometry == nullptr) {
         return;
     }
 
-    if (!ImGui::TreeNodeEx("Geometry")) {
+    if (!ImGui::TreeNodeEx("Geometry", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -620,16 +646,19 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
         !is_rendertarget    (item);
 }
 
-void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item)
+void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in)
 {
-    const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    const auto& node_physics         = std::dynamic_pointer_cast<Node_physics        >(item);
-    const auto& rendertarget         = std::dynamic_pointer_cast<Rendertarget_mesh   >(item);
-    const auto& camera               = std::dynamic_pointer_cast<erhe::scene::Camera >(item);
-    const auto& light                = std::dynamic_pointer_cast<erhe::scene::Light  >(item);
-    const auto& mesh                 = std::dynamic_pointer_cast<erhe::scene::Mesh   >(item);
-    const auto& node                 = std::dynamic_pointer_cast<erhe::scene::Node   >(item);
-    const auto& brush_placement      = std::dynamic_pointer_cast<Brush_placement     >(item);
+    const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node   >(item_in);
+    const auto& item                 = content_library_node ? content_library_node->item : item_in;
+
+    const auto& node_physics         = std::dynamic_pointer_cast<Node_physics           >(item);
+    const auto& rendertarget         = std::dynamic_pointer_cast<Rendertarget_mesh      >(item);
+    const auto& camera               = std::dynamic_pointer_cast<erhe::scene::Camera    >(item);
+    const auto& light                = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
+    const auto& mesh                 = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
+    const auto& node                 = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
+    const auto& brush_placement      = std::dynamic_pointer_cast<Brush_placement        >(item);
+    const auto& texture              = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
 
     const bool default_open = !node_physics && !content_library_node && !node;
 
@@ -696,6 +725,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item)
         brush_placement_properties(*brush_placement);
     }
 
+    if (texture) {
+        texture_properties(texture);
+    }
+
     ImGui::TreePop();
     ImGui::PopID();
 }
@@ -705,13 +738,7 @@ void Properties::material_properties()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto selected_material = m_context.selection->get<erhe::primitive::Material>();
     if (selected_material) {
-        if (
-            ImGui::TreeNodeEx(
-                "Material",
-                ImGuiTreeNodeFlags_Framed |
-                ImGuiTreeNodeFlags_DefaultOpen
-            )
-        ) {
+        if (ImGui::TreeNodeEx("Material", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
             std::string name = selected_material->get_name();
             if (ImGui::InputText("Name", &name)) {
                 selected_material->set_name(name);
@@ -756,7 +783,10 @@ void Properties::imgui()
     ERHE_PROFILE_FUNCTION();
 
     const auto& selection = m_context.selection->get_selection();
+    int id = 0;
     for (const auto& item : selection) {
+        ImGui::PushID(id++);
+        ERHE_DEFER( ImGui::PopID(); );
         ERHE_VERIFY(item);
         item_properties(item);
 
@@ -766,7 +796,11 @@ void Properties::imgui()
         }
 
         for (auto& attachment : node->get_attachments()) {
+            ImGui::PushID(id++);
+            ImGui::Indent(indent);
             item_properties(attachment);
+            ImGui::Unindent(indent);
+            ImGui::PopID();
         }
     }
 

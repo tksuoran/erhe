@@ -14,11 +14,7 @@ namespace erhe::primitive {
 
 namespace {
 
-inline void write_low(
-    const std::span<std::uint8_t>  destination,
-    const erhe::dataformat::Format format,
-    const std::size_t              value
-)
+inline void write_low(const std::span<std::uint8_t> destination, const erhe::dataformat::Format format, const std::size_t value)
 {
     switch (format) {
         case erhe::dataformat::Format::format_8_scalar_uint: {
@@ -47,20 +43,12 @@ inline void write_low(
     }
 }
 
-inline void write_low(
-    const std::span<std::uint8_t>  destination,
-    const erhe::dataformat::Format format,
-    const unsigned int             value
-)
+inline void write_low(const std::span<std::uint8_t> destination, const erhe::dataformat::Format format, const unsigned int value)
 {
     write_low(destination, format, static_cast<std::size_t>(value));
 }
 
-inline void write_low(
-    const std::span<std::uint8_t>  destination,
-    const erhe::dataformat::Format format,
-    const glm::vec2                value
-)
+inline void write_low(const std::span<std::uint8_t> destination, const erhe::dataformat::Format format, const glm::vec2 value)
 {
     switch (format) {
         case erhe::dataformat::Format::format_32_vec2_float: {
@@ -100,11 +88,7 @@ inline void write_low(
     }
 }
 
-inline void write_low(
-    const std::span<std::uint8_t>  destination,
-    const erhe::dataformat::Format format,
-    const glm::vec3                value
-)
+inline void write_low(const std::span<std::uint8_t> destination, const erhe::dataformat::Format format, const glm::vec3 value)
 {
     switch (format) {
         case erhe::dataformat::Format::format_32_vec3_float: {
@@ -149,11 +133,7 @@ inline void write_low(
     }
 }
 
-inline void write_low(
-    const std::span<std::uint8_t>  destination,
-    const erhe::dataformat::Format format,
-    const glm::vec4                value
-)
+inline void write_low(const std::span<std::uint8_t> destination, const erhe::dataformat::Format format, const glm::vec4 value)
 {
     switch (format) {
         case erhe::dataformat::Format::format_32_vec4_float: {
@@ -203,11 +183,7 @@ inline void write_low(
     }
 }
 
-inline void write_low(
-    const std::span<std::uint8_t>  destination,
-    const erhe::dataformat::Format format,
-    const glm::uvec2               value
-)
+inline void write_low(const std::span<std::uint8_t> destination, const erhe::dataformat::Format format, const glm::uvec2 value)
 {
     switch (format) {
         case erhe::dataformat::Format::format_8_vec2_uint: {
@@ -239,11 +215,7 @@ inline void write_low(
     }
 }
 
-inline void write_low(
-    const std::span<std::uint8_t>  destination,
-    const erhe::dataformat::Format format,
-    const glm::uvec4               value
-)
+inline void write_low(const std::span<std::uint8_t> destination, const erhe::dataformat::Format format, const glm::uvec4 value)
 {
     switch (format) {
         case erhe::dataformat::Format::format_8_vec4_uint: {
@@ -361,10 +333,7 @@ auto Index_buffer_writer::start_offset() -> std::size_t
 void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec2 value)
 {
     write_low(
-        vertex_data_span.subspan(
-            vertex_write_offset + attribute.offset,
-            attribute.size
-        ),
+        vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
         attribute.data_type,
         value
     );
@@ -373,23 +342,16 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec3 value)
 {
     write_low(
-        vertex_data_span.subspan(
-            vertex_write_offset + attribute.offset,
-            attribute.size
-        ),
+        vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
         attribute.data_type,
         value
     );
 }
 
-void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec4 value
-)
+void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::vec4 value)
 {
     write_low(
-        vertex_data_span.subspan(
-            vertex_write_offset + attribute.offset,
-            attribute.size
-        ),
+        vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
         attribute.data_type,
         value
     );
@@ -398,10 +360,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const uint32_t value)
 {
     write_low(
-        vertex_data_span.subspan(
-            vertex_write_offset + attribute.offset,
-            attribute.size
-        ),
+        vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
         attribute.data_type,
         value
     );
@@ -410,10 +369,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const u
 void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::uvec2 value)
 {
     write_low(
-        vertex_data_span.subspan(
-            vertex_write_offset + attribute.offset,
-            attribute.size
-        ),
+        vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
         attribute.data_type,
         value
     );
@@ -422,10 +378,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const glm::uvec4 value)
 {
     write_low(
-        vertex_data_span.subspan(
-            vertex_write_offset + attribute.offset,
-            attribute.size
-        ),
+        vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
         attribute.data_type,
         value
     );

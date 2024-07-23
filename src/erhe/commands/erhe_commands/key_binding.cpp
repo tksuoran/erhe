@@ -32,26 +32,15 @@ auto Key_binding::get_pressed() const -> bool
     return m_pressed;
 }
 
-auto Key_binding::on_key(
-    Input_arguments&            input,
-    const bool                  pressed,
-    const erhe::window::Keycode code,
-    const uint32_t              modifier_mask
-) -> bool
+auto Key_binding::on_key(Input_arguments& input, const bool pressed, const erhe::window::Keycode code, const uint32_t modifier_mask) -> bool
 {
-    if (
-        (m_code    != code   ) ||
-        (m_pressed != pressed)
-    ) {
+    if ((m_code!= code) || (m_pressed != pressed)) {
         return false;
     }
 
     auto* const command = get_command();
 
-    if (
-        m_modifier_mask.has_value() &&
-        m_modifier_mask.value() != modifier_mask
-    ) {
+    if (m_modifier_mask.has_value() && m_modifier_mask.value() != modifier_mask) {
         log_input_event_filtered->trace(
             "{} rejected key {} due to modifier mask mismatch",
             command->get_name(),
@@ -67,12 +56,7 @@ auto Key_binding::on_key(
 
     const bool consumed = command->try_call_with_input(input);
     if (consumed) {
-        log_input_event_consumed->trace(
-            "{} consumed key {} {}",
-            command->get_name(),
-            erhe::window::c_str(code),
-            pressed ? "press" : "release"
-        );
+        log_input_event_consumed->trace("{} consumed key {} {}", command->get_name(), erhe::window::c_str(code), pressed ? "press" : "release");
     }
     return consumed && pressed;
 }

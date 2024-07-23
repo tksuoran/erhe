@@ -8,7 +8,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/instance.hpp"
-#include "erhe_graphics/png_loader.hpp"
+#include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
@@ -799,7 +799,10 @@ private:
         }
         m_data_out.animations[animation_index] = erhe_animation;
     }
-    auto load_image_file(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>
+    auto load_image_file(
+        const std::filesystem::path& path,
+        std::string_view             image_name
+    ) -> std::shared_ptr<erhe::graphics::Texture>
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -809,7 +812,7 @@ private:
         }
 
         erhe::graphics::Image_info image_info;
-        erhe::graphics::PNG_loader loader;
+        erhe::graphics::Image_loader loader;
 
         if (!loader.open(path, image_info)) {
             return {};
@@ -826,18 +829,14 @@ private:
             .depth           = image_info.depth,
             .level_count     = image_info.level_count,
             .row_stride      = image_info.row_stride,
-            .debug_label     = path.filename().string()
+            .debug_label     = std::string{image_name} // path.filename().string()
         };
         const int  mipmap_count    = texture_create_info.calculate_level_count();
         const bool generate_mipmap = mipmap_count != image_info.level_count;
         if (generate_mipmap) {
             texture_create_info.level_count = mipmap_count;
         }
-        std::span<std::byte> span = slot.begin_span_for(
-            image_info.width,
-            image_info.height,
-            texture_create_info.internal_format
-        );
+        std::span<std::uint8_t> span = slot.begin_span_for(image_info.width, image_info.height, texture_create_info.internal_format);
 
         const bool ok = loader.load(span);
         loader.close();
@@ -848,7 +847,7 @@ private:
 
         auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
         texture->set_source_path(path);
-        texture->set_debug_label(erhe::file::to_string(path));
+        texture->set_debug_label(image_name.empty() ? erhe::file::to_string(path) : image_name);
 
         gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
@@ -860,16 +859,22 @@ private:
         }
         return texture;
     }
-    auto load_png_buffer(const std::size_t buffer_view_index, const std::size_t image_index) -> std::shared_ptr<erhe::graphics::Texture>
+    auto load_image_buffer(
+        const std::size_t buffer_view_index,
+        const std::size_t image_index,
+        std::string_view  image_name
+    ) -> std::shared_ptr<erhe::graphics::Texture>
     {
         ERHE_PROFILE_FUNCTION();
 
-        const fastgltf::BufferView& buffer_view      = m_asset->bufferViews[buffer_view_index];
-        const fastgltf::Buffer&     buffer           = m_asset->buffers.at(buffer_view.bufferIndex);
-        const std::string           buffer_view_name = safe_resource_name(buffer_view.name, "buffer_view", buffer_view_index);
-        const std::string           name             = fmt::format("{} image {} {}", m_arguments.path.filename().string(), image_index, buffer_view_name);
-        erhe::graphics::Image_info  image_info;
-        erhe::graphics::PNG_loader  loader;
+        const fastgltf::BufferView&  buffer_view      = m_asset->bufferViews[buffer_view_index];
+        const fastgltf::Buffer&      buffer           = m_asset->buffers.at(buffer_view.bufferIndex);
+        const std::string            buffer_view_name = safe_resource_name(buffer_view.name, "buffer_view", buffer_view_index);
+        const std::string            name             = !image_name.empty() 
+            ? std::string{image_name}
+            : fmt::format("{} image {} {}", m_arguments.path.filename().string(), image_index, buffer_view_name);
+        erhe::graphics::Image_info   image_info;
+        erhe::graphics::Image_loader loader;
 
         bool load_ok = false;
         auto& slot = m_arguments.image_transfer.get_slot();
@@ -887,12 +892,12 @@ private:
                     ERHE_FATAL("TODO Unsupported image buffer view source");
                 },
                 [&](const fastgltf::sources::Array& data) {
-                    std::span<const std::byte> png_encoded_buffer_view{
-                        data.bytes.data() + buffer_view.byteOffset,
+                    std::span<const std::uint8_t> image_encoded_buffer_view{
+                        reinterpret_cast<const std::uint8_t*>(data.bytes.data()) + buffer_view.byteOffset,
                         buffer_view.byteLength
                     };
-                    if (!loader.open(png_encoded_buffer_view, image_info)) {
-                        log_gltf->error("Failed to parse PNG encoded image from buffer view '{}'", name);
+                    if (!loader.open(image_encoded_buffer_view, image_info)) {
+                        log_gltf->error("Failed to parse image from buffer view '{}'", name);
                         return;
                     }
 
@@ -910,11 +915,7 @@ private:
                     if (generate_mipmap) {
                         texture_create_info.level_count = mipmap_count;
                     }
-                    std::span<std::byte> span = slot.begin_span_for(
-                        image_info.width,
-                        image_info.height,
-                        texture_create_info.internal_format
-                    );
+                    std::span<std::uint8_t> span = slot.begin_span_for(image_info.width, image_info.height, texture_create_info.internal_format);
 
                     load_ok = loader.load(span);
                     loader.close();
@@ -924,8 +925,17 @@ private:
         );
         slot.end(load_ok);
         if (!load_ok) {
+            log_gltf->warn(
+                "Image '{}' load failed: image index = {}, width = {}, height = {}",
+                name, image_index, texture_create_info.width, texture_create_info.height
+            );
             return {};
         }
+
+        log_gltf->info(
+            "Loaded image '{}': image index = {}, width = {}, height = {}",
+            name, image_index, texture_create_info.width, texture_create_info.height
+        );
 
         auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
         texture->set_source_path(m_arguments.path);
@@ -955,11 +965,11 @@ private:
                     ERHE_FATAL("TODO Unsupported image source");
                 },
                 [&](const fastgltf::sources::BufferView& buffer_view_source){
-                    erhe_texture = load_png_buffer(buffer_view_source.bufferViewIndex, image_index);
+                    erhe_texture = load_image_buffer(buffer_view_source.bufferViewIndex, image_index, image_name);
                 },
                 [&](const fastgltf::sources::URI& uri){
                     std::filesystem::path relative_path = uri.uri.fspath();
-                    erhe_texture = load_image_file(m_arguments.path.replace_filename(relative_path));
+                    erhe_texture = load_image_file(m_arguments.path.replace_filename(relative_path), image_name);
                 }
             },
             image.data

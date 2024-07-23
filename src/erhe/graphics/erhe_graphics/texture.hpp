@@ -63,31 +63,31 @@ public:
     void upload(gl::Internal_format internal_format, int width, int height = 1, int depth = 1);
 
     void upload(
-        gl::Internal_format              internal_format,
-        const std::span<const std::byte> data,
-        int                              width,
-        int                              height = 1,
-        int                              depth = 1,
-        int                              level = 0,
-        int                              x = 0,
-        int                              y = 0,
-        int                              z = 0
+        gl::Internal_format                 internal_format,
+        const std::span<const std::uint8_t> data,
+        int                                 width,
+        int                                 height = 1,
+        int                                 depth = 1,
+        int                                 level = 0,
+        int                                 x = 0,
+        int                                 y = 0,
+        int                                 z = 0
     );
     void upload_subimage(
-        gl::Internal_format              internal_format,
-        const std::span<const std::byte> data,
-        int                              src_row_length,
-        int                              src_x,
-        int                              src_y,
-        int                              width,
-        int                              height,
-        int                              level,
-        int                              x,
-        int                              y,
-        int                              z = 0
+        gl::Internal_format                 internal_format,
+        const std::span<const std::uint8_t> data,
+        int                                 src_row_length,
+        int                                 src_x,
+        int                                 src_y,
+        int                                 width,
+        int                                 height,
+        int                                 level,
+        int                                 x,
+        int                                 y,
+        int                                 z = 0
     );
 
-    void set_debug_label(const std::string& value);
+    void set_debug_label(std::string_view value);
 
     [[nodiscard]] auto debug_label         () const -> const std::string&;
     [[nodiscard]] auto width               () const -> int;

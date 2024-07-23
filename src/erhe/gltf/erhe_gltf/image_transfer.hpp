@@ -3,12 +3,10 @@
 #include "erhe_graphics/gl_objects.hpp"
 
 #include <array>
-#include <memory>
 #include <span>
 
 namespace erhe::graphics {
     class Instance;
-    class Scoped_gl_context;
 }
 
 namespace erhe::gltf {
@@ -21,7 +19,7 @@ public:
     public:
         explicit Slot(erhe::graphics::Instance& graphics_instance);
 
-        [[nodiscard]] auto begin_span_for(int width, int height, gl::Internal_format internal_format) -> std::span<std::byte>;
+        [[nodiscard]] auto begin_span_for(int width, int height, gl::Internal_format internal_format) -> std::span<std::uint8_t>;
         [[nodiscard]] auto gl_name() -> unsigned int
         {
             return m_pbo.gl_name();
@@ -37,7 +35,7 @@ public:
         gl::Buffer_storage_mask    m_storage_mask;
         gl::Map_buffer_access_mask m_access_mask;
 
-        std::span<std::byte>      m_span;
+        std::span<std::uint8_t>   m_span;
         std::size_t               m_capacity{0};
         erhe::graphics::Gl_buffer m_pbo;
     };

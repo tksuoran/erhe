@@ -22,7 +22,7 @@ auto get_mask_bits() -> tile_mask_t
     const auto mask = load_png("res/hextiles/mask.png");
 
     tile_mask_t res;
-    const std::byte* const mask_pixels = mask.data.data();
+    const std::uint8_t* const mask_pixels = mask.data.data();
     if (mask.data.empty()) {
 #if defined(ERHE_PNG_LIBRARY_NONE)
         log_pixel_lookup->error("Unable to load image due to ERHE_PNG_LIBRARY_NONE build configuration. Exiting program.");
@@ -38,9 +38,9 @@ auto get_mask_bits() -> tile_mask_t
     }
     for (size_t y = 0; y < Tile_shape::height; ++y) {
         for (size_t x = 0; x < Tile_shape::full_width; ++x) {
-            const std::byte r         = mask_pixels[y * mask.info.row_stride + x * 4];
-            const size_t    bit_index = x + y * Tile_shape::full_width;
-            res.set(bit_index, r != std::byte{0u});
+            const std::uint8_t r         = mask_pixels[y * mask.info.row_stride + x * 4];
+            const size_t       bit_index = x + y * Tile_shape::full_width;
+            res.set(bit_index, r != std::uint8_t{0u});
         }
     }
 
@@ -73,12 +73,7 @@ Pixel_lookup::Pixel_lookup()
                 for (pixel_t my = 0; my < Tile_shape::height; ++my) {
                     const pixel_t lx = x0 + mx; //+ Tile_shape::center_x + 1 - lut_width;
                     const pixel_t ly = y0 + my; //+ Tile_shape::center_y - lut_height;
-                    if (
-                        (lx >= 0) &&
-                        (ly >= 0) &&
-                        (lx < lut_width) &&
-                        (ly < lut_height)
-                    ) {
+                    if ((lx >= 0) && (ly >= 0) && (lx < lut_width) && (ly < lut_height)) {
                         any_set = true;
                         const int  mask_bit_index = (int)mx + (int)my * (int)Tile_shape::full_width;
                         const int  lut_index      = (int)lx + (int)ly * (int)lut_width;
@@ -86,10 +81,7 @@ Pixel_lookup::Pixel_lookup()
                         if (mask) {
                             const Tile_coordinate old = m_lut[lut_index];
                             m_lut[lut_index] = Tile_coordinate{tx, ty};
-                            if (
-                                (old.x != unset_coordinate) ||
-                                (old.y != unset_coordinate)
-                            ) {
+                            if ((old.y != unset_coordinate)) {
                                 log_pixel_lookup->error("logic error");
                                 std::abort();
                             }
@@ -115,10 +107,7 @@ Pixel_lookup::Pixel_lookup()
             const int             lut_index = (int)lx + (int)ly * lut_width;
             const Tile_coordinate value     = m_lut[lut_index];
             char glyph = '?';
-            if (
-                (value.x == unset_coordinate) ||
-                (value.y == unset_coordinate)
-            ) {
+            if ((value.x == unset_coordinate) || (value.y == unset_coordinate)) {
                 glyph = '!';
                 //log_pixel_lookup.error("bad\n");
                 //std::abort();
@@ -178,10 +167,7 @@ auto Pixel_lookup::pixel_to_tile(Pixel_coordinate pixel_coordinate) const -> Til
     const int  ly        = (int)mod(pixel_coordinate.y, lut_height);
     const int  lut_index = lx + ly * lut_width;
     const Tile_coordinate tile_offset = m_lut[lut_index];
-    return Tile_coordinate{
-        static_cast<coordinate_t>(tx * 2),
-        ty
-    } + tile_offset;
+    return Tile_coordinate{static_cast<coordinate_t>(tx * 2), ty} + tile_offset;
 }
 
 } // namespace hextiles

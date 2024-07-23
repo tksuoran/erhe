@@ -126,5 +126,6 @@
         "titleBar.activeForeground":   "#ffffff",
         "titleBar.inactiveBackground": "#402292",
         "titleBar.inativeForeground":  "#cccccc"
-    }
+    },
+    "C_Cpp.dimInactiveRegions": false
 }

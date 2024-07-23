@@ -64,10 +64,10 @@ void Image::put_pixel(size_t x, size_t y, glm::vec4 color)
     ERHE_VERIFY(x < info.width);
     ERHE_VERIFY(y < info.height);
     const size_t index = y * info.row_stride + x * 4;
-    data[index    ] = static_cast<std::byte>(static_cast<uint8_t>(color.r * 255.0f));
-    data[index + 1] = static_cast<std::byte>(static_cast<uint8_t>(color.g * 255.0f));
-    data[index + 2] = static_cast<std::byte>(static_cast<uint8_t>(color.b * 255.0f));
-    data[index + 3] = static_cast<std::byte>(static_cast<uint8_t>(color.a * 255.0f));
+    data[index    ] = static_cast<uint8_t>(color.r * 255.0f);
+    data[index + 1] = static_cast<uint8_t>(color.g * 255.0f);
+    data[index + 2] = static_cast<uint8_t>(color.b * 255.0f);
+    data[index + 3] = static_cast<uint8_t>(color.a * 255.0f);
 }
 
 auto load_png(const std::filesystem::path& path) -> Image
@@ -78,25 +78,10 @@ auto load_png(const std::filesystem::path& path) -> Image
     }
 
     Image image;
-    erhe::graphics::PNG_loader loader;
+    erhe::graphics::Image_loader loader;
 
     if (!loader.open(path, image.info)) {
-#if defined(ERHE_PNG_LIBRARY_NONE)
-        log_image->error(
-            "Unable to load image '{}' due to ERHE_PNG_LIBRARY_NONE build configuration. Exiting program.",
-            path.string()
-        );
-#elif !defined(ERHE_PNG_LIBRARY_MANGO)
-        log_image->error(
-            "Unable to load image '{}', check ERHE_PNG_LIBRARY build configuration. Exiting program.",
-            path.string()
-        );
-#else
-        log_image->error(
-            "Unable to load image '{}', check program working directory. Exiting program.",
-            path.string()
-        );
-#endif
+        log_image->error("Unable to load image '{}'. Exiting program.", path.string());
         std::abort();
     }
 
@@ -112,10 +97,7 @@ auto load_png(const std::filesystem::path& path) -> Image
     return image;
 }
 
-auto load_texture(
-    erhe::graphics::Instance&    graphics_instance,
-    const std::filesystem::path& path
-) -> std::shared_ptr<erhe::graphics::Texture>
+auto load_texture(erhe::graphics::Instance& graphics_instance, const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>
 {
     const Image image = load_png(path);
     if (image.data.size() == 0) {

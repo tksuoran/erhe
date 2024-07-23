@@ -510,10 +510,7 @@ void Commands::update_active_mouse_command(Command* const command)
 {
     inactivate_ready_commands();
 
-    if (
-        (command->get_command_state() == State::Active) &&
-        (m_active_mouse_command != command)
-    ) {
+    if ((command->get_command_state() == State::Active) && (m_active_mouse_command != command)) {
         ERHE_VERIFY(m_active_mouse_command == nullptr);
         log_input->trace("Set active mouse command = {}", command->get_name());
         m_active_mouse_command = command;

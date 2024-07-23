@@ -139,11 +139,7 @@ auto get_upload_pixel_byte_count(const gl::Internal_format internalformat)-> siz
     ERHE_FATAL("Bad internal format");
 }
 
-auto get_format_and_type(
-    const gl::Internal_format internalformat,
-    gl::Pixel_format&         format,
-    gl::Pixel_type&           type
-) -> bool
+auto get_format_and_type(const gl::Internal_format internalformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool
 {
     for (const auto& entry : INTERNAL_FORMAT_INFO) {
         if (entry.internal_format == internalformat) {
@@ -240,12 +236,7 @@ Texture::Texture(Texture&&) noexcept = default;
 
 Texture::~Texture() noexcept
 {
-    SPDLOG_LOGGER_TRACE(
-        log_texture,
-        "Deleting texture {} {}",
-        gl_name(),
-        m_debug_label
-    );
+    SPDLOG_LOGGER_TRACE(log_texture, "Deleting texture {} {}", gl_name(), m_debug_label);
 }
 
 auto Texture::gl_name() const -> GLuint
@@ -466,13 +457,7 @@ Texture::Texture(const Create_info& create_info)
 
         case 2: {
             if (m_sample_count == 0) {
-                gl::texture_storage_2d(
-                    gl_name(),
-                    m_level_count,
-                    m_internal_format,
-                    m_width,
-                    m_height
-                );
+                gl::texture_storage_2d(gl_name(), m_level_count, m_internal_format, m_width, m_height);
             } else {
                 gl::texture_storage_2d_multisample(
                     gl_name(),
@@ -480,23 +465,14 @@ Texture::Texture(const Create_info& create_info)
                     m_internal_format,
                     m_width,
                     m_height,
-                    m_fixed_sample_locations
-                        ? GL_TRUE
-                        : GL_FALSE
+                    m_fixed_sample_locations ? GL_TRUE : GL_FALSE
                 );
             }
             break;
         }
 
         case 3: {
-            gl::texture_storage_3d(
-                gl_name(),
-                m_level_count,
-                m_internal_format,
-                m_width,
-                m_height,
-                m_depth
-            );
+            gl::texture_storage_3d(gl_name(), m_level_count, m_internal_format, m_width, m_height, m_depth);
             break;
         }
 
@@ -539,11 +515,7 @@ auto Texture::is_shown_in_ui() const -> bool
 ////     return i->second;
 //// }
 
-void Texture::upload(
-    const gl::Internal_format internal_format,
-    const int                 width,
-    const int                 height,
-    const int                 depth)
+void Texture::upload(const gl::Internal_format internal_format, const int width, const int height, const int depth)
 {
     ERHE_VERIFY(internal_format == m_internal_format);
     ERHE_VERIFY(width  >= 1);
@@ -578,15 +550,15 @@ void Texture::upload(
 }
 
 void Texture::upload(
-    const gl::Internal_format        internal_format,
-    const std::span<const std::byte> data,
-    const int                        width,
-    const int                        height,
-    const int                        depth,
-    const int                        level,
-    const int                        x,
-    const int                        y,
-    const int                        z
+    const gl::Internal_format           internal_format,
+    const std::span<const std::uint8_t> data,
+    const int                           width,
+    const int                           height,
+    const int                           depth,
+    const int                           level,
+    const int                           x,
+    const int                           y,
+    const int                           z
 )
 {
     ERHE_VERIFY(internal_format == m_internal_format);
@@ -627,17 +599,17 @@ void Texture::upload(
 }
 
 void Texture::upload_subimage(
-    const gl::Internal_format        internal_format,
-    const std::span<const std::byte> data,
-    const int                        src_row_length,
-    const int                        src_x,
-    const int                        src_y,
-    const int                        width,
-    const int                        height,
-    const int                        level,
-    const int                        x,
-    const int                        y,
-    const int                        z
+    const gl::Internal_format           internal_format,
+    const std::span<const std::uint8_t> data,
+    const int                           src_row_length,
+    const int                           src_x,
+    const int                           src_y,
+    const int                           width,
+    const int                           height,
+    const int                           level,
+    const int                           x,
+    const int                           y,
+    const int                           z
 )
 {
     ERHE_VERIFY(internal_format == m_internal_format);
@@ -656,10 +628,7 @@ void Texture::upload_subimage(
     ERHE_VERIFY(data.size_bytes() >= byte_count);
     const std::size_t src_x_offset = src_x * pixel_stride;
     const std::size_t src_y_offset = src_y * row_stride;
-    const char* data_pointer =
-        reinterpret_cast<const char*>(data.data())
-        + src_x_offset
-        + src_y_offset;
+    const char* data_pointer = reinterpret_cast<const char*>(data.data()) + src_x_offset + src_y_offset;
     gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, src_row_length);
 
     switch (storage_dimensions(m_target)) {
@@ -685,22 +654,12 @@ void Texture::upload_subimage(
     gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, 0);
 }
 
-void Texture::set_debug_label(const std::string& value)
+void Texture::set_debug_label(std::string_view value)
 {
-    SPDLOG_LOGGER_TRACE(
-        log_texture,
-        "Texture {} name set to {}",
-        gl_name(),
-        value
-    );
+    SPDLOG_LOGGER_TRACE(log_texture, "Texture {} name set to {}", gl_name(), value);
 
     m_debug_label = fmt::format("(T:{}) {}", gl_name(), value);
-    gl::object_label(
-        gl::Object_identifier::texture,
-        gl_name(),
-        static_cast<GLsizei>(m_debug_label.length()),
-        m_debug_label.c_str()
-    );
+    gl::object_label(gl::Object_identifier::texture, gl_name(), static_cast<GLsizei>(m_debug_label.length()), m_debug_label.c_str());
 }
 
 auto Texture::debug_label() const -> const std::string&

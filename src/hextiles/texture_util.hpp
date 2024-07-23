@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/png_loader.hpp"
+#include "erhe_graphics/image_loader.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 
 #include <glm/glm.hpp>
@@ -21,7 +21,7 @@ public:
     void put_pixel(size_t x, size_t y, glm::vec4 color);
 
     erhe::graphics::Image_info info;
-    std::vector<std::byte>     data;
+    std::vector<std::uint8_t>  data;
 };
 
 auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format;

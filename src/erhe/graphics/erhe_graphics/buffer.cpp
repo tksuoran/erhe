@@ -95,11 +95,7 @@ Buffer::Buffer(
     allocate_storage();
 }
 
-Buffer::Buffer(
-    Instance&                     instance,
-    const std::size_t             capacity_byte_count,
-    const gl::Buffer_storage_mask storage_mask
-) noexcept
+Buffer::Buffer(Instance& instance, const std::size_t capacity_byte_count, const gl::Buffer_storage_mask storage_mask) noexcept
     : m_instance           {instance}
     , m_target             {0}
     , m_capacity_byte_count{capacity_byte_count}
@@ -258,10 +254,7 @@ auto Buffer::debug_label() const noexcept -> const std::string&
     return m_debug_label;
 }
 
-auto Buffer::allocate_bytes(
-    const std::size_t byte_count,
-    const std::size_t alignment
-) noexcept -> std::size_t
+auto Buffer::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::size_t
 {
     ERHE_VERIFY(alignment > 0);
 

@@ -444,12 +444,9 @@ public:
         // fmt::print("\nend of blit\n");
     }
 
-    [[nodiscard]] auto as_span() -> std::span<std::byte>
+    [[nodiscard]] auto as_span() -> std::span<std::uint8_t>
     {
-        return std::span<std::byte>(
-            reinterpret_cast<std::byte*>(&m_data[0]),
-            m_data.size() * sizeof(value_t)
-        );
+        return std::span<std::uint8_t>(&m_data[0], m_data.size() * sizeof(value_t));
     }
 
 private:

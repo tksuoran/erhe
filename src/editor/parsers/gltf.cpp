@@ -101,18 +101,21 @@ void import_gltf(
     // TODO Make importing an operation
 
     std::shared_ptr<Content_library> content_library = scene_root.content_library();
+    log_parsers->info("Processing {} textures", gltf_data.images.size());
     for (const auto& image : gltf_data.images) {
         if (image) {
             content_library->textures->add(image);
         }
     }
 
+    log_parsers->info("Processing {} materials", gltf_data.materials.size());
     for (const auto& material : gltf_data.materials) {
         if (material) {
             content_library->materials->add(material);
         }
     }
 
+    log_parsers->info("Processing {} skins", gltf_data.skins.size());
     for (const auto& skin : gltf_data.skins) {
         if (skin) {
             content_library->skins->add(skin);
@@ -135,6 +138,23 @@ void import_gltf(
 
     bool add_default_camera = true;
     bool add_default_light = false;
+    log_parsers->info("Processing {} nodes", gltf_data.nodes.size());
+
+    size_t mesh_count = 0;
+    size_t primitive_count = 0;
+    for (const auto& node : gltf_data.nodes) {
+        if (!node) {
+            continue;
+        }
+        auto mesh = erhe::scene::get_mesh(node.get());
+        if (mesh) {
+            ++mesh_count;
+            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
+            primitive_count += primitives.size();
+        }
+    }
+    log_parsers->info("Processing {} nodes, {} meshes, {} primitives", gltf_data.nodes.size(), mesh_count, primitive_count);
+
     for (const auto& node : gltf_data.nodes) {
         if (!node) {
             continue;

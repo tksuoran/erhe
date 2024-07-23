@@ -81,22 +81,12 @@ void Icon_rasterization::rasterize(lunasvg::Document& document, const int column
     const int x_offset = column * m_icon_width;
     const int y_offset = row    * m_icon_height;
 
-    const auto span = std::span<std::byte>{
-        reinterpret_cast<std::byte*>(bitmap.data()),
+    const auto span = std::span<std::uint8_t>{
+        bitmap.data(),
         static_cast<size_t>(bitmap.stride()) * static_cast<size_t>(bitmap.height())
     };
 
-    m_texture->upload(
-        gl::Internal_format::rgba8,
-        span,
-        bitmap.width(),
-        bitmap.height(),
-        1,
-        0,
-        x_offset,
-        y_offset,
-        0
-    );
+    m_texture->upload(gl::Internal_format::rgba8, span, bitmap.width(), bitmap.height(), 1, 0, x_offset, y_offset, 0);
 #else
     static_cast<void>(document);
     static_cast<void>(column);
@@ -111,10 +101,7 @@ auto Icon_rasterization::get_size() const -> int
 
 auto Icon_rasterization::uv1(const glm::vec2& uv0) const -> glm::vec2
 {
-    return glm::vec2{
-        uv0.x + m_icon_uv_width,
-        uv0.y + m_icon_uv_height
-    };
+    return glm::vec2{uv0.x + m_icon_uv_width, uv0.y + m_icon_uv_height};
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -164,17 +151,7 @@ auto Icon_rasterization::icon_button(
 #else
     ERHE_PROFILE_FUNCTION();
 
-    const bool result = m_imgui_renderer.image_button(
-        id,
-        m_texture,
-        m_icon_width,
-        m_icon_height,
-        uv0,
-        uv1(uv0),
-        background_color,
-        tint_color,
-        linear
-    );
+    const bool result = m_imgui_renderer.image_button(id, m_texture, m_icon_width, m_icon_height, uv0, uv1(uv0), background_color, tint_color, linear);
     ImGui::SameLine();
     return result;
 #endif

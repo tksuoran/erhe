@@ -29,7 +29,9 @@ erhe_target_sources_grouped(
     erhe_graphics/opengl_state_tracker.hpp
     erhe_graphics/pipeline.cpp
     erhe_graphics/pipeline.hpp
-    erhe_graphics/png_loader.hpp
+    erhe_graphics/image_loader_wuffs.cpp
+    erhe_graphics/image_loader_wuffs.hpp
+    erhe_graphics/image_loader.hpp
     erhe_graphics/renderbuffer.cpp
     erhe_graphics/renderbuffer.hpp
     erhe_graphics/sampler.cpp
@@ -99,6 +101,7 @@ target_link_libraries(${_target}
         erhe::window
         fmt::fmt
         glm::glm-header-only
+        #### wuffs
         #### glslang
     PRIVATE
         erhe::bit

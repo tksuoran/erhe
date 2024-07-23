@@ -126,7 +126,7 @@ public:
         parse_triangles();
         parse_vertex_data();
         m_geometry.make_point_corners();
-        m_geometry.build_edges();
+        //m_geometry.build_edges();
     }
 
 private:

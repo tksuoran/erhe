@@ -778,10 +778,7 @@ namespace
 class Light_comparator
 {
 public:
-    [[nodiscard]] inline auto operator()(
-        const std::shared_ptr<Light>& lhs,
-        const std::shared_ptr<Light>& rhs
-    ) -> bool
+    [[nodiscard]] inline auto operator()(const std::shared_ptr<Light>& lhs, const std::shared_ptr<Light>& rhs) -> bool
     {
         return sort_value(lhs->type) < sort_value(rhs->type);
     }
