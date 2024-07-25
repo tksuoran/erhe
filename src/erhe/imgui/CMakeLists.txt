@@ -57,11 +57,6 @@ target_link_libraries(${_target}
         erhe::renderer
         erhe::time
 )
-if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
-    target_link_libraries(${_target} PUBLIC mango spng)
-endif()
-if (${ERHE_PNG_LIBRARY} STREQUAL "fpng")
-    target_link_libraries(${_target} PUBLIC fpng)
-endif()
+target_link_libraries(${_target} PUBLIC mango)
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

@@ -4,6 +4,8 @@
 #-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
 #-DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld \
 
+#    --fresh \
+
 mkdir -p build/ninja
 cmake \
     -G "Ninja" \
@@ -16,7 +18,6 @@ cmake \
     -DERHE_GLTF_LIBRARY=fastgltf \
     -DERHE_GUI_LIBRARY=imgui \
     -DERHE_PHYSICS_LIBRARY=jolt \
-    -DERHE_PNG_LIBRARY=mango \
     -DERHE_PROFILE_LIBRARY=none \
     -DERHE_RAYTRACE_LIBRARY=bvh \
     -DERHE_SVG_LIBRARY=lunasvg \

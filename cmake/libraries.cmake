@@ -189,7 +189,7 @@ FetchContent_Declare(
     MathGeoLib
     #GIT_REPOSITORY https://github.com/juj/MathGeoLib.git
     GIT_REPOSITORY  https://github.com/tksuoran/MathGeoLib.git
-    GIT_TAG        origin/fetchcontent
+    GIT_TAG        origin/winver
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

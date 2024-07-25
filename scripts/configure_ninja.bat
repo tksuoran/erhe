@@ -14,7 +14,6 @@ cmake ^
     -DERHE_GLTF_LIBRARY=fastgltf ^
     -DERHE_GUI_LIBRARY=imgui ^
     -DERHE_PHYSICS_LIBRARY=none ^
-    -DERHE_PNG_LIBRARY=mango ^
     -DERHE_PROFILE_LIBRARY=none ^
     -DERHE_RAYTRACE_LIBRARY=bvh ^
     -DERHE_SVG_LIBRARY=lunasvg ^

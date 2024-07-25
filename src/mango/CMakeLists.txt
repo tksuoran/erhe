@@ -96,7 +96,7 @@ target_sources(
     include/mango/core/configure.hpp
     include/mango/core/core.hpp
     include/mango/core/cpuinfo.hpp
-    include/mango/core/dynamic_library.hpp
+    #include/mango/core/dynamic_library.hpp
     include/mango/core/endian.hpp
     include/mango/core/exception.hpp
     include/mango/core/half.hpp
@@ -128,7 +128,7 @@ if (WIN32)
     target_sources(
         mango
         PRIVATE
-        source/mango/core/win32/dynamic_library.cpp
+        #source/mango/core/win32/dynamic_library.cpp
         source/mango/filesystem/win32/file_observer.cpp
         source/mango/filesystem/win32/file_stream.cpp
         source/mango/filesystem/win32/mapper_file.cpp
@@ -137,7 +137,7 @@ else()
     target_sources(
         mango
         PRIVATE
-        source/mango/core/unix/dynamic_library.cpp
+        #source/mango/core/unix/dynamic_library.cpp
         source/mango/filesystem/unix/file_observer.cpp
         source/mango/filesystem/unix/file_stream.cpp
         source/mango/filesystem/unix/mapper_file.cpp

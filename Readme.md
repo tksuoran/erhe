@@ -106,7 +106,6 @@ erhe with CMake:
 | ERHE_GLTF_LIBRARY               | GLTF library               | cgltf, fastgltf, none           |
 | ERHE_GUI_LIBRARY                | GUI library                | imgui, none                     |
 | ERHE_PHYSICS_LIBRARY            | Physics library            | jolt, none                      |
-| ERHE_PNG_LIBRARY                | PNG loading library        | mango, none                     |
 | ERHE_PROFILE_LIBRARY            | Profile library            | nvtx, superluminal, tracy, none |
 | ERHE_RAYTRACE_LIBRARY           | Raytrace library           | embree, bvh, none               |
 | ERHE_SVG_LIBRARY                | SVG loading library        | lunasvg, none                   |
@@ -157,12 +156,6 @@ Disabling xr library removes ability to enable headset rendering in erhe editor.
 
 Only `lunasvg` is current supported as SVG loading library in erhe.
 Disabling SVG library removes erhe editor scene node icons.
-
-### ERHE_PNG_LIBRARY
-
-Disabling PNG library removes erhe window icon.
-
-Current implementation uses mango (subset) and spng for loading PNG files.
 
 ### ERHE_GLTF_LIBRARY
 

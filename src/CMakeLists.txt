@@ -27,10 +27,7 @@ add_subdirectory(rapidjson)
 add_subdirectory(RectangleBinPack)
 #add_subdirectory(taskflow)
 
-if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
-    add_subdirectory(spng)
-    add_subdirectory(mango)
-endif ()
+add_subdirectory(mango)
 
 add_subdirectory(erhe)
 add_subdirectory(editor)

@@ -10,7 +10,6 @@ cmake ^
     -DERHE_GLTF_LIBRARY=none ^
     -DERHE_GUI_LIBRARY=none ^
     -DERHE_PHYSICS_LIBRARY=none ^
-    -DERHE_PNG_LIBRARY=none ^
     -DERHE_PROFILE_LIBRARY=none ^
     -DERHE_RAYTRACE_LIBRARY=none ^
     -DERHE_SVG_LIBRARY=none ^

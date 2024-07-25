@@ -12,7 +12,6 @@
                 "ERHE_GLTF_LIBRARY": "fastgltf",
                 "ERHE_GUI_LIBRARY": "imgui",
                 "ERHE_PHYSICS_LIBRARY": "jolt",
-                "ERHE_PNG_LIBRARY": "mango",
                 "ERHE_PROFILE_LIBRARY": "tracy",
                 "ERHE_RAYTRACE_LIBRARY": "bvh",
                 "ERHE_SVG_LIBRARY": "lunasvg",

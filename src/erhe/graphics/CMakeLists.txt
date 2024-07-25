@@ -68,25 +68,6 @@ erhe_target_sources_grouped(
     erhe_graphics/vertex_format.cpp
     erhe_graphics/vertex_format.hpp
 )
-if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_graphics/png_loader_mango_spng.cpp
-        erhe_graphics/png_loader_mango_spng.hpp
-    )
-elseif (${ERHE_PNG_LIBRARY} STREQUAL "fpng")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_graphics/png_loader_fpng.cpp
-        erhe_graphics/png_loader_fpng.hpp
-    )
-else()
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_graphics/png_loader_none.cpp
-        erhe_graphics/png_loader_none.hpp
-    )
-endif()
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
@@ -101,6 +82,7 @@ target_link_libraries(${_target}
         erhe::window
         fmt::fmt
         glm::glm-header-only
+        mango
         #### wuffs
         #### glslang
     PRIVATE
@@ -111,11 +93,5 @@ target_link_libraries(${_target}
         erhe::profile
         erhe::verify
 )
-if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
-    target_link_libraries(${_target} PUBLIC mango spng)
-endif()
-if (${ERHE_PNG_LIBRARY} STREQUAL "fpng")
-    target_link_libraries(${_target} PUBLIC fpng)
-endif()
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
