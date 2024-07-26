@@ -239,12 +239,16 @@ void Line_renderer_set::next_frame()
     for (auto& entry : hidden ) entry->next_frame();
 }
 
-void Line_renderer_set::render(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera)
+void Line_renderer_set::render(const erhe::math::Viewport viewport, const erhe::scene::Camera* camera)
 {
     ERHE_PROFILE_FUNCTION();
 
-    for (auto& entry: hidden ) entry->render(viewport, camera, true, false);
-    for (auto& entry: visible) entry->render(viewport, camera, true, true);
+    if (camera == nullptr) {
+        return;
+    }
+
+    for (auto& entry: hidden ) entry->render(viewport, *camera, true, false);
+    for (auto& entry: visible) entry->render(viewport, *camera, true, true);
     m_graphics_instance.opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 

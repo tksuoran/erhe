@@ -8,12 +8,14 @@
 
 mkdir -p build/ninja
 cmake \
+    --fresh \
     -G "Ninja" \
     -B build/ninja \
     -S . \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -Wno-dev \
+    -DERHE_USE_PRECOMPILED_HEADERS=OFF \
     -DERHE_FONT_RASTERIZATION_LIBRARY=freetype \
     -DERHE_GLTF_LIBRARY=fastgltf \
     -DERHE_GUI_LIBRARY=imgui \

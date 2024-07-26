@@ -114,10 +114,7 @@ void Node::set_node_parent(Node* const new_parent_node, const std::size_t positi
     }
 }
 
-void Node::set_parent(
-    const std::shared_ptr<erhe::Hierarchy>& new_parent_item,
-    const std::size_t                       position
-)
+void Node::set_parent(const std::shared_ptr<erhe::Hierarchy>& new_parent_item, const std::size_t position)
 {
     const auto& world_from_node = world_from_node_transform();
     Hierarchy::set_parent(new_parent_item, position);
@@ -138,12 +135,7 @@ void Node::attach(const std::shared_ptr<Node_attachment>& attachment)
 
     ERHE_VERIFY(attachment);
 
-    log->trace(
-        "{} (attach({} {})",
-        describe(),
-        attachment->get_type_name(),
-        attachment->get_name()
-    );
+    log->trace("{} (attach({} {})", describe(), attachment->get_type_name(), attachment->get_name());
 
     attachment->set_node(this);
     node_sanity_check();
@@ -158,12 +150,7 @@ auto Node::detach(Node_attachment* attachment) -> bool
         return false;
     }
 
-    log->trace(
-        "{} (detach({} {})",
-        get_name(),
-        attachment->get_type_name(),
-        attachment->get_name()
-    );
+    log->trace("{} (detach({} {})", get_name(), attachment->get_type_name(), attachment->get_name());
 
     auto* node = attachment->get_node();
     if (node != this) {
@@ -293,6 +280,8 @@ void Node::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
     }
     if (new_scene_host != nullptr) {
         new_scene_host->register_node(shared_this); // updates node_data.host from Scene::register_node()
+    } else {
+        node_data.host = nullptr; // Orphan
     }
 
     // This must come *after* node_data.host has been updated
@@ -307,7 +296,7 @@ void Node::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
         }
         child_node->handle_item_host_update(old_item_host, new_item_host);
     }
-    // Set by new_item_host->register_node()
+    // Set by new_item_host->register_node(), or Orphan path above in this function
     ERHE_VERIFY(node_data.host == new_item_host);
 }
 

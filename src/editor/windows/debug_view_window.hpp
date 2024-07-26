@@ -93,7 +93,7 @@ public:
     void hidden() override;
 
 private:
-    void set_shadow_renderer_node(Shadow_render_node* node);
+    void set_shadow_renderer_node(erhe::rendergraph::Rendergraph& rendergraph, Shadow_render_node* node);
 
     Editor_context&                                  m_context;
     std::unique_ptr<Depth_to_color_rendergraph_node> m_depth_to_color_node;

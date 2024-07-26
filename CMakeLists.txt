@@ -25,7 +25,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/../cache")
 set(ERHE_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/src")
 
-set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Do not update everytime I run cmake, please")
+#set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Do not update everytime I run cmake, please")
 
 # Split parts to cmake/
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
@@ -49,7 +49,9 @@ set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype
 set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw or none"                       "glfw"     "glfw;none")
 set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either openxr, or none"                        "none"     "openxr;none")
 set_option(ERHE_TERMINAL_LIBRARY           "Terminal use with erhe. Either cpp-terminal, or none"                       "none"     "cpp-terminal;none")
-set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "ON"       "ON;OFF")
+set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "OFF"      "ON;OFF")
+
+# TODO fix ERHE_USE_PRECOMPILED_HEADERS
 
 # These are in cmake/ directory
 message("Compiler = ${CMAKE_CXX_COMPILER_ID}")
@@ -59,9 +61,11 @@ include(functions)
 include(libraries)
 
 if (WIN32)
+    message("Detected Windows platform")
     set(ERHE_TARGET_OS_WINDOWS TRUE)
     add_definitions(-DERHE_OS_WINDOWS)
 elseif (UNIX AND ${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    message("Detected Linux platform")
     set(ERHE_TARGET_OS_LINUX TRUE)
     add_definitions(-DERHE_OS_LINUX)
 else ()

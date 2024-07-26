@@ -99,9 +99,24 @@ using PrecomputedTri = bvh::v2::PrecomputedTri<Scalar>;
 
 static constexpr bool should_permute = true; // TODO
 
-// TODO Are these ok here?
-bvh::v2::ThreadPool thread_pool;
-bvh::v2::ParallelExecutor executor{thread_pool};
+class Executor_resources
+{
+public:
+    static Executor_resources& get_instance() {
+        static Executor_resources static_instance;
+        return static_instance;
+    }
+
+    auto get_thread_pool() -> bvh::v2::ThreadPool&       { return m_thread_pool; }
+    auto get_executor   () -> bvh::v2::ParallelExecutor& { return m_executor; }
+
+private:
+    Executor_resources() : m_thread_pool{}, m_executor{m_thread_pool} {}
+    ~Executor_resources(){};
+
+    bvh::v2::ThreadPool       m_thread_pool;
+    bvh::v2::ParallelExecutor m_executor;
+};
 
 void Bvh_geometry::commit()
 {
@@ -189,6 +204,8 @@ void Bvh_geometry::commit()
             log_geometry->trace("BVH hash for {} : {:x}", debug_label(), hash_code);
         }
 
+        Executor_resources& executor_resources = Executor_resources::get_instance();
+
         const bool load_ok = load_bvh(m_bvh, hash_code);
         if (!load_ok)
         {
@@ -201,7 +218,7 @@ void Bvh_geometry::commit()
 
                 timer.begin();
                 m_bvh = bvh::v2::DefaultBuilder<Node>::build(
-                    thread_pool,
+                    executor_resources.get_thread_pool(),
                     bboxes,
                     centers,
                     config
@@ -223,7 +240,8 @@ void Bvh_geometry::commit()
             ERHE_PROFILE_SCOPE("bvh precompute");
             m_precomputed_triangles.clear();
             m_precomputed_triangles.resize(tris.size());
-            executor.for_each(
+
+            executor_resources.get_executor().for_each(
                 0,
                 tris.size(),
                 [&] (const size_t begin, const size_t end) {
@@ -273,9 +291,7 @@ void Bvh_geometry::set_buffer(
 )
 {
     m_buffer_infos.push_back(
-        Buffer_info{
-            type, slot, format, buffer, byte_offset, byte_stride, item_count
-        }
+        Buffer_info{type, slot, format, buffer, byte_offset, byte_stride, item_count}
     );
 }
 

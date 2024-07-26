@@ -775,7 +775,7 @@ void Editor_rendering::render_id(const Render_context& context)
     const auto position = position_opt.value();
 
     const auto& layers = scene_root->layers();
-    if (tool_scene_root == nullptr) {
+    if ((tool_scene_root == nullptr) || (context.camera == nullptr)) {
         return;
     }
 
@@ -785,7 +785,7 @@ void Editor_rendering::render_id(const Render_context& context)
     m_context.id_renderer->render(
         Id_renderer::Render_parameters{
             .viewport           = context.viewport,
-            .camera             = context.camera,
+            .camera             = *context.camera,
             .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes },
             .tool_mesh_spans    = { tool_layers.tool()->meshes },
             .x                  = static_cast<int>(position.x),

@@ -215,6 +215,10 @@ void Merge_operation::execute(Editor_context& context)
         if (first_entry) {
             // TODO Improve physics RAII and remove this workaround
             std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+
+            // This keeps node alive while we modify it
+            std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+
             node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
             // For first mesh: Replace mesh primitives
@@ -268,6 +272,10 @@ void Merge_operation::undo(Editor_context& context)
         if (first_entry) {
             // TODO Improve physics RAII and remove this workaround
             std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+
+            // This keeps node alive while we modify it
+            std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+
             node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
             first_entry = false;

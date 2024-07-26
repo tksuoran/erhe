@@ -232,11 +232,11 @@ Debug_view_window::Debug_view_window(
     const auto& nodes = editor_rendering.get_all_shadow_nodes();
     if (!nodes.empty()) {
         const auto& node = nodes.front();
-        set_shadow_renderer_node(node.get());
+        set_shadow_renderer_node(rendergraph, node.get());
     }
 }
 
-void Debug_view_window::set_shadow_renderer_node(Shadow_render_node* node)
+void Debug_view_window::set_shadow_renderer_node(erhe::rendergraph::Rendergraph& rendergraph, Shadow_render_node* node)
 {
     if (m_context.OpenXR) {
         return; // TODO
@@ -252,7 +252,7 @@ void Debug_view_window::set_shadow_renderer_node(Shadow_render_node* node)
     m_shadow_renderer_node = node;
 
     if (node) {
-        m_context.rendergraph->connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_renderer_node, m_depth_to_color_node.get());
+        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_renderer_node, m_depth_to_color_node.get());
         m_depth_to_color_node->set_enabled(true);
         m_node.set_enabled(true);
     } else {
@@ -305,7 +305,7 @@ void Debug_view_window::imgui()
         const bool node_set = ImGui::SliderInt("Node", &m_selected_node, 0, last_node_index);
         if (node_set && (m_selected_node >= 0) && (m_selected_node < nodes.size())) {
             const auto node = nodes.at(m_selected_node);
-            set_shadow_renderer_node(node.get());
+            set_shadow_renderer_node(*m_context.rendergraph, node.get());
         }
     }
 

@@ -45,6 +45,10 @@ void Mesh_operation::execute(Editor_context&)
 
         // TODO Improve physics RAII and remove this workaround
         std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+
+        // This keeps node alive while we modify it
+        std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+
         node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
         auto old_node_physics = get_node_physics(node);
@@ -69,6 +73,10 @@ void Mesh_operation::undo(Editor_context&)
 
         // TODO Improve physics RAII and remove this workaround
         std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+
+        // This keeps node alive while we modify it
+        std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+
         node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
         auto old_node_physics = get_node_physics(node);
@@ -121,8 +129,11 @@ void Mesh_operation::make_entries(
 #endif
 
     for (auto& item : selected_items) {
-        auto* node = std::dynamic_pointer_cast<erhe::scene::Node>(item).get();
-        auto  mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        auto  node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        auto* node        = node_shared.get();
+        auto  mesh        = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+
+        // If we have node selected, get mesh from node
         if (!mesh) {
             if (node != nullptr) {
                 mesh = erhe::scene::get_mesh(node);
@@ -131,11 +142,14 @@ void Mesh_operation::make_entries(
         if (!mesh) {
             continue;
         }
+        // If we have mesh selected, get node from mesh
         if (node == nullptr) {
             node = mesh->get_node();
+            node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
         }
 
         Entry entry{
+            // TODO consider keeping node alive always .node   = node_shared,
             .mesh   = mesh,
             .before = {
                 .node_physics = get_node_physics(node),

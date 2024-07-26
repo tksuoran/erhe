@@ -120,7 +120,7 @@ void Renderpass::render(const Render_context& context) const
         log_composer->debug("render_fullscreen");
         context.editor_context.forward_renderer->render_fullscreen(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .camera                 = &context.camera,
+                .camera                 = context.camera,
                 .light_projections      = nullptr,
                 .lights                 = {},
                 .skins                  = {},
@@ -168,9 +168,8 @@ void Renderpass::render(const Render_context& context) const
         context.editor_context.forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .index_type             = context.editor_context.mesh_memory->buffer_info.index_type,
-
                 .ambient_light          = layers.light()->ambient_light,
-                .camera                 = &context.camera,
+                .camera                 = context.camera,
                 .light_projections      = context.scene_view.get_light_projections(),
                 .lights                 = layers.light()->lights,
                 .skins                  = scene->get_skins(),

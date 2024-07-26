@@ -263,12 +263,12 @@ void Logs::tail_log_imgui()
         ImGui::SameLine();
         ImGui::SetNextItemWidth(100.0f);
         if (ImGui::Button("Clear")) {
-            tail->trim(0);
+            tail.trim(0);
         }
         ImGui::SameLine();
         ImGui::SetNextItemWidth(100.0f);
         if (ImGui::Checkbox("Paused", &m_paused)) {
-            m_pause_serial = tail->get_serial();
+            m_pause_serial = tail.get_serial();
             //tail->set_paused(m_paused);
         }
         ImGui::SameLine();
@@ -284,9 +284,9 @@ void Logs::tail_log_imgui()
 
     // Log content rows
     const auto trim_size = static_cast<size_t>(m_tail_buffer_trim_size);
-    tail->trim(trim_size);
+    tail.trim(trim_size);
 
-    auto& tail_entries = tail->get_log();
+    auto& tail_entries = tail.get_log();
 
     const auto visible_count = (std::min)(
         static_cast<size_t>(m_tail_buffer_show_size),
@@ -326,7 +326,7 @@ void Logs::frame_log_imgui()
 {
     auto& frame = erhe::log::get_frame_store_log();
 
-    auto& frame_entries = frame->get_log();
+    auto& frame_entries = frame.get_log();
     ImGui::PushFont(m_imgui_renderer.mono_font());
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
     const ImVec2 outer_size{-FLT_MIN, 0.0f};

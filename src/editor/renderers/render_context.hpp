@@ -27,7 +27,7 @@ public:
     Editor_context&                      editor_context;
     Scene_view&                          scene_view;
     Viewport_config&                     viewport_config;
-    erhe::scene::Camera&                 camera;
+    erhe::scene::Camera*                 camera                {nullptr};
     Viewport_scene_view*                 viewport_scene_view   {nullptr};
     erhe::math::Viewport                 viewport              {0, 0, 0, 0, true};
     const erhe::graphics::Shader_stages* override_shader_stages{nullptr};

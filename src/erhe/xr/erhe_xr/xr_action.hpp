@@ -3,6 +3,8 @@
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #include <openxr/openxr.h>
 #else
+#include <cstdint>
+
 #define XR_DEFINE_HANDLE(object) typedef struct object##_T* object;
 #define XR_DEFINE_ATOM(object) typedef uint64_t object;
 typedef int64_t XrTime;

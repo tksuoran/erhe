@@ -49,8 +49,8 @@ private:
     std::deque<Entry> m_entries;
 };
 
-[[nodiscard]] auto get_tail_store_log () -> const std::shared_ptr<Store_log_sink>&;
-[[nodiscard]] auto get_frame_store_log() -> const std::shared_ptr<Store_log_sink>&;
+[[nodiscard]] auto get_tail_store_log () -> Store_log_sink&;
+[[nodiscard]] auto get_frame_store_log() -> Store_log_sink&;
 [[nodiscard]] auto get_groupname      (const std::string& s) -> std::string;
 [[nodiscard]] auto get_basename       (const std::string& s) -> std::string;
 [[nodiscard]] auto get_levelname      (spdlog::level::level_enum level) -> std::string;

@@ -13,6 +13,7 @@ namespace erhe::geometry {
 }
 namespace erhe::scene {
     class Mesh;
+    class Node;
 }
 
 namespace editor {
@@ -33,6 +34,7 @@ protected:
     class Entry
     {
     public:
+        // TODO consider keeping node always alive using std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<erhe::scene::Mesh> mesh;
 
         class Version

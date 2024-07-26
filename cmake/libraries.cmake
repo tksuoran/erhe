@@ -253,8 +253,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     tracy
-    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-    GIT_TAG        v0.10
+    GIT_REPOSITORY https://github.com/tksuoran/tracy.git
+    GIT_TAG        msys2_clang64_link_fix
+    #GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    #GIT_TAG        v0.10
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

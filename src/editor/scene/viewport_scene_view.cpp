@@ -105,13 +105,20 @@ void Viewport_scene_view::execute_rendergraph_node()
         return;
     }
 
+    bool do_render = true;
     const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
-    bool do_render = scene_root && !m_camera.expired();
+    if (!scene_root) {
+        do_render = false;
+    }
+    std::shared_ptr<erhe::scene::Camera> camera = m_camera.lock();
+    if (!camera) {
+        do_render = false;
+    }
     const Render_context context{
         .editor_context         = m_context,
         .scene_view             = *this,
         .viewport_config        = m_viewport_config,
-        .camera                 = *m_camera.lock().get(),
+        .camera                 = camera.get(),
         .viewport_scene_view    = this,
         .viewport               = output_viewport,
         .override_shader_stages = get_override_shader_stages()

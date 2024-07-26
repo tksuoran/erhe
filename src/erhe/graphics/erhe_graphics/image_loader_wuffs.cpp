@@ -41,16 +41,24 @@
 //#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGRA_PREMUL
 
 #ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4100) // unused
-#pragma warning(disable : 4127) // constant expression
-#pragma warning(disable : 4505) // unreferenced
+#   pragma warning(push)
+#   pragma warning(disable : 4100) // unused
+#   pragma warning(disable : 4127) // constant expression
+#   pragma warning(disable : 4505) // unreferenced
+#endif
+
+// https://github.com/google/wuffs/issues/152
+#if defined(__clang__)
+#   pragma clang attribute push (__attribute__((no_sanitize("undefined"))), apply_to=function)
 #endif
 
 #include "wuffs-v0.4.c"
 
+#if defined(__clang__)
+#   pragma clang attribute pop
+#endif
 #ifdef _MSC_VER
-#pragma warning(pop)
+#   pragma warning(pop)
 #endif
 
 const char* c_str(wuffs_base__pixel_format pixel_format)
@@ -328,7 +336,7 @@ Image_loader::Image_loader()
 {
 }
 
-Image_loader::~Image_loader()
+Image_loader::~Image_loader() noexcept
 {
     close();
 }

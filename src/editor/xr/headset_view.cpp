@@ -491,7 +491,7 @@ void Headset_view::render_headset()
                     .editor_context         = m_context,
                     .scene_view             = *this,
                     .viewport_config        = m_viewport_config,
-                    .camera                 = *view_resources->get_camera(),
+                    .camera                 = view_resources->get_camera(),
                     .viewport               = viewport,
                     .override_shader_stages = override_shader_stages
                 };

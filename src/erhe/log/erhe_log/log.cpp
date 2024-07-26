@@ -85,44 +85,103 @@ void Store_log_sink::flush_()
 {
 }
 
-namespace {
+class Log_sinks
+{
+public:
+    static Log_sinks& get_instance()
+    {
+        static Log_sinks static_instance;
+        return static_instance;
+    }
 
 #if defined _WIN32
-std::shared_ptr<spdlog::sinks::msvc_sink_mt>         sink_msvc;
+    auto get_msvc_sink       () -> spdlog::sinks::msvc_sink_mt& { return *m_sink_msvc.get(); }
 #endif
-std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> sink_console;
-std::shared_ptr<spdlog::sinks::basic_file_sink_mt>   sink_log_file;
-std::shared_ptr<Store_log_sink>                      tail_store_log;
-std::shared_ptr<Store_log_sink>                      frame_store_log;
-bool s_log_to_console{false};
+    auto get_console_sink    () -> spdlog::sinks::stdout_color_sink_mt& { return *m_sink_console.get(); }
+    auto get_file_sink       () -> spdlog::sinks::basic_file_sink_mt& { return *m_sink_log_file.get(); }
+    auto get_tail_store_sink () -> Store_log_sink& { return *m_tail_store_log.get(); }
+    auto get_frame_store_sink() -> Store_log_sink& { return *m_frame_store_log.get(); }
+    auto get_log_to_console  () const -> bool { return m_log_to_console; }
+    void set_log_to_console  (bool value) { m_log_to_console = value; }
 
+    auto make_logger(const std::string& name, const bool tail) -> std::shared_ptr<spdlog::logger>
+    {
+        ERHE_VERIFY(!name.empty());
+        const auto groupname = get_groupname(name);
+        const auto basename  = get_basename(name);
+        auto ini = erhe::configuration::get_ini("logging.ini", groupname.c_str());
+        std::string levelname;
+        ini->get(basename.c_str(), levelname);
+        const spdlog::level::level_enum level_parsed = spdlog::level::from_str(levelname);
+
+        std::shared_ptr<spdlog::logger> logger = std::make_shared<spdlog::logger>(
+            name,
+            spdlog::sinks_init_list{
+#if defined _WIN32
+                m_sink_msvc,
+#endif
+                //sink_console,
+                m_sink_log_file,
+                tail ? m_tail_store_log : m_frame_store_log
+            }
+        );
+        if (m_log_to_console) {
+            logger->sinks().push_back(m_sink_console);
+        }
+        std::shared_ptr<spdlog::logger> logger_copy = logger;
+        spdlog::register_logger(logger_copy);
+        logger->set_level(level_parsed);
+        logger->flush_on(spdlog::level::trace);
+        return logger;
+    }
+
+    void create_sinks()
+    {
+#if defined _WIN32
+        m_sink_msvc = std::make_shared<spdlog::sinks::msvc_sink_mt>();
+#endif
+        m_sink_console = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        m_sink_log_file = std::make_shared<spdlog::sinks::basic_file_sink_mt>("log.txt", true);
+        m_tail_store_log = std::make_shared<Store_log_sink>();
+        m_frame_store_log = std::make_shared<Store_log_sink>();
+
+        m_sink_log_file->set_pattern("[%H:%M:%S %z] [%n] [%L] [%t] %v");
+    }
+
+private:
+    Log_sinks()
+    {
+    }
+    ~Log_sinks() {}
+
+#if defined _WIN32
+    std::shared_ptr<spdlog::sinks::msvc_sink_mt>         m_sink_msvc      {};
+#endif
+    std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> m_sink_console   {};
+    std::shared_ptr<spdlog::sinks::basic_file_sink_mt>   m_sink_log_file  {};
+    std::shared_ptr<Store_log_sink>                      m_tail_store_log {};
+    std::shared_ptr<Store_log_sink>                      m_frame_store_log{};
+    bool                                                 m_log_to_console {false};
+};
+
+auto get_tail_store_log() -> Store_log_sink&
+{
+    return Log_sinks::get_instance().get_tail_store_sink();
 }
 
-auto get_tail_store_log() -> const std::shared_ptr<Store_log_sink>&
+auto get_frame_store_log() -> Store_log_sink&
 {
-    return tail_store_log;
-}
-auto get_frame_store_log() -> const std::shared_ptr<Store_log_sink>&
-{
-    return frame_store_log;
+    return Log_sinks::get_instance().get_frame_store_sink();
 }
 
 void log_to_console()
 {
-    s_log_to_console = true;
+    Log_sinks::get_instance().set_log_to_console(true);
 }
 
 void initialize_log_sinks()
 {
-#if defined _WIN32
-    sink_msvc       = std::make_shared<spdlog::sinks::msvc_sink_mt>();
-#endif
-    sink_console    = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    sink_log_file   = std::make_shared<spdlog::sinks::basic_file_sink_mt>("log.txt", true);
-    tail_store_log  = std::make_shared<Store_log_sink>();
-    frame_store_log = std::make_shared<Store_log_sink>();
-
-    sink_log_file->set_pattern("[%H:%M:%S %z] [%n] [%L] [%t] %v");
+    Log_sinks::get_instance().create_sinks();
 }
 
 auto get_groupname(const std::string& s) -> std::string
@@ -158,32 +217,7 @@ auto make_frame_logger(const std::string& name) -> std::shared_ptr<spdlog::logge
 
 auto make_logger(const std::string& name, const bool tail) -> std::shared_ptr<spdlog::logger>
 {
-    ERHE_VERIFY(!name.empty());
-    const auto groupname = get_groupname(name);
-    const auto basename  = get_basename(name);
-    auto ini = erhe::configuration::get_ini("logging.ini", groupname.c_str());
-    std::string levelname;
-    ini->get(basename.c_str(), levelname);
-    const spdlog::level::level_enum level_parsed = spdlog::level::from_str(levelname);
-
-    auto logger = std::make_shared<spdlog::logger>(
-        name,
-        spdlog::sinks_init_list{
-#if defined _WIN32
-            sink_msvc,
-#endif
-            //sink_console,
-            sink_log_file,
-            tail ? tail_store_log : frame_store_log
-        }
-    );
-    if (s_log_to_console) {
-        logger->sinks().push_back(sink_console);
-    }
-    spdlog::register_logger(logger);
-    logger->set_level(level_parsed);
-    logger->flush_on(spdlog::level::trace);
-    return logger;
+    return Log_sinks::get_instance().make_logger(name, tail);
 }
 
 } // namespace erhe::log

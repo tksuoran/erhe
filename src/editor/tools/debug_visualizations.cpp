@@ -590,7 +590,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (camera == &render_context.camera) {
+    if (camera == render_context.camera) {
         return;
     }
 
@@ -630,7 +630,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
     ERHE_PROFILE_FUNCTION();
 
     const auto* scene = context.get_scene();
-    if (scene == nullptr) {
+    if ((scene == nullptr) || (context.camera == nullptr)) {
         return;
     }
 
@@ -678,9 +678,9 @@ void Debug_visualizations::selection_visualization(const Render_context& context
 
     if (m_selection_bounding_volume.get_element_count() > 1) {
         if (m_selection_bounding_points_visible) {
-            const auto&     camera                = context.camera;
-            const auto      projection_transforms = camera.projection_transforms(context.viewport);
-            const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
+            const erhe::scene::Camera* camera                = context.camera;
+            const auto                 projection_transforms = camera->projection_transforms(context.viewport);
+            const glm::mat4            clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
             for (std::size_t i = 0, i_end = m_selection_bounding_volume.get_element_count(); i < i_end; ++i) {
                 for (std::size_t j = 0, j_end = m_selection_bounding_volume.get_element_point_count(i); j < j_end; ++j) {
@@ -763,13 +763,13 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
 
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
-    const auto& scene_root = context.scene_view.get_scene_root();    
-    if (!scene_root) {
+    const auto& scene_root = context.scene_view.get_scene_root();
+    const auto* camera     = context.camera;
+    if (!scene_root || (camera == nullptr)) {
         return;
     }
 
-    const auto&     camera                = context.camera;
-    const auto      projection_transforms = camera.projection_transforms(context.viewport);
+    const auto      projection_transforms = camera->projection_transforms(context.viewport);
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
@@ -918,12 +918,12 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
     if (mesh == nullptr) {
         return;
     }
-    const auto* node = mesh->get_node();
-    if (node == nullptr) {
+    const auto* node   = mesh->get_node();
+    const auto* camera = context.camera;
+    if ((node == nullptr) || (camera == nullptr)) {
         return;
     }
-    const auto&     camera                = context.camera;
-    const auto      projection_transforms = camera.projection_transforms(context.viewport);
+    const auto      projection_transforms = camera->projection_transforms(context.viewport);
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     const glm::mat4 world_from_node = node->world_from_node();

@@ -259,10 +259,7 @@ public:
     void begin     ();
     void end       ();
     void next_frame();
-    void render(
-        const erhe::math::Viewport camera_viewport,
-        const erhe::scene::Camera& camera
-    );
+    void render    (const erhe::math::Viewport camera_viewport, const erhe::scene::Camera* camera);
 
 public:
     static constexpr unsigned int s_max_stencil_reference = 4;

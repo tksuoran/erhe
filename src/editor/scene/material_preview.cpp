@@ -275,12 +275,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 
     gl::enable(gl::Enable_cap::scissor_test);
     gl::scissor(viewport.x, viewport.y, viewport.width, viewport.height);
-    gl::clear_color(
-        m_clear_color[0],
-        m_clear_color[1],
-        m_clear_color[2],
-        m_clear_color[3]
-    );
+    gl::clear_color(m_clear_color[0], m_clear_color[1], m_clear_color[2], m_clear_color[3]);
     gl::clear_stencil(0);
     gl::clear_depth_f(*m_context.graphics_instance->depth_clear_value_pointer());
 
@@ -295,12 +290,12 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     };
 
     const Render_context context{
-        .editor_context  = m_context,
-        .scene_view      = *this,
-        .viewport_config = m_viewport_config,
-        .camera          = *m_camera.get(),
+        .editor_context      = m_context,
+        .scene_view          = *this,
+        .viewport_config     = m_viewport_config,
+        .camera              = m_camera.get(),
         .viewport_scene_view = nullptr,
-        .viewport        = erhe::math::Viewport{
+        .viewport            = erhe::math::Viewport{
             .x      = 0,
             .y      = 0,
             .width  = m_width,
@@ -310,10 +305,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     };
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-    gl::clear(
-        gl::Clear_buffer_mask::color_buffer_bit |
-        gl::Clear_buffer_mask::depth_buffer_bit
-    );
+    gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
     m_composer.render(context);
     gl::disable(gl::Enable_cap::scissor_test);
 }

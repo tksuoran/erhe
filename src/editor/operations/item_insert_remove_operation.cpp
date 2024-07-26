@@ -121,12 +121,7 @@ void Item_insert_remove_operation::undo(Editor_context& context)
     }
     m_item->set_parent(m_before_parent, m_index_in_parent);
 
-    for (
-        auto i = rbegin(m_parent_changes),
-        end = rend(m_parent_changes);
-        i < end;
-        ++i
-    ) {
+    for (auto i = rbegin(m_parent_changes), end = rend(m_parent_changes); i < end; ++i) {
         auto& child_parent_change = *i;
         child_parent_change->undo(context);
     }

@@ -1458,7 +1458,7 @@ static void QuickSort(int* pSortBuffer, int iLeft, int iRight, unsigned int uSee
 
 	// Random
 	unsigned int t=uSeed&31;
-	t=(uSeed<<t)|(uSeed>>(32-t));
+	t=t?(uSeed<<t)|(uSeed>>(32-t)):uSeed; // https://github.com/mmikk/MikkTSpace/issues/7
 	uSeed=uSeed+t+3;
 	// Random end
 
@@ -1665,7 +1665,7 @@ static void QuickSortEdges(SEdge * pSortBuffer, int iLeft, int iRight, const int
 
 	// Random
 	t=uSeed&31;
-	t=(uSeed<<t)|(uSeed>>(32-t));
+	t=t?(uSeed<<t)|(uSeed>>(32-t)):uSeed; // https://github.com/mmikk/MikkTSpace/issues/7
 	uSeed=uSeed+t+3;
 	// Random end
 

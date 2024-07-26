@@ -97,8 +97,11 @@ void Grid::render(const Render_context& context)
     if (!is_visible()) {
         return;
     }
+    if (context.camera == nullptr) {
+        return;
+    }
 
-    const erhe::scene::Node* camera_node = context.camera.get_node();
+    const erhe::scene::Node* camera_node = context.camera->get_node();
     ERHE_VERIFY(camera_node != nullptr);
     const glm::mat4 m = world_from_grid();
 

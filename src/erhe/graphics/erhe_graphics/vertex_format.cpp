@@ -31,7 +31,8 @@ void Vertex_format::align_to(const std::size_t alignment)
 void Vertex_format::add_attribute(const Vertex_attribute& attribute)
 {
     const std::size_t attribute_stride = erhe::dataformat::get_format_size(attribute.data_type);
-    // Note: Vertex attributes have no alignment requirements - do *not* align attribute offsets
+    const std::size_t alignment = erhe::dataformat::get_component_byte_size(attribute.data_type);
+    align_to(alignment);
     auto& new_attribute = m_attributes.emplace_back(attribute);
     new_attribute.offset = m_stride;
     m_stride += attribute_stride;

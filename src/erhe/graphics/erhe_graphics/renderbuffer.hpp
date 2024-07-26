@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/gl_objects.hpp"
 
+#include <string>
 #include <string_view>
 
 namespace erhe::graphics {
