@@ -145,6 +145,7 @@ public:
         m_tail_store_log = std::make_shared<Store_log_sink>();
         m_frame_store_log = std::make_shared<Store_log_sink>();
 
+        // This causes a crash in MSVC Release build :/
         m_sink_log_file->set_pattern("[%H:%M:%S %z] [%n] [%L] [%t] %v");
     }
 
