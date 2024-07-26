@@ -24,6 +24,19 @@
             "cppStandard":           "c++20",
             "intelliSenseMode":      "clang-x64",
             "configurationProvider": "ms-vscode.cmake-tools"
+        },
+        {
+            "name": "Windows msys2 clang64",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "compilerPath":          "c:/msys64/clang64/bin/clang",
+            "compileCommands":       "${workspaceFolder}/build/${command:cmake.configurePreset}/compile_commands.json",
+            "cStandard":             "c11",
+            "cppStandard":           "c++20",
+            "intelliSenseMode":      "clang-x64",
+            "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],
     "version": 4
