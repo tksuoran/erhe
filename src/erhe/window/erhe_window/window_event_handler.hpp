@@ -268,6 +268,18 @@ public:
     [[nodiscard]] auto describe() const -> std::string;
 };
 
+class Window_close_event
+{
+public:
+    [[nodiscard]] auto describe() const -> std::string;
+};
+
+class Window_refresh_event
+{
+public:
+    [[nodiscard]] auto describe() const -> std::string;
+};
+
 class Window_focus_event
 {
 public:
@@ -320,6 +332,8 @@ public:
         Controller_axis_event   controller_axis_event;
         Controller_button_event controller_button_event;
         Window_resize_event     window_resize_event;
+        Window_close_event      window_close_event;
+        Window_refresh_event    window_refresh_event;
         Xr_boolean_event        xr_boolean_event;
         Xr_float_event          xr_float_event;
         Xr_vector2f_event       xr_vector2f_event;
@@ -342,8 +356,8 @@ public:
     virtual auto on_controller_axis_event  (const Controller_axis_event&  ) -> bool { return false; }
     virtual auto on_controller_button_event(const Controller_button_event&) -> bool { return false; }
     virtual auto on_window_resize_event    (const Window_resize_event&    ) -> bool { return false; }
-    virtual auto on_window_close_event     () -> bool { return false; }
-    virtual auto on_window_refresh_event   () -> bool { return false; }
+    virtual auto on_window_close_event     (const Window_close_event&     ) -> bool { return false; }
+    virtual auto on_window_refresh_event   (const Window_refresh_event&   ) -> bool { return false; }
     virtual auto on_xr_boolean_event       (const Xr_boolean_event&       ) -> bool { return false; }
     virtual auto on_xr_float_event         (const Xr_float_event&         ) -> bool { return false; }
     virtual auto on_xr_vector2f_event      (const Xr_vector2f_event&      ) -> bool { return false; }

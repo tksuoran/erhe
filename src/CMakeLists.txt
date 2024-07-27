@@ -10,10 +10,6 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
     add_subdirectory(superluminal)
 endif ()
 
-if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
-    add_subdirectory(cgltf)
-endif ()
-
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     add_subdirectory(imgui)
 endif ()

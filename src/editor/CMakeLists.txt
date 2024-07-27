@@ -388,7 +388,7 @@ target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
 endif ()
-target_link_options(${_target} PRIVATE "/MAP:${CMAKE_CURRENT_SOURCE_DIR}/editor.map")
+# MSVC only target_link_options(${_target} PRIVATE "/MAP:${CMAKE_CURRENT_SOURCE_DIR}/editor.map")
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe-executables")
 

@@ -29,6 +29,15 @@ function (erhe_target_settings target)
 
     # Allow glm constexpr by disabling SIMD
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:GLM_FORCE_PURE>)
+
+    # Add the compiler commandline flags to select the right instruction sets
+    if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x86" OR "${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
+        #target_compile_options(${target} PUBLIC /arch:AVX512)
+        message("Enabling /arch:AVX2 for ${target}")
+        target_compile_options(${target} PUBLIC /arch:AVX2)
+        #target_compile_options(${target} PUBLIC /arch:AVX)
+    endif()
+
 endfunction()
 
 function (erhe_disable_incremental_linking)

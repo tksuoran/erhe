@@ -7,6 +7,9 @@
 
 #define WUFFS_IMPLEMENTATION
 //#define WUFFS_CONFIG__STATIC_FUNCTIONS
+
+// https://github.com/google/wuffs/issues/151
+// https://developercommunity.visualstudio.com/t/fatal--error-C1001:-Internal-compiler-er/10703305
 #define WUFFS_CONFIG__AVOID_CPU_ARCH
 
 #define WUFFS_CONFIG__MODULES
@@ -20,7 +23,7 @@
 //#define WUFFS_CONFIG__MODULE__GIF
 #define WUFFS_CONFIG__MODULE__JPEG
 //#define WUFFS_CONFIG__MODULE__NETPBM
-//#define WUFFS_CONFIG__MODULE__NIE
+#define WUFFS_CONFIG__MODULE__NIE
 #define WUFFS_CONFIG__MODULE__PNG
 //#define WUFFS_CONFIG__MODULE__TGA
 //#define WUFFS_CONFIG__MODULE__VP8
@@ -28,15 +31,15 @@
 //#define WUFFS_CONFIG__MODULE__WEBP
 #define WUFFS_CONFIG__MODULE__ZLIB
 
-#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ENABLE_ALLOWLIST
-#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGR_565
-#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGR
-#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGRA_NONPREMUL
-#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGRA_NONPREMUL_4X16LE
-#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGRA_PREMUL
-#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_RGB
-#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_RGBA_NONPREMUL
-#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_RGBA_PREMUL
+//#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ENABLE_ALLOWLIST
+//#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGR_565
+//#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGR
+//#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGRA_NONPREMUL
+//#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGRA_NONPREMUL_4X16LE
+//#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGRA_PREMUL
+//#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_RGB
+//#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_RGBA_NONPREMUL
+//#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_RGBA_PREMUL
 
 //#define WUFFS_CONFIG__DST_PIXEL_FORMAT__ALLOW_BGRA_PREMUL
 
@@ -129,10 +132,16 @@ private:
     union {
         //wuffs_bmp__decoder bmp;
         //wuffs_gif__decoder gif;
+#if defined(WUFFS_CONFIG__MODULE__JPEG)
         wuffs_jpeg__decoder jpeg;
+#endif
         //wuffs_netpbm__decoder netpbm;
-        //wuffs_nie__decoder nie;
+#if defined(WUFFS_CONFIG__MODULE__NIE)
+        wuffs_nie__decoder nie;
+#endif
+#if defined(WUFFS_CONFIG__MODULE__PNG)
         wuffs_png__decoder png;
+#endif
         //wuffs_tga__decoder tga;
         //wuffs_wbmp__decoder wbmp;
         //wuffs_webp__decoder webp;
@@ -140,10 +149,8 @@ private:
     wuffs_base__image_config  m_image_config;
     wuffs_base__frame_config  m_frame_config;
     wuffs_base__pixel_buffer  m_pixel_buffer;
-    //std::vector<std::uint8_t> m_pixel_buffer_storage;
     std::vector<std::uint8_t> m_work_buffer_storage;
     wuffs_base__table_u8      m_pixel_buffer_table;
-
 };
 
 Image_loader_impl::Image_loader_impl()
@@ -179,6 +186,7 @@ auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, I
     int32_t fourcc = wuffs_base__magic_number_guess_fourcc(file_data, true);
 
     switch (fourcc) {
+#if defined(WUFFS_CONFIG__MODULE__JPEG)
         case WUFFS_BASE__FOURCC__JPEG: {
             wuffs_base__status initialize_status = wuffs_jpeg__decoder__initialize(
                 &m_decoder_union.jpeg,
@@ -190,6 +198,8 @@ auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, I
             m_image_decoder = wuffs_jpeg__decoder__upcast_as__wuffs_base__image_decoder(&m_decoder_union.jpeg);
             break;
         }
+#endif
+#if defined(WUFFS_CONFIG__MODULE__PNG)
         case WUFFS_BASE__FOURCC__PNG: {
             wuffs_base__status initialize_status = wuffs_png__decoder__initialize(
                 &m_decoder_union.png,
@@ -201,6 +211,20 @@ auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, I
             m_image_decoder = wuffs_png__decoder__upcast_as__wuffs_base__image_decoder(&m_decoder_union.png);
             break;
         }
+#endif
+#if defined(WUFFS_CONFIG__MODULE__NIE)
+        case WUFFS_BASE__FOURCC__NIE: {
+            wuffs_base__status initialize_status = wuffs_nie__decoder__initialize(
+                &m_decoder_union.nie,
+                sizeof m_decoder_union.nie,
+                WUFFS_VERSION, 
+                WUFFS_INITIALIZE__DEFAULT_OPTIONS
+            );
+            ERHE_VERIFY(wuffs_base__status__is_ok(&initialize_status));
+            m_image_decoder = wuffs_nie__decoder__upcast_as__wuffs_base__image_decoder(&m_decoder_union.nie);
+            break;
+        }
+#endif
         default: {
             return false;
         }

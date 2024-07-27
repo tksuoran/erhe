@@ -12,14 +12,7 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
 endif ()
-if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_gltf/gltf_cgltf.cpp
-        erhe_gltf/gltf_cgltf.hpp
-    )
-    #target_link_libraries(${_target} PRIVATE cgltf)
-elseif (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
+if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_gltf/gltf_fastgltf.cpp

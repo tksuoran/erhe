@@ -192,9 +192,11 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
             }
             const auto position = pointer.value();
             if ((m_last_mouse_x != position.x) || (m_last_mouse_y != position.y)) {
+                float dx = (m_last_mouse_x == -FLT_MAX) ? 0.0f : position.x - m_last_mouse_x;
+                float dy = (m_last_mouse_y == -FLT_MAX) ? 0.0f : position.y - m_last_mouse_y;
+                on_mouse_move_event({position.x, position.y, dx, dy, 0});
                 m_last_mouse_x = position.x;
                 m_last_mouse_y = position.y;
-                on_mouse_move_event({position.x, position.y});
             }
 
             // TODO Is there better way to route mouse button and other events here?
@@ -211,7 +213,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 on_cursor_enter_event(erhe::window::Cursor_enter_event{.entered = false});
                 m_last_mouse_x = -FLT_MAX;
                 m_last_mouse_y = -FLT_MAX;
-                on_mouse_move_event({-FLT_MAX, -FLT_MAX});
+                on_mouse_move_event({-FLT_MAX, -FLT_MAX, 0.0f, 0.0f, 0});
             }
         }
     }

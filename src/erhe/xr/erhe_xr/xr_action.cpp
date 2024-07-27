@@ -84,6 +84,8 @@ Xr_action_boolean::Xr_action_boolean(
     if (result != XR_SUCCESS) {
         log_xr->error("xrCreateAction() returned error {} for {}", c_str(result), name);
     }
+#else
+    static_cast<void>(action_set);
 #endif
 }
 

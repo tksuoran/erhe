@@ -103,7 +103,7 @@ erhe with CMake:
 | :---                            | :---                       | :---                            |
 | ERHE_AUDIO_LIBRARY              | Audio library              | miniaudio, none                 |
 | ERHE_FONT_RASTERIZATION_LIBRARY | Font rasterization library | freetype, none                  |
-| ERHE_GLTF_LIBRARY               | GLTF library               | cgltf, fastgltf, none           |
+| ERHE_GLTF_LIBRARY               | GLTF library               | fastgltf, none                  |
 | ERHE_GUI_LIBRARY                | GUI library                | imgui, none                     |
 | ERHE_PHYSICS_LIBRARY            | Physics library            | jolt, none                      |
 | ERHE_PROFILE_LIBRARY            | Profile library            | nvtx, superluminal, tracy, none |

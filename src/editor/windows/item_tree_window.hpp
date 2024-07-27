@@ -116,7 +116,7 @@ private:
     float                              m_ui_scale{1.0f};
 };
 
-class Item_tree_window : public Item_tree, public erhe::imgui::Imgui_window
+class Item_tree_window : public erhe::imgui::Imgui_window, public Item_tree
 {
 public:
     Item_tree_window(

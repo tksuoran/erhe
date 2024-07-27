@@ -104,7 +104,7 @@ public:
         m_tile_renderer .next_frame();
     }
 
-    auto on_window_close_event() -> bool override
+    auto on_window_close_event(const erhe::window::Window_close_event&) -> bool override
     {
         m_close_requested = true;
         return true;

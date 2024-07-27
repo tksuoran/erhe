@@ -531,12 +531,12 @@ public:
         m_input_state.alt     = erhe::bit::test_all_rhs_bits_set(key_event.modifier_mask, erhe::window::Key_modifier_bit_menu);
         return false;
     }
-    auto on_window_close_event() -> bool override
+    auto on_window_close_event(const erhe::window::Window_close_event&) -> bool override
     {
         m_close_requested = true;
         return true;
     }
-    auto on_window_refresh_event() -> bool override
+    auto on_window_refresh_event(const erhe::window::Window_refresh_event&) -> bool override
     {
         // TODO
         return true;

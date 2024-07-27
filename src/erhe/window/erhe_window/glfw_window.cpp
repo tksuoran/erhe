@@ -815,6 +815,9 @@ void Context_window::handle_window_refresh_event()
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_refresh_event,
+            .u = {
+                .window_refresh_event = {}
+            }
         }
     );
 }
@@ -824,6 +827,9 @@ void Context_window::handle_window_close_event()
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_close_event,
+            .u = {
+                .window_close_event = {}
+            }
         }
     );
 }

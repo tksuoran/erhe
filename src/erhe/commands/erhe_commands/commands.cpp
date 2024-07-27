@@ -722,6 +722,7 @@ auto Commands::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_m
 auto Commands::on_xr_boolean_event(const erhe::window::Xr_boolean_event& xr_boolean_event) -> bool
 {
     Input_arguments input{
+        .modifier_mask = 0,
         .variant = {
             .button_pressed = xr_boolean_event.value
         }
@@ -754,6 +755,7 @@ auto Commands::on_xr_boolean_event(const erhe::window::Xr_boolean_event& xr_bool
 auto Commands::on_xr_float_event(const erhe::window::Xr_float_event& xr_float_event) -> bool
 {
     Input_arguments input{
+        .modifier_mask = 0,
         .variant = {
             .float_value = xr_float_event.value
         }
@@ -780,6 +782,7 @@ auto Commands::on_xr_float_event(const erhe::window::Xr_float_event& xr_float_ev
 auto Commands::on_xr_vector2f_event(const erhe::window::Xr_vector2f_event& xr_vector2f_event) -> bool
 {
     Input_arguments context{
+        .modifier_mask = 0,
         .variant = {
             .vector2{
                 .absolute_value = glm::vec2{
