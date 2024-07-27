@@ -1,6 +1,8 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
 #include <algorithm>
+#include <cstring>
+#include <limits>
 
 namespace erhe::dataformat {
 

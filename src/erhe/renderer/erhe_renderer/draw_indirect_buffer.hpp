@@ -3,6 +3,9 @@
 #include "erhe_renderer/multi_buffer.hpp"
 #include "erhe_primitive/enums.hpp"
 
+#include <memory>
+#include <span>
+
 namespace erhe {
     class Item_filter;
 }

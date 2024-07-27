@@ -3,6 +3,7 @@
 #include "erhe_graphics/gl_objects.hpp"
 
 #include <array>
+#include <cstdint>
 #include <span>
 
 namespace erhe::graphics {

@@ -3,6 +3,7 @@
 #include "erhe_gl/wrapper_enums.hpp"
 
 #include <deque>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string_view>

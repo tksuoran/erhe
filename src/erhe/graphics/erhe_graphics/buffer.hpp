@@ -5,10 +5,10 @@
 
 #include "erhe_dataformat/dataformat.hpp"
 
-#include <span>
-
-#include <string_view>
 #include <mutex>
+#include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace erhe::graphics {

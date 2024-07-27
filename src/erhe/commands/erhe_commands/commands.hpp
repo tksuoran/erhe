@@ -15,6 +15,7 @@
 
 #include <glm/glm.hpp>
 
+#include <memory>
 #include <mutex>
 #include <optional>
 
