@@ -255,6 +255,7 @@ FetchContent_Declare(
     tracy
     GIT_REPOSITORY https://github.com/tksuoran/tracy.git
     GIT_TAG        msys2_clang64_link_fix
+    # msys2_clang64_link_fix is not yet in tagged commit
     #GIT_REPOSITORY https://github.com/wolfpld/tracy.git
     #GIT_TAG        v0.10
     GIT_SHALLOW    TRUE
