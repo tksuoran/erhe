@@ -51,7 +51,7 @@ void check_error()
 #if defined(WIN32)
         DebugBreak();
 #else
-        raise(SIGTRAP);
+        //raise(SIGTRAP);
 #endif
     }
 }

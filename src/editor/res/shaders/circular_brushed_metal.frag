@@ -150,7 +150,7 @@ vec3 brdf(
 float sample_light_visibility(vec4 position, uint light_index, float N_dot_L)
 {
 #if defined(ERHE_SHADOW_MAPS)
-    if (light_block.shadow_texture == max_u32) {
+    if (light_block.shadow_texture.x == max_u32) {
         return 1.0;
     }
 
