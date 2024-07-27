@@ -137,16 +137,20 @@ public:
 
     void create_sinks()
     {
+        m_sink_log_file = std::make_shared<spdlog::sinks::basic_file_sink_mt>("log.txt", true);
+
+        // If you get a crash here:
+        // - Install / repair latest VC redistributable from
+        //   https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170
+        // - See also: https://github.com/gabime/spdlog/issues/3145
+        m_sink_log_file->set_pattern("[%H:%M:%S %z] [%n] [%L] [%t] %v");
+
 #if defined _WIN32
         m_sink_msvc = std::make_shared<spdlog::sinks::msvc_sink_mt>();
 #endif
         m_sink_console = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-        m_sink_log_file = std::make_shared<spdlog::sinks::basic_file_sink_mt>("log.txt", true);
         m_tail_store_log = std::make_shared<Store_log_sink>();
         m_frame_store_log = std::make_shared<Store_log_sink>();
-
-        // This causes a crash in MSVC Release build :/
-        m_sink_log_file->set_pattern("[%H:%M:%S %z] [%n] [%L] [%t] %v");
     }
 
 private:
