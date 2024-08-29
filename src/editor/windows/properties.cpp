@@ -233,7 +233,7 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
     const auto width = avail - label_size;
     {
         ImGui::SetNextItemWidth(width);
-        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic)) {
+        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 800000.0f, "%.3f", logarithmic)) {
             camera.set_exposure(exposure);
         }
     }
@@ -649,7 +649,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in)
 {
     const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node   >(item_in);
-    const auto& item                 = content_library_node ? content_library_node->item : item_in;
+    const auto& item                 = (content_library_node && content_library_node->item) ? content_library_node->item : item_in;
 
     const auto& node_physics         = std::dynamic_pointer_cast<Node_physics           >(item);
     const auto& rendertarget         = std::dynamic_pointer_cast<Rendertarget_mesh      >(item);
@@ -661,6 +661,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& texture              = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
 
     const bool default_open = !node_physics && !content_library_node && !node;
+
+    if (!item) {
+        return;
+    }
 
     if (
         !ImGui::TreeNodeEx(

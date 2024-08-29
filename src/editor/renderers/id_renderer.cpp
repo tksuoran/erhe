@@ -50,10 +50,7 @@ constexpr gl::Map_buffer_access_mask access_mask{
 
 }
 
-Id_renderer::Id_frame_resources::Id_frame_resources(
-    erhe::graphics::Instance& graphics_instance,
-    const std::size_t         slot
-)
+Id_renderer::Id_frame_resources::Id_frame_resources(erhe::graphics::Instance& graphics_instance, const std::size_t slot)
     : pixel_pack_buffer{
         graphics_instance,
         gl::Buffer_target::pixel_pack_buffer,
@@ -67,9 +64,7 @@ Id_renderer::Id_frame_resources::Id_frame_resources(
 
 Id_renderer::Id_frame_resources::Id_frame_resources(Id_frame_resources&& other) noexcept = default;
 
-auto Id_renderer::Id_frame_resources::operator=(
-    Id_frame_resources&& other
-) noexcept -> Id_frame_resources& = default;
+auto Id_renderer::Id_frame_resources::operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources& = default;
 
 static constexpr std::string_view c_id_renderer_initialize_component{"Id_renderer::initialize_component()"};
 
@@ -331,12 +326,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     idr.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
     idr.clip_from_world = clip_from_world;
 
-    const auto camera_range = m_camera_buffers.update(
-        *camera.projection(),
-        *camera.get_node(),
-        viewport,
-        1.0f
-    );
+    const auto camera_range = m_camera_buffers.update(*camera.projection(), *camera.get_node(), viewport, 1.0f);
     m_camera_buffers.bind(camera_range);
 
     {
@@ -451,12 +441,7 @@ inline T read_as(uint8_t const* raw_memory)
     return result;
 }
 
-auto Id_renderer::get(
-    const int x,
-    const int y,
-    uint32_t& id,
-    float&    depth
-) -> bool
+auto Id_renderer::get(const int x, const int y, uint32_t& id, float& depth) -> bool
 {
     if (m_id_frame_resources.empty()) {
         return false;

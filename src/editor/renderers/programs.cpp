@@ -36,32 +36,23 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
     , shadow_sampler{
         graphics_instance.info.use_bindless_texture
             ? nullptr
-            : default_uniform_block.add_sampler(
-                "s_shadow",
-                gl::Uniform_type::sampler_2d_array,
-                shadow_texture_unit
-            )
+            : default_uniform_block.add_sampler("s_shadow", gl::Uniform_type::sampler_2d_array, shadow_texture_unit)
     }
     , texture_sampler{
         graphics_instance.info.use_bindless_texture
             ? nullptr
-            : default_uniform_block.add_sampler(
-                "s_texture",
-                gl::Uniform_type::sampler_2d,
-                base_texture_unit,
-                s_texture_unit_count
-            )
+            : default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, base_texture_unit, s_texture_unit_count)
     }
     , nearest_sampler{
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest,
+            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Programs nearest"
         }
     }
     , linear_sampler{
         erhe::graphics::Sampler_create_info{
-            .min_filter = gl::Texture_min_filter::linear,
+            .min_filter = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter = gl::Texture_mag_filter::linear,
             .debug_label = "Programs linear"
         }

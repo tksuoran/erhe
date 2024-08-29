@@ -61,11 +61,7 @@ public:
     [[nodiscard]] static auto c_str(Precision v) -> const char*;
 
     // Struct definition
-    Shader_resource(
-        Instance&              instance,
-        const std::string_view struct_type_name,
-        Shader_resource*       parent = nullptr
-    );
+    Shader_resource(Instance& instance, const std::string_view struct_type_name, Shader_resource* parent = nullptr);
 
     // Struct member
     Shader_resource(

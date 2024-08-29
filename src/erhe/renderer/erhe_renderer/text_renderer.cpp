@@ -155,7 +155,7 @@ Text_renderer::Text_renderer(
     }
     , m_nearest_sampler{
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest,
+            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Text_renderer"
         }

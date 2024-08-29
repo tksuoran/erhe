@@ -103,20 +103,24 @@ void Shader_monitor::poll_thread()
             for (auto& i : m_files) {
                 auto& f = i.second;
 
-                // Watch out; filesystem can throw exception for some random reason,
-                // like file being externally modified at the same time.
-                try {
-                    const bool ok = erhe::file::check_is_existing_non_empty_regular_file("Shader_monitor::poll_thread", f.path);
-                    if (ok) {
-                        const auto time = std::filesystem::last_write_time(f.path);
-                        if (f.last_time != time) {
-                            m_reload_list.emplace_back(&f);
-                            continue;
-                        }
+                const bool ok = erhe::file::check_is_existing_non_empty_regular_file("Shader_monitor::poll_thread", f.path);
+                if (ok) {
+                    std::error_code error_code{};
+                    const auto time = std::filesystem::last_write_time(f.path, error_code);
+                    if (error_code) {
+                        log_shader_monitor->warn(
+                            "{}: std::filesystem::last_write_time('{}') returned error code {}: {}",
+                            __func__,
+                            erhe::file::to_string(f.path),
+                            error_code.value(),
+                            error_code.message()
+                        );
+                        continue;
                     }
-                } catch (...) {
-                    log_shader_monitor->warn("Failed to poll file {}", f.path.string());
-                    // Never mind exceptions.
+
+                    if (f.last_time != time) {
+                        m_reload_list.emplace_back(&f);
+                    }
                 }
             }
         }

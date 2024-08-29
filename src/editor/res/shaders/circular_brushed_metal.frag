@@ -49,6 +49,31 @@ vec2 get_texture_size(uvec2 texture_handle)
 const float m_pi   = 3.1415926535897932384626434;
 const float m_i_pi = 0.3183098861837906715377675;
 
+// https://www.shadertoy.com/view/WssyR7
+// 2016 - Filtering Distributions of Normals for Shading Antialiasing
+//        by A. Kaplanyan, S. Hill, A. Patney, A. Lefohn (HPG 2016)
+//        project page : https://research.nvidia.com/publication/filtering-distributions-normals-shading-antialiasing
+//        demo : https://blog.selfshadow.com/sandbox/specaa.html
+// 2017 - Error Reduction and Simplification for Shading Anti-Aliasing
+//        by Y. Tokuyoshi (technical report)
+//        project page : http://www.jp.square-enix.com/tech/publications.html
+//-----------------------------------------------------------------------------
+//-- Specular AA --------------------------------------------------------------
+//-- Snippet code for specular antialiasing
+//-- Based on A. Kaplanyan & Y. Tokuyoshi work
+//-----------------------------------------------------------------------------
+void specular_anti_aliasing(in vec3 half_vector, inout float alpha_x, inout float alpha_y)
+{
+    float sigma                  = 0.50; //- screen space variance
+    float Kappa                  = 0.18; //- clamping treshold
+    vec2  H                      = half_vector.xy;
+    vec2  footprint_bounding_box = fwidth(H);//- abs(dfdx(slope_h)) + abs(dfdy(slope_h))
+    vec2  variance               = sigma * sigma * footprint_bounding_box * footprint_bounding_box;
+    vec2  kernel_roughness       = min(vec2(Kappa), 2.0 * variance); 
+    alpha_x = sqrt(alpha_x * alpha_x + kernel_roughness.x);
+    alpha_y = sqrt(alpha_y * alpha_y + kernel_roughness.y);
+}
+
 float ggx_isotropic_ndf(float N_dot_H, float alpha)
 {
     float a = N_dot_H * alpha;
@@ -123,8 +148,17 @@ vec3 brdf(
     vec3  N
 )
 {
+    mat3  TBN     = mat3(T, B, N);
+    mat3  TBN_t   = transpose(TBN);
+    vec3  wo      = normalize(TBN_t * V);
+    vec3  wg      = normalize(TBN_t * N);
+    vec3  wi      = normalize(TBN_t * L);
+    vec3  wh      = normalize(wo + wi);
+
     float alpha_x = roughness_x * roughness_x;
     float alpha_y = roughness_y * roughness_y;
+    specular_anti_aliasing(wh, alpha_x, alpha_y);
+
     vec3  F0      = 0.16 * reflectance * reflectance * (1.0 - metallic) + base_color * metallic;
     vec3  H       = normalize(L + V);
     float N_dot_H = clamped_dot(N, H);

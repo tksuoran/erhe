@@ -58,7 +58,7 @@ public:
         "YZY",
         "ZXZ",
         "ZYZ",
-        // Tait-Bryar angles
+        // Tait-Bryan angles
         "XYZ",
         "XZY",
         "YXZ",

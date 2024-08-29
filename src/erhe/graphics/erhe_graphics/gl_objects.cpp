@@ -7,18 +7,26 @@
 
 namespace erhe::graphics {
 
-Gl_texture::Gl_texture(gl::Texture_target target)
+Gl_texture::Gl_texture(gl::Texture_target target, bool for_texture_view)
 {
-    gl::create_textures(target, 1, &m_gl_name);
+    if (!for_texture_view) {
+        gl::create_textures(target, 1, &m_gl_name);
+    } else {
+        gl::gen_textures(1, &m_gl_name);
+    }
     ERHE_VERIFY(m_gl_name != 0);
 }
 
-Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name)
+Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name, bool for_texture_view)
     : m_gl_name{wrap_name}
     , m_owned  {wrap_name == 0}
 {
     if (m_owned) {
-        gl::create_textures(target, 1, &m_gl_name);
+        if (!for_texture_view) {
+            gl::create_textures(target, 1, &m_gl_name);
+        } else {
+            gl::gen_textures(1, &m_gl_name);
+        }
     }
     ERHE_VERIFY((wrap_name == 0) || (m_gl_name != 0));
 }

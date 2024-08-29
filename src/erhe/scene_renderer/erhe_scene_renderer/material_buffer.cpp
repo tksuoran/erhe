@@ -40,17 +40,14 @@ Material_interface::Material_interface(erhe::graphics::Instance& graphics_instan
     material_block.set_readonly(true);
 }
 
-Material_buffer::Material_buffer(
-    erhe::graphics::Instance& graphics_instance,
-    Material_interface&       material_interface
-)
+Material_buffer::Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface)
     : Multi_buffer        {graphics_instance, "material"}
     , m_graphics_instance {graphics_instance}
     , m_material_interface{material_interface}
 {
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest,
+            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Material_buffer nearest"
         }
@@ -58,7 +55,7 @@ Material_buffer::Material_buffer(
 
     m_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear,
+            .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
             .debug_label = "Material_buffer linear"
         }

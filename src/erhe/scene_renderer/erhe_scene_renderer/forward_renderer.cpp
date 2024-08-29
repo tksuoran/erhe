@@ -38,7 +38,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, 
     , m_primitive_buffers    {graphics_instance, program_interface.primitive_interface}
     , m_nearest_sampler{
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest,
+            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Forward_aer nearest"
         }

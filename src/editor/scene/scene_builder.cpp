@@ -111,6 +111,7 @@ Scene_builder::Scene_builder(
     Editor_scenes&                  editor_scenes,
     Editor_settings&                editor_settings,
     Mesh_memory&                    mesh_memory,
+    Post_processing&                post_processing,
     Tools&                          tools,
     Scene_views&                    scene_views
 )
@@ -138,6 +139,7 @@ Scene_builder::Scene_builder(
         rendergraph,
         editor_rendering,
         editor_settings,
+        post_processing,
         tools,
         scene_views
     );
@@ -271,6 +273,7 @@ void Scene_builder::setup_cameras(
     erhe::rendergraph::Rendergraph& rendergraph,
     Editor_rendering&               editor_rendering,
     Editor_settings&                editor_settings,
+    Post_processing&                post_processing,
     Tools&                          tools,
     Scene_views&                    scene_views
 )
@@ -312,6 +315,7 @@ void Scene_builder::setup_cameras(
         rendergraph,
         editor_rendering,
         editor_settings,
+        post_processing,
         tools,
         "Primary Viewport_scene_view",
         m_scene_root,
@@ -705,8 +709,8 @@ void Scene_builder::add_room()
     auto& material_library = m_scene_root->content_library()->materials;
     auto floor_material = material_library->make<erhe::primitive::Material>(
         "Floor",
-        //vec4{0.02f, 0.02f, 0.02f, 1.0f},
-        vec4{0.01f, 0.01f, 0.01f, 1.0f},
+        vec4{0.02f, 0.02f, 0.02f, 1.0f},
+        //vec4{0.01f, 0.01f, 0.01f, 1.0f},
         glm::vec2{0.9f, 0.9f},
         0.01f
     );
@@ -745,7 +749,7 @@ void Scene_builder::add_curved_shapes(const Make_mesh_config& config)
     make_mesh_nodes(config, brushes);
 }
 
-void Scene_builder::add_torus_chain(const Make_mesh_config& config)
+void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connected)
 {
     const float major_radius = 1.0f  * config.object_scale;
     const float minor_radius = 0.25f * config.object_scale;
@@ -758,7 +762,9 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config)
     float y = major_radius + minor_radius;
     float z = 0.0f;
 
-    float x_stride = major_radius - 2.0f * minor_radius + major_radius;
+    float x_stride = connected 
+        ? major_radius - 2.0f * minor_radius + major_radius
+        : 3 * major_radius;
     glm::mat4 alternate_rotate[2] = {
         glm::mat4{1.0f},
         erhe::math::create_rotation<float>(glm::pi<float>() / 2.0f, glm::vec3{1.0f, 0.0f, 0.0f})
@@ -770,7 +776,7 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config)
             .node_flags      = Item_flags::show_in_ui | Item_flags::visible | Item_flags::content,
             .mesh_flags      = Item_flags::show_in_ui | Item_flags::visible | Item_flags::opaque | Item_flags::content | Item_flags::id | Item_flags::shadow_cast,
             .scene_root      = m_scene_root.get(),
-            .world_from_node = erhe::math::create_translation(x, y, z) * alternate_rotate[i & 1],
+            .world_from_node = erhe::math::create_translation(x, y, z) * alternate_rotate[connected ? (i & 1) : 0],
             .material        = config.material ? config.material : materials.at(material_index),
             .scale           = config.object_scale
         };

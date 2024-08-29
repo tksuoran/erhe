@@ -100,8 +100,7 @@ void Renderpass::render(const Render_context& context) const
         (render_style != nullptr) &&
         !render_style->is_primitive_mode_enabled(this->primitive_mode)
     ) {
-        //// XXX TODO
-        log_composer->warn("primitive mode is not enabled - skipping");
+        log_composer->trace("primitive mode is not enabled - skipping");
         return;
     }
 

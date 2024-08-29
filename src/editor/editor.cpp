@@ -284,7 +284,7 @@ public:
         , m_editor_windows        {m_editor_context}
         , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_editor_context, m_editor_settings.icons, m_programs}
-        , m_post_processing       {m_graphics_instance, m_editor_context,    m_programs}
+        , m_post_processing       {m_graphics_instance, m_editor_context}
         , m_id_renderer           {m_graphics_instance, m_program_interface, m_mesh_memory,     m_programs}
         , m_composer_window       {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_selection_window      {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
@@ -329,6 +329,7 @@ public:
             m_editor_scenes,
             m_editor_settings,
             m_mesh_memory,
+            m_post_processing,
             m_tools,
             m_viewport_scene_views
         }

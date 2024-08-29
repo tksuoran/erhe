@@ -21,10 +21,7 @@ Reloadable_shader_stages::Reloadable_shader_stages(const std::string& non_functi
 {
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(
-    Instance&                        graphics_instance,
-    const Shader_stages_create_info& create_info
-)
+Reloadable_shader_stages::Reloadable_shader_stages(Instance& graphics_instance, const Shader_stages_create_info& create_info)
     : create_info  {create_info}
     , shader_stages{make_prototype(graphics_instance)}
 {
@@ -74,12 +71,7 @@ auto Shader_stages::gl_name() const -> unsigned int
 Shader_stages::Shader_stages(const std::string& failed_name)
 {
     std::string label = fmt::format("(P:{}) {} - compilation failed", gl_name(), failed_name);
-    gl::object_label(
-        gl::Object_identifier::program,
-        gl_name(),
-        static_cast<GLsizei>(label.length()),
-        label.c_str()
-    );
+    gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
 }
 
 Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
@@ -90,18 +82,8 @@ Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
     m_handle   = std::move(prototype.m_handle);
     m_is_valid = true;
 
-    std::string label = fmt::format(
-        "(P:{}) {}{}",
-        gl_name(),
-        m_name,
-        prototype.is_valid() ? "" : " (Failed)"
-    );
-    gl::object_label(
-        gl::Object_identifier::program,
-        gl_name(),
-        static_cast<GLsizei>(label.length()),
-        label.c_str()
-    );
+    std::string label = fmt::format("(P:{}) {}{}", gl_name(), m_name, prototype.is_valid() ? "" : " (Failed)");
+    gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
 }
 
 auto Shader_stages::is_valid() const -> bool
@@ -116,10 +98,7 @@ void Shader_stages::invalidate()
 
 void Shader_stages::reload(Shader_stages_prototype&& prototype)
 {
-    if (
-        !prototype.is_valid() ||
-        (prototype.m_handle.gl_name() == 0)
-    ) {
+    if (!prototype.is_valid() || (prototype.m_handle.gl_name() == 0)) {
         invalidate();
         return;
     }
@@ -154,9 +133,7 @@ void Shader_stages_tracker::reset()
 
 void Shader_stages_tracker::execute(const Shader_stages* state)
 {
-    unsigned int name = (state != nullptr)
-        ? state->gl_name()
-        : 0;
+    unsigned int name = (state != nullptr) ? state->gl_name() : 0;
     if (m_last == name) {
         return;
     }

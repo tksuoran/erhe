@@ -374,12 +374,12 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
 
     // Create samplers
     , m_nearest_sampler{{
-        .min_filter  = gl::Texture_min_filter::nearest,
+        .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
         .mag_filter  = gl::Texture_mag_filter::nearest,
         .debug_label = "Imgui_renderer nearest"
     }}
     , m_linear_sampler{{
-        .min_filter  = gl::Texture_min_filter::linear,
+        .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
         .mag_filter  = gl::Texture_mag_filter::linear,
         .debug_label = "Imgui_renderer linear"
     }}
@@ -731,10 +731,7 @@ auto Imgui_renderer::image_button(
     ImGui::ImageButtonEx(
         id,
         handle,
-        ImVec2{
-            static_cast<float>(width),
-            static_cast<float>(height)
-        },
+        ImVec2{static_cast<float>(width), static_cast<float>(height)},
         uv0,
         uv1,
         from_glm(background_color),

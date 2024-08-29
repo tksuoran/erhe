@@ -12,6 +12,7 @@ namespace erhe::graphics {
 class Buffer;
 class Instance;
 class Sampler;
+class Texture;
 
 class Texture_create_info
 {
@@ -20,21 +21,27 @@ public:
 
     [[nodiscard]] auto calculate_level_count() const -> int;
 
-    Instance&           instance;
-    gl::Texture_target  target                {gl::Texture_target::texture_2d};
-    gl::Internal_format internal_format       {gl::Internal_format::rgba8};
-    bool                use_mipmaps           {false};
-    bool                fixed_sample_locations{true};
-    bool                sparse                {false};
-    int                 sample_count          {0};
-    int                 width                 {1};
-    int                 height                {1};
-    int                 depth                 {1};
-    int                 level_count           {0};
-    int                 row_stride            {0};
-    Buffer*             buffer                {nullptr};
-    GLuint              wrap_texture_name     {0};
-    std::string         debug_label;
+    static auto make_view(Instance& instance, const std::shared_ptr<Texture>& view_source) -> Texture_create_info;
+
+    Instance&                instance;
+    gl::Texture_target       target                {gl::Texture_target::texture_2d};
+    gl::Internal_format      internal_format       {gl::Internal_format::rgba8};
+    bool                     use_mipmaps           {false};
+    bool                     fixed_sample_locations{true};
+    bool                     sparse                {false};
+    int                      sample_count          {0};
+    int                      width                 {1};
+    int                      height                {1};
+    int                      depth                 {1};
+    int                      level_count           {0};
+    int                      row_stride            {0};
+    Buffer*                  buffer                {nullptr};
+    GLuint                   wrap_texture_name     {0};
+    std::string              debug_label;
+    std::shared_ptr<Texture> view_source           {};
+    int                      view_min_level        {0};
+    int                      view_min_layer        {0};
+    // TODO layer_count?
 };
 
 class Texture : public erhe::Item<erhe::Item_base, erhe::Item_base, Texture, erhe::Item_kind::not_clonable>
@@ -89,17 +96,19 @@ public:
 
     void set_debug_label(std::string_view value);
 
-    [[nodiscard]] auto debug_label         () const -> const std::string&;
-    [[nodiscard]] auto width               () const -> int;
-    [[nodiscard]] auto height              () const -> int;
-    [[nodiscard]] auto internal_format     () const -> gl::Internal_format;
-    [[nodiscard]] auto depth               () const -> int;
-    [[nodiscard]] auto sample_count        () const -> int;
-    [[nodiscard]] auto target              () const -> gl::Texture_target;
-    [[nodiscard]] auto is_layered          () const -> bool;
-    [[nodiscard]] auto gl_name             () const -> GLuint;
-    [[nodiscard]] auto get_handle          () const -> uint64_t;
-    [[nodiscard]] auto is_sparse           () const -> bool;
+    [[nodiscard]] auto debug_label           () const -> const std::string&;
+    [[nodiscard]] auto width                 () const -> int;
+    [[nodiscard]] auto height                () const -> int;
+    [[nodiscard]] auto internal_format       () const -> gl::Internal_format;
+    [[nodiscard]] auto depth                 () const -> int;
+    [[nodiscard]] auto level_count           () const -> int;
+    [[nodiscard]] auto fixed_sample_locations() const -> int;
+    [[nodiscard]] auto sample_count          () const -> int;
+    [[nodiscard]] auto target                () const -> gl::Texture_target;
+    [[nodiscard]] auto is_layered            () const -> bool;
+    [[nodiscard]] auto gl_name               () const -> GLuint;
+    [[nodiscard]] auto get_handle            () const -> uint64_t;
+    [[nodiscard]] auto is_sparse             () const -> bool;
     //// [[nodiscard]] auto get_sparse_tile_size() const -> Tile_size;
 
     [[nodiscard]] auto is_shown_in_ui() const -> bool;

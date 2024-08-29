@@ -34,9 +34,9 @@ Imgui_window::~Imgui_window() noexcept
     m_imgui_windows.unregister_imgui_window(this);
 }
 
-void Imgui_window::draw_image(const std::shared_ptr<erhe::graphics::Texture>& texture, const int width, const int height)
+void Imgui_window::draw_image(const std::shared_ptr<erhe::graphics::Texture>& texture, const int width, const int height, const bool linear)
 {
-    m_imgui_renderer.image(texture, width, height, glm::vec2{0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}, glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, true);
+    m_imgui_renderer.image(texture, width, height, glm::vec2{0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}, glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, linear);
 }
 
 auto Imgui_window::get_imgui_host() const -> Imgui_host*

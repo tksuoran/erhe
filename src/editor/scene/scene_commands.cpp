@@ -332,6 +332,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         *m_context.rendergraph,
         *m_context.editor_rendering,
         *m_context.editor_settings,
+        *m_context.post_processing,
         *m_context.tools,
         "rt scene view",
         scene_root->shared_from_this(),

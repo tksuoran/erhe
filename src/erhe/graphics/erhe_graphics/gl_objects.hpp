@@ -9,8 +9,10 @@ namespace erhe::graphics {
 class Gl_texture final
 {
 public:
-    explicit Gl_texture(gl::Texture_target target);
-    Gl_texture         (gl::Texture_target target, GLuint wrap_name);
+    static constexpr bool not_texture_view = false;
+    static constexpr bool texture_view     = true;
+    explicit Gl_texture(gl::Texture_target target, bool for_texture_view = not_texture_view);
+    Gl_texture         (gl::Texture_target target, GLuint wrap_name, bool for_texture_view = not_texture_view);
     ~Gl_texture        () noexcept;
     Gl_texture         (const Gl_texture&) = delete;
     void operator=     (const Gl_texture&) = delete;

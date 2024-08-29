@@ -81,6 +81,7 @@ public:
         erhe::rendergraph::Rendergraph&             rendergraph,
         Editor_rendering&                           editor_rendering,
         Editor_settings&                            editor_settings,
+        Post_processing&                            post_processing,
         Tools&                                      tools,
         const std::string_view                      name,
         const std::shared_ptr<Scene_root>&          scene_root,

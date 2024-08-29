@@ -45,7 +45,7 @@ public:
     void show_window             ();
     void hide_window             ();
     void toggle_window_visibility();
-    void draw_image              (const std::shared_ptr<erhe::graphics::Texture>& texture, int width, int height);
+    void draw_image              (const std::shared_ptr<erhe::graphics::Texture>& texture, int width, int height, bool linear = false);
 
     auto get_imgui_host() const -> Imgui_host*;
     virtual void set_imgui_host(Imgui_host* imgui_host);

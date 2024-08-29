@@ -292,6 +292,7 @@ void main()
     vec3  N       = normalize(v_TBN[2]);
     mat3  TBN     = mat3(T, B, N);
     mat3  TBN_t   = transpose(TBN);
+
     float N_dot_V = clamped_dot(N, V);
 
     Material material = material.materials[v_material_index];

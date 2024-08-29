@@ -30,14 +30,14 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
 
     , nearest_sampler{
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest,
+            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Programs nearest"
         }
     }
     , linear_sampler{
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear,
+            .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
             .debug_label = "Programs linear"
         }

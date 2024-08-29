@@ -24,11 +24,10 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
-#include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_renderer/line_renderer.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_renderer/text_renderer.hpp"
@@ -664,7 +663,6 @@ void Editor_rendering::end_frame()
     m_context.headset_view->end_frame();
 #endif
 
-    m_context.post_processing  ->next_frame();
     m_context.line_renderer_set->next_frame();
     m_context.text_renderer    ->next_frame();
     m_context.forward_renderer ->next_frame();

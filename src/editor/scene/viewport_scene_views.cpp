@@ -137,6 +137,7 @@ auto Scene_views::create_viewport_scene_view(
     erhe::rendergraph::Rendergraph&             rendergraph,
     Editor_rendering&                           editor_rendering,
     Editor_settings&                            editor_settings,
+    Post_processing&                            post_processing,
     Tools&                                      tools,
     const std::string_view                      name,
     const std::shared_ptr<Scene_root>&          scene_root,
@@ -198,11 +199,7 @@ auto Scene_views::create_viewport_scene_view(
             erhe::rendergraph::Rendergraph_node_key::viewport
         );
         new_viewport_window->link_to(multisample_resolve_node);
-        rendergraph.connect(
-            erhe::rendergraph::Rendergraph_node_key::viewport,
-            new_viewport_window.get(),
-            multisample_resolve_node.get()
-        );
+        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport, new_viewport_window.get(), multisample_resolve_node.get());
         previous_node = multisample_resolve_node;
     } else {
         log_post_processing->trace("Multisample is disabled (not added to rendergraph)");
@@ -213,16 +210,13 @@ auto Scene_views::create_viewport_scene_view(
     if (enable_post_processing) {
         log_post_processing->trace("Adding post processing node to rendergraph");
         auto post_processing_node = std::make_shared<Post_processing_node>(
+            graphics_instance,
             rendergraph,
-            m_context,
+            post_processing,
             fmt::format("Post processing for {}", name)
         );
         new_viewport_window->link_to(post_processing_node);
-        rendergraph.connect(
-            erhe::rendergraph::Rendergraph_node_key::viewport,
-            previous_node.get(),
-            post_processing_node.get()
-        );
+        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport, previous_node.get(), post_processing_node.get());
         new_viewport_window->set_final_output(post_processing_node);
     } else {
         log_post_processing->trace("Post processing is disabled (not added to rendergraph)");
@@ -314,6 +308,7 @@ auto Scene_views::open_new_viewport_scene_view(const std::shared_ptr<Scene_root>
                     *m_context.rendergraph,
                     *m_context.editor_rendering,
                     *m_context.editor_settings,
+                    *m_context.post_processing,
                     *m_context.tools,
                     name,
                     scene_root,
@@ -330,6 +325,7 @@ auto Scene_views::open_new_viewport_scene_view(const std::shared_ptr<Scene_root>
                 *m_context.rendergraph,
                 *m_context.editor_rendering,
                 *m_context.editor_settings,
+                *m_context.post_processing,
                 *m_context.tools,
                 name,
                 scene_root,
@@ -345,6 +341,7 @@ auto Scene_views::open_new_viewport_scene_view(const std::shared_ptr<Scene_root>
         *m_context.rendergraph,
         *m_context.editor_rendering,
         *m_context.editor_settings,
+        *m_context.post_processing,
         *m_context.tools,
         name,
         {},

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/framebuffer.hpp"
@@ -9,18 +8,11 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_imgui/imgui_window.hpp"
 #include "erhe_renderer/buffer_writer.hpp"
-#include "erhe_renderer/multi_buffer.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 
-#include <fmt/format.h>
-
-#include <string>
-#include <deque>
+#include <string_view>
 
 namespace erhe::graphics {
     class Texture;
@@ -29,39 +21,20 @@ namespace erhe::scene_renderer {
     class Program_interface;
 }
 
-namespace editor
-{
+namespace editor {
 
 class Editor_context;
-class Post_processing_node;
 class Post_processing;
 class Programs;
 
-class Downsample_node
-{
-public:
-    Downsample_node(
-        erhe::graphics::Instance& graphics_instance,
-        const std::string&        label,
-        int                       width,
-        int                       height,
-        int                       axis
-    );
 
-    void bind_framebuffer() const;
-
-    std::shared_ptr<erhe::graphics::Texture>     texture;
-    std::shared_ptr<erhe::graphics::Framebuffer> framebuffer;
-    int                                          axis{0};
-};
-
-/// Rendergraph_node for applying bloom and tonemap.
 class Post_processing_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     Post_processing_node(
+        erhe::graphics::Instance&       graphics_instance,
         erhe::rendergraph::Rendergraph& rendergraph,
-        Editor_context&                 editor_context,
+        Post_processing&                post_processing,
         const std::string_view          name
     );
 
@@ -73,7 +46,7 @@ public:
     auto get_consumer_input_texture(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
 
     // Overridden to provide framebuffer from the first downsample node
-    auto get_consumer_input_framebuffer(erhe::rendergraph::Routing resource_routing, int key, int depth = 0 ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_consumer_input_framebuffer(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
 
     // Override so that size is always sources from output
     auto get_consumer_input_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
@@ -81,33 +54,70 @@ public:
     // Public API
     void viewport_toolbar();
 
-    // For Post_processing
-    [[nodiscard]] auto get_downsample_nodes() -> const std::vector<Downsample_node>&;
+    auto update_size() -> bool;
 
-private:
-    auto update_downsample_nodes(erhe::graphics::Instance& graphics_instance) -> bool;
+    void update_parameters();
 
-    Editor_context& m_context;
+    erhe::graphics::Instance& graphics_instance;
+    Post_processing&          post_processing;
 
-    std::vector<Downsample_node> m_downsample_nodes;
-    int                          m_width  {0};
-    int                          m_height {0};
+    float                                                     upsample_radius{1.0f};
+    std::shared_ptr<erhe::graphics::Texture>                  downsample_texture;
+    std::shared_ptr<erhe::graphics::Texture>                  upsample_texture;
+    std::vector<std::shared_ptr<erhe::graphics::Framebuffer>> downsample_framebuffers;
+    std::vector<std::shared_ptr<erhe::graphics::Framebuffer>> upsample_framebuffers;
+    std::vector<std::shared_ptr<erhe::graphics::Texture>>     downsample_texture_views;
+    std::vector<std::shared_ptr<erhe::graphics::Texture>>     upsample_texture_views;
+    std::vector<int>                                          level_widths;
+    std::vector<int>                                          level_heights;
+    std::vector<size_t>                                       downsample_source_levels;
+    std::vector<size_t>                                       upsample_source_levels;
+    std::vector<float>                                        weights;
+    int                                                       level0_width  {0};
+    int                                                       level0_height {0};
+    erhe::graphics::Buffer                                    parameter_buffer;
+    float                                                     tonemap_luminance_max{1.5f};
+    float                                                     tonemap_alpha{1.0f / 1.5f};
+    int                                                       lowpass_count{2};
 };
 
 class Post_processing
 {
 public:
-    Post_processing(
-        erhe::graphics::Instance& graphics_instance,
-        Editor_context&           editor_context,
-        Programs&                 programs
-    );
+    class Offsets
+    {
+    public:
+        Offsets(erhe::graphics::Shader_resource& block);
+
+        std::size_t downsample_texture   {0}; // uvec2
+        std::size_t upsample_texture     {0}; // uvec2
+
+        std::size_t texel_scale          {0}; // vec2
+        std::size_t source_lod           {0}; // float
+        std::size_t level_count          {0}; // float
+
+        std::size_t upsample_radius      {0}; // float
+        std::size_t mix_weight           {0}; // float
+        std::size_t tonemap_luminance_max{0}; // float
+        std::size_t tonemap_alpha        {0}; // float
+    };
+
+    Post_processing(erhe::graphics::Instance& graphics_instance, Editor_context& editor_context);
 
     // Public API
-    [[nodiscard]] auto create_node(erhe::rendergraph::Rendergraph& rendergraph, std::string_view name) -> std::shared_ptr<Post_processing_node>;
-    [[nodiscard]] auto get_nodes  () -> const std::vector<std::shared_ptr<Post_processing_node>>&;
+    [[nodiscard]] auto create_node(
+        erhe::graphics::Instance&       graphics_instance,
+        erhe::rendergraph::Rendergraph& rendergraph,
+        std::string_view                name
+    ) -> std::shared_ptr<Post_processing_node>;
+
+    [[nodiscard]] auto get_nodes() -> const std::vector<std::shared_ptr<Post_processing_node>>&;
     void post_process(Post_processing_node& node);
     void next_frame  ();
+
+    auto get_offsets        () const -> const Offsets&                         { return m_offsets; }
+    auto get_parameter_block() const -> const erhe::graphics::Shader_resource& { return m_parameter_block; }
+    auto get_sampler        () const -> const erhe::graphics::Sampler&         { return m_linear_mipmap_nearest_sampler; }
 
 private:
     [[nodiscard]] auto make_program(
@@ -116,47 +126,31 @@ private:
         const std::filesystem::path& fs_path
     ) -> erhe::graphics::Shader_stages_create_info;
 
-    void downsample(
-        const erhe::graphics::Texture*  source_texture,
-        const Downsample_node&          node,
-        const erhe::graphics::Pipeline& pipeline
-    );
-    void compose               (Post_processing_node& node);
-    void create_frame_resources();
-
-    class Offsets
-    {
-    public:
-        Offsets(erhe::graphics::Shader_resource& block, std::size_t source_texture_count);
-
-        std::size_t texel_scale   {0}; // float
-        std::size_t texture_count {0}; // uint
-        std::size_t reserved0     {0}; // float
-        std::size_t reserved1     {0}; // float
-        std::size_t source_texture{0}; // uvec2[source_texture_count]
-    };
-
     Editor_context&                                    m_context;
     std::vector<std::shared_ptr<Post_processing_node>> m_nodes;
     erhe::graphics::Fragment_outputs                   m_fragment_outputs;
     std::shared_ptr<erhe::graphics::Texture>           m_dummy_texture;
-    erhe::graphics::Sampler&                           m_linear_sampler;
-    erhe::graphics::Sampler&                           m_nearest_sampler;
-    erhe::renderer::Multi_buffer                       m_parameter_buffer;
+    erhe::graphics::Sampler                            m_linear_mipmap_nearest_sampler;
     erhe::graphics::Shader_resource                    m_parameter_block;
-    std::size_t                                        m_source_texture_count;
     Offsets                                            m_offsets;
     erhe::graphics::Vertex_input_state                 m_empty_vertex_input;
-    erhe::graphics::Shader_resource                    m_default_uniform_block;              // containing sampler uniforms for non bindless textures
-    const erhe::graphics::Shader_resource*             m_downsample_source_texture_resource; // for non bindless textures
-    const erhe::graphics::Shader_resource*             m_compose_source_textures_resource;   // for non bindless textures
+    erhe::graphics::Shader_resource                    m_default_uniform_block;       // containing sampler uniforms for non bindless textures
+    const erhe::graphics::Shader_resource*             m_downsample_texture_resource; // for non bindless textures
+    const erhe::graphics::Shader_resource*             m_upsample_texture_resource;   // for non bindless textures
     std::filesystem::path                              m_shader_path;
-    erhe::graphics::Reloadable_shader_stages           m_downsample_x_shader_stages;
-    erhe::graphics::Reloadable_shader_stages           m_downsample_y_shader_stages;
-    erhe::graphics::Reloadable_shader_stages           m_compose_shader_stages;
-    erhe::graphics::Pipeline                           m_downsample_x_pipeline;
-    erhe::graphics::Pipeline                           m_downsample_y_pipeline;
-    erhe::graphics::Pipeline                           m_compose_pipeline;
+
+    struct Shader_stages {
+        erhe::graphics::Reloadable_shader_stages   downsample_with_lowpass;
+        erhe::graphics::Reloadable_shader_stages   downsample;
+        erhe::graphics::Reloadable_shader_stages   upsample;
+    }                                                  m_shader_stages;
+
+    struct Pipelines {
+        erhe::graphics::Pipeline                   downsample_with_lowpass;
+        erhe::graphics::Pipeline                   downsample;
+        erhe::graphics::Pipeline                   upsample;
+    }                                                  m_pipelines;
+
     erhe::graphics::Gpu_timer                          m_gpu_timer;
 };
 

@@ -10,13 +10,13 @@ namespace erhe::graphics {
 class Sampler_create_info
 {
 public:
-    gl::Texture_min_filter               min_filter    {gl::Texture_min_filter::nearest};
+    gl::Texture_min_filter               min_filter    {gl::Texture_min_filter::nearest_mipmap_nearest};
     gl::Texture_mag_filter               mag_filter    {gl::Texture_mag_filter::nearest};
 
     std::array<gl::Texture_wrap_mode, 3> wrap_mode{
-        gl::Texture_wrap_mode::clamp_to_border,
-        gl::Texture_wrap_mode::clamp_to_border,
-        gl::Texture_wrap_mode::clamp_to_border
+        gl::Texture_wrap_mode::clamp_to_edge,
+        gl::Texture_wrap_mode::clamp_to_edge,
+        gl::Texture_wrap_mode::clamp_to_edge
     };
     gl::Texture_compare_mode             compare_mode  {gl::Texture_compare_mode::none};
     gl::Texture_compare_func             compare_func  {gl::Texture_compare_func::lequal};
@@ -43,7 +43,7 @@ public:
     [[nodiscard]] auto debug_label () const -> const std::string&;
     [[nodiscard]] auto uses_mipmaps() const -> bool;
 
-    gl::Texture_min_filter               min_filter    {gl::Texture_min_filter::nearest};
+    gl::Texture_min_filter               min_filter    {gl::Texture_min_filter::nearest_mipmap_nearest};
     gl::Texture_mag_filter               mag_filter    {gl::Texture_mag_filter::nearest};
 
     std::array<gl::Texture_wrap_mode, 3> wrap_mode{

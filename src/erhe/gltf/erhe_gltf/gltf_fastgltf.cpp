@@ -990,7 +990,7 @@ private:
         log_gltf->trace("Sampler: sampler index = {}, name = {}", sampler_index, sampler_name);
 
         erhe::graphics::Sampler_create_info create_info;
-        create_info.min_filter     = sampler.minFilter.has_value() ? static_cast<gl::Texture_min_filter>(sampler.minFilter.value()) : gl::Texture_min_filter::nearest;
+        create_info.min_filter     = sampler.minFilter.has_value() ? static_cast<gl::Texture_min_filter>(sampler.minFilter.value()) : gl::Texture_min_filter::nearest_mipmap_nearest;
         create_info.mag_filter     = sampler.magFilter.has_value() ? static_cast<gl::Texture_mag_filter>(sampler.magFilter.value()) : gl::Texture_mag_filter::nearest;
         create_info.wrap_mode[0]   = static_cast<gl::Texture_wrap_mode>(sampler.wrapS);
         create_info.wrap_mode[1]   = static_cast<gl::Texture_wrap_mode>(sampler.wrapT);

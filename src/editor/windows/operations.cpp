@@ -147,7 +147,10 @@ void Operations::imgui()
             m_context.scene_builder->add_curved_shapes(m_make_mesh_config);
         }
         if (erhe::imgui::make_button("Chain", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_torus_chain(m_make_mesh_config);
+            m_context.scene_builder->add_torus_chain(m_make_mesh_config, true);
+        }
+        if (erhe::imgui::make_button("Toruses", erhe::imgui::Item_mode::normal, button_size)) {
+            m_context.scene_builder->add_torus_chain(m_make_mesh_config, false);
         }
         ImGui::TreePop();
     }

@@ -79,6 +79,7 @@ public:
         Editor_scenes&                  editor_scenes,
         Editor_settings&                editor_settings,
         Mesh_memory&                    mesh_memory,
+        Post_processing&                post_processing,
         Tools&                          tools,
         Scene_views&                    scene_views
     );
@@ -96,7 +97,7 @@ public:
 
     void add_platonic_solids(const Make_mesh_config& config);
     void add_curved_shapes  (const Make_mesh_config& config);
-    void add_torus_chain    (const Make_mesh_config& config);
+    void add_torus_chain    (const Make_mesh_config& config, bool connected);
 
 private:
     auto make_directional_light(
@@ -140,6 +141,7 @@ private:
         erhe::rendergraph::Rendergraph& rendergraph,
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings,
+        Post_processing&                post_processing,
         Tools&                          tools,
         Scene_views&                    scene_views
     );
