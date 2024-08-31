@@ -15,7 +15,6 @@
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_graphics/vertex_format.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"

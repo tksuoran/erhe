@@ -151,21 +151,21 @@ auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_
     ERHE_VERIFY(input_event.handled == false);
     switch (input_event.type) {
         case Input_event_type::no_event               : break;
-        case Input_event_type::key_event              : input_event.handled = on_key_event              (input_event.u.key_event); break;
-        case Input_event_type::char_event             : input_event.handled = on_char_event             (input_event.u.char_event); break;
-        case Input_event_type::window_focus_event     : input_event.handled = on_window_focus_event     (input_event.u.window_focus_event); break;
-        case Input_event_type::cursor_enter_event     : input_event.handled = on_cursor_enter_event     (input_event.u.cursor_enter_event); break;
-        case Input_event_type::mouse_move_event       : input_event.handled = on_mouse_move_event       (input_event.u.mouse_move_event); break;
-        case Input_event_type::mouse_button_event     : input_event.handled = on_mouse_button_event     (input_event.u.mouse_button_event); break;
-        case Input_event_type::mouse_wheel_event      : input_event.handled = on_mouse_wheel_event      (input_event.u.mouse_wheel_event); break;
-        case Input_event_type::controller_axis_event  : input_event.handled = on_controller_axis_event  (input_event.u.controller_axis_event); break;
-        case Input_event_type::controller_button_event: input_event.handled = on_controller_button_event(input_event.u.controller_button_event); break;
-        case Input_event_type::window_resize_event    : input_event.handled = on_window_resize_event    (input_event.u.window_resize_event); break;
-        case Input_event_type::window_close_event     : input_event.handled = on_window_close_event     (input_event.u.window_close_event); break;
-        case Input_event_type::window_refresh_event   : input_event.handled = on_window_refresh_event   (input_event.u.window_refresh_event); break;
-        case Input_event_type::xr_boolean_event       : input_event.handled = on_xr_boolean_event       (input_event.u.xr_boolean_event); break;
-        case Input_event_type::xr_float_event         : input_event.handled = on_xr_float_event         (input_event.u.xr_float_event); break;
-        case Input_event_type::xr_vector2f_event      : input_event.handled = on_xr_vector2f_event      (input_event.u.xr_vector2f_event); break;
+        case Input_event_type::key_event              : input_event.handled = on_key_event              (input_event); break;
+        case Input_event_type::char_event             : input_event.handled = on_char_event             (input_event); break;
+        case Input_event_type::window_focus_event     : input_event.handled = on_window_focus_event     (input_event); break;
+        case Input_event_type::cursor_enter_event     : input_event.handled = on_cursor_enter_event     (input_event); break;
+        case Input_event_type::mouse_move_event       : input_event.handled = on_mouse_move_event       (input_event); break;
+        case Input_event_type::mouse_button_event     : input_event.handled = on_mouse_button_event     (input_event); break;
+        case Input_event_type::mouse_wheel_event      : input_event.handled = on_mouse_wheel_event      (input_event); break;
+        case Input_event_type::controller_axis_event  : input_event.handled = on_controller_axis_event  (input_event); break;
+        case Input_event_type::controller_button_event: input_event.handled = on_controller_button_event(input_event); break;
+        case Input_event_type::window_resize_event    : input_event.handled = on_window_resize_event    (input_event); break;
+        case Input_event_type::window_close_event     : input_event.handled = on_window_close_event     (input_event); break;
+        case Input_event_type::window_refresh_event   : input_event.handled = on_window_refresh_event   (input_event); break;
+        case Input_event_type::xr_boolean_event       : input_event.handled = on_xr_boolean_event       (input_event); break;
+        case Input_event_type::xr_float_event         : input_event.handled = on_xr_float_event         (input_event); break;
+        case Input_event_type::xr_vector2f_event      : input_event.handled = on_xr_vector2f_event      (input_event); break;
         default: break;
     }
     return input_event.handled;

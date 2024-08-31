@@ -18,14 +18,8 @@ auto Mouse_motion_binding::on_motion(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
 
-    if (
-        m_modifier_mask.has_value() &&
-        m_modifier_mask.value() != input.modifier_mask
-    ) {
-        log_input_event_filtered->trace(
-            "{} rejected motion due to modifier mask mismatch",
-            command->get_name()
-        );
+    if (m_modifier_mask.has_value() && (m_modifier_mask.value() != input.modifier_mask)) {
+        log_input_event_filtered->trace("{} rejected motion due to modifier mask mismatch", command->get_name());
         return false;
     }
 

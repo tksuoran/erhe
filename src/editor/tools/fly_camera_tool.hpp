@@ -6,7 +6,11 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/windows/graph.hpp"
+#include "erhe_imgui/windows/graph_plotter.hpp"
 #include "erhe_window/window_event_handler.hpp" // keycode
+
+#include <random>
 
 namespace erhe::commands {
     class Commands;
@@ -24,6 +28,22 @@ class Editor_message_bus;
 class Fly_camera_tool;
 class Tools;
 class Scene_views;
+
+class Jitter
+{
+public:
+    Jitter();
+
+    void imgui();
+    void sleep();
+
+private:
+    int                                m_min{0};
+    int                                m_max{0};
+    std::random_device                 m_random_device;
+    std::default_random_engine         m_random_engine;
+    std::uniform_int_distribution<int> m_distribution;
+};
 
 class Fly_camera_turn_command : public erhe::commands::Command
 {
@@ -84,20 +104,20 @@ class Fly_camera_move_command : public erhe::commands::Command
 {
 public:
     Fly_camera_move_command(
-        erhe::commands::Commands&               commands,
-        Editor_context&                         context,
-        Variable                                variable,
-        erhe::math::Simulation_variable_control control,
-        bool                                    active
+        erhe::commands::Commands&      commands,
+        Editor_context&                context,
+        Variable                       variable,
+        erhe::math::Input_axis_control control,
+        bool                           active
     );
 
-    auto try_call() -> bool override;
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
-    Editor_context&                         m_context;
-    Variable                                m_variable;
-    erhe::math::Simulation_variable_control m_control;
-    bool                                    m_active;
+    Editor_context&                m_context;
+    Variable                       m_variable;
+    erhe::math::Input_axis_control m_control;
+    bool                           m_active;
 };
 
 class Fly_camera_variable_float_command : public erhe::commands::Command
@@ -119,8 +139,7 @@ private:
 };
 
 class Fly_camera_tool
-    : public Update_fixed_step
-    , public Update_once_per_frame
+    : public Update_once_per_frame
     , public erhe::imgui::Imgui_window
     , public Tool
 {
@@ -128,11 +147,10 @@ public:
     class Config
     {
     public:
-        bool  invert_x          {false};
-        bool  invert_y          {false};
-        float velocity_damp     {0.92f};
-        float velocity_max_delta{0.004f};
-        float sensitivity       {1.0f};
+        bool  invert_x  {false};
+        bool  invert_y  {false};
+        float move_power{1000.0f};
+        float turn_speed{   1.0f};
     };
     Config config;
 
@@ -151,31 +169,38 @@ public:
     // Implements Window
     void imgui() override;
 
-    void update_fixed_step    (const Time_context& time_context) override;
+    // Implements Update_once_per_frame
     void update_once_per_frame(const Time_context& time_context) override;
+    //void tick(std::chrono::steady_clock::time_point timestamp);
+
+    void on_frame_begin();
+    void on_frame_end();
 
     [[nodiscard]] auto get_camera() const -> erhe::scene::Camera*;
     void set_camera (erhe::scene::Camera* camera, erhe::scene::Node* node = nullptr);
-    void translation(int tx, int ty, int tz);
-    void rotation   (int rx, int ry, int rz);
+    void translation(std::chrono::steady_clock::time_point timestamp, int tx, int ty, int tz);
+    void rotation   (std::chrono::steady_clock::time_point timestamp, int rx, int ry, int rz);
 
     // Commands
     void on_hover_viewport_change();
     auto try_ready       () -> bool;
-    auto try_move        (Variable variable, erhe::math::Simulation_variable_control item, bool active) -> bool;
-    auto adjust          (Variable variable, float value) -> bool;
-    auto turn_relative   (float dx, float dy) -> bool;
+    auto try_move        (std::chrono::steady_clock::time_point timestamp, Variable variable, erhe::math::Input_axis_control item, bool active) -> bool;
+    auto adjust          (std::chrono::steady_clock::time_point timestamp, Variable variable, float value) -> bool;
+    auto turn_relative   (std::chrono::steady_clock::time_point timestamp, float dx, float dy) -> bool;
     auto try_start_tumble() -> bool;
-    auto tumble_relative (float dx, float dy) -> bool;
+    auto tumble_relative (std::chrono::steady_clock::time_point timestamp, float dx, float dy) -> bool;
     auto try_start_track () -> bool;
     auto track           () -> bool;
-    auto zoom            (float delta) -> bool;
+    auto zoom            (std::chrono::steady_clock::time_point timestamp, float delta) -> bool;
 
     void capture_pointer();
     void release_pointer();
 
+    void record_sample(std::chrono::steady_clock::time_point timestamp);
+
 private:
     void update_camera();
+    void show_input_axis_ui(erhe::math::Input_axis& input_axis) const;
 
     Fly_camera_turn_command           m_turn_command;
     Fly_camera_tumble_command         m_tumble_command;
@@ -208,15 +233,29 @@ private:
     std::optional<glm::vec3>          m_track_plane_normal;
 
     std::mutex                        m_mutex;
-    float                             m_sensitivity        {1.0f};
     bool                              m_use_viewport_camera{true};
     erhe::scene::Camera*              m_camera{nullptr};
     erhe::scene::Node*                m_node{nullptr};
 
-#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
-    Fly_camera_space_mouse_listener      m_space_mouse_listener;
-    erhe::window::Space_mouse_controller m_space_mouse_controller;
-#endif
+    class Event
+    {
+    public:
+        float x;
+        std::string text;
+    };
+
+    bool                                      m_recording{false};
+    std::chrono::steady_clock::time_point     m_recording_start_time{};
+    std::vector<Event>                        m_events;
+    bool                                      m_log_frame_update_details{false};
+    erhe::imgui::Graph<std::array<ImVec2, 2>> m_velocity_graph;
+    erhe::imgui::Graph<std::array<ImVec2, 2>> m_distance_graph;
+    erhe::imgui::Graph<std::array<ImVec2, 2>> m_distance_dt_graph;
+    erhe::imgui::Graph<std::array<ImVec2, 2>> m_state_time_graph; // t0 and t1
+    erhe::imgui::Graph<std::array<ImVec2, 2>> m_deltatime_graph;
+    erhe::imgui::Graph_plotter                m_graph_plotter;
+
+    Jitter m_jitter;
 };
 
 } // namespace editor

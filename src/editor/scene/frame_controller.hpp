@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_math/simulation_variable.hpp"
+#include "erhe_math/input_axis.hpp"
 
 #include "erhe_scene/node_attachment.hpp"
 
@@ -46,29 +46,33 @@ public:
 
     // Public API
     void reset                  ();
+    void on_frame_begin         ();
+    void on_frame_end           ();
     void update                 ();
-    void update_fixed_step      ();
+    void tick                   (std::chrono::steady_clock::time_point timestamp);
     void set_position           (const glm::vec3 position);
     void set_orientation        (const glm::mat4& orientation);
     void get_transform_from_node(erhe::scene::Node* node);
 
     void apply_rotation(float rx, float ry, float rz);
-    void apply_tumble(glm::vec3 pivot, float rx, float ry, float rz);
+    void apply_tumble  (glm::vec3 pivot, float rx, float ry, float rz);
 
     [[nodiscard]] auto get_position   () const -> glm::vec3;
     [[nodiscard]] auto get_orientation() const -> glm::mat4;
     [[nodiscard]] auto get_axis_x     () const -> glm::vec3;
     [[nodiscard]] auto get_axis_y     () const -> glm::vec3;
     [[nodiscard]] auto get_axis_z     () const -> glm::vec3;
-    [[nodiscard]] auto get_variable   (const Variable variable) -> erhe::math::Simulation_variable&;
+    [[nodiscard]] auto get_variable   (const Variable variable) -> erhe::math::Input_axis&;
+    [[nodiscard]] auto get_move_speed () const -> float;
 
-    erhe::math::Simulation_variable rotate_x;
-    erhe::math::Simulation_variable rotate_y;
-    erhe::math::Simulation_variable rotate_z;
-    erhe::math::Simulation_variable translate_x;
-    erhe::math::Simulation_variable translate_y;
-    erhe::math::Simulation_variable translate_z;
-    erhe::math::Simulation_variable speed_modifier;
+    erhe::math::Input_axis rotate_x;
+    erhe::math::Input_axis rotate_y;
+    erhe::math::Input_axis rotate_z;
+    erhe::math::Input_axis translate_x;
+    erhe::math::Input_axis translate_y;
+    erhe::math::Input_axis translate_z;
+    erhe::math::Input_axis speed_modifier;
+    float move_speed{1.0f};
 
 private:
     glm::vec3 m_position;

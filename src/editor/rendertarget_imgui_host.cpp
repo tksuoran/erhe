@@ -96,8 +96,9 @@ auto Rendertarget_imgui_host::get_scale_value() const -> float
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-auto Rendertarget_imgui_host::on_xr_boolean_event(const erhe::window::Xr_boolean_event& xr_boolean_event) -> bool
+auto Rendertarget_imgui_host::on_xr_boolean_event(const erhe::window::Input_event& input_event) -> bool
 {
+    const erhe::window::Xr_boolean_event& xr_boolean_event = input_event.u.xr_boolean_event;
     if (!m_has_cursor) {
         return false; // TODO Is this needed? Should not be.
     }
@@ -138,13 +139,13 @@ auto Rendertarget_imgui_host::on_xr_boolean_event(const erhe::window::Xr_boolean
     return false;
 }
 
-auto Rendertarget_imgui_host::on_xr_float_event(const erhe::window::Xr_float_event& xr_float_event) -> bool
+auto Rendertarget_imgui_host::on_xr_float_event(const erhe::window::Input_event&) -> bool
 {
-    static_cast<void>(xr_float_event); // TODO
+    // TODO
     return false;
 }
 
-auto Rendertarget_imgui_host::on_xr_vector2f_event(const erhe::window::Xr_vector2f_event& xr_vector2f_event) -> bool
+auto Rendertarget_imgui_host::on_xr_vector2f_event(const erhe::window::Input_event& input_event) -> bool
 {
     if (!m_has_cursor) {
         return false; // TODO Is this needed? Should not be.
@@ -158,11 +159,23 @@ auto Rendertarget_imgui_host::on_xr_vector2f_event(const erhe::window::Xr_vector
     if (r_thumbstick == nullptr) {
         return false;
     }
+    const erhe::window::Xr_vector2f_event& xr_vector2f_event = input_event.u.xr_vector2f_event;
     if (xr_vector2f_event.action != r_thumbstick) {
         return false;
     }
     if (xr_vector2f_event.x != 0.0f || xr_vector2f_event.y != 0.0f) {
-        on_mouse_wheel_event({xr_vector2f_event.x * 0.25f, xr_vector2f_event.y * 0.25f, 0});
+        erhe::window::Input_event mouse_wheel_event{
+            .type = erhe::window::Input_event_type::mouse_wheel_event,
+            .timestamp = input_event.timestamp,
+            .u = {
+                .mouse_wheel_event = {
+                    .x             = xr_vector2f_event.x * 0.25f,
+                    .y             = xr_vector2f_event.y * 0.25f,
+                    .modifier_mask = 0
+                }
+            }
+        };
+        on_mouse_wheel_event(mouse_wheel_event);
     }
     return true;
 }
@@ -188,13 +201,37 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     {
         if (pointer.has_value()) {
             if (!has_cursor()) {
-                on_cursor_enter_event(erhe::window::Cursor_enter_event{.entered = true});
+                on_cursor_enter_event(
+                    erhe::window::Input_event{
+                        .type = erhe::window::Input_event_type::cursor_enter_event,
+                        .timestamp = std::chrono::steady_clock::now(),
+                        .u = {
+                            .cursor_enter_event = {
+                                .entered = true
+                            }
+                        }
+                    }
+                );
             }
             const auto position = pointer.value();
             if ((m_last_mouse_x != position.x) || (m_last_mouse_y != position.y)) {
                 float dx = (m_last_mouse_x == -FLT_MAX) ? 0.0f : position.x - m_last_mouse_x;
                 float dy = (m_last_mouse_y == -FLT_MAX) ? 0.0f : position.y - m_last_mouse_y;
-                on_mouse_move_event({position.x, position.y, dx, dy, 0});
+                on_mouse_move_event(
+                    erhe::window::Input_event{
+                        .type = erhe::window::Input_event_type::mouse_move_event,
+                        .timestamp = std::chrono::steady_clock::now(),
+                        .u = {
+                            .mouse_move_event = {
+                                .x = position.x,
+                                .y = position.y,
+                                .dx = dx,
+                                .dy = dy,
+                                .modifier_mask = 0
+                            }
+                        }
+                    }
+                );
                 m_last_mouse_x = position.x;
                 m_last_mouse_y = position.y;
             }
@@ -210,10 +247,34 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
 
         } else {
             if (has_cursor()) {
-                on_cursor_enter_event(erhe::window::Cursor_enter_event{.entered = false});
+                on_cursor_enter_event(
+                    erhe::window::Input_event{
+                        .type = erhe::window::Input_event_type::cursor_enter_event,
+                        .timestamp = std::chrono::steady_clock::now(),
+                        .u = {
+                            .cursor_enter_event = {
+                                .entered = false
+                            }
+                        }
+                    }
+                );
                 m_last_mouse_x = -FLT_MAX;
                 m_last_mouse_y = -FLT_MAX;
-                on_mouse_move_event({-FLT_MAX, -FLT_MAX, 0.0f, 0.0f, 0});
+                on_mouse_move_event(
+                    erhe::window::Input_event{
+                        .type = erhe::window::Input_event_type::mouse_move_event,
+                        .timestamp = std::chrono::steady_clock::now(),
+                        .u = {
+                            .mouse_move_event = {
+                                .x = -FLT_MAX,
+                                .y = -FLT_MAX,
+                                .dx = 0.0f,
+                                .dy = 0.0f,
+                                .modifier_mask = 0
+                            }
+                        }
+                    }
+                );
             }
         }
     }
@@ -250,14 +311,40 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
                 if (window_position_opt.has_value()) {
                     if (!has_cursor()) {
-                        on_cursor_enter_event(erhe::window::Cursor_enter_event{.entered = true});
+                        on_cursor_enter_event(
+                            erhe::window::Input_event{
+                                .type = erhe::window::Input_event_type::cursor_enter_event,
+                                .timestamp = std::chrono::steady_clock::now(),
+                                .u = {
+                                    .cursor_enter_event = {
+                                        .entered = true
+                                    }
+                                }
+                            }
+                        );
                     }
                     mouse_has_position = true;
                     const auto position = window_position_opt.value();
                     if ((m_last_mouse_x != position.x) || (m_last_mouse_y != position.y)) {
+                        float dx = (m_last_mouse_x == -FLT_MAX) ? 0.0f : position.x - m_last_mouse_x;
+                        float dy = (m_last_mouse_y == -FLT_MAX) ? 0.0f : position.y - m_last_mouse_y;
+                        on_mouse_move_event(
+                            erhe::window::Input_event{
+                                .type = erhe::window::Input_event_type::mouse_move_event,
+                                .timestamp = std::chrono::steady_clock::now(),
+                                .u = {
+                                    .mouse_move_event = {
+                                        .x = position.x,
+                                        .y = position.y,
+                                        .dx = dx,
+                                        .dy = dy,
+                                        .modifier_mask = 0
+                                    }
+                                }
+                            }
+                        );
                         m_last_mouse_x = position.x;
                         m_last_mouse_y = position.y;
-                        on_mouse_move_event({position.x, position.y});
                     }
 
                     // Process input events from the context window
@@ -281,10 +368,34 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
             }
             if (!mouse_has_position) {
                 if (has_cursor()) {
-                    on_cursor_enter_event(erhe::window::Cursor_enter_event{.entered = false});
+                    on_cursor_enter_event(
+                        erhe::window::Input_event{
+                            .type = erhe::window::Input_event_type::cursor_enter_event,
+                            .timestamp = std::chrono::steady_clock::now(),
+                            .u = {
+                                .cursor_enter_event = {
+                                    .entered = false
+                                }
+                            }
+                        }
+                    );
                     m_last_mouse_x = -FLT_MAX;
                     m_last_mouse_y = -FLT_MAX;
-                    on_mouse_move_event({-FLT_MAX, -FLT_MAX});
+                    on_mouse_move_event(
+                        erhe::window::Input_event{
+                            .type = erhe::window::Input_event_type::mouse_move_event,
+                            .timestamp = std::chrono::steady_clock::now(),
+                            .u = {
+                                .mouse_move_event = {
+                                    .x = -FLT_MAX,
+                                    .y = -FLT_MAX,
+                                    .dx = 0.0f,
+                                    .dy = 0.0f,
+                                    .modifier_mask = 0
+                                }
+                            }
+                        }
+                    );
                 }
             }
         }

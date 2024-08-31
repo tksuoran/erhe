@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <chrono>
 #include <cstdint>
 
 namespace erhe::commands {
@@ -10,6 +11,7 @@ namespace erhe::commands {
 struct Input_arguments
 {
     uint32_t modifier_mask;
+    std::chrono::steady_clock::time_point timestamp;
 
     union Variant {
         bool button_pressed;

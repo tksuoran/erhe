@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_math/simulation_variable.hpp"
+#include "erhe_math/input_axis.hpp"
 
 #include "erhe_scene/node_attachment.hpp"
 
@@ -37,8 +37,8 @@ public:
 
     // Public API
     void reset                  ();
-    void update                 ();
-    void update_fixed_step      ();
+    void update_transform       ();
+    void tick                   (std::chrono::steady_clock::time_point timestamp);
     void set_position           (const glm::vec3 position);
     void set_elevation          (const float value);
     void set_heading            (const float value);
@@ -50,15 +50,15 @@ public:
     [[nodiscard]] auto get_axis_x    () const -> glm::vec3;
     [[nodiscard]] auto get_axis_y    () const -> glm::vec3;
     [[nodiscard]] auto get_axis_z    () const -> glm::vec3;
-    [[nodiscard]] auto get_controller(const Control control) -> erhe::math::Simulation_variable&;
+    [[nodiscard]] auto get_controller(const Control control) -> erhe::math::Input_axis&;
 
-    erhe::math::Simulation_variable rotate_x;
-    erhe::math::Simulation_variable rotate_y;
-    erhe::math::Simulation_variable rotate_z;
-    erhe::math::Simulation_variable translate_x;
-    erhe::math::Simulation_variable translate_y;
-    erhe::math::Simulation_variable translate_z;
-    erhe::math::Simulation_variable speed_modifier;
+    erhe::math::Input_axis rotate_x;
+    erhe::math::Input_axis rotate_y;
+    erhe::math::Input_axis rotate_z;
+    erhe::math::Input_axis translate_x;
+    erhe::math::Input_axis translate_y;
+    erhe::math::Input_axis translate_z;
+    erhe::math::Input_axis speed_modifier;
 
 private:
     float     m_elevation       {0.0f};

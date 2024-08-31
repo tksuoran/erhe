@@ -86,7 +86,12 @@ void Menu_window::imgui()
         m_type_editor.unit_editor_window.show_window();
     }
     if (ImGui::Button("Quit", button_size)) {
-        m_input_event_handler.on_window_close_event(erhe::window::Window_close_event{}); // hacky(ish)?
+        m_input_event_handler.on_window_close_event(
+            erhe::window::Input_event{
+                .type      = erhe::window::Input_event_type::window_close_event,
+                .timestamp = std::chrono::steady_clock::now()
+            }
+        ); // hacky(ish)?
     }
 }
 

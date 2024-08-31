@@ -266,78 +266,78 @@ auto Imgui_windows::want_capture_mouse() const -> bool
     return m_window_imgui_host ? m_window_imgui_host->want_capture_mouse() : false;
 }
 
-auto Imgui_windows::on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
+auto Imgui_windows::on_window_focus_event(const erhe::window::Input_event& input_event) -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_window_focus_event({})", window_focus_event.focused);
+    SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_window_focus_event({})", input_event.u.window_focus_event.focused);
     if (!m_window_imgui_host) {
         SPDLOG_LOGGER_TRACE(log_input_events, "  m_window_imgui_host");
         return false;
     }
 
-    m_window_imgui_host->on_window_focus_event(window_focus_event);
+    m_window_imgui_host->on_window_focus_event(input_event);
 
     return false; // does not consume
 }
 
-auto Imgui_windows::on_cursor_enter_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
+auto Imgui_windows::on_cursor_enter_event(const erhe::window::Input_event& input_event) -> bool
 {
     if (!m_window_imgui_host) {
         return false;
     }
 
-    m_window_imgui_host->on_cursor_enter_event(cursor_enter_event);
+    m_window_imgui_host->on_cursor_enter_event(input_event);
     return false; // does not consume
 }
 
-auto Imgui_windows::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
+auto Imgui_windows::on_mouse_move_event(const erhe::window::Input_event& input_event) -> bool
 {
     if (!m_window_imgui_host) {
         return false;
     }
 
-    m_window_imgui_host->on_mouse_move_event(mouse_move_event);
+    m_window_imgui_host->on_mouse_move_event(input_event);
 
     // If ImGui wants to capture mouse, the mouse event is marked as handled
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_mouse_button_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
+auto Imgui_windows::on_mouse_button_event(const erhe::window::Input_event& input_event) -> bool
 {
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& host : imgui_hosts) {
-        host->on_mouse_button_event(mouse_button_event);
+        host->on_mouse_button_event(input_event);
     }
 
     // If ImGui wants to capture mouse, the mouse event is marked as handled
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
+auto Imgui_windows::on_mouse_wheel_event(const erhe::window::Input_event& input_event) -> bool
 {
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& host : imgui_hosts) {
-        host->on_mouse_wheel_event(mouse_wheel_event);
+        host->on_mouse_wheel_event(input_event);
     }
 
     // If ImGui wants to capture mouse, the mouse event is marked as handled
     return want_capture_mouse();
 }
 
-auto Imgui_windows::on_key_event(const erhe::window::Key_event& key_event) -> bool
+auto Imgui_windows::on_key_event(const erhe::window::Input_event& input_event) -> bool
 {
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& host : imgui_hosts) {
-        host->on_key_event(key_event);
+        host->on_key_event(input_event);
     }
 
     return want_capture_keyboard();
 }
 
-auto Imgui_windows::on_char_event(const erhe::window::Char_event& char_event) -> bool
+auto Imgui_windows::on_char_event(const erhe::window::Input_event& input_event) -> bool
 {
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& host : imgui_hosts) {
-        host->on_char_event(char_event);
+        host->on_char_event(input_event);
     }
 
     return want_capture_keyboard();

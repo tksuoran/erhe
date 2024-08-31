@@ -115,15 +115,15 @@ public:
     [[nodiscard]] auto last_mouse_position      () const -> glm::vec2;
     [[nodiscard]] auto last_mouse_position_delta() const -> glm::vec2;
 
-    void tick(std::vector<erhe::window::Input_event>& input_events);
+    void tick(std::chrono::steady_clock::time_point timestamp, std::vector<erhe::window::Input_event>& input_events);
 
     // Implements Input_event_handler
-    auto on_key_event              (const erhe::window::Key_event& key_event) -> bool override;
-    auto on_mouse_move_event       (const erhe::window::Mouse_move_event& mouse_move_event) -> bool override;
-    auto on_mouse_button_event     (const erhe::window::Mouse_button_event& mouse_button_event) -> bool override;
-    auto on_mouse_wheel_event      (const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool override;
-    auto on_controller_axis_event  (const erhe::window::Controller_axis_event& controller_axis_event) -> bool override;
-    auto on_controller_button_event(const erhe::window::Controller_button_event& controller_button_event) -> bool override;
+    auto on_key_event              (const erhe::window::Input_event& input_event) -> bool override;
+    auto on_mouse_move_event       (const erhe::window::Input_event& input_event) -> bool override;
+    auto on_mouse_button_event     (const erhe::window::Input_event& input_event) -> bool override;
+    auto on_mouse_wheel_event      (const erhe::window::Input_event& input_event) -> bool override;
+    auto on_controller_axis_event  (const erhe::window::Input_event& input_event) -> bool override;
+    auto on_controller_button_event(const erhe::window::Input_event& input_event) -> bool override;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void dispatch_xr_events(erhe::xr::Xr_instance& instance, void* session);
@@ -133,9 +133,9 @@ public:
     [[nodiscard]] auto get_active_mouse_command() -> Command* { return m_active_mouse_command; }
 
 private:
-    auto on_xr_boolean_event (const erhe::window::Xr_boolean_event& ) -> bool override;
-    auto on_xr_float_event   (const erhe::window::Xr_float_event&   ) -> bool override;
-    auto on_xr_vector2f_event(const erhe::window::Xr_vector2f_event&) -> bool override;
+    auto on_xr_boolean_event (const erhe::window::Input_event&) -> bool override;
+    auto on_xr_float_event   (const erhe::window::Input_event&) -> bool override;
+    auto on_xr_vector2f_event(const erhe::window::Input_event&) -> bool override;
 
     void sort_mouse_bindings        ();
     void sort_controller_bindings   ();

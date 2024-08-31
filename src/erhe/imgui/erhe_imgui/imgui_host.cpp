@@ -245,8 +245,9 @@ auto Imgui_host::get_mouse_position() const -> glm::vec2
 // Note: All handlers here return false, in order to
 //       let other, later event handlers to process
 //       these events as well.
-auto Imgui_host::on_cursor_enter_event(const erhe::window::Cursor_enter_event& cursor_enter_event) -> bool
+auto Imgui_host::on_cursor_enter_event(const erhe::window::Input_event& input_event) -> bool
 {
+    const erhe::window::Cursor_enter_event& cursor_enter_event = input_event.u.cursor_enter_event;
     SPDLOG_LOGGER_TRACE(log_input_events, "on_cursor_enter_event({})", cursor_enter_event.entered);
     m_has_cursor = cursor_enter_event.entered != 0;
     ImGuiIO& io = m_imgui_context->IO;
@@ -256,54 +257,54 @@ auto Imgui_host::on_cursor_enter_event(const erhe::window::Cursor_enter_event& c
     return true;
 }
 
-auto Imgui_host::on_window_focus_event(const erhe::window::Window_focus_event& window_focus_event) -> bool
+auto Imgui_host::on_window_focus_event(const erhe::window::Input_event& input_event) -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_window_focus_event({})", window_focus_event.focused);
+    SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_window_focus_event({})", input_event.u.window_focus_event.focused);
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddFocusEvent(window_focus_event.focused);
+    io.AddFocusEvent(input_event.u.window_focus_event.focused);
     return true;
 }
 
-auto Imgui_host::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
+auto Imgui_host::on_mouse_move_event(const erhe::window::Input_event& input_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddMousePosEvent(mouse_move_event.x, mouse_move_event.y);
+    io.AddMousePosEvent(input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y);
     return false;
 }
 
-auto Imgui_host::on_mouse_button_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
+auto Imgui_host::on_mouse_button_event(const erhe::window::Input_event& input_event) -> bool
 {
-    int imgui_mouse_button = from_erhe(mouse_button_event.button);
+    int imgui_mouse_button = from_erhe(input_event.u.mouse_button_event.button);
     if (imgui_mouse_button < 0) {
         return false;
     }
 
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddMouseButtonEvent(imgui_mouse_button, mouse_button_event.pressed);
+    io.AddMouseButtonEvent(imgui_mouse_button, input_event.u.mouse_button_event.pressed);
     return false;
 }
 
-auto Imgui_host::on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
+auto Imgui_host::on_mouse_wheel_event(const erhe::window::Input_event& input_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddMouseWheelEvent(mouse_wheel_event.x, mouse_wheel_event.y);
+    io.AddMouseWheelEvent(input_event.u.mouse_wheel_event.x, input_event.u.mouse_wheel_event.y);
     return false;
 }
 
-auto Imgui_host::on_key_event(const erhe::window::Key_event& event) -> bool
+auto Imgui_host::on_key_event(const erhe::window::Input_event& input_event) -> bool
 {
     using erhe::window::Keycode;
 
     ImGuiIO& io = m_imgui_context->IO;
-    update_key_modifiers(io, event.modifier_mask);
-    io.AddKeyEvent(from_erhe(event.keycode), event.pressed);
+    update_key_modifiers(io, input_event.u.key_event.modifier_mask);
+    io.AddKeyEvent(from_erhe(input_event.u.key_event.keycode), input_event.u.key_event.pressed);
     return false;
 }
 
-auto Imgui_host::on_char_event(const erhe::window::Char_event& char_event) -> bool
+auto Imgui_host::on_char_event(const erhe::window::Input_event& input_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddInputCharacter(char_event.codepoint);
+    io.AddInputCharacter(input_event.u.char_event.codepoint);
     return false;
 }
 

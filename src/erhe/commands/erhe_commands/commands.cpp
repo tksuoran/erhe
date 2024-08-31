@@ -273,26 +273,7 @@ void Commands::command_inactivated(Command* const command)
     }
 }
 
-auto Commands::on_key_event(const erhe::window::Key_event& key_event) -> bool
-{
-    m_last_modifier_mask = key_event.modifier_mask;
-
-    Input_arguments context;
-
-    for (auto& binding : m_key_bindings) {
-        if (!binding.is_command_host_enabled()) {
-            continue;
-        }
-        if (binding.on_key(context, key_event.pressed, key_event.keycode, key_event.modifier_mask)) {
-            return true;
-        }
-    }
-
-    log_input_event_filtered->trace("key {} {} not consumed", erhe::window::c_str(key_event.keycode), key_event.pressed ? "press" : "release");
-    return false;
-}
-
-void Commands::tick(std::vector<erhe::window::Input_event>& input_events)
+void Commands::tick(std::chrono::steady_clock::time_point timestamp, std::vector<erhe::window::Input_event>& input_events)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -324,6 +305,7 @@ void Commands::tick(std::vector<erhe::window::Input_event>& input_events)
     if (m_last_mouse_button_bits != 0) {
         Input_arguments dummy_input{
             .modifier_mask = m_last_modifier_mask,
+            .timestamp = timestamp,
             .variant = {
                 .vector2{
                     .absolute_value{0.0f, 0.0f},
@@ -523,8 +505,29 @@ void Commands::update_active_mouse_command(Command* const command)
     }
 }
 
-auto Commands::on_mouse_button_event(const erhe::window::Mouse_button_event& mouse_button_event) -> bool
+auto Commands::on_key_event(const erhe::window::Input_event& input_event) -> bool
 {
+    m_last_modifier_mask = input_event.u.key_event.modifier_mask;
+
+    Input_arguments context;
+    context.timestamp = input_event.timestamp;
+
+    for (auto& binding : m_key_bindings) {
+        if (!binding.is_command_host_enabled()) {
+            continue;
+        }
+        if (binding.on_key(context, input_event.u.key_event.pressed, input_event.u.key_event.keycode, input_event.u.key_event.modifier_mask)) {
+            return true;
+        }
+    }
+
+    log_input_event_filtered->trace("key {} {} not consumed", erhe::window::c_str(input_event.u.key_event.keycode), input_event.u.key_event.pressed ? "press" : "release");
+    return false;
+}
+
+auto Commands::on_mouse_button_event(const erhe::window::Input_event& input_event) -> bool
+{
+    const erhe::window::Mouse_button_event& mouse_button_event = input_event.u.mouse_button_event;
     m_last_modifier_mask = mouse_button_event.modifier_mask;
 
     sort_mouse_bindings();
@@ -538,6 +541,7 @@ auto Commands::on_mouse_button_event(const erhe::window::Mouse_button_event& mou
 
     Input_arguments input{
         .modifier_mask = mouse_button_event.modifier_mask,
+        .timestamp = input_event.timestamp,
         .variant = {
             .button_pressed = mouse_button_event.pressed
         }
@@ -581,14 +585,16 @@ auto Commands::on_mouse_button_event(const erhe::window::Mouse_button_event& mou
     return false;
 }
 
-auto Commands::on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mouse_wheel_event) -> bool
+auto Commands::on_mouse_wheel_event(const erhe::window::Input_event& input_event) -> bool
 {
+    const erhe::window::Mouse_wheel_event& mouse_wheel_event = input_event.u.mouse_wheel_event;
     m_last_modifier_mask = mouse_wheel_event.modifier_mask;
 
     sort_mouse_bindings();
 
     Input_arguments input{
         .modifier_mask = mouse_wheel_event.modifier_mask,
+        .timestamp = input_event.timestamp,
         .variant = {
             .vector2 {
                 .absolute_value = glm::vec2{mouse_wheel_event.x, mouse_wheel_event.y},
@@ -611,14 +617,16 @@ auto Commands::on_mouse_wheel_event(const erhe::window::Mouse_wheel_event& mouse
     return false;
 }
 
-auto Commands::on_controller_axis_event(const erhe::window::Controller_axis_event& controller_axis_event) -> bool
+auto Commands::on_controller_axis_event(const erhe::window::Input_event& input_event) -> bool
 {
+    const erhe::window::Controller_axis_event& controller_axis_event = input_event.u.controller_axis_event;
     m_last_modifier_mask = controller_axis_event.modifier_mask;
 
     sort_controller_bindings();
 
     Input_arguments input{
         .modifier_mask = controller_axis_event.modifier_mask,
+        .timestamp = input_event.timestamp,
         .variant = {
             .float_value = controller_axis_event.value
         }
@@ -643,12 +651,14 @@ auto Commands::on_controller_axis_event(const erhe::window::Controller_axis_even
     return false;
 }
 
-auto Commands::on_controller_button_event(const erhe::window::Controller_button_event& controller_button_event) -> bool
+auto Commands::on_controller_button_event(const erhe::window::Input_event& input_event) -> bool
 {
+    const erhe::window::Controller_button_event& controller_button_event = input_event.u.controller_button_event;
     m_last_modifier_mask = controller_button_event.modifier_mask;
 
     Input_arguments input{
         .modifier_mask = 0,
+        .timestamp = input_event.timestamp,
         .variant = {
             .button_pressed = controller_button_event.value
         }
@@ -683,8 +693,9 @@ auto Commands::on_controller_button_event(const erhe::window::Controller_button_
     return false;
 }
 
-auto Commands::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_move_event) -> bool
+auto Commands::on_mouse_move_event(const erhe::window::Input_event& input_event) -> bool
 {
+    const erhe::window::Mouse_move_event& mouse_move_event = input_event.u.mouse_move_event;
     m_last_modifier_mask = mouse_move_event.modifier_mask;
 
     glm::vec2 new_mouse_position{mouse_move_event.x, mouse_move_event.y};
@@ -693,6 +704,7 @@ auto Commands::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_m
     m_last_mouse_position = new_mouse_position;
     Input_arguments input{
         .modifier_mask = mouse_move_event.modifier_mask,
+        .timestamp = input_event.timestamp,
         .variant = {
             .vector2{
                 .absolute_value = new_mouse_position,
@@ -719,10 +731,12 @@ auto Commands::on_mouse_move_event(const erhe::window::Mouse_move_event& mouse_m
     return false;
 }
 
-auto Commands::on_xr_boolean_event(const erhe::window::Xr_boolean_event& xr_boolean_event) -> bool
+auto Commands::on_xr_boolean_event(const erhe::window::Input_event& input_event) -> bool
 {
+    const erhe::window::Xr_boolean_event& xr_boolean_event = input_event.u.xr_boolean_event;
     Input_arguments input{
         .modifier_mask = 0,
+        .timestamp = input_event.timestamp,
         .variant = {
             .button_pressed = xr_boolean_event.value
         }
@@ -752,10 +766,12 @@ auto Commands::on_xr_boolean_event(const erhe::window::Xr_boolean_event& xr_bool
     return false;
 }
 
-auto Commands::on_xr_float_event(const erhe::window::Xr_float_event& xr_float_event) -> bool
+auto Commands::on_xr_float_event(const erhe::window::Input_event& input_event) -> bool
 {
+    const erhe::window::Xr_float_event& xr_float_event = input_event.u.xr_float_event;
     Input_arguments input{
         .modifier_mask = 0,
+        .timestamp = input_event.timestamp,
         .variant = {
             .float_value = xr_float_event.value
         }
@@ -779,10 +795,12 @@ auto Commands::on_xr_float_event(const erhe::window::Xr_float_event& xr_float_ev
     return false;
 }
 
-auto Commands::on_xr_vector2f_event(const erhe::window::Xr_vector2f_event& xr_vector2f_event) -> bool
+auto Commands::on_xr_vector2f_event(const erhe::window::Input_event& input_event) -> bool
 {
+    const erhe::window::Xr_vector2f_event& xr_vector2f_event = input_event.u.xr_vector2f_event;
     Input_arguments context{
         .modifier_mask = 0,
+        .timestamp = input_event.timestamp,
         .variant = {
             .vector2{
                 .absolute_value = glm::vec2{

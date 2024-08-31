@@ -97,11 +97,7 @@ void Logs::log_entry(erhe::log::Entry& entry)
 
     ImGui::TableNextRow();
     if (ImGui::TableSetColumnIndex(0)) {
-        ImGui::TextColored(
-            ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-            "%s",
-            entry.timestamp.c_str()
-        );
+        ImGui::TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "%s", entry.timestamp.c_str());
     }
     if (ImGui::TableSetColumnIndex(1)) {
         ImGui::TextUnformatted(entry.logger.c_str());

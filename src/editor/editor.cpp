@@ -76,6 +76,7 @@
 #endif
 #include "erhe_item/item_log.hpp"
 #include "erhe_log/log.hpp"
+#include "erhe_math/math_log.hpp"
 #include "erhe_net/net_log.hpp"
 #include "erhe_physics/physics_log.hpp"
 #include "erhe_primitive/primitive_log.hpp"
@@ -112,6 +113,10 @@ public:
 
         std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
 
+        std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
+
+        m_fly_camera_tool.on_frame_begin();
+
         // Apply logic updates
         if (!m_editor_context.OpenXR) { //if (!m_headset_view.is_active()) {
             auto* imgui_host = m_imgui_windows.get_window_imgui_host().get(); // get glfw window hosted viewport
@@ -143,7 +148,7 @@ public:
         m_imgui_windows.imgui_windows();
 
         // - Apply all command bindings (OpenXR bindings were already executed above)
-        m_commands.tick(input_events);
+        m_commands.tick(timestamp, input_events);
 
         m_operation_stack.update();
 
@@ -159,6 +164,8 @@ public:
 
         // Apply physics updates
         m_editor_scenes.after_physics_simulation_steps();
+
+        m_fly_camera_tool.on_frame_end();
 
         // Rendering
         m_graphics_instance.shader_monitor.update_once_per_frame();
@@ -525,19 +532,19 @@ public:
         m_editor_context.scene_views            = &m_viewport_scene_views  ;
     }
 
-    auto on_key_event(const erhe::window::Key_event& key_event) -> bool override
+    auto on_key_event(const erhe::window::Input_event& input_event) -> bool override
     {
-        m_input_state.shift   = erhe::bit::test_all_rhs_bits_set(key_event.modifier_mask, erhe::window::Key_modifier_bit_shift);
-        m_input_state.control = erhe::bit::test_all_rhs_bits_set(key_event.modifier_mask, erhe::window::Key_modifier_bit_ctrl);
-        m_input_state.alt     = erhe::bit::test_all_rhs_bits_set(key_event.modifier_mask, erhe::window::Key_modifier_bit_menu);
+        m_input_state.shift   = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_shift);
+        m_input_state.control = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_ctrl);
+        m_input_state.alt     = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_menu);
         return false;
     }
-    auto on_window_close_event(const erhe::window::Window_close_event&) -> bool override
+    auto on_window_close_event(const erhe::window::Input_event&) -> bool override
     {
         m_close_requested = true;
         return true;
     }
-    auto on_window_refresh_event(const erhe::window::Window_refresh_event&) -> bool override
+    auto on_window_refresh_event(const erhe::window::Input_event&) -> bool override
     {
         // TODO
         return true;
@@ -677,6 +684,7 @@ void run_editor()
     erhe::graphics::initialize_logging();
     erhe::imgui::initialize_logging();
     erhe::item::initialize_logging();
+    erhe::math::initialize_logging();
     erhe::net::initialize_logging();
     erhe::physics::initialize_logging();
     erhe::primitive::initialize_logging();
