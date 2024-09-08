@@ -103,9 +103,9 @@ public:
     void next_frame();
 
     // scale, translation, clip rectangle, texture indices
-    static constexpr std::size_t s_max_draw_count     =   6'000;
-    static constexpr std::size_t s_max_index_count    = 300'000;
-    static constexpr std::size_t s_max_vertex_count   = 800'000;
+    static constexpr std::size_t s_max_draw_count     =     8'000;
+    static constexpr std::size_t s_max_index_count    = 2'000'000;
+    static constexpr std::size_t s_max_vertex_count   = 5'000'000;
     static constexpr std::size_t s_texture_unit_count = 32; // for non bindless textures
 
     erhe::graphics::Shader_resource     draw_parameter_block;
