@@ -197,6 +197,8 @@ void Input_axis::update(std::chrono::steady_clock::time_point timestamp)
     }
     const std::chrono::duration<double> duration = timestamp - m_last_timestamp.value();
     double dt = duration.count();
+    m_segment_base_velocity = m_base_velocity;
+    m_segment_direction     = m_direction;
     m_segment_timestamp[0]  = m_last_timestamp.value();
     m_segment_timestamp[1]  = timestamp;
     m_segment_state_time[0] = m_state_time;
@@ -218,6 +220,15 @@ void Input_axis::update(std::chrono::steady_clock::time_point timestamp)
     }
     m_velocity = m_segment_velocity[1];
     m_last_timestamp = timestamp;
+}
+
+auto Input_axis::evaluate_velocity_at_state_time(float state_time) const -> float
+{
+    if (m_segment_direction == 0.0) {
+        return static_cast<float>(m_segment_base_velocity * checked_pow(m_base, -state_time));
+    } else {
+        return static_cast<float>(m_segment_direction * (1.0 - checked_pow(m_base, -state_time)));
+    }
 }
 
 void Input_axis::set_direction(double direction)

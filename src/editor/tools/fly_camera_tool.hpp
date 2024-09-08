@@ -11,6 +11,7 @@
 #include "erhe_window/window_event_handler.hpp" // keycode
 
 #include <random>
+#include <vector>
 
 namespace erhe::commands {
     class Commands;
@@ -253,6 +254,7 @@ private:
     erhe::imgui::Graph<std::array<ImVec2, 2>> m_distance_dt_graph;
     erhe::imgui::Graph<std::array<ImVec2, 2>> m_state_time_graph; // t0 and t1
     erhe::imgui::Graph<std::array<ImVec2, 2>> m_deltatime_graph;
+    erhe::imgui::Graph<std::array<ImVec2, 2>> m_reference_velocity_graph;
     erhe::imgui::Graph_plotter                m_graph_plotter;
 
     Jitter m_jitter;

@@ -405,29 +405,34 @@ Fly_camera_tool::Fly_camera_tool(
     , m_rotate_y_command              {commands, editor_context, Variable::rotate_y,    -0.6f}
     , m_rotate_z_command              {commands, editor_context, Variable::rotate_z,     0.6f}
 
-    , m_velocity_graph                {"Velocity",      "time", "ms", "velocity",      "m/s"}
-    , m_distance_graph                {"Distance",      "time", "ms", "distance",      "m"}
-    , m_distance_dt_graph             {"Distance / dt", "time", "ms", "distance / dt", "m/s"}
-    , m_state_time_graph              {"State time",    "time", "ms", "state time",    "ms"}
-    , m_deltatime_graph               {"Delta-Time",    "time", "ms", "dt",            "ms"}
+    , m_velocity_graph                {"Velocity",           "time", "ms", "velocity",           "m/s"}
+    , m_distance_graph                {"Distance",           "time", "ms", "distance",           "m"}
+    , m_distance_dt_graph             {"Distance / dt",      "time", "ms", "distance / dt",      "m/s"}
+    , m_state_time_graph              {"State time",         "time", "ms", "state time",         "ms"}
+    , m_deltatime_graph               {"Delta-Time",         "time", "ms", "dt",                 "ms"}
+    , m_reference_velocity_graph      {"Reference Velocity", "time", "ms", "reference velocity", "m/s"}
 {
     m_velocity_graph   .path_color  = 0xffcccccc;
     m_distance_graph   .path_color  = 0xffcc88cc;
     m_distance_dt_graph.path_color  = 0xff88cccc;
     m_state_time_graph .path_color  = 0xffcccc88;
     m_deltatime_graph  .path_color  = 0xff22cc88;
+    m_reference_velocity_graph.path_color = 0x886666ff;
+    m_reference_velocity_graph.draw_keys = false;
 
     m_velocity_graph   .key_color   = 0xffaaaaaa;
     m_distance_graph   .key_color   = 0xffaa66aa;
     m_distance_dt_graph.key_color   = 0xff66aaaa;
     m_state_time_graph .key_color   = 0xffaaaa66;
     m_deltatime_graph  .key_color   = 0xff33aa66;
+    m_reference_velocity_graph.key_color = 0x00000000;
 
     m_velocity_graph   .hover_color = 0xffffffff;
     m_distance_graph   .hover_color = 0xffffbbff;
     m_distance_dt_graph.hover_color = 0xffbbffff;
     m_state_time_graph .hover_color = 0xffffffbb;
     m_deltatime_graph  .hover_color = 0xffbbffbb;
+    m_reference_velocity_graph.hover_color = 0x88555555;
 
     if (editor_context.OpenXR) {
         return;
@@ -844,29 +849,62 @@ auto Fly_camera_tool::track() -> bool
 
 void Fly_camera_tool::record_sample(std::chrono::steady_clock::time_point)
 {
-    if (m_recording) {
-        erhe::scene::Node* node = m_camera_controller->get_node();
-        if (node != nullptr) {
-            auto  timestamp_0  = m_camera_controller->translate_x.get_segment_timestamp(0);
-            auto  timestamp_1  = m_camera_controller->translate_x.get_segment_timestamp(1);
-            std::chrono::duration<float> time_0 = timestamp_0 - m_recording_start_time;
-            std::chrono::duration<float> time_1 = timestamp_1 - m_recording_start_time;
-            float dt           = time_1.count() - time_0.count();
-            float dt_ms        = 1000.0f * dt;
-            float ms_0         = 1000.0f * time_0.count();
-            float ms_1         = 1000.0f * time_1.count();
-            float velocity_0   = m_camera_controller->translate_x.get_segment_velocity(0);
-            float velocity_1   = m_camera_controller->translate_x.get_segment_velocity(1);
-            float distance_0   = m_camera_controller->translate_x.get_segment_distance(0);
-            float distance_1   = m_camera_controller->translate_x.get_segment_distance(1);
-            float state_time_0 = 1000.0f * m_camera_controller->translate_x.get_segment_state_time(0);
-            float state_time_1 = 1000.0f * m_camera_controller->translate_x.get_segment_state_time(1);
-            float distance     = distance_1 - distance_0;
-            m_velocity_graph   .samples.push_back({ImVec2{ms_0, velocity_0},    ImVec2{ms_1, velocity_1}});
-            m_distance_graph   .samples.push_back({ImVec2{ms_0, distance_0},    ImVec2{ms_1, distance_1}});
-            m_distance_dt_graph.samples.push_back({ImVec2{ms_0, distance / dt}, ImVec2{ms_1, distance / dt}});
-            m_state_time_graph .samples.push_back({ImVec2{ms_0, state_time_0},  ImVec2{ms_1, state_time_1}});
-            m_deltatime_graph  .samples.push_back({ImVec2{ms_0, dt_ms},         ImVec2{ms_1, dt_ms}});
+    if (!m_recording) {
+        return;
+    }
+    erhe::math::Input_axis& input_axis = m_camera_controller->translate_x;
+    erhe::scene::Node* node = m_camera_controller->get_node();
+    if (node == nullptr) {
+        return;
+    }
+    auto  timestamp_0  = input_axis.get_segment_timestamp(0);
+    auto  timestamp_1  = input_axis.get_segment_timestamp(1);
+    std::chrono::duration<float> time_0 = timestamp_0 - m_recording_start_time;
+    std::chrono::duration<float> time_1 = timestamp_1 - m_recording_start_time;
+    float t_0          = time_0.count();
+    float t_1          = time_1.count();
+    float dt           = t_1 - t_0;
+    float velocity_0   = input_axis.get_segment_velocity(0);
+    float velocity_1   = input_axis.get_segment_velocity(1);
+    float distance_0   = input_axis.get_segment_distance(0);
+    float distance_1   = input_axis.get_segment_distance(1);
+    float state_time_0 = input_axis.get_segment_state_time(0);
+    float state_time_1 = input_axis.get_segment_state_time(1);
+    float distance     = distance_1 - distance_0;
+    m_velocity_graph   .samples.push_back({ImVec2{1000.0f * t_0, velocity_0},             ImVec2{1000.0f * t_1, velocity_1}});
+    m_distance_graph   .samples.push_back({ImVec2{1000.0f * t_0, distance_0},             ImVec2{1000.0f * t_1, distance_1}});
+    m_distance_dt_graph.samples.push_back({ImVec2{1000.0f * t_0, distance / dt},          ImVec2{1000.0f * t_1, distance / dt}});
+    m_state_time_graph .samples.push_back({ImVec2{1000.0f * t_0, 1000.0f * state_time_0}, ImVec2{1000.0f * t_1, 1000.0f * state_time_1}});
+    m_deltatime_graph  .samples.push_back({ImVec2{1000.0f * t_0, 1000.0f * dt},           ImVec2{1000.0f * t_1, 1000.0f * dt}});
+    float state_time_diff         = state_time_1 - state_time_0;
+    float last_t                  = t_0;
+    float last_reference_velocity = input_axis.evaluate_velocity_at_state_time(state_time_0);
+    float velocity_min = std::min(velocity_0, velocity_1);
+    float velocity_max = std::max(velocity_0, velocity_1);
+    for (int i = 1; i <= 10; ++i) {
+        float rel                = static_cast<float>(i) / 10.0f;
+        float t                  = t_0          + rel * dt;
+        float state_time         = state_time_0 + rel * state_time_diff;
+        float reference_velocity = input_axis.evaluate_velocity_at_state_time(state_time);
+        m_reference_velocity_graph.samples.push_back(
+            {
+                ImVec2{1000.0f * last_t, last_reference_velocity},
+                ImVec2{1000.0f * t,      reference_velocity}
+            }
+        );
+        last_t                  = t;
+        last_reference_velocity = reference_velocity;
+        if (reference_velocity < velocity_min) {
+            float diff = std::abs(reference_velocity - velocity_min);
+            if (diff > 0.1f) {
+                log_fly_camera->warn("reference velocity sanity check failed @ {}", 1000.0f * t);
+            }
+        }
+        if (reference_velocity > velocity_max) {
+            float diff = std::abs(reference_velocity - velocity_max);
+            if (diff > 0.1f) {
+                log_fly_camera->warn("reference velocity sanity check failed @ {}", 1000.0f * t);
+            }
         }
     }
 }
@@ -982,11 +1020,12 @@ void Fly_camera_tool::imgui()
         if (ImGui::Button("Start Recording")) {
             m_events           .clear();
 
-            m_velocity_graph   .clear();
-            m_distance_graph   .clear();
-            m_distance_dt_graph.clear();
-            m_state_time_graph .clear();
-            m_deltatime_graph  .clear();
+            m_velocity_graph          .clear();
+            m_distance_graph          .clear();
+            m_distance_dt_graph       .clear();
+            m_state_time_graph        .clear();
+            m_deltatime_graph         .clear();
+            m_reference_velocity_graph.clear();
             m_recording_start_time = std::chrono::steady_clock::now();
             m_recording = true;
         }
@@ -998,11 +1037,12 @@ void Fly_camera_tool::imgui()
 
     m_jitter.imgui();
 
-                       ImGui::Checkbox("Velocity",      &m_velocity_graph   .plot);
-    ImGui::SameLine(); ImGui::Checkbox("Distance",      &m_distance_graph   .plot);
-    ImGui::SameLine(); ImGui::Checkbox("Distance / dt", &m_distance_dt_graph.plot);
-    ImGui::SameLine(); ImGui::Checkbox("State Time",    &m_state_time_graph .plot);
-    ImGui::SameLine(); ImGui::Checkbox("Delta-Time",    &m_deltatime_graph  .plot);
+                       ImGui::Checkbox("Velocity",           &m_velocity_graph          .plot);
+    ImGui::SameLine(); ImGui::Checkbox("Reference Velocity", &m_reference_velocity_graph.plot);
+    ImGui::SameLine(); ImGui::Checkbox("Distance",           &m_distance_graph          .plot);
+    ImGui::SameLine(); ImGui::Checkbox("Distance / dt",      &m_distance_dt_graph       .plot);
+    ImGui::SameLine(); ImGui::Checkbox("State Time",         &m_state_time_graph        .plot);
+    ImGui::SameLine(); ImGui::Checkbox("Delta-Time",         &m_deltatime_graph         .plot);
 
     if (m_velocity_graph   .plot) ImGui::SliderFloat("Velocity Scale",      &m_velocity_graph   .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
     if (m_distance_graph   .plot) ImGui::SliderFloat("Distance Scale",      &m_distance_graph   .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
@@ -1010,29 +1050,23 @@ void Fly_camera_tool::imgui()
     if (m_state_time_graph .plot) ImGui::SliderFloat("State Time Scale",    &m_state_time_graph .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
     if (m_deltatime_graph  .plot) ImGui::SliderFloat("Delta Time Scale",    &m_deltatime_graph  .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
 
+    m_reference_velocity_graph.y_scale = m_velocity_graph.y_scale;
+
     if (m_graph_plotter.begin()) {
         for (const Event& event : m_events) {
             m_graph_plotter.sample_x_line(event.x, 0x88008800);
         }
-        m_graph_plotter.plot(m_velocity_graph   );
-        m_graph_plotter.plot(m_distance_graph   );
-        m_graph_plotter.plot(m_distance_dt_graph);
-        m_graph_plotter.plot(m_state_time_graph );
-        m_graph_plotter.plot(m_deltatime_graph  );
+        m_graph_plotter.plot(m_velocity_graph          );
+        m_graph_plotter.plot(m_reference_velocity_graph);
+        m_graph_plotter.plot(m_distance_graph          );
+        m_graph_plotter.plot(m_distance_dt_graph       );
+        m_graph_plotter.plot(m_state_time_graph        );
+        m_graph_plotter.plot(m_deltatime_graph         );
         for (const Event& event : m_events) {
             m_graph_plotter.sample_text(event.x, 0.0f, event.text.c_str(), 0xff00ff00);
         }
         m_graph_plotter.end();
     }
-
-    //// if (m_camera_controller) {
-    ////     float speed = m_camera_controller->translate_z.max_delta();
-    ////     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
-    //// 
-    ////     m_camera_controller->translate_x.set_max_delta(speed);
-    ////     m_camera_controller->translate_y.set_max_delta(speed);
-    ////     m_camera_controller->translate_z.set_max_delta(speed);
-    //// }
 #endif
 }
 

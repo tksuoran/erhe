@@ -38,6 +38,7 @@ public:
     [[nodiscard]] auto get_segment_velocity  (std::size_t i) const -> float;
     [[nodiscard]] auto get_segment_distance  (std::size_t i) const -> float;
     [[nodiscard]] auto get_segment_state_time(std::size_t i) const -> float;
+    [[nodiscard]] auto evaluate_velocity_at_state_time(float state_time) const -> float;
 
     void set_power_base(float base);
     void on_frame_begin();
@@ -67,9 +68,11 @@ private:
     double m_velocity     {0.0}; // velocity at end of last segment
     double m_tick_distance{0.0}; // distance travelled during last tick
     std::array<std::chrono::steady_clock::time_point, 2> m_segment_timestamp;
-    std::array<double, 2>                                m_segment_velocity   = {0.0, 0.0};
-    std::array<double, 2>                                m_segment_distance   = {0.0, 0.0};
-    std::array<double, 2>                                m_segment_state_time = {0.0, 0.0};
+    double                                               m_segment_base_velocity = 0.0;
+    double                                               m_segment_direction     = 0.0;
+    std::array<double, 2>                                m_segment_velocity      = {0.0, 0.0};
+    std::array<double, 2>                                m_segment_distance      = {0.0, 0.0};
+    std::array<double, 2>                                m_segment_state_time    = {0.0, 0.0};
     std::optional<std::chrono::steady_clock::time_point> m_last_timestamp;
     std::string m_name;
 };
