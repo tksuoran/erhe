@@ -8,7 +8,7 @@
 #include "xr/headset_view_resources.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
-#include "erhe_math/simulation_variable.hpp"
+#include "erhe_math/input_axis.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_xr/headset.hpp"
 
@@ -71,20 +71,20 @@ private:
 class Headset_camera_offset_move_command : public erhe::commands::Command
 {
 public:
-    Headset_camera_offset_move_command(erhe::commands::Commands& commands, erhe::math::Simulation_variable& variable, char axis);
+    Headset_camera_offset_move_command(erhe::commands::Commands& commands, erhe::math::Input_axis& variable, char axis);
 
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
-    erhe::math::Simulation_variable& m_variable;
-    char                             m_axis;
+    erhe::math::Input_axis& m_variable;
+    char                    m_axis;
 };
 
 class Headset_view
     : public std::enable_shared_from_this<Headset_view>
     , public Scene_view
     , public Renderable
-    , public Update_fixed_step
+    , public Update_once_per_frame
     , public erhe::imgui::Imgui_window
 {
 public:
@@ -122,8 +122,8 @@ public:
     void end_frame                ();
     void request_renderdoc_capture();
 
-    // Implements Update_fixed_step
-    void update_fixed_step(const Time_context&) override;
+    // Implements Update_once_per_frame
+    void update_once_per_frame(const Time_context&) override;
 
     // Implements Scene_view
     auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
@@ -151,9 +151,9 @@ private:
     void update_camera_node();
     void update_pointer_context_from_controller();
 
-    erhe::math::Simulation_variable    m_translate_x;
-    erhe::math::Simulation_variable    m_translate_y;
-    erhe::math::Simulation_variable    m_translate_z;
+    erhe::math::Input_axis             m_translate_x;
+    erhe::math::Input_axis             m_translate_y;
+    erhe::math::Input_axis             m_translate_z;
     glm::vec3                          m_camera_offset{0.0f, 0.0f, 0.0f};
     Headset_camera_offset_move_command m_offset_x_command;
     Headset_camera_offset_move_command m_offset_y_command;

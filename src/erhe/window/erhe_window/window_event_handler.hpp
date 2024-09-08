@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
@@ -320,6 +321,7 @@ class Input_event
 {
 public:
     Input_event_type type;
+    std::chrono::steady_clock::time_point timestamp;
     bool handled{false};
     union Imgui_event_union {
         Key_event               key_event;
@@ -346,21 +348,21 @@ class Input_event_handler
 {
 public:
     virtual auto dispatch_input_event      (Input_event& input_event) -> bool;
-    virtual auto on_key_event              (const Key_event&              ) -> bool { return false; }
-    virtual auto on_char_event             (const Char_event&             ) -> bool { return false; }
-    virtual auto on_window_focus_event     (const Window_focus_event&     ) -> bool { return false; }
-    virtual auto on_cursor_enter_event     (const Cursor_enter_event&     ) -> bool { return false; }
-    virtual auto on_mouse_move_event       (const Mouse_move_event&       ) -> bool { return false; }
-    virtual auto on_mouse_button_event     (const Mouse_button_event&     ) -> bool { return false; }
-    virtual auto on_mouse_wheel_event      (const Mouse_wheel_event&      ) -> bool { return false; }
-    virtual auto on_controller_axis_event  (const Controller_axis_event&  ) -> bool { return false; }
-    virtual auto on_controller_button_event(const Controller_button_event&) -> bool { return false; }
-    virtual auto on_window_resize_event    (const Window_resize_event&    ) -> bool { return false; }
-    virtual auto on_window_close_event     (const Window_close_event&     ) -> bool { return false; }
-    virtual auto on_window_refresh_event   (const Window_refresh_event&   ) -> bool { return false; }
-    virtual auto on_xr_boolean_event       (const Xr_boolean_event&       ) -> bool { return false; }
-    virtual auto on_xr_float_event         (const Xr_float_event&         ) -> bool { return false; }
-    virtual auto on_xr_vector2f_event      (const Xr_vector2f_event&      ) -> bool { return false; }
+    virtual auto on_key_event              (const Input_event&) -> bool { return false; }
+    virtual auto on_char_event             (const Input_event&) -> bool { return false; }
+    virtual auto on_window_focus_event     (const Input_event&) -> bool { return false; }
+    virtual auto on_cursor_enter_event     (const Input_event&) -> bool { return false; }
+    virtual auto on_mouse_move_event       (const Input_event&) -> bool { return false; }
+    virtual auto on_mouse_button_event     (const Input_event&) -> bool { return false; }
+    virtual auto on_mouse_wheel_event      (const Input_event&) -> bool { return false; }
+    virtual auto on_controller_axis_event  (const Input_event&) -> bool { return false; }
+    virtual auto on_controller_button_event(const Input_event&) -> bool { return false; }
+    virtual auto on_window_resize_event    (const Input_event&) -> bool { return false; }
+    virtual auto on_window_close_event     (const Input_event&) -> bool { return false; }
+    virtual auto on_window_refresh_event   (const Input_event&) -> bool { return false; }
+    virtual auto on_xr_boolean_event       (const Input_event&) -> bool { return false; }
+    virtual auto on_xr_float_event         (const Input_event&) -> bool { return false; }
+    virtual auto on_xr_vector2f_event      (const Input_event&) -> bool { return false; }
 };
 
 } // namespace erhe::window

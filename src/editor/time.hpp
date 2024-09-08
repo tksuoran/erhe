@@ -12,9 +12,10 @@ class Time;
 class Time_context
 {
 public:
-    double   dt          {0.0};
-    double   time        {0.0};
-    uint64_t frame_number{0};
+    std::chrono::steady_clock::time_point timestamp   {};
+    double                                dt          {0.0};
+    double                                time        {0.0};
+    uint64_t                              frame_number{0};
 };
 
 class Update_time_base

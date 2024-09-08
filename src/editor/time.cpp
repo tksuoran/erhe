@@ -83,6 +83,7 @@ void Time::update()
         //++steps;
         update_fixed_step(
             Time_context{
+                // TODO .timestamp    = new_time,
                 .dt           = dt,
                 .time         = m_time,
                 .frame_number = m_frame_number
@@ -96,6 +97,7 @@ void Time::update()
 
     // For once per frame
     m_last_update = Time_context{
+        .timestamp    = new_time, 
         .dt           = dt,
         .time         = m_time,
         .frame_number = m_frame_number

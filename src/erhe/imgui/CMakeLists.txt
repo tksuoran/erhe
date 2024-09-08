@@ -31,6 +31,10 @@ erhe_target_sources_grouped(
     erhe_imgui/windows/performance_window.hpp
     erhe_imgui/windows/pipelines.cpp
     erhe_imgui/windows/pipelines.hpp
+    erhe_imgui/windows/graph.cpp
+    erhe_imgui/windows/graph.hpp
+    erhe_imgui/windows/graph_plotter.cpp
+    erhe_imgui/windows/graph_plotter.hpp
 )
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})

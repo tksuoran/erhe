@@ -86,25 +86,26 @@ public:
                     m_commands.dispatch_input_event(input_event);
                 }
             }
-            tick();
+            std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
+            tick(timestamp);
             m_context_window.swap_buffers();
         }
     }
 
-    void tick()
+    void tick(std::chrono::steady_clock::time_point timestamp)
     {
         if (m_map_window.is_window_visible()) {
             m_map_window.render();
         }
         auto& input_events = m_context_window.get_input_events();
         m_imgui_windows .imgui_windows();
-        m_commands.tick(input_events);
+        m_commands.tick(timestamp, input_events);
         m_rendergraph   .execute();
         m_imgui_renderer.next_frame();
         m_tile_renderer .next_frame();
     }
 
-    auto on_window_close_event(const erhe::window::Window_close_event&) -> bool override
+    auto on_window_close_event(const erhe::window::Input_event&) -> bool override
     {
         m_close_requested = true;
         return true;

@@ -62,27 +62,25 @@ public:
     [[nodiscard]] auto get_input_events  () -> std::vector<Input_event>&;
 
     auto open                       (const Window_configuration& configuration) -> bool;
-    void request_close              ();
     void make_current               () const;
     void clear_current              () const;
     void swap_buffers               () const;
-    void break_event_loop           ();
     void poll_events                (float wait_time = 0.0f);
     void get_cursor_position        (float& xpos, float& ypos);
     void get_capture_position       (float& xpos, float& ypos);
     void set_visible                (bool visible);
     void set_cursor                 (Mouse_cursor cursor);
     void capture_mouse              (bool capture);
-    void handle_key_event           (int key, int scancode, int action, int glfw_modifiers);
-    void handle_char_event          (unsigned int codepoint);
-    void handle_mouse_button_event  (int button, int action, int glfw_modifiers);
-    void handle_mouse_wheel_event   (double x, double y);
-    void handle_mouse_move          (double x, double y);
-    void handle_window_resize_event (int width, int height);
-    void handle_window_refresh_event();
-    void handle_window_close_event  ();
-    void handle_window_focus_event  (int focused);
-    void handle_cursor_enter_event  (int entered);
+    void handle_key_event           (std::chrono::steady_clock::time_point timestamp, int key, int scancode, int action, int glfw_modifiers);
+    void handle_char_event          (std::chrono::steady_clock::time_point timestamp, unsigned int codepoint);
+    void handle_mouse_button_event  (std::chrono::steady_clock::time_point timestamp, int button, int action, int glfw_modifiers);
+    void handle_mouse_wheel_event   (std::chrono::steady_clock::time_point timestamp, double x, double y);
+    void handle_mouse_move          (std::chrono::steady_clock::time_point timestamp, double x, double y);
+    void handle_window_resize_event (std::chrono::steady_clock::time_point timestamp, int width, int height);
+    void handle_window_refresh_event(std::chrono::steady_clock::time_point timestamp);
+    void handle_window_close_event  (std::chrono::steady_clock::time_point timestamp);
+    void handle_window_focus_event  (std::chrono::steady_clock::time_point timestamp, int focused);
+    void handle_cursor_enter_event  (std::chrono::steady_clock::time_point timestamp, int entered);
 
     [[nodiscard]] auto get_modifier_mask () const -> Key_modifier_mask;
     [[nodiscard]] auto get_device_pointer() const -> void*;
@@ -92,19 +90,18 @@ public:
 private:
     void get_extensions();
 
-    GLFWwindow*              m_glfw_window          {nullptr};
-    Mouse_cursor             m_current_mouse_cursor {Mouse_cursor_Arrow};
-    bool                     m_is_event_loop_running{false};
-    bool                     m_is_mouse_captured    {false};
-    bool                     m_is_window_visible    {false};
-    GLFWcursor*              m_mouse_cursor         [Mouse_cursor_COUNT];
+    GLFWwindow*              m_glfw_window         {nullptr};
+    Mouse_cursor             m_current_mouse_cursor{Mouse_cursor_Arrow};
+    bool                     m_is_mouse_captured   {false};
+    bool                     m_is_window_visible   {false};
+    GLFWcursor*              m_mouse_cursor        [Mouse_cursor_COUNT];
     Window_configuration     m_configuration;
-    double                   m_last_mouse_x         {0.0};
-    double                   m_last_mouse_y         {0.0};
-    double                   m_mouse_capture_xpos   {0.0};
-    double                   m_mouse_capture_ypos   {0.0};
-    double                   m_mouse_virtual_xpos   {0.0};
-    double                   m_mouse_virtual_ypos   {0.0};
+    double                   m_last_mouse_x        {0.0};
+    double                   m_last_mouse_y        {0.0};
+    double                   m_mouse_capture_xpos  {0.0};
+    double                   m_mouse_capture_ypos  {0.0};
+    double                   m_mouse_virtual_xpos  {0.0};
+    double                   m_mouse_virtual_ypos  {0.0};
     int                      m_glfw_key_modifiers{0};
     int                      m_joystick{-1};
     std::vector<float>       m_controller_axis_values;

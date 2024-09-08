@@ -222,81 +222,91 @@ auto glfw_mouse_button_action_to_erhe(const int glfw_mouse_button_action) -> boo
 
 void key_event_callback(GLFWwindow* glfw_window, const int key, const int scancode, const int action, const int glfw_modifiers)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_key_event(key, scancode, action, glfw_modifiers);
+        window->handle_key_event(timestamp, key, scancode, action, glfw_modifiers);
     }
 }
 
 void char_event_callback(GLFWwindow* glfw_window, const unsigned int codepoint)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_char_event(codepoint);
+        window->handle_char_event(timestamp, codepoint);
     }
 }
 
 void mouse_position_event_callback(GLFWwindow* glfw_window, double x, double y)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_mouse_move(x, y);
+        window->handle_mouse_move(timestamp, x, y);
     }
 }
 
 void mouse_button_event_callback(GLFWwindow* glfw_window, const int button, const int action, const int mods)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_mouse_button_event(button, action, mods);
+        window->handle_mouse_button_event(timestamp, button, action, mods);
     }
 }
 
 void mouse_wheel_event_callback(GLFWwindow* glfw_window, const double x, const double y)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_mouse_wheel_event(x, y);
+        window->handle_mouse_wheel_event(timestamp, x, y);
     }
 }
 
 void window_resize_event_callback(GLFWwindow* glfw_window, const int width, const int height)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_window_resize_event(width, height);
+        window->handle_window_resize_event(timestamp, width, height);
     }
 }
 
 void window_refresh_callback(GLFWwindow* glfw_window)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_window_refresh_event();
+        window->handle_window_refresh_event(timestamp);
     }
 }
 
 void window_close_event_callback(GLFWwindow* glfw_window)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_window_close_event();
+        window->handle_window_close_event(timestamp);
     }
 }
 
 void window_focus_event_callback(GLFWwindow* glfw_window, int focused)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_window_focus_event(focused);
+        window->handle_window_focus_event(timestamp, focused);
     }
 }
 
 void window_cursor_enter_callback(GLFWwindow* glfw_window, int entered)
 {
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        window->handle_cursor_enter_event(entered);
+        window->handle_cursor_enter_event(timestamp, entered);
     }
 }
 
@@ -444,7 +454,6 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     }
 
     s_window_count++;
-    m_is_event_loop_running = false;
     m_is_mouse_captured = false;
 
     auto* const window = static_cast<GLFWwindow*>(m_glfw_window);
@@ -541,12 +550,6 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     return true;
 }
 
-void Context_window::request_close()
-{
-    break_event_loop();
-    handle_window_close_event();
-}
-
 Context_window::~Context_window() noexcept
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
@@ -561,11 +564,6 @@ Context_window::~Context_window() noexcept
             glfwTerminate();
         }
     }
-}
-
-void Context_window::break_event_loop()
-{
-    m_is_event_loop_running = false;
 }
 
 void Context_window::poll_events(float wait_time)
@@ -588,7 +586,10 @@ void Context_window::poll_events(float wait_time)
         int present = glfwJoystickPresent(jid);
         if (present) {
             int axis_count = 0;
+            int button_count = 0;
             const float* axis_values = glfwGetJoystickAxes(jid, &axis_count);
+            const unsigned char* button_values = glfwGetJoystickButtons(jid, &button_count);
+            std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
             if (axis_count > m_controller_axis_values.size()) {
                 m_controller_axis_values.resize(axis_count);
             }
@@ -603,6 +604,7 @@ void Context_window::poll_events(float wait_time)
                     m_input_events[m_input_event_queue_write].push_back(
                         Input_event{
                             .type = Input_event_type::controller_axis_event,
+                            .timestamp = timestamp,
                             .u = {
                                 .controller_axis_event = {
                                     .controller    = jid,
@@ -615,8 +617,6 @@ void Context_window::poll_events(float wait_time)
                     );
                 }
             }
-            int button_count = 0;
-            const unsigned char* button_values = glfwGetJoystickButtons(jid, &button_count);
             if (button_count > m_controller_button_values.size()) {
                 m_controller_button_values.resize(button_count);
             }
@@ -627,6 +627,7 @@ void Context_window::poll_events(float wait_time)
                     m_input_events[m_input_event_queue_write].push_back(
                         Input_event{
                             .type = Input_event_type::controller_button_event,
+                            .timestamp = timestamp,
                             .u = {
                                 .controller_button_event = {
                                     .controller    = jid,
@@ -655,26 +656,6 @@ void Context_window::poll_events(float wait_time)
     m_input_events[old_read_buffer].clear();
     m_input_event_queue_write = old_read_buffer;
 }
-
-//void Context_window::enter_event_loop()
-//{
-//    m_is_event_loop_running = true;
-//    for (;;) {
-//        if (!m_is_event_loop_running) {
-//            break;
-//        }
-//
-//        poll_events();
-//
-//        if (!m_is_event_loop_running) {
-//            break;
-//        }
-//
-//        if (m_window_event_handler != nullptr) {
-//            m_window_event_handler->on_idle();
-//        }
-//    }
-//}
 
 void Context_window::get_cursor_position(float& xpos, float& ypos)
 {
@@ -765,7 +746,7 @@ auto Context_window::get_modifier_mask() const -> Key_modifier_mask
     return glfw_modifiers_to_erhe(m_glfw_key_modifiers);
 }
 
-void Context_window::handle_key_event(int key, int scancode, int action, int glfw_modifiers)
+void Context_window::handle_key_event(std::chrono::steady_clock::time_point timestamp, int key, int scancode, int action, int glfw_modifiers)
 {
     static_cast<void>(scancode);
 
@@ -777,6 +758,7 @@ void Context_window::handle_key_event(int key, int scancode, int action, int glf
             m_input_events[m_input_event_queue_write].push_back(
                 Input_event{
                     .type = Input_event_type::key_event,
+                    .timestamp = timestamp,
                     .u = {
                         .key_event = {
                             .keycode       = glfw_key_to_erhe(key),
@@ -795,11 +777,12 @@ void Context_window::handle_key_event(int key, int scancode, int action, int glf
     }
 }
 
-void Context_window::handle_window_resize_event(int width, int height)
+void Context_window::handle_window_resize_event(std::chrono::steady_clock::time_point timestamp, int width, int height)
 {
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_resize_event,
+            .timestamp = timestamp,
             .u = {
                 .window_resize_event = {
                     .width = width,
@@ -810,11 +793,12 @@ void Context_window::handle_window_resize_event(int width, int height)
     );
 }
 
-void Context_window::handle_window_refresh_event()
+void Context_window::handle_window_refresh_event(std::chrono::steady_clock::time_point timestamp)
 {
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_refresh_event,
+            .timestamp = timestamp,
             .u = {
                 .window_refresh_event = {}
             }
@@ -822,11 +806,12 @@ void Context_window::handle_window_refresh_event()
     );
 }
 
-void Context_window::handle_window_close_event()
+void Context_window::handle_window_close_event(std::chrono::steady_clock::time_point timestamp)
 {
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_close_event,
+            .timestamp = timestamp,
             .u = {
                 .window_close_event = {}
             }
@@ -834,11 +819,12 @@ void Context_window::handle_window_close_event()
     );
 }
 
-void Context_window::handle_window_focus_event(int focused)
+void Context_window::handle_window_focus_event(std::chrono::steady_clock::time_point timestamp, int focused)
 {
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_focus_event,
+            .timestamp = timestamp,
             .u = {
                 .window_focus_event = {
                     .focused = (focused != 0)
@@ -849,11 +835,12 @@ void Context_window::handle_window_focus_event(int focused)
     log_window_event->trace(m_input_events[m_input_event_queue_write].back().describe());
 }
 
-void Context_window::handle_cursor_enter_event(int entered)
+void Context_window::handle_cursor_enter_event(std::chrono::steady_clock::time_point timestamp, int entered)
 {
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::cursor_enter_event,
+            .timestamp = timestamp,
             .u = {
                 .cursor_enter_event = {
                     .entered = entered
@@ -864,11 +851,12 @@ void Context_window::handle_cursor_enter_event(int entered)
     log_window_event->trace(m_input_events[m_input_event_queue_write].back().describe());
 }
 
-void Context_window::handle_char_event(unsigned int codepoint)
+void Context_window::handle_char_event(std::chrono::steady_clock::time_point timestamp, unsigned int codepoint)
 {
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::char_event,
+            .timestamp = timestamp,
             .u = {
                 .char_event = {
                     .codepoint = codepoint
@@ -878,13 +866,14 @@ void Context_window::handle_char_event(unsigned int codepoint)
     );
 }
 
-void Context_window::handle_mouse_button_event(int button, int action, int glfw_modifiers)
+void Context_window::handle_mouse_button_event(std::chrono::steady_clock::time_point timestamp, int button, int action, int glfw_modifiers)
 {
     m_glfw_key_modifiers = glfw_modifiers;
 
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::mouse_button_event,
+            .timestamp = timestamp,
             .u = {
                 .mouse_button_event = {
                     .button        = glfw_mouse_button_to_erhe(button),
@@ -896,11 +885,12 @@ void Context_window::handle_mouse_button_event(int button, int action, int glfw_
     );
 }
 
-void Context_window::handle_mouse_wheel_event(double x, double y)
+void Context_window::handle_mouse_wheel_event(std::chrono::steady_clock::time_point timestamp, double x, double y)
 {
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::mouse_wheel_event,
+            .timestamp = timestamp,
             .u = {
                 .mouse_wheel_event = {
                     .x             = static_cast<float>(x),
@@ -912,7 +902,7 @@ void Context_window::handle_mouse_wheel_event(double x, double y)
     );
 }
 
-void Context_window::handle_mouse_move(double x, double y)
+void Context_window::handle_mouse_move(std::chrono::steady_clock::time_point timestamp, double x, double y)
 {
     if (m_is_mouse_captured) {
         double dx = x - m_mouse_capture_xpos;
@@ -920,6 +910,7 @@ void Context_window::handle_mouse_move(double x, double y)
         m_input_events[m_input_event_queue_write].push_back(
             Input_event{
                 .type = Input_event_type::mouse_move_event,
+                .timestamp = timestamp,
                 .u = {
                     .mouse_move_event = {
                         .x             = static_cast<float>(m_mouse_capture_xpos),
@@ -939,6 +930,7 @@ void Context_window::handle_mouse_move(double x, double y)
         m_input_events[m_input_event_queue_write].push_back(
             Input_event{
                 .type = Input_event_type::mouse_move_event,
+                .timestamp = timestamp,
                 .u = {
                     .mouse_move_event = {
                         .x             = static_cast<float>(x),

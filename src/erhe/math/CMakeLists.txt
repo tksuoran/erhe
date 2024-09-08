@@ -4,10 +4,12 @@ add_library(erhe::math ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_math/math_log.cpp
+    erhe_math/math_log.hpp
     erhe_math/math_util.cpp
     erhe_math/math_util.hpp
-    erhe_math/simulation_variable.cpp
-    erhe_math/simulation_variable.hpp
+    erhe_math/input_axis.cpp
+    erhe_math/input_axis.hpp
     erhe_math/viewport.cpp
     erhe_math/viewport.hpp
 )
