@@ -379,7 +379,7 @@ Post_processing::Post_processing(erhe::graphics::Instance& graphics_instance, Ed
         .upsample               {graphics_instance, make_program(graphics_instance, "upsample",           std::filesystem::path("upsample.frag"))}
     }
     , m_pipelines{
-        .downsample_with_lowpass{
+        .downsample_with_lowpass = erhe::graphics::Pipeline{
             erhe::graphics::Pipeline_data{
                 .name           = "Downsample with Lowpass",
                 .shader_stages  = &m_shader_stages.downsample.shader_stages,
@@ -390,7 +390,7 @@ Post_processing::Post_processing(erhe::graphics::Instance& graphics_instance, Ed
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
-        .downsample{
+        .downsample = erhe::graphics::Pipeline{
             erhe::graphics::Pipeline_data{
                 .name           = "Post Processing Downsample",
                 .shader_stages  = &m_shader_stages.downsample.shader_stages,
@@ -401,7 +401,7 @@ Post_processing::Post_processing(erhe::graphics::Instance& graphics_instance, Ed
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
-        .upsample{
+        .upsample = erhe::graphics::Pipeline{
             erhe::graphics::Pipeline_data{
                 .name           = "Post Processing Upsample",
                 .shader_stages  = &m_shader_stages.upsample.shader_stages,
