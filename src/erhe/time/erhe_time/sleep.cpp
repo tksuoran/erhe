@@ -3,6 +3,8 @@
 
 #if defined(_WIN32)
 #   include <Windows.h>
+#else
+#   include <time.h>
 #endif
 
 #include <thread>
@@ -89,8 +91,6 @@ void sleep_for_100ns(int64_t time_to_sleep_in_100ns)
 
 #else
 
-// TODO
-
 auto sleep_initialize() -> bool
 {
     return true;
@@ -99,6 +99,19 @@ auto sleep_initialize() -> bool
 void sleep_for(std::chrono::duration<float, std::milli> time_to_sleep)
 {
     std::this_thread::sleep_for(time_to_sleep);
+}
+
+void sleep_for_100ns(int64_t time_to_sleep_in_100ns)
+{
+    struct timespec ts;
+    ts.tv_sec  =  time_to_sleep_in_100ns / 10000000;
+    ts.tv_nsec = (time_to_sleep_in_100ns % 10000000) * 100;
+    while (
+        (nanosleep(&ts, &ts) == -1) &&
+        (errno == EINTR)
+    ) {
+        log_time->warn("nanosleep() EINTR");
+    }
 }
 
 #endif

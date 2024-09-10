@@ -2,6 +2,8 @@
 
 #include "erhe_primitive/buffer_mesh.hpp"
 
+#include <memory>
+
 namespace erhe::raytrace {
     class IGeometry;
     class IInstance;
