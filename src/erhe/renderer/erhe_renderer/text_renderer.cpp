@@ -163,9 +163,9 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto ini = erhe::configuration::get_ini("erhe.ini", "text_renderer");
-    ini->get("enabled",   config.enabled);
-    ini->get("font_size", config.font_size);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "text_renderer");
+    ini.get("enabled",   config.enabled);
+    ini.get("font_size", config.font_size);
 
     if (!config.enabled) {
         log_startup->info("Text renderer disabled due to erhe.ini setting");

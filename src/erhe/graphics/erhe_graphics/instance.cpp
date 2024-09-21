@@ -411,13 +411,13 @@ Instance::Instance(erhe::window::Context_window& context_window)
     bool capture_support            {false};
     bool initial_clear              {false};
     {
-        auto ini = erhe::configuration::get_ini("erhe.ini", "graphics");
-        ini->get("reverse_depth",   configuration.reverse_depth  );
-        ini->get("post_processing", configuration.post_processing);
-        ini->get("use_time_query",  configuration.use_time_query );
-        ini->get("force_no_bindless",           force_no_bindless);
-        ini->get("force_no_persistent_buffers", force_no_persistent_buffers);
-        ini->get("initial_clear",               initial_clear);
+        const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "graphics");
+        ini.get("reverse_depth",   configuration.reverse_depth  );
+        ini.get("post_processing", configuration.post_processing);
+        ini.get("use_time_query",  configuration.use_time_query );
+        ini.get("force_no_bindless",           force_no_bindless);
+        ini.get("force_no_persistent_buffers", force_no_persistent_buffers);
+        ini.get("initial_clear",               initial_clear);
     }
     if (initial_clear) {
         gl::clear_color(0.2f, 0.2f, 0.2f, 0.2f);
@@ -428,8 +428,8 @@ Instance::Instance(erhe::window::Context_window& context_window)
     }
 
     {
-        auto ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
-        ini->get("capture_support", capture_support);
+        const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderdoc");
+        ini.get("capture_support", capture_support);
     }
 
     if (force_no_bindless || capture_support) {

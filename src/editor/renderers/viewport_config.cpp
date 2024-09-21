@@ -15,7 +15,7 @@ auto Viewport_config::default_config() -> Viewport_config
     config.selection_highlight_width_high       = -3.0f;
     config.selection_highlight_frequency        =  1.0f;
 
-    auto ini = erhe::configuration::get_ini("erhe.ini", "viewport");
+    auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");
     float     gizmo_scale              {3.0f};
     bool      polygon_fill             {true};
     bool      edge_lines               {false};
@@ -28,18 +28,19 @@ auto Viewport_config::default_config() -> Viewport_config
     glm::vec4 edge_color               {0.0f, 0.0f, 0.0f, 0.5f};
     glm::vec4 selection_edge_color     {0.0f, 0.0f, 0.0f, 0.5f};
     glm::vec4 clear_color              {0.1f, 0.2f, 0.4f, 1.0f};
-    ini->get("gizmo_scale",               gizmo_scale);
-    ini->get("polygon_fill",              polygon_fill);
-    ini->get("edge_lines",                edge_lines);
-    ini->get("edge_color",                edge_color);
-    ini->get("selection_polygon_fill",    selection_polygon_fill);
-    ini->get("selection_edge_lines",      selection_edge_lines);
-    ini->get("corner_points",             corner_points);
-    ini->get("polygon_centroids",         polygon_centroids);
-    ini->get("selection_bounding_box",    selection_bounding_box);
-    ini->get("selection_bounding_sphere", selection_bounding_sphere);
-    ini->get("selection_edge_color",      selection_edge_color);
-    ini->get("clear_color",               clear_color);
+    const auto& viewport_section = erhe_ini.get_section("viewport");
+    viewport_section.get("gizmo_scale",               gizmo_scale);
+    viewport_section.get("polygon_fill",              polygon_fill);
+    viewport_section.get("edge_lines",                edge_lines);
+    viewport_section.get("edge_color",                edge_color);
+    viewport_section.get("selection_polygon_fill",    selection_polygon_fill);
+    viewport_section.get("selection_edge_lines",      selection_edge_lines);
+    viewport_section.get("corner_points",             corner_points);
+    viewport_section.get("polygon_centroids",         polygon_centroids);
+    viewport_section.get("selection_bounding_box",    selection_bounding_box);
+    viewport_section.get("selection_bounding_sphere", selection_bounding_sphere);
+    viewport_section.get("selection_edge_color",      selection_edge_color);
+    viewport_section.get("clear_color",               clear_color);
 
     Render_style_data& render_style_not_selected = config.render_style_not_selected;
     render_style_not_selected.polygon_fill      = polygon_fill;

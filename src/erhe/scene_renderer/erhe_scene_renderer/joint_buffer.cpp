@@ -21,8 +21,8 @@ Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
     }
     , joint_struct{graphics_instance, "Joint"}
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
-    ini->get("max_joint_count", max_joint_count);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    ini.get("max_joint_count", max_joint_count);
 
     offsets.debug_joint_indices     = joint_block.add_uvec4("debug_joint_indices")->offset_in_parent();
     offsets.debug_joint_color_count = joint_block.add_uint ("debug_joint_color_count")->offset_in_parent(),

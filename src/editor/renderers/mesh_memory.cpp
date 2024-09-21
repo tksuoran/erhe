@@ -10,8 +10,8 @@ static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::m
 auto Mesh_memory::get_vertex_buffer_size() const -> std::size_t
 {
     int vertex_buffer_size{32}; // in megabytes
-    const auto ini = erhe::configuration::get_ini("erhe.ini", "mesh_memory");
-    ini->get("vertex_buffer_size", vertex_buffer_size);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "mesh_memory");
+    ini.get("vertex_buffer_size", vertex_buffer_size);
     std::size_t kilo = 1024;
     std::size_t mega = 1024 * kilo;
     return static_cast<std::size_t>(vertex_buffer_size) * mega;
@@ -20,8 +20,8 @@ auto Mesh_memory::get_vertex_buffer_size() const -> std::size_t
 auto Mesh_memory::get_index_buffer_size() const -> std::size_t
 {
     int index_buffer_size{8}; // in megabytes
-    const auto ini = erhe::configuration::get_ini("erhe.ini", "mesh_memory");
-    ini->get("index_buffer_size", index_buffer_size);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "mesh_memory");
+    ini.get("index_buffer_size", index_buffer_size);
     std::size_t kilo = 1024;
     std::size_t mega = 1024 * kilo;
     return static_cast<std::size_t>(index_buffer_size) * mega;

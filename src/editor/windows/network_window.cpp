@@ -24,11 +24,11 @@ Network_window::Network_window(
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Network", "network"}
     , m_context                {editor_context}
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "network");
-    ini->get("upstream_address",   m_upstream_address);
-    ini->get("upstream_port",      m_upstream_port);
-    ini->get("downstream_address", m_downstream_address);
-    ini->get("downstream_port",    m_downstream_port);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "network");
+    ini.get("upstream_address",   m_upstream_address);
+    ini.get("upstream_port",      m_upstream_port);
+    ini.get("downstream_address", m_downstream_address);
+    ini.get("downstream_port",    m_downstream_port);
 
     m_client.set_receive_handler(
         [this](const uint8_t* data, const std::size_t length) {

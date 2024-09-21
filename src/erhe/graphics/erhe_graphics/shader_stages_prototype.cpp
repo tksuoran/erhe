@@ -3,6 +3,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
@@ -353,6 +354,8 @@ template <typename T>
 
 auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
 {
+    ERHE_PROFILE_FUNCTION();
+
     Gl_shader gl_shader{shader.type};
 
     if (m_state == state_fail) {
@@ -385,6 +388,8 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
 
 auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(m_state == state_shader_compilation_started);
 
     const auto gl_name = gl_shader.gl_name();
@@ -419,6 +424,8 @@ Shader_stages_prototype::Shader_stages_prototype(
     , m_create_info          {create_info}
     , m_default_uniform_block{graphics_instance}
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(m_handle.gl_name() != 0);
     if (create_info.build) {
         post_link();
@@ -433,6 +440,8 @@ Shader_stages_prototype::Shader_stages_prototype(
     , m_create_info          {create_info}
     , m_default_uniform_block{graphics_instance}
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(m_handle.gl_name() != 0);
     if (create_info.build) {
         post_link();
@@ -441,6 +450,8 @@ Shader_stages_prototype::Shader_stages_prototype(
 
 void Shader_stages_prototype::compile_shaders()
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(m_state == state_init);
     for (const auto& shader : m_create_info.shaders) {
         m_prelink_shaders.emplace_back(compile(shader));
@@ -452,6 +463,8 @@ void Shader_stages_prototype::compile_shaders()
 
 auto Shader_stages_prototype::link_program() -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (m_state == state_fail) {
         return false;
     }
@@ -484,6 +497,8 @@ auto Shader_stages_prototype::link_program() -> bool
 
 void Shader_stages_prototype::post_link()
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (m_state == state_fail) {
         return;
     }
@@ -619,6 +634,8 @@ auto is_array_and_nonzero(const std::string& name)
 
 void Shader_stages_prototype::dump_reflection() const
 {
+    ERHE_PROFILE_FUNCTION();
+
     const int gl_name = m_handle.gl_name();
 
     int link_status                          {0};

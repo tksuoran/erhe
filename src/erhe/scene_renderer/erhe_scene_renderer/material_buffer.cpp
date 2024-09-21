@@ -29,8 +29,8 @@ Material_interface::Material_interface(erhe::graphics::Instance& graphics_instan
         .reserved3                  = material_struct.add_float("reserved3"                 )->offset_in_parent()
     }
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
-    ini->get("max_material_count", max_material_count);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    ini.get("max_material_count", max_material_count);
 
     material_block.add_struct(
         "materials",

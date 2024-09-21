@@ -1,4 +1,5 @@
 #include "erhe_physics/jolt/jolt_compound_shape.hpp"
+#include "erhe_physics/jolt/glm_conversions.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::physics {

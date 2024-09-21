@@ -203,39 +203,39 @@ public:
     [[nodiscard]] static auto get_windows_ini_path() -> std::string
     {
         bool openxr{false};
-        auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
-        ini->get("openxr", openxr);
+        const auto& heaset = erhe::configuration::get_ini_file_section("erhe.ini", "headset");
+        heaset.get("openxr", openxr);
         return openxr ? "openxr_windows.ini" : "windows.ini";
     }
 
     [[nodiscard]] static auto conditionally_enable_window_imgui_host(erhe::window::Context_window* context_window)
     {
         bool openxr{false};
-        auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
-        ini->get("openxr", openxr);
+        const auto& heaset = erhe::configuration::get_ini_file_section("erhe.ini", "headset");
+        heaset.get("openxr", openxr);
         return openxr ? nullptr : context_window;
     }
 
     [[nodiscard]] auto create_window() -> erhe::window::Context_window
     {
-        {
-            auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
-            ini->get("openxr",        m_editor_context.OpenXR);
-            ini->get("openxr_mirror", m_editor_context.OpenXR_mirror);
+        auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");
 
-            ini = erhe::configuration::get_ini("erhe.ini", "developer");
-            ini->get("enable", m_editor_context.developer_mode);
+        const auto& headset_section = erhe_ini.get_section("headset");
+        headset_section.get("openxr",        m_editor_context.OpenXR);
+        headset_section.get("openxr_mirror", m_editor_context.OpenXR_mirror);
 
-            ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
-            ini->get("capture_support", m_editor_context.renderdoc);
-            if (m_editor_context.renderdoc) {
-                m_editor_context.developer_mode = true;
-            }
+        const auto& developer_section = erhe_ini.get_section("developer");
+        developer_section.get("enable", m_editor_context.developer_mode);
 
-            ini = erhe::configuration::get_ini("erhe.ini", "window");
-            ini->get("use_sleep", m_editor_context.use_sleep);
-            ini->get("sleep_margin", m_editor_context.sleep_margin);
+        const auto& renderdoc_section = erhe_ini.get_section("renderdoc");
+        renderdoc_section.get("capture_support", m_editor_context.renderdoc);
+        if (m_editor_context.renderdoc) {
+            m_editor_context.developer_mode = true;
         }
+
+        const auto& window_section = erhe_ini.get_section("window");
+        window_section.get("use_sleep", m_editor_context.use_sleep);
+        window_section.get("sleep_margin", m_editor_context.sleep_margin);
 
         erhe::window::Window_configuration configuration{
             .use_depth         = m_editor_context.OpenXR_mirror,
@@ -248,15 +248,14 @@ public:
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta")
         };
 
-        auto ini = erhe::configuration::get_ini("erhe.ini", "window");
-        ini->get("show",             configuration.show);
-        ini->get("fullscreen",       configuration.fullscreen);
-        ini->get("use_transparency", configuration.framebuffer_transparency);
-        ini->get("gl_major",         configuration.gl_major);
-        ini->get("gl_minor",         configuration.gl_minor);
-        ini->get("width",            configuration.width);
-        ini->get("height",           configuration.height);
-        ini->get("swap_interval",    configuration.swap_interval);
+        window_section.get("show",             configuration.show);
+        window_section.get("fullscreen",       configuration.fullscreen);
+        window_section.get("use_transparency", configuration.framebuffer_transparency);
+        window_section.get("gl_major",         configuration.gl_major);
+        window_section.get("gl_minor",         configuration.gl_minor);
+        window_section.get("width",            configuration.width);
+        window_section.get("height",           configuration.height);
+        window_section.get("swap_interval",    configuration.swap_interval);
 
         return erhe::window::Context_window{configuration};
     }
@@ -414,9 +413,9 @@ public:
 
         fill_editor_context();
 
-        auto ini = erhe::configuration::get_ini("erhe.ini", "physics");
-        ini->get("static_enable",  m_editor_settings.physics.static_enable);
-        ini->get("dynamic_enable", m_editor_settings.physics.dynamic_enable);
+        const auto& physics_section = erhe::configuration::get_ini_file_section("erhe.ini", "physics");
+        physics_section.get("static_enable",  m_editor_settings.physics.static_enable);
+        physics_section.get("dynamic_enable", m_editor_settings.physics.dynamic_enable);
         if (!m_editor_settings.physics.static_enable) {
             m_editor_settings.physics.dynamic_enable = false;
         }
@@ -682,43 +681,54 @@ void run_editor()
 #if defined(ERHE_PROFILE_LIBRARY_NVTX)
     nvtxInitialize(nullptr);
 #endif
-    erhe::log::initialize_log_sinks();
-    gl::initialize_logging();
-    erhe::commands::initialize_logging();
-    erhe::file::initialize_logging();
-    erhe::gltf::initialize_logging();
-    erhe::geometry::initialize_logging();
-    erhe::graphics::initialize_logging();
-    erhe::imgui::initialize_logging();
-    erhe::item::initialize_logging();
-    erhe::math::initialize_logging();
-    erhe::net::initialize_logging();
-    erhe::physics::initialize_logging();
-    erhe::primitive::initialize_logging();
-    erhe::raytrace::initialize_logging();
-    erhe::renderer::initialize_logging();
-    erhe::rendergraph::initialize_logging();
-    erhe::scene::initialize_logging();
-    erhe::scene_renderer::initialize_logging();
-    erhe::window::initialize_logging();
-    erhe::ui::initialize_logging();
+    {
+        ERHE_PROFILE_SCOPE("erhe::log::initialize_log_sinks()");
+        erhe::log::initialize_log_sinks();
+    }
+    {
+        ERHE_PROFILE_SCOPE("initialize logging");
+        gl::initialize_logging();
+        erhe::commands::initialize_logging();
+        erhe::file::initialize_logging();
+        erhe::gltf::initialize_logging();
+        erhe::geometry::initialize_logging();
+        erhe::graphics::initialize_logging();
+        erhe::imgui::initialize_logging();
+        erhe::item::initialize_logging();
+        erhe::math::initialize_logging();
+        erhe::net::initialize_logging();
+        erhe::physics::initialize_logging();
+        erhe::primitive::initialize_logging();
+        erhe::raytrace::initialize_logging();
+        erhe::renderer::initialize_logging();
+        erhe::rendergraph::initialize_logging();
+        erhe::scene::initialize_logging();
+        erhe::scene_renderer::initialize_logging();
+        erhe::window::initialize_logging();
+        erhe::ui::initialize_logging();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    erhe::xr::initialize_logging();
+        erhe::xr::initialize_logging();
 #endif
-    editor::initialize_logging();
+        editor::initialize_logging();
+    }
+
     erhe::time::sleep_initialize();
 
-    bool enable_renderdoc_capture_support{false};
     {
-        auto ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
-        ini->get("capture_support", enable_renderdoc_capture_support);
-    }
-    if (enable_renderdoc_capture_support) {
-        erhe::window::initialize_frame_capture();
+        ERHE_PROFILE_SCOPE("init renderdoc");
+        bool enable_renderdoc_capture_support{false};
+        const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderdoc");
+        ini.get("capture_support", enable_renderdoc_capture_support);
+        if (enable_renderdoc_capture_support) {
+            erhe::window::initialize_frame_capture();
+        }
     }
 
-    Editor editor{};
-    editor.run();
+    {
+        ERHE_PROFILE_SCOPE("Construct and run Editor");
+        Editor editor{};
+        editor.run();
+    }
 }
 
 } // namespace editor

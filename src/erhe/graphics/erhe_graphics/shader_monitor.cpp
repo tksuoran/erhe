@@ -12,8 +12,8 @@ using std::string;
 
 void Shader_monitor::begin()
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "shader_monitor");
-    ini->get("enabled", m_run);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "shader_monitor");
+    ini.get("enabled", m_run);
 
     if (!m_run) {
         log_shader_monitor->info("Shader monitor disabled due to erhe.ini setting");

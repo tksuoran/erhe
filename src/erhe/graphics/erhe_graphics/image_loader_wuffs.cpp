@@ -1,4 +1,5 @@
 #include "erhe_graphics/image_loader.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <mango/mango.hpp>
@@ -164,6 +165,8 @@ Image_loader_impl::~Image_loader_impl() noexcept
 
 auto Image_loader_impl::open(const std::filesystem::path& path, Image_info& info) -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     close();
 
     m_file = std::make_unique<mango::filesystem::File>(path.string());
@@ -175,6 +178,8 @@ auto Image_loader_impl::open(const std::filesystem::path& path, Image_info& info
 
 auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, Image_info& info) -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     wuffs_base__slice_u8 file_data{
         .ptr = const_cast<uint8_t*>(buffer_view.data()),
         .len = buffer_view.size()
@@ -300,6 +305,8 @@ auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, I
 
 auto Image_loader_impl::load(std::span<std::uint8_t> destination) -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     uint32_t width = wuffs_base__pixel_config__width(&m_image_config.pixcfg);
     uint32_t height = wuffs_base__pixel_config__height(&m_image_config.pixcfg);
 

@@ -33,8 +33,8 @@ Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
         .exposure             = camera_struct.add_float("exposure"            )->offset_in_parent()
     }
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
-    ini->get("max_camera_count", max_camera_count);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    ini.get("max_camera_count", max_camera_count);
 
     camera_block.add_struct("cameras", &camera_struct, max_camera_count);
 }

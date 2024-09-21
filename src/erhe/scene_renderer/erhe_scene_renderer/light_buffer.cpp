@@ -17,8 +17,8 @@ namespace erhe::scene_renderer {
 [[nodiscard]] auto get_max_light_count() -> std::size_t
 {
     int max_light_count{1};
-    auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
-    ini->get("max_light_count", max_light_count);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    ini.get("max_light_count", max_light_count);
     return max_light_count;
 }
 

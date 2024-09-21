@@ -83,20 +83,20 @@ using glm::vec4;
 
 Scene_builder::Config::Config()
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "scene");
-    ini->get("camera_exposure",             camera_exposure);
-    ini->get("directional_light_intensity", directional_light_intensity);
-    ini->get("directional_light_radius",    directional_light_radius);
-    ini->get("directional_light_height",    directional_light_height);
-    ini->get("directional_light_count",     directional_light_count);
-    ini->get("spot_light_intensity",        spot_light_intensity);
-    ini->get("spot_light_radius",           spot_light_radius);
-    ini->get("spot_light_height",           spot_light_height);
-    ini->get("spot_light_count",            spot_light_count);
-    ini->get("floor_size",                  floor_size);
-    ini->get("mass_scale",                  mass_scale);
-    ini->get("detail",                      detail);
-    ini->get("floor",                       floor);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+    ini.get("camera_exposure",             camera_exposure);
+    ini.get("directional_light_intensity", directional_light_intensity);
+    ini.get("directional_light_radius",    directional_light_radius);
+    ini.get("directional_light_height",    directional_light_height);
+    ini.get("directional_light_count",     directional_light_count);
+    ini.get("spot_light_intensity",        spot_light_intensity);
+    ini.get("spot_light_radius",           spot_light_radius);
+    ini.get("spot_light_height",           spot_light_height);
+    ini.get("spot_light_count",            spot_light_count);
+    ini.get("floor_size",                  floor_size);
+    ini.get("mass_scale",                  mass_scale);
+    ini.get("detail",                      detail);
+    ini.get("floor",                       floor);
 }
 
 Scene_builder::Scene_builder(
@@ -303,8 +303,8 @@ void Scene_builder::setup_cameras(
     const bool window_viewport        = true;
     bool imgui_window_scene_view = true;
     {
-        auto ini = erhe::configuration::get_ini("erhe.ini", "scene");
-        ini->get("imgui_window_scene_view", imgui_window_scene_view);
+        const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+        ini.get("imgui_window_scene_view", imgui_window_scene_view);
     }
 
     if (!imgui_window_scene_view) {

@@ -107,13 +107,13 @@ Headset_view::Headset_view(
         return;
     }
 
-    auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
-    ini->get("quad_view",         config.quad_view);
-    ini->get("debug",             config.debug);
-    ini->get("depth",             config.depth);
-    ini->get("visibility_mask",   config.visibility_mask);
-    ini->get("hand_tracking",     config.hand_tracking);
-    ini->get("composition_alpha", config.composition_alpha);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "headset");
+    ini.get("quad_view",         config.quad_view);
+    ini.get("debug",             config.debug);
+    ini.get("depth",             config.depth);
+    ini.get("visibility_mask",   config.visibility_mask);
+    ini.get("hand_tracking",     config.hand_tracking);
+    ini.get("composition_alpha", config.composition_alpha);
 
     m_scene_root = scene_builder.get_scene_root();
     editor_rendering.add(this);

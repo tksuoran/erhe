@@ -27,8 +27,8 @@ Primitive_interface::Primitive_interface(erhe::graphics::Instance& graphics_inst
         .base_joint_index         = primitive_struct.add_uint ("base_joint_index"        )->offset_in_parent()
     }
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
-    ini->get("max_primitive_count", max_primitive_count);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    ini.get("max_primitive_count", max_primitive_count);
 
     primitive_block.add_struct("primitives", &primitive_struct, erhe::graphics::Shader_resource::unsized_array);
     primitive_block.set_readonly(true);

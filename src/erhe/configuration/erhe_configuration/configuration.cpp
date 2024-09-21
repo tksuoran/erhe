@@ -4,6 +4,7 @@
 #include <cctype>
 #include <filesystem>
 #include <string>
+#include <string_view>
 
 namespace erhe::configuration {
 
@@ -144,64 +145,111 @@ void ini_get(const mINI::INIMap<std::string>& ini, std::string key, bool& destin
     }
 }
 
-Ini::~Ini() noexcept = default;
+//Ini::~Ini() noexcept = default;
 
-class Ini_impl : public Ini
+class Ini_section_impl : public Ini_section
 {
 public:
-    Ini_impl(const char* path, const char* section_name)
+    Ini_section_impl(const std::string& name, mINI::INIStructure& ini)
+        : m_name{name}
+        , m_ini_map{ini.get(m_name)}
     {
-        mINI::INIFile file{path};
-        if (file.read(ini)) {
-            section = ini.get(section_name);
-            //const auto current_path = std::filesystem::current_path();
-            //log_configuration->warn("Unable to read ini file '{}' in '{}'", path, current_path.string());
+    }
+    Ini_section_impl(const Ini_section_impl&) = delete;
+    Ini_section_impl(Ini_section_impl&&) = default;
+    Ini_section_impl& operator=(const Ini_section_impl&) = delete;
+    Ini_section_impl& operator=(Ini_section_impl&&) = default;
+    ~Ini_section_impl() override {}
+
+    auto get_name() const -> const std::string& { return m_name; }
+
+    void get(const std::string& key, std::size_t& destination) const override { ini_get(m_ini_map, key, destination); }
+    void get(const std::string& key, bool&        destination) const override { ini_get(m_ini_map, key, destination); }
+    void get(const std::string& key, int&         destination) const override { ini_get(m_ini_map, key, destination); }
+    void get(const std::string& key, float&       destination) const override { ini_get(m_ini_map, key, destination); }
+    void get(const std::string& key, glm::vec2&   destination) const override { ini_get(m_ini_map, key, destination); }
+    void get(const std::string& key, glm::vec3&   destination) const override { ini_get(m_ini_map, key, destination); }
+    void get(const std::string& key, glm::vec4&   destination) const override { ini_get(m_ini_map, key, destination); }
+    void get(const std::string& key, std::string& destination) const override { ini_get(m_ini_map, key, destination); }
+
+private:
+    std::string m_name;
+    mINI::INIMap<std::string> m_ini_map;
+};
+
+class Ini_file_impl : public Ini_file
+{
+public:
+    Ini_file_impl(const std::string& name)
+        : m_name{name}
+    {
+        mINI::INIFile file{name};
+        file.read(m_ini);
+    }
+    Ini_file_impl(const Ini_file_impl&) = delete;
+    Ini_file_impl& operator=(const Ini_file_impl&) = delete;
+    Ini_file_impl(Ini_file_impl&&) = default;
+    Ini_file_impl& operator=(Ini_file_impl&&) = default;
+    ~Ini_file_impl() override {}
+
+    auto get_name() const -> const std::string& { return m_name; }
+
+    auto get_section(const std::string& name) -> const Ini_section& override
+    {
+        for (const auto& section : m_sections) {
+            if (section.get_name() == name) {
+                return section;
+            }
         }
-    }
-    ~Ini_impl() noexcept override = default;
-    Ini_impl& operator=(const Ini_impl&) = default;
-    void get(const char* key, std::size_t& destination) const override
-    {
-        ini_get(section, key, destination);
-    }
-    void get(const char* key, int& destination) const override
-    {
-        ini_get(section, key, destination);
-    }
-    void get(const char* key, float& destination) const override
-    {
-        ini_get(section, key, destination);
-    }
-    void get(const char* key, glm::vec2& destination) const override
-    {
-        ini_get(section, key, destination);
-    }
-    void get(const char* key, glm::vec3& destination) const override
-    {
-        ini_get(section, key, destination);
-    }
-    void get(const char* key, glm::vec4& destination) const override
-    {
-        ini_get(section, key, destination);
-    }
-    void get(const char* key, std::string& destination) const override
-    {
-        ini_get(section, key, destination);
-    }
-    void get(const char* key, bool& destination) const override
-    {
-        ini_get(section, key, destination);
+        Ini_section_impl& section = m_sections.emplace_back(name, m_ini);
+        return section;
     }
 
 private:
-    mINI::INIStructure ini;
-    mINI::INIMap<std::string> section;
+    std::string m_name;
+    mINI::INIStructure m_ini;
+    std::vector<Ini_section_impl> m_sections;
 };
 
-auto get_ini(const char* path, const char* section) -> std::unique_ptr<Ini>
+class Ini_cache_impl : public Ini_cache
 {
-    return std::make_unique<Ini_impl>(path, section);
+public:
+    ~Ini_cache_impl() override {}
+
+    auto get_ini_file(const std::string& name) -> Ini_file& override
+    {
+        for (auto& file : m_files) {
+            if (file.get_name() == name) {
+                return file;
+            }
+        }
+        Ini_file_impl& file = m_files.emplace_back(name);
+        return file;
+    }
+
+    std::vector<Ini_file_impl> m_files;
+};
+
+auto Ini_cache::get_instance() -> Ini_cache&
+{
+    static Ini_cache_impl static_instance;
+    return static_instance;
+}
+
+auto get_ini_file(std::string_view file_name) -> Ini_file&
+{
+    Ini_cache& cache = Ini_cache::get_instance();
+    Ini_file& file = cache.get_ini_file(std::string{file_name});
+    return file;
+}
+
+auto get_ini_file_section(std::string_view file_name, std::string_view section_name) -> const Ini_section&
+{
+    Ini_file& file = get_ini_file(file_name);
+    const Ini_section& section = file.get_section(std::string{section_name});
+    return section;
 }
 
 } // namespace erhe::configuration
+
 

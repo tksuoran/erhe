@@ -109,9 +109,10 @@ public:
         ERHE_VERIFY(!name.empty());
         const auto groupname = get_groupname(name);
         const auto basename  = get_basename(name);
-        auto ini = erhe::configuration::get_ini("logging.ini", groupname.c_str());
+        const auto& ini = erhe::configuration::get_ini_file_section("logging.ini", groupname);
+
         std::string levelname;
-        ini->get(basename.c_str(), levelname);
+        ini.get(basename.c_str(), levelname);
         const spdlog::level::level_enum level_parsed = spdlog::level::from_str(levelname);
 
         std::shared_ptr<spdlog::logger> logger = std::make_shared<spdlog::logger>(

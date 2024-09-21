@@ -355,8 +355,8 @@ auto Scene_views::open_new_viewport_scene_view(const std::shared_ptr<Scene_root>
 void Scene_views::open_new_viewport_scene_view_node()
 {
     bool window_viewport{true};
-    auto ini = erhe::configuration::get_ini("erhe.ini", "imgui");
-    ini->get("window_viewport", window_viewport);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "imgui");
+    ini.get("window_viewport", window_viewport);
 
     auto viewport_scene_view = open_new_viewport_scene_view();
     if (window_viewport) {

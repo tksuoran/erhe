@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/instance.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <fmt/format.h>
 
@@ -11,6 +12,7 @@ using std::string;
 
 auto Reloadable_shader_stages::make_prototype(Instance& graphics_instance) -> Shader_stages_prototype
 {
+    ERHE_PROFILE_FUNCTION();
     erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
     return prototype;
 }
@@ -76,6 +78,8 @@ Shader_stages::Shader_stages(const std::string& failed_name)
 
 Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(prototype.m_handle.gl_name() != 0);
 
     m_name     = prototype.name();
@@ -98,6 +102,8 @@ void Shader_stages::invalidate()
 
 void Shader_stages::reload(Shader_stages_prototype&& prototype)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!prototype.is_valid() || (prototype.m_handle.gl_name() == 0)) {
         invalidate();
         return;

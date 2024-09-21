@@ -7,6 +7,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/instance.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -343,6 +344,8 @@ Texture::Texture(const Create_info& create_info)
     , m_depth                 {create_info.depth}
     , m_buffer                {create_info.buffer}
 {
+    ERHE_PROFILE_FUNCTION();
+
     SPDLOG_LOGGER_TRACE(
         log_texture,
         "New texture {} {}x{} {} sample count = {}",
@@ -544,6 +547,8 @@ auto Texture::is_shown_in_ui() const -> bool
 
 void Texture::upload(const gl::Internal_format internal_format, const int width, const int height, const int depth)
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(internal_format == m_internal_format);
     ERHE_VERIFY(width  >= 1);
     ERHE_VERIFY(height >= 1);
@@ -588,6 +593,8 @@ void Texture::upload(
     const int                           z
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(internal_format == m_internal_format);
     ERHE_VERIFY(width  >= 1);
     ERHE_VERIFY(height >= 1);
@@ -639,6 +646,8 @@ void Texture::upload_subimage(
     const int                           z
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(internal_format == m_internal_format);
     ERHE_VERIFY(width  >= 1);
     ERHE_VERIFY(height >= 1);

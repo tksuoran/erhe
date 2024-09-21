@@ -187,13 +187,13 @@ Hotbar::Hotbar(
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto ini = erhe::configuration::get_ini("erhe.ini", "hotbar");
-    ini->get("enabled",    m_enabled);
-    ini->get("show",       m_show);
-    ini->get("use_radial", m_use_radial);
-    ini->get("x",          m_x);
-    ini->get("y",          m_y);
-    ini->get("z",          m_z);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "hotbar");
+    ini.get("enabled",    m_enabled);
+    ini.get("show",       m_show);
+    ini.get("use_radial", m_use_radial);
+    ini.get("x",          m_x);
+    ini.get("y",          m_y);
+    ini.get("z",          m_z);
 
     if (!m_enabled) {
         hide_window();

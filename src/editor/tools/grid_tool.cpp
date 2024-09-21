@@ -40,18 +40,18 @@ Grid_tool::Grid_tool(
 
     tools.register_tool(this);
 
-    auto ini = erhe::configuration::get_ini("erhe.ini", "grid");
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "grid");
     bool initial_snap_enable{true};
     bool initial_grid_visible{true};
-    ini->get("snap_enabled", initial_snap_enable);
-    ini->get("visible",      initial_grid_visible);
-    ini->get("major_color",  config.major_color);
-    ini->get("minor_color",  config.minor_color);
-    ini->get("major_width",  config.major_width);
-    ini->get("minor_width",  config.minor_width);
-    ini->get("cell_size",    config.cell_size);
-    ini->get("cell_div",     config.cell_div);
-    ini->get("cell_count",   config.cell_count);
+    ini.get("snap_enabled", initial_snap_enable);
+    ini.get("visible",      initial_grid_visible);
+    ini.get("major_color",  config.major_color);
+    ini.get("minor_color",  config.minor_color);
+    ini.get("major_width",  config.major_width);
+    ini.get("minor_width",  config.minor_width);
+    ini.get("cell_size",    config.cell_size);
+    ini.get("cell_div",     config.cell_div);
+    ini.get("cell_count",   config.cell_count);
 
     std::shared_ptr<Grid> grid = std::make_shared<Grid>();
     // TODO Move config to editor ?

@@ -449,12 +449,12 @@ Fly_camera_tool::Fly_camera_tool(
     m_camera_controller->get_variable(Variable::rotate_y   ).set_power_base(65536.0f * 65536.0f);
     m_camera_controller->get_variable(Variable::rotate_z   ).set_power_base(65536.0f * 65536.0f);
 
-    auto ini = erhe::configuration::get_ini("erhe.ini", "camera_controls");
-    ini->get("invert_x",   config.invert_x);
-    ini->get("invert_y",   config.invert_y);
-    ini->get("move_power", config.move_power);
-    ini->get("move_speed", m_camera_controller->move_speed);
-    ini->get("turn_speed", config.turn_speed);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "camera_controls");
+    ini.get("invert_x",   config.invert_x);
+    ini.get("invert_y",   config.invert_y);
+    ini.get("move_power", config.move_power);
+    ini.get("move_speed", m_camera_controller->move_speed);
+    ini.get("turn_speed", config.turn_speed);
 
     set_base_priority(c_priority);
     set_description  ("Fly Camera");

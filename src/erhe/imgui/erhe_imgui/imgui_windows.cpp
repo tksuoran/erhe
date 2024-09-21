@@ -110,8 +110,8 @@ auto Imgui_windows::get_persistent_window_open(std::string_view ini_label) const
 {
     bool result = true;
     if (!m_windows_ini_path.empty()) {
-        auto ini = erhe::configuration::get_ini(m_windows_ini_path.c_str(), "windows");
-        ini->get(ini_label.data(), result);
+        const auto& ini = erhe::configuration::get_ini_file_section(m_windows_ini_path.c_str(), "windows");
+        ini.get(ini_label.data(), result);
     }
     return result;
 }

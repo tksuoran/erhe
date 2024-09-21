@@ -147,23 +147,21 @@ void Graphics_settings::select_active_graphics_preset(Editor_message_bus& editor
 void Editor_settings::read()
 {
     graphics.read_presets();
-    {
-        auto ini = erhe::configuration::get_ini("settings.ini", "graphics");
-        ini->get("preset", graphics.current_graphics_preset.name);
-    }
-    {
-        auto ini = erhe::configuration::get_ini("settings.ini", "imgui");
-        ini->get("primary_font", imgui.primary_font);
-        ini->get("mono_font",    imgui.mono_font);
-        ini->get("font_size",    imgui.font_size);
-        ini->get("vr_font_size", imgui.vr_font_size);
-    }
-    {
-        auto ini = erhe::configuration::get_ini("erhe.ini", "icons");
-        ini->get("small_icon_size",  icons.small_icon_size);
-        ini->get("large_icon_size",  icons.large_icon_size);
-        ini->get("hotbar_icon_size", icons.hotbar_icon_size);
-    }
+
+    auto& settings_ini = erhe::configuration::get_ini_file("settings.ini");
+    const auto& graphics_section = settings_ini.get_section("graphics");
+    graphics_section.get("preset", graphics.current_graphics_preset.name);
+
+    const auto& imgui_section = settings_ini.get_section("imgui");
+    imgui_section.get("primary_font", imgui.primary_font);
+    imgui_section.get("mono_font",    imgui.mono_font);
+    imgui_section.get("font_size",    imgui.font_size);
+    imgui_section.get("vr_font_size", imgui.vr_font_size);
+
+    const auto& icons_section = settings_ini.get_section("icons");
+    icons_section.get("small_icon_size",  icons.small_icon_size);
+    icons_section.get("large_icon_size",  icons.large_icon_size);
+    icons_section.get("hotbar_icon_size", icons.hotbar_icon_size);
 }
 
 void Editor_settings::write()

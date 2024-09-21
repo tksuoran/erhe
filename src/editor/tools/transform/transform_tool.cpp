@@ -126,10 +126,10 @@ Transform_tool::Transform_tool(
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto ini = erhe::configuration::get_ini("erhe.ini", "transform_tool");
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "transform_tool");
     auto& settings = shared.settings;
-    ini->get("show_translate", settings.show_translate);
-    ini->get("show_rotate",    settings.show_rotate);
+    ini.get("show_translate", settings.show_translate);
+    ini.get("show_rotate",    settings.show_rotate);
 
     shared.visualization.emplace(editor_context, mesh_memory, tools);
 

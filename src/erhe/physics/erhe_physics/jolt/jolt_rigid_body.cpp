@@ -2,6 +2,7 @@
 
 #include "erhe_physics/jolt/jolt_rigid_body.hpp"
 #include "erhe_log/log_glm.hpp"
+#include "erhe_physics/jolt/glm_conversions.hpp"
 #include "erhe_physics/jolt/jolt_collision_shape.hpp"
 #include "erhe_physics/jolt/jolt_world.hpp"
 #include "erhe_physics/physics_log.hpp"

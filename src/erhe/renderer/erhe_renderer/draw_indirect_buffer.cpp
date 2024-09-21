@@ -15,8 +15,8 @@ namespace erhe::renderer {
 Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance)
     : Multi_buffer{graphics_instance, "draw indirect"}
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
-    ini->get("max_draw_count", m_max_draw_count);
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    ini.get("max_draw_count", m_max_draw_count);
 
     Multi_buffer::allocate(
         gl::Buffer_target::draw_indirect_buffer,

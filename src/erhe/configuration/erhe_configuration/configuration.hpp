@@ -18,20 +18,42 @@ void ini_get (const mINI::INIMap<std::string>& ini, std::string key, glm::vec4& 
 void ini_get (const mINI::INIMap<std::string>& ini, std::string key, std::string& destination);
 void ini_get (const mINI::INIMap<std::string>& ini, std::string key, bool& destination);
 
-class Ini
+class Ini_section
 {
 public:
-    virtual ~Ini() noexcept;
-    virtual void get(const char* key, std::size_t& destination) const = 0;
-    virtual void get(const char* key, int&         destination) const = 0;
-    virtual void get(const char* key, float&       destination) const = 0;
-    virtual void get(const char* key, glm::vec3&   destination) const = 0;
-    virtual void get(const char* key, glm::vec2&   destination) const = 0;
-    virtual void get(const char* key, glm::vec4&   destination) const = 0;
-    virtual void get(const char* key, std::string& destination) const = 0;
-    virtual void get(const char* key, bool&        destination) const = 0;
+    virtual ~Ini_section(){}
+
+    virtual void get(const std::string& key, std::size_t& destination) const = 0;
+    virtual void get(const std::string& key, bool&        destination) const = 0;
+    virtual void get(const std::string& key, int&         destination) const = 0;
+    virtual void get(const std::string& key, float&       destination) const = 0;
+    virtual void get(const std::string& key, glm::vec2&   destination) const = 0;
+    virtual void get(const std::string& key, glm::vec3&   destination) const = 0;
+    virtual void get(const std::string& key, glm::vec4&   destination) const = 0;
+    virtual void get(const std::string& key, std::string& destination) const = 0;
 };
 
-auto get_ini(const char* path, const char* section) -> std::unique_ptr<Ini>;
+class Ini_file
+{
+public:
+    virtual ~Ini_file(){}
+
+    virtual auto get_section(const std::string& name) -> const Ini_section& = 0;
+};
+
+class Ini_cache
+{
+public:
+    virtual ~Ini_cache() {}
+
+    static auto get_instance() -> Ini_cache&;
+
+    virtual auto get_ini_file(const std::string& name) -> Ini_file& = 0;
+};
+
+auto get_ini_file(std::string_view file_name) -> Ini_file&;
+auto get_ini_file_section(std::string_view file_name, std::string_view section_name) -> const Ini_section&;
+
+//auto get_ini(const char* path) -> std::unique_ptr<Ini>;
 
 } // namespace erhe::configuration

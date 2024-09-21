@@ -4,6 +4,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <thread>
@@ -14,6 +15,8 @@ namespace {
 
 void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
 {
+    ERHE_PROFILE_FUNCTION();
+
     int type{0};
     gl::get_named_framebuffer_attachment_parameter_iv(
         fbo_name,
@@ -159,6 +162,8 @@ Framebuffer::~Framebuffer() noexcept
 
 void Framebuffer::on_thread_enter()
 {
+    ERHE_PROFILE_FUNCTION();
+
     const std::lock_guard lock{s_mutex};
 
     for (auto* framebuffer : s_all_framebuffers) {
@@ -170,6 +175,8 @@ void Framebuffer::on_thread_enter()
 
 void Framebuffer::on_thread_exit()
 {
+    ERHE_PROFILE_FUNCTION();
+
     const std::lock_guard lock{s_mutex};
 
     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
@@ -190,6 +197,8 @@ void Framebuffer::reset()
 
 void Framebuffer::create()
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (m_gl_framebuffer.has_value()) {
         ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
         return;

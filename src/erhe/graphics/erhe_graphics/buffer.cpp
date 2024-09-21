@@ -381,6 +381,8 @@ auto Buffer::map_bytes(
     const gl::Map_buffer_access_mask access_mask
 ) noexcept -> std::span<std::byte>
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(byte_count > 0);
     ERHE_VERIFY(m_map.empty());
     ERHE_VERIFY(gl_name() != 0);
@@ -465,6 +467,8 @@ auto Buffer::map_bytes(
 
 void Buffer::unmap() noexcept
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(!m_map.empty());
     ERHE_VERIFY(gl_name() != 0);
 
