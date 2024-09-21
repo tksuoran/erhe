@@ -21,6 +21,7 @@ target_link_libraries(${_target}
         fmt::fmt
     PRIVATE
         erhe::log
+        erhe::profile
 )
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

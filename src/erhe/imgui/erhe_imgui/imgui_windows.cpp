@@ -25,6 +25,8 @@ Imgui_windows::Imgui_windows(
     , m_rendergraph     {rendergraph}
     , m_windows_ini_path{windows_ini_path}
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (context_window != nullptr) {
         m_window_imgui_host = std::make_shared<erhe::imgui::Window_imgui_host>(
             imgui_renderer,

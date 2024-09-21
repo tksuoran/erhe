@@ -32,6 +32,8 @@ Grid_tool::Grid_tool(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Grid", "grid"}
     , Tool                     {editor_context}
 {
+    ERHE_PROFILE_FUNCTION();
+
     set_description("Grid");
     set_flags      (Tool_flags::background);
     set_icon       (icon_set.icons.grid);

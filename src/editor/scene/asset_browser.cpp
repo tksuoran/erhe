@@ -53,6 +53,8 @@ auto Scene_open_operation::describe() const -> std::string
 
 void Scene_open_operation::execute(Editor_context& context)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!m_scene_root) {
         m_content_library = std::make_shared<Content_library>();
 
@@ -191,6 +193,7 @@ void Asset_browser_window::imgui()
 Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
     : m_context{editor_context}
 {
+    ERHE_PROFILE_FUNCTION();
     scan();
 
     m_node_tree_window = std::make_shared<Asset_browser_window>(

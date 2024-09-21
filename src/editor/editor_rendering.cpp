@@ -80,6 +80,8 @@ Editor_rendering::Editor_rendering(
     , m_brush_timer          {"brush"}
     , m_tools_timer          {"tools"}
 {
+    ERHE_PROFILE_FUNCTION();
+
     commands.register_command(&m_capture_frame_command);
     commands.bind_command_to_key(&m_capture_frame_command, erhe::window::Key_f10);
     commands.bind_command_to_menu(&m_capture_frame_command, "View.Frame");

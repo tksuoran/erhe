@@ -104,6 +104,8 @@ Material_paint_tool::Material_paint_tool(
     , m_paint_command{commands, editor_context}
     , m_pick_command {commands, editor_context}
 {
+    ERHE_PROFILE_FUNCTION();
+
     set_base_priority(c_priority);
     set_description  ("Material Paint");
     set_flags        (Tool_flags::toolbox);

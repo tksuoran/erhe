@@ -110,6 +110,8 @@ Hud::Hud(
     , m_drag_bool_enable_command          {commands, m_drag_bool_redirect_update_command}
 #endif
 {
+    ERHE_PROFILE_FUNCTION();
+
     int   width {1024};
     int   height{1024};
     float ppm   {5000.0f};

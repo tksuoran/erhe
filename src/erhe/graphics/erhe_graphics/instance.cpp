@@ -11,6 +11,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/depth_stencil_state.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_window/window.hpp"
 
 #if !defined(WIN32)
@@ -95,6 +96,8 @@ Instance::Instance(erhe::window::Context_window& context_window)
     , context_provider{*this, opengl_state_tracker}
     , m_context_window{context_window}
 {
+    ERHE_PROFILE_FUNCTION();
+
     std::vector<std::string> extensions;
     const auto gl_vendor      = (get_string)(gl::String_name::vendor);
     const auto gl_renderer    = (get_string)(gl::String_name::renderer);

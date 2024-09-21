@@ -103,6 +103,8 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
     , debug_polygon_edge_count{"debug_polygon_edge_count_g-not_loaded"}
     , debug_misc              {"debug_misc-not_loaded"}
 {
+    ERHE_PROFILE_FUNCTION();
+
     // Not available on Dell laptop.
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
 

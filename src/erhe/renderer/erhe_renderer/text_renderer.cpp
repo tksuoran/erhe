@@ -110,9 +110,7 @@ Text_renderer::Frame_resources::Frame_resources(
 
 static constexpr std::string_view c_text_renderer_initialize_component{"Text_renderer::initialize_component()"};
 
-Text_renderer::Text_renderer(
-    erhe::graphics::Instance& graphics_instance
-)
+Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
     : m_graphics_instance{graphics_instance}
     , m_default_uniform_block{graphics_instance}
    ,  m_projection_block{

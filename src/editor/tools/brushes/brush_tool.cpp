@@ -118,6 +118,8 @@ Brush_tool::Brush_tool(
     , m_pick_command                  {commands, editor_context}
     , m_pick_using_float_input_command{commands, m_pick_command, 0.6f, 0.4f}
 {
+    ERHE_PROFILE_FUNCTION();
+
     set_base_priority(Brush_tool::c_priority);
     set_description  ("Brush Tool");
     set_flags        (Tool_flags::toolbox);

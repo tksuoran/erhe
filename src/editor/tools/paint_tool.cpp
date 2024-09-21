@@ -120,6 +120,8 @@ Paint_tool::Paint_tool(
     , m_drag_redirect_update_command{commands, m_paint_vertex_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
 {
+    ERHE_PROFILE_FUNCTION();
+
     set_base_priority(c_priority);
     set_description  ("Paint Tool");
     set_flags        (Tool_flags::toolbox);

@@ -101,6 +101,8 @@ Headset_view::Headset_view(
     , m_editor_context  {editor_context}
     , m_context_window  {context_window}
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!editor_context.OpenXR) {
         return;
     }

@@ -65,6 +65,8 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
 
 auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state) -> erhe::graphics::Pipeline&
 {
+    ERHE_PROFILE_FUNCTION();
+
     ++m_pipeline_cache_serial;
     uint64_t              lru_serial{m_pipeline_cache_serial};
     Pipeline_cache_entry* lru_entry {nullptr};
@@ -105,6 +107,8 @@ void Shadow_renderer::next_frame()
 
 auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     log_render->debug("Shadow_renderer::render()");
     log_shadow_renderer->trace(
         "Making light projections using texture '{}' sampler '{}' handle '{}'",
@@ -123,8 +127,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.texture,
         shadow_texture_handle
     };
-
-    ERHE_PROFILE_FUNCTION();
 
     //ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render)
 

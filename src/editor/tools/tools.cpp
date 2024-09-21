@@ -11,10 +11,11 @@
 #include "tools/tool.hpp"
 #include "windows/item_tree_window.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/instance.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
 
 namespace editor {
 
@@ -226,6 +227,8 @@ Tools::Tools(
     : m_context              {editor_context}
     , m_pipeline_renderpasses{graphics_instance, mesh_memory, programs}
 {
+    ERHE_PROFILE_FUNCTION();
+
     const auto tools_content_library = std::make_shared<Content_library>();
 
     if (editor_context.developer_mode) {

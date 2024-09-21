@@ -8,6 +8,7 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_bit/bit_helpers.hpp"
@@ -37,6 +38,8 @@ void Icon_set::load_icons(
     Programs&                    programs
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
     m_row_count    = 16;

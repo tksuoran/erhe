@@ -101,6 +101,8 @@ Physics_tool::Physics_tool(
     , m_drag_enable_command         {commands, m_drag_redirect_update_command, 0.3f, 0.2f}
 #endif
 {
+    ERHE_PROFILE_FUNCTION();
+
     set_base_priority(c_priority);
     set_description  ("Physics Tool");
     set_flags        (Tool_flags::toolbox);

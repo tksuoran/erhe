@@ -31,12 +31,14 @@
 #include "erhe_geometry/shapes/torus.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/iworld.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/material.hpp"
-#include "erhe_physics/icollision_shape.hpp"
-#include "erhe_physics/iworld.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene/camera.hpp"
@@ -44,8 +46,6 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_math/math_util.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -117,6 +117,8 @@ Scene_builder::Scene_builder(
 )
     : m_context{editor_context}
 {
+    ERHE_PROFILE_FUNCTION();
+
     auto content_library = std::make_shared<Content_library>();
     add_default_materials(*content_library.get());
 
@@ -709,7 +711,8 @@ void Scene_builder::add_room()
     auto& material_library = m_scene_root->content_library()->materials;
     auto floor_material = material_library->make<erhe::primitive::Material>(
         "Floor",
-        vec4{0.02f, 0.02f, 0.02f, 1.0f},
+        //vec4{0.02f, 0.02f, 0.02f, 1.0f}, aces
+        vec4{0.07f, 0.07f, 0.07f, 1.0f},
         //vec4{0.01f, 0.01f, 0.01f, 1.0f},
         glm::vec2{0.9f, 0.9f},
         0.01f

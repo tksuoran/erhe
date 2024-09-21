@@ -14,18 +14,13 @@
 namespace editor
 {
 
-Editor_scenes::Editor_scenes(
-    Editor_context& editor_context,
-    Time&           time
-)
+Editor_scenes::Editor_scenes(Editor_context& editor_context, Time& time)
     : Update_time_base{time}
     , m_context       {editor_context}
 {
 }
 
-void Editor_scenes::register_scene_root(
-    Scene_root* scene_root
-)
+void Editor_scenes::register_scene_root(Scene_root* scene_root)
 {
     std::lock_guard<std::mutex> lock{m_mutex};
 
@@ -37,9 +32,7 @@ void Editor_scenes::register_scene_root(
     }
 }
 
-void Editor_scenes::unregister_scene_root(
-    Scene_root* scene_root
-)
+void Editor_scenes::unregister_scene_root(Scene_root* scene_root)
 {
     std::lock_guard<std::mutex> lock{m_mutex};
 
@@ -60,6 +53,8 @@ void Editor_scenes::imgui()
 
 void Editor_scenes::update_physics_simulation_fixed_step(const Time_context& time_context)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (
         !m_context.editor_settings->physics.static_enable ||
         !m_context.editor_settings->physics.dynamic_enable
@@ -87,6 +82,8 @@ void Editor_scenes::before_physics_simulation_steps()
 
 void Editor_scenes::update_node_transforms()
 {
+    ERHE_PROFILE_FUNCTION();
+
     for (const auto& scene_root : m_scene_roots) {
         scene_root->get_scene().update_node_transforms();
     }
@@ -97,6 +94,8 @@ void Editor_scenes::update_node_transforms()
 
 void Editor_scenes::update_fixed_step(const Time_context& time_context)
 {
+    ERHE_PROFILE_FUNCTION();
+
     update_physics_simulation_fixed_step(time_context);
 }
 
@@ -127,11 +126,7 @@ void Editor_scenes::sanity_check()
 #endif
 }
 
-auto Editor_scenes::scene_combo(
-    const char*  label,
-    Scene_root*& in_out_selected_entry,
-    const bool   empty_option
-) const -> bool
+auto Editor_scenes::scene_combo(const char* label, Scene_root*& in_out_selected_entry, const bool empty_option) const -> bool
 {
     int selection_index = 0;
     int index = 0;

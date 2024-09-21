@@ -1000,7 +1000,7 @@ Item_tree_window::Item_tree_window(
     const std::shared_ptr<erhe::Hierarchy>& root
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, window_title, ini_label}
-, Item_tree{context, root}
+    , Item_tree{context, root}
 {
 }
 

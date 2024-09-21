@@ -248,6 +248,8 @@ auto Selection_duplicate_command::try_call() -> bool
 Selection_tool::Selection_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools)
     : Tool{editor_context}
 {
+    ERHE_PROFILE_FUNCTION();
+
     set_base_priority(c_priority);
     set_description  ("Selection Tool");
     set_flags        (Tool_flags::toolbox | Tool_flags::secondary);

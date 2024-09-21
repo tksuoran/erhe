@@ -4,6 +4,7 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <fmt/format.h>
 
@@ -11,6 +12,8 @@ namespace editor {
 
 Editor_settings::Editor_settings(Editor_message_bus& editor_message_bus)
 {
+    ERHE_PROFILE_FUNCTION();
+
     graphics.get_limits();
     read();
     graphics.select_active_graphics_preset(editor_message_bus);

@@ -27,9 +27,9 @@ Frame_controller::Frame_controller()
 
 {
     reset();
-    rotate_x      .set_power_base(4.0f);
-    rotate_y      .set_power_base(4.0f);
-    rotate_z      .set_power_base(4.0f);
+    rotate_x      .set_power_base(0.0f);
+    rotate_y      .set_power_base(0.0f);
+    rotate_z      .set_power_base(0.0f);
     translate_x   .set_power_base(4.0f);
     translate_y   .set_power_base(4.0f);
     translate_z   .set_power_base(4.0f);

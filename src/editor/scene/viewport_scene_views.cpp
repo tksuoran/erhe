@@ -76,6 +76,8 @@ Scene_views::Scene_views(
     : m_context                             {editor_context}
     , m_open_new_viewport_scene_view_command{commands, editor_context}
 {
+    ERHE_PROFILE_FUNCTION();
+
     Command_host::set_description("Scene_views");
 
     commands.register_command   (&m_open_new_viewport_scene_view_command);

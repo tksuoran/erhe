@@ -321,6 +321,8 @@ auto Post_processing::make_program(
     const std::filesystem::path& fs_path
 ) -> erhe::graphics::Shader_stages_create_info
 {
+    ERHE_PROFILE_FUNCTION();
+
     const std::vector<std::pair<std::string, std::string>> bindess_defines{{"ERHE_BINDLESS_TEXTURE", "1"}};
     const std::vector<std::pair<std::string, std::string>> empty_defines{};
 

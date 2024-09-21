@@ -82,7 +82,7 @@ auto Input_axis::get_less() const -> bool
 void Input_axis::set_power_base(const float value)
 {
     m_base = value;
-    m_log_base = checked_log(value);
+    m_log_base = value == 0.0f ? 0.0 : checked_log(value);
 }
 
 void Input_axis::adjust(std::chrono::steady_clock::time_point timestamp, const float delta)
@@ -191,6 +191,9 @@ auto Input_axis::get_base_velocity() const -> float
 // t(v) = log(v0/v) / log(a)
 void Input_axis::update(std::chrono::steady_clock::time_point timestamp)
 {
+    if (m_log_base == 0.0) {
+        return;
+    }
     if (!m_last_timestamp.has_value() || (timestamp == m_last_timestamp.value())) {
         m_last_timestamp = timestamp;
         return;
@@ -233,6 +236,7 @@ auto Input_axis::evaluate_velocity_at_state_time(float state_time) const -> floa
 
 void Input_axis::set_direction(double direction)
 {
+    ERHE_VERIFY(m_log_base != 0.0);
     double old_base_velocity = m_base_velocity;
     double old_velocity      = m_velocity;
     double old_state_time    = m_state_time;
@@ -276,6 +280,7 @@ void Input_axis::set_direction(double direction)
 
 void Input_axis::set_more(std::chrono::steady_clock::time_point timestamp, const bool value)
 {
+    ERHE_VERIFY(m_log_base != 0.0);
     log_input_axis->info("{} begin set_more {}", m_name, value ? "true" : "false");
     update(timestamp);
     m_more = value;
@@ -291,6 +296,7 @@ void Input_axis::set_more(std::chrono::steady_clock::time_point timestamp, const
 
 void Input_axis::set_less(std::chrono::steady_clock::time_point timestamp, const bool value)
 {
+    ERHE_VERIFY(m_log_base != 0.0);
     log_input_axis->info("{} begin set_less {}", m_name, value ? "true" : "false");
     update(timestamp);
     m_less = value;
@@ -306,6 +312,7 @@ void Input_axis::set_less(std::chrono::steady_clock::time_point timestamp, const
 
 void Input_axis::set(std::chrono::steady_clock::time_point timestamp, const Input_axis_control control, const bool value)
 {
+    ERHE_VERIFY(m_log_base != 0.0);
     switch (control) {
         //using enum Input_axis_item;
         case Input_axis_control::less: set_less(timestamp, value); break;

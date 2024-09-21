@@ -1,4 +1,5 @@
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
@@ -6,7 +7,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/instance.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -55,6 +56,8 @@ void Buffer::capability_check(const gl::Map_buffer_access_mask access_mask)
 
 void Buffer::allocate_storage()
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(m_capacity_byte_count > 0);
 
     capability_check(m_storage_mask);

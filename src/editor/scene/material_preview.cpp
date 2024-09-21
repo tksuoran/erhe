@@ -57,6 +57,8 @@ Material_preview::Material_preview(
     , m_composer{"Material Preview Composer"}
 #undef REVERSE_DEPTH
 {
+    ERHE_PROFILE_FUNCTION();
+
     m_content_library = std::make_shared<Content_library>();
 
     m_scene_root = std::make_shared<Scene_root>(
@@ -87,6 +89,8 @@ void Material_preview::set_area_size(int size)
 
 void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_instance)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (
         m_color_texture &&
         (m_color_texture->width () == m_width) &&
@@ -179,6 +183,8 @@ void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_in
 
 void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
 {
+    ERHE_PROFILE_FUNCTION();
+
     m_node = std::make_shared<erhe::scene::Node>("Material Preview Node");
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
@@ -263,6 +269,8 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
 
 void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Material>& material)
 {
+    ERHE_PROFILE_FUNCTION();
+
     erhe::graphics::Scoped_debug_group outer_debug_scope{"Material preview"};
 
     m_content_library->materials->remove_all_children_recursively();

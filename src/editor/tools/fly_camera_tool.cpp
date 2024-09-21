@@ -412,6 +412,8 @@ Fly_camera_tool::Fly_camera_tool(
     , m_deltatime_graph               {"Delta-Time",         "time", "ms", "dt",                 "ms"}
     , m_reference_velocity_graph      {"Reference Velocity", "time", "ms", "reference velocity", "m/s"}
 {
+    ERHE_PROFILE_FUNCTION();
+
     m_velocity_graph   .path_color  = 0xffcccccc;
     m_distance_graph   .path_color  = 0xffcc88cc;
     m_distance_dt_graph.path_color  = 0xff88cccc;

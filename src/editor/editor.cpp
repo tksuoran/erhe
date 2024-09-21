@@ -403,6 +403,7 @@ public:
         , m_selection_tool{m_editor_context, m_icon_set, m_tools}
     {
 #pragma endregion Initialize members
+        ERHE_PROFILE_FUNCTION();
         ERHE_PROFILE_GPU_CONTEXT
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -477,6 +478,8 @@ public:
 
     void fill_editor_context()
     {
+        ERHE_PROFILE_FUNCTION();
+
         m_editor_context.commands               = &m_commands              ;
         m_editor_context.graphics_instance      = &m_graphics_instance     ;
         m_editor_context.imgui_renderer         = &m_imgui_renderer        ;
@@ -552,6 +555,8 @@ public:
 
     void run()
     {
+        ERHE_PROFILE_FUNCTION();
+
         m_run_started = true;
         float wait_time = m_editor_context.use_sleep ? m_editor_context.sleep_margin : 0.0f;
         // TODO: https://registry.khronos.org/OpenGL/extensions/NV/GLX_NV_delay_before_swap.txt
@@ -672,6 +677,8 @@ public:
 
 void run_editor()
 {
+    ERHE_PROFILE_FUNCTION();
+
 #if defined(ERHE_PROFILE_LIBRARY_NVTX)
     nvtxInitialize(nullptr);
 #endif

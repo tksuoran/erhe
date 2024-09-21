@@ -321,12 +321,16 @@ int Context_window::s_window_count{0};
 
 Context_window::Context_window(const Window_configuration& configuration)
 {
+    ERHE_PROFILE_FUNCTION();
+
     const bool ok = open(configuration);
     ERHE_VERIFY(ok);
 }
 
 Context_window::Context_window(Context_window* share)
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(share != nullptr);
 
     const bool ok = open(

@@ -15,6 +15,7 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_profile//profile.hpp"
 
 namespace editor {
 
@@ -40,6 +41,8 @@ Clipboard::Clipboard(erhe::commands::Commands& commands, Editor_context& context
     : m_paste_command{commands, context}
     , m_context      {context}
 {
+    ERHE_PROFILE_FUNCTION();
+
     commands.register_command(&m_paste_command);
     commands.bind_command_to_key(&m_paste_command, erhe::window::Key_insert, true, erhe::window::Key_modifier_bit_shift);
     commands.bind_command_to_key(&m_paste_command, erhe::window::Key_v,      true, erhe::window::Key_modifier_bit_ctrl);

@@ -1,5 +1,6 @@
 #include "erhe_time/sleep.hpp"
 #include "erhe_time/time_log.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(_WIN32)
 #   include <Windows.h>
@@ -33,6 +34,8 @@ std::chrono::duration<long long, std::ratio<1, 10000000>> resolution;
 #if defined(_WIN32)
 auto sleep_initialize() -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     HMODULE ntdll_module = GetModuleHandleA("ntdll.dll");
     if (ntdll_module == nullptr) {
         log_time->warn("Could not open ntdll.dll");

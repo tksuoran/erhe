@@ -185,6 +185,8 @@ Hotbar::Hotbar(
     , m_thumbstick_command       {commands, editor_context}
 #endif
 {
+    ERHE_PROFILE_FUNCTION();
+
     auto ini = erhe::configuration::get_ini("erhe.ini", "hotbar");
     ini->get("enabled",    m_enabled);
     ini->get("show",       m_show);
@@ -369,6 +371,8 @@ void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
 
 void Hotbar::get_all_tools()
 {
+    ERHE_PROFILE_FUNCTION();
+
     m_slot_first = 0;
     m_slot_last  = 0;
     m_slots.clear();

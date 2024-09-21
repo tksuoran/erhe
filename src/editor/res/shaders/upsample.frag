@@ -57,6 +57,7 @@ vec3 PBRNeutralToneMapping( vec3 color ) {
   float g = 1. - 1. / (desaturation * (peak - newPeak) + 1.);
   return mix(color, newPeak * vec3(1, 1, 1), g);
 }
+
 float get_weight()
 {
     float level_count = post_processing.level_count;
@@ -89,13 +90,17 @@ void main()
 
     if (destination_lod == 0.0) {
         vec3 color = mix(curr, down, post_processing.mix_weight);
-        out_color.rgb = PBRNeutralToneMapping(color);
+        //out_color.rgb = PBRNeutralToneMapping(color);
         //out_color.rgb = tonemap_aces(color);
         //if (v_texcoord.x < 1.0 / 3.0) {
-        //    out_color.rgb = tonemap_log(color);
-        //} else if (v_texcoord.x < 2.0 / 3.0) {
-        //    out_color.rgb = PBRNeutralToneMapping(color);
-        //} else {
+            out_color.rgb = PBRNeutralToneMapping(color);
+        //} 
+        //else
+        //if (v_texcoord.x < 2.0 / 3.0) {
+        //    out_color.rgb = color;
+        //}
+        //else
+        //{
         //    out_color.rgb = tonemap_aces(color);
         //}
         //out_color.rgb = (v_texcoord.x > 1.0/3.05) ? tonemap_aces(color) : tonemap_log(color);

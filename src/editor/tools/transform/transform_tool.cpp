@@ -124,6 +124,8 @@ Transform_tool::Transform_tool(
     , m_drag_redirect_update_command{commands, m_drag_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
 {
+    ERHE_PROFILE_FUNCTION();
+
     auto ini = erhe::configuration::get_ini("erhe.ini", "transform_tool");
     auto& settings = shared.settings;
     ini->get("show_translate", settings.show_translate);
