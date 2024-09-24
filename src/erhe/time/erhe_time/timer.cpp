@@ -4,20 +4,20 @@
 
 namespace erhe::time {
 
-std::mutex          Timer::s_mutex;
-std::vector<Timer*> Timer::s_all_timers;
+ERHE_PROFILE_MUTEX(std::mutex, Timer::s_mutex);
+std::vector<Timer*>            Timer::s_all_timers;
 
 Timer::Timer(const char* label)
     : m_label{label}
 {
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     s_all_timers.push_back(this);
 }
 
 Timer::~Timer() noexcept
 {
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     s_all_timers.erase(
         std::remove(
@@ -31,7 +31,7 @@ Timer::~Timer() noexcept
 
 auto Timer::all_timers() -> std::vector<Timer*>
 {
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     return s_all_timers;
 }

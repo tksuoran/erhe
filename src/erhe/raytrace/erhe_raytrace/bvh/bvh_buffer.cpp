@@ -58,7 +58,7 @@ auto Bvh_buffer::allocate_bytes(const std::size_t byte_count, const std::size_t 
 {
     ERHE_VERIFY(alignment > 0);
 
-    const std::lock_guard<std::mutex> lock{m_allocate_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_allocate_mutex};
 
     while ((m_next_free_byte % alignment) != 0) {
         ++m_next_free_byte;

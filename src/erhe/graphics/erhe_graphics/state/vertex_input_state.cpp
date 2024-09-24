@@ -13,7 +13,7 @@
 
 namespace erhe::graphics {
 
-std::mutex                       Vertex_input_state::s_mutex;
+ERHE_PROFILE_MUTEX(std::mutex,   Vertex_input_state::s_mutex);
 std::vector<Vertex_input_state*> Vertex_input_state::s_all_vertex_input_states;
 
 void Vertex_input_state::on_thread_enter()

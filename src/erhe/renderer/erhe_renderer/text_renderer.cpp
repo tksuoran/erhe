@@ -103,6 +103,9 @@ Text_renderer::Frame_resources::Frame_resources(
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
         }
     }
+    , vertex_writer{graphics_instance, vertex_buffer}
+    , projection_writer{graphics_instance, projection_buffer}
+
 {
     vertex_buffer    .set_debug_label(fmt::format("Text Renderer Vertex {}", slot));
     projection_buffer.set_debug_label(fmt::format("Text Renderer Projection {}", slot));
@@ -113,7 +116,7 @@ static constexpr std::string_view c_text_renderer_initialize_component{"Text_ren
 Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
     : m_graphics_instance{graphics_instance}
     , m_default_uniform_block{graphics_instance}
-   ,  m_projection_block{
+    , m_projection_block{
         graphics_instance,
         "projection",
         0,
@@ -158,8 +161,6 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
             .debug_label = "Text_renderer"
         }
     }
-    , m_vertex_writer        {graphics_instance}
-    , m_projection_writer    {graphics_instance}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -272,9 +273,9 @@ auto Text_renderer::current_frame_resources() -> Text_renderer::Frame_resources&
 
 void Text_renderer::next_frame()
 {
+    m_frame_resources[m_current_frame_resource_slot].vertex_writer.reset();
+    m_frame_resources[m_current_frame_resource_slot].projection_writer.reset();
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
-    m_vertex_writer    .reset();
-    m_projection_writer.reset();
     m_index_range_first = 0;
     m_index_count       = 0;
 }
@@ -287,10 +288,10 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
         return;
     }
 
-    auto* const               vertex_buffer     = &current_frame_resources().vertex_buffer;
+    auto&                     vertex_writer     = current_frame_resources().vertex_writer;
     const std::size_t         quad_count        = m_font->get_glyph_count(text);
     const std::size_t         vertex_byte_count = quad_count * 4 * m_vertex_format.stride();
-    const auto                vertex_gpu_data   = m_vertex_writer.begin(vertex_buffer, vertex_byte_count);
+    const auto                vertex_gpu_data   = vertex_writer.begin(gl::Buffer_target::array_buffer, vertex_byte_count);
     std::byte* const          start             = vertex_gpu_data.data();
     const std::size_t         byte_count        = vertex_gpu_data.size_bytes();
     const std::size_t         word_count        = byte_count / sizeof(float);
@@ -312,8 +313,8 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
         bounding_box
     );
     ERHE_VERIFY(quad_count2 == quad_count);
-    m_vertex_writer.write_offset += vertex_byte_count; // quad_count * 4 * m_vertex_format.stride();
-    m_vertex_writer.end();
+    vertex_writer.write_offset += vertex_byte_count; // quad_count * 4 * m_vertex_format.stride();
+    vertex_writer.end();
     m_index_count += quad_count * 5;
 }
 
@@ -344,7 +345,8 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 
     auto* const               projection_buffer   = &current_frame_resources().projection_buffer;
-    const auto                projection_gpu_data = m_projection_writer.begin(projection_buffer, m_projection_block.size_bytes());
+    auto&                     projection_writer   = current_frame_resources().projection_writer;
+    const auto                projection_gpu_data = projection_writer.begin(projection_buffer->target(), m_projection_block.size_bytes());
     std::byte* const          start               = projection_gpu_data.data();
     const std::size_t         byte_count          = projection_gpu_data.size_bytes();
     const std::size_t         word_count          = byte_count / sizeof(float);
@@ -361,7 +363,7 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     using erhe::graphics::write;
 
     write(gpu_float_data, m_u_clip_from_window_offset, as_span(clip_from_window));
-    m_projection_writer.write_offset += m_u_clip_from_window_size;
+    projection_writer.write_offset += m_u_clip_from_window_size;
 
     const uint32_t texture_handle[2] =
     {
@@ -370,9 +372,9 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     };
     const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
     write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
-    m_projection_writer.write_offset += m_u_texture_size;
+    projection_writer.write_offset += m_u_texture_size;
 
-    m_projection_writer.end();
+    projection_writer.end();
 
     const auto& pipeline = current_frame_resources().pipeline;
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
@@ -383,8 +385,8 @@ void Text_renderer::render(erhe::math::Viewport viewport)
         projection_buffer->target(),
         static_cast<GLuint>    (m_projection_block.binding_point()),
         static_cast<GLuint>    (projection_buffer->gl_name()),
-        static_cast<GLintptr>  (m_projection_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(m_projection_writer.range.byte_count)
+        static_cast<GLintptr>  (projection_writer.range.first_byte_offset),
+        static_cast<GLsizeiptr>(projection_writer.range.byte_count)
     );
 
     if (m_graphics_instance.info.use_bindless_texture) {

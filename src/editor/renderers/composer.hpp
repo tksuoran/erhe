@@ -1,9 +1,11 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace editor {
@@ -14,8 +16,10 @@ class Renderpass;
 class Composer : public erhe::Item<erhe::Item_base, erhe::Item_base, Composer>
 {
 public:
-    explicit Composer(const Composer&);
+    Composer(const Composer&);
     Composer& operator=(const Composer&);
+    Composer(Composer&& old);
+    Composer& operator=(Composer&& old);
     ~Composer() noexcept override;
 
     explicit Composer(const std::string_view name);
@@ -27,11 +31,12 @@ public:
     auto get_type_name() const -> std::string_view override;
 
     // Public API
-    void render(const Render_context& context) const;
+    void render(const Render_context& context);
 
     void imgui();
 
     // TODO Move to children
+    ERHE_PROFILE_MUTEX(std::mutex,           mutex);
     std::vector<std::shared_ptr<Renderpass>> renderpasses;
 };
 

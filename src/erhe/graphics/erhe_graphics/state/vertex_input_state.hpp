@@ -2,8 +2,8 @@
 
 #include "erhe_graphics/gl_objects.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
-
 #include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <cstddef>
 #include <memory>
@@ -75,8 +75,8 @@ private:
     std::thread::id                m_owner_thread;
     Vertex_input_state_data        m_data;
 
-    static std::mutex                       s_mutex;
-    static std::vector<Vertex_input_state*> s_all_vertex_input_states;
+    static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
+    static std::vector<Vertex_input_state*>           s_all_vertex_input_states;
 };
 
 class Vertex_input_state_tracker

@@ -13,6 +13,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -167,7 +168,7 @@ void Hover_tool::tool_render(const Render_context& context)
     }
 
     if (entry->normal.has_value()) {
-        auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
+        erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
         const auto p0 = entry->position.value();
         const auto p1 = entry->position.value() + entry->normal.value();
         line_renderer.set_thickness(10.0f);

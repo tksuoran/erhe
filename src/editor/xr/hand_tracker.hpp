@@ -13,7 +13,7 @@ namespace erhe::xr {
     class Headset;
 }
 namespace erhe::renderer {
-    class Line_renderer;
+    class Scoped_line_renderer;
 }
 
 namespace editor {
@@ -74,14 +74,14 @@ public:
     auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> std::optional<float>;
     auto is_active() const -> bool;
     auto is_valid (const XrHandJointEXT joint) const -> bool;
-    void draw     (erhe::renderer::Line_renderer& line_renderer, const glm::mat4 transform);
+    void draw     (erhe::renderer::Scoped_line_renderer& line_renderer, const glm::mat4 transform);
     void set_color(const std::size_t finger, const ImVec4 color);
 
 private:
     void draw_joint_line_strip(
-        const glm::mat4                    transform,
-        const std::vector<XrHandJointEXT>& joint_names,
-        erhe::renderer::Line_renderer&  line_renderer
+        const glm::mat4                       transform,
+        const std::vector<XrHandJointEXT>&    joint_names,
+        erhe::renderer::Scoped_line_renderer& line_renderer
     ) const;
 
     XrHandEXT                                                          m_hand;

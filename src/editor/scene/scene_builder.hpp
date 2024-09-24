@@ -4,6 +4,8 @@
 #include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
 
+#include "erhe_profile/profile.hpp"
+
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -33,6 +35,11 @@ namespace erhe::scene_renderer {
     class Shadow_renderer;
 }
 
+namespace tf {
+    class Executor;
+    class Taskflow;
+}
+
 namespace editor {
 
 class Brush;
@@ -45,6 +52,7 @@ class Editor_rendering;
 class Editor_scenes;
 class Editor_settings;
 class Fly_camera_tool;
+class Json_library;
 class Mesh_memory;
 class Post_processing;
 class Scene_root;
@@ -68,15 +76,14 @@ class Scene_builder
 {
 public:
     Scene_builder(
+        std::shared_ptr<Scene_root>     scene,
+        tf::Executor&                   executor,
         erhe::graphics::Instance&       graphics_instance,
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
-        erhe::scene::Scene_message_bus& scene_message_bus,
         Editor_context&                 editor_context,
-        Editor_message_bus&             editor_message_bus,
         Editor_rendering&               editor_rendering,
-        Editor_scenes&                  editor_scenes,
         Editor_settings&                editor_settings,
         Mesh_memory&                    mesh_memory,
         Post_processing&                post_processing,
@@ -85,7 +92,6 @@ public:
     );
 
     // Public API
-    void add_rendertarget_viewports(int count);
     [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root>;
 
     // Can discard return value
@@ -148,10 +154,18 @@ private:
     void animate_lights     (const double time_d);
     void add_room           ();
 
-    void make_brushes       (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
-    void make_mesh_nodes    (const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes);
-    void make_cube_benchmark(Mesh_memory& mesh_memory);
-    void setup_lights       ();
+    auto get_brushes() -> Content_library_node&;
+
+    void make_brushes               (Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Executor& executor);
+    void make_platonic_solid_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory);
+    void make_sphere_brushes        (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
+    void make_torus_brushes         (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
+    void make_cylinder_brushes      (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
+    void make_cone_brushes          (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
+    void make_json_brushes          (Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Taskflow& tf, Json_library& library);
+    void make_mesh_nodes            (const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes);
+    void make_cube_benchmark        (Mesh_memory& mesh_memory);
+    void setup_lights               ();
 
     Editor_context& m_context;
 
@@ -176,7 +190,7 @@ private:
     Config m_config;
 
     // Self owned parts
-    std::mutex                          m_brush_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex,      m_brush_mutex);
     std::unique_ptr<Brush>              m_floor_brush;
     std::unique_ptr<Brush>              m_table_brush;
     std::vector<std::shared_ptr<Brush>> m_platonic_solids;

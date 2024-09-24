@@ -24,7 +24,7 @@ Buffer_transfer_queue::~Buffer_transfer_queue() noexcept
 
 void Buffer_transfer_queue::enqueue(Buffer& buffer, const std::size_t offset, std::vector<uint8_t>&& data)
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     SPDLOG_LOGGER_TRACE(
         log_buffer,
@@ -40,7 +40,7 @@ void Buffer_transfer_queue::flush()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     for (const auto& entry : m_queued) {
         SPDLOG_LOGGER_TRACE(

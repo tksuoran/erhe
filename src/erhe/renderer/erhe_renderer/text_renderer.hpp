@@ -87,6 +87,8 @@ private:
         erhe::graphics::Buffer             projection_buffer;
         erhe::graphics::Vertex_input_state vertex_input;
         erhe::graphics::Pipeline           pipeline;
+        Buffer_writer                      vertex_writer;
+        Buffer_writer                      projection_writer;
     };
 
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
@@ -114,8 +116,6 @@ private:
     erhe::graphics::Vertex_format             m_vertex_format;
     erhe::graphics::Buffer                    m_index_buffer;
     erhe::graphics::Sampler                   m_nearest_sampler;
-    Buffer_writer                             m_vertex_writer;
-    Buffer_writer                             m_projection_writer;
 
     std::unique_ptr<erhe::graphics::Shader_stages> m_shader_stages;
     std::unique_ptr<erhe::ui::Font>                m_font;

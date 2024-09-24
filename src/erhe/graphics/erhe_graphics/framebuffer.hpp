@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/gl_objects.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <mutex>
 #include <optional>
@@ -86,8 +87,8 @@ private:
     std::thread::id               m_owner_thread;
     std::string                   m_debug_label;
 
-    static std::mutex                s_mutex;
-    static std::vector<Framebuffer*> s_all_framebuffers;
+    static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
+    static std::vector<Framebuffer*>                  s_all_framebuffers;
 };
 
 } // namespace erhe::graphics

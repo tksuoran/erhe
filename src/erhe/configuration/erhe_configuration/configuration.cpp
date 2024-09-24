@@ -1,8 +1,11 @@
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_profile/profile.hpp"
+
+#include <etl/vector.h>
 
 #include <algorithm>
 #include <cctype>
-#include <filesystem>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -196,6 +199,7 @@ public:
 
     auto get_section(const std::string& name) -> const Ini_section& override
     {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
         for (const auto& section : m_sections) {
             if (section.get_name() == name) {
                 return section;
@@ -206,9 +210,10 @@ public:
     }
 
 private:
-    std::string m_name;
-    mINI::INIStructure m_ini;
-    std::vector<Ini_section_impl> m_sections;
+    std::string                    m_name;
+    ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
+    mINI::INIStructure             m_ini;
+    std::vector<Ini_section_impl>  m_sections;
 };
 
 class Ini_cache_impl : public Ini_cache
@@ -218,6 +223,7 @@ public:
 
     auto get_ini_file(const std::string& name) -> Ini_file& override
     {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
         for (auto& file : m_files) {
             if (file.get_name() == name) {
                 return file;
@@ -227,7 +233,9 @@ public:
         return file;
     }
 
-    std::vector<Ini_file_impl> m_files;
+private:
+    ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
+    etl::vector<Ini_file_impl, 40> m_files;
 };
 
 auto Ini_cache::get_instance() -> Ini_cache&

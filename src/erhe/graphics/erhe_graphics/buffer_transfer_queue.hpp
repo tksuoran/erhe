@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_profile/profile.hpp"
+
 #include <mutex>
 #include <vector>
 
@@ -47,8 +49,8 @@ public:
     void enqueue(Buffer& buffer, std::size_t offset, std::vector<uint8_t>&& data);
 
 private:
-    std::mutex                  m_mutex;
-    std::vector<Transfer_entry> m_queued;
+    ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
+    std::vector<Transfer_entry>    m_queued;
 };
 
 

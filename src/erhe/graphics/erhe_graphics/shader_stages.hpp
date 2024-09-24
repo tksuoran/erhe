@@ -67,14 +67,8 @@ public:
 class Shader_stages_prototype final
 {
 public:
-    Shader_stages_prototype(
-        Instance&                   graphics_instance,
-        Shader_stages_create_info&& create_info
-    );
-    Shader_stages_prototype(
-        Instance&                        graphics_instance,
-        const Shader_stages_create_info& create_info
-    );
+    Shader_stages_prototype(Instance& graphics_instance, Shader_stages_create_info&& create_info);
+    Shader_stages_prototype(Instance& graphics_instance, const Shader_stages_create_info& create_info);
     ~Shader_stages_prototype() noexcept = default;
     Shader_stages_prototype (const Shader_stages_prototype&) = delete;
     void operator=          (const Shader_stages_prototype&) = delete;
@@ -84,9 +78,10 @@ public:
     [[nodiscard]] auto create_info() const -> const Shader_stages_create_info&;
     [[nodiscard]] auto is_valid   () -> bool;
 
-    auto link_program   () -> bool;
-    void compile_shaders();
-    void dump_reflection() const;
+    void finalize_shader_sources();
+    void compile_shaders        ();
+    auto link_program           () -> bool;
+    void dump_reflection        () const;
 
 private:
     void post_link();

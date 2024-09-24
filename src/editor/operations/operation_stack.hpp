@@ -51,6 +51,7 @@ class Operation_stack
 {
 public:
     Operation_stack(
+        tf::Executor&                executor,
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
@@ -79,7 +80,7 @@ private:
     Undo_command m_undo_command;
     Redo_command m_redo_command;
 
-    std::unique_ptr<tf::Executor> m_executor;
+    tf::Executor&                           m_executor;
 
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;

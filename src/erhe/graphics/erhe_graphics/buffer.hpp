@@ -2,7 +2,7 @@
 
 #include "erhe_graphics/gl_objects.hpp"
 #include "erhe_graphics/span.hpp"
-
+#include "erhe_profile/profile.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 
 #include <mutex>
@@ -113,15 +113,15 @@ private:
     void capability_check(gl::Buffer_storage_mask storage_mask);
     void capability_check(gl::Map_buffer_access_mask access_mask);
 
-    Instance&                  m_instance;
-    Gl_buffer                  m_handle;
-    std::string                m_debug_label;
-    gl::Buffer_target          m_target             {gl::Buffer_target::array_buffer};
-    std::size_t                m_capacity_byte_count{0};
-    std::size_t                m_next_free_byte     {0};
-    gl::Buffer_storage_mask    m_storage_mask       {0};
-    gl::Map_buffer_access_mask m_access_mask        {0};
-    std::mutex                 m_allocate_mutex;
+    Instance&                      m_instance;
+    Gl_buffer                      m_handle;
+    std::string                    m_debug_label;
+    gl::Buffer_target              m_target             {gl::Buffer_target::array_buffer};
+    std::size_t                    m_capacity_byte_count{0};
+    std::size_t                    m_next_free_byte     {0};
+    gl::Buffer_storage_mask        m_storage_mask       {0};
+    gl::Map_buffer_access_mask     m_access_mask        {0};
+    ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
 
     // Last MapBuffer
     std::span<std::byte>       m_map;

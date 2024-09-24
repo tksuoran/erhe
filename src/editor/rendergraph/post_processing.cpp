@@ -75,7 +75,9 @@ Post_processing_node::Post_processing_node(
     , parameter_buffer{
         graphics_instance,
         gl::Buffer_target::uniform_buffer,
-        post_processing.get_parameter_block().size_bytes() * 20, // max 20 levels
+        graphics_instance.align_buffer_offset(
+            gl::Buffer_target::uniform_buffer, post_processing.get_parameter_block().size_bytes()
+        ) * 20, // max 20 levels
         storage_mask(graphics_instance),
         access_mask(graphics_instance),
         fmt::format("{}", name)
@@ -226,6 +228,8 @@ void Post_processing_node::update_parameters()
     const std::size_t               entry_size = post_processing.get_parameter_block().size_bytes();
     const Post_processing::Offsets& offsets    = post_processing.get_offsets();
 
+    const std::size_t level_offset_size = graphics_instance.align_buffer_offset(parameter_buffer.target(), entry_size);
+
     const uint64_t downsample_handle = graphics_instance.get_handle(*downsample_texture, sampler);
     const uint64_t upsample_handle   = graphics_instance.get_handle(*upsample_texture,   sampler);
     const uint32_t downsample_texture_handle[2] = {
@@ -240,8 +244,8 @@ void Post_processing_node::update_parameters()
     const std::span<const uint32_t> upsample_texture_handle_cpu_data  {&upsample_texture_handle[0], 2};
 
     size_t level_count = level_widths.size();
-    erhe::renderer::Buffer_writer parameter_writer{graphics_instance};
-    auto parameter_gpu_data = parameter_writer.begin(&parameter_buffer, 2 * level_count * entry_size);
+    erhe::renderer::Buffer_writer parameter_writer{graphics_instance, parameter_buffer};
+    auto parameter_gpu_data = parameter_writer.begin(parameter_buffer.target(), level_count * level_offset_size);
     std::byte* const          start      = parameter_gpu_data.data();
     const std::size_t         byte_count = parameter_gpu_data.size_bytes();
     const std::size_t         word_count = byte_count / sizeof(float);
@@ -263,7 +267,7 @@ void Post_processing_node::update_parameters()
         write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.mix_weight,            weights.at(source_level));
         write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.tonemap_luminance_max, tonemap_luminance_max);
         write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.tonemap_alpha,         tonemap_alpha);
-        parameter_writer.write_offset += entry_size;
+        parameter_writer.write_offset += level_offset_size;
     }
     parameter_writer.end();
 }
@@ -443,7 +447,11 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 
 void Post_processing::post_process(Post_processing_node& node)
 {
-    const std::size_t entry_size = m_parameter_block.size_bytes();
+    const std::size_t level_offset_size = m_context.graphics_instance->align_buffer_offset(
+        node.parameter_buffer.target(),
+        m_parameter_block.size_bytes()
+    );
+
     const uint64_t downsample_handle = m_context.graphics_instance->get_handle(*node.downsample_texture, m_linear_mipmap_nearest_sampler);
     const uint64_t upsample_handle   = m_context.graphics_instance->get_handle(*node.upsample_texture,   m_linear_mipmap_nearest_sampler);
     if (m_context.graphics_instance->info.use_bindless_texture) {
@@ -467,8 +475,8 @@ void Post_processing::post_process(Post_processing_node& node)
             node.parameter_buffer.target(),
             static_cast<GLuint>    (m_parameter_block.binding_point()),
             static_cast<GLuint>    (node.parameter_buffer.gl_name()),
-            static_cast<GLintptr>  (source_level * entry_size),
-            static_cast<GLsizeiptr>(entry_size)
+            static_cast<GLintptr>  (source_level * level_offset_size),
+            static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );
         if (source_level == node.lowpass_count) {
             m_context.graphics_instance->opengl_state_tracker.execute(m_pipelines.downsample);
@@ -501,8 +509,8 @@ void Post_processing::post_process(Post_processing_node& node)
             node.parameter_buffer.target(),
             static_cast<GLuint>    (m_parameter_block.binding_point()),
             static_cast<GLuint>    (node.parameter_buffer.gl_name()),
-            static_cast<GLintptr>  (source_level * entry_size),
-            static_cast<GLsizeiptr>(entry_size)
+            static_cast<GLintptr>  (source_level * level_offset_size),
+            static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );
         gl::draw_arrays(gl::Primitive_type::triangles, 0, 3);
     }

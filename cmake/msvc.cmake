@@ -20,6 +20,9 @@ function (erhe_target_settings target)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4>)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/WX>)
 
+    # Disable unreachable warning (libfmt)
+    target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/wd4702>) # unreachable
+
     # Treat code included using angle brackets as external, and set warning level 3 for external code
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/external:anglebrackets>)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/external:W3>)

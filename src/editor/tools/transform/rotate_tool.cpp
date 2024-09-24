@@ -10,8 +10,9 @@
 #include "tools/transform/transform_tool.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
-#include "erhe_renderer/line_renderer.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui/imgui.h>
@@ -186,7 +187,7 @@ void Rotate_tool::render(const Render_context& context)
     constexpr vec4 blue  {0.0f, 0.0f, 1.0f, 1.0f};
     constexpr vec4 orange{1.0f, 0.5f, 0.0f, 0.8f};
 
-    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
+    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
 
     {
         const int sector_count = shared.settings.rotate_snap_enable

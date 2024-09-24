@@ -194,6 +194,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 log_render->warn("primitive_count != draw_indirect_buffer_range.draw_indirect_count");
             }
             m_primitive_buffers.bind(primitive_range);
+
+            // Draw indirect buffer is not indexed, this binds the whole buffer
             m_draw_indirect_buffers.bind(draw_indirect_buffer_range.range);
 
             {

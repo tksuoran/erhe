@@ -5,6 +5,8 @@
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <taskflow/taskflow.hpp>
+
 namespace editor {
 
 Programs::Shader_stages_builder::Shader_stages_builder(
@@ -30,7 +32,7 @@ Programs::Shader_stages_builder::Shader_stages_builder(Shader_stages_builder&& o
 {
 }
 
-Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface)
+Programs::Programs(erhe::graphics::Instance& graphics_instance)
     : shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , default_uniform_block{graphics_instance}
     , shadow_sampler{
@@ -103,8 +105,14 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
     , debug_polygon_edge_count{"debug_polygon_edge_count_g-not_loaded"}
     , debug_misc              {"debug_misc-not_loaded"}
 {
-    ERHE_PROFILE_FUNCTION();
+}
 
+void Programs::load_programs(
+    tf::Executor&                            executor,
+    erhe::graphics::Instance&                graphics_instance,
+    erhe::scene_renderer::Program_interface& program_interface
+)
+{
     // Not available on Dell laptop.
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
 
@@ -117,12 +125,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
         erhe::graphics::Shader_stages_create_info&& create_info
     ) {
         reloadable_shader_stages.create_info = std::move(create_info);
-        prototypes.emplace_back(
-            reloadable_shader_stages,
-            graphics_instance,
-            program_interface,
-            shader_path
-        );
+        prototypes.emplace_back(reloadable_shader_stages, graphics_instance, program_interface, shader_path);
     };
 
     add_shader(error                   , CI{ .name = "error"                   , .default_uniform_block = &default_uniform_block, .dump_interface = true } );
@@ -168,18 +171,23 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
     add_shader(debug_misc              , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = &default_uniform_block } );
 
     // Compile shaders
+
+    static_cast<void>(executor);
     {
         ERHE_PROFILE_SCOPE("compile shaders");
 
+        /// tf::Taskflow compile_taskflow;
         for (auto& entry : prototypes) {
             entry.prototype.compile_shaders();
         }
+        //// executor.run(compile_taskflow).wait();
     }
 
     // Link programs
     {
         ERHE_PROFILE_SCOPE("link programs");
 
+        //// tf::Taskflow link_taskflow;
         for (auto& entry : prototypes) {
             entry.prototype.link_program();
         }

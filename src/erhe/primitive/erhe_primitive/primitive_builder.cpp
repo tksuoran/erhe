@@ -14,6 +14,7 @@
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
@@ -307,7 +308,8 @@ void Build_context::build_polygon_id()
     ////     vertex_writer.write(root.attributes.attribute_id_uint, polygon_index);
     //// }
 
-    if (root.attributes.id_vec3.is_valid()) {
+    //// if (root.attributes.id_vec3.is_valid()) 
+    {
         const vec3 v = erhe::math::vec3_from_uint(polygon_index);
         vertex_writer.write(root.attributes.id_vec3, v);
     }
@@ -315,6 +317,7 @@ void Build_context::build_polygon_id()
 
 auto Build_context::get_polygon_normal() -> vec3
 {
+    ERHE_PROFILE_FUNCTION();
     vec3 polygon_normal{0.0f, 1.0f, 0.0f};
     if (property_maps.polygon_normals != nullptr) {
         property_maps.polygon_normals->maybe_get(polygon_id, polygon_normal);
@@ -327,11 +330,11 @@ void Build_context::build_vertex_position()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.position.is_valid()) {
-        return;
-    }
+    // if (!root.attributes.position.is_valid()) {
+    //     return;
+    // }
 
-    ERHE_VERIFY(property_maps.point_locations != nullptr);
+    //// ERHE_VERIFY(property_maps.point_locations != nullptr);
     const vec3 position = property_maps.point_locations->get(point_id);
     vertex_writer.write(root.attributes.position, position);
 
@@ -342,35 +345,33 @@ void Build_context::build_vertex_position()
     );
 }
 
-void Build_context::build_vertex_normal()
+void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.normal.is_valid() && !root.attributes.normal_smooth.is_valid()) {
-        return;
-    }
+    /// if (!root.attributes.normal.is_valid() && !root.attributes.normal_smooth.is_valid()) {
+    ///     return;
+    /// }
 
-    const vec3 polygon_normal = get_polygon_normal();
     vec3 normal{0.0f, 1.0f, 0.0f};
-
-    vec3 point_normal{0.0f, 1.0f, 0.0f};
-    bool found_point_normal{false};
-    if (property_maps.point_normals != nullptr) {
-        found_point_normal = property_maps.point_normals->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
-    }
-    if (!found_point_normal && (property_maps.point_normals_smooth != nullptr)) {
-        found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
-    }
-
     bool found_normal{false};
     if (property_maps.corner_normals != nullptr) {
         found_normal = property_maps.corner_normals->maybe_get(corner_id, normal) && (glm::length(normal) > 0.9f);
     }
     if (!found_normal) {
+        vec3 point_normal{0.0f, 1.0f, 0.0f};
+        bool found_point_normal{false};
+        if (property_maps.point_normals != nullptr) {
+            found_point_normal = property_maps.point_normals->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
+        }
+        if (!found_point_normal && (property_maps.point_normals_smooth != nullptr)) {
+            found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
+        }
         normal = point_normal;
     }
 
-    if (root.attributes.normal.is_valid()) {
+    if (do_normal) {
+        ERHE_PROFILE_SCOPE("n");
         switch (normal_style) {
             //using enum Normal_style;
             case Normal_style::none: {
@@ -379,21 +380,31 @@ void Build_context::build_vertex_normal()
             }
 
             case Normal_style::corner_normals: {
-                ERHE_VERIFY(glm::length(normal) > 0.9f);
+                //// ERHE_VERIFY(glm::length(normal) > 0.9f);
                 vertex_writer.write(root.attributes.normal, normal);
                 SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} normal {}", point_id, corner_id, normal);
                 break;
             }
 
             case Normal_style::point_normals: {
-                ERHE_VERIFY(glm::length(point_normal) > 0.9f);
+                //// ERHE_VERIFY(glm::length(point_normal) > 0.9f);
+                vec3 point_normal{0.0f, 1.0f, 0.0f};
+                bool found_point_normal{false};
+                if (property_maps.point_normals != nullptr) {
+                    found_point_normal = property_maps.point_normals->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
+                }
+                if (!found_point_normal && (property_maps.point_normals_smooth != nullptr)) {
+                    found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
+                }
+
                 vertex_writer.write(root.attributes.normal, point_normal);
                 SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point normal {}", point_id, corner_id, point_normal);
                 break;
             }
 
             case Normal_style::polygon_normals: {
-                ERHE_VERIFY(glm::length(polygon_normal) > 0.9f);
+                const vec3 polygon_normal = get_polygon_normal();
+                //// ERHE_VERIFY(glm::length(polygon_normal) > 0.9f);
                 vertex_writer.write(root.attributes.normal, polygon_normal);
                 SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} polygon normal {}", point_id, corner_id, polygon_normal);
                 break;
@@ -410,7 +421,8 @@ void Build_context::build_vertex_normal()
     //     SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} flat polygon normal {}", point_id, corner_id, polygon_normal);
     // }
     // 
-    if (root.attributes.normal_smooth.is_valid()) {
+    if (do_normal_smooth) {
+        ERHE_PROFILE_SCOPE("2n");
         vec3 smooth_point_normal{0.0f, 1.0f, 0.0f};
     
         if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id)) {
@@ -433,9 +445,9 @@ void Build_context::build_vertex_tangent()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.tangent.is_valid()) {
-        return;
-    }
+    // if (!root.attributes.tangent.is_valid()) {
+    //     return;
+    // }
 
     vec4 tangent{1.0f, 0.0f, 0.0, 1.0f};
     bool found{false};
@@ -468,9 +480,9 @@ void Build_context::build_vertex_bitangent()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.bitangent.is_valid()) {
-        return;
-    }
+    // if (!root.attributes.bitangent.is_valid()) {
+    //     return;
+    // }
 
     vec4 bitangent{0.0f, 0.0f, 1.0, 1.0f};
     bool found{false};
@@ -502,9 +514,9 @@ void Build_context::build_vertex_texcoord()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.texcoord.is_valid()) {
-        return;
-    }
+    // if (!root.attributes.texcoord.is_valid()) {
+    //     return;
+    // }
 
     vec2 texcoord{0.0f, 0.0f};
     bool found{false};
@@ -536,9 +548,9 @@ void Build_context::build_vertex_joint_indices()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.joint_indices.is_valid()) {
-        return;
-    }
+    //if (!root.attributes.joint_indices.is_valid()) {
+    //    return;
+    //}
 
     const uvec4 joint_indices = (property_maps.point_joint_indices != nullptr)
         ? property_maps.point_joint_indices->get(point_id)
@@ -556,9 +568,9 @@ void Build_context::build_vertex_joint_weights()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.joint_weights.is_valid()) {
-        return;
-    }
+    //if (!root.attributes.joint_weights.is_valid()) {
+    //    return;
+    //}
 
     const vec4 joint_weights = (property_maps.point_joint_weights != nullptr)
         ? property_maps.point_joint_weights->get(point_id)
@@ -596,9 +608,9 @@ void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.color.is_valid()) {
-        return;
-    }
+    //if (!root.attributes.color.is_valid()) {
+    //    return;
+    //}
 
     vec4 color{root.build_info.constant_color};
     bool found{false};
@@ -644,9 +656,9 @@ void Build_context::build_vertex_aniso_control()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.aniso_control.is_valid()) {
-        return;
-    }
+    //if (!root.attributes.aniso_control.is_valid()) {
+    //    return;
+    //}
 
     // X is used to modulate anisotropy level:
     //   0.0 -- Anisotropic
@@ -724,19 +736,20 @@ void Build_context::build_centroid_normal()
 
 void Build_context::build_valency_edge_count()
 {
-    if (root.attributes.normal.is_valid()) {
-        const unsigned int vertex_valency      = static_cast<unsigned int>(root.geometry.points.at(point_id).corner_count);
-        const unsigned int polygone_edge_count = static_cast<unsigned int>(root.geometry.polygons.at(polygon_id).corner_count);
-        const glm::uvec2 valency_edge_count{vertex_valency, polygone_edge_count};
-        vertex_writer.write(root.attributes.valency_edge_count, valency_edge_count);
-    }
+    //if (root.attributes.valency_edge_count.is_valid()) 
+    //{
+    const unsigned int vertex_valency      = static_cast<unsigned int>(root.geometry.points.at(point_id).corner_count);
+    const unsigned int polygone_edge_count = static_cast<unsigned int>(root.geometry.polygons.at(polygon_id).corner_count);
+    const glm::uvec2 valency_edge_count{vertex_valency, polygone_edge_count};
+    vertex_writer.write(root.attributes.valency_edge_count, valency_edge_count);
+    //}
 }
 
 void Build_context::build_corner_point_index()
 {
-    if (root.build_info.primitive_types.corner_points) {
-        index_writer.write_corner(vertex_index);
-    }
+    //if (root.build_info.primitive_types.corner_points) {
+    index_writer.write_corner(vertex_index);
+    //}
 }
 
 void Build_context::build_triangle_fill_index()
@@ -771,7 +784,24 @@ void Build_context::build_polygon_fill()
 
     const Polygon_id polygon_id_end = root.geometry.get_polygon_count();
     root.element_mappings.corner_to_vertex_id.resize(root.geometry.get_corner_count());
+
+    const bool do_polygon_id           = root.attributes.id_vec3           .is_valid();
+    const bool do_vertex_position      = root.attributes.position          .is_valid();
+    const bool do_vertex_normal        = root.attributes.normal            .is_valid();
+    const bool do_vertex_normal_smooth = root.attributes.normal_smooth     .is_valid();
+    const bool do_vertex_normal_either = do_vertex_normal || do_vertex_normal_smooth;
+    const bool do_vertex_tangent       = root.attributes.tangent           .is_valid();
+    const bool do_vertex_bitangent     = root.attributes.bitangent         .is_valid();
+    const bool do_vertex_texcoord      = root.attributes.texcoord          .is_valid();
+    const bool do_vertex_color         = root.attributes.color             .is_valid();
+    const bool do_aniso_control        = root.attributes.aniso_control     .is_valid();
+    const bool do_joint_indices        = root.attributes.joint_indices     .is_valid();
+    const bool do_joint_weights        = root.attributes.joint_weights     .is_valid();
+    const bool do_vertex_valency       = root.attributes.valency_edge_count.is_valid();
+    const bool do_corner_points        = root.build_info.primitive_types.corner_points;
+
     for (polygon_id = 0; polygon_id < polygon_id_end; ++polygon_id) {
+        ERHE_PROFILE_SCOPE("polygon");
         const Polygon& polygon = root.geometry.polygons[polygon_id];
         first_index    = vertex_index;
         previous_index = first_index;
@@ -786,28 +816,29 @@ void Build_context::build_polygon_fill()
 
         const Polygon_corner_id polyon_corner_id_end = polygon.first_polygon_corner_id + polygon.corner_count;
         for (polygon_corner_id = polygon.first_polygon_corner_id; polygon_corner_id < polyon_corner_id_end; ++polygon_corner_id) {
+            ERHE_PROFILE_SCOPE("corner");
             corner_id            = root.geometry.polygon_corners[polygon_corner_id];
             const Corner& corner = root.geometry.corners[corner_id];
             point_id             = corner.point_id;
 
             root.element_mappings.corner_to_vertex_id[corner_id] = vertex_index;
 
-            build_polygon_id          ();
-            build_vertex_position     ();
-            build_vertex_normal       ();
-            build_vertex_tangent      ();
-            build_vertex_bitangent    ();
-            build_vertex_texcoord     ();
-            build_vertex_color        (polygon.corner_count);
-            build_vertex_aniso_control();
-            build_vertex_joint_indices();
-            build_vertex_joint_weights();
-            build_valency_edge_count  ();
+            if (do_polygon_id          ) build_polygon_id          ();
+            if (do_vertex_position     ) build_vertex_position     ();
+            if (do_vertex_normal_either) build_vertex_normal       (do_vertex_normal, do_vertex_normal_smooth);
+            if (do_vertex_tangent      ) build_vertex_tangent      ();
+            if (do_vertex_bitangent    ) build_vertex_bitangent    ();
+            if (do_vertex_texcoord     ) build_vertex_texcoord     ();
+            if (do_vertex_color        ) build_vertex_color        (polygon.corner_count);
+            if (do_aniso_control       ) build_vertex_aniso_control();
+            if (do_joint_indices       ) build_vertex_joint_indices();
+            if (do_joint_weights       ) build_vertex_joint_weights();
+            if (do_vertex_valency      ) build_valency_edge_count  ();
 
             // Indices
             property_maps.corner_indices->put(corner_id, vertex_index);
 
-            build_corner_point_index();
+            if (do_corner_points) build_corner_point_index();
             build_triangle_fill_index();
 
             vertex_writer.move(root.vertex_stride);

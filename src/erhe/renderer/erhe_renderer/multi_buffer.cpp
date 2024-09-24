@@ -15,14 +15,13 @@ namespace erhe::renderer{
 
 Multi_buffer::Multi_buffer(erhe::graphics::Instance& graphics_instance, const std::string_view name)
     : m_instance{graphics_instance}
-    , m_writer  {graphics_instance}
     , m_name    {name}
 {
 }
 
-auto Multi_buffer::writer() -> Buffer_writer&
+auto Multi_buffer::get_writer() -> Buffer_writer&
 {
-    return m_writer;
+    return m_writers.at(m_current_slot);
 }
 
 namespace {
@@ -62,6 +61,8 @@ inline auto access_mask(erhe::graphics::Instance& instance) -> gl::Map_buffer_ac
 
 void Multi_buffer::allocate(const gl::Buffer_target target, const unsigned int binding_point, const std::size_t size)
 {
+    ERHE_VERIFY(m_buffers.empty());
+    ERHE_VERIFY(m_writers.empty());
     ERHE_VERIFY(gl_helpers::is_indexed(target));
     m_binding_point = binding_point;
 
@@ -76,11 +77,14 @@ void Multi_buffer::allocate(const gl::Buffer_target target, const unsigned int b
             access_mask(m_instance),
             fmt::format("{} {}", m_name, slot)
         );
+        m_writers.emplace_back(m_instance, m_buffers.back());
     }
 }
 
 void Multi_buffer::allocate(const gl::Buffer_target target, const std::size_t size)
 {
+    ERHE_VERIFY(m_buffers.empty());
+    ERHE_VERIFY(m_writers.empty());
     ERHE_VERIFY(!gl_helpers::is_indexed(target));
     m_binding_point = 0;
 
@@ -95,34 +99,34 @@ void Multi_buffer::allocate(const gl::Buffer_target target, const std::size_t si
             access_mask(m_instance),
             fmt::format("{} {}", m_name, slot)
         );
+        m_writers.emplace_back(m_instance, m_buffers.back());
     }
 }
 
-auto Multi_buffer::buffers() -> std::vector<erhe::graphics::Buffer>&
+auto Multi_buffer::get_buffers() -> etl::vector<erhe::graphics::Buffer, s_frame_resources_count>&
 {
     return m_buffers;
 }
 
-auto Multi_buffer::buffers() const -> const std::vector<erhe::graphics::Buffer>&
+auto Multi_buffer::get_buffers() const -> const etl::vector<erhe::graphics::Buffer, s_frame_resources_count>&
 {
     return m_buffers;
 }
 
-auto Multi_buffer::current_buffer() -> erhe::graphics::Buffer&
+auto Multi_buffer::get_current_buffer() -> erhe::graphics::Buffer&
 {
     return m_buffers.at(m_current_slot);
 }
 
-auto Multi_buffer::name() const -> const std::string&
+auto Multi_buffer::get_name() const -> const std::string&
 {
     return m_name;
 }
 
 void Multi_buffer::next_frame()
 {
+    m_writers[m_current_slot].reset();
     m_current_slot = (m_current_slot + 1) % s_frame_resources_count;
-
-    m_writer.reset();
 
     SPDLOG_LOGGER_TRACE(log_multi_buffer, "{} next_frame() - current slot is now {}", m_name, m_current_slot);
 }
@@ -135,7 +139,7 @@ void Multi_buffer::bind(const erhe::renderer::Buffer_range& range)
         return;
     }
 
-    const auto& buffer = current_buffer();
+    const auto& buffer = get_current_buffer();
 
     SPDLOG_LOGGER_TRACE(
         log_multi_buffer,
@@ -172,8 +176,8 @@ void Multi_buffer::bind(const erhe::renderer::Buffer_range& range)
 void Multi_buffer::reset()
 {
     m_buffers.clear();
+    m_writers.clear();
     m_current_slot = 0;
-    m_writer.reset();
 }
 
 } // namespace erhe::renderer

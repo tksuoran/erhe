@@ -93,6 +93,8 @@ Tile_renderer::Frame_resources::Frame_resources(
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
         }
     }
+    , vertex_writer{graphics_instance, vertex_buffer}
+    , projection_writer{graphics_instance, projection_buffer}
 {
     vertex_buffer    .set_debug_label(fmt::format("Map Renderer Vertex {}", slot));
     projection_buffer.set_debug_label(fmt::format("Map Renderer Projection {}", slot));
@@ -217,9 +219,6 @@ Tile_renderer::Tile_renderer(
     , m_u_texture_offset         {m_texture_handle->offset_in_parent()}
     , m_shader_path              {std::filesystem::path{"res"} / std::filesystem::path{"shaders"}}
     , m_shader_stages            {make_program(make_prototype(graphics_instance))}
-    , m_vertex_writer            {graphics_instance}
-    , m_projection_writer        {graphics_instance}
-        
 {
     erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{
         m_index_buffer,
@@ -663,9 +662,9 @@ void Tile_renderer::next_frame()
 {
     ERHE_VERIFY(m_can_blit == false);
 
+    m_frame_resources[m_current_frame_resource_slot].vertex_writer.reset();
+    m_frame_resources[m_current_frame_resource_slot].projection_writer.reset();
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
-    m_vertex_writer    .reset();
-    m_projection_writer.reset();
     m_index_range_first = 0;
     m_index_count       = 0;
 }
@@ -675,9 +674,10 @@ void Tile_renderer::begin()
     ERHE_VERIFY(m_can_blit == false);
 
     // TODO byte_count?
-    const auto       vertex_gpu_data = m_vertex_writer.begin(&current_frame_resources().vertex_buffer, 0);
-    std::byte* const start           = vertex_gpu_data.data()       + m_vertex_writer.write_offset;
-    const size_t     byte_count      = vertex_gpu_data.size_bytes() - m_vertex_writer.write_offset;
+    auto&            vertex_writer   = m_frame_resources[m_current_frame_resource_slot].vertex_writer;
+    const auto       vertex_gpu_data = vertex_writer.begin(gl::Buffer_target::array_buffer, 0);
+    std::byte* const start           = vertex_gpu_data.data()       + vertex_writer.write_offset;
+    const size_t     byte_count      = vertex_gpu_data.size_bytes() - vertex_writer.write_offset;
     const size_t     word_count      = byte_count / sizeof(float);
     m_gpu_float_data = std::span<float>   {reinterpret_cast<float*   >(start), word_count};
     m_gpu_uint_data  = std::span<uint32_t>{reinterpret_cast<uint32_t*>(start), word_count};
@@ -751,8 +751,9 @@ void Tile_renderer::end()
 {
     ERHE_VERIFY(m_can_blit == true);
 
-    m_vertex_writer.write_offset += m_word_offset * 4;
-    m_vertex_writer.end();
+    auto& vertex_writer = m_frame_resources[m_current_frame_resource_slot].vertex_writer;
+    vertex_writer.write_offset += m_word_offset * 4;
+    vertex_writer.end();
 
     m_can_blit = false;
 }
@@ -771,9 +772,10 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
 
     // TODO byte_count
     auto* const               projection_buffer   = &current_frame_resources().projection_buffer;
-    const auto                projection_gpu_data = m_projection_writer.begin(projection_buffer, 0);
-    std::byte* const          start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
-    const size_t              byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
+    auto&                     projection_writer   = m_frame_resources[m_current_frame_resource_slot].projection_writer;
+    const auto                projection_gpu_data = projection_writer.begin(projection_buffer->target(), 0);
+    std::byte* const          start               = projection_gpu_data.data()       + projection_writer.write_offset;
+    const size_t              byte_count          = projection_gpu_data.size_bytes() - projection_writer.write_offset;
     const size_t              word_count          = byte_count / sizeof(float);
     const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
     const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
@@ -788,7 +790,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     using erhe::graphics::write;
     write(gpu_float_data, m_u_clip_from_window_offset, as_span(clip_from_window));
 
-    m_projection_writer.write_offset += m_u_clip_from_window_size * sizeof(float);
+    projection_writer.write_offset += m_u_clip_from_window_size * sizeof(float);
 
     const uint32_t texture_handle[2] =
     {
@@ -797,9 +799,9 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     };
     const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
     write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
-    m_projection_writer.write_offset += m_u_texture_size;
+    projection_writer.write_offset += m_u_texture_size;
 
-    m_projection_writer.end();
+    projection_writer.end();
 
     const auto& pipeline = current_frame_resources().pipeline;
 
@@ -814,8 +816,8 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
         projection_buffer->target(),
         static_cast<GLuint>    (m_projection_block.binding_point()),
         static_cast<GLuint>    (projection_buffer->gl_name()),
-        static_cast<GLintptr>  (m_projection_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(m_projection_writer.range.byte_count)
+        static_cast<GLintptr>  (projection_writer.range.first_byte_offset),
+        static_cast<GLsizeiptr>(projection_writer.range.byte_count)
     );
 
     if (m_graphics_instance.info.use_bindless_texture) {
@@ -842,10 +844,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     m_index_count = 0;
 }
 
-auto Tile_renderer::terrain_image(
-    const terrain_tile_t terrain_tile,
-    const int            scale
-) -> bool
+auto Tile_renderer::terrain_image(const terrain_tile_t terrain_tile, const int scale) -> bool
 {
     const Pixel_coordinate& texel = get_terrain_shape(terrain_tile);
     const glm::vec2 uv0{
@@ -868,10 +867,7 @@ auto Tile_renderer::terrain_image(
     );
 }
 
-auto Tile_renderer::unit_image(
-    const unit_tile_t unit_tile,
-    const int         scale
-) -> bool
+auto Tile_renderer::unit_image(const unit_tile_t unit_tile, const int scale) -> bool
 {
     const auto&     texel = get_unit_shape(unit_tile);
     const glm::vec2 uv0{
@@ -942,11 +938,7 @@ void Tile_renderer::make_terrain_type_combo(const char* label, terrain_t& value)
     }
 }
 
-void Tile_renderer::make_unit_type_combo(
-    const char* label,
-    unit_t&     value,
-    const int   player
-)
+void Tile_renderer::make_unit_type_combo(const char* label, unit_t& value, const int player)
 {
     auto&       preview_unit  = m_tiles.get_unit_type(value);
     const char* preview_value = preview_unit.name.c_str();
@@ -979,182 +971,3 @@ void Tile_renderer::make_unit_type_combo(
 }
 
 } // namespace hextiles
-
-
-
-#if 0
-void Tile_renderer::blit_tile(
-    tile_t   tile,
-    float    dst_x0,
-    float    dst_y0,
-    float    dst_x1,
-    float    dst_y1,
-    uint32_t color
-)
-{
-    ERHE_VERIFY(m_can_blit == true);
-
-   //const uint32_t color = 0xffffffffu;
-    const float& x0 = dst_x0;
-    const float& y0 = dst_y0;
-    const float& x1 = dst_x1;
-    const float& y1 = dst_y1;
-
-    m_gpu_float_data[m_word_offset++] = x0;
-    m_gpu_float_data[m_word_offset++] = y0;
-    m_gpu_uint_data [m_word_offset++] = color;
-    m_gpu_uint_data [m_word_offset++] = tile;
-    m_gpu_uint_data [m_word_offset++] = 0;
-
-    m_gpu_float_data[m_word_offset++] = x1;
-    m_gpu_float_data[m_word_offset++] = y0;
-    m_gpu_uint_data [m_word_offset++] = color;
-    m_gpu_uint_data [m_word_offset++] = tile;
-    m_gpu_uint_data [m_word_offset++] = 1;
-
-    m_gpu_float_data[m_word_offset++] = x1;
-    m_gpu_float_data[m_word_offset++] = y1;
-    m_gpu_uint_data [m_word_offset++] = color;
-    m_gpu_uint_data [m_word_offset++] = tile;
-    m_gpu_uint_data [m_word_offset++] = 2;
-
-    m_gpu_float_data[m_word_offset++] = x0;
-    m_gpu_float_data[m_word_offset++] = y1;
-    m_gpu_uint_data [m_word_offset++] = color;
-    m_gpu_uint_data [m_word_offset++] = tile;
-    m_gpu_uint_data [m_word_offset++] = 3;
-    m_index_count += 5;
-}
-
-    const size_t terrain_shape_count = m_tiles->get_terrain_shapes().size();
-    const size_t unit_shape_count    = m_tiles->get_unit_shapes   ().size();
-    const size_t unit_type_count     = m_tiles->get_unit_type_count();
-    const size_t terrain_tile_count  = terrain_shape_count;
-    const size_t unit_tile_count     = unit_shape_count * max_player_count;
-    const size_t tile_count          = terrain_tile_count + unit_tile_count;
-
-    erhe::graphics::Texture_create_info texture_create_info{
-        .target          = gl::Texture_target::texture_2d_array,
-        .internal_format = to_gl(m_tileset_image.info.format),
-        .use_mipmaps     = false,
-        .width           = Tile_shape::full_width,
-        .height          = Tile_shape::height,
-        .depth           = static_cast<int>(tile_count),
-        .level_count     = 1
-    };
-    erhe::graphics::Texture_create_info texture_create_info{
-        .target          = gl::Texture_target::texture_2d_array,
-        .internal_format = to_gl(m_tileset_image.info.format),
-        .use_mipmaps     = false,
-        .width           = Tile_shape::full_width,
-        .height          = Tile_shape::height,
-        .depth           = static_cast<int>(tile_count),
-        .level_count     = 1
-    };
-
-    m_terrain_tile_offset = 0;
-    const auto& terrain_shapes = m_tiles->get_terrain_shapes();
-    tile_t tile{0};
-    for (terrain_t i = 0; i < terrain_tile_count; ++i) {
-        auto&                   terrain_type = m_tiles->get_terrain_type(i);
-        const Pixel_coordinate& shape        = terrain_shapes[i];
-        terrain_type.tile = tile;
-        m_tileset_texture->upload_subimage(
-            to_gl(m_tileset_image.info.format),
-            m_tileset_image.data,
-            m_tileset_image.info.width,
-            shape.x,
-            shape.y,
-            Tile_shape::full_width,
-            Tile_shape::height,
-            0,    // mipmap level
-            0,    // x
-            0,    // y
-            tile  // z / array index
-        );
-        ++tile;
-    }
-
-    constexpr size_t player_color_shade_count = 4;
-    struct Player_unit_colors
-    {
-        std::array<glm::vec4, player_color_shade_count> shades;
-    };
-    std::vector<Player_unit_colors> players_colors;
-    {
-        int ty_offset = 0;
-        ty_offset += Tile_group::count * Tile_group::height; // terrain group tiles
-        ty_offset += 1; // edge tiles
-        ty_offset += 1; // extra tiles
-        ty_offset += Base_tiles::height;
-        ty_offset += 1; // grid tiles
-        ty_offset += Explosion_tiles::height * 2; // Explision tiles (double width and height)
-        int tx_offset = Unit_group::width;
-        int x0 = tx_offset * Tile_shape::full_width;
-        int y0 = ty_offset * Tile_shape::height;
-        for (int i = 0; i < max_player_count; ++i) {
-            Player_unit_colors player_colors;
-            for (size_t s = 0; s < player_color_shade_count; ++s) {
-                const glm::vec4 color = m_tileset_image.get_pixel(x0 + s, y0 + i);
-                player_colors.shades[s] = color;
-                log_c.tiles->info(
-                    "Player {} Shader {} Color: {}, {}, {}, {}",
-                    i, s,
-                    color.r, color.g, color.b, color.a
-                );
-            }
-            players_colors.push_back(player_colors);
-        }
-    }
-
-    Image scratch{
-        .info = {
-            .width       = Unit_group::width * Tile_shape::full_width,
-            .height      = Unit_group::height * Tile_shape::height,
-            .depth       = 1,
-            .level_count = 1,
-            .row_stride  = 4 * Unit_group::width * Tile_shape::full_width,
-            .format      = m_tileset_image.info.format
-        }
-    };
-    scratch.data.resize(scratch.info.height * scratch.info.row_stride);
-
-    //m_unit_tile_offset = tile;
-    const auto& unit_shapes = m_tiles->get_unit_shapes();
-    for (unit_t i = 0; i < unit_type_count; ++i) {
-        auto&                   unit_type = m_tiles->get_unit_type(i);
-        const Pixel_coordinate& shape     = unit_shapes[i];
-        unit_type.tile = tile;
-        for (int j = 0; j < max_player_count; ++j) {
-            const Player_unit_colors& player_colors = players_colors[j];
-            for (int y = 0; y < Tile_shape::height; ++y) {
-                for (int x = 0; x < Tile_shape::full_width; ++x) {
-                    const auto      original_color = m_tileset_image.get_pixel(x, y);
-                    const glm::vec4 player_color   =
-                        original_color.b * player_colors.shades[1] +
-                        original_color.r * player_colors.shades[2] +
-                        original_color.g * player_colors.shades[3];
-                    scratch_tile.put_pixel(
-                        x,
-                        y,
-                        original_color.b * player_colors.shades[1] +
-                        original_color.r * player_colors.shades[2] +
-                        original_color.g * player_colors.shades[3]
-                    );
-                }
-            }
-            m_tileset_texture->upload(
-                to_gl(scratch_tile.info.format),
-                scratch_tile.data,
-                Tile_shape::full_width,
-                Tile_shape::height,
-                1,    // depth
-                0,    // mipmap level
-                0,    // x
-                0,    // y
-                tile  // z / array index
-            );
-        }
-        tile++;
-    }
-#endif

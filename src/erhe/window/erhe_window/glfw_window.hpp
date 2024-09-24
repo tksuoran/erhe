@@ -4,8 +4,10 @@
 
 #include "erhe_window/window_event_handler.hpp"
 
+#include <atomic>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 struct GLFWwindow;
@@ -103,11 +105,12 @@ private:
     double                   m_mouse_virtual_xpos  {0.0};
     double                   m_mouse_virtual_ypos  {0.0};
     int                      m_glfw_key_modifiers{0};
-    int                      m_joystick{-1};
+    std::atomic<bool>        m_joystick_scan_done{false};
     std::vector<float>       m_controller_axis_values;
     std::vector<bool>        m_controller_button_values;
     int                      m_input_event_queue_write{0};
     std::vector<Input_event> m_input_events[2];
+    std::thread              m_joystick_scan_task;
 
     static int s_window_count;
 };

@@ -1,4 +1,5 @@
 #include "erhe_renderer/buffer_writer.hpp"
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/instance.hpp"
@@ -8,69 +9,49 @@
 
 namespace erhe::renderer {
 
-Buffer_writer::Buffer_writer(erhe::graphics::Instance& instance)
-    : m_instance{instance}
+Buffer_writer::Buffer_writer(erhe::graphics::Instance& graphic_instance, erhe::graphics::Buffer& buffer)
+    : m_graphics_instance{graphic_instance}
+    , m_buffer{buffer}
 {
 }
 
-void Buffer_writer::shader_storage_align()
+auto Buffer_writer::begin(gl::Buffer_target target, std::size_t byte_count, Buffer_writer_flags flags) -> std::span<std::byte>
 {
-    while (write_offset % m_instance.implementation_defined.shader_storage_buffer_offset_alignment) {
-        write_offset++;
-    }
-}
-
-void Buffer_writer::uniform_align()
-{
-    while (write_offset % m_instance.implementation_defined.uniform_buffer_offset_alignment) {
-        write_offset++;
-    }
-}
-
-auto Buffer_writer::begin(erhe::graphics::Buffer* const buffer, std::size_t byte_count) -> std::span<std::byte>
-{
-    ERHE_VERIFY(m_buffer == nullptr);
-    m_buffer = buffer;
-    const gl::Buffer_target buffer_target = m_buffer->target();
-
-    switch (buffer_target) {
-        //using enum gl::Buffer_target;
-        case gl::Buffer_target::shader_storage_buffer: {
-            shader_storage_align();
-            break;
-        }
-
-        case gl::Buffer_target::uniform_buffer: {
-            uniform_align();
-            break;
-        }
-        default: {
-            // TODO
-            break;
-        }
-    }
+    write_offset = m_graphics_instance.align_buffer_offset(target, write_offset);
 
     if (byte_count == 0) {
-        byte_count = buffer->capacity_byte_count() - write_offset;
+        byte_count = m_buffer.capacity_byte_count() - write_offset;
     } else {
-        byte_count = std::min(byte_count, buffer->capacity_byte_count() - write_offset);
+        std::size_t available_capacity = m_buffer.capacity_byte_count() - write_offset;
+        if (byte_count > available_capacity) {
+            if (erhe::bit::test_all_rhs_bits_set(flags, Buffer_writer_flag_masks::allow_wrap)) {
+                reset();
+                available_capacity = m_buffer.capacity_byte_count() - write_offset;
+                ERHE_VERIFY(available_capacity >= byte_count);
+                ++wrap_count;
+            } else if (erhe::bit::test_all_rhs_bits_set(flags, Buffer_writer_flag_masks::allow_clamp)) {
+               byte_count = std::min(byte_count, m_buffer.capacity_byte_count() - write_offset);
+            } else {
+                ERHE_FATAL("Buffer_writer::begin() out of memory");
+            }
+        }
     }
 
-    if (!m_instance.info.use_persistent_buffers) {
+    if (!m_graphics_instance.info.use_persistent_buffers) {
         // Only requested range will be temporarily mapped
         map_offset   = write_offset;
         write_offset = 0;
         write_end    = byte_count;
-        m_buffer->begin_write(map_offset, byte_count);
-        range.first_byte_offset = map_offset + write_offset;
-        m_map = buffer->map();
+        m_buffer.begin_write(map_offset, byte_count);
+        range.first_byte_offset = map_offset;
+        m_map = m_buffer.map();
         return m_map;
     } else {
         // The whole buffer is always mapped - return subspan for requested range
         write_end               = write_offset + byte_count;
         range.first_byte_offset = write_offset;
         write_offset = 0;
-        m_map = buffer->map().subspan(range.first_byte_offset, byte_count);
+        m_map = m_buffer.map().subspan(range.first_byte_offset, byte_count);
         return m_map;
     }
 
@@ -86,7 +67,7 @@ auto Buffer_writer::subspan(const std::size_t byte_count) -> std::span<std::byte
 
 void Buffer_writer::dump()
 {
-    auto span = m_buffer->map();
+    auto span = m_buffer.map();
     uint8_t* data = reinterpret_cast<uint8_t*>(span.data());
     const std::size_t byte_count = span.size();
     const std::size_t word_count{byte_count / sizeof(uint32_t)};
@@ -111,10 +92,9 @@ void Buffer_writer::dump()
 
 void Buffer_writer::end()
 {
-    ERHE_VERIFY(m_buffer != nullptr);
-    if (!m_instance.info.use_persistent_buffers) {
+    if (!m_graphics_instance.info.use_persistent_buffers) {
         range.byte_count = write_offset;
-        m_buffer->end_write(map_offset, write_offset);
+        m_buffer.end_write(map_offset, write_offset);
         write_offset += map_offset;
         map_offset = 0;
         write_end = 0;
@@ -122,9 +102,7 @@ void Buffer_writer::end()
         range.byte_count = write_offset;
         write_offset += range.first_byte_offset;
     }
-    m_buffer = nullptr;
     m_map = {};
-
 }
 
 void Buffer_writer::reset()
@@ -133,6 +111,7 @@ void Buffer_writer::reset()
     range.byte_count        = 0;
     map_offset              = 0;
     write_offset            = 0;
+    wrap_count              = 0;
     m_map                   = {};
 }
 

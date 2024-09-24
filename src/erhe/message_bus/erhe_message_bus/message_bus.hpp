@@ -1,7 +1,10 @@
 #pragma once
 
+#include "erhe_profile/profile.hpp"
+
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <queue>
 #include <vector>
 
@@ -14,11 +17,13 @@ class Message_bus
 public:
     void add_receiver(std::function<void(Message_type&)> message_receiver)
     {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
         m_receivers.push_back(message_receiver);
     }
 
     void send_message(Message_type message)
     {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
         for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++) {
             (*iter)(message);
         }
@@ -26,11 +31,13 @@ public:
 
     void queue_message(Message_type message)
     {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
         m_messages.push(message);
     }
 
     void update()
     {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
         while (!m_messages.empty()) {
             for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++) {
                 (*iter)(m_messages.front());
@@ -40,8 +47,9 @@ public:
     }
 
 private:
+    ERHE_PROFILE_MUTEX(std::mutex,                   m_mutex);
     std::vector<std::function<void (Message_type&)>> m_receivers;
     std::queue<Message_type>                         m_messages;
 };
 
-}
+} // namespace erhe::message_bus

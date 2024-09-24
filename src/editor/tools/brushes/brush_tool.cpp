@@ -21,6 +21,7 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
@@ -662,7 +663,7 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
 #endif
 }
 
-void Brush_tool::tool_render(const Render_context&)
+void Brush_tool::tool_render(const Render_context& render_context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -670,7 +671,7 @@ void Brush_tool::tool_render(const Render_context&)
         return;
     }
 
-    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
+    erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
 
     const auto& transform = m_preview_node->parent_from_node_transform();
     glm::mat4 m = transform.get_matrix();

@@ -132,8 +132,8 @@ void Multi_pipeline::allocate(
     erhe::renderer::Multi_buffer&                    index_buffer
 )
 {
-    std::vector<erhe::graphics::Buffer>& vertex_buffers = vertex_buffer.buffers();
-    std::vector<erhe::graphics::Buffer>& index_buffers  = index_buffer .buffers();
+    auto& vertex_buffers = vertex_buffer.get_buffers();
+    auto& index_buffers  = index_buffer .get_buffers();
 
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         erhe::graphics::Buffer* const a_vertex_buffer = &vertex_buffers.at(slot);
@@ -161,7 +161,7 @@ void Multi_pipeline::allocate(
     }
 }
 
-auto Multi_pipeline::current_pipeline() -> erhe::graphics::Pipeline&
+auto Multi_pipeline::get_current_pipeline() -> erhe::graphics::Pipeline&
 {
     return m_pipelines.at(m_current_slot);
 }
@@ -787,19 +787,17 @@ void Imgui_renderer::render_draw_data()
     erhe::graphics::Scoped_gpu_timer   timer     {m_gpu_timer};
 
     auto&       program               = m_imgui_program_interface;
-    auto&       draw_parameter_buffer = program.draw_parameter_buffer.current_buffer();
-    auto&       draw_indirect_buffer  = program.draw_indirect_buffer .current_buffer();
-    auto&       vertex_buffer         = program.vertex_buffer        .current_buffer();
-    auto&       index_buffer          = program.index_buffer         .current_buffer();
-    const auto& pipeline              = program.pipeline             .current_pipeline();
+    auto&       draw_parameter_buffer = program.draw_parameter_buffer.get_current_buffer();
+    auto&       draw_indirect_buffer  = program.draw_indirect_buffer .get_current_buffer();
+    const auto& pipeline              = program.pipeline             .get_current_pipeline();
 
     const auto& draw_parameter_struct_offsets = program.draw_parameter_struct_offsets;
     const auto  draw_parameter_entry_size     = program.draw_parameter_struct.size_bytes();
 
-    auto& draw_parameter_writer = program.draw_parameter_buffer.writer();
-    auto& draw_indirect_writer  = program.draw_indirect_buffer .writer();
-    auto& vertex_writer         = program.vertex_buffer        .writer();
-    auto& index_writer          = program.index_buffer         .writer();
+    auto& draw_parameter_writer = program.draw_parameter_buffer.get_writer();
+    auto& draw_indirect_writer  = program.draw_indirect_buffer .get_writer();
+    auto& vertex_writer         = program.vertex_buffer        .get_writer();
+    auto& index_writer          = program.index_buffer         .get_writer();
 
     std::size_t draw_indirect_count{0};
 
@@ -836,10 +834,10 @@ void Imgui_renderer::render_draw_data()
         }
     }
 
-    auto draw_parameter_gpu_data = draw_parameter_writer.begin(&draw_parameter_buffer, draw_parameter_byte_count);
-    auto draw_indirect_gpu_data  = draw_indirect_writer .begin(&draw_indirect_buffer,  draw_indirect_byte_count);
-    auto vertex_gpu_data         = vertex_writer        .begin(&vertex_buffer,         vertex_byte_count);
-    auto index_gpu_data          = index_writer         .begin(&index_buffer,          index_byte_count);
+    auto draw_parameter_gpu_data = draw_parameter_writer.begin(m_imgui_program_interface.draw_parameter_block.get_binding_target(), draw_parameter_byte_count);
+    auto draw_indirect_gpu_data  = draw_indirect_writer .begin(gl::Buffer_target::draw_indirect_buffer, draw_indirect_byte_count);
+    auto vertex_gpu_data         = vertex_writer        .begin(gl::Buffer_target::array_buffer,         vertex_byte_count);
+    auto index_gpu_data          = index_writer         .begin(gl::Buffer_target::element_array_buffer, index_byte_count);
 
     using erhe::graphics::write;
 

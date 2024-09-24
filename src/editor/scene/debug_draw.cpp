@@ -48,9 +48,12 @@ void Debug_draw::set_colors(const Colors& colors)
 
 void Debug_draw::draw_line(const glm::vec3 from, const glm::vec3 to, const glm::vec3 color)
 {
-    auto& line_renderer = *m_context.line_renderer_set->visible.at(2).get();
-    line_renderer.set_thickness(line_width);
-    line_renderer.add_lines(glm::vec4{color, 1.0f}, { {from, to} });
+    static_cast<void>(from);
+    static_cast<void>(to);
+    static_cast<void>(color);
+    /// TODO auto& line_renderer = m_context.line_renderer->get(
+    /// TODO line_renderer.set_thickness(line_width);
+    /// TODO line_renderer.add_lines(glm::vec4{color, 1.0f}, { {from, to} });
 }
 
 void Debug_draw::draw_3d_text(const glm::vec3 location, const char* text)

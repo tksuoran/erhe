@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_profile/profile.hpp"
+
 #include <mutex>
 #include <vector>
 
@@ -35,7 +37,7 @@ public:
 
 private:
     erhe::graphics::Instance&      m_graphics_instance;
-    std::mutex                     m_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     std::vector<Rendergraph_node*> m_nodes;
 };
 

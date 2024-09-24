@@ -55,12 +55,14 @@ auto Redo_command::try_call() -> bool
 #pragma endregion Commands
 
 Operation_stack::Operation_stack(
+    tf::Executor&                executor,
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
     Editor_context&              editor_context
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Operation Stack", "operation_stack"}
+    , m_executor    {executor}
     , m_context     {editor_context}
     , m_undo_command{commands, editor_context}
     , m_redo_command{commands, editor_context}
@@ -72,8 +74,6 @@ Operation_stack::Operation_stack(
     commands.bind_command_to_menu(&m_undo_command, "Edit.Undo");
     commands.bind_command_to_menu(&m_redo_command, "Edit.Redo");
 
-    m_executor = std::make_unique<tf::Executor>();
-
     m_undo_command.set_host(this);
     m_redo_command.set_host(this);
 }
@@ -82,7 +82,7 @@ Operation_stack::~Operation_stack() = default;
 
 auto Operation_stack::get_executor() -> tf::Executor&
 {
-    return *m_executor.get();
+    return m_executor;
 }
 
 void Operation_stack::queue(const std::shared_ptr<Operation>& operation)

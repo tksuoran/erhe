@@ -17,8 +17,9 @@
 #endif
 
 #include <cstdlib>
-#include <stdexcept>
 #include <ctime>
+#include <stdexcept>
+#include <thread>
 
 namespace gl {
 
@@ -379,11 +380,43 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
     const bool primary = (configuration.share == nullptr);
 
-    glfwWindowHint(GLFW_CLIENT_API,       GLFW_OPENGL_API);
-    glfwWindowHint(GLFW_RED_BITS,         8);
-    glfwWindowHint(GLFW_GREEN_BITS,       8);
-    glfwWindowHint(GLFW_BLUE_BITS,        8);
-    glfwWindowHint(GLFW_ALPHA_BITS,       8);
+    // Scanning joysticks appears to be slow, so do it in worker thread
+    if (primary) {
+        m_joystick_scan_task = std::thread{
+            [this]() {
+                ERHE_PROFILE_SCOPE("Scan joysticks");
+                for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
+                    ERHE_PROFILE_SCOPE("Joystick");
+                    int present = glfwJoystickPresent(jid);
+                    if (present) {
+                        const char* name = glfwGetJoystickName(jid);
+                        const char* guid = glfwGetJoystickGUID(jid);
+                        int axis_count = 0;
+                        const float* axes = glfwGetJoystickAxes(jid, &axis_count);
+                        static_cast<void>(axes);
+                        int button_count;
+                        const unsigned char* buttons = glfwGetJoystickButtons(jid, &button_count);
+                        static_cast<void>(buttons);
+                        log_window->info(
+                            "Joystick {}: name = {} GUID = {} axis_count = {} button_count = {}",
+                            jid,
+                            (name != nullptr) ? name : "",
+                            (guid != nullptr) ? guid : "",
+                            axis_count,
+                            button_count
+                        );
+                    }
+                }
+                m_joystick_scan_done.store(true);
+            }
+        };
+    };
+
+    glfwWindowHint(GLFW_CLIENT_API,     GLFW_OPENGL_API);
+    glfwWindowHint(GLFW_RED_BITS,       8);
+    glfwWindowHint(GLFW_GREEN_BITS,     8);
+    glfwWindowHint(GLFW_BLUE_BITS,      8);
+    glfwWindowHint(GLFW_ALPHA_BITS,     8);
     glfwWindowHint(GLFW_DEPTH_BITS,     configuration.use_depth   ? 24 : 0);
     glfwWindowHint(GLFW_STENCIL_BITS,   configuration.use_stencil ?  8 : 0);
 
@@ -423,8 +456,10 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
     if (fullscreen && (monitor != nullptr)) {
         const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+        ERHE_PROFILE_SCOPE("glfwCreateWindow");
         m_glfw_window = glfwCreateWindow(mode->width, mode->height, configuration.title.data(), monitor, share_window);
     } else {
+        ERHE_PROFILE_SCOPE("glfwCreateWindow");
         m_glfw_window = glfwCreateWindow(configuration.width, configuration.height, configuration.title.data(), monitor, share_window);
     }
 
@@ -526,29 +561,6 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         }
     }
 
-    for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
-        int present = glfwJoystickPresent(jid);
-        if (present) {
-            const char* name = glfwGetJoystickName(jid);
-            const char* guid = glfwGetJoystickGUID(jid);
-            int axis_count = 0;
-            const float* axes = glfwGetJoystickAxes(jid, &axis_count);
-            static_cast<void>(axes);
-            int button_count;
-            const unsigned char* buttons = glfwGetJoystickButtons(jid, &button_count);
-            static_cast<void>(buttons);
-            log_window->info(
-                "Joystick {}: name = {} GUID = {} axis_count = {} button_count = {}",
-                jid,
-                (name != nullptr) ? name : "",
-                (guid != nullptr) ? guid : "",
-                axis_count,
-                button_count
-            );
-            m_joystick = jid;
-        }
-    }
-
     glfwGetCursorPos(window, &m_last_mouse_x, &m_last_mouse_y);
 
     return true;
@@ -556,6 +568,10 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
 Context_window::~Context_window() noexcept
 {
+    if (m_joystick_scan_task.joinable()) {
+        m_joystick_scan_task.join();
+    }
+
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr) {
         for (Mouse_cursor cursor_n = 0; cursor_n < Mouse_cursor_COUNT; cursor_n++) {
@@ -586,62 +602,64 @@ void Context_window::poll_events(float wait_time)
         glfwPollEvents();
     }
 
-    for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
-        int present = glfwJoystickPresent(jid);
-        if (present) {
-            int axis_count = 0;
-            int button_count = 0;
-            const float* axis_values = glfwGetJoystickAxes(jid, &axis_count);
-            const unsigned char* button_values = glfwGetJoystickButtons(jid, &button_count);
-            std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
-            if (axis_count > m_controller_axis_values.size()) {
-                m_controller_axis_values.resize(axis_count);
-            }
-            for (int i = 0; i < axis_count; ++i) {
-                const float value = axis_values[i];
-                // TODO This was somewhat unexpected: At least space navigator
-                //      reports *cumulative* values for each axis, instead of
-                //      the current physical state of the controller.
-                const float delta = value - m_controller_axis_values[i];
-                if (delta != 0.0f) {
-                    m_controller_axis_values[i] = value;
-                    m_input_events[m_input_event_queue_write].push_back(
-                        Input_event{
-                            .type = Input_event_type::controller_axis_event,
-                            .timestamp = timestamp,
-                            .u = {
-                                .controller_axis_event = {
-                                    .controller    = jid,
-                                    .axis          = i,
-                                    .value         = delta,
-                                    .modifier_mask = get_modifier_mask()
-                                }
-                            }
-                        }
-                    );
+    if (m_joystick_scan_done.load()) {
+        for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
+            int present = glfwJoystickPresent(jid);
+            if (present) {
+                int axis_count = 0;
+                int button_count = 0;
+                const float* axis_values = glfwGetJoystickAxes(jid, &axis_count);
+                const unsigned char* button_values = glfwGetJoystickButtons(jid, &button_count);
+                std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
+                if (axis_count > m_controller_axis_values.size()) {
+                    m_controller_axis_values.resize(axis_count);
                 }
-            }
-            if (button_count > m_controller_button_values.size()) {
-                m_controller_button_values.resize(button_count);
-            }
-            for (int i = 0; i < button_count; ++i) {
-                const bool value = button_values[i] != 0;
-                if (value != m_controller_button_values[i]) {
-                    m_controller_button_values[i] = value;
-                    m_input_events[m_input_event_queue_write].push_back(
-                        Input_event{
-                            .type = Input_event_type::controller_button_event,
-                            .timestamp = timestamp,
-                            .u = {
-                                .controller_button_event = {
-                                    .controller    = jid,
-                                    .button        = i,
-                                    .value         = value,
-                                    .modifier_mask = get_modifier_mask()
+                for (int i = 0; i < axis_count; ++i) {
+                    const float value = axis_values[i];
+                    // TODO This was somewhat unexpected: At least space navigator
+                    //      reports *cumulative* values for each axis, instead of
+                    //      the current physical state of the controller.
+                    const float delta = value - m_controller_axis_values[i];
+                    if (delta != 0.0f) {
+                        m_controller_axis_values[i] = value;
+                        m_input_events[m_input_event_queue_write].push_back(
+                            Input_event{
+                                .type = Input_event_type::controller_axis_event,
+                                .timestamp = timestamp,
+                                .u = {
+                                    .controller_axis_event = {
+                                        .controller    = jid,
+                                        .axis          = i,
+                                        .value         = delta,
+                                        .modifier_mask = get_modifier_mask()
+                                    }
                                 }
                             }
-                        }
-                    );
+                        );
+                    }
+                }
+                if (button_count > m_controller_button_values.size()) {
+                    m_controller_button_values.resize(button_count);
+                }
+                for (int i = 0; i < button_count; ++i) {
+                    const bool value = button_values[i] != 0;
+                    if (value != m_controller_button_values[i]) {
+                        m_controller_button_values[i] = value;
+                        m_input_events[m_input_event_queue_write].push_back(
+                            Input_event{
+                                .type = Input_event_type::controller_button_event,
+                                .timestamp = timestamp,
+                                .u = {
+                                    .controller_button_event = {
+                                        .controller    = jid,
+                                        .button        = i,
+                                        .value         = value,
+                                        .modifier_mask = get_modifier_mask()
+                                    }
+                                }
+                            }
+                        );
+                    }
                 }
             }
         }
@@ -994,6 +1012,7 @@ auto Context_window::get_input_events() -> std::vector<Input_event>&
 
 void Context_window::get_extensions()
 {
+    ERHE_PROFILE_FUNCTION();
     gl::dynamic_load_init(glfwGetProcAddress);
 }
 
@@ -1016,6 +1035,7 @@ void Context_window::clear_current() const
 
 void Context_window::swap_buffers() const
 {
+    ERHE_PROFILE_FUNCTION();
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr) {
         glfwSwapBuffers(window);

@@ -9,10 +9,7 @@
 
 namespace erhe::graphics {
 
-Gl_context_provider::Gl_context_provider(
-    erhe::graphics::Instance& graphics_instance,
-    OpenGL_state_tracker&     opengl_state_tracker
-)
+Gl_context_provider::Gl_context_provider(erhe::graphics::Instance& graphics_instance, OpenGL_state_tracker& opengl_state_tracker)
     : m_graphics_instance   {graphics_instance}
     , m_opengl_state_tracker{opengl_state_tracker}
     , m_main_thread_id      {std::this_thread::get_id()}
@@ -21,6 +18,7 @@ Gl_context_provider::Gl_context_provider(
 
 void Gl_context_provider::provide_worker_contexts(
     erhe::window::Context_window* main_window,
+    unsigned int                  num_threads,
     std::function<bool()>         worker_contexts_still_needed_callback
 )
 {
@@ -37,7 +35,7 @@ void Gl_context_provider::provide_worker_contexts(
         main_window->clear_current();
     }
 
-    auto max_count = std::min(std::thread::hardware_concurrency(), 8u);
+    auto max_count = std::min(std::thread::hardware_concurrency(), num_threads);
     for (auto end = max_count, i = 0u; i < end; ++i) {
         ERHE_PROFILE_SCOPE("Worker context");
 
@@ -52,10 +50,7 @@ void Gl_context_provider::provide_worker_contexts(
         auto context = std::make_shared<erhe::window::Context_window>(main_window);
         m_contexts.push_back(context);
         context->clear_current();
-        Gl_worker_context context_wrapper{
-            static_cast<int>(i),
-            context.get()
-        };
+        Gl_worker_context context_wrapper{static_cast<int>(i), context.get()};
         m_worker_context_pool.enqueue(context_wrapper);
         m_condition_variable.notify_one();
     }
@@ -67,7 +62,6 @@ void Gl_context_provider::provide_worker_contexts(
         ERHE_PROFILE_SCOPE("main_window->make_current()");
         main_window->make_current();
     }
-
 }
 
 auto Gl_context_provider::acquire_gl_context() -> Gl_worker_context
@@ -83,8 +77,8 @@ auto Gl_context_provider::acquire_gl_context() -> Gl_worker_context
     while (!m_worker_context_pool.try_dequeue(context)) {
         log_context->trace("Waiting for available GL context");
         //ERHE_PROFILE_MESSAGE_LITERAL("Waiting for available GL context");
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_condition_variable.wait(lock);
+        std::unique_lock<LockableBase(std::mutex)> lock(m_mutex);
+        m_condition_variable.wait(lock, []{ return true; });
     }
     //const std::string text = fmt::format("Got GL context {}", context.id);
     log_context->trace("Got GL context {}", context.id);
@@ -92,6 +86,7 @@ auto Gl_context_provider::acquire_gl_context() -> Gl_worker_context
     //ZoneValue(context.id);
     ERHE_VERIFY(context.context != nullptr);
     context.context->make_current();
+    m_opengl_state_tracker.on_thread_enter();
     log_context->trace("Made current GL context {}", context.id);
     return context;
 }

@@ -32,7 +32,6 @@ target_link_libraries(
         erhe::renderer
         erhe::scene
     PRIVATE
-        erhe::concurrency
         erhe::file
         erhe::gl
         erhe::log

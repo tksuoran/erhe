@@ -37,6 +37,7 @@ class Editor_context;
 class Editor_rendering;
 class Content_library;
 class Mesh_memory;
+class Programs;
 class Scene_root;
 class Tools;
 

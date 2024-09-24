@@ -44,7 +44,6 @@ target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
         erhe::commands
-        erhe::concurrency
         erhe::graphics
         erhe::log
         erhe::math

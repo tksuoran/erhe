@@ -264,6 +264,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     renderpass->primitive_mode   = erhe::primitive::Primitive_mode::polygon_fill;
     renderpass->filter           = erhe::Item_filter{};
     renderpass->passes           = { &m_pipeline_renderpass };
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
     m_composer.renderpasses.push_back(renderpass);
 }
 

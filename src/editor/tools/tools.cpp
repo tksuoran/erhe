@@ -297,7 +297,7 @@ auto Tools::get_tool_scene_root() -> std::shared_ptr<Scene_root>
 
 void Tools::register_tool(Tool* tool)
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const auto flags = tool->get_flags();
     if (erhe::bit::test_all_rhs_bits_set(flags, Tool_flags::background)) {

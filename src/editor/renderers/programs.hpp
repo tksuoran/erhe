@@ -10,6 +10,9 @@ namespace erhe::graphics {
 namespace erhe::scene_renderer {
     class Program_interface;
 }
+namespace tf {
+    class Executor;
+}
 
 namespace editor {
 
@@ -81,7 +84,9 @@ class Programs
 public:
     static constexpr std::size_t s_texture_unit_count = 15; // for non bindless textures
 
-    Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface);
+    Programs(erhe::graphics::Instance& graphics_instance);
+
+    void load_programs(tf::Executor& executor, erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface);
 
     [[nodiscard]] auto get_variant_shader_stages(Shader_stages_variant variant) const -> const erhe::graphics::Shader_stages*;
 

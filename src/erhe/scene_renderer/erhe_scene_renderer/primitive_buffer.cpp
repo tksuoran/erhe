@@ -104,11 +104,12 @@ auto Primitive_buffer::update(
         primitive_count += mesh->get_primitives().size();
     }
 
-    auto&             buffer             = current_buffer();
+    auto&             buffer             = get_current_buffer();
+    auto&             writer             = get_writer();
     const auto        entry_size         = m_primitive_interface.primitive_struct.size_bytes();
     const auto&       offsets            = m_primitive_interface.offsets;
     const std::size_t max_byte_count     = primitive_count * entry_size;
-    const auto        primitive_gpu_data = m_writer.begin(&buffer, max_byte_count);
+    const auto        primitive_gpu_data = writer.begin(m_primitive_interface.primitive_block.get_binding_target(), max_byte_count);
     std::size_t primitive_index    = 0;
     mesh_index = 0;
     for (const auto& mesh : meshes) {
@@ -125,7 +126,7 @@ auto Primitive_buffer::update(
             continue;
         }
 
-        if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
+        if ((writer.write_offset + entry_size) > writer.write_end) {
             log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
             ERHE_FATAL("primitive buffer capacity exceeded");
             break;
@@ -138,7 +139,7 @@ auto Primitive_buffer::update(
 
         std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh->get_primitives()) {
-            if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
+            if ((writer.write_offset + entry_size) > writer.write_end) {
                 log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
                 ERHE_FATAL("primitive buffer capacity exceeded");
                 break;
@@ -176,7 +177,7 @@ auto Primitive_buffer::update(
                 mesh_index - 1,
                 (material != nullptr) ? material->get_name() : std::string{},
                 material_index,
-                m_writer.write_offset
+                writer.write_offset
             );
 
             using erhe::graphics::as_span;
@@ -192,17 +193,17 @@ auto Primitive_buffer::update(
             {
                 //ZoneScopedN("write");
                 using erhe::graphics::write;
-                write(primitive_gpu_data, m_writer.write_offset + offsets.world_from_node,          as_span(world_from_node         ));
-                write(primitive_gpu_data, m_writer.write_offset + offsets.world_from_node_cofactor, as_span(world_from_node_cofactor));
-                write(primitive_gpu_data, m_writer.write_offset + offsets.color,                    color_span                       );
-                write(primitive_gpu_data, m_writer.write_offset + offsets.material_index,           as_span(material_index          ));
-                write(primitive_gpu_data, m_writer.write_offset + offsets.size,                     size_span                        );
-                write(primitive_gpu_data, m_writer.write_offset + offsets.skinning_factor,          as_span(skinning_factor         ));
-                write(primitive_gpu_data, m_writer.write_offset + offsets.base_joint_index,         as_span(base_joint_index        ));
+                write(primitive_gpu_data, writer.write_offset + offsets.world_from_node,          as_span(world_from_node         ));
+                write(primitive_gpu_data, writer.write_offset + offsets.world_from_node_cofactor, as_span(world_from_node_cofactor));
+                write(primitive_gpu_data, writer.write_offset + offsets.color,                    color_span                       );
+                write(primitive_gpu_data, writer.write_offset + offsets.material_index,           as_span(material_index          ));
+                write(primitive_gpu_data, writer.write_offset + offsets.size,                     size_span                        );
+                write(primitive_gpu_data, writer.write_offset + offsets.skinning_factor,          as_span(skinning_factor         ));
+                write(primitive_gpu_data, writer.write_offset + offsets.base_joint_index,         as_span(base_joint_index        ));
 
             }
-            m_writer.write_offset += entry_size;
-            ERHE_VERIFY(m_writer.write_offset <= m_writer.write_end);
+            writer.write_offset += entry_size;
+            ERHE_VERIFY(writer.write_offset <= writer.write_end);
 
             if (use_id_ranges) {
                 m_id_ranges.push_back(
@@ -221,10 +222,10 @@ auto Primitive_buffer::update(
         }
     }
 
-    m_writer.end();
+    writer.end();
 
     // SPDLOG_LOGGER_TRACE(log_primitive_buffer, "wrote {} entries to primitive buffer", primitive_index);
-    return m_writer.range;
+    return writer.range;
 }
 
 } // namespace erhe::scene_renderer

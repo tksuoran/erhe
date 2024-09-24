@@ -121,8 +121,8 @@ void dump_fbo(int fbo_name)
 }
 
 // TODO move to graphics instance?
-std::mutex                Framebuffer::s_mutex;
-std::vector<Framebuffer*> Framebuffer::s_all_framebuffers;
+ERHE_PROFILE_MUTEX(std::mutex, Framebuffer::s_mutex);
+std::vector<Framebuffer*>      Framebuffer::s_all_framebuffers;
 
 void Framebuffer::Create_info::attach(const gl::Framebuffer_attachment attachment_point, Texture* texture, const unsigned int level, const unsigned int layer)
 {

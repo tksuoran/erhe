@@ -102,7 +102,7 @@ void Scene_views::on_message(Editor_message& message)
 
 void Scene_views::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const int msaa_sample_count = graphics_preset != nullptr ? graphics_preset->msaa_sample_count : 1;
     for (const auto& viewport_scene_view : m_viewport_scene_views) {
@@ -158,7 +158,7 @@ auto Scene_views::create_viewport_scene_view(
         camera
     );
 
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
     {
         m_viewport_scene_views.push_back(new_viewport_window);
     }

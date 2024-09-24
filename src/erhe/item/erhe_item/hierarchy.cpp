@@ -15,8 +15,7 @@ Hierarchy::Hierarchy()           = default;
 Hierarchy::~Hierarchy() noexcept = default;
 
 Hierarchy::Hierarchy(const Hierarchy& src)
-    : Item{src}
-    // m_parent is not copied from other
+    : Item{src} // m_parent is not copied from other
 {
     m_children.reserve(src.m_children.size());
     for (const auto& src_child : src.m_children) {
@@ -59,12 +58,7 @@ auto Hierarchy::shared_hierarchy_from_this() -> std::shared_ptr<Hierarchy>
 
 void Hierarchy::remove()
 {
-    log->trace(
-        "Hierarchy::remove() '{}' depth = {} child count = {}",
-        describe(),
-        get_depth(),
-        m_children.size()
-    );
+    log->trace("Hierarchy::remove() '{}' depth = {} child count = {}", describe(), get_depth(), m_children.size());
 
     hierarchy_sanity_check();
 
@@ -122,11 +116,7 @@ auto Hierarchy::get_index_in_parent() const -> std::size_t
 
 auto Hierarchy::get_index_of_child(const Hierarchy* child) const -> std::optional<std::size_t>
 {
-    for (
-        std::size_t i = 0, end = m_children.size();
-        i < end;
-        ++i
-    ) {
+    for (std::size_t i = 0, end = m_children.size(); i < end; ++i) {
         if (m_children[i].get() == child) {
             return i;
         }
@@ -151,10 +141,7 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& parent)
     set_parent(parent, std::numeric_limits<std::size_t>::max());
 }
 
-void Hierarchy::set_parent(
-    const std::shared_ptr<Hierarchy>& new_parent_,
-    const std::size_t                 position
-)
+void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const std::size_t position)
 {
     ERHE_VERIFY(new_parent_.get() != this);
     Hierarchy* old_parent = m_parent.lock().get();
@@ -187,11 +174,7 @@ void Hierarchy::set_parent(
         log->trace("Now orphan: '{}'", describe());
     }
 
-    set_depth_recursive(
-        new_parent
-            ? new_parent->get_depth() + 1
-            : 0
-    );
+    set_depth_recursive(new_parent ? new_parent->get_depth() + 1 : 0);
     handle_parent_update(old_parent, new_parent);
     hierarchy_sanity_check();
 }
@@ -205,10 +188,7 @@ void Hierarchy::set_parent(Hierarchy* const new_parent, const std::size_t positi
 {
     ERHE_VERIFY(new_parent != this);
     if (new_parent != nullptr) {
-        set_parent(
-            new_parent->shared_hierarchy_from_this(),
-            position
-        );
+        set_parent(new_parent->shared_hierarchy_from_this(), position   );
     } else {
         set_parent(std::shared_ptr<Hierarchy>{}, position);
     }
@@ -248,11 +228,7 @@ void Hierarchy::handle_remove_child(Hierarchy* const child)
         log->trace("Removing child '{}' from '{}'", child->describe(), describe());
         m_children.erase(i, m_children.end());
     } else {
-        log->error(
-            "child '{}' cannot be removed from parent '{}': child not found",
-            child->describe(),
-            describe()
-        );
+        log->error("child '{}' cannot be removed from parent '{}': child not found", child->describe(), describe());
     }
 }
 
@@ -328,11 +304,7 @@ void Hierarchy::hierarchy_sanity_check() const
             }
         }
         if (!child_found_in_parent) {
-            log->error(
-                "Item {0} parent {1} does not have item {0} as child",
-                describe(),
-                current_parent->describe()
-            );
+            log->error("Item {0} parent {1} does not have item {0} as child", describe(), current_parent->describe());
         }
     }
 
@@ -342,19 +314,11 @@ void Hierarchy::hierarchy_sanity_check() const
                 "Item {} child {} parent == {}",
                 describe(),
                 child->describe(),
-                (child->get_parent().lock())
-                    ? child->get_parent().lock()->describe()
-                    : "(none)"
+                (child->get_parent().lock()) ? child->get_parent().lock()->describe() : "(none)"
             );
         }
         if (child->get_depth() != get_depth() + 1) {
-            log->error(
-                "Item {} depth = {}, child {} depth = {}",
-                describe(),
-                get_depth(),
-                child->describe(),
-                child->get_depth()
-            );
+            log->error("Item {} depth = {}, child {} depth = {}", describe(), get_depth(), child->describe(), child->get_depth());
         }
         child->hierarchy_sanity_check();
     }
@@ -366,10 +330,7 @@ void Hierarchy::sanity_check_root_path(const Hierarchy* item) const
     const auto& current_parent = m_parent.lock();
     if (current_parent) {
         if (current_parent.get() == item) {
-            log->error(
-                "Item {} has itself as an ancestor",
-                item->describe()
-            );
+            log->error("Item {} has itself as an ancestor", item->describe());
         }
         current_parent->sanity_check_root_path(item);
     }

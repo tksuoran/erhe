@@ -20,7 +20,7 @@
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -211,7 +211,7 @@ void Paint_tool::tool_render(const Render_context& context)
     if (!is_enabled()) {
         return;
     }
-    auto& line_renderer = *(context.editor_context.line_renderer_set->visible.at(2).get());
+    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
     line_renderer.set_thickness(5.0f);
 
     auto* scene_view = get_hover_scene_view();

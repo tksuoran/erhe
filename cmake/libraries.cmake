@@ -69,7 +69,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
     #GIT_TAG        origin/master
     #GIT_TAG        171a020c828669490b98af0c2640e50f1511d2cc
-    GIT_TAG        11.0.1
+    GIT_TAG        11.0.2
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

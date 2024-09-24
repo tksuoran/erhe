@@ -44,13 +44,13 @@ auto Imgui_windows::get_window_imgui_host() -> std::shared_ptr<Window_imgui_host
 
 void Imgui_windows::queue(std::function<void()>&& operation)
 {
-    const std::lock_guard<std::mutex> lock{m_queued_operations_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_queued_operations_mutex};
     m_queued_operations.push_back(std::move(operation));
 }
 
 void Imgui_windows::flush_queue()
 {
-    const std::lock_guard<std::mutex> lock{m_queued_operations_mutex}; // TODO Can this be avoided?
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_queued_operations_mutex}; // TODO Can this be avoided?
     while (!m_queued_operations.empty()) {
         auto op = m_queued_operations.back();
         m_queued_operations.pop_back();

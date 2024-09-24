@@ -20,10 +20,10 @@ extern std::shared_ptr<spdlog::logger> log_gl;
 
 namespace erhe::graphics {
 
-std::mutex              Gpu_timer::s_mutex;
-std::vector<Gpu_timer*> Gpu_timer::s_all_gpu_timers;
-Gpu_timer*              Gpu_timer::s_active_timer{nullptr};
-size_t                  Gpu_timer::s_index       {0};
+ERHE_PROFILE_MUTEX(std::mutex, Gpu_timer::s_mutex);
+std::vector<Gpu_timer*>        Gpu_timer::s_all_gpu_timers;
+Gpu_timer*                     Gpu_timer::s_active_timer{nullptr};
+size_t                         Gpu_timer::s_index       {0};
 
 void Gpu_timer::on_thread_enter()
 {
@@ -83,7 +83,7 @@ Gpu_timer::Gpu_timer(const char* label)
     : m_label{label}
 {
 #if defined(ERHE_USE_TIME_QUERY)
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     s_all_gpu_timers.push_back(this);
 
@@ -94,7 +94,7 @@ Gpu_timer::Gpu_timer(const char* label)
 Gpu_timer::~Gpu_timer() noexcept
 {
 #if defined(ERHE_USE_TIME_QUERY)
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     s_all_gpu_timers.erase(
         std::remove(
@@ -143,7 +143,7 @@ void Gpu_timer::reset()
 void Gpu_timer::begin()
 {
 #if defined(ERHE_USE_TIME_QUERY)
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
     ERHE_VERIFY(s_active_timer == nullptr);
@@ -160,7 +160,7 @@ void Gpu_timer::begin()
 void Gpu_timer::end()
 {
 #if defined(ERHE_USE_TIME_QUERY)
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
     ERHE_VERIFY(s_active_timer == this);
@@ -220,7 +220,7 @@ auto Gpu_timer::label() const -> const char*
 void Gpu_timer::end_frame()
 {
 #if defined(ERHE_USE_TIME_QUERY)
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     for (auto* timer : s_all_gpu_timers) {
         if (timer->m_owner_thread == std::this_thread::get_id()) {
@@ -233,7 +233,7 @@ void Gpu_timer::end_frame()
 
 auto Gpu_timer::all_gpu_timers() -> std::vector<Gpu_timer*>
 {
-    const std::lock_guard<std::mutex> lock{s_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     return s_all_gpu_timers;
 }

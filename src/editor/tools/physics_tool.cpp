@@ -12,17 +12,17 @@
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
-#include "erhe_renderer/line_renderer.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_physics/iconstraint.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/iworld.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/ray.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
-#include "erhe_bit/bit_helpers.hpp"
-#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -484,7 +484,7 @@ void Physics_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::renderer::Line_renderer& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
+    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
 
     // TODO Make sure this has good enough perf, disable if not.
     if (m_target_mesh) {

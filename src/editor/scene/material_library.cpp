@@ -5,6 +5,7 @@
 
 //#include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_profile/profile.hpp"
 
 //#include <fmt/format.h>
 
@@ -12,6 +13,8 @@ namespace editor {
 
 void add_default_materials(Content_library& library)
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library.mutex};
+
     //const glm::vec2 roughness{0.68f, 0.34f};
     const glm::vec2 roughness{0.34f, 0.20f};
 

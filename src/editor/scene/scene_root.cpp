@@ -425,7 +425,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     }
 
     if (is_rendertarget(mesh)) {
-        const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_rendertarget_meshes_mutex};
         m_rendertarget_meshes.push_back(std::dynamic_pointer_cast<Rendertarget_mesh>(mesh));
     }
 
@@ -448,7 +448,7 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     mesh->detach_rt_from_scene(); //m_raytrace_scene.get());
 
     if (is_rendertarget(mesh)) {
-        const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_rendertarget_meshes_mutex};
         const auto rendertarget = std::dynamic_pointer_cast<Rendertarget_mesh>(mesh);
         const auto i = std::remove(m_rendertarget_meshes.begin(), m_rendertarget_meshes.end(), rendertarget);
         if (i == m_rendertarget_meshes.end()) {
@@ -793,7 +793,7 @@ void Scene_root::sort_lights()
 
 void Scene_root::update_pointer_for_rendertarget_meshes(Scene_view* scene_view)
 {
-    std::lock_guard<std::mutex> lock(m_rendertarget_meshes_mutex);
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock(m_rendertarget_meshes_mutex);
 
     for (const auto& rendertarget_mesh : m_rendertarget_meshes) {
         rendertarget_mesh->update_pointer(scene_view);

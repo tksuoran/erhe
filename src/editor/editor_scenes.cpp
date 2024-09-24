@@ -7,12 +7,12 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_physics/iworld.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene.hpp"
 
 #include <imgui/imgui.h>
 
-namespace editor
-{
+namespace editor {
 
 Editor_scenes::Editor_scenes(Editor_context& editor_context, Time& time)
     : Update_time_base{time}
@@ -22,7 +22,7 @@ Editor_scenes::Editor_scenes(Editor_context& editor_context, Time& time)
 
 void Editor_scenes::register_scene_root(Scene_root* scene_root)
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const auto i = std::find(m_scene_roots.begin(), m_scene_roots.end(), scene_root);
     if (i != m_scene_roots.end()) {
@@ -34,7 +34,7 @@ void Editor_scenes::register_scene_root(Scene_root* scene_root)
 
 void Editor_scenes::unregister_scene_root(Scene_root* scene_root)
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const auto i = std::remove(m_scene_roots.begin(), m_scene_roots.end(), scene_root);
     if (i == m_scene_roots.end()) {
@@ -85,11 +85,14 @@ void Editor_scenes::update_node_transforms()
     ERHE_PROFILE_FUNCTION();
 
     for (const auto& scene_root : m_scene_roots) {
+        // TODO ? std::lock_guard<std::mutex> scene_lock{scene_root->item_host_mutex};
         scene_root->get_scene().update_node_transforms();
     }
 
     // Not in m_scene_roots
-    m_context.tools->get_tool_scene_root()->get_hosted_scene()->update_node_transforms();
+    Scene_root& scene_root = *m_context.tools->get_tool_scene_root().get();
+    // TODO ? std::lock_guard<std::mutex> scene_lock{scene_root.item_host_mutex};
+    scene_root.get_hosted_scene()->update_node_transforms();
 }
 
 void Editor_scenes::update_fixed_step(const Time_context& time_context)

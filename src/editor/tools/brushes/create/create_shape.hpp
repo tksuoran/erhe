@@ -3,7 +3,7 @@
 #include <memory>
 
 namespace erhe::renderer {
-    class Line_renderer;
+    class Scoped_line_renderer;
 }
 
 namespace editor {
@@ -19,8 +19,7 @@ public:
     virtual void imgui() = 0;
     [[nodiscard]] virtual auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> = 0;
 
-    auto get_line_renderer(const Create_preview_settings& preview_settings) -> erhe::renderer::Line_renderer&;
-
+    auto get_line_renderer(const Create_preview_settings& preview_settings) -> erhe::renderer::Scoped_line_renderer;
 };
 
 } // namespace editor

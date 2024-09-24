@@ -311,7 +311,6 @@ target_link_libraries(
     PRIVATE
     erhe::bit
     erhe::commands
-    erhe::concurrency
     erhe::configuration
     erhe::defer
     erhe::file

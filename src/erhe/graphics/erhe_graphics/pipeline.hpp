@@ -4,6 +4,7 @@
 #include "erhe_graphics/state/depth_stencil_state.hpp"
 #include "erhe_graphics/state/input_assembly_state.hpp"
 #include "erhe_graphics/state/rasterization_state.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <mutex>
 #include <vector>
@@ -29,7 +30,7 @@ class Pipeline final
 {
 public:
     Pipeline();
-    explicit Pipeline(Pipeline_data&& create_info);
+    Pipeline(Pipeline_data&& create_info);
     ~Pipeline() noexcept;
 
     Pipeline(const Pipeline& other);
@@ -42,8 +43,9 @@ public:
     Pipeline_data data;
 
     static auto get_pipelines() -> std::vector<Pipeline*>;
-    static std::mutex s_mutex;
-    static std::vector<Pipeline*> s_pipelines;
+
+    static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
+    static std::vector<Pipeline*>                     s_pipelines;
 };
 
 } // namespace erhe::graphics

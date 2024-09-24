@@ -1,6 +1,7 @@
 #pragma once
 
 #include "time.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <memory>
 #include <mutex>
@@ -35,9 +36,9 @@ public:
     void imgui();
 
 private:
-    Editor_context&          m_context;
-    std::mutex               m_mutex;
-    std::vector<Scene_root*> m_scene_roots;
+    Editor_context&                m_context;
+    ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
+    std::vector<Scene_root*>       m_scene_roots;
 };
 
 } // namespace editor

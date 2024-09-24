@@ -11,6 +11,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/weld.hpp"
 #include "erhe_physics/icollision_shape.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -197,6 +198,8 @@ void Merge_operation::execute(Editor_context& context)
         return;
     }
 
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+
 #if !defined(NDEBUG)
     auto& scene = scene_root->get_scene();
     scene.sanity_check();
@@ -257,6 +260,8 @@ void Merge_operation::undo(Editor_context& context)
     if (scene_root == nullptr) {
         return;
     }
+
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
 
 #if !defined(NDEBUG)
     auto& scene = scene_root->get_scene();

@@ -2,6 +2,7 @@
 
 #include "erhe_rendergraph/resource_routing.hpp"
 #include "erhe_math/viewport.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <glm/glm.hpp>
 
@@ -96,7 +97,7 @@ protected:
     virtual auto outputs_allowed() const -> bool;
 
     Rendergraph&                                m_rendergraph;
-    std::mutex                                  m_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex,              m_mutex);
     std::string                                 m_name;
     bool                                        m_enabled {true};
     std::vector<Rendergraph_consumer_connector> m_inputs;

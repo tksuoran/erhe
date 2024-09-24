@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/gl_objects.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <array>
 #include <mutex>
@@ -45,11 +46,11 @@ private:
         bool                    pending     {false};
     };
 
-    static constexpr std::size_t   s_count = 4;
-    static std::mutex              s_mutex;
-    static std::vector<Gpu_timer*> s_all_gpu_timers;
-    static Gpu_timer*              s_active_timer;
-    static std::size_t             s_index;
+    static constexpr std::size_t                      s_count = 4;
+    static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
+    static std::vector<Gpu_timer*>                    s_all_gpu_timers;
+    static Gpu_timer*                                 s_active_timer;
+    static std::size_t                                s_index;
 
     std::array<Query, s_count> m_queries;
     std::thread::id            m_owner_thread;

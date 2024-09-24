@@ -1,6 +1,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_gl/command_info.hpp"
+#include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
@@ -261,7 +262,7 @@ auto Buffer::allocate_bytes(const std::size_t byte_count, const std::size_t alig
 {
     ERHE_VERIFY(alignment > 0);
 
-    const std::lock_guard<std::mutex> lock{m_allocate_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_allocate_mutex};
 
     while ((m_next_free_byte % alignment) != 0) {
         ++m_next_free_byte;

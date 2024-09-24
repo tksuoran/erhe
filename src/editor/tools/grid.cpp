@@ -5,9 +5,9 @@
 #include "tools/selection_tool.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
-#include "erhe_renderer/line_renderer.hpp"
-#include "erhe_scene/camera.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -101,6 +101,12 @@ void Grid::render(const Render_context& context)
         return;
     }
 
+    render(context, false); // minor
+    render(context, true); // major
+}
+
+void Grid::render(const Render_context& context, bool major)
+{
     const erhe::scene::Node* camera_node = context.camera->get_node();
     ERHE_VERIFY(camera_node != nullptr);
     const glm::mat4 m = world_from_grid();
@@ -108,41 +114,25 @@ void Grid::render(const Render_context& context)
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
     int cell;
-    auto& major_renderer = m_see_hidden_major
-        ? *context.editor_context.line_renderer_set->visible.at(1).get()
-        : *context.editor_context.line_renderer_set->hidden .at(1).get();
-    auto& minor_renderer = m_see_hidden_minor
-        ? *context.editor_context.line_renderer_set->visible.at(0).get()
-        : *context.editor_context.line_renderer_set->hidden .at(0).get();
-    major_renderer.set_thickness(m_major_width);
-    minor_renderer.set_thickness(m_minor_width);
-    major_renderer.set_line_color(m_major_color);
-    minor_renderer.set_line_color(m_minor_color);
 
+    erhe::renderer::Scoped_line_renderer renderer = 
+        major ? context.get_line_renderer(1, true, m_see_hidden_major) :
+                context.get_line_renderer(0, true, m_see_hidden_minor);
+
+    renderer.set_thickness (major ? m_major_width : m_minor_width);
+    renderer.set_line_color(major ? m_major_color : m_minor_color);
+
+    bool minor = !major;
     for (cell = -m_cell_count; cell < m_cell_count; ++cell) {
         float xz = static_cast<float>(cell) * m_cell_size;
 
-        major_renderer.add_lines(
-            m,
-            {
-                {
-                    vec3{     xz, 0.0f,  -extent},
-                    vec3{     xz, 0.0f,   extent}
-                },
-                {
-                    vec3{-extent, 0.0f,      xz},
-                    vec3{ extent, 0.0f,      xz}
-                }
-            }
-        );
-        for (int i = 0; i < (m_cell_div - 1); ++i) {
-            xz += minor_step;
-            minor_renderer.add_lines(
+        if (major) {
+            renderer.add_lines(
                 m,
                 {
                     {
-                        vec3{     xz, 0.0f, -extent},
-                        vec3{     xz, 0.0f,  extent}
+                        vec3{     xz, 0.0f,  -extent},
+                        vec3{     xz, 0.0f,   extent}
                     },
                     {
                         vec3{-extent, 0.0f,      xz},
@@ -151,21 +141,42 @@ void Grid::render(const Render_context& context)
                 }
             );
         }
-    }
-    float xz = static_cast<float>(cell) * m_cell_size;
-    major_renderer.add_lines(
-        m,
+        if (minor)
         {
-            {
-                vec3{     xz, 0.0f, -extent},
-                vec3{     xz, 0.0f,  extent}
-            },
-            {
-                vec3{-extent, 0.0f,      xz},
-                vec3{ extent, 0.0f,      xz}
+            for (int i = 0; i < (m_cell_div - 1); ++i) {
+                xz += minor_step;
+                renderer.add_lines(
+                    m,
+                    {
+                        {
+                            vec3{     xz, 0.0f, -extent},
+                            vec3{     xz, 0.0f,  extent}
+                        },
+                        {
+                            vec3{-extent, 0.0f,      xz},
+                            vec3{ extent, 0.0f,      xz}
+                        }
+                    }
+                );
             }
         }
-    );
+    }
+    if (major) {
+        float xz = static_cast<float>(cell) * m_cell_size;
+        renderer.add_lines(
+            m,
+            {
+                {
+                    vec3{     xz, 0.0f, -extent},
+                    vec3{     xz, 0.0f,  extent}
+                },
+                {
+                    vec3{-extent, 0.0f,      xz},
+                    vec3{ extent, 0.0f,      xz}
+                }
+            }
+        );
+    }
 }
 
 void Grid::imgui(Editor_context& context)

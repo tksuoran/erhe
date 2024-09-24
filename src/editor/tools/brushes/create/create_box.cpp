@@ -7,7 +7,7 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/box.hpp"
-#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -24,7 +24,8 @@ void Create_box::render_preview(const Create_preview_settings& preview_settings)
     if (!view_camera) {
         return;
     }
-    auto& line_renderer = get_line_renderer(preview_settings);
+
+    erhe::renderer::Scoped_line_renderer line_renderer = get_line_renderer(preview_settings);
     line_renderer.add_cube(
         preview_settings.transform.get_matrix(),
         preview_settings.major_color,

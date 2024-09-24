@@ -10,6 +10,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/format_info.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/scene_message.hpp"
 #include "erhe_scene/scene_message_bus.hpp"
@@ -185,8 +186,8 @@ private:
     [[nodiscard]] auto get_node_rt_mask(erhe::scene::Node* node) -> uint32_t;
 
     // Live longest
-    mutable std::mutex                              m_mutex;
-    std::mutex                                      m_rendertarget_meshes_mutex;
+    mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
+    ERHE_PROFILE_MUTEX        (std::mutex, m_rendertarget_meshes_mutex);
 
     Editor_scenes*                                  m_editor_scenes{nullptr};
     std::shared_ptr<Content_library>                m_content_library;

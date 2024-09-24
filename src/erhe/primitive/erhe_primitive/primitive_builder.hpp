@@ -100,7 +100,7 @@ private:
     [[nodiscard]] auto get_polygon_normal() -> glm::vec3;
 
     void build_vertex_position     ();
-    void build_vertex_normal       ();
+    void build_vertex_normal       (bool normal, bool smooth_normal);
     void build_vertex_tangent      ();
     void build_vertex_bitangent    ();
     void build_vertex_texcoord     ();

@@ -5,6 +5,7 @@
 #include "renderers/programs.hpp"
 #include "renderers/renderpass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
 #include "erhe_commands/command.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
@@ -141,8 +142,8 @@ private:
     bool                      m_trigger_capture{false};
     std::vector<std::shared_ptr<Shadow_render_node>> m_all_shadow_render_nodes;
 
-    std::mutex               m_renderables_mutex;
-    std::vector<Renderable*> m_renderables;
+    ERHE_PROFILE_MUTEX(std::mutex, m_renderables_mutex);
+    std::vector<Renderable*>       m_renderables;
 };
 
 static constexpr unsigned int s_stencil_edge_lines               =  1u; // 0 inc

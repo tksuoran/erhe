@@ -14,8 +14,7 @@
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
-namespace editor
-{
+namespace editor {
 
 Settings_window::Settings_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
@@ -35,50 +34,31 @@ void Settings_window::imgui()
 
     if (ImGui::TreeNodeEx("User Interface", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
         auto& imgui = m_context.editor_settings->imgui;
-        auto& icons = m_context.editor_settings->icons;
-        const bool font_size_changed = ImGui::DragFloat(
-            "UI Font Size",
-            &imgui.font_size,
-            0.1f,
-            4.0f,
-            100.0f,
-            "%.1f"
-        );
+        auto& icon_settings = m_context.editor_settings->icon_settings;
+        const bool font_size_changed = ImGui::DragFloat("UI Font Size", &imgui.font_size, 0.1f, 4.0f, 100.0f, "%.1f");
         if (font_size_changed) {
             m_context.imgui_renderer->on_font_config_changed(imgui);
         }
 
-        ImGui::DragInt(
-            "Small Icon Size",
-            &icons.small_icon_size,
-            0.1f,
-            4,
-            512
-        );
+        ImGui::DragInt("Small Icon Size", &icon_settings.small_icon_size, 0.1f, 4, 512);
         const bool small_icon_size_changed = ImGui::IsItemDeactivatedAfterEdit();
-        ImGui::DragInt(
-            "Large Icon Size",
-            &icons.large_icon_size,
-            0.1f,
-            4,
-            512
-        );
+        ImGui::DragInt("Large Icon Size", &icon_settings.large_icon_size, 0.1f, 4, 512);
         const bool large_icon_size_changed = ImGui::IsItemDeactivatedAfterEdit();
-        ImGui::DragInt(
-            "Hotbar Icon Size",
-            &icons.hotbar_icon_size,
-            0.1f,
-            4,
-            512
-        );
+        ImGui::DragInt("Hotbar Icon Size", &icon_settings.hotbar_icon_size, 0.1f, 4, 512);
         const bool hotbar_icon_size_changed = ImGui::IsItemDeactivatedAfterEdit();
 
         if (small_icon_size_changed || large_icon_size_changed || hotbar_icon_size_changed) {
+
+            Icons icons;
+            Icon_loader icon_loader{m_context.editor_settings->icon_settings};
+            icons.queue_load_icons(icon_loader);
+            icon_loader.execute_queue();
+
             m_context.icon_set->load_icons(
                 *m_context.graphics_instance,
-                *m_context.imgui_renderer,
+                m_context.editor_settings->icon_settings,
                 icons,
-                *m_context.programs
+                icon_loader
             );
         }
         ImGui::TreePop();

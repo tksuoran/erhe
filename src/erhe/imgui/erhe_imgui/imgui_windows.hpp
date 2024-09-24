@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_window/window_event_handler.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <functional>
 #include <memory>
@@ -68,7 +69,7 @@ private:
     std::recursive_mutex               m_mutex;
     bool                               m_iterating{false};
     std::vector<Imgui_window*>         m_imgui_windows;
-    std::mutex                         m_queued_operations_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex,     m_queued_operations_mutex);
     std::vector<std::function<void()>> m_queued_operations;
     erhe::rendergraph::Rendergraph&    m_rendergraph;
     std::string                        m_windows_ini_path;

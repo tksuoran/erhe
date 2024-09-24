@@ -7,6 +7,7 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_message_bus/message_bus.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_window/window_event_handler.hpp"
@@ -141,7 +142,7 @@ private:
     // Commands
     Open_new_viewport_scene_view_command m_open_new_viewport_scene_view_command;
 
-    std::mutex                                                 m_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex,                             m_mutex);
     std::vector<std::shared_ptr<Basic_scene_view_node>>        m_basic_scene_view_nodes;
     std::vector<std::shared_ptr<Imgui_window_scene_view_node>> m_imgui_window_scene_view_nodes;
     std::vector<std::shared_ptr<Viewport_scene_view>>          m_viewport_scene_views;

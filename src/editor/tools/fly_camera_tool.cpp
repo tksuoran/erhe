@@ -602,7 +602,7 @@ void Fly_camera_tool::translation(std::chrono::steady_clock::time_point timestam
         return;
     }
 
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     float x = static_cast<float>(tx) / 256.0f;
     float y = static_cast<float>(ty) / 256.0f;
@@ -619,7 +619,7 @@ void Fly_camera_tool::rotation(std::chrono::steady_clock::time_point timestamp, 
         return;
     }
 
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     constexpr float scale = 65536.0f;
     m_camera_controller->rotate_x.adjust(timestamp, config.turn_speed * static_cast<float>(rx) / scale);
@@ -636,7 +636,7 @@ void Fly_camera_tool::on_hover_viewport_change()
 
 auto Fly_camera_tool::adjust(std::chrono::steady_clock::time_point timestamp, Variable variable, float value) -> bool
 {
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     if ((get_hover_scene_view() == nullptr)) {
         m_camera_controller->translate_x.reset();
@@ -655,7 +655,7 @@ auto Fly_camera_tool::adjust(std::chrono::steady_clock::time_point timestamp, Va
 
 auto Fly_camera_tool::try_move(std::chrono::steady_clock::time_point timestamp, const Variable variable, const erhe::math::Input_axis_control control, const bool active) -> bool
 {
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     if ((get_hover_scene_view() == nullptr) && active) {
         m_camera_controller->translate_x.reset();
@@ -681,7 +681,7 @@ auto Fly_camera_tool::try_move(std::chrono::steady_clock::time_point timestamp, 
 
 auto Fly_camera_tool::zoom(std::chrono::steady_clock::time_point timestamp, const float delta) -> bool
 {
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     if (delta != 0.0f) {
         glm::vec3 position = m_camera_controller->get_position();
@@ -695,7 +695,7 @@ auto Fly_camera_tool::zoom(std::chrono::steady_clock::time_point timestamp, cons
 
 auto Fly_camera_tool::turn_relative(std::chrono::steady_clock::time_point timestamp, const float dx, const float dy) -> bool
 {
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     const float rx = config.turn_speed * dy * m_rotate_scale_y;
     const float ry = config.turn_speed * dx * m_rotate_scale_x;
@@ -746,7 +746,7 @@ auto Fly_camera_tool::try_start_tumble() -> bool
 auto Fly_camera_tool::tumble_relative(std::chrono::steady_clock::time_point timestamp, float dx, float dy) -> bool
 {
     static_cast<void>(timestamp); // TODO consider how to correctly the time into account here
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
     if (!viewport_scene_view) {
@@ -786,7 +786,7 @@ auto Fly_camera_tool::try_start_track() -> bool
 
 auto Fly_camera_tool::track() -> bool
 {
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
@@ -844,7 +844,7 @@ auto Fly_camera_tool::track() -> bool
 //        return; 
 //    }
 //
-//    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+//    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 //
 //    m_camera_controller->update_fixed_step();
 //}
@@ -929,7 +929,7 @@ void Fly_camera_tool::update_once_per_frame(const Time_context& time_context)
         return; 
     }
 
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     update_camera();
     m_camera_controller->tick(time_context.timestamp);
@@ -983,7 +983,7 @@ void Fly_camera_tool::imgui()
     ERHE_PROFILE_FUNCTION();
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     ImGui::Checkbox   ("Use Viewport Camera", &m_use_viewport_camera);
     ImGui::SliderFloat("Move Power Base", &config.move_power, 1.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);

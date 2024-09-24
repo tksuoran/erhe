@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -27,6 +28,10 @@ namespace erhe::physics {
 namespace erhe::scene {
     class Mesh;
     class Node;
+}
+
+namespace tf {
+    class Executor;
 }
 
 namespace editor {
@@ -66,14 +71,23 @@ public:
 class Transform_tool_shared
 {
 public:
-    Transform_tool_settings              settings;
-    std::vector<Transform_entry>         entries;
-    glm::vec3                            initial_drag_position_in_world{0.0f};
-    float                                initial_drag_distance         {0.0f};
-    erhe::scene::Trs_transform           world_from_anchor_initial_state;
-    erhe::scene::Trs_transform           world_from_anchor;
-    bool                                 touched          {false};
-    std::optional<Handle_visualizations> visualization;
+    auto get_visualizations() const -> Handle_visualizations*
+    {
+        if (!visualizations_ready.load()) {
+            return nullptr;
+        }
+        return visualizations.get();
+    }
+
+    Transform_tool_settings                settings;
+    std::vector<Transform_entry>           entries;
+    glm::vec3                              initial_drag_position_in_world{0.0f};
+    float                                  initial_drag_distance         {0.0f};
+    erhe::scene::Trs_transform             world_from_anchor_initial_state;
+    erhe::scene::Trs_transform             world_from_anchor;
+    bool                                   touched             {false};
+    std::atomic<bool>                      visualizations_ready{false};
+    std::unique_ptr<Handle_visualizations> visualizations      {};
 };
 
 enum class Reference_mode : unsigned int {
@@ -96,6 +110,7 @@ public:
     static constexpr int c_priority{1};
 
     Transform_tool(
+        tf::Executor&                executor,
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,

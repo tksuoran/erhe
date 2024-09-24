@@ -22,17 +22,17 @@
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/rotate_tool.hpp"
 
-#include "erhe_configuration/configuration.hpp"
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
+#include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_renderer/line_renderer.hpp"
-#include "erhe_physics/irigid_body.hpp"
-#include "erhe_raytrace/ray.hpp"
-#include "erhe_scene/mesh.hpp"
 #include "erhe_message_bus/message_bus.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_physics/irigid_body.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_raytrace/ray.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_scene/mesh.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -109,6 +109,7 @@ void Transform_tool_drag_command::on_inactive()
 #pragma endregion Commands
 
 Transform_tool::Transform_tool(
+    tf::Executor&                executor,
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -131,7 +132,14 @@ Transform_tool::Transform_tool(
     ini.get("show_translate", settings.show_translate);
     ini.get("show_rotate",    settings.show_rotate);
 
-    shared.visualization.emplace(editor_context, mesh_memory, tools);
+    //executor.silent_async(
+    //    [this, &editor_context, &mesh_memory, &tools](){
+    // TODO
+    static_cast<void>(executor);
+    shared.visualizations = std::make_unique<Handle_visualizations>(editor_context, mesh_memory, tools);
+    shared.visualizations_ready.store(true);
+    //    }
+    //);
 
     set_base_priority(c_priority);
     set_description  ("Transform");
@@ -187,7 +195,11 @@ void Transform_tool::on_message(Editor_message& message)
 
 void Transform_tool::viewport_toolbar(bool& hovered)
 {
-    shared.visualization->viewport_toolbar(hovered);
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations == nullptr) {
+        return;
+    }
+    visualizations->viewport_toolbar(hovered);
 }
 
 auto Transform_tool::is_transform_tool_active() const -> bool
@@ -316,8 +328,11 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 
     shared.world_from_anchor = shared.world_from_anchor_initial_state;
 
-    shared.visualization->set_anchor(shared.world_from_anchor);
-    shared.visualization->update_visibility();
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations != nullptr) {
+        visualizations->set_anchor(shared.world_from_anchor);
+        visualizations->update_visibility();
+    }
 }
 
 void Transform_tool::adjust(const mat4& updated_world_from_anchor)
@@ -579,9 +594,9 @@ auto Transform_tool::get_hover_handle() const -> Handle
 
 auto Transform_tool::get_handle(erhe::scene::Mesh* mesh) const -> Handle
 {
-    return shared.visualization->get_handle(mesh);
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    return (visualizations != nullptr) ? visualizations->get_handle(mesh) : Handle::e_handle_none;
 }
-
 
 #pragma region Render
 
@@ -605,7 +620,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
         { 0.0f,  0.0f, -1.0f}
     };
 
-    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
+    erhe::renderer::Scoped_line_renderer line_renderer = m_context.line_renderer->get(2, true, true);
 
     auto& raytrace_scene = scene_root->get_raytrace_scene();
 
@@ -657,20 +672,29 @@ void Transform_tool::tool_render(const Render_context& context)
 void Transform_tool::update_for_view(Scene_view* scene_view)
 {
     update_visibility();
-    shared.visualization->update_for_view(scene_view);
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations != nullptr) {
+        visualizations->update_for_view(scene_view);
+    }
     update_transforms();
 }
 
 void Transform_tool::update_visibility()
 {
-    shared.visualization->update_visibility();
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations != nullptr) {
+        visualizations->update_visibility();
+    }
     update_transforms();
 }
 
 void Transform_tool::update_transforms()
 {
-    shared.visualization->set_anchor(shared.world_from_anchor);
-    shared.visualization->update_transforms();
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations != nullptr) {
+        visualizations->set_anchor(shared.world_from_anchor);
+        visualizations->update_transforms();
+    };
 }
 
 void Transform_tool::touch()

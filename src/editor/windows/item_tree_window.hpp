@@ -4,11 +4,13 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
 
 #include <functional>
 #include <memory>
+#include <mutex>
 
 namespace erhe {
     class Hierarchy;
@@ -60,6 +62,8 @@ public:
     auto drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& node) -> bool;
 
     void imgui_tree(float ui_scale);
+
+    ERHE_PROFILE_MUTEX(std::mutex, item_tree_mutex);
 
 private:
     void set_item_selection_terminator(const std::shared_ptr<erhe::Item_base>& item);

@@ -86,7 +86,7 @@ public:
         erhe::renderer::Multi_buffer&                    index_buffer
     );
 
-    [[nodiscard]] auto current_pipeline() -> erhe::graphics::Pipeline&;
+    [[nodiscard]] auto get_current_pipeline() -> erhe::graphics::Pipeline&;
 
 protected:
     std::vector<std::unique_ptr<erhe::graphics::Vertex_input_state>> m_vertex_inputs;

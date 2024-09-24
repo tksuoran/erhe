@@ -66,16 +66,17 @@ auto Camera_buffer::update(
         m_writer.write_offset
     );
 
-    auto&           buffer           = current_buffer();
+    auto&           buffer           = get_current_buffer();
+    auto&           writer           = get_writer();
     const auto      entry_size       = m_camera_interface.camera_struct.size_bytes();
     const auto&     offsets          = m_camera_interface.offsets;
     const auto      clip_from_camera = camera_projection.clip_from_node_transform(viewport);
-    const auto      gpu_data         = m_writer.begin(&buffer, entry_size);
+    const auto      gpu_data         = writer.begin(m_camera_interface.camera_block.get_binding_target(), entry_size);
     const glm::mat4 world_from_node  = camera_node.world_from_node();
     const glm::mat4 world_from_clip  = world_from_node * clip_from_camera.get_inverse_matrix();
     const glm::mat4 clip_from_world  = clip_from_camera.get_matrix() * camera_node.node_from_world();
 
-    if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
+    if ((writer.write_offset + entry_size) > writer.write_end) {
         log_render->critical("camera buffer capacity {} exceeded", buffer.capacity_byte_count());
         ERHE_FATAL("camera buffer capacity exceeded");
     }
@@ -98,20 +99,20 @@ auto Camera_buffer::update(
     const float view_depth_far       = camera_projection.z_far;
     using erhe::graphics::as_span;
     using erhe::graphics::write;
-    write(gpu_data, m_writer.write_offset + offsets.world_from_node,      as_span(world_from_node     ));
-    write(gpu_data, m_writer.write_offset + offsets.world_from_clip,      as_span(world_from_clip     ));
-    write(gpu_data, m_writer.write_offset + offsets.clip_from_world,      as_span(clip_from_world     ));
-    write(gpu_data, m_writer.write_offset + offsets.viewport,             as_span(viewport_floats     ));
-    write(gpu_data, m_writer.write_offset + offsets.fov,                  as_span(fov_floats          ));
-    write(gpu_data, m_writer.write_offset + offsets.clip_depth_direction, as_span(clip_depth_direction));
-    write(gpu_data, m_writer.write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
-    write(gpu_data, m_writer.write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
-    write(gpu_data, m_writer.write_offset + offsets.exposure,             as_span(exposure            ));
-    m_writer.write_offset += entry_size;
-    ERHE_VERIFY(m_writer.write_offset <= m_writer.write_end);
-    m_writer.end();
+    write(gpu_data, writer.write_offset + offsets.world_from_node,      as_span(world_from_node     ));
+    write(gpu_data, writer.write_offset + offsets.world_from_clip,      as_span(world_from_clip     ));
+    write(gpu_data, writer.write_offset + offsets.clip_from_world,      as_span(clip_from_world     ));
+    write(gpu_data, writer.write_offset + offsets.viewport,             as_span(viewport_floats     ));
+    write(gpu_data, writer.write_offset + offsets.fov,                  as_span(fov_floats          ));
+    write(gpu_data, writer.write_offset + offsets.clip_depth_direction, as_span(clip_depth_direction));
+    write(gpu_data, writer.write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
+    write(gpu_data, writer.write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
+    write(gpu_data, writer.write_offset + offsets.exposure,             as_span(exposure            ));
+    writer.write_offset += entry_size;
+    ERHE_VERIFY(writer.write_offset <= writer.write_end);
+    writer.end();
 
-    return m_writer.range;
+    return writer.range;
 }
 
 } // namespace erhe::scene_renderer

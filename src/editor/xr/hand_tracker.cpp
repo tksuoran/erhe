@@ -2,13 +2,13 @@
 
 #include "editor_context.hpp"
 #include "editor_rendering.hpp"
+#include "renderers/render_context.hpp"
 #include "xr/headset_view.hpp"
 
-#include "erhe_renderer/line_renderer.hpp"
-#include "renderers/render_context.hpp"
-#include "erhe_scene/node.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_xr/headset.hpp"
 
@@ -324,7 +324,7 @@ void Hand::set_color(const std::size_t finger, const ImVec4 color)
     m_color[finger] = color;
 }
 
-void Hand::draw(erhe::renderer::Line_renderer& line_renderer, const glm::mat4 transform)
+void Hand::draw(erhe::renderer::Scoped_line_renderer& line_renderer, const glm::mat4 transform)
 {
     if (!m_is_active) {
         return;
@@ -351,9 +351,9 @@ void Hand::draw(erhe::renderer::Line_renderer& line_renderer, const glm::mat4 tr
 }
 
 void Hand::draw_joint_line_strip(
-    const glm::mat4                    transform,
-    const std::vector<XrHandJointEXT>& joint_names,
-    erhe::renderer::Line_renderer&     line_renderer
+    const glm::mat4                       transform,
+    const std::vector<XrHandJointEXT>&    joint_names,
+    erhe::renderer::Scoped_line_renderer& line_renderer
 ) const
 {
     ERHE_PROFILE_FUNCTION();
@@ -452,7 +452,7 @@ void Hand_tracker::set_color(const Hand_name hand_name, const std::size_t finger
     get_hand(hand_name).set_color(finger_name, color);
 }
 
-void Hand_tracker::render(const Render_context&)
+void Hand_tracker::render(const Render_context& render_context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -466,8 +466,7 @@ void Hand_tracker::render(const Render_context&)
     }
 
     const auto transform = root_node->world_from_node();
-    auto& line_renderer = *m_context.line_renderer_set->hidden.at(3).get();
-
+    erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(3, true, true);
     m_left_hand .draw(line_renderer, transform);
     m_right_hand.draw(line_renderer, transform);
 }

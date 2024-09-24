@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/shader_stages.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <condition_variable>
 #include <mutex>
@@ -29,7 +30,7 @@ public:
 private:
     void set_run(bool value)
     {
-        const std::lock_guard<std::mutex> lock{m_mutex};
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
         m_run = value;
     }
 
@@ -77,7 +78,7 @@ private:
     Instance&                             m_graphics_instance;
     bool                                  m_run{false};
     std::map<std::filesystem::path, File> m_files;
-    std::mutex                            m_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex,        m_mutex);
     std::thread                           m_poll_filesystem_thread;
     std::vector<File*>                    m_reload_list;
 };

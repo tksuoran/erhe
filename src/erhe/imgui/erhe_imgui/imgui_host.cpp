@@ -176,6 +176,8 @@ Imgui_host::~Imgui_host()
 {
     m_imgui_renderer.unregister_imgui_host(this);
 
+    m_imgui_context->IO.BackendPlatformUserData = nullptr;
+    m_imgui_context->IO.BackendRendererUserData = nullptr;
     ImGui::DestroyContext(m_imgui_context);
     m_imgui_context = nullptr;
 }

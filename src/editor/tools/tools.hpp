@@ -17,6 +17,7 @@
 #   include "xr/headset_view.hpp"
 #endif
 
+#include "erhe_profile/profile.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 
 namespace erhe::commands {
@@ -84,7 +85,7 @@ private:
     Editor_context&                   m_context;
     Tools_pipeline_renderpasses       m_pipeline_renderpasses;
     Tool*                             m_priority_tool{nullptr};
-    std::mutex                        m_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex,    m_mutex);
     std::vector<Tool*>                m_tools;
     std::vector<Tool*>                m_background_tools;
     std::shared_ptr<Scene_root>       m_scene_root;

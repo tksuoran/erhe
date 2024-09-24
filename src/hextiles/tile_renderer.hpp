@@ -133,6 +133,8 @@ private:
         erhe::graphics::Buffer             projection_buffer;
         erhe::graphics::Vertex_input_state vertex_input;
         erhe::graphics::Pipeline           pipeline;
+        erhe::renderer::Buffer_writer      vertex_writer;
+        erhe::renderer::Buffer_writer      projection_writer;
     };
 
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
@@ -177,8 +179,6 @@ private:
     std::deque<Frame_resources>   m_frame_resources;
     size_t                        m_current_frame_resource_slot{0};
 
-    erhe::renderer::Buffer_writer m_vertex_writer;
-    erhe::renderer::Buffer_writer m_projection_writer;
     size_t                        m_index_range_first{0};
     size_t                        m_index_count      {0};
 

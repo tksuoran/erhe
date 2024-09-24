@@ -11,7 +11,7 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 namespace erhe::renderer {
-    class Line_renderer_set;
+    class Line_renderer;
     class Text_renderer;
 }
 namespace erhe::rendergraph {
@@ -89,7 +89,7 @@ public:
     erhe::graphics::Instance*               graphics_instance     {nullptr};
     erhe::imgui::Imgui_renderer*            imgui_renderer        {nullptr};
     erhe::imgui::Imgui_windows*             imgui_windows         {nullptr};
-    erhe::renderer::Line_renderer_set*      line_renderer_set     {nullptr};
+    erhe::renderer::Line_renderer*          line_renderer         {nullptr};
     erhe::renderer::Text_renderer*          text_renderer         {nullptr};
     erhe::rendergraph::Rendergraph*         rendergraph           {nullptr};
     erhe::scene::Scene_message_bus*         scene_message_bus     {nullptr};

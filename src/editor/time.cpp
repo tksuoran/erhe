@@ -34,25 +34,25 @@ Update_once_per_frame::~Update_once_per_frame() noexcept
 
 void Time::register_update_fixed_step(Update_fixed_step* entry)
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
     m_update_fixed_step.push_back(entry);
 }
 
 void Time::register_update_once_per_frame(Update_once_per_frame* entry)
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
     m_update_once_per_frame.push_back(entry);
 }
 
 void Time::unregister_update_fixed_step(Update_fixed_step* entry)
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
     m_update_fixed_step.erase(std::remove(m_update_fixed_step.begin(), m_update_fixed_step.end(), entry), m_update_fixed_step.end());
 }
 
 void Time::unregister_update_once_per_frame(Update_once_per_frame* entry)
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
     m_update_once_per_frame.erase(std::remove(m_update_once_per_frame.begin(), m_update_once_per_frame.end(), entry), m_update_once_per_frame.end());
 }
 
@@ -65,7 +65,7 @@ void Time::update()
 {
     ERHE_PROFILE_FUNCTION();
 
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const auto new_time   = std::chrono::steady_clock::now();
     const auto duration   = new_time - m_current_time;

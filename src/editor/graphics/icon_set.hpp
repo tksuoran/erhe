@@ -13,6 +13,7 @@ namespace erhe {
     class Item_base;
 }
 namespace erhe::graphics {
+    class Instance;
     class Texture;
 }
 namespace erhe::scene {
@@ -26,14 +27,15 @@ namespace lunasvg {
 namespace editor {
 
 class Editor_context;
-class Icon_set;
+class Icon_loader;
 class Icon_rasterization;
-class Icons;
-
+class Icon_settings;
 
 class Icons
 {
 public:
+    void queue_load_icons(Icon_loader& icon_loader);
+
     glm::vec2 anim             {};
     glm::vec2 bone             {};
     glm::vec2 brush_small      {}; // for vertex paint
@@ -78,30 +80,26 @@ public:
     glm::vec2 vive_trigger     {};
 };
 
-class Editor_context;
-class Icon_settings;
-
 class Icon_set
 {
 public:
     Icon_set(
-        erhe::graphics::Instance&    graphics_instance,
-        erhe::imgui::Imgui_renderer& imgui_renderer,
-        Editor_context&              editor_context,
-        Icon_settings&               icon_settings,
-        Programs&                    programs
+        Editor_context&           editor_context,
+        erhe::graphics::Instance& graphics_instance,
+        Icon_settings&            icon_settings,
+        Icons&                    icons,
+        Icon_loader&              icon_loader
     );
 
     void load_icons(
-        erhe::graphics::Instance&    graphics_instance,
-        erhe::imgui::Imgui_renderer& imgui_renderer,
-        Icon_settings&               icon_settings,
-        Programs&                    programs
+        erhe::graphics::Instance& graphics_instance,
+        Icon_settings&            icon_settings,
+        Icons&                    icons_in,
+        Icon_loader&              loader
     );
 
     void item_icon(const std::shared_ptr<erhe::Item_base>& item, float scale);
 
-    [[nodiscard]] auto load    (const std::filesystem::path& path) -> glm::vec2;
     [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const glm::vec2;
 
     [[nodiscard]] auto get_small_rasterization () const -> const Icon_rasterization&;
@@ -112,16 +110,14 @@ public:
 
 private:
     Editor_context&                     m_context;
-    int                                 m_row_count   {0};
-    int                                 m_column_count{0};
-    int                                 m_row         {0};
-    int                                 m_column      {1};
     std::unique_ptr<Icon_rasterization> m_small;
     std::unique_ptr<Icon_rasterization> m_large;
     std::unique_ptr<Icon_rasterization> m_hotbar;
 
 public:
     Icons icons;
+    static constexpr int s_row_count = 16;
+    static constexpr int s_column_count = 16;
 
     class Type_icon
     {

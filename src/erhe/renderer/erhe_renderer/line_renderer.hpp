@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_renderer/buffer_writer.hpp"
+#include "erhe_renderer/line_renderer_bucket.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/pipeline.hpp"
@@ -15,13 +16,14 @@
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_math/viewport.hpp"
 
+#include <etl/vector.h>
+
 #include <glm/glm.hpp>
 
+
 #include <cstdint>
-#include <deque>
 #include <list>
 #include <memory>
-#include <vector>
 
 namespace erhe::graphics {
     class Buffer;
@@ -34,24 +36,10 @@ namespace erhe::scene {
 
 namespace erhe::renderer {
 
-class Line
+class Line_renderer_program_interface
 {
 public:
-    glm::vec3 p0;
-    glm::vec3 p1;
-};
-
-class Line4
-{
-public:
-    glm::vec4 p0;
-    glm::vec4 p1;
-};
-
-class Line_renderer_pipeline
-{
-public:
-    explicit Line_renderer_pipeline(erhe::graphics::Instance& graphics_instance);
+    explicit Line_renderer_program_interface(erhe::graphics::Instance& graphics_instance);
 
     bool                                             reverse_depth{false};
     erhe::graphics::Fragment_outputs                 fragment_outputs;
@@ -71,153 +59,42 @@ public:
     std::size_t                                      fov_offset                   {0};
 };
 
+class Scoped_line_renderer;
+class Line_renderer_bucket;
+class Line_renderer_config;
+
 class Line_renderer
 {
 public:
-    Line_renderer(
-        erhe::graphics::Instance& graphics_instance,
-        Line_renderer_pipeline&   pipeline,
-        const char*               name,
-        unsigned int              stencil_reference
-    );
+    Line_renderer(erhe::graphics::Instance& graphics_instance);
 
-    Line_renderer (const Line_renderer&) = delete; // Due to std::deque<Frame_resources> m_frame_resources
+    Line_renderer (const Line_renderer&) = delete; // TODO No longer needed? Was: Due to std::deque<Frame_resources> m_frame_resources
     void operator=(const Line_renderer&) = delete; // Style must be non-copyable and non-movable.
     Line_renderer (Line_renderer&&)      = delete;
     void operator=(Line_renderer&&)      = delete;
 
     // Public API
-    void next_frame();
-    void begin     ();
+    void begin       ();
+    auto get         (const Line_renderer_config& config) -> Scoped_line_renderer;
+    auto get         (unsigned int stencil, bool visible, bool hidden) -> erhe::renderer::Scoped_line_renderer;
+    auto get_indirect(unsigned int stencil, bool visible, bool hidden) -> erhe::renderer::Scoped_line_renderer;
+
     void end       ();
-    void render(
-        const erhe::math::Viewport camera_viewport,
-        const erhe::scene::Camera& camera,
-        const bool                 show_visible_lines,
-        const bool                 show_hidden_lines
-    );
+    void next_frame();
+    void render    (const erhe::math::Viewport camera_viewport, const erhe::scene::Camera& camera);
 
-    void set_line_color(float r, float g, float b, float a);
-    void set_line_color(const glm::vec3& color);
-    void set_line_color(const glm::vec4& color);
-    void set_thickness (float thickness);
-
-    void add_lines(const std::initializer_list<Line> lines);
-    void add_lines(const glm::mat4& transform, const std::initializer_list<Line> lines);
-    void add_lines(const glm::mat4& transform, const std::initializer_list<Line4> lines);
-
-    void add_line(const glm::vec4& color0, float width0, glm::vec3 p0, const glm::vec4& color1, float width1, glm::vec3 p2);
-
-    void add_lines(const glm::mat4 transform, const glm::vec4& color, const std::initializer_list<Line> lines)
-    {
-        set_line_color(color);
-        add_lines(transform, lines);
-    }
-
-    void add_lines(const glm::vec4& color, const std::initializer_list<Line> lines)
-    {
-        set_line_color(color);
-        add_lines(lines);
-    }
-
-    void add_cube(
-        const glm::mat4& transform,
-        const glm::vec4& color,
-        const glm::vec3& min_corner,
-        const glm::vec3& max_corner,
-        bool             z_cross = false
-    );
-
-    void add_bone(
-        const glm::mat4& transform,
-        const glm::vec4& color,
-        const glm::vec3& start,
-        const glm::vec3& end
-    );
-
-    void add_sphere(
-        const erhe::scene::Transform& transform,
-        const glm::vec4&              edge_color,
-        const glm::vec4&              great_circle_color,
-        float                         edge_thickness,
-        float                         great_circle_thickness,
-        const glm::vec3&              local_center,
-        float                         local_radius,
-        const erhe::scene::Transform* camera_world_from_node = nullptr,
-        int                           step_count = 40
-    );
-
-    void add_cone(
-        const erhe::scene::Transform& transform,
-        const glm::vec4&              major_color,
-        const glm::vec4&              minor_color,
-        float                         major_thickness,
-        float                         minor_thickness,
-        const glm::vec3&              center,
-        float                         height,
-        float                         bottom_radius,
-        float                         top_radius,
-        const glm::vec3&              camera_position_in_world,
-        int                           side_count
-    );
-
-    void add_torus(
-        const erhe::scene::Transform& world_from_node,
-        const glm::vec4&              major_color,
-        const glm::vec4&              minor_color,
-        float                         major_thickness,
-        float                         major_radius,
-        float                         minor_radius,
-        const glm::vec3&              camera_position_in_world,
-        int                           major_step_count,
-        int                           minor_step_count,
-        float                         epsilon,
-        int                           debug_major,
-        int                           debug_minor
-    );
+    // API for Line_renderer_bucket
+    auto get_line_offset           () const -> std::size_t;
+    auto allocate_vertex_subspan   (std::size_t byte_count) -> std::span<std::byte>;
+    auto get_program_interface     () const -> const Line_renderer_program_interface& { return m_program_interface; }
+    auto get_line_vertex_buffer    () -> erhe::graphics::Buffer& { return m_line_vertex_buffer; }
+    auto get_triangle_vertex_buffer() -> erhe::graphics::Buffer& { return m_triangle_vertex_buffer; }
+    auto get_view_buffer           () -> erhe::graphics::Buffer& { return m_view_buffer; }
+    auto get_vertex_input          () -> erhe::graphics::Vertex_input_state* { return &m_vertex_input ;}
+    auto verify_inside_begin_end   () const -> bool;
 
 private:
-    static constexpr std::size_t s_frame_resources_count = 4;
-
-    class Frame_resources
-    {
-    public:
-        Frame_resources(
-            erhe::graphics::Instance&                 graphics_instance,
-            unsigned int                              stencil_reference,
-            bool                                      reverse_depth,
-            std::size_t                               view_stride,
-            std::size_t                               view_count,
-            std::size_t                               line_count,
-            erhe::graphics::Shader_stages*            shader_stages,
-            erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-            erhe::graphics::Vertex_format&            line_vertex_format,
-            erhe::graphics::Vertex_format&            triangle_vertex_format,
-            const std::string&                        style_name,
-            std::size_t                               slot
-        );
-
-        Frame_resources(const Frame_resources&) = delete;
-        void operator= (const Frame_resources&) = delete;
-        Frame_resources(Frame_resources&&)      = delete;
-        void operator= (Frame_resources&&)      = delete;
-
-        erhe::graphics::Shader_stages*     compute_shader_stages{nullptr};
-        erhe::graphics::Buffer             line_vertex_buffer;
-        erhe::graphics::Buffer             triangle_vertex_buffer;
-        erhe::graphics::Buffer             view_buffer;
-        erhe::graphics::Vertex_input_state vertex_input;
-        erhe::graphics::Pipeline           compute;
-        erhe::graphics::Pipeline           pipeline_visible;
-        erhe::graphics::Pipeline           pipeline_hidden;
-
-        [[nodiscard]] auto make_pipeline(
-            bool                           reverse_depth,
-            erhe::graphics::Shader_stages* shader_stages,
-            bool                           visible,
-            unsigned int                   stencil_reference
-        ) -> erhe::graphics::Pipeline;
-    };
+    static constexpr std::size_t s_buffer_slot_count = 4;
 
     class Buffer_range
     {
@@ -226,49 +103,24 @@ private:
         std::size_t byte_count       {0};
     };
 
-    [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
+    erhe::graphics::Instance&             m_graphics_instance;
+    Line_renderer_program_interface       m_program_interface;
 
-    void put(
-        const glm::vec3&        point,
-        float                   thickness,
-        const glm::vec4&        color,
-        const std::span<float>& gpu_float_data,
-        std::size_t&            word_offset
-    );
+    erhe::graphics::Buffer                m_line_vertex_buffer;
+    erhe::graphics::Buffer                m_triangle_vertex_buffer;
+    erhe::graphics::Buffer                m_view_buffer;
+    erhe::graphics::Vertex_input_state    m_vertex_input;
+    Buffer_writer                         m_view_writer;
+    Buffer_writer                         m_vertex_writer;
+    std::span<std::byte>                  m_slot_span;
 
-    erhe::graphics::Instance&   m_graphics_instance;
-    Line_renderer_pipeline&     m_pipeline;
-    std::deque<Frame_resources> m_frame_resources;
-    std::string                 m_name;
-    Buffer_writer               m_view_writer;
-    Buffer_writer               m_vertex_writer;
-    std::size_t                 m_current_frame_resource_slot{0};
-    std::size_t                 m_line_count                 {0};
-    glm::vec4                   m_line_color                 {1.0f, 1.0f, 1.0f, 1.0f};
-    float                       m_line_thickness             {1.0f};
-    bool                        m_inside_begin_end           {false};
-};
+    etl::vector<Line_renderer_bucket, 32> m_buckets;
+    std::size_t                           m_current_buffer_slot{0};
+    bool                                  m_inside_begin_end   {false};
 
-class Line_renderer_set
-{
-public:
-    explicit Line_renderer_set(erhe::graphics::Instance& graphics_instance);
-    ~Line_renderer_set() noexcept;
-
-    // Public API
-    void begin     ();
-    void end       ();
-    void next_frame();
-    void render    (const erhe::math::Viewport camera_viewport, const erhe::scene::Camera* camera);
-
-public:
-    static constexpr unsigned int s_max_stencil_reference = 4;
-    std::array<std::unique_ptr<Line_renderer>, s_max_stencil_reference + 1> visible;
-    std::array<std::unique_ptr<Line_renderer>, s_max_stencil_reference + 1> hidden;
-
-private:
-    erhe::graphics::Instance& m_graphics_instance;
-    Line_renderer_pipeline    m_pipeline;
+    static constexpr std::size_t s_view_stride    = 256;
+    static constexpr std::size_t s_max_view_count = 16;
+    static constexpr std::size_t s_max_line_count = 64 * 1024;
 };
 
 } // namespace erhe::renderer

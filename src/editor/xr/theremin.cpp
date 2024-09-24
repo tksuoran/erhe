@@ -8,12 +8,12 @@
 
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
 #include "erhe_scene/node.hpp"
 
 #include <imgui/imgui.h>
 
-namespace editor
-{
+namespace editor {
 
 namespace {
 
@@ -237,11 +237,8 @@ void Theremin::render(const Render_context& context)
         return;
     }
 
-    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
-    //const auto camera        = m_headset_view->get_camera();
-    //if (!camera) {
-    //    return;
-    //}
+    erhe::renderer::Scoped_line_renderer line_renderer = m_context.line_renderer->get(2, true, false);
+
     const auto& root_node = m_context.headset_view->get_root_node();
     if (!root_node) {
         return;

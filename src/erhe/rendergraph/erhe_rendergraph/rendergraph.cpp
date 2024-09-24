@@ -123,7 +123,7 @@ void Rendergraph::execute()
 {
     ERHE_PROFILE_FUNCTION();
 
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     SPDLOG_LOGGER_TRACE(log_frame, "Execute render graph with {} nodes:", m_nodes.size());
 
@@ -143,7 +143,7 @@ void Rendergraph::execute()
 
 void Rendergraph::register_node(Rendergraph_node* node)
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
 #if !defined(NDEBUG)
     const auto i = std::find_if(
@@ -172,7 +172,7 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
         return;
     }
 
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const auto i = std::find_if(
         m_nodes.begin(),

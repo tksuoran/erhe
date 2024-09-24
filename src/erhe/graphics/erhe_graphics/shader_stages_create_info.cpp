@@ -3,6 +3,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_file/file.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::graphics {
@@ -114,6 +115,8 @@ auto Shader_stages_create_info::interface_source() const -> std::string
 
 auto Shader_stages_create_info::final_source(Instance& graphics_instance, const Shader_stage& shader) const -> std::string
 {
+    ERHE_PROFILE_FUNCTION();
+
     std::stringstream sb;
     sb << "#version " << graphics_instance.info.glsl_version << " core\n\n";
 

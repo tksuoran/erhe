@@ -7,6 +7,7 @@
 #include "editor_scenes.hpp"
 #include "editor_settings.hpp"
 #include "editor_windows.hpp"
+#include "scene/material_library.hpp"
 #include "input_state.hpp"
 #include "time.hpp"
 
@@ -22,6 +23,7 @@
 #include "scene/material_preview.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
+#include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/brushes/brush.hpp"
 #include "tools/clipboard.hpp"
@@ -56,6 +58,7 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_file/file.hpp"
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_gl/gl_log.hpp"
@@ -98,11 +101,64 @@
 #include "erhe_window/window_event_handler.hpp"
 #include "erhe_ui/ui_log.hpp"
 
+#include <taskflow/taskflow.hpp>
+
 #if defined(ERHE_PROFILE_LIBRARY_NVTX)
 #   include <nvtx3/nvToolsExt.h>
 #endif
 
+//#if defined(ERHE_PROFILE_LIBRARY_TRACY)
+//#   include <tracy/Tracy.hpp>
+#   include <tracy/TracyC.h>
+//#endif
+
 namespace editor {
+
+class Tracy_observer : public tf::ObserverInterface {
+public:
+    void set_up(std::size_t) override final {};
+
+    void on_entry(tf::WorkerView, tf::TaskView tv) override final
+    {
+        const std::string& name = tv.name();
+#if TRACY_ENABLE
+        const std::size_t hash = tv.hash_value();
+        const uint32_t color = 0x804020ffu;
+        uint64_t srcloc = ___tracy_alloc_srcloc_name(1, "", 0, "", 0, name.c_str(), name.length(), color);
+        TracyCZoneCtx zone = ___tracy_emit_zone_begin_alloc(srcloc, 1);
+        // log_startup->trace("enter zone = {} worker = {} task = {} hash = {:x}", zone.id, w.id(), name, hash);
+        st_entries.emplace_back(hash, zone);
+#endif
+    }
+
+    void on_exit(tf::WorkerView, tf::TaskView tv) override final
+    {
+        //const std::string& name = tv.name();
+#if TRACY_ENABLE
+        const std::size_t hash = tv.hash_value();
+        for (Entry& entry : st_entries) {
+            if (entry.hash == hash && entry.zone.active != 0) {
+                // log_startup->trace("leave zone = {} worker = {} task = {} hash = {:x}", entry.zone.id, w.id(), name, hash);
+                ___tracy_emit_zone_end(entry.zone);
+                entry.zone.active = 0;
+                return;
+            }
+        }
+        ERHE_FATAL("zone not found");
+#endif
+    }
+
+private:
+    struct Entry
+    {
+        std::size_t   hash;
+        TracyCZoneCtx zone;
+    };
+    static thread_local std::vector<Entry> st_entries;
+};
+
+thread_local std::vector<Tracy_observer::Entry> Tracy_observer::st_entries;
+
 
 class Editor : public erhe::window::Input_event_handler
 {
@@ -111,17 +167,17 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
-        std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
+        std::vector<erhe::window::Input_event>& input_events = m_context_window->get_input_events();
 
         std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
 
-        m_fly_camera_tool.on_frame_begin();
+        m_fly_camera_tool->on_frame_begin();
 
         // Apply logic updates
         if (!m_editor_context.OpenXR) { //if (!m_headset_view.is_active()) {
-            auto* imgui_host = m_imgui_windows.get_window_imgui_host().get(); // get glfw window hosted viewport
+            auto* imgui_host = m_imgui_windows->get_window_imgui_host().get(); // get glfw window hosted viewport
             if (imgui_host != nullptr) {
-                m_viewport_scene_views.update_hover(imgui_host); // updates what viewport window is being hovered
+                m_viewport_scene_views->update_hover(imgui_host); // updates what viewport window is being hovered
             }
         }
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -131,9 +187,9 @@ public:
         // - updates controller visualization nodes
         if (m_editor_context.OpenXR) {
             ERHE_PROFILE_SCOPE("OpenXR update events");
-            bool headset_update_ok = m_headset_view.update_events();
-            if (headset_update_ok && m_headset_view.is_active()) {
-                m_viewport_config_window.set_edit_data(&m_headset_view.get_config());
+            bool headset_update_ok = m_headset_view->update_events();
+            if (headset_update_ok && m_headset_view->is_active()) {
+                m_viewport_config_window->set_edit_data(&m_headset_view->get_config());
             } else{
                 ERHE_PROFILE_SCOPE("OpenXR sleep");
                 // Throttle loop since xrWaitFrame won't be called.
@@ -145,46 +201,46 @@ public:
         // - Update all ImGui hosts. glfw window host processes input events, converting them to ImGui inputs events
         //   This may consume some input events, so that they will not get processed by m_commands.tick() below
         // - Call all ImGui code (Imgui_window)
-        m_imgui_windows.imgui_windows();
+        m_imgui_windows->imgui_windows();
 
         // - Apply all command bindings (OpenXR bindings were already executed above)
-        m_commands.tick(timestamp, input_events);
+        m_commands->tick(timestamp, input_events);
 
-        m_operation_stack.update();
+        m_operation_stack->update();
 
-        m_editor_scenes.before_physics_simulation_steps();
+        m_editor_scenes->before_physics_simulation_steps();
 
         // - Execute all fixes step updates
         // - Execute all once per frame updates
         //    - Editor_scenes (updates physics)
         //    - Fly_camera_tool
         //    - Network_window 
-        m_time.update();
-        m_editor_message_bus.update(); // Flushes queued messages
+        m_time->update();
+        m_editor_message_bus->update(); // Flushes queued messages
 
         // Apply physics updates
-        m_editor_scenes.after_physics_simulation_steps();
+        m_editor_scenes->after_physics_simulation_steps();
 
-        m_fly_camera_tool.on_frame_end();
+        m_fly_camera_tool->on_frame_end();
 
         // Rendering
-        m_graphics_instance.shader_monitor.update_once_per_frame();
-        m_mesh_memory.gl_buffer_transfer_queue.flush();
+        m_graphics_instance->shader_monitor.update_once_per_frame();
+        m_mesh_memory->gl_buffer_transfer_queue.flush();
 
-        m_editor_rendering.begin_frame(); // tests renderdoc capture start
+        m_editor_rendering->begin_frame(); // tests renderdoc capture start
 
         // Execute rendergraph
-        m_rendergraph.execute();
+        m_rendergraph->execute();
 
-        m_imgui_renderer.next_frame();
-        m_editor_rendering.end_frame();
+        m_imgui_renderer->next_frame();
+        m_editor_rendering->end_frame();
         if (!m_editor_context.OpenXR) {
             gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
             if (m_editor_context.use_sleep) {
                 std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
                 {
                     ERHE_PROFILE_SCOPE("swap_buffers");
-                    m_context_window.swap_buffers();
+                    m_context_window->swap_buffers();
                 }
                 std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
                 const std::chrono::duration<float> swap_duration = start_time - end_time;
@@ -195,7 +251,7 @@ public:
                 }
             } else {
                 ERHE_PROFILE_SCOPE("swap_buffers");
-                m_context_window.swap_buffers();
+                m_context_window->swap_buffers();
             }
         }
     }
@@ -216,7 +272,7 @@ public:
         return openxr ? nullptr : context_window;
     }
 
-    [[nodiscard]] auto create_window() -> erhe::window::Context_window
+    [[nodiscard]] auto create_window() -> std::unique_ptr<erhe::window::Context_window>
     {
         auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");
 
@@ -257,201 +313,493 @@ public:
         window_section.get("height",           configuration.height);
         window_section.get("swap_interval",    configuration.swap_interval);
 
-        return erhe::window::Context_window{configuration};
+        return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
-#pragma region Editor()
-#pragma region Initialize members
     Editor()
-        : m_commands          {}
-        , m_scene_message_bus {}
-        , m_editor_message_bus{}
-        , m_input_state       {}
-        , m_time              {}
-        , m_editor_context    {}
-
-        , m_clipboard             {m_commands, m_editor_context}
-        , m_context_window        {create_window()}
-        , m_editor_settings       {m_editor_message_bus}
-        , m_graphics_instance     {m_context_window}
-        , m_imgui_renderer        {m_graphics_instance, m_editor_settings.imgui}
-        , m_line_renderer_set     {m_graphics_instance}
-        , m_program_interface     {m_graphics_instance}
-        , m_rendergraph           {m_graphics_instance}
-        , m_text_renderer         {m_graphics_instance}
-
-        , m_programs              {m_graphics_instance, m_program_interface}
-        , m_forward_renderer      {m_graphics_instance, m_program_interface}
-        , m_shadow_renderer       {m_graphics_instance, m_program_interface}
-        , m_mesh_memory           {m_graphics_instance, m_program_interface}
-
-        , m_imgui_windows         {m_imgui_renderer,    conditionally_enable_window_imgui_host(&m_context_window), m_rendergraph, get_windows_ini_path()}
-        , m_editor_scenes         {m_editor_context,    m_time}
-        , m_editor_windows        {m_editor_context}
-        , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
-        , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_editor_context, m_editor_settings.icons, m_programs}
-        , m_post_processing       {m_graphics_instance, m_editor_context}
-        , m_id_renderer           {m_graphics_instance, m_program_interface, m_mesh_memory,     m_programs}
-        , m_composer_window       {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
-        , m_selection_window      {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
-        , m_settings_window       {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
-        , m_viewport_scene_views  {m_commands,          m_editor_context,    m_editor_message_bus}
-        , m_editor_rendering      {m_commands,          m_graphics_instance, m_editor_context,  m_editor_message_bus, m_mesh_memory, m_programs}
-        , m_selection             {m_commands,          m_editor_context,    m_editor_message_bus}
-        , m_operation_stack       {m_commands,          m_imgui_renderer,    m_imgui_windows,   m_editor_context}
-        , m_scene_commands        {m_commands,          m_editor_context}
-        , m_clipboard_window      {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_commands_window       {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_layers_window         {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_network_window        {m_imgui_renderer, m_imgui_windows, m_editor_context, m_time}
-        , m_operations            {m_commands,       m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_physics_window        {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_post_processing_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_properties            {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_rendergraph_window    {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_tool_properties_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_viewport_config_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_logs                  {m_commands, m_imgui_renderer}
-        , m_log_settings_window   {m_imgui_renderer, m_imgui_windows, m_logs}
-        , m_tail_log_window       {m_imgui_renderer, m_imgui_windows, m_logs}
-        , m_frame_log_window      {m_imgui_renderer, m_imgui_windows, m_logs}
-        , m_performance_window    {m_imgui_renderer, m_imgui_windows}
-        , m_pipelines             {m_imgui_renderer, m_imgui_windows}
-
-        , m_tools{
-            m_imgui_renderer, m_imgui_windows,
-            m_graphics_instance, m_scene_message_bus, m_editor_context,
-            m_editor_rendering,  m_mesh_memory,       m_programs
-        }
-        , m_scene_builder{
-            m_graphics_instance,
-            m_imgui_renderer,
-            m_imgui_windows,
-            m_rendergraph,
-            m_scene_message_bus,
-            m_editor_context,
-            m_editor_message_bus,
-            m_editor_rendering,
-            m_editor_scenes,
-            m_editor_settings,
-            m_mesh_memory,
-            m_post_processing,
-            m_tools,
-            m_viewport_scene_views
-        }
-        , m_fly_camera_tool       {m_commands, m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus, m_time, m_tools}
-        , m_headset_view{
-            m_commands,
-            m_graphics_instance,
-            m_imgui_renderer,
-            m_imgui_windows,
-            m_rendergraph,
-            m_context_window,
-            m_editor_context,
-            m_editor_rendering,
-            m_editor_settings,
-            m_mesh_memory,
-            m_scene_builder,
-            m_time
-        }
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-        , m_hand_tracker{m_editor_context, m_editor_rendering}
-#endif
-        , m_move_tool             {m_editor_context, m_icon_set, m_tools}
-        , m_rotate_tool           {m_editor_context, m_icon_set, m_tools}
-        , m_scale_tool            {m_editor_context, m_icon_set, m_tools}
-        , m_transform_tool{
-            m_commands,           m_imgui_renderer,  m_imgui_windows, m_editor_context,
-            m_editor_message_bus, m_headset_view,    m_mesh_memory,   m_tools
-        }
-        , m_hud{
-            m_commands,       m_graphics_instance,  m_imgui_renderer, m_rendergraph,
-            m_editor_context, m_editor_message_bus, m_editor_windows, m_headset_view,  m_mesh_memory,
-            m_scene_builder,  m_tools
-        }
-        , m_hotbar{
-            m_commands,       m_imgui_renderer,     m_imgui_windows,
-            m_editor_context, m_editor_message_bus, m_headset_view,
-            m_mesh_memory,    m_scene_builder,      m_tools
-        }
-        , m_hover_tool       {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus, m_tools}
-
-        , m_brdf_slice{
-            m_rendergraph, m_forward_renderer, m_editor_context, m_programs
-        }
-        , m_debug_draw            {m_editor_context}
-        , m_debug_view_window     {
-            m_imgui_renderer, m_imgui_windows,    m_rendergraph, m_forward_renderer,
-            m_editor_context, m_editor_rendering, m_mesh_memory, m_programs
-        }
-        , m_debug_visualizations  {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus, m_editor_rendering}
-        , m_material_preview      {m_graphics_instance, m_scene_message_bus, m_editor_context, m_mesh_memory, m_programs}
-
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-        ////, m_theremin              {m_imgui_renderer, m_imgui_windows,  m_hand_tracker,       m_editor_context}
-#endif
-        , m_brush_tool            {m_commands,       m_editor_context, m_editor_message_bus, m_headset_view, m_icon_set, m_tools}
-        , m_create                {m_imgui_renderer, m_imgui_windows,  m_editor_context,     m_tools}
-        , m_grid_tool             {m_imgui_renderer, m_imgui_windows,  m_editor_context,     m_icon_set, m_tools}
-        , m_material_paint_tool   {m_commands,       m_editor_context, m_headset_view,       m_icon_set, m_tools}
-        , m_paint_tool{
-            m_commands,           m_imgui_renderer, m_imgui_windows, m_editor_context,
-            m_editor_message_bus, m_headset_view,   m_icon_set,      m_tools
-        }
-        , m_physics_tool  {m_commands,       m_editor_context, m_editor_message_bus, m_headset_view, m_icon_set, m_tools}
-        , m_selection_tool{m_editor_context, m_icon_set, m_tools}
     {
-#pragma endregion Initialize members
+        m_executor = std::make_unique<tf::Executor>(8);
+
+        try {
+            tf::Taskflow taskflow;
+            std::shared_ptr<Tracy_observer> observer = m_executor->make_observer<Tracy_observer>();
+
+            m_commands           = std::make_unique<erhe::commands::Commands      >();
+            m_scene_message_bus  = std::make_unique<erhe::scene::Scene_message_bus>();
+            m_editor_message_bus = std::make_unique<Editor_message_bus            >();
+            m_editor_settings    = std::make_unique<Editor_settings               >();
+            m_input_state        = std::make_unique<Input_state                   >();
+            m_time               = std::make_unique<Time                          >();
+            auto& commands           = *m_commands          .get();
+            auto& editor_message_bus = *m_editor_message_bus.get();
+            auto& time               = *m_time              .get();
+
+            // Icon rasterization is slow task that can be run in parallel with
+            // GL context creation and Joystick scanning which are two other slow tasks
+            Icons icons;
+            Icon_loader icon_loader{m_editor_settings->icon_settings};
+            icons.queue_load_icons(icon_loader);
+            auto icon_rasterization_task = taskflow.emplace([this, &icon_loader](){
+                icon_loader.execute_queue();
+            })  .name("Icon rasterization");
+
+            m_executor->run(taskflow);
+
+            // Window and graphics context creation - in main thread
+            m_context_window = create_window();
+            m_editor_settings->apply_limits(editor_message_bus);
+
+            // Graphics context state init after window - in main thread
+            m_graphics_instance = std::make_unique<erhe::graphics::Instance>(*m_context_window.get());
+
+            // It seems to be faster to create the worker thread here instead of between
+            // executor run and wait.
+            m_graphics_instance->context_provider.provide_worker_contexts(
+                m_context_window.get(),
+                8u,
+                []() -> bool { return true; }
+            );
+
+            m_clipboard            = std::make_unique<Clipboard     >(commands, m_editor_context);
+            m_editor_scenes        = std::make_unique<Editor_scenes >(m_editor_context, time);
+            m_editor_windows       = std::make_unique<Editor_windows>(m_editor_context);
+            m_viewport_scene_views = std::make_unique<Scene_views   >(commands, m_editor_context, editor_message_bus);
+            m_selection            = std::make_unique<Selection     >(commands, m_editor_context, editor_message_bus);
+            m_scene_commands       = std::make_unique<Scene_commands>(commands, m_editor_context);
+            m_debug_draw           = std::make_unique<Debug_draw    >(m_editor_context);
+            m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(*m_graphics_instance.get());
+            m_programs             = std::make_unique<Programs>(*m_graphics_instance.get());
+
+            auto programs_load_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_programs->load_programs(*m_executor.get(), *m_graphics_instance.get(), *m_program_interface.get());
+            })  .name("Programs (load)");
+
+            auto imgui_renderer_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_imgui_renderer = std::make_unique<erhe::imgui::Imgui_renderer>(*m_graphics_instance.get(), m_editor_settings->imgui);
+            })  .name("Imgui_renderer");
+
+            auto line_renderer_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_line_renderer = std::make_unique<erhe::renderer::Line_renderer>(*m_graphics_instance.get());
+            })  .name("Line_renderer");
+
+            auto rendergraph_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_rendergraph = std::make_unique<erhe::rendergraph::Rendergraph>(*m_graphics_instance.get());
+            })  .name("Rendergraph");
+
+            auto text_renderer_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(*m_graphics_instance.get());
+            }).name("Text_renderer");
+
+            auto forward_renderer_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(*m_graphics_instance.get(), *m_program_interface.get());
+            })  .name("Forward_renderer");
+                //.succeed(program_interface_task);
+
+            auto shadow_renderer_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_shadow_renderer = std::make_unique<erhe::scene_renderer::Shadow_renderer >(*m_graphics_instance.get(), *m_program_interface.get());
+            })  .name("Shadow_renderer");
+                //.succeed(program_interface_task);
+
+            auto mesh_memory_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_mesh_memory = std::make_unique<Mesh_memory>(*m_graphics_instance.get(), *m_program_interface.get());
+            })  .name("Mesh_memory");
+                //.succeed(program_interface_task);
+
+            auto imgui_windows_task = taskflow.emplace([this](){
+                m_imgui_windows = std::make_unique<erhe::imgui::Imgui_windows>(
+                    *m_imgui_renderer.get(),
+                    conditionally_enable_window_imgui_host(m_context_window.get()),
+                    *m_rendergraph.get(),
+                    get_windows_ini_path()
+                );
+            })  .name("Imgui_windows")
+                .succeed(imgui_renderer_task, rendergraph_task);
+
+            auto icon_set_task = taskflow.emplace([this, &icons, &icon_loader](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_icon_set = std::make_unique<Icon_set>(
+                    m_editor_context,
+                    *m_graphics_instance.get(),
+                    m_editor_settings->icon_settings,
+                    icons,
+                    icon_loader
+                );
+            })  .name("Icon_set")
+                .succeed(icon_rasterization_task);
+
+            auto post_processing_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_post_processing = std::make_unique<Post_processing>(*m_graphics_instance.get(), m_editor_context);
+            })  .name("Post_processing");
+
+            auto id_renderer_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_id_renderer = std::make_unique<Id_renderer>(*m_graphics_instance.get(), *m_program_interface.get(), *m_mesh_memory.get(), *m_programs.get());
+            })  .name("Id_renderer")
+                .succeed(mesh_memory_task);
+
+            auto editor_rendering_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_editor_rendering = std::make_unique<Editor_rendering>(
+                    *m_commands.get(),
+                    *m_graphics_instance.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_mesh_memory.get(),
+                    *m_programs.get()
+                );
+            })  .name("Editor_rendering")
+                .succeed(mesh_memory_task);
+
+            auto some_windows_task = taskflow.emplace([this](){
+                m_operation_stack        = std::make_unique<Operation_stack                 >(*m_executor.get(),       *m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_editor_context);
+                m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_composer_window        = std::make_unique<Composer_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_selection_window       = std::make_unique<Selection_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_settings_window        = std::make_unique<Settings_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_clipboard_window       = std::make_unique<Clipboard_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_commands_window        = std::make_unique<Commands_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_layers_window          = std::make_unique<Layers_window                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_network_window         = std::make_unique<Network_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context,       *m_time.get());
+                m_operations             = std::make_unique<Operations                      >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_editor_context);
+                m_physics_window         = std::make_unique<Physics_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_post_processing_window = std::make_unique<Post_processing_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_viewport_config_window = std::make_unique<Viewport_config_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_logs                   = std::make_unique<erhe::imgui::Logs               >(*m_commands.get(),       *m_imgui_renderer.get());
+                m_log_settings_window    = std::make_unique<erhe::imgui::Log_settings_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(),  *m_logs.get());
+                m_tail_log_window        = std::make_unique<erhe::imgui::Tail_log_window    >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  *m_logs.get());
+                m_frame_log_window       = std::make_unique<erhe::imgui::Frame_log_window   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  *m_logs.get());
+                m_performance_window     = std::make_unique<erhe::imgui::Performance_window >(*m_imgui_renderer.get(), *m_imgui_windows.get());
+                m_pipelines              = std::make_unique<erhe::imgui::Pipelines          >(*m_imgui_renderer.get(), *m_imgui_windows.get());
+            })  .name("Some windows")
+                .succeed(imgui_renderer_task, imgui_windows_task);
+
+            auto tools_task = taskflow.emplace([this](){
+                m_tools = std::make_unique<Tools>(
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    *m_graphics_instance.get(),
+                    *m_scene_message_bus.get(),
+                    m_editor_context,
+                    *m_editor_rendering.get(),
+                    *m_mesh_memory.get(),
+                    *m_programs
+                );
+                m_fly_camera_tool = std::make_unique<Fly_camera_tool>(
+                    *m_commands.get(),
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_time.get(),
+                    *m_tools.get()
+                );
+            })  .name("Tools")
+                .succeed(imgui_renderer_task, imgui_windows_task, mesh_memory_task, editor_rendering_task);
+        
+            auto default_scene_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                auto content_library = std::make_shared<Content_library>();
+                add_default_materials(*content_library.get());
+
+                m_default_scene = std::make_shared<Scene_root>(
+                    m_imgui_renderer.get(),
+                    m_imgui_windows.get(),
+                    *m_scene_message_bus.get(),
+                    &m_editor_context,
+                    m_editor_message_bus.get(),
+                    m_editor_scenes.get(),
+                    content_library,
+                    "Default Scene"
+                );
+                m_default_scene_browser = m_default_scene->make_browser_window(
+                    *m_imgui_renderer.get(), *m_imgui_windows.get(), m_editor_context, *m_editor_settings.get()
+                );
+            })  .name("Default scene")
+                .succeed(imgui_renderer_task, imgui_windows_task);
+
+            auto scene_builder_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+
+                m_scene_builder = std::make_unique<Scene_builder>(
+                    m_default_scene,                //std::shared_ptr<Scene_root>     scene
+                    *m_executor.get(),              //tf::Executor&                   executor
+                    *m_graphics_instance.get(),     //erhe::graphics::Instance&       graphics_instance
+                    *m_imgui_renderer.get(),        //erhe::imgui::Imgui_renderer&    imgui_renderer
+                    *m_imgui_windows.get(),         //erhe::imgui::Imgui_windows&     imgui_windows
+                    *m_rendergraph.get(),           //erhe::rendergraph::Rendergraph& rendergraph
+                    m_editor_context,               //Editor_context&                 editor_context
+                    *m_editor_rendering.get(),      //Editor_rendering&               editor_rendering
+                    *m_editor_settings.get(),       //Editor_settings&                editor_settings
+                    *m_mesh_memory.get(),           //Mesh_memory&                    mesh_memory
+                    *m_post_processing.get(),       //Post_processing&                post_processing
+                    *m_tools.get(),                 //Tools&                          tools
+                    *m_viewport_scene_views.get()   //Scene_views&                    scene_views
+                );
+            })  .name("Scene_builder")
+                .succeed(default_scene_task, imgui_renderer_task, imgui_windows_task, rendergraph_task, editor_rendering_task, mesh_memory_task, post_processing_task, tools_task);
+
+            auto headset_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_headset_view = std::make_unique<Headset_view>(
+                    *m_commands.get(),
+                    *m_graphics_instance.get(),
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    *m_rendergraph.get(),
+                    *m_context_window.get(),
+                    m_editor_context,
+                    *m_editor_rendering.get(),
+                    *m_editor_settings.get(),
+                    *m_time.get()
+                );
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+                m_hand_tracker = std::make_unique<Hand_tracker>(m_editor_context, *m_editor_rendering.get());
+#endif
+            })  .name("Headset (init)")
+                .succeed(imgui_renderer_task, imgui_windows_task, rendergraph_task, editor_rendering_task);
+
+            auto headset_attach_task = taskflow.emplace([this](){
+                m_headset_view->attach_to_scene(m_default_scene, *m_mesh_memory.get());
+            })  .name("Headset (attach)")
+                .succeed(default_scene_task, headset_task, mesh_memory_task, scene_builder_task);
+
+            auto transform_tools_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_move_tool   = std::make_unique<Move_tool  >(m_editor_context, *m_icon_set.get(), *m_tools.get());
+                m_rotate_tool = std::make_unique<Rotate_tool>(m_editor_context, *m_icon_set.get(), *m_tools.get());
+                m_scale_tool  = std::make_unique<Scale_tool >(m_editor_context, *m_icon_set.get(), *m_tools.get());
+                m_transform_tool = std::make_unique<Transform_tool>(
+                    *m_executor.get(),
+                    *m_commands.get(),
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_headset_view.get(),
+                    *m_mesh_memory.get(),
+                    *m_tools.get()
+                );
+            })  .name("Transform tools")
+                .succeed(imgui_renderer_task, imgui_windows_task, headset_task, mesh_memory_task, icon_set_task, tools_task);
+
+            auto group_1 = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_hud = std::make_unique<Hud>(
+                    *m_commands.get(),
+                    *m_graphics_instance.get(),
+                    *m_imgui_renderer.get(),
+                    *m_rendergraph.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_editor_windows.get(),
+                    *m_headset_view.get(),
+                    *m_mesh_memory.get(),
+                    *m_scene_builder.get(),
+                    *m_tools.get()
+                );
+                m_hotbar = std::make_unique<Hotbar>(
+                    *m_commands.get(),
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_headset_view.get(),
+                    *m_mesh_memory.get(),
+                    *m_scene_builder.get(),
+                    *m_tools.get()
+                );
+                m_hover_tool = std::make_unique<Hover_tool>(
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_tools.get()
+                );
+                m_brdf_slice = std::make_unique<Brdf_slice>(
+                    *m_rendergraph.get(),
+                    *m_forward_renderer.get(),
+                    m_editor_context,
+                    *m_programs.get()
+                );
+                m_debug_view_window = std::make_unique<Debug_view_window>(
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    *m_rendergraph.get(),
+                    *m_forward_renderer.get(),
+                    m_editor_context,
+                    *m_editor_rendering.get(),
+                    *m_mesh_memory.get(),
+                    *m_programs.get()
+                );
+                m_debug_visualizations = std::make_unique<Debug_visualizations>(
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_editor_rendering.get()
+                );
+            })  .name("Group 1")
+                .succeed(
+                    imgui_renderer_task,
+                    imgui_windows_task,
+                    editor_rendering_task,
+                    mesh_memory_task,
+                    rendergraph_task,
+                    forward_renderer_task,
+                    tools_task,
+                    scene_builder_task,
+                    headset_task
+                );
+
+            auto material_preview_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_material_preview = std::make_unique<Material_preview>(
+                    *m_graphics_instance.get(),
+                    *m_scene_message_bus.get(),
+                    m_editor_context,
+                    *m_mesh_memory.get(),
+                    *m_programs.get()
+                );
+            })  .name("Material_preview")
+                .succeed(mesh_memory_task);
+
+    #if defined(ERHE_XR_LIBRARY_OPENXR)
+            ////, m_theremin              {m_imgui_renderer, m_imgui_windows,  m_hand_tracker,       m_editor_context}
+    #endif
+
+            auto brush_tool_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_brush_tool = std::make_unique<Brush_tool>(
+                    *m_commands.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_headset_view.get(),
+                    *m_icon_set.get(),
+                    *m_tools.get()
+                );
+            })  .name("Brush_tool")
+                .succeed(headset_task, icon_set_task, tools_task);
+
+            auto group_2 = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_create = std::make_unique<Create>(
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_editor_context,
+                    *m_tools.get()
+                );
+                m_grid_tool = std::make_unique<Grid_tool>(
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_editor_context,
+                    *m_icon_set.get(),
+                    *m_tools.get()
+                );
+                m_material_paint_tool = std::make_unique<Material_paint_tool>(
+                    *m_commands.get(),
+                    m_editor_context,
+                    *m_headset_view.get(),
+                    *m_icon_set.get(),
+                    *m_tools.get()
+                );
+                m_paint_tool = std::make_unique<Paint_tool>(
+                    *m_commands.get(),
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_headset_view.get(),
+                    *m_icon_set.get(),
+                    *m_tools.get()
+                );
+                m_physics_tool = std::make_unique<Physics_tool>(
+                    *m_commands.get(),
+                    m_editor_context,
+                    *m_editor_message_bus.get(),
+                    *m_headset_view.get(),
+                    *m_icon_set.get(),
+                    *m_tools.get()
+                );
+                m_selection_tool = std::make_unique<Selection_tool>(
+                    m_editor_context,
+                    *m_icon_set.get(),
+                    *m_tools.get()
+                );
+            })  .name("Group 2")
+                .succeed(imgui_renderer_task, imgui_windows_task, icon_set_task, tools_task, headset_task);
+
+            std::string graph_dump = taskflow.dump();
+            erhe::file::write_file("erhe_init_graph.dot", graph_dump);
+            m_executor->run(taskflow).wait();
+        } catch (std::runtime_error& e) {
+            log_startup->error("exception: {}", e.what());
+        }
+
+        m_context_window->make_current();
+        m_graphics_instance->opengl_state_tracker.on_thread_enter();
+
         ERHE_PROFILE_FUNCTION();
         ERHE_PROFILE_GPU_CONTEXT
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         if (m_editor_context.OpenXR) {
-            m_selection.setup_xr_bindings(m_commands, m_headset_view);
+            m_selection->setup_xr_bindings(*m_commands.get(), *m_headset_view.get());
         }
 #endif
 
         fill_editor_context();
 
         const auto& physics_section = erhe::configuration::get_ini_file_section("erhe.ini", "physics");
-        physics_section.get("static_enable",  m_editor_settings.physics.static_enable);
-        physics_section.get("dynamic_enable", m_editor_settings.physics.dynamic_enable);
-        if (!m_editor_settings.physics.static_enable) {
-            m_editor_settings.physics.dynamic_enable = false;
+        physics_section.get("static_enable",  m_editor_settings->physics.static_enable);
+        physics_section.get("dynamic_enable", m_editor_settings->physics.dynamic_enable);
+        if (!m_editor_settings->physics.static_enable) {
+            m_editor_settings->physics.dynamic_enable = false;
         }
 
         {
-            m_clipboard_window.set_developer();
-            m_commands_window.set_developer();
-            m_composer_window.set_developer();
-            m_debug_view_window.set_developer();
-            m_hover_tool.set_developer();
-            m_frame_log_window.set_developer();
-            m_log_settings_window.set_developer();
-            m_performance_window.set_developer();
-            m_pipelines.set_developer();
+            m_clipboard_window   ->set_developer();
+            m_commands_window    ->set_developer();
+            m_composer_window    ->set_developer();
+            m_debug_view_window  ->set_developer();
+            m_hover_tool         ->set_developer();
+            m_frame_log_window   ->set_developer();
+            m_log_settings_window->set_developer();
+            m_performance_window ->set_developer();
+            m_pipelines          ->set_developer();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
             ////m_theremin.set_developer();
 #endif
-            m_layers_window.set_developer();
-            m_network_window.set_developer();
-            m_post_processing_window.set_developer();
-            m_rendergraph_window.set_developer();
-            m_selection_window.set_developer();
-            m_tail_log_window.set_developer();
-            m_operation_stack.set_developer();
+            m_layers_window         ->set_developer();
+            m_network_window        ->set_developer();
+            m_post_processing_window->set_developer();
+            m_rendergraph_window    ->set_developer();
+            m_selection_window      ->set_developer();
+            m_tail_log_window       ->set_developer();
+            m_operation_stack       ->set_developer();
         }
 
-        m_hotbar.get_all_tools();
+        m_hotbar->get_all_tools();
 
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
         gl::enable      (gl::Enable_cap::framebuffer_srgb);
 
-        const auto window_viewport = m_imgui_windows.get_window_imgui_host();
+        const auto window_viewport = m_imgui_windows->get_window_imgui_host();
         if (!m_editor_context.OpenXR) {
             window_viewport->set_begin_callback(
                 [this](erhe::imgui::Imgui_host& imgui_host) {
-                    m_editor_windows.viewport_menu(imgui_host);
+                    m_editor_windows->viewport_menu(imgui_host);
                 }
             );
         }
@@ -460,9 +808,9 @@ public:
         if (m_editor_context.OpenXR) {
             // TODO Create windows directly to correct viewport?
             // Move all imgui windows that have window viewport to hud viewport
-            const auto viewport = m_hud.get_rendertarget_imgui_viewport();
+            const auto viewport = m_hud->get_rendertarget_imgui_viewport();
             if (viewport) {
-                auto& windows = m_imgui_windows.get_windows();
+                auto& windows = m_imgui_windows->get_windows();
                 for (auto window : windows) {
                     if (window->get_imgui_host() == window_viewport.get()) {
                         window->set_imgui_host(viewport.get());
@@ -471,74 +819,73 @@ public:
             }
         }
 #endif
-        m_tools.set_priority_tool(&m_physics_tool);
+        m_tools->set_priority_tool(m_physics_tool.get());
     }
-#pragma endregion Editor()
 
     void fill_editor_context()
     {
         ERHE_PROFILE_FUNCTION();
 
-        m_editor_context.commands               = &m_commands              ;
-        m_editor_context.graphics_instance      = &m_graphics_instance     ;
-        m_editor_context.imgui_renderer         = &m_imgui_renderer        ;
-        m_editor_context.imgui_windows          = &m_imgui_windows         ;
-        m_editor_context.line_renderer_set      = &m_line_renderer_set     ;
-        m_editor_context.text_renderer          = &m_text_renderer         ;
-        m_editor_context.rendergraph            = &m_rendergraph           ;
-        m_editor_context.scene_message_bus      = &m_scene_message_bus     ;
-        m_editor_context.forward_renderer       = &m_forward_renderer      ;
-        m_editor_context.shadow_renderer        = &m_shadow_renderer       ;
-        m_editor_context.context_window         = &m_context_window        ;
-        m_editor_context.brdf_slice             = &m_brdf_slice            ;
-        m_editor_context.brush_tool             = &m_brush_tool            ;
-        m_editor_context.clipboard              = &m_clipboard             ;
-        m_editor_context.clipboard_window       = &m_clipboard_window      ;
-        m_editor_context.create                 = &m_create                ;
-        m_editor_context.editor_message_bus     = &m_editor_message_bus    ;
-        m_editor_context.editor_rendering       = &m_editor_rendering      ;
-        m_editor_context.editor_scenes          = &m_editor_scenes         ;
-        m_editor_context.editor_settings        = &m_editor_settings       ;
-        m_editor_context.editor_windows         = &m_editor_windows        ;
-        m_editor_context.fly_camera_tool        = &m_fly_camera_tool       ;
-        m_editor_context.grid_tool              = &m_grid_tool             ;
+        m_editor_context.commands               = m_commands              .get();
+        m_editor_context.graphics_instance      = m_graphics_instance     .get();
+        m_editor_context.imgui_renderer         = m_imgui_renderer        .get();
+        m_editor_context.imgui_windows          = m_imgui_windows         .get();
+        m_editor_context.line_renderer          = m_line_renderer         .get();
+        m_editor_context.text_renderer          = m_text_renderer         .get();
+        m_editor_context.rendergraph            = m_rendergraph           .get();
+        m_editor_context.scene_message_bus      = m_scene_message_bus     .get();
+        m_editor_context.forward_renderer       = m_forward_renderer      .get();
+        m_editor_context.shadow_renderer        = m_shadow_renderer       .get();
+        m_editor_context.context_window         = m_context_window        .get();
+        m_editor_context.brdf_slice             = m_brdf_slice            .get();
+        m_editor_context.brush_tool             = m_brush_tool            .get();
+        m_editor_context.clipboard              = m_clipboard             .get();
+        m_editor_context.clipboard_window       = m_clipboard_window      .get();
+        m_editor_context.create                 = m_create                .get();
+        m_editor_context.editor_message_bus     = m_editor_message_bus    .get();
+        m_editor_context.editor_rendering       = m_editor_rendering      .get();
+        m_editor_context.editor_scenes          = m_editor_scenes         .get();
+        m_editor_context.editor_settings        = m_editor_settings       .get();
+        m_editor_context.editor_windows         = m_editor_windows        .get();
+        m_editor_context.fly_camera_tool        = m_fly_camera_tool       .get();
+        m_editor_context.grid_tool              = m_grid_tool             .get();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        m_editor_context.hand_tracker           = &m_hand_tracker          ;
+        m_editor_context.hand_tracker           = m_hand_tracker          .get();
 #endif
-        m_editor_context.headset_view           = &m_headset_view          ;
-        m_editor_context.hotbar                 = &m_hotbar                ;
-        m_editor_context.hud                    = &m_hud                   ;
-        m_editor_context.icon_set               = &m_icon_set              ;
-        m_editor_context.id_renderer            = &m_id_renderer           ;
-        m_editor_context.input_state            = &m_input_state           ;
-        m_editor_context.material_paint_tool    = &m_material_paint_tool   ;
-        m_editor_context.material_preview       = &m_material_preview      ;
-        m_editor_context.mesh_memory            = &m_mesh_memory           ;
-        m_editor_context.move_tool              = &m_move_tool             ;
-        m_editor_context.operation_stack        = &m_operation_stack       ;
-        m_editor_context.paint_tool             = &m_paint_tool            ;
-        m_editor_context.physics_tool           = &m_physics_tool          ;
-        m_editor_context.post_processing        = &m_post_processing       ;
-        m_editor_context.programs               = &m_programs              ;
-        m_editor_context.rotate_tool            = &m_rotate_tool           ;
-        m_editor_context.scale_tool             = &m_scale_tool            ;
-        m_editor_context.scene_builder          = &m_scene_builder         ;
-        m_editor_context.scene_commands         = &m_scene_commands        ;
-        m_editor_context.selection              = &m_selection             ;
-        m_editor_context.selection_tool         = &m_selection_tool        ;
-        m_editor_context.settings_window        = &m_settings_window       ;
-        m_editor_context.time                   = &m_time                  ;
-        m_editor_context.tools                  = &m_tools                 ;
-        m_editor_context.transform_tool         = &m_transform_tool        ;
-        m_editor_context.viewport_config_window = &m_viewport_config_window;
-        m_editor_context.scene_views            = &m_viewport_scene_views  ;
+        m_editor_context.headset_view           = m_headset_view          .get();
+        m_editor_context.hotbar                 = m_hotbar                .get();
+        m_editor_context.hud                    = m_hud                   .get();
+        m_editor_context.icon_set               = m_icon_set              .get();
+        m_editor_context.id_renderer            = m_id_renderer           .get();
+        m_editor_context.input_state            = m_input_state           .get();
+        m_editor_context.material_paint_tool    = m_material_paint_tool   .get();
+        m_editor_context.material_preview       = m_material_preview      .get();
+        m_editor_context.mesh_memory            = m_mesh_memory           .get();
+        m_editor_context.move_tool              = m_move_tool             .get();
+        m_editor_context.operation_stack        = m_operation_stack       .get();
+        m_editor_context.paint_tool             = m_paint_tool            .get();
+        m_editor_context.physics_tool           = m_physics_tool          .get();
+        m_editor_context.post_processing        = m_post_processing       .get();
+        m_editor_context.programs               = m_programs              .get();
+        m_editor_context.rotate_tool            = m_rotate_tool           .get();
+        m_editor_context.scale_tool             = m_scale_tool            .get();
+        m_editor_context.scene_builder          = m_scene_builder         .get();
+        m_editor_context.scene_commands         = m_scene_commands        .get();
+        m_editor_context.selection              = m_selection             .get();
+        m_editor_context.selection_tool         = m_selection_tool        .get();
+        m_editor_context.settings_window        = m_settings_window       .get();
+        m_editor_context.time                   = m_time                  .get();
+        m_editor_context.tools                  = m_tools                 .get();
+        m_editor_context.transform_tool         = m_transform_tool        .get();
+        m_editor_context.viewport_config_window = m_viewport_config_window.get();
+        m_editor_context.scene_views            = m_viewport_scene_views  .get();
     }
 
     auto on_key_event(const erhe::window::Input_event& input_event) -> bool override
     {
-        m_input_state.shift   = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_shift);
-        m_input_state.control = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_ctrl);
-        m_input_state.alt     = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_menu);
+        m_input_state->shift   = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_shift);
+        m_input_state->control = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_ctrl);
+        m_input_state->alt     = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_menu);
         return false;
     }
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
@@ -564,10 +911,10 @@ public:
         //  - Count number of swapbuffers
         //  - Wait to avoid presenting frames faster than display refreshrate
         while (!m_close_requested) {
-            m_context_window.poll_events(wait_time);
+            m_context_window->poll_events(wait_time);
             {
                 ERHE_PROFILE_SCOPE("dispatch events");
-                auto& input_events = m_context_window.get_input_events();
+                auto& input_events = m_context_window->get_input_events();
                 for (erhe::window::Input_event& input_event : input_events) {
                     dispatch_input_event(input_event);
                 }
@@ -579,99 +926,104 @@ public:
         m_run_stopped = true;
     }
 
-#pragma region Members
     bool m_close_requested{false};
+    bool m_run_started    {false};
+    bool m_run_stopped    {false};
+
+
+    std::unique_ptr<tf::Executor>       m_executor;
+
+    Editor_context                      m_editor_context;
+
+    std::shared_ptr<Scene_root>         m_default_scene;
+    std::shared_ptr<Item_tree_window>   m_default_scene_browser;
 
     // No dependencies (constructors)
-    erhe::commands::Commands                m_commands;
-    erhe::scene::Scene_message_bus          m_scene_message_bus;
-    Editor_message_bus                      m_editor_message_bus;
-    Input_state                             m_input_state;
-    Time                                    m_time;
-    Editor_context                          m_editor_context;
-    bool                                    m_run_started{false};
-    bool                                    m_run_stopped{false};
+    std::unique_ptr<erhe::commands::Commands      > m_commands;
+    std::unique_ptr<erhe::scene::Scene_message_bus> m_scene_message_bus;
+    std::unique_ptr<Editor_message_bus            > m_editor_message_bus;
+    std::unique_ptr<Input_state                   > m_input_state;
+    std::unique_ptr<Time                          > m_time;
 
-    Clipboard                               m_clipboard;
-    erhe::window::Context_window            m_context_window;
-    Editor_settings                         m_editor_settings;
-    erhe::graphics::Instance                m_graphics_instance;
-    erhe::imgui::Imgui_renderer             m_imgui_renderer;
-    erhe::renderer::Line_renderer_set       m_line_renderer_set;
-    erhe::scene_renderer::Program_interface m_program_interface;
-    erhe::rendergraph::Rendergraph          m_rendergraph;
-    erhe::renderer::Text_renderer           m_text_renderer;
+    std::unique_ptr<Clipboard                              > m_clipboard;
+    std::unique_ptr<erhe::window::Context_window           > m_context_window;
+    std::unique_ptr<Editor_settings                        > m_editor_settings;
+    std::unique_ptr<erhe::graphics::Instance               > m_graphics_instance;
+    std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;
+    std::unique_ptr<erhe::renderer::Line_renderer          > m_line_renderer;
+    std::unique_ptr<erhe::scene_renderer::Program_interface> m_program_interface;
+    std::unique_ptr<erhe::rendergraph::Rendergraph         > m_rendergraph;
+    std::unique_ptr<erhe::renderer::Text_renderer          > m_text_renderer;
 
-    Programs                                m_programs;
-    erhe::scene_renderer::Forward_renderer  m_forward_renderer;
-    erhe::scene_renderer::Shadow_renderer   m_shadow_renderer;
-    Mesh_memory                             m_mesh_memory;
+    std::unique_ptr<Programs                              >  m_programs;
+    std::unique_ptr<erhe::scene_renderer::Forward_renderer>  m_forward_renderer;
+    std::unique_ptr<erhe::scene_renderer::Shadow_renderer >  m_shadow_renderer;
+    std::unique_ptr<Mesh_memory                           >  m_mesh_memory;
 
-    erhe::imgui::Imgui_windows              m_imgui_windows;
-    Editor_scenes                           m_editor_scenes;
-    Editor_windows                          m_editor_windows;
+    std::unique_ptr<erhe::imgui::Imgui_windows>              m_imgui_windows;
+    std::unique_ptr<Editor_scenes             >              m_editor_scenes;
+    std::unique_ptr<Editor_windows            >              m_editor_windows;
 
-    Asset_browser                           m_asset_browser;
-    Icon_set                                m_icon_set;
-    Post_processing                         m_post_processing;
-    Id_renderer                             m_id_renderer;
-    Composer_window                         m_composer_window;
-    Selection_window                        m_selection_window;
-    Settings_window                         m_settings_window;
-    Scene_views                             m_viewport_scene_views;
-    Editor_rendering                        m_editor_rendering;
-    Selection                               m_selection;
-    Operation_stack                         m_operation_stack;
-    Scene_commands                          m_scene_commands;
-    Clipboard_window                        m_clipboard_window;
-    Commands_window                         m_commands_window;
-    Layers_window                           m_layers_window;
-    Network_window                          m_network_window;
-    Operations                              m_operations;
-    Physics_window                          m_physics_window;
-    Post_processing_window                  m_post_processing_window;
-    Properties                              m_properties;
-    Rendergraph_window                      m_rendergraph_window;
-    Tool_properties_window                  m_tool_properties_window;
-    Viewport_config_window                  m_viewport_config_window;
-    erhe::imgui::Logs                       m_logs;
-    erhe::imgui::Log_settings_window        m_log_settings_window;
-    erhe::imgui::Tail_log_window            m_tail_log_window;
-    erhe::imgui::Frame_log_window           m_frame_log_window;
-    erhe::imgui::Performance_window         m_performance_window;
-    erhe::imgui::Pipelines                  m_pipelines;
+    std::unique_ptr<Asset_browser                   >        m_asset_browser;
+    std::unique_ptr<Icon_set                        >        m_icon_set;
+    std::unique_ptr<Post_processing                 >        m_post_processing;
+    std::unique_ptr<Id_renderer                     >        m_id_renderer;
+    std::unique_ptr<Composer_window                 >        m_composer_window;
+    std::unique_ptr<Selection_window                >        m_selection_window;
+    std::unique_ptr<Settings_window                 >        m_settings_window;
+    std::unique_ptr<Scene_views                     >        m_viewport_scene_views;
+    std::unique_ptr<Editor_rendering                >        m_editor_rendering;
+    std::unique_ptr<Selection                       >        m_selection;
+    std::unique_ptr<Operation_stack                 >        m_operation_stack;
+    std::unique_ptr<Scene_commands                  >        m_scene_commands;
+    std::unique_ptr<Clipboard_window                >        m_clipboard_window;
+    std::unique_ptr<Commands_window                 >        m_commands_window;
+    std::unique_ptr<Layers_window                   >        m_layers_window;
+    std::unique_ptr<Network_window                  >        m_network_window;
+    std::unique_ptr<Operations                      >        m_operations;
+    std::unique_ptr<Physics_window                  >        m_physics_window;
+    std::unique_ptr<Post_processing_window          >        m_post_processing_window;
+    std::unique_ptr<Properties                      >        m_properties;
+    std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
+    std::unique_ptr<Tool_properties_window          >        m_tool_properties_window;
+    std::unique_ptr<Viewport_config_window          >        m_viewport_config_window;
+    std::unique_ptr<erhe::imgui::Logs               >        m_logs;
+    std::unique_ptr<erhe::imgui::Log_settings_window>        m_log_settings_window;
+    std::unique_ptr<erhe::imgui::Tail_log_window    >        m_tail_log_window;
+    std::unique_ptr<erhe::imgui::Frame_log_window   >        m_frame_log_window;
+    std::unique_ptr<erhe::imgui::Performance_window >        m_performance_window;
+    std::unique_ptr<erhe::imgui::Pipelines          >        m_pipelines;
 
-    Tools                                   m_tools;
-    Scene_builder                           m_scene_builder;
-    Fly_camera_tool                         m_fly_camera_tool;
-    Headset_view                            m_headset_view;
+    std::unique_ptr<Tools          >                         m_tools;
+    std::unique_ptr<Scene_builder  >                         m_scene_builder;
+    std::unique_ptr<Fly_camera_tool>                         m_fly_camera_tool;
+    std::unique_ptr<Headset_view   >                         m_headset_view;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    Hand_tracker                            m_hand_tracker;
+    std::unique_ptr<Hand_tracker>                            m_hand_tracker;
 #endif
-    Move_tool                               m_move_tool;
-    Rotate_tool                             m_rotate_tool;
-    Scale_tool                              m_scale_tool;
-    Transform_tool                          m_transform_tool;
-    Hud                                     m_hud;
-    Hotbar                                  m_hotbar;
-    Hover_tool                              m_hover_tool;
-    Brdf_slice                              m_brdf_slice;
-    Debug_draw                              m_debug_draw;
-    Debug_view_window                       m_debug_view_window;
-    Debug_visualizations                    m_debug_visualizations;
-    Material_preview                        m_material_preview;
+    std::unique_ptr<Move_tool           >                    m_move_tool;
+    std::unique_ptr<Rotate_tool         >                    m_rotate_tool;
+    std::unique_ptr<Scale_tool          >                    m_scale_tool;
+    std::unique_ptr<Transform_tool      >                    m_transform_tool;
+    std::unique_ptr<Hud                 >                    m_hud;
+    std::unique_ptr<Hotbar              >                    m_hotbar;
+    std::unique_ptr<Hover_tool          >                    m_hover_tool;
+    std::unique_ptr<Brdf_slice          >                    m_brdf_slice;
+    std::unique_ptr<Debug_draw          >                    m_debug_draw;
+    std::unique_ptr<Debug_view_window   >                    m_debug_view_window;
+    std::unique_ptr<Debug_visualizations>                    m_debug_visualizations;
+    std::unique_ptr<Material_preview    >                    m_material_preview;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     ////Theremin                                m_theremin;
 #endif
 
-    Brush_tool                              m_brush_tool;
-    Create                                  m_create;
-    Grid_tool                               m_grid_tool;
-    Material_paint_tool                     m_material_paint_tool;
-    Paint_tool                              m_paint_tool;
-    Physics_tool                            m_physics_tool;
-    Selection_tool                          m_selection_tool;
-#pragma endregion Members
+    std::unique_ptr<Brush_tool         >                     m_brush_tool;
+    std::unique_ptr<Create             >                     m_create;
+    std::unique_ptr<Grid_tool          >                     m_grid_tool;
+    std::unique_ptr<Material_paint_tool>                     m_material_paint_tool;
+    std::unique_ptr<Paint_tool         >                     m_paint_tool;
+    std::unique_ptr<Physics_tool       >                     m_physics_tool;
+    std::unique_ptr<Selection_tool     >                     m_selection_tool;
 };
 
 void run_editor()
@@ -726,6 +1078,13 @@ void run_editor()
 
     {
         ERHE_PROFILE_SCOPE("Construct and run Editor");
+
+        //// for (std::size_t i = 0; i < 20; ++i) {
+        ////     log_startup->info("Stress test iteration {}", i);
+        ////     Editor editor{};
+        ////     editor.tick();
+        //// }
+
         Editor editor{};
         editor.run();
     }

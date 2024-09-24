@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_profile/profile.hpp"
+
 #include <cstdint>
 #include <mutex>
 #include <optional>
@@ -26,8 +28,8 @@ public:
     static auto all_timers() -> std::vector<Timer*>;
 
 private:
-    static std::mutex          s_mutex;
-    static std::vector<Timer*> s_all_timers;
+    static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
+    static std::vector<Timer*>                        s_all_timers;
 
     std::optional<std::chrono::steady_clock::time_point> m_start_time;
     std::optional<std::chrono::steady_clock::time_point> m_end_time;

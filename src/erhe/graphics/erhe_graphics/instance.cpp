@@ -4,6 +4,7 @@
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/command_info.hpp"
+#include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
@@ -141,6 +142,8 @@ Instance::Instance(erhe::window::Context_window& context_window)
 
     log_startup->trace("GL Extensions:");
     {
+        ERHE_PROFILE_SCOPE("Extensions");
+
         int num_extensions{0};
 
         gl::get_integer_v(gl::Get_p_name::num_extensions, &num_extensions);
@@ -149,13 +152,14 @@ Instance::Instance(erhe::window::Context_window& context_window)
             for (unsigned int i = 0; i < static_cast<unsigned int>(num_extensions); ++i) {
                 const auto* extension_str = gl::get_string_i(gl::String_name::extensions, i);
                 auto e = std::string(reinterpret_cast<const char*>(extension_str));
-                log_startup->trace("    {}", e);
+                //log_startup->trace("    {}", e);
                 extensions.push_back(e);
             }
         }
     }
 
     {
+        ERHE_PROFILE_SCOPE("GLSL");
         auto shading_language_version = (get_string)(gl::String_name::shading_language_version);
         log_startup->info("GLSL Version:  {}", shading_language_version);
         versions = split(shading_language_version, '.');
@@ -168,63 +172,73 @@ Instance::Instance(erhe::window::Context_window& context_window)
     log_startup->info("glVersion:   {}", info.gl_version);
     log_startup->info("glslVersion: {}", info.glsl_version);
 
-    gl::command_info_init(info.glsl_version, extensions);
+    {
+        ERHE_PROFILE_SCOPE("Query GL");
 
-    gl::get_float_v  (gl::Get_p_name::max_texture_max_anisotropy, &limits.max_texture_max_anisotropy);
-    gl::get_integer_v(gl::Get_p_name::max_samples,                &limits.max_samples);
-    gl::get_integer_v(gl::Get_p_name::max_color_texture_samples,  &limits.max_color_texture_samples);
-    gl::get_integer_v(gl::Get_p_name::max_depth_texture_samples,  &limits.max_depth_texture_samples);
-    gl::get_integer_v(gl::Get_p_name::max_framebuffer_samples,    &limits.max_framebuffer_samples);
-    gl::get_integer_v(gl::Get_p_name::max_integer_samples,        &limits.max_integer_samples);
+        {
+            ERHE_PROFILE_SCOPE("gl::command_info_init");
+            gl::command_info_init(info.glsl_version, extensions);
+        }
 
-    log_startup->info(
-        "max samples = {}, max color texture samples = {}, max depth texture samples = {}, "
-        "max framebuffer samples = {}, max integer samples = {}",
-        limits.max_samples,
-        limits.max_color_texture_samples,
-        limits.max_depth_texture_samples,
-        limits.max_framebuffer_samples,
-        limits.max_integer_samples
-    );
+        gl::get_float_v  (gl::Get_p_name::max_texture_max_anisotropy, &limits.max_texture_max_anisotropy);
+        gl::get_integer_v(gl::Get_p_name::max_samples,                &limits.max_samples);
+        gl::get_integer_v(gl::Get_p_name::max_color_texture_samples,  &limits.max_color_texture_samples);
+        gl::get_integer_v(gl::Get_p_name::max_depth_texture_samples,  &limits.max_depth_texture_samples);
+        gl::get_integer_v(gl::Get_p_name::max_framebuffer_samples,    &limits.max_framebuffer_samples);
+        gl::get_integer_v(gl::Get_p_name::max_integer_samples,        &limits.max_integer_samples);
 
-    gl::get_integer_v(gl::Get_p_name::max_3d_texture_size,              &limits.max_3d_texture_size);
-    gl::get_integer_v(gl::Get_p_name::max_cube_map_texture_size,        &limits.max_cube_map_texture_size);
-    gl::get_integer_v(gl::Get_p_name::max_texture_image_units,          &limits.max_texture_image_units);
-    gl::get_integer_v(gl::Get_p_name::max_combined_texture_image_units, &limits.max_combined_texture_image_units);
+        log_startup->info(
+            "max samples = {}, max color texture samples = {}, max depth texture samples = {}, "
+            "max framebuffer samples = {}, max integer samples = {}",
+            limits.max_samples,
+            limits.max_color_texture_samples,
+            limits.max_depth_texture_samples,
+            limits.max_framebuffer_samples,
+            limits.max_integer_samples
+        );
 
-    // GL 3.0 introduced context flags
-    int context_flags = 0;
-    gl::get_integer_v(gl::Get_p_name::context_flags, &context_flags);
-    if ((static_cast<unsigned int>(context_flags) & static_cast<unsigned int>(GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)) != 0) {
-        info.forward_compatible = true;
-        log_startup->info("forward compatible");
+        gl::get_integer_v(gl::Get_p_name::max_3d_texture_size,              &limits.max_3d_texture_size);
+        gl::get_integer_v(gl::Get_p_name::max_cube_map_texture_size,        &limits.max_cube_map_texture_size);
+        gl::get_integer_v(gl::Get_p_name::max_texture_image_units,          &limits.max_texture_image_units);
+        gl::get_integer_v(gl::Get_p_name::max_combined_texture_image_units, &limits.max_combined_texture_image_units);
+
+        // GL 3.0 introduced context flags
+        int context_flags = 0;
+        gl::get_integer_v(gl::Get_p_name::context_flags, &context_flags);
+        if ((static_cast<unsigned int>(context_flags) & static_cast<unsigned int>(GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)) != 0) {
+            info.forward_compatible = true;
+            log_startup->info("forward compatible");
+        }
+
+        // GL 3.3 introduced context profile mask
+        int context_profile_mask = 0;
+        gl::get_integer_v(gl::Get_p_name::context_profile_mask, &context_profile_mask);
+        if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_CORE_PROFILE_BIT)) != 0) {
+            info.core_profile = true;
+            log_startup->info("core profile");
+        }
+        if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_COMPATIBILITY_PROFILE_BIT)) != 0) {
+            info.compatibility_profile = true;
+            log_startup->info("compatibility profile");
+        }
+
+        gl::get_integer_v(gl::Get_p_name::max_texture_buffer_size, &limits.max_texture_buffer_size);
     }
 
-    // GL 3.3 introduced context profile mask
-    int context_profile_mask = 0;
-    gl::get_integer_v(gl::Get_p_name::context_profile_mask, &context_profile_mask);
-    if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_CORE_PROFILE_BIT)) != 0) {
-        info.core_profile = true;
-        log_startup->info("core profile");
+    {
+        ERHE_PROFILE_SCOPE("Debug Callback");
+        gl::debug_message_callback(erhe_opengl_callback, nullptr);
+        gl::debug_message_control(
+            gl::Debug_source  ::dont_care,
+            gl::Debug_type    ::dont_care,
+            gl::Debug_severity::dont_care,
+            0,
+            nullptr,
+            GL_TRUE
+        );
+        gl::enable(gl::Enable_cap::debug_output);
+        gl::enable(gl::Enable_cap::debug_output_synchronous);
     }
-    if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_COMPATIBILITY_PROFILE_BIT)) != 0) {
-        info.compatibility_profile = true;
-        log_startup->info("compatibility profile");
-    }
-
-    gl::get_integer_v(gl::Get_p_name::max_texture_buffer_size, &limits.max_texture_buffer_size);
-
-    gl::debug_message_callback(erhe_opengl_callback, nullptr);
-    gl::debug_message_control(
-        gl::Debug_source  ::dont_care,
-        gl::Debug_type    ::dont_care,
-        gl::Debug_severity::dont_care,
-        0,
-        nullptr,
-        GL_TRUE
-    );
-    gl::enable(gl::Enable_cap::debug_output);
-    gl::enable(gl::Enable_cap::debug_output_synchronous);
 
     for (GLuint i = 0; i < 3; ++i) {
         gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_count, i, &limits.max_compute_workgroup_count[i]);
@@ -315,6 +329,8 @@ Instance::Instance(erhe::window::Context_window& context_window)
     log_startup->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
 
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
+        ERHE_PROFILE_SCOPE("Sparse texture");
+
         info.use_sparse_texture = true;
         GLint max_sparse_texture_size{};
         gl::get_integer_v(gl::Get_p_name::max_sparse_texture_size_arb, &max_sparse_texture_size);
@@ -420,6 +436,8 @@ Instance::Instance(erhe::window::Context_window& context_window)
         ini.get("initial_clear",               initial_clear);
     }
     if (initial_clear) {
+        ERHE_PROFILE_SCOPE("Initial clear");
+
         gl::clear_color(0.2f, 0.2f, 0.2f, 0.2f);
         for (int i = 0; i < 3; ++i) {
             gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
@@ -446,7 +464,10 @@ Instance::Instance(erhe::window::Context_window& context_window)
         }
     }
 
-    shader_monitor.begin();
+    {
+        ERHE_PROFILE_SCOPE("Start shader monitor");
+        shader_monitor.begin();
+    }
 }
 
 auto Instance::depth_clear_value_pointer() const -> const float*
@@ -596,6 +617,47 @@ auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> size_t
         }
     }
     return m_texture_units.size();
+}
+
+auto Instance::align_buffer_offset(gl::Buffer_target target, std::size_t offset) -> std::size_t
+{
+    switch (target) {
+        //using enum gl::Buffer_target;
+        case gl::Buffer_target::array_buffer: 
+        case gl::Buffer_target::element_array_buffer:
+        {
+            while (offset % 64u) { // TODO Good alignment?
+                offset++;
+            }
+            return offset;
+        }
+
+        case gl::Buffer_target::shader_storage_buffer: {
+            while (offset % implementation_defined.shader_storage_buffer_offset_alignment) {
+                offset++;
+            }
+            return offset;
+        }
+
+        case gl::Buffer_target::uniform_buffer: {
+            while (offset % implementation_defined.uniform_buffer_offset_alignment) {
+                offset++;
+            }
+            return offset;
+        }
+
+        case gl::Buffer_target::draw_indirect_buffer: {
+            while (offset % sizeof(gl::Draw_elements_indirect_command)) {
+                offset++;
+            }
+            return offset;
+        }
+        default: {
+            // TODO
+            break;
+        }
+    }
+    return offset;
 }
 
 } // namespace erhe::graphics

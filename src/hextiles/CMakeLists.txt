@@ -89,7 +89,6 @@ target_link_libraries(
     PRIVATE
     etl::etl
     erhe::commands
-    erhe::concurrency
     erhe::file
     erhe::geometry
     erhe::gl

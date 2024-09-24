@@ -63,10 +63,11 @@ class Editor_message_bus;
 class Editor_settings
 {
 public:
-    explicit Editor_settings(Editor_message_bus& editor_message_bus);
+    explicit Editor_settings();
 
-    void read ();
-    void write();
+    void apply_limits(Editor_message_bus& editor_message_bus);
+    void read        ();
+    void write       ();
 
     [[nodiscard]] auto get_ui_scale() const -> float;
 
@@ -76,7 +77,7 @@ public:
 
     Physics_settings            physics;
     Graphics_settings           graphics;
-    Icon_settings               icons;
+    Icon_settings               icon_settings;
     erhe::imgui::Imgui_settings imgui;
 };
 

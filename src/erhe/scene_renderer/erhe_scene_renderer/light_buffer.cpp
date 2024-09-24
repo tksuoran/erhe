@@ -154,12 +154,11 @@ auto Light_buffer::update(
         m_light_buffer.writer().write_offset
     );
 
-    auto&          buffer            = m_light_buffer.current_buffer();
-    auto&          writer            = m_light_buffer.writer();
+    auto&          writer            = m_light_buffer.get_writer();
     const auto     light_struct_size = m_light_interface.light_struct.size_bytes();
     const auto&    offsets           = m_light_interface.offsets;
     const size_t   max_byte_count    = offsets.light_struct + (lights.size() + 1) * light_struct_size;
-    const auto     light_gpu_data    = writer.begin(&buffer, max_byte_count);
+    const auto     light_gpu_data    = writer.begin(m_light_interface.light_block.get_binding_target(), max_byte_count);
     uint32_t       directional_light_count{0u};
     uint32_t       spot_light_count       {0u};
     uint32_t       point_light_count      {0u};
@@ -245,10 +244,9 @@ auto Light_buffer::update_control(const std::size_t light_index) -> erhe::render
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto&      buffer     = m_control_buffer.current_buffer();
-    auto&      writer     = m_control_buffer.writer();
+    auto&      writer     = m_control_buffer.get_writer();
     const auto entry_size = m_light_interface.light_control_block.size_bytes();
-    const auto gpu_data   = writer.begin(&buffer, entry_size);
+    const auto gpu_data   = writer.begin(m_light_interface.light_control_block.get_binding_target(), entry_size);
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;

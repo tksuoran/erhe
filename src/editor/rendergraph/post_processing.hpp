@@ -140,15 +140,15 @@ private:
     std::filesystem::path                              m_shader_path;
 
     struct Shader_stages {
-        erhe::graphics::Reloadable_shader_stages   downsample_with_lowpass;
-        erhe::graphics::Reloadable_shader_stages   downsample;
-        erhe::graphics::Reloadable_shader_stages   upsample;
+        erhe::graphics::Reloadable_shader_stages downsample_with_lowpass;
+        erhe::graphics::Reloadable_shader_stages downsample;
+        erhe::graphics::Reloadable_shader_stages upsample;
     }                                                  m_shader_stages;
 
     struct Pipelines {
-        erhe::graphics::Pipeline                   downsample_with_lowpass;
-        erhe::graphics::Pipeline                   downsample;
-        erhe::graphics::Pipeline                   upsample;
+        erhe::graphics::Pipeline downsample_with_lowpass;
+        erhe::graphics::Pipeline downsample;
+        erhe::graphics::Pipeline upsample;
     }                                                  m_pipelines;
 
     erhe::graphics::Gpu_timer                          m_gpu_timer;

@@ -1,5 +1,6 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
+#include "erhe_item/item_host.hpp"
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
@@ -82,6 +83,8 @@ void Item_insert_remove_operation::execute(Editor_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
 
+    erhe::Item_host_lock_guard scene_lock{m_item.get()};
+
     if (m_mode == Mode::remove) {
         m_before_parent = m_item->get_parent().lock();
         m_index_in_parent = m_item->get_index_in_parent();
@@ -115,6 +118,8 @@ void Item_insert_remove_operation::execute(Editor_context& context)
 void Item_insert_remove_operation::undo(Editor_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
+
+    erhe::Item_host_lock_guard scene_lock{m_item.get()};
 
     if (m_mode == Mode::remove) {
         m_after_parent = m_item->get_parent().lock();

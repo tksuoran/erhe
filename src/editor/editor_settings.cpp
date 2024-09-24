@@ -10,10 +10,13 @@
 
 namespace editor {
 
-Editor_settings::Editor_settings(Editor_message_bus& editor_message_bus)
+Editor_settings::Editor_settings()
 {
-    ERHE_PROFILE_FUNCTION();
+   read();
+}
 
+void Editor_settings::apply_limits(Editor_message_bus& editor_message_bus)
+{
     graphics.get_limits();
     read();
     graphics.select_active_graphics_preset(editor_message_bus);
@@ -159,9 +162,9 @@ void Editor_settings::read()
     imgui_section.get("vr_font_size", imgui.vr_font_size);
 
     const auto& icons_section = settings_ini.get_section("icons");
-    icons_section.get("small_icon_size",  icons.small_icon_size);
-    icons_section.get("large_icon_size",  icons.large_icon_size);
-    icons_section.get("hotbar_icon_size", icons.hotbar_icon_size);
+    icons_section.get("small_icon_size",  icon_settings.small_icon_size);
+    icons_section.get("large_icon_size",  icon_settings.large_icon_size);
+    icons_section.get("hotbar_icon_size", icon_settings.hotbar_icon_size);
 }
 
 void Editor_settings::write()
@@ -178,9 +181,9 @@ void Editor_settings::write()
     ini["imgui"]["font_size"   ] = fmt::format("{}", imgui.font_size);
     ini["imgui"]["vr_font_size"] = fmt::format("{}", imgui.vr_font_size);
 
-    ini["icons"]["small_icon_size" ] = fmt::format("{}", icons.small_icon_size);
-    ini["icons"]["large_icon_size" ] = fmt::format("{}", icons.large_icon_size);
-    ini["icons"]["hotbar_icon_size"] = fmt::format("{}", icons.hotbar_icon_size);
+    ini["icons"]["small_icon_size" ] = fmt::format("{}", icon_settings.small_icon_size);
+    ini["icons"]["large_icon_size" ] = fmt::format("{}", icon_settings.large_icon_size);
+    ini["icons"]["hotbar_icon_size"] = fmt::format("{}", icon_settings.hotbar_icon_size);
     file.generate(ini);
 }
 

@@ -40,6 +40,16 @@ void Mesh_operation::execute(Editor_context&)
 {
     log_operations->trace("Op Execute {}", describe());
 
+    ERHE_VERIFY(!m_entries.empty());
+    Entry& first_entry = m_entries.front();
+    erhe::scene::Mesh* first_mesh = first_entry.mesh.get();
+    ERHE_VERIFY(first_mesh != nullptr);
+    erhe::scene::Node* first_node = first_mesh->get_node();
+    ERHE_VERIFY(first_node != nullptr);
+    erhe::Item_host* item_host = first_node->get_item_host();
+    ERHE_VERIFY(item_host != nullptr);
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+
     for (const auto& entry : m_entries) {
         auto* node = entry.mesh->get_node();
 
@@ -67,6 +77,16 @@ void Mesh_operation::execute(Editor_context&)
 void Mesh_operation::undo(Editor_context&)
 {
     log_operations->trace("Op Undo {}", describe());
+
+    ERHE_VERIFY(!m_entries.empty());
+    Entry& first_entry = m_entries.front();
+    erhe::scene::Mesh* first_mesh = first_entry.mesh.get();
+    ERHE_VERIFY(first_mesh != nullptr);
+    erhe::scene::Node* first_node = first_mesh->get_node();
+    ERHE_VERIFY(first_node != nullptr);
+    erhe::Item_host* item_host = first_node->get_item_host();
+    ERHE_VERIFY(item_host != nullptr);
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
     for (const auto& entry : m_entries) {
         auto* node = entry.mesh->get_node();
@@ -109,6 +129,10 @@ void Mesh_operation::make_entries(
     if (!first_mesh && !first_node) {
         return;
     }
+
+    erhe::Item_host* item_host = first_node->get_item_host();
+    ERHE_VERIFY(item_host != nullptr);
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
     auto* const first_node_raw = first_node ? first_node.get() : first_mesh->get_node();
     if (first_node_raw == nullptr) {

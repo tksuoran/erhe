@@ -67,7 +67,9 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     m_last_mouse_y = -FLT_MAX;
 }
 
-Rendertarget_imgui_host::~Rendertarget_imgui_host() noexcept = default;
+Rendertarget_imgui_host::~Rendertarget_imgui_host() noexcept
+{
+}
 
 template <typename T>
 [[nodiscard]] inline auto as_span(const T& value) -> std::span<const T>

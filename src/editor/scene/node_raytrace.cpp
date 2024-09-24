@@ -1,20 +1,20 @@
 #include "scene/node_raytrace.hpp"
 
+#include "scene/node_raytrace_mask.hpp"
 #include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
-#include "erhe_renderer/line_renderer.hpp"
-#include "erhe_scene/mesh.hpp"
-#include "erhe_scene/mesh_raytrace.hpp"
-#include "scene/node_raytrace_mask.hpp"
+#include "erhe_defer/defer.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/ray.hpp"
+#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_defer/defer.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace editor {
@@ -92,10 +92,10 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
 }
 
 void draw_ray_hit(
-    erhe::renderer::Line_renderer& line_renderer,
-    const erhe::raytrace::Ray&     ray,
-    const erhe::raytrace::Hit&     hit,
-    const Ray_hit_style&           style
+    erhe::renderer::Scoped_line_renderer& line_renderer,
+    const erhe::raytrace::Ray&            ray,
+    const erhe::raytrace::Hit&            hit,
+    const Ray_hit_style&                  style
 )
 {
     erhe::scene::Node* node = get_hit_node(hit);

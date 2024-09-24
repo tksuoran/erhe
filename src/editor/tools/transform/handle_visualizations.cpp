@@ -67,6 +67,9 @@ Handle_visualizations::Handle_visualizations(Editor_context& editor_context, Mes
 
     m_tool_node = std::make_shared<erhe::scene::Node>("Trs");
     const auto scene_root = tools.get_tool_scene_root();
+
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+
     m_tool_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
 
     m_pos_x_material        = make_material(tools, "X+",        glm::vec3{1.00f, 0.00f, 0.0f}, Mode::Normal);

@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
@@ -324,6 +326,8 @@ template <typename T>
 
 [[nodiscard]] auto format_source(const std::string& source) -> std::string
 {
+    ERHE_PROFILE_FUNCTION();
+
     int         line{1};
     const char* head = source.c_str();
 
@@ -372,14 +376,13 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
     const char* const c_source = source.c_str();
     std::array<const char* , 1> sources{ c_source };
 
-    log_glsl->trace(
-        "Shader_stage source:\nPath: {}\n{}\n",
-        shader.path.string(),
-        format_source(m_create_info.final_source(m_graphics_instance, shader))
-    );
+    SPDLOG_LOGGER_TRACE(log_glsl, "Shader_stage source:\nPath: {}\n{}\n", shader.path.string(), format_source(source));
 
-    gl::shader_source(gl_name, static_cast<GLsizei>(sources.size()), sources.data(), nullptr);
-    gl::compile_shader(gl_name);
+    {
+        ERHE_PROFILE_SCOPE("glCompileShader");
+        gl::shader_source(gl_name, static_cast<GLsizei>(sources.size()), sources.data(), nullptr);
+        gl::compile_shader(gl_name);
+    }
 
     m_state = state_shader_compilation_started;
 
@@ -400,6 +403,7 @@ auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader
     gl::get_shader_iv(gl_name, gl::Shader_parameter_name::delete_status,  &delete_status);
 
     if (compile_status != GL_TRUE) {
+        ERHE_PROFILE_SCOPE("get info log");
         int length{0};
         gl::get_shader_iv(gl_name, gl::Shader_parameter_name::info_log_length, &length);
         std::string log(static_cast<std::string::size_type>(length) + 1, '\0');
@@ -486,10 +490,14 @@ auto Shader_stages_prototype::link_program() -> bool
             m_state = state_fail;
             return false;
         }
+        ERHE_PROFILE_SCOPE("glAttachShader");
         gl::attach_shader(gl_name, m_prelink_shaders[i].gl_name());
     }
 
-    gl::link_program(gl_name);
+    {
+        ERHE_PROFILE_SCOPE("glLinkProgram");
+        gl::link_program(gl_name);
+    }
     m_prelink_shaders.clear();
     m_state = state_program_link_started;
     return true;
@@ -546,6 +554,7 @@ void Shader_stages_prototype::post_link()
     //gl::get_program_iv(gl_name, gl::Program_property::compute_work_group_size,               &compute_work_group_size[0]);
 
     if (link_status != GL_TRUE) {
+        ERHE_PROFILE_SCOPE("get link log");
         m_state = state_fail;
         std::string log(static_cast<std::size_t>(info_log_length) + 1, 0);
         gl::get_program_info_log(gl_name, info_log_length, nullptr, &log[0]);

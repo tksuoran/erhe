@@ -92,6 +92,8 @@ void import_gltf(
     };
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
+
     erhe::scene::Scene* scene = scene_root.get_hosted_scene();
     auto& layers              = scene_root.layers();
     layers.light()->ambient_light = glm::vec4{0.17f, 0.17f, 0.17f, 0.0f};

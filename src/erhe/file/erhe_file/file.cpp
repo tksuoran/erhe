@@ -113,6 +113,27 @@ auto read(const std::string_view description, const std::filesystem::path& path)
     return std::optional<std::string>(result);
 }
 
+auto write_file(const char* const path, const std::string& text) -> bool
+{
+    if (path == nullptr) {
+        log_file->error("write_file(): path = nullptr");
+        return false;
+    }
+
+    FILE* const file = std::fopen(path, "wb");
+    if (file == nullptr) {
+        log_file->error("Failed to open '{}' for writing", path);
+        return false;
+    }
+    const size_t res = std::fwrite(text.data(), 1, text.size(), file);
+    std::fclose(file);
+    if (res != text.size()) {
+        log_file->error("Failed to write '{}'", path);
+        return false;
+    }
+    return true;
+}
+
 #if defined(ERHE_OS_WINDOWS)
 auto select_file() -> std::optional<std::filesystem::path>
 {

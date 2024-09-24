@@ -10,6 +10,10 @@ erhe_target_sources_grouped(
     erhe_renderer/draw_indirect_buffer.hpp
     erhe_renderer/line_renderer.cpp
     erhe_renderer/line_renderer.hpp
+    erhe_renderer/line_renderer_bucket.cpp
+    erhe_renderer/line_renderer_bucket.hpp
+    erhe_renderer/scoped_line_renderer.cpp
+    erhe_renderer/scoped_line_renderer.hpp
     erhe_renderer/multi_buffer.cpp
     erhe_renderer/multi_buffer.hpp
     erhe_renderer/pipeline_renderpass.cpp
@@ -28,7 +32,7 @@ target_link_libraries(
         erhe::scene
         erhe::ui
     PRIVATE
-        erhe::concurrency
+        erhe::bit
         erhe::gl
         erhe::log
         erhe::profile

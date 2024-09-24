@@ -48,10 +48,11 @@ auto Draw_indirect_buffer::update(
         primitive_count += mesh->get_primitives().size();
     }
 
-    auto&             buffer         = current_buffer();
+    auto&             writer         = get_writer();
+    auto&             buffer         = get_current_buffer();
     const std::size_t entry_size     = sizeof(gl::Draw_elements_indirect_command);
     const std::size_t max_byte_count = primitive_count * entry_size;
-    const auto        gpu_data       = m_writer.begin(&buffer, max_byte_count);
+    const auto        gpu_data       = writer.begin(gl::Buffer_target::draw_indirect_buffer, max_byte_count);
     uint32_t          instance_count     {1};
     uint32_t          base_instance      {0};
     std::size_t       draw_indirect_count{0};
@@ -67,7 +68,7 @@ auto Draw_indirect_buffer::update(
             continue;
         }
 
-        if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
+        if ((writer.write_offset + entry_size) > writer.write_end) {
             log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
             ERHE_FATAL("draw indirect buffer capacity exceeded");
             break;
@@ -80,7 +81,7 @@ auto Draw_indirect_buffer::update(
                 continue;
             }
 
-            if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
+            if ((writer.write_offset + entry_size) > writer.write_end) {
                 log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
                 ERHE_FATAL("draw indirect buffer capacity exceeded");
                 break;
@@ -103,22 +104,18 @@ auto Draw_indirect_buffer::update(
                 base_instance
             };
 
-            erhe::graphics::write(
-                gpu_data,
-                m_writer.write_offset,
-                erhe::graphics::as_span(draw_command)
-            );
+            erhe::graphics::write(gpu_data, writer.write_offset, erhe::graphics::as_span(draw_command));
 
-            m_writer.write_offset += entry_size;
-            ERHE_VERIFY(m_writer.write_offset <= m_writer.write_end);
+            writer.write_offset += entry_size;
+            ERHE_VERIFY(writer.write_offset <= writer.write_end);
             ++draw_indirect_count;
         }
     }
 
-    m_writer.end();
+    writer.end();
 
     SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to draw indirect buffer", draw_indirect_count);
-    return { m_writer.range, draw_indirect_count };
+    return { writer.range, draw_indirect_count };
 }
 
 }

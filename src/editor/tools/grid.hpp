@@ -60,6 +60,8 @@ public:
     void set_minor_width (float width) { m_minor_width = width; }
 
 private:
+    void render(const Render_context& context, bool major);
+
     Grid_plane_type m_plane_type      {Grid_plane_type::XZ};
     bool            m_intersect_enable{true};
     bool            m_snap_enabled    {true};

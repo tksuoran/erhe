@@ -76,11 +76,11 @@ auto Joint_buffer::update(
         joint_count += skin_data.joints.size();
     }
 
-    auto&             buffer             = current_buffer();
+    auto&             writer             = get_writer();
     const auto        entry_size         = m_joint_interface.joint_struct.size_bytes();
     const auto&       offsets            = m_joint_interface.offsets;
     const std::size_t max_byte_count     = offsets.joint_struct + joint_count * entry_size;
-    const auto        primitive_gpu_data = m_writer.begin(&buffer, max_byte_count);
+    const auto        primitive_gpu_data = writer.begin(m_joint_interface.joint_block.get_binding_target(), max_byte_count);
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;
@@ -90,11 +90,11 @@ auto Joint_buffer::update(
     const uint32_t extra2 = 0;
     const uint32_t extra3 = 0;
 
-    write(primitive_gpu_data, m_writer.write_offset + offsets.debug_joint_indices,     as_span(debug_joint_indices    ));
-    write(primitive_gpu_data, m_writer.write_offset + offsets.debug_joint_color_count, as_span(debug_joint_color_count));
-    write(primitive_gpu_data, m_writer.write_offset + offsets.extra1,                  as_span(extra1));
-    write(primitive_gpu_data, m_writer.write_offset + offsets.extra2,                  as_span(extra2));
-    write(primitive_gpu_data, m_writer.write_offset + offsets.extra3,                  as_span(extra3));
+    write(primitive_gpu_data, writer.write_offset + offsets.debug_joint_indices,     as_span(debug_joint_indices    ));
+    write(primitive_gpu_data, writer.write_offset + offsets.debug_joint_color_count, as_span(debug_joint_color_count));
+    write(primitive_gpu_data, writer.write_offset + offsets.extra1,                  as_span(extra1));
+    write(primitive_gpu_data, writer.write_offset + offsets.extra2,                  as_span(extra2));
+    write(primitive_gpu_data, writer.write_offset + offsets.extra3,                  as_span(extra3));
 
     if (!debug_joint_colors.empty()) {
         uint32_t color_index = 0;
@@ -106,20 +106,21 @@ auto Joint_buffer::update(
             auto& color = debug_joint_colors[i];
             write(
                 primitive_gpu_data,
-                m_writer.write_offset + offsets.debug_joint_colors + (color_index * 4 * sizeof(float)),
+                writer.write_offset + offsets.debug_joint_colors + (color_index * 4 * sizeof(float)),
                 as_span(color)
             );
             ++color_index;
         }
     }
 
-    m_writer.write_offset += offsets.joint_struct;
+    writer.write_offset += offsets.joint_struct;
 
     uint32_t joint_index = 0;
+    auto& buffer = get_current_buffer();
     for (auto& skin : skins) {
         ERHE_VERIFY(skin);
 
-        if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
+        if ((writer.write_offset + entry_size) > writer.write_end) {
             log_render->critical("joint buffer capacity {} exceeded", buffer.capacity_byte_count());
             ERHE_FATAL("joint buffer capacity exceeded");
             break;
@@ -130,7 +131,7 @@ auto Joint_buffer::update(
         for (std::size_t i = 0, end_i = skin->skin_data.joints.size(); i < end_i; ++i) {
             const std::shared_ptr<erhe::scene::Node>& joint = skin->skin_data.joints[i];
             const glm::mat4 joint_from_bind = skin->skin_data.inverse_bind_matrices[i];
-            if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
+            if ((writer.write_offset + entry_size) > writer.write_end) {
                 log_render->critical("joint buffer capacity {} exceeded", buffer.capacity_byte_count());
                 ERHE_FATAL("joint buffer capacity exceeded");
                 break;
@@ -142,19 +143,19 @@ auto Joint_buffer::update(
             // TODO Use compute shader
             const glm::mat4 world_from_bind_cofactor = erhe::math::compute_cofactor(world_from_bind);
 
-            write(primitive_gpu_data, m_writer.write_offset + offsets.joint.world_from_bind,          as_span(world_from_bind         ));
-            write(primitive_gpu_data, m_writer.write_offset + offsets.joint.world_from_bind_cofactor, as_span(world_from_bind_cofactor));
-            m_writer.write_offset += entry_size;
+            write(primitive_gpu_data, writer.write_offset + offsets.joint.world_from_bind,          as_span(world_from_bind         ));
+            write(primitive_gpu_data, writer.write_offset + offsets.joint.world_from_bind_cofactor, as_span(world_from_bind_cofactor));
+            writer.write_offset += entry_size;
             ++joint_index;
-            ERHE_VERIFY(m_writer.write_offset <= m_writer.write_end);
+            ERHE_VERIFY(writer.write_offset <= writer.write_end);
         }
     }
 
-    m_writer.end();
+    writer.end();
 
     SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to joint buffer", joint_index);
 
-    return m_writer.range;
+    return writer.range;
 }
 
 } //namespace erhe::scene_renderer

@@ -8,6 +8,7 @@
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/windows/graph.hpp"
 #include "erhe_imgui/windows/graph_plotter.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_window/window_event_handler.hpp" // keycode
 
 #include <random>
@@ -233,7 +234,7 @@ private:
     std::optional<glm::vec3>          m_track_plane_point;
     std::optional<glm::vec3>          m_track_plane_normal;
 
-    std::mutex                        m_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex,    m_mutex);
     bool                              m_use_viewport_camera{true};
     erhe::scene::Camera*              m_camera{nullptr};
     erhe::scene::Node*                m_node{nullptr};

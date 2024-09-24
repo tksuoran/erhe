@@ -260,7 +260,7 @@ public:
         }
 
         geometry.make_point_corners();
-        geometry.build_edges();
+        //geometry.build_edges();
         geometry.promise_has_polygon_normals();
         geometry.promise_has_polygon_centroids();
         geometry.promise_has_normals();

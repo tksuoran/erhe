@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_profile/profile.hpp"
+
 #include <chrono>
 #include <cstdint>
 #include <mutex>
@@ -68,7 +70,7 @@ private:
     uint64_t                              m_frame_number{0};
     Time_context                          m_last_update;
 
-    std::mutex                          m_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex,      m_mutex);
     std::vector<Update_fixed_step*>     m_update_fixed_step;
     std::vector<Update_once_per_frame*> m_update_once_per_frame;
 };

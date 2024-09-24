@@ -1,6 +1,7 @@
 #pragma once
 
 #include "concurrentqueue.h"
+#include "erhe_profile/profile.hpp"
 
 #include <condition_variable>
 #include <functional>
@@ -28,10 +29,7 @@ public:
 class Gl_context_provider
 {
 public:
-    Gl_context_provider(
-        Instance&             graphics_instance,
-        OpenGL_state_tracker& opengl_state_tracker
-    );
+    Gl_context_provider(Instance& graphics_instance, OpenGL_state_tracker& opengl_state_tracker);
 
     Gl_context_provider (const Gl_context_provider&) = delete;
     void operator=      (const Gl_context_provider&) = delete;
@@ -43,6 +41,7 @@ public:
     void release_gl_context     (Gl_worker_context context);
     void provide_worker_contexts(
         erhe::window::Context_window* main_window,
+        unsigned int                  num_threads,
         std::function<bool()>         worker_contexts_still_needed_callback
     );
 
@@ -52,8 +51,8 @@ private:
 
     erhe::window::Context_window*                              m_main_window{nullptr};
     std::thread::id                                            m_main_thread_id;
-    std::mutex                                                 m_mutex;
-    std::condition_variable                                    m_condition_variable;
+    ERHE_PROFILE_MUTEX(std::mutex,                             m_mutex);
+    std::condition_variable_any                                m_condition_variable;
     moodycamel::ConcurrentQueue<Gl_worker_context>             m_worker_context_pool;
     std::vector<std::shared_ptr<erhe::window::Context_window>> m_contexts;
 };

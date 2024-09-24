@@ -5,6 +5,7 @@
 #include "scene/scene_view.hpp"
 #include "erhe_commands/command.hpp"
 #include "erhe_geometry/types.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <memory>
 #include <mutex>
@@ -103,7 +104,7 @@ private:
     Brush_tool_pick_command                 m_pick_command;
     erhe::commands::Float_threshold_command m_pick_using_float_input_command;
 
-    std::mutex                         m_brush_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex,     m_brush_mutex);
     std::shared_ptr<Brush>             m_drag_and_drop_brush   {};
     float                              m_preview_hover_distance{0.001f};
     bool                               m_snap_to_hover_polygon {true};

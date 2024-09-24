@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_raytrace/ibuffer.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <mutex>
 #include <vector>
@@ -25,13 +26,13 @@ public:
     auto debug_label        () const -> std::string_view override;
 
 private:
-    std::mutex             m_allocate_mutex;
-    std::size_t            m_capacity_byte_count{0};
-    std::size_t            m_next_free_byte     {0};
+    ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
+    std::size_t                    m_capacity_byte_count{0};
+    std::size_t                    m_next_free_byte     {0};
 
-    std::vector<std::byte> m_buffer;
-    std::span<std::byte>   m_span;
-    std::string            m_debug_label;
+    std::vector<std::byte>         m_buffer;
+    std::span<std::byte>           m_span;
+    std::string                    m_debug_label;
 };
 
 } // namespace erhe::raytrace

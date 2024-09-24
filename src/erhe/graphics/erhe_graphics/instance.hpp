@@ -50,6 +50,8 @@ public:
     auto texture_unit_cache_allocate(uint64_t handle) -> std::optional<std::size_t>;
     auto texture_unit_cache_bind    (uint64_t fallback_handle) -> std::size_t;
 
+    auto align_buffer_offset(gl::Buffer_target target, std::size_t offset) -> std::size_t;
+
     class Info
     {
     public:
@@ -120,7 +122,6 @@ public:
         bool reverse_depth  {true};  // TODO move to editor
         bool post_processing{true};  // TODO move to editor
         bool use_time_query {true};
-        //int  msaa_sample_count          {4};     // TODO move to editor
     };
 
     // Public API

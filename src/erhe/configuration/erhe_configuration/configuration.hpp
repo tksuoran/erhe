@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_profile/profile.hpp"
+
 #include <glm/glm.hpp>
 
 #include "mini/ini.h"

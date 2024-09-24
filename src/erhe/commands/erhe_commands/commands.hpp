@@ -10,7 +10,7 @@
 #include "erhe_commands/xr_boolean_binding.hpp"
 #include "erhe_commands/xr_float_binding.hpp"
 #include "erhe_commands/xr_vector2f_binding.hpp"
-
+#include "erhe_profile/profile.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
 #include <glm/glm.hpp>
@@ -143,7 +143,7 @@ private:
     void inactivate_ready_commands  ();
     void update_active_mouse_command(Command* command);
 
-    std::mutex m_command_mutex;
+    ERHE_PROFILE_MUTEX(std::mutex, m_command_mutex);
     Command*   m_active_mouse_command     {nullptr}; // does not tell if command(s) is/are ready
     uint32_t   m_last_mouse_button_bits   {0u};
     glm::vec2  m_last_mouse_position      {0.0f, 0.0f};

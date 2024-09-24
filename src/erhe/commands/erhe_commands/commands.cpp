@@ -20,7 +20,7 @@ namespace erhe::commands {
 
 void Commands::register_command(Command* const command)
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
 
     m_commands.push_back(command);
 }
@@ -82,7 +82,7 @@ auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
 
 void Commands::bind_command_to_menu(Command* command, std::string_view menu_path, std::function<bool()> enabled_callback)
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_menu_bindings.emplace_back(command, menu_path, enabled_callback);
 }
 
@@ -93,7 +93,7 @@ void Commands::bind_command_to_key(
     const std::optional<uint32_t> modifier_mask
 )
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_key_bindings.emplace_back(command, code, pressed, modifier_mask);
 }
 
@@ -104,7 +104,7 @@ void Commands::bind_command_to_mouse_button(
     const std::optional<uint32_t>    modifier_mask
 )
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_mouse_bindings.push_back(
         std::make_unique<Mouse_button_binding>(command, button, trigger_on_pressed, modifier_mask)
     );
@@ -112,7 +112,7 @@ void Commands::bind_command_to_mouse_button(
 
 void Commands::bind_command_to_mouse_wheel(Command* const command, const std::optional<uint32_t> modifier_mask)
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_mouse_wheel_bindings.push_back(
         std::make_unique<Mouse_wheel_binding>(command, modifier_mask)
     );
@@ -120,7 +120,7 @@ void Commands::bind_command_to_mouse_wheel(Command* const command, const std::op
 
 void Commands::bind_command_to_mouse_motion(Command* const command, const std::optional<uint32_t> modifier_mask)
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_mouse_bindings.push_back(
         std::make_unique<Mouse_motion_binding>(command, modifier_mask)
     );
@@ -133,7 +133,7 @@ void Commands::bind_command_to_mouse_drag(
     const std::optional<uint32_t>    modifier_mask
 )
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_mouse_bindings.push_back(
         std::make_unique<Mouse_drag_binding>(command, button, call_on_button_down_without_motion, modifier_mask)
     );
@@ -141,7 +141,7 @@ void Commands::bind_command_to_mouse_drag(
 
 void Commands::bind_command_to_controller_axis(Command* command, const int axis, std::optional<uint32_t> modifier_mask)
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_controller_axis_bindings.emplace_back(command, axis, modifier_mask);
 }
 
@@ -152,7 +152,7 @@ void Commands::bind_command_to_controller_button(
     const std::optional<uint32_t>    modifier_mask
 )
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_controller_button_bindings.emplace_back(command, button, button_trigger, modifier_mask);
 }
 
@@ -162,25 +162,25 @@ void Commands::bind_command_to_xr_boolean_action(
     const Button_trigger               button_trigger
 )
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_xr_boolean_bindings.emplace_back(command, xr_action, button_trigger);
 }
 
 void Commands::bind_command_to_xr_float_action(Command* const command, erhe::xr::Xr_action_float* const xr_action)
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_xr_float_bindings.emplace_back(command, xr_action);
 }
 
 void Commands::bind_command_to_xr_vector2f_action(Command* const command, erhe::xr::Xr_action_vector2f* const xr_action)
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_xr_vector2f_bindings.emplace_back(command, xr_action);
 }
 
 void Commands::bind_command_to_update(Command* const command)
 {
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
     m_update_bindings.emplace_back(command);
 }
 
@@ -277,7 +277,7 @@ void Commands::tick(std::chrono::steady_clock::time_point timestamp, std::vector
 {
     ERHE_PROFILE_FUNCTION();
 
-    std::lock_guard<std::mutex> lock{m_command_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
 
     //if (input_events.empty()) {
     //    SPDLOG_LOGGER_TRACE(log_input_frame, "Commands - no input events");

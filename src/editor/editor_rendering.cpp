@@ -28,6 +28,7 @@
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_renderer/line_renderer.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_renderer/text_renderer.hpp"
@@ -331,6 +332,7 @@ auto Editor_rendering::get_pipeline_renderpass(
 auto Editor_rendering::make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>
 {
     auto renderpass = std::make_shared<Renderpass>(name);
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
     m_composer.renderpasses.push_back(renderpass);
     return renderpass;
 }
@@ -342,7 +344,6 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_instance, Mesh_memory&mesh_memory, Programs& programs)
-    //const bool reverse_depth = graphics_instance.configuration.reverse_depth;
 
 #define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
 
@@ -665,11 +666,11 @@ void Editor_rendering::end_frame()
     m_context.headset_view->end_frame();
 #endif
 
-    m_context.line_renderer_set->next_frame();
-    m_context.text_renderer    ->next_frame();
-    m_context.forward_renderer ->next_frame();
-    m_context.shadow_renderer  ->next_frame();
-    m_context.id_renderer      ->next_frame();
+    m_context.line_renderer   ->next_frame();
+    m_context.text_renderer   ->next_frame();
+    m_context.forward_renderer->next_frame();
+    m_context.shadow_renderer ->next_frame();
+    m_context.id_renderer     ->next_frame();
 
     if (m_trigger_capture) {
         erhe::window::end_frame_capture(*m_context.context_window);
@@ -681,7 +682,7 @@ void Editor_rendering::add(Renderable* renderable)
 {
     ERHE_VERIFY(renderable != nullptr);
 
-    const std::lock_guard<std::mutex> lock{m_renderables_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_renderables_mutex};
 
 #if !defined(NDEBUG)
     const auto i = std::find_if(
@@ -702,7 +703,8 @@ void Editor_rendering::add(Renderable* renderable)
 
 void Editor_rendering::remove(Renderable* renderable)
 {
-    const std::lock_guard<std::mutex> lock{m_renderables_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_renderables_mutex};
+
     const auto i = std::find_if(
         m_renderables.begin(),
         m_renderables.end(),

@@ -5,6 +5,7 @@
 #include "graphics/icon_set.hpp"
 
 #include "erhe_item/hierarchy.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -91,6 +93,8 @@ public:
     std::shared_ptr<Content_library_node> skins;
     std::shared_ptr<Content_library_node> materials;
     std::shared_ptr<Content_library_node> textures;
+
+    ERHE_PROFILE_MUTEX(std::mutex, mutex);
 };
 
 template <typename T, typename ...Args>

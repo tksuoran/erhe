@@ -269,18 +269,14 @@ void Rendergraph_node::set_enabled(bool value)
     m_enabled = value;
 }
 
-auto Rendergraph_node::register_input(
-    const Routing resource_routing,
-    const std::string_view label,
-    const int              key
-) -> bool
+auto Rendergraph_node::register_input(const Routing resource_routing, const std::string_view label, const int key) -> bool
 {
     if (!inputs_allowed()) {
         log_tail->error("Node '{}' inputs are not allowed (label = {}, key = {})", get_name(), label, key);
         return false;
     }
 
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     auto i = std::find_if(
         m_inputs.begin(),
@@ -314,7 +310,7 @@ auto Rendergraph_node::register_output(
         return false;
     }
 
-    std::lock_guard<std::mutex> lock{m_mutex};
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     auto i = std::find_if(
         m_outputs.begin(),

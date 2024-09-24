@@ -71,7 +71,7 @@ void Shader_monitor::add(
 )
 {
     ERHE_VERIFY(shader_stages != nullptr);
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     auto i = m_files.find(path);
     if (i == m_files.end()) {
@@ -98,7 +98,7 @@ void Shader_monitor::poll_thread()
         {
             ERHE_PROFILE_SCOPE("Shader_monitor::poll_thread");
 
-            const std::lock_guard<std::mutex> lock{m_mutex};
+            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
             for (auto& i : m_files) {
                 auto& f = i.second;
@@ -134,7 +134,7 @@ void Shader_monitor::update_once_per_frame()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     for (auto* f : m_reload_list) {
         for (auto& entry : f->reload_entries) {

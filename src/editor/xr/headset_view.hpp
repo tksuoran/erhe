@@ -110,10 +110,10 @@ public:
         Editor_context&                 editor_context,
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings,
-        Mesh_memory&                    mesh_memory,
-        Scene_builder&                  scene_builder,
         Time&                           time
     );
+
+    void attach_to_scene(std::shared_ptr<Scene_root> scene_root, Mesh_memory& mesh_memory);
 
     // Public API
     [[nodiscard]] auto update_events() -> bool;
