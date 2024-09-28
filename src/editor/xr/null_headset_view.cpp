@@ -12,8 +12,6 @@ Headset_view::Headset_view(
         Editor_context&                 editor_context,
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings,
-        Mesh_memory&                    mesh_memory,
-        Scene_builder&                  scene_builder,
         Time&                           time
 )
     : Scene_view{editor_context, Viewport_config{}}
@@ -25,8 +23,6 @@ Headset_view::Headset_view(
     static_cast<void>(context_window);
     static_cast<void>(editor_rendering);
     static_cast<void>(editor_settings);
-    static_cast<void>(mesh_memory);
-    static_cast<void>(scene_builder);
     static_cast<void>(time);
 }
 

@@ -571,7 +571,9 @@ public:
                 .succeed(imgui_renderer_task, imgui_windows_task, rendergraph_task, editor_rendering_task);
 
             auto headset_attach_task = taskflow.emplace([this](){
+#if defined(ERHE_XR_LIBRARY_OPENXR)
                 m_headset_view->attach_to_scene(m_default_scene, *m_mesh_memory.get());
+#endif
             })  .name("Headset (attach)")
                 .succeed(default_scene_task, headset_task, mesh_memory_task, scene_builder_task);
 

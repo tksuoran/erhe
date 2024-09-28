@@ -73,8 +73,6 @@ public:
         Editor_context&                 editor_context,
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings,
-        Mesh_memory&                    mesh_memory,
-        Scene_builder&                  scene_builder,
         Time&                           time
     );
 
