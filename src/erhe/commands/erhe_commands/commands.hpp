@@ -46,6 +46,8 @@ class Update_binding;
 class Commands : public erhe::window::Input_event_handler
 {
 public:
+    ~Commands();
+
     // Public API
     void register_command(Command* command);
     void sort_bindings   ();

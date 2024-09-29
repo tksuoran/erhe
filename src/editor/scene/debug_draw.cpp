@@ -36,6 +36,10 @@ Debug_draw::Debug_draw(Editor_context& editor_context)
         IDebug_draw::c_Draw_frames;
 }
 
+Debug_draw::~Debug_draw()
+{
+}
+
 auto Debug_draw::get_colors() const -> Colors
 {
     return m_colors;

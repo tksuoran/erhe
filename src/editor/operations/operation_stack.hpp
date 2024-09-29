@@ -76,11 +76,10 @@ private:
     void imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations);
 
     Editor_context& m_context;
+    tf::Executor&   m_executor;
 
     Undo_command m_undo_command;
     Redo_command m_redo_command;
-
-    tf::Executor&                           m_executor;
 
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;

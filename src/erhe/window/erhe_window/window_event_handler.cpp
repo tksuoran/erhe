@@ -146,6 +146,10 @@ auto c_str(const Mouse_button button) -> const char*
     };
 }
 
+Input_event_handler::~Input_event_handler()
+{
+}
+
 auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_event) -> bool
 {
     ERHE_VERIFY(input_event.handled == false);

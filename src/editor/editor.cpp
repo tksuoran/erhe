@@ -399,19 +399,16 @@ public:
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(*m_graphics_instance.get(), *m_program_interface.get());
             })  .name("Forward_renderer");
-                //.succeed(program_interface_task);
 
             auto shadow_renderer_task = taskflow.emplace([this](){
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_shadow_renderer = std::make_unique<erhe::scene_renderer::Shadow_renderer >(*m_graphics_instance.get(), *m_program_interface.get());
             })  .name("Shadow_renderer");
-                //.succeed(program_interface_task);
 
             auto mesh_memory_task = taskflow.emplace([this](){
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_mesh_memory = std::make_unique<Mesh_memory>(*m_graphics_instance.get(), *m_program_interface.get());
             })  .name("Mesh_memory");
-                //.succeed(program_interface_task);
 
             auto imgui_windows_task = taskflow.emplace([this](){
                 m_imgui_windows = std::make_unique<erhe::imgui::Imgui_windows>(
@@ -677,10 +674,6 @@ public:
             })  .name("Material_preview")
                 .succeed(mesh_memory_task);
 
-    #if defined(ERHE_XR_LIBRARY_OPENXR)
-            ////, m_theremin              {m_imgui_renderer, m_imgui_windows,  m_hand_tracker,       m_editor_context}
-    #endif
-
             auto brush_tool_task = taskflow.emplace([this](){
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_brush_tool = std::make_unique<Brush_tool>(
@@ -824,6 +817,11 @@ public:
         m_tools->set_priority_tool(m_physics_tool.get());
     }
 
+    ~Editor()
+    {
+        m_default_scene_browser.reset();
+        m_default_scene.reset();
+    }
     void fill_editor_context()
     {
         ERHE_PROFILE_FUNCTION();
@@ -1081,11 +1079,11 @@ void run_editor()
     {
         ERHE_PROFILE_SCOPE("Construct and run Editor");
 
-        //// for (std::size_t i = 0; i < 20; ++i) {
-        ////     log_startup->info("Stress test iteration {}", i);
-        ////     Editor editor{};
-        ////     editor.tick();
-        //// }
+        //for (std::size_t i = 0; i < 20; ++i) {
+        //    log_startup->info("Stress test iteration {}", i);
+        //    Editor editor{};
+        //    editor.tick();
+        //}
 
         Editor editor{};
         editor.run();

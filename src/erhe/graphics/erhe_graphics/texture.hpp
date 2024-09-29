@@ -37,7 +37,7 @@ public:
     int                      row_stride            {0};
     Buffer*                  buffer                {nullptr};
     GLuint                   wrap_texture_name     {0};
-    std::string              debug_label;
+    std::string              debug_label           {};
     std::shared_ptr<Texture> view_source           {};
     int                      view_min_level        {0};
     int                      view_min_layer        {0};

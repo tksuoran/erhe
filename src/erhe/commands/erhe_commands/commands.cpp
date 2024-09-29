@@ -18,6 +18,10 @@
 
 namespace erhe::commands {
 
+Commands::~Commands()
+{
+}
+
 void Commands::register_command(Command* const command)
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};

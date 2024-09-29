@@ -339,6 +339,7 @@ public:
         Xr_boolean_event        xr_boolean_event;
         Xr_float_event          xr_float_event;
         Xr_vector2f_event       xr_vector2f_event;
+        bool                    dummy;
     } u;
 
     [[nodiscard]] auto describe() const -> std::string;
@@ -347,6 +348,8 @@ public:
 class Input_event_handler
 {
 public:
+    virtual ~Input_event_handler();
+    
     virtual auto dispatch_input_event      (Input_event& input_event) -> bool;
     virtual auto on_key_event              (const Input_event&) -> bool { return false; }
     virtual auto on_char_event             (const Input_event&) -> bool { return false; }

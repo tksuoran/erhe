@@ -10,6 +10,7 @@ class Debug_draw : public erhe::physics::IDebug_draw
 {
 public:
     explicit Debug_draw(Editor_context& editor_context);
+    virtual ~Debug_draw(); // TODO override - make virtual ~IDebug_draw()
 
     // Implemnents IDebug_draw
     auto get_colors          () const -> Colors                                                override;

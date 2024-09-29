@@ -9,8 +9,20 @@ add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>")
 add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
 add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 
-add_compile_options(-fsanitize=undefined)
-add_link_options(-fsanitize=undefined)
+# TODO For now, to enable sanitizers, uncomment lines here
+
+#add_compile_options(-fsanitize=undefined)
+#add_link_options(-fsanitize=undefined)
+
+#add_compile_options(-fsanitize=address)
+#add_link_options(-fsanitize=address)
+
+# No implicit-conversion because Tracy uses moodycamel
+#add_compile_options(-fsanitize=undefined,float-divide-by-zero,local-bounds -fno-sanitize-recover=all)
+#add_link_options(-fsanitize=undefined,float-divide-by-zero,local-bounds -fno-sanitize-recover=all)
+
+#add_compile_options(-fsanitize=thread)
+#add_link_options(-fsanitize=thread)
 
 if (WIN32)
     set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")

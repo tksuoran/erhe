@@ -118,23 +118,6 @@
 
         {
             "hidden": true,
-            "name": "Configure GCC 10",
-            "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc-10",
-                "CMAKE_CXX_COMPILER": "g++-10"
-            }
-        },
-        {
-            "name": "Configure GCC 10 Debug",
-            "inherits": [ "Configure Debug", "Configure GCC 10" ]
-        },
-        {
-            "name": "Configure GCC 10 Release",
-            "inherits": [ "Configure Release", "Configure GCC 10" ]
-        },
-
-        {
-            "hidden": true,
             "name": "Configure GCC 14",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc-14",
@@ -202,43 +185,23 @@
 
 
         {
-            "name": "Configure Clang 15",
+            "name": "Configure Clang 18",
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "clang-15",
-                "CMAKE_CXX_COMPILER": "clang++-15",
+                "CMAKE_C_COMPILER": "clang-18",
+                "CMAKE_CXX_COMPILER": "clang++-18",
                 "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
                 "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld"
             }
         },
         {
-            "name": "Configure Clang 15 Debug",
-            "inherits": [ "Configure Debug", "Configure Clang 15" ]
+            "name": "Configure Clang 18 Debug",
+            "inherits": [ "Configure Debug", "Configure Clang 18" ]
         },
         {
-            "name": "Configure Clang 15 Release",
-            "inherits": [ "Configure Release", "Configure Clang 15" ]
-        },
-
-        {
-            "name": "Configure Clang 16",
-            "hidden": true,
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "clang-16",
-                "CMAKE_CXX_COMPILER": "clang++-16",
-                "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
-                "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld"
-            }
-        },
-        {
-            "name": "Configure Clang 16 Debug",
-            "inherits": [ "Configure Debug", "Configure Clang 16" ]
-        },
-        {
-            "name": "Configure Clang 16 Release",
-            "inherits": [ "Configure Release", "Configure Clang 16" ]
+            "name": "Configure Clang 18 Release",
+            "inherits": [ "Configure Release", "Configure Clang 18" ]
         }
     ],
     "buildPresets": [
@@ -287,17 +250,6 @@
         },
 
         {
-            "name": "Build GCC 10 Debug",
-            "inherits": "Build Debug",
-            "configurePreset": "Configure GCC 10 Debug"
-        },
-        {
-            "name": "Build GCC 10 Release",
-            "inherits": "Build Release",
-            "configurePreset": "Configure GCC 10 Release"
-        },
-
-        {
             "name": "Build GCC 14 Debug",
             "inherits": "Build Debug",
             "configurePreset": "Configure GCC 14 Debug"
@@ -320,33 +272,23 @@
         },
 
         {
-            "name": "Build Clang 15 Debug",
-            "configurePreset": "Configure Clang 15 Debug",
+            "name": "Build Clang 18 Debug",
+            "configurePreset": "Configure Clang 18 Debug",
             "configuration": "Debug"
         },
         {
-            "name": "Build Clang 15 Release",
-            "configurePreset": "Configure Clang 15 Release",
+            "name": "Build Clang 18 Release",
+            "configurePreset": "Configure Clang 18 Release",
             "configuration": "Release"
         },
 
         {
-            "name": "Build Clang 16 Debug",
-            "configurePreset": "Configure Clang 16 Debug",
-            "configuration": "Debug"
-        },
-        {
-            "name": "Build Clang 16 Release",
-            "configurePreset": "Configure Clang 16 Release",
-            "configuration": "Release"
-        },
-        {
-            "name": "Build Clang 15 Windows Ninja Debug",
+            "name": "Build Clang Windows Ninja Debug",
             "configurePreset": "Configure Clang Windows Ninja",
             "configuration": "Debug"
         },
         {
-            "name": "Build Clang 15 Windows Ninja Release",
+            "name": "Build Clang Windows Ninja Release",
             "configurePreset": "Configure Clang Windows Ninja",
             "configuration": "Release"
         }

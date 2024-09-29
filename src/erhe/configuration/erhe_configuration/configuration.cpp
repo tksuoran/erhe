@@ -191,8 +191,8 @@ public:
     }
     Ini_file_impl(const Ini_file_impl&) = delete;
     Ini_file_impl& operator=(const Ini_file_impl&) = delete;
-    Ini_file_impl(Ini_file_impl&&) = default;
-    Ini_file_impl& operator=(Ini_file_impl&&) = default;
+    Ini_file_impl(Ini_file_impl&&) = delete;
+    Ini_file_impl& operator=(Ini_file_impl&&) = delete;
     ~Ini_file_impl() override {}
 
     auto get_name() const -> const std::string& { return m_name; }

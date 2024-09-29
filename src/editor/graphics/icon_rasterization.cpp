@@ -168,18 +168,18 @@ Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::gra
             }
         )
     }
-    , m_texture_handle{
-        graphics_instance.get_handle(
-            *m_texture.get(),
-            m_linear_sampler
-        )
-    }
     , m_linear_sampler{
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
             .debug_label = "Icon_rasterization linear"
         }
+    }
+    , m_texture_handle{
+        graphics_instance.get_handle(
+            *m_texture.get(),
+            m_linear_sampler
+        )
     }
     , m_icon_width    {size}
     , m_icon_height   {size}
