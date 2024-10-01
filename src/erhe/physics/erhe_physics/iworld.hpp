@@ -10,6 +10,8 @@
 
 namespace erhe::physics {
 
+void initialize_physics_system();
+
 class IConstraint;
 class IDebug_draw;
 class IRigid_body;

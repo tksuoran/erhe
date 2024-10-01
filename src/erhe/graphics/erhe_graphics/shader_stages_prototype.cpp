@@ -368,15 +368,16 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
     ERHE_VERIFY((m_state == state_init) || (m_state == state_shader_compilation_started));
     const auto gl_name = gl_shader.gl_name();
 
-    const std::string source{m_create_info.final_source(m_graphics_instance, shader)};
+    const std::string source{m_create_info.final_source(m_graphics_instance, shader, gl_name)};
     if (source.empty()) {
         m_state = state_fail;
         return gl_shader;
     }
+    m_final_sources[gl_name] = source;
     const char* const c_source = source.c_str();
     std::array<const char* , 1> sources{ c_source };
 
-    SPDLOG_LOGGER_TRACE(log_glsl, "Shader_stage source:\nPath: {}\n{}\n", shader.path.string(), format_source(source));
+    SPDLOG_LOGGER_TRACE(log_glsl, "Shader_stage compile {} {} source:\nPath: {}\n{}\n", gl::c_str(shader.type), gl_name, shader.path.string(), format_source(source));
 
     {
         ERHE_PROFILE_SCOPE("glCompileShader");
@@ -387,6 +388,17 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
     m_state = state_shader_compilation_started;
 
     return gl_shader;
+}
+
+auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) const -> std::string
+{
+    if (gl_name.has_value()) {
+        const auto i = m_final_sources.find(gl_name.value());
+        if (i != m_final_sources.end()) {
+            return i->second;
+        }
+    }
+    return m_create_info.final_source(m_graphics_instance, shader, gl_name);
 }
 
 auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool
@@ -408,7 +420,7 @@ auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader
         gl::get_shader_iv(gl_name, gl::Shader_parameter_name::info_log_length, &length);
         std::string log(static_cast<std::string::size_type>(length) + 1, '\0');
         gl::get_shader_info_log(gl_name, length, nullptr, &log[0]);
-        const std::string source{m_create_info.final_source(m_graphics_instance, shader)};
+        const std::string source = get_final_source(shader, gl_name);
         const std::string f_source = format_source(source);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
@@ -498,7 +510,6 @@ auto Shader_stages_prototype::link_program() -> bool
         ERHE_PROFILE_SCOPE("glLinkProgram");
         gl::link_program(gl_name);
     }
-    m_prelink_shaders.clear();
     m_state = state_program_link_started;
     return true;
 }
@@ -560,8 +571,11 @@ void Shader_stages_prototype::post_link()
         gl::get_program_info_log(gl_name, info_log_length, nullptr, &log[0]);
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
-        for (const auto& s : m_create_info.shaders) {
-            const std::string f_source = format_source(m_create_info.final_source(m_graphics_instance, s));
+        ERHE_VERIFY(m_prelink_shaders.size() == m_create_info.shaders.size());
+        for (size_t i = 0, end = m_prelink_shaders.size(); i < end; ++i) {
+            log_program->error("Shader_stages linking failed:");
+            const std::string source = get_final_source(m_create_info.shaders[i], m_prelink_shaders[i].gl_name());
+            const std::string f_source = format_source(source);
             log_glsl->error("\n{}", f_source);
         }
         log_program->error("Shader_stages linking failed:");
@@ -570,8 +584,10 @@ void Shader_stages_prototype::post_link()
     } else {
         m_state = state_ready;
         log_program->trace("Shader_stages linking succeeded:");
-        for (const auto& s : m_create_info.shaders) {
-            const std::string f_source = format_source(m_create_info.final_source(m_graphics_instance, s));
+        ERHE_VERIFY(m_prelink_shaders.size() == m_create_info.shaders.size());
+        for (size_t i = 0, end = m_prelink_shaders.size(); i < end; ++i) {
+            const std::string source = get_final_source(m_create_info.shaders[i], m_prelink_shaders[i].gl_name());
+            const std::string f_source = format_source(source);
             log_glsl->trace("\n{}", f_source);
         }
         if (m_create_info.dump_reflection) {
@@ -582,12 +598,15 @@ void Shader_stages_prototype::post_link()
             log_glsl->info("\n{}", f_source);
         }
         if (m_create_info.dump_final_source) {
-            for (const auto& s : m_create_info.shaders) {
-                const std::string f_source = format_source(m_create_info.final_source(m_graphics_instance, s));
+            ERHE_VERIFY(m_prelink_shaders.size() == m_create_info.shaders.size());
+            for (size_t i = 0, end = m_prelink_shaders.size(); i < end; ++i) {
+                const std::string source = get_final_source(m_create_info.shaders[i], m_prelink_shaders[i].gl_name());
+                const std::string f_source = format_source(source);
                 log_glsl->info("\n{}", f_source);
             }
         }
     }
+    m_prelink_shaders.clear();
 }
 
 auto Shader_stages_prototype::is_valid() -> bool
@@ -631,8 +650,7 @@ auto is_array_and_nonzero(const std::string& name)
     if (
         (close_bracket_pos == (open_bracket_pos + 2)) &&
         (
-            (digit == '0') ||
-            (digit == '1')
+            (digit == '0') || (digit == '1')
         )
     ) {
         return false;
@@ -686,12 +704,7 @@ void Shader_stages_prototype::dump_reflection() const
         }
 
         int interface_max_name_length{0};
-        gl::get_program_interface_iv(
-            gl_name,
-            interface,
-            gl::Program_interface_p_name::max_name_length,
-            &interface_max_name_length
-        );
+        gl::get_program_interface_iv(gl_name, interface, gl::Program_interface_p_name::max_name_length, &interface_max_name_length);
         max_name_length = std::max(max_name_length, interface_max_name_length);
     }
 
@@ -701,13 +714,7 @@ void Shader_stages_prototype::dump_reflection() const
 
     for (auto interface : program_interfaces) {
         int active_resource_count{0};
-        gl::get_program_interface_iv(
-            gl_name,
-            interface,
-            gl::Program_interface_p_name::active_resources,
-            &active_resource_count
-        );
-
+        gl::get_program_interface_iv(gl_name, interface, gl::Program_interface_p_name::active_resources, &active_resource_count);
         if (active_resource_count == 0) {
             continue;
 
@@ -718,14 +725,7 @@ void Shader_stages_prototype::dump_reflection() const
         for (int i = 0; i < active_resource_count; ++i) {
             if (interface != gl::Program_interface::atomic_counter_buffer) {
                 std::fill(begin(name_buffer), end(name_buffer), '\0');
-                gl::get_program_resource_name(
-                    gl_name,
-                    interface,
-                    i,
-                    max_name_length,
-                    &name_length,
-                    name_buffer.data()
-                );
+                gl::get_program_resource_name(gl_name, interface, i, max_name_length, &name_length, name_buffer.data());
                 name = std::string(name_buffer.data(), name_length);
                 if (is_array_and_nonzero(name)) {
                     continue;
@@ -743,35 +743,13 @@ void Shader_stages_prototype::dump_reflection() const
             ) {
                 GLsizei length{0};
                 GLint num_active_variables{0};
-                gl::get_program_resource_iv(
-                    gl_name,
-                    interface,
-                    i,
-                    1,
-                    &property_num_active_variables,
-                    1,
-                    &length,
-                    &num_active_variables
-                );
-                log_program->info(
-                    "\t\t{:<40} = {}",
-                    c_str(property_num_active_variables),
-                    num_active_variables
-                );
+                gl::get_program_resource_iv(gl_name, interface, i, 1, &property_num_active_variables, 1, &length, &num_active_variables);
+                log_program->info("\t\t{:<40} = {}", c_str(property_num_active_variables), num_active_variables);
                 if (num_active_variables > 0) {
                     std::vector<GLint> indices;
                     indices.resize(num_active_variables);
                     std::fill(begin(indices), end(indices), 0);
-                    gl::get_program_resource_iv(
-                        gl_name,
-                        interface,
-                        i,
-                        1,
-                        &property_active_variables,
-                        num_active_variables,
-                        &length,
-                        indices.data()
-                    );
+                    gl::get_program_resource_iv(gl_name, interface, i, 1, &property_active_variables, num_active_variables, &length, indices.data());
                     std::stringstream ss;
                     ss << fmt::format("\t\t{:<40} = [ ", c_str(property_active_variables));
                     bool first{true};
@@ -780,14 +758,7 @@ void Shader_stages_prototype::dump_reflection() const
                         const auto member_interface_ = member_interface(interface);
                         if (member_interface_.has_value()) {
                             std::fill(begin(name_buffer), end(name_buffer), '\0');
-                            gl::get_program_resource_name(
-                                gl_name,
-                                member_interface_.value(),
-                                indices[j],
-                                max_name_length,
-                                &name_length,
-                                name_buffer.data()
-                            );
+                            gl::get_program_resource_name( gl_name, member_interface_.value(), indices[j], max_name_length, &name_length, name_buffer.data());
                             name = std::string{name_buffer.data(), static_cast<size_t>(name_length)};
                             if (is_array_and_nonzero(name)) {
                                 skipped = true;
@@ -818,16 +789,7 @@ void Shader_stages_prototype::dump_reflection() const
                 }
                 GLsizei length{0};
                 int param{0};
-                gl::get_program_resource_iv(
-                    gl_name,
-                    interface,
-                    i,
-                    1,
-                    &property,
-                    1,
-                    &length,
-                    &param
-                );
+                gl::get_program_resource_iv(gl_name, interface, i, 1, &property, 1, &length, &param);
                 if (property != gl::Program_resource_property::type) {
                     log_program->info("\t\t{:<40} = {}", c_str(property), param);
                 } else {

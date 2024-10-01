@@ -39,7 +39,7 @@ class Shader_stages_create_info
 public:
     // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
     // and source (possibly read from file).
-    [[nodiscard]] auto final_source           (Instance& graphics_instance, const Shader_stage& shader) const -> std::string;
+    [[nodiscard]] auto final_source           (Instance& graphics_instance, const Shader_stage& shader, std::optional<unsigned int> gl_name = {}) const -> std::string;
     [[nodiscard]] auto attributes_source      () const -> std::string;
     [[nodiscard]] auto fragment_outputs_source() const -> std::string;
     [[nodiscard]] auto struct_types_source    () const -> std::string;
@@ -83,6 +83,8 @@ public:
     auto link_program           () -> bool;
     void dump_reflection        () const;
 
+    auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) const -> std::string;
+
 private:
     void post_link();
 
@@ -97,13 +99,14 @@ private:
     static constexpr int state_ready                      = 3;
     static constexpr int state_fail                       = 4;
 
-    Instance&                 m_graphics_instance;
-    Shader_stages_create_info m_create_info;
-    Gl_program                m_handle;
-    std::vector<Gl_shader>    m_prelink_shaders;
-    int                       m_state{state_init};
-    Shader_resource           m_default_uniform_block;
+    Instance&                                           m_graphics_instance;
+    Shader_stages_create_info                           m_create_info;
+    Gl_program                                          m_handle;
+    std::vector<Gl_shader>                              m_prelink_shaders;
+    int                                                 m_state{state_init};
+    Shader_resource                                     m_default_uniform_block;
     std::map<std::string, Shader_resource, std::less<>> m_resources;
+    std::map<unsigned int, std::string>                 m_final_sources;
 };
 
 class Shader_stages

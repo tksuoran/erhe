@@ -1,4 +1,5 @@
 #include "erhe_graphics/fragment_outputs.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
@@ -113,12 +114,20 @@ auto Shader_stages_create_info::interface_source() const -> std::string
     return sb.str();
 }
 
-auto Shader_stages_create_info::final_source(Instance& graphics_instance, const Shader_stage& shader) const -> std::string
+auto Shader_stages_create_info::final_source(Instance& graphics_instance, const Shader_stage& shader, std::optional<unsigned int> gl_name) const -> std::string
 {
     ERHE_PROFILE_FUNCTION();
 
     std::stringstream sb;
     sb << "#version " << graphics_instance.info.glsl_version << " core\n\n";
+
+    if (!shader.path.empty()) {
+        sb << "// Path: " << shader.path << "\n";
+    }
+    sb << "// Stage: " << gl::c_str(shader.type) << "\n";
+    if (gl_name.has_value()) {
+        sb << "// Shader name: " << gl_name.value() << "\n";
+    }
 
     if (!pragmas.empty()) {
         sb << "// Pragmas\n";

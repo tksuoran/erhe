@@ -1,4 +1,4 @@
-﻿in vec2 v_texcoord;
+in vec2 v_texcoord;
 
 float luminance(vec3 c) // BT.709
 {

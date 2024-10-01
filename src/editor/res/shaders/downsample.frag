@@ -1,4 +1,4 @@
-﻿in vec2 v_texcoord;
+in vec2 v_texcoord;
 
 void main()
 {

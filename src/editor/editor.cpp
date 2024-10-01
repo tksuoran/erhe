@@ -82,6 +82,7 @@
 #include "erhe_math/math_log.hpp"
 #include "erhe_net/net_log.hpp"
 #include "erhe_physics/physics_log.hpp"
+#include "erhe_physics/iworld.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_renderer/line_renderer.hpp"
@@ -1065,6 +1066,8 @@ void run_editor()
     }
 
     erhe::time::sleep_initialize();
+    erhe::physics::initialize_physics_system();
+
 
     {
         ERHE_PROFILE_SCOPE("init renderdoc");

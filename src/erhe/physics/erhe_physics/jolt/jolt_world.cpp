@@ -147,9 +147,7 @@ auto IWorld::create_unique() -> std::unique_ptr<IWorld>
     return std::make_unique<Jolt_world>();
 }
 
-//// void register_empty_shape();
-
-Jolt_world::Initialize_first::Initialize_first()
+void initialize_physics_system()
 {
     // Register allocation hook
     JPH::RegisterDefaultAllocator();
@@ -162,8 +160,6 @@ Jolt_world::Initialize_first::Initialize_first()
     JPH::Factory::sInstance = new JPH::Factory();
 
     JPH::RegisterTypes();
-
-    ////register_empty_shape();
 }
 
 Jolt_world::Jolt_world()

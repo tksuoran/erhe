@@ -105,13 +105,6 @@ public:
     [[nodiscard]] auto get_physics_system() -> JPH::PhysicsSystem&;
 
 private:
-    class Initialize_first
-    {
-    public:
-        Initialize_first();
-    };
-    Initialize_first m_initialize_first;
-
     static constexpr unsigned int cMaxBodies             = 1024 * 32;
     static constexpr unsigned int cNumBodyMutexes        = 0;
     static constexpr unsigned int cMaxBodyPairs          = 1024 * 8;
