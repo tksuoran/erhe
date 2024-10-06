@@ -28,7 +28,8 @@
 #       undef glQueryCounter
 #   endif
 #
-#   define ERHE_PROFILE_FUNCTION() ZoneScopedS(62)
+#   define ERHE_PROFILE_FUNCTION() ZoneScoped
+//#   define ERHE_PROFILE_FUNCTION() ZoneScopedS(62)
 #   define ERHE_PROFILE_SCOPE(erhe_profile_id) ZoneScopedN(erhe_profile_id)
 #   define ERHE_PROFILE_COLOR(erhe_profile_id, erhe_profile_color) ZoneScopedNC(erhe_profile_id, erhe_profile_color);
 #   define ERHE_PROFILE_DATA(erhe_profile_id, erhe_profile_data, erhe_profile_data_length) ZoneName(erhe_profile_data, erhe_profile_data_length)

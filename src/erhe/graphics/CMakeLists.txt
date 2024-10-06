@@ -19,6 +19,8 @@ erhe_target_sources_grouped(
     erhe_graphics/gl_context_provider.hpp
     erhe_graphics/gl_objects.cpp
     erhe_graphics/gl_objects.hpp
+    erhe_graphics/glsl_file_loader.cpp
+    erhe_graphics/glsl_file_loader.hpp
     erhe_graphics/gpu_timer.cpp
     erhe_graphics/gpu_timer.hpp
     erhe_graphics/graphics_log.cpp

@@ -90,6 +90,8 @@ erhe_target_sources_grouped(
     rendertarget_imgui_host.hpp
     rendertarget_mesh.cpp
     rendertarget_mesh.hpp
+
+    # Shaders
     res/shaders/anisotropic_engine_ready.frag
     res/shaders/anisotropic_engine_ready.vert
     res/shaders/anisotropic_slope.frag
@@ -102,12 +104,21 @@ erhe_target_sources_grouped(
     res/shaders/circular_brushed_metal.vert
     res/shaders/compose.frag
     res/shaders/compute_before_line.comp
-    res/shaders/depth.frag
-    res/shaders/depth.vert
+    res/shaders/depth_only.frag
+    res/shaders/depth_only.vert
+    res/shaders/downsample.frag
+    res/shaders/downsample_lowpass.frag
     res/shaders/downsample_x.frag
     res/shaders/downsample_y.frag
     res/shaders/edge_lines.frag
     res/shaders/edge_lines.vert
+    res/shaders/erhe_bxdf.glsl
+    res/shaders/erhe_ggx.glsl
+    res/shaders/erhe_light.glsl
+    res/shaders/erhe_math.glsl
+    res/shaders/erhe_srgb.glsl
+    res/shaders/erhe_texture.glsl
+    res/shaders/erhe_tonemap.glsl
     res/shaders/error.frag
     res/shaders/error.vert
     res/shaders/fat_triangle.frag
@@ -115,9 +126,6 @@ erhe_target_sources_grouped(
     res/shaders/fat_triangle.vert
     res/shaders/id.frag
     res/shaders/id.vert
-    res/shaders/line.frag
-    res/shaders/line.geom
-    res/shaders/line.vert
     res/shaders/line_after_compute.frag
     res/shaders/line_after_compute.vert
     res/shaders/points.frag
@@ -133,13 +141,17 @@ erhe_target_sources_grouped(
     res/shaders/text.vert
     res/shaders/textured.frag
     res/shaders/textured.vert
+    res/shaders/tile.frag
+    res/shaders/tile.vert
     res/shaders/tool.frag
     res/shaders/tool.vert
+    res/shaders/upsample.frag
     res/shaders/visualize_depth.frag
     res/shaders/visualize_depth.vert
     res/shaders/wide_lines.frag
     res/shaders/wide_lines.geom
     res/shaders/wide_lines.vert
+
     scene/asset_browser.cpp
     scene/asset_browser.hpp
     scene/brush_placement.cpp

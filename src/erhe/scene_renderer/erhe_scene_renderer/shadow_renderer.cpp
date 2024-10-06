@@ -40,7 +40,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
             graphics_instance,
             "res/shaders",
             erhe::graphics::Shader_stages_create_info{
-                .name           = "depth",
+                .name           = "depth_only",
                 .dump_interface = false,
                 .build          = true
             }

@@ -21,8 +21,7 @@ vec3 fresnel_schlick(float cos_theta, vec3 f0) {
 //-- Snippet code for specular antialiasing
 //-- Based on A. Kaplanyan & Y. Tokuyoshi work
 //-----------------------------------------------------------------------------
-void specular_anti_aliasing(in vec3 half_vector, inout float alpha_x, inout float alpha_y)
-{
+void specular_anti_aliasing(in vec3 half_vector, inout float alpha_x, inout float alpha_y) {
     float sigma                  = 0.50; //- screen space variance
     float Kappa                  = 0.18; //- clamping treshold
     vec2  H                      = half_vector.xy;
@@ -34,31 +33,41 @@ void specular_anti_aliasing(in vec3 half_vector, inout float alpha_x, inout floa
 }
 
 // isotropic BRDF
-vec3 brdf(vec3 base_color, float roughness, float metalness, vec3 L, vec3 V, vec3 N) {
-    vec3  H                 = normalize(L + V);
-    float N_dot_L           = clamped_dot(N, L);
-    float N_dot_V           = clamped_dot(N, V);
-    float N_dot_H           = clamped_dot(N, H);
-    float V_dot_H           = clamped_dot(V, H); // Note: H.L == L.H == H.V == V.H
-    float N_dot_H_squared   = N_dot_H * N_dot_H;
-    float N_dot_L_squared   = N_dot_L * N_dot_L;
-    float N_dot_V_squared   = N_dot_V * N_dot_V;
-    float alpha             = roughness * roughness;
-    float a2                = alpha * alpha;
-    float one_minus_a2      = 1.0 - a2;
-    float d_denom           = N_dot_H * N_dot_H * (a2 - 1.0) + 1.0;
-    float distribution      = a2 * heaviside(N_dot_H) / (m_pi * d_denom * d_denom);
-    float V_denominator_l   = N_dot_L + sqrt(a2 + one_minus_a2 * N_dot_L_squared);
-    float V_denominator_v   = N_dot_V + sqrt(a2 + one_minus_a2 * N_dot_V_squared);
-    float visibility        = heaviside(V_dot_H) / (V_denominator_l * V_denominator_v);
-    float specular_brdf     = N_dot_L * visibility * distribution;
-    vec3  diffuse_brdf      = N_dot_L * base_color * m_i_pi;
-    float fresnel           = pow(1.0 - abs(V_dot_H), 5.0);
-    vec3  conductor_fresnel = specular_brdf * (base_color + (1.0 - base_color) * fresnel);
-    float f0                = 0.04;
-    float fr                = f0 + (1.0 - f0) * fresnel;
-    vec3  fresnel_mix       = mix(diffuse_brdf, vec3(specular_brdf), fr);
-    return mix(fresnel_mix, conductor_fresnel, metalness);
+// Based on https://www.shadertoy.com/view/flsyWX by Arthur Cavalier
+vec3 brdf(
+    vec3  base_color,
+    float roughness,
+    float metalness,
+    float reflectance,
+    vec3  L,
+    vec3  V,
+    vec3  N
+) {
+    vec3  H       = normalize(L + V);
+    float N_dot_L = dot(N, L);
+    float N_dot_V = dot(N, V);
+    float N_dot_H = dot(N, H);
+    float V_dot_H = dot(V, H); // Note: H.L == L.H == H.V == V.H
+    float alpha   = roughness * roughness;
+
+    // Computing Normal Distribution Term
+    float D   = ggx_isotropic_ndf(N_dot_H, alpha);
+
+    // Computing Visibility Term
+    float Vis = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha); 
+
+    // Computing Fresnel Term
+    // Using reflectance mapping as in Filament PBR Pipeline
+    vec3  F0  = 0.16 * reflectance * reflectance * (1.0 - metalness) + base_color * metalness;
+    vec3  F   = fresnel_schlick(max(dot(V, H), 0.0), F0);
+
+    // Lighting
+    vec3 specular_microfacet = D * Vis * F;
+    vec3 diffuse_lambert     = m_i_pi * (1.0 - metalness) * base_color;
+    vec3 diffuse_factor      = vec3(1.0) - F; 
+            
+    // Final color
+    return max(N_dot_L, 0.0) * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
 
 // anisotropic BRDF
@@ -66,7 +75,7 @@ vec3 brdf(
     vec3  base_color,
     float roughness_x,
     float roughness_y,
-    float metallic,
+    float metalness,
     float reflectance,
     vec3  L,
     vec3  V,
@@ -85,26 +94,34 @@ vec3 brdf(
     float alpha_y = roughness_y * roughness_y;
     specular_anti_aliasing(wh, alpha_x, alpha_y);
 
-    vec3  F0      = 0.16 * reflectance * reflectance * (1.0 - metallic) + base_color * metallic;
     vec3  H       = normalize(L + V);
-    float N_dot_H = clamped_dot(N, H);
-    float N_dot_V = clamped_dot(N, V);
-    float N_dot_L = clamped_dot(N, L);
+    float N_dot_H = dot(N, H);
+    float N_dot_V = dot(N, V);
+    float N_dot_L = dot(N, L);
     float T_dot_V = dot(T, V);
     float B_dot_V = dot(B, V);
     float T_dot_L = dot(T, L);
     float B_dot_L = dot(B, L);
     float T_dot_H = dot(T, H);
     float B_dot_H = dot(B, H);
-    //float D       = ggx_isotropic_ndf       (N_dot_H, alpha_x);
-    //float Vis     = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha_x);
-    float D       = ggx_anisotropic_ndf       (alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
-    float Vis     = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L);
-    vec3  F                   = fresnel_schlick(max(dot(V, H), 0.0), F0);
-    vec3  specular_microfacet = D * Vis * F;
-    vec3  diffuse_lambert     = m_i_pi * (1.0 - metallic) * base_color;
-    vec3  diffuse_factor      = vec3(1.0) - F;
-    return N_dot_L * (diffuse_factor * diffuse_lambert + specular_microfacet);
+
+    // Computing Normal Distribution Term
+    float D   = ggx_anisotropic_ndf(alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
+        
+    // Computing Visibility Term
+    float Vis = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L); 
+        
+    // Computing Fresnel Term 
+    vec3  F0  = 0.16 * reflectance * reflectance * (1.0 - metalness) + base_color * metalness;
+    vec3  F   = fresnel_schlick(max(dot(V, H), 0.0), F0);
+
+    // Lighting
+    vec3 specular_microfacet = D * Vis * F;
+    vec3 diffuse_lambert     = m_i_pi * (1.0 - metalness) * base_color;
+    vec3 diffuse_factor      = vec3(1.0) - F; 
+
+    // Final color
+    return max(N_dot_L, 0.0) * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
 
 // This shader is adapted from https://www.shadertoy.com/view/3tyXRt - Arthur Cavalier

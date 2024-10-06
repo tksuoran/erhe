@@ -144,7 +144,6 @@ void Programs::load_programs(
     add_shader(wide_lines_draw_color   , CI{ .name = "wide_lines"              , .defines = {{"ERHE_USE_DRAW_COLOR",   "1"}}});
     add_shader(wide_lines_vertex_color , CI{ .name = "wide_lines"              , .defines = {{"ERHE_USE_VERTEX_COLOR", "1"}}});
     add_shader(points                  , CI{ .name = "points" } );
-    add_shader(depth                   , CI{ .name = "depth"  } );
     add_shader(id                      , CI{ .name = "id"     } );
     add_shader(tool                    , CI{ .name = "tool"   } );
     add_shader(debug_depth             , CI{ .name = "visualize_depth", .default_uniform_block = &default_uniform_block } );

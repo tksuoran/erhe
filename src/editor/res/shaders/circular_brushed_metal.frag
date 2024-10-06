@@ -36,6 +36,7 @@ void main() {
     // Y is used for tangent space selection/control:
     //   0.0 -- Use geometry T and B (from vertex attribute
     //   1.0 -- Use T and B derived from texcoord
+    // GLSL mix(a, b, w) = a * (1 - w) + y * w   w == 0 -> a, w == 1 -> b
     float anisotropy_strength = mix(
         1.0,
         min(1.0, circular_anisotropy_magnitude),
@@ -43,7 +44,7 @@ void main() {
     ) * v_aniso_control.x;
     // Mix tangent space geometric .. texcoord generated
     vec3  T                   = circular_anisotropy_magnitude > 0.0 ? mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y) : T0;
-    vec3  B                   = mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y);
+    vec3  B                   = circular_anisotropy_magnitude > 0.0 ? mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y) : B0;
     float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
     // Mix roughness based on anisotropy_strength
     float roughness_x         = mix(isotropic_roughness, material.roughness.x, anisotropy_strength);
@@ -56,7 +57,8 @@ void main() {
     uint spot_light_offset        = directional_light_count;
     uint point_light_offset       = spot_light_offset + spot_light_count;
     vec3 color = vec3(0);
-    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
+    //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
+    color += light_block.ambient_light.rgb * base_color;
     color += material.emissive.rgb;
 
     for (uint i = 0; i < directional_light_count; ++i) {
@@ -65,9 +67,9 @@ void main() {
         vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
         vec3  L              = normalize(point_to_light);   // Direction from surface point to light
         float N_dot_L        = clamped_dot(N, L);
-        //color = vec3(N_dot_V);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
+#if 1
             color += intensity * brdf(
                 base_color,
                 roughness_x,
@@ -80,6 +82,16 @@ void main() {
                 B,
                 N
             );
+#else
+            color += intensity * brdf(
+                base_color,
+                material.roughness.x,
+                material.metallic,
+                L,
+                V,
+                N
+            );
+#endif
         }
     }
 
@@ -117,7 +129,7 @@ void main() {
         float N_dot_L        = clamped_dot(N, L);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-            float light_visibility  = 1.0; // TODO sample_light_visibility(v_position, light_index, N_dot_L);
+            float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
             color += intensity * brdf(
                 base_color,
@@ -143,11 +155,12 @@ void main() {
 
     //vec3  T                   = mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y);
 
-    //out_color.rgb = 0.5 * T + vec3(0.5);
+    //out_color.rgb = 0.5 * B + vec3(0.5);
     //out_color.rgb = vec3(circular_anisotropy_magnitude);
     //out_color.rgb = vec3(base_color);
     //out_color.rgb = vec3(T_circular.y);
-    //out_color.rgb = vec3(roughness_y);
+    //out_color.rgb = vec3(anisotropy_strength, circular_anisotropy_magnitude, 0.0);
+    ////out_color = circular_anisotropy_magnitude > 0 ? vec4(0.0, 1.0, 0.0, 1.0)  : vec4(0.0, 0.0, 1.0, 1.0);
     //out_color.a = 1.0;
 
 }

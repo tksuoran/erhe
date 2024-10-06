@@ -15,7 +15,7 @@ void main()
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],
         camera.cameras[0].world_from_node[3][2]
-    );
+    ); 
 
     vec3  V       = normalize(view_position_in_world - v_position.xyz);
     vec3  T       = normalize(v_TBN[0]);
@@ -54,6 +54,7 @@ void main()
                 base_color,
                 material.roughness.x,
                 material.metallic,
+                material.reflectance,
                 L,
                 V,
                 N
@@ -76,6 +77,7 @@ void main()
                 base_color,
                 material.roughness.x,
                 material.metallic,
+                material.reflectance,
                 L,
                 V,
                 N
@@ -97,6 +99,7 @@ void main()
                 base_color,
                 material.roughness.x,
                 material.metallic,
+                material.reflectance,
                 L,
                 V,
                 N
