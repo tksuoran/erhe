@@ -1,6 +1,7 @@
 #include "erhe_graphics/shader_monitor.hpp"
 
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/glsl_file_loader.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_file/file.hpp"
@@ -54,7 +55,13 @@ void Shader_monitor::add(erhe::graphics::Shader_stages_create_info create_info, 
     for (const auto& shader : create_info.shaders) {
         for (const std::filesystem::path& path : shader.paths) {
             if (erhe::file::check_is_existing_non_empty_regular_file("Shader_monitor::add", path)) {
-                add(path, create_info, shader_stages);
+                Glsl_file_loader loader;
+                static_cast<void>(loader.read_shader_source_file(path));
+                for (const std::filesystem::path& included_path : loader.get_file_paths()) {
+                    if (erhe::file::check_is_existing_non_empty_regular_file("Shader_monitor::add", included_path)) {
+                        add(included_path, create_info, shader_stages);
+                    }
+                }
             }
         }
     }

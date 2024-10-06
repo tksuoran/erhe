@@ -45,7 +45,7 @@ vec3 brdf(
 ) {
     vec3  H       = normalize(L + V);
     float N_dot_L = dot(N, L);
-    float N_dot_V = dot(N, V);
+    float N_dot_V = clamped_dot(N, V);
     float N_dot_H = dot(N, H);
     float V_dot_H = dot(V, H); // Note: H.L == L.H == H.V == V.H
     float alpha   = roughness * roughness;
