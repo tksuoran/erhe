@@ -162,7 +162,7 @@ private:
     void make_torus_brushes         (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
     void make_cylinder_brushes      (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
     void make_cone_brushes          (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
-    void make_json_brushes          (Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Taskflow& tf, Json_library& library);
+    void make_json_brushes          (Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Taskflow* tf, Json_library& library);
     void make_mesh_nodes            (const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes);
     void make_cube_benchmark        (Mesh_memory& mesh_memory);
     void setup_lights               ();

@@ -1,3 +1,5 @@
+#include "erhe_srgb.glsl"
+
 in vec2      v_texcoord;
 in vec4      v_position;
 in vec4      v_color;
@@ -6,35 +8,7 @@ in flat uint v_material_index;
 in float     v_tangent_scale;
 in float     v_line_width;
 
-float srgb_to_linear(float x)
-{
-    if (x <= 0.04045) {
-        return x / 12.92;
-    } else {
-        return pow((x + 0.055) / 1.055, 2.4);
-    }
-}
-
-vec3 srgb_to_linear(vec3 V)
-{
-    return vec3(
-        srgb_to_linear(V.r),
-        srgb_to_linear(V.g),
-        srgb_to_linear(V.b)
-    );
-}
-
-vec2 srgb_to_linear(vec2 V)
-{
-    return vec2(
-        srgb_to_linear(V.r),
-        srgb_to_linear(V.g)
-    );
-}
-
-
-void main()
-{
+void main() {
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],

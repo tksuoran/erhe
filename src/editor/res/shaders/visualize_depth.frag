@@ -1,22 +1,6 @@
+#include "erhe_srgb.glsl"
+
 in vec2 v_texcoord;
-
-float srgb_to_linear(float x)
-{
-    if (x <= 0.04045) {
-        return x / 12.92;
-    } else {
-        return pow((x + 0.055) / 1.055, 2.4);
-    }
-}
-
-vec3 srgb_to_linear(vec3 v)
-{
-    return vec3(
-        srgb_to_linear(v.r),
-        srgb_to_linear(v.g),
-        srgb_to_linear(v.b)
-    );
-}
 
 const vec3 temperature_colors[] = vec3[](
     vec3(  4.,  35., 51.) / 255.,

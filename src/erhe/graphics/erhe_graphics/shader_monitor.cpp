@@ -6,6 +6,8 @@
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <sstream>
+
 namespace erhe::graphics {
 
 using std::string;
@@ -50,11 +52,10 @@ void Shader_monitor::add(erhe::graphics::Shader_stages_create_info create_info, 
 {
     ERHE_VERIFY(shader_stages != nullptr);
     for (const auto& shader : create_info.shaders) {
-        if (
-            shader.source.empty() &&
-            erhe::file::check_is_existing_non_empty_regular_file("Shader_monitor::add", shader.path)
-        ) {
-            add(shader.path, create_info, shader_stages);
+        for (const std::filesystem::path& path : shader.paths) {
+            if (erhe::file::check_is_existing_non_empty_regular_file("Shader_monitor::add", path)) {
+                add(path, create_info, shader_stages);
+            }
         }
     }
 }
@@ -142,10 +143,11 @@ void Shader_monitor::update_once_per_frame()
             erhe::graphics::Shader_stages_prototype prototype{m_graphics_instance, create_info};
             if (prototype.is_valid()) {
                 entry.shader_stages->reload(std::move(prototype));
-                log_shader_monitor->info("Shader reload OK {}", entry.create_info.shaders.front().path.string());
+                std::stringstream ss;
+                log_shader_monitor->info("Shader program reload OK {}", entry.create_info.get_description());
             } else {
                 entry.shader_stages->invalidate();
-                log_shader_monitor->warn("Shader reload FAIL {}", entry.create_info.shaders.front().path.string());
+                log_shader_monitor->warn("Shader reload FAIL {}", entry.create_info.get_description());
             }
         }
         std::error_code error_code;

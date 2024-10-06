@@ -6,6 +6,8 @@ in vec4 v_position;
 
 in flat uint v_material_index;
 
+#include "erhe_bxdf.glsl"
+
 // in float v_r;
 // in float v_p;
 // in vec3  v_Cd;
@@ -20,27 +22,6 @@ vec3 ColorFn1Ddiv(float y) {
     float g = 0.334 + ( 0.585 + 0.00332 * y) * sin(1.82  + 1.95 * y);
     float b = 0.517 + ( 0.406 - 0.0348  * y) * sin(1.23  + 2.49 * y);
     return vec3 (r, g, b);
-}
-
-float srgb_to_linear(float x)
-{
-    if (x <= 0.04045)
-    {
-        return x / 12.92;
-    }
-    else
-    {
-        return pow((x + 0.055) / 1.055, 2.4);
-    }
-}
-
-vec3 srgb_to_linear(vec3 v)
-{
-    return vec3(
-        srgb_to_linear(v.x),
-        srgb_to_linear(v.y),
-        srgb_to_linear(v.z)
-    );
 }
 
 struct Surface {

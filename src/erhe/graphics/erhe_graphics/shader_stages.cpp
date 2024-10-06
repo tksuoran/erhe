@@ -1,10 +1,13 @@
 #include "erhe_graphics/shader_stages.hpp"
 
 #include "erhe_graphics/instance.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <fmt/format.h>
+
+#include <sstream>
 
 namespace erhe::graphics {
 
@@ -48,16 +51,26 @@ Reloadable_shader_stages& Reloadable_shader_stages::operator=(Reloadable_shader_
     return *this;
 }
 
-Shader_stage::Shader_stage(gl::Shader_type type, const std::string_view source)
+Shader_stage::Shader_stage(gl::Shader_type type, std::string_view source)
     : type  {type}
     , source{source}
 {
 }
 
-Shader_stage::Shader_stage(gl::Shader_type type, const std::filesystem::path path)
-    : type{type}
-    , path{path}
+Shader_stage::Shader_stage(gl::Shader_type type, const std::filesystem::path& path)
+    : type {type}
+    , paths{path}
 {
+}
+
+auto Shader_stage::get_description() const -> std::string
+{
+    std::stringstream ss;
+    ss << gl::c_str(type);
+    for (const std::filesystem::path& path : paths) {
+        ss << " " << path.string();
+    }
+    return ss.str();
 }
 
 auto Shader_stages::name() const -> const std::string&
@@ -113,12 +126,7 @@ void Shader_stages::reload(Shader_stages_prototype&& prototype)
     m_is_valid = true;
 
     std::string label = fmt::format("(P:{}) {}", gl_name(), m_name);
-    gl::object_label(
-        gl::Object_identifier::program,
-        gl_name(),
-        static_cast<GLsizei>(label.length()),
-        label.c_str()
-    );
+    gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
 }
 
 auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool

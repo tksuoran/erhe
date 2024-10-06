@@ -1,3 +1,8 @@
+#include "erhe_bxdf.glsl"
+#include "erhe_light.glsl"
+#include "erhe_srgb.glsl"
+#include "erhe_texture.glsl"
+
 in vec2      v_texcoord;
 in vec4      v_position;
 in vec4      v_color;
@@ -8,74 +13,6 @@ in float     v_tangent_scale;
 in float     v_line_width;
 in vec4      v_bone_color;
 in flat uvec2 v_valency_edge_count;
-
-const uint  max_u32 = 4294967295u;
-
-vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
-{
-    if (texture_handle.x == max_u32) {
-        return vec4(1.0, 1.0, 1.0, 1.0);
-    }
-#if defined(ERHE_BINDLESS_TEXTURE)
-    sampler2D s_texture = sampler2D(texture_handle);
-    return texture(s_texture, v_texcoord);
-#else
-    return texture(s_texture[texture_handle.x], v_texcoord);
-#endif
-}
-
-vec4 sample_texture_lod_bias(uvec2 texture_handle, vec2 texcoord, float lod_bias)
-{
-    if (texture_handle.x == max_u32) {
-        return vec4(1.0, 1.0, 1.0, 1.0);
-    }
-#if defined(ERHE_BINDLESS_TEXTURE)
-    sampler2D s_texture = sampler2D(texture_handle);
-    return texture(s_texture, texcoord, lod_bias);
-#else
-    return texture(s_texture[texture_handle.x], texcoord, lod_bias);
-#endif
-}
-
-vec2 get_texture_size(uvec2 texture_handle)
-{
-    if (texture_handle.x == max_u32) {
-        return vec2(1.0, 1.0);
-    }
-#if defined(ERHE_BINDLESS_TEXTURE)
-    sampler2D s_texture = sampler2D(texture_handle);
-    return textureSize(s_texture, 0);
-#else
-    return textureSize(s_texture[texture_handle.x], 0);
-#endif
-}
-
-float srgb_to_linear(float x)
-{
-    if (x <= 0.04045) {
-        return x / 12.92;
-    } else {
-        return pow((x + 0.055) / 1.055, 2.4);
-    }
-}
-
-vec3 srgb_to_linear(vec3 V)
-{
-    return vec3(
-        srgb_to_linear(V.r),
-        srgb_to_linear(V.g),
-        srgb_to_linear(V.b)
-    );
-}
-
-vec2 srgb_to_linear(vec2 V)
-{
-    return vec2(
-        srgb_to_linear(V.r),
-        srgb_to_linear(V.g)
-    );
-}
-
 
 void main()
 {

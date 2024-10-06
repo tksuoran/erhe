@@ -95,11 +95,7 @@ gl::Program_resource_property program_resource_properties[]
 template <typename T>
 [[nodiscard]] auto is_in_list(const T& item, std::initializer_list<T> items) -> bool
 {
-    return std::find(
-        items.begin(),
-        items.end(),
-        item
-    ) != items.end();
+    return std::find(items.begin(), items.end(), item) != items.end();
 }
 
 // [OpenGL 4.6 (Core Profile)] Table 7.2 GetProgramResourceiv properties and supported interfaces
@@ -324,32 +320,106 @@ template <typename T>
     }
 }
 
+auto try_parse_int(char const*& s_in_out) -> std::optional<int>
+{
+    char const* s = s_in_out;
+    if ((s == nullptr) || (*s == '\0')) {
+        return std::nullopt;
+    }
+
+    int result = 0;
+    bool found_digit = false;
+    while (true) {
+        if ((*s == '\0') || isspace(*s)) {
+            if (found_digit) {
+                s_in_out = s;
+                return result;
+            } else {
+                return std::nullopt;
+            }
+        }
+        if ((*s < '0') || (*s > '9')) {
+            return std::nullopt;
+        }
+        found_digit = true;
+        result = result * 10 + (*s - '0');
+        ++s;
+     }
+} 
+
 [[nodiscard]] auto format_source(const std::string& source) -> std::string
 {
     ERHE_PROFILE_FUNCTION();
 
+    int         source_string_index{0};
     int         line{1};
     const char* head = source.c_str();
+    bool line_start_white_space_only = true;
 
     std::stringstream sb;
-    sb << fmt::format("{:>3}: ", line);
+    bool header_pending = true;
 
     for (;;) {
         char c = *head;
-        ++head;
         if (c == '\r') {
+            ++head;
             continue;
         }
         if (c == 0) {
             break;
         }
 
+        if (line_start_white_space_only && (c == '#')) {
+            const char* line_token = "#line";
+            const std::size_t line_token_length = strlen(line_token);
+            const int diff = strncmp(head, line_token, line_token_length);
+            if (diff == 0) {
+                const char* p = head + line_token_length;
+                while (*p != '\n' && isspace(*p)) {
+                    ++p;
+                }
+                std::optional<int> line_opt = try_parse_int(p);
+                if (line_opt.has_value()) {
+                    line = line_opt.value();
+                    while (*p != '\n' && isspace(*p)) {
+                        ++p;
+                    }
+                    std::optional<int> source_string_index_opt = try_parse_int(p);
+                    if (source_string_index_opt.has_value()) {
+                        source_string_index = source_string_index_opt.value();
+                    }
+                    while (*p != '\n' && *p != '\0') {
+                        ++p;
+                    }
+                    if (*p == '\n') {
+                        ++p;
+                    }
+                    head = p;
+                    header_pending = true;
+                    continue;
+                }
+            }
+        }
+
+        if (header_pending) {
+            sb << fmt::format("{}.{:>3}: ", source_string_index, line);
+            header_pending = false;
+        }
+
+        sb << c;
+
         if (c == '\n') {
             ++line;
-            sb << fmt::format("\n{:>3}: ", line);
+            line_start_white_space_only = true;
+            header_pending = true;
+            ++head;
             continue;
         }
-        sb << c;
+
+        if (line_start_white_space_only && !isspace(c)) {
+            line_start_white_space_only = false;
+        }
+        ++head;
     }
     return sb.str();
 }
@@ -368,7 +438,7 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
     ERHE_VERIFY((m_state == state_init) || (m_state == state_shader_compilation_started));
     const auto gl_name = gl_shader.gl_name();
 
-    const std::string source{m_create_info.final_source(m_graphics_instance, shader, gl_name)};
+    const std::string source = get_final_source(shader, gl_name);
     if (source.empty()) {
         m_state = state_fail;
         return gl_shader;
@@ -377,7 +447,14 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
     const char* const c_source = source.c_str();
     std::array<const char* , 1> sources{ c_source };
 
-    SPDLOG_LOGGER_TRACE(log_glsl, "Shader_stage compile {} {} source:\nPath: {}\n{}\n", gl::c_str(shader.type), gl_name, shader.path.string(), format_source(source));
+    SPDLOG_LOGGER_TRACE(
+        log_glsl,
+        "Shader_stage compile {} {} source:\nPath: {}\n{}\n",
+        gl::c_str(shader.type),
+        gl_name,
+        shader.path.string(),
+        format_source(source)
+    );
 
     {
         ERHE_PROFILE_SCOPE("glCompileShader");
@@ -390,7 +467,7 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
     return gl_shader;
 }
 
-auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) const -> std::string
+auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string
 {
     if (gl_name.has_value()) {
         const auto i = m_final_sources.find(gl_name.value());
@@ -398,7 +475,7 @@ auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::
             return i->second;
         }
     }
-    return m_create_info.final_source(m_graphics_instance, shader, gl_name);
+    return m_create_info.final_source(m_graphics_instance, shader, &m_paths, gl_name);
 }
 
 auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool
@@ -424,7 +501,7 @@ auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader
         const std::string f_source = format_source(source);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
-        log_glsl->error("{}", f_source);
+        log_glsl->error("\n{}", f_source);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
         return false;
@@ -432,10 +509,7 @@ auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader
     return true;
 }
 
-Shader_stages_prototype::Shader_stages_prototype(
-    Instance&                   graphics_instance,
-    Shader_stages_create_info&& create_info
-)
+Shader_stages_prototype::Shader_stages_prototype(Instance& graphics_instance, Shader_stages_create_info&& create_info)
     : m_graphics_instance    {graphics_instance}
     , m_create_info          {create_info}
     , m_default_uniform_block{graphics_instance}
@@ -447,10 +521,7 @@ Shader_stages_prototype::Shader_stages_prototype(
         post_link();
     }
 }
-
-Shader_stages_prototype::Shader_stages_prototype(
-    Instance&                        graphics_instance,
-    const Shader_stages_create_info& create_info
+Shader_stages_prototype::Shader_stages_prototype(Instance& graphics_instance, const Shader_stages_create_info& create_info
 )
     : m_graphics_instance    {graphics_instance}
     , m_create_info          {create_info}

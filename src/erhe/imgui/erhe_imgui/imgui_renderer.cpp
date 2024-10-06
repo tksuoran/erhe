@@ -287,11 +287,9 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Instance& graph
                 .interface_blocks          = { &draw_parameter_block },
                 .vertex_attribute_mappings = &attribute_mappings,
                 .fragment_outputs          = &fragment_outputs,
-                .default_uniform_block     = graphics_instance.info.use_bindless_texture
-                    ? nullptr
-                    : &default_uniform_block,
+                .default_uniform_block     = graphics_instance.info.use_bindless_texture ? nullptr : &default_uniform_block,
                 .shaders = {
-                    { gl::Shader_type::vertex_shader,   c_vertex_shader_source },
+                    { gl::Shader_type::vertex_shader,   c_vertex_shader_source   },
                     { gl::Shader_type::fragment_shader, c_fragment_shader_source }
                 },
                 .build = true

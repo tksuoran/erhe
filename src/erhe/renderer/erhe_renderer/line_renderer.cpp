@@ -174,10 +174,7 @@ Line_renderer_program_interface::Line_renderer_program_interface(erhe::graphics:
             graphics_instance.shader_monitor.add(create_info, graphics_shader_stages.get());
         } else {
             const auto current_path = std::filesystem::current_path();
-            log_startup->error(
-                "Unable to load Line_renderer shader - check working directory '{}'",
-                current_path.string()
-            );
+            log_startup->error("Unable to load Line_renderer shader - check working directory '{}'", current_path.string());
         }
     }
 }

@@ -490,35 +490,38 @@ void Scene_builder::make_cone_brushes(Editor_settings& editor_settings, Mesh_mem
     );
 }
 
-void Scene_builder::make_json_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Taskflow& tf, Json_library& library)
+void Scene_builder::make_json_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Taskflow* tf, Json_library& library)
 {
     Content_library_node& brushes = get_brushes();
 
     auto& folder = *(brushes.make_folder("Johnson Solids").get());
     for (const auto& key_name : library.names) {
-        tf.emplace(
-            [this, &editor_settings, &mesh_memory, &library, &key_name, &folder]() {
-                auto geometry = library.make_geometry(key_name);
-                if (geometry.get_polygon_count() == 0) {
-                    return;
-                }
-                geometry.compute_polygon_normals();
-                const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(geometry));
-
-                make_brush(
-                    folder,
-                    Brush_data{
-                        .context            = m_context,
-                        .editor_settings    = editor_settings,
-                        .name               = shared_geometry->name,
-                        .build_info         = build_info(mesh_memory),
-                        .normal_style       = Normal_style::polygon_normals,
-                        .geometry_generator = [shared_geometry](){ return shared_geometry; },
-                        .density            = m_config.mass_scale
-                    }
-                );
+        auto op = [this, &editor_settings, &mesh_memory, &library, &key_name, &folder]() {
+            auto geometry = library.make_geometry(key_name);
+            if (geometry.get_polygon_count() == 0) {
+                return;
             }
-        );
+            geometry.compute_polygon_normals();
+            const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(std::move(geometry));
+
+            make_brush(
+                folder,
+                Brush_data{
+                    .context            = m_context,
+                    .editor_settings    = editor_settings,
+                    .name               = shared_geometry->name,
+                    .build_info         = build_info(mesh_memory),
+                    .normal_style       = Normal_style::polygon_normals,
+                    .geometry_generator = [shared_geometry](){ return shared_geometry; },
+                    .density            = m_config.mass_scale
+                }
+            );
+        };
+        if (tf != nullptr) {
+            tf->emplace(op);
+        } else {
+            op();
+        }
     }
 }
 
@@ -568,19 +571,29 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
         //);
     }
 
-    tf::Taskflow tf;
-
-    tf.emplace([this, &editor_settings, &mesh_memory]() { make_platonic_solid_brushes(editor_settings, mesh_memory); }).name("Platonic Solid Brushes");
-    tf.emplace([this, &editor_settings, &mesh_memory]() { make_sphere_brushes        (editor_settings, mesh_memory); }).name("Sphere Brushes");
-    tf.emplace([this, &editor_settings, &mesh_memory]() { make_torus_brushes         (editor_settings, mesh_memory); }).name("Torus Brushes");
-    tf.emplace([this, &editor_settings, &mesh_memory]() { make_cylinder_brushes      (editor_settings, mesh_memory); }).name("Cylinder Brushes");
-    tf.emplace([this, &editor_settings, &mesh_memory]() { make_cone_brushes          (editor_settings, mesh_memory); }).name("Cone Brushes");
-
     Json_library library("res/polyhedra/johnson.json");
-    make_json_brushes(editor_settings, mesh_memory, tf, library);
+    if (executor.num_workers() > 1) {
+        tf::Taskflow tf;
 
-    tf::Future<void> future = executor.run(tf);
-    future.wait();
+        tf.emplace([this, &editor_settings, &mesh_memory]() { make_platonic_solid_brushes(editor_settings, mesh_memory); }).name("Platonic Solid Brushes");
+        tf.emplace([this, &editor_settings, &mesh_memory]() { make_sphere_brushes        (editor_settings, mesh_memory); }).name("Sphere Brushes");
+        tf.emplace([this, &editor_settings, &mesh_memory]() { make_torus_brushes         (editor_settings, mesh_memory); }).name("Torus Brushes");
+        tf.emplace([this, &editor_settings, &mesh_memory]() { make_cylinder_brushes      (editor_settings, mesh_memory); }).name("Cylinder Brushes");
+        tf.emplace([this, &editor_settings, &mesh_memory]() { make_cone_brushes          (editor_settings, mesh_memory); }).name("Cone Brushes");
+
+        make_json_brushes(editor_settings, mesh_memory, &tf, library);
+
+        tf::Future<void> future = executor.run(tf);
+        future.wait();
+    } else {
+        make_platonic_solid_brushes(editor_settings, mesh_memory);
+        make_sphere_brushes        (editor_settings, mesh_memory);
+        make_torus_brushes         (editor_settings, mesh_memory);
+        make_cylinder_brushes      (editor_settings, mesh_memory);
+        make_cone_brushes          (editor_settings, mesh_memory);
+
+        make_json_brushes(editor_settings, mesh_memory, nullptr, library);
+    }
 
     mesh_memory.gl_buffer_transfer_queue.flush();
 }

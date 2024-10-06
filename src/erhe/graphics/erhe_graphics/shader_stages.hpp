@@ -26,12 +26,14 @@ class Shader_stage
 public:
     // user-provided constructors are needed for vector::emplace_back()
     // Sadly, this disables using designated initializers
-    Shader_stage(gl::Shader_type type, const std::string_view source);
-    Shader_stage(gl::Shader_type type, const std::filesystem::path path);
+    Shader_stage(gl::Shader_type type, std::string_view source);
+    Shader_stage(gl::Shader_type type, const std::filesystem::path& path);
 
-    gl::Shader_type       type;
-    std::string           source;
-    std::filesystem::path path;
+    auto get_description() const -> std::string;
+
+    gl::Shader_type                    type;
+    std::string                        source;
+    std::vector<std::filesystem::path> paths;
 };
 
 class Shader_stages_create_info
@@ -39,7 +41,13 @@ class Shader_stages_create_info
 public:
     // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
     // and source (possibly read from file).
-    [[nodiscard]] auto final_source           (Instance& graphics_instance, const Shader_stage& shader, std::optional<unsigned int> gl_name = {}) const -> std::string;
+    [[nodiscard]] auto final_source(
+        Instance&                           graphics_instance,
+        const Shader_stage&                 shader,
+        std::vector<std::filesystem::path>* paths,
+        std::optional<unsigned int>         gl_name = {}
+    ) const -> std::string;
+
     [[nodiscard]] auto attributes_source      () const -> std::string;
     [[nodiscard]] auto fragment_outputs_source() const -> std::string;
     [[nodiscard]] auto struct_types_source    () const -> std::string;
@@ -47,6 +55,8 @@ public:
     [[nodiscard]] auto interface_source       () const -> std::string;
 
     void add_interface_block(const Shader_resource* uniform_block);
+
+    auto get_description() const -> std::string;
 
     std::string                                      name;
     std::vector<std::string>                         pragmas                  {};
@@ -67,8 +77,8 @@ public:
 class Shader_stages_prototype final
 {
 public:
-    Shader_stages_prototype(Instance& graphics_instance, Shader_stages_create_info&& create_info);
-    Shader_stages_prototype(Instance& graphics_instance, const Shader_stages_create_info& create_info);
+    Shader_stages_prototype (Instance& graphics_instance, Shader_stages_create_info&& create_info);
+    Shader_stages_prototype (Instance& graphics_instance, const Shader_stages_create_info& create_info);
     ~Shader_stages_prototype() noexcept = default;
     Shader_stages_prototype (const Shader_stages_prototype&) = delete;
     void operator=          (const Shader_stages_prototype&) = delete;
@@ -78,12 +88,11 @@ public:
     [[nodiscard]] auto create_info() const -> const Shader_stages_create_info&;
     [[nodiscard]] auto is_valid   () -> bool;
 
-    void finalize_shader_sources();
-    void compile_shaders        ();
-    auto link_program           () -> bool;
-    void dump_reflection        () const;
+    void compile_shaders();
+    auto link_program   () -> bool;
+    void dump_reflection() const;
 
-    auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) const -> std::string;
+    auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
 
 private:
     void post_link();
@@ -107,6 +116,7 @@ private:
     Shader_resource                                     m_default_uniform_block;
     std::map<std::string, Shader_resource, std::less<>> m_resources;
     std::map<unsigned int, std::string>                 m_final_sources;
+    std::vector<std::filesystem::path>                  m_paths;
 };
 
 class Shader_stages

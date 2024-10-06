@@ -327,7 +327,7 @@ auto Post_processing::make_program(
 {
     ERHE_PROFILE_FUNCTION();
 
-    const std::vector<std::pair<std::string, std::string>> bindess_defines{{"ERHE_BINDLESS_TEXTURE", "1"}};
+    const std::vector<std::pair<std::string, std::string>> bindless_defines{{"ERHE_BINDLESS_TEXTURE", "1"}};
     const std::vector<std::pair<std::string, std::string>> empty_defines{};
 
     const std::vector<erhe::graphics::Shader_stage_extension> bindless_extensions{
@@ -339,14 +339,14 @@ auto Post_processing::make_program(
     return
         erhe::graphics::Shader_stages_create_info{
             .name                  = name,
-            .defines               = bindless_textures ? bindess_defines : empty_defines,
+            .defines               = bindless_textures ? bindless_defines    : empty_defines,
             .extensions            = bindless_textures ? bindless_extensions : empty_extensions,
             .interface_blocks      = { &m_parameter_block },
             .fragment_outputs      = &m_fragment_outputs,
             .default_uniform_block = bindless_textures ? nullptr : &m_default_uniform_block,
             .shaders = {
                 { gl::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path("post_processing.vert")},
-                { gl::Shader_type::fragment_shader, m_shader_path / fs_path}
+                { gl::Shader_type::fragment_shader, m_shader_path / fs_path }
             },
             .build                 = true
         };

@@ -1,28 +1,6 @@
 in vec3 v_normal;
 
-float srgb_to_linear(float x)
-{
-    if (x <= 0.04045)
-    {
-        return x / 12.92;
-    }
-    else
-    {
-        return pow((x + 0.055) / 1.055, 2.4);
-    }
-}
-
-vec3 srgb_to_linear(vec3 v)
-{
-    return vec3(
-        srgb_to_linear(v.x),
-        srgb_to_linear(v.y),
-        srgb_to_linear(v.z)
-    );
-}
-
-void main(void)
-{
+void main(void) {
    //vec3  L          = vec3(0.0, 1.0, 0.0);
    //vec3  N          = normalize(v_normal);
    //float ln         = dot(L, N);

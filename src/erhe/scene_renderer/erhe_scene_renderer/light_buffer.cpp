@@ -77,7 +77,7 @@ Light_buffer::Light_buffer(erhe::graphics::Instance& graphics_instance, Light_in
         gl::Buffer_target::uniform_buffer,
         m_light_interface.light_control_block.binding_point(),
         // TODO
-        64 * (m_light_interface.light_control_block.size_bytes())
+        256 * (m_light_interface.light_control_block.size_bytes())
     );
 }
 

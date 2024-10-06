@@ -319,7 +319,12 @@ public:
 
     Editor()
     {
-        m_executor = std::make_unique<tf::Executor>(8);
+        int init_thread_count = 1;
+        auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");
+        const auto& threading_section = erhe_ini.get_section("threading");
+        threading_section.get("init_thread_count", init_thread_count);
+
+        m_executor = std::make_unique<tf::Executor>(init_thread_count);
 
         try {
             tf::Taskflow taskflow;
