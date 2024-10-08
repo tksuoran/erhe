@@ -30,12 +30,7 @@ void Compound_operation::undo(Editor_context& context)
 {
     log_operations->trace("Op Undo Begin {}", describe());
 
-    for (
-        auto i = rbegin(m_parameters.operations),
-        end = rend(m_parameters.operations);
-        i < end;
-        ++i
-    ) {
+    for (auto i = rbegin(m_parameters.operations), end = rend(m_parameters.operations); i < end; ++i) {
         auto& operation = *i;
         operation->undo(context);
     }

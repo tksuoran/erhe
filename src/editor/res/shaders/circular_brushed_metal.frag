@@ -57,8 +57,7 @@ void main() {
     uint spot_light_offset        = directional_light_count;
     uint point_light_offset       = spot_light_offset + spot_light_count;
     vec3 color = vec3(0);
-    //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
-    color += light_block.ambient_light.rgb * base_color;
+    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
     color += material.emissive.rgb;
 
     for (uint i = 0; i < directional_light_count; ++i) {
@@ -69,8 +68,7 @@ void main() {
         float N_dot_L        = clamped_dot(N, L);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
-#if 1
-            color += intensity * brdf(
+            color += intensity * anisotropic_brdf(
                 base_color,
                 roughness_x,
                 roughness_y,
@@ -82,16 +80,6 @@ void main() {
                 B,
                 N
             );
-#else
-            color += intensity * brdf(
-                base_color,
-                material.roughness.x,
-                material.metallic,
-                L,
-                V,
-                N
-            );
-#endif
         }
     }
 
@@ -106,7 +94,7 @@ void main() {
             float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
             float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
-            color += intensity * brdf(
+            color += intensity * anisotropic_brdf(
                 base_color,
                 roughness_x,
                 roughness_y,
@@ -131,7 +119,7 @@ void main() {
             float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
             float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
-            color += intensity * brdf(
+            color += intensity * anisotropic_brdf(
                 base_color,
                 roughness_x,
                 roughness_y,
@@ -149,18 +137,4 @@ void main() {
     float exposure = camera.cameras[0].exposure;
     out_color.rgb = color * exposure * material.opacity;
     out_color.a = material.opacity;
-
-    //out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * T0);
-
-
-    //vec3  T                   = mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y);
-
-    //out_color.rgb = 0.5 * B + vec3(0.5);
-    //out_color.rgb = vec3(circular_anisotropy_magnitude);
-    //out_color.rgb = vec3(base_color);
-    //out_color.rgb = vec3(T_circular.y);
-    //out_color.rgb = vec3(anisotropy_strength, circular_anisotropy_magnitude, 0.0);
-    ////out_color = circular_anisotropy_magnitude > 0 ? vec4(0.0, 1.0, 0.0, 1.0)  : vec4(0.0, 0.0, 1.0, 1.0);
-    //out_color.a = 1.0;
-
 }

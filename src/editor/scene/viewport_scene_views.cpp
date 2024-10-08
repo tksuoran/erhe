@@ -276,17 +276,19 @@ auto Scene_views::create_imgui_window_scene_view_node(
     erhe::rendergraph::Rendergraph&             rendergraph,
     const std::shared_ptr<Viewport_scene_view>& viewport_scene_view,
     std::string_view                            name,
-    std::string_view                            ini_name
+    std::string_view                            ini_name_in
 ) -> std::shared_ptr<Imgui_window_scene_view_node>
 {
     const auto& window_imgui_host = imgui_windows.get_window_imgui_host();
 
+    std::string window_name = fmt::format("{}##{}", name, m_imgui_window_scene_view_nodes.size());
+    std::string ini_name = ini_name_in.empty() ? std::string{} : fmt::format("{}##{}", ini_name, m_imgui_window_scene_view_nodes.size());
     auto node = std::make_shared<Imgui_window_scene_view_node>(
         imgui_renderer,
         imgui_windows,
         rendergraph,
         m_context,
-        name, //fmt::format("Imgui_window_scene_view_node {}", m_imgui_window_scene_view_nodes.size()),
+        window_name,
         ini_name,
         viewport_scene_view
     );
@@ -365,7 +367,7 @@ void Scene_views::open_new_viewport_scene_view_node()
             *m_context.imgui_windows,
             *m_context.rendergraph,
             viewport_scene_view,
-            "w scene view",
+            "scene view",
             ""
         );
     } else {

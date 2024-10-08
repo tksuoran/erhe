@@ -4,6 +4,7 @@
 #include "erhe_math.glsl" // clamped_dot(), heaviside()
 #include "erhe_ggx.glsl"
 
+// NOTE: Caller *must* ensure cos_theta is >= 0.0 and <= 1.0
 vec3 fresnel_schlick(float cos_theta, vec3 f0) {
     return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
 }
@@ -32,9 +33,8 @@ void specular_anti_aliasing(in vec3 half_vector, inout float alpha_x, inout floa
     alpha_y = sqrt(alpha_y * alpha_y + kernel_roughness.y);
 }
 
-// isotropic BRDF
 // Based on https://www.shadertoy.com/view/flsyWX by Arthur Cavalier
-vec3 brdf(
+vec3 isotropic_brdf(
     vec3  base_color,
     float roughness,
     float metalness,
@@ -59,7 +59,7 @@ vec3 brdf(
     // Computing Fresnel Term
     // Using reflectance mapping as in Filament PBR Pipeline
     vec3  F0  = 0.16 * reflectance * reflectance * (1.0 - metalness) + base_color * metalness;
-    vec3  F   = fresnel_schlick(max(dot(V, H), 0.0), F0);
+    vec3  F   = fresnel_schlick(clamp(V_dot_H, 0.0, 1.0), F0);
 
     // Lighting
     vec3 specular_microfacet = D * Vis * F;
@@ -70,8 +70,7 @@ vec3 brdf(
     return max(N_dot_L, 0.0) * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
 
-// anisotropic BRDF
-vec3 brdf(
+vec3 anisotropic_brdf(
     vec3  base_color,
     float roughness_x,
     float roughness_y,
@@ -104,6 +103,7 @@ vec3 brdf(
     float B_dot_L = dot(B, L);
     float T_dot_H = dot(T, H);
     float B_dot_H = dot(B, H);
+    float V_dot_H = dot(V, H); // Note: H.L == L.H == H.V == V.H
 
     // Computing Normal Distribution Term
     float D   = ggx_anisotropic_ndf(alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
@@ -113,7 +113,7 @@ vec3 brdf(
         
     // Computing Fresnel Term 
     vec3  F0  = 0.16 * reflectance * reflectance * (1.0 - metalness) + base_color * metalness;
-    vec3  F   = fresnel_schlick(max(dot(V, H), 0.0), F0);
+    vec3  F   = fresnel_schlick(clamp(V_dot_H, 0.0, 1.0), F0);
 
     // Lighting
     vec3 specular_microfacet = D * Vis * F;

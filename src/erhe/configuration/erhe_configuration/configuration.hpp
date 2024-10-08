@@ -51,6 +51,7 @@ public:
     static auto get_instance() -> Ini_cache&;
 
     virtual auto get_ini_file(const std::string& name) -> Ini_file& = 0;
+    virtual void flush() = 0;
 };
 
 auto get_ini_file(std::string_view file_name) -> Ini_file&;

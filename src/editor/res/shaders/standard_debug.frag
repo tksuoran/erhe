@@ -76,8 +76,8 @@ void main()
         v_aniso_control.y
     ) * v_aniso_control.x;
     // Mix tangent space geometric .. texcoord generated
-    vec3  T                   = mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y);
-    vec3  B                   = mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y);
+    vec3  T                   = circular_anisotropy_magnitude > 0.0 ? mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y) : T0;
+    vec3  B                   = circular_anisotropy_magnitude > 0.0 ? mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y) : B0;
     float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
     // Mix roughness based on anisotropy_strength
     float roughness_x         = mix(isotropic_roughness, material.roughness.x, anisotropy_strength);

@@ -14,12 +14,7 @@
 namespace erhe::scene_renderer {
 
 Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
-    : camera_block{
-        graphics_instance,
-        "camera",
-        4,
-        erhe::graphics::Shader_resource::Type::uniform_block
-    }
+    : camera_block{graphics_instance, "camera", 4, erhe::graphics::Shader_resource::Type::uniform_block}
     , camera_struct{graphics_instance, "Camera"}
     , offsets{
         .world_from_node      = camera_struct.add_mat4 ("world_from_node"     )->offset_in_parent(),
@@ -36,7 +31,7 @@ Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
     ini.get("max_camera_count", max_camera_count);
 
-    camera_block.add_struct("cameras", &camera_struct, max_camera_count);
+    camera_block.add_struct("cameras", &camera_struct, 1);
 }
 
 Camera_buffer::Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface)
@@ -47,7 +42,7 @@ Camera_buffer::Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera
         gl::Buffer_target::uniform_buffer,
         m_camera_interface.camera_block.binding_point(),
         // TODO
-        100 * m_camera_interface.camera_struct.size_bytes()
+        64 * m_camera_interface.max_camera_count * m_camera_interface.camera_struct.size_bytes()
     );
 }
 
@@ -60,11 +55,7 @@ auto Camera_buffer::update(
 {
     ERHE_PROFILE_FUNCTION();
 
-    SPDLOG_LOGGER_TRACE(
-        log_render,
-        "write_offset = {}",
-        m_writer.write_offset
-    );
+    SPDLOG_LOGGER_TRACE(log_render, "write_offset = {}", m_writer.write_offset);
 
     auto&           buffer           = get_current_buffer();
     auto&           writer           = get_writer();

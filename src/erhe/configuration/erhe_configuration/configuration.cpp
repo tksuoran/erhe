@@ -221,6 +221,12 @@ class Ini_cache_impl : public Ini_cache
 public:
     ~Ini_cache_impl() override {}
 
+    void flush() override
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        m_files.clear();
+    }
+
     auto get_ini_file(const std::string& name) -> Ini_file& override
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};

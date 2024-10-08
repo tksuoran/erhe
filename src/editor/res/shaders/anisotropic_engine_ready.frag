@@ -43,7 +43,7 @@ void main()
         float N_dot_L        = clamped_dot(N, L);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
-            color += intensity * brdf(
+            color += intensity * anisotropic_brdf(
                 base_color,
                 material.roughness.x,
                 material.roughness.y,
@@ -69,7 +69,7 @@ void main()
             float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
             float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
-            color += intensity * brdf(
+            color += intensity * anisotropic_brdf(
                 base_color,
                 material.roughness.x,
                 material.roughness.y,
@@ -94,7 +94,7 @@ void main()
             float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
             float light_visibility  = 1.0; // TODO sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
-            color += intensity * brdf(
+            color += intensity * anisotropic_brdf(
                 base_color,
                 material.roughness.x,
                 material.roughness.y,

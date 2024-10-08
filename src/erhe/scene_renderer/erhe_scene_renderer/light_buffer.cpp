@@ -24,19 +24,9 @@ namespace erhe::scene_renderer {
 
 Light_interface::Light_interface(erhe::graphics::Instance& graphics_instance)
     : max_light_count{get_max_light_count()}
-    , light_block{
-        graphics_instance,
-        "light_block",
-        1,
-        erhe::graphics::Shader_resource::Type::uniform_block
-    }
-    , light_control_block{
-        graphics_instance,
-        "light_control_block",
-        2,
-        erhe::graphics::Shader_resource::Type::uniform_block
-    }
-    , light_struct{graphics_instance, "Light"}
+    , light_block        {graphics_instance, "light_block",         1, erhe::graphics::Shader_resource::Type::uniform_block}
+    , light_control_block{graphics_instance, "light_control_block", 2, erhe::graphics::Shader_resource::Type::uniform_block}
+    , light_struct       {graphics_instance, "Light"}
     , offsets     {
         .shadow_texture          = light_block.add_uvec2("shadow_texture"         )->offset_in_parent(),
         .brdf_phi_incident_phi   = light_block.add_vec2 ("brdf_phi_incident_phi"  )->offset_in_parent(),
@@ -93,11 +83,10 @@ Light_projections::Light_projections(
     const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
     uint64_t                                                    shadow_map_texture_handle
 )
-    : parameters
-        {
-            .view_camera         = view_camera,
-            .shadow_map_viewport = light_texture_viewport
-        }
+    : parameters{
+        .view_camera         = view_camera,
+        .shadow_map_viewport = light_texture_viewport
+    }
     , shadow_map_texture       {shadow_map_texture}
     , shadow_map_texture_handle{shadow_map_texture_handle}
 {
@@ -147,17 +136,12 @@ auto Light_buffer::update(
 {
     ERHE_PROFILE_FUNCTION();
 
-    SPDLOG_LOGGER_TRACE(
-        log_render,
-        "lights.size() = {}, m_light_buffer.writer().write_offset = {}",
-        lights.size(),
-        m_light_buffer.writer().write_offset
-    );
+    SPDLOG_LOGGER_TRACE(log_render, "lights.size() = {}, m_light_buffer.writer().write_offset = {}", lights.size(), m_light_buffer.writer().write_offset);
 
     auto&          writer            = m_light_buffer.get_writer();
     const auto     light_struct_size = m_light_interface.light_struct.size_bytes();
     const auto&    offsets           = m_light_interface.offsets;
-    const size_t   max_byte_count    = offsets.light_struct + (lights.size() + 1) * light_struct_size;
+    const size_t   max_byte_count    = offsets.light_struct + (m_light_interface.max_light_count) * light_struct_size;
     const auto     light_gpu_data    = writer.begin(m_light_interface.light_block.get_binding_target(), max_byte_count);
     uint32_t       directional_light_count{0u};
     uint32_t       spot_light_count       {0u};
@@ -219,7 +203,15 @@ auto Light_buffer::update(
         write(light_gpu_data, light_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, light_offset + offsets.light.radiance_and_range,           as_span(radiance));
     }
-    writer.write_offset += (max_light_index + 1) * light_struct_size;
+    // Fill in unused part of the array
+    size_t padding_light_offset = (max_light_index + 1);
+    size_t padding_light_count = m_light_interface.max_light_count - padding_light_offset;
+    memset(
+        light_gpu_data.data() + light_array_offset + padding_light_offset * light_struct_size,
+        0,
+        padding_light_count * light_struct_size
+    );
+    writer.write_offset += m_light_interface.max_light_count * light_struct_size;
 
     const auto brdf_phi_incident_phi = light_projections != nullptr ? glm::vec2{light_projections->brdf_phi, light_projections->brdf_incident_phi} : glm::vec2{0.0f, 0.0f};
     const auto brdf_material         = light_projections != nullptr ? (light_projections->brdf_material ? light_projections->brdf_material->material_buffer_index : 0) : 0;
@@ -235,7 +227,7 @@ auto Light_buffer::update(
     write(light_gpu_data, common_offset + offsets.reserved_2,              as_span(uvec4_zero)               );
 
     writer.end();
-    SPDLOG_LOGGER_TRACE(log_draw, "wrote up to {} entries to light buffer", max_light_index);
+    SPDLOG_LOGGER_TRACE(log_draw, "wrote up to {} entries to light buffer", padding_light_offset);
 
     return writer.range;
 }

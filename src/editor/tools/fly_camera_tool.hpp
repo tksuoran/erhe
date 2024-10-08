@@ -140,6 +140,18 @@ private:
     float           m_scale;
 };
 
+class Fly_camera_serialization_command : public erhe::commands::Command
+{
+public:
+    Fly_camera_serialization_command(erhe::commands::Commands& commands, Editor_context& context, bool store);
+
+    auto try_call() -> bool override;
+
+private:
+    Editor_context& m_context;
+    bool            m_store;
+};
+
 class Fly_camera_tool
     : public Update_once_per_frame
     , public erhe::imgui::Imgui_window
@@ -183,17 +195,18 @@ public:
     void translation(std::chrono::steady_clock::time_point timestamp, int tx, int ty, int tz);
     void rotation   (std::chrono::steady_clock::time_point timestamp, int rx, int ry, int rz);
 
-    // Commands
+    // API for commands
     void on_hover_viewport_change();
-    auto try_ready       () -> bool;
-    auto try_move        (std::chrono::steady_clock::time_point timestamp, Variable variable, erhe::math::Input_axis_control item, bool active) -> bool;
-    auto adjust          (std::chrono::steady_clock::time_point timestamp, Variable variable, float value) -> bool;
-    auto turn_relative   (std::chrono::steady_clock::time_point timestamp, float dx, float dy) -> bool;
-    auto try_start_tumble() -> bool;
-    auto tumble_relative (std::chrono::steady_clock::time_point timestamp, float dx, float dy) -> bool;
-    auto try_start_track () -> bool;
-    auto track           () -> bool;
-    auto zoom            (std::chrono::steady_clock::time_point timestamp, float delta) -> bool;
+    auto try_ready               () -> bool;
+    auto try_move                (std::chrono::steady_clock::time_point timestamp, Variable variable, erhe::math::Input_axis_control item, bool active) -> bool;
+    auto adjust                  (std::chrono::steady_clock::time_point timestamp, Variable variable, float value) -> bool;
+    auto turn_relative           (std::chrono::steady_clock::time_point timestamp, float dx, float dy) -> bool;
+    auto try_start_tumble        () -> bool;
+    auto tumble_relative         (std::chrono::steady_clock::time_point timestamp, float dx, float dy) -> bool;
+    auto try_start_track         () -> bool;
+    auto track                   () -> bool;
+    auto zoom                    (std::chrono::steady_clock::time_point timestamp, float delta) -> bool;
+    void serialize_transform     (bool store);
 
     void capture_pointer();
     void release_pointer();
@@ -227,6 +240,8 @@ private:
     Fly_camera_variable_float_command m_rotate_x_command;
     Fly_camera_variable_float_command m_rotate_y_command;
     Fly_camera_variable_float_command m_rotate_z_command;
+    Fly_camera_serialization_command  m_serialize_transform_command;
+    Fly_camera_serialization_command  m_deserialize_transform_command;
     std::shared_ptr<Frame_controller> m_camera_controller;
     float                             m_rotate_scale_x{1.0f};
     float                             m_rotate_scale_y{1.0f};

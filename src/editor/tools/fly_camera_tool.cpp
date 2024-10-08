@@ -27,6 +27,7 @@
 #endif
 
 #include <numeric>
+#include <string>
 
 namespace editor {
 
@@ -356,7 +357,7 @@ Fly_camera_variable_float_command::Fly_camera_variable_float_command(
     Variable                  variable,
     float                     scale
 )
-    : Command   {commands, ""}
+    : Command   {commands, "Fly_camera_variable_float_command"}
     , m_context {context}
     , m_variable{variable}
     , m_scale   {scale}
@@ -368,6 +369,56 @@ auto Fly_camera_variable_float_command::try_call_with_input(erhe::commands::Inpu
     return m_context.fly_camera_tool->adjust(input.timestamp, m_variable, input.variant.float_value * m_scale);
 }
 #pragma endregion Fly_camera_variable_float_command
+
+Fly_camera_serialization_command::Fly_camera_serialization_command(erhe::commands::Commands& commands, Editor_context& context, bool store)
+    : Command  {commands, "Fly_camera_serialization_command"}
+    , m_context{context}
+    , m_store  {store}
+{
+}
+
+auto Fly_camera_serialization_command::try_call() -> bool
+{
+    m_context.fly_camera_tool->serialize_transform(m_store);
+    return true;
+}
+
+void Fly_camera_tool::serialize_transform(bool store)
+{
+    if (m_node == nullptr) {
+        return;
+    }
+    if (store) {
+        const erhe::scene::Trs_transform& world_from_node = m_node->node_data.transforms.world_from_node;
+        glm::vec3 translation = world_from_node.get_translation();
+        glm::quat rotation    = world_from_node.get_rotation();
+        mINI::INIFile file("fly_camera.ini");
+        mINI::INIStructure ini;
+        ini["translation"]["x"] = std::to_string(translation.x);
+        ini["translation"]["y"] = std::to_string(translation.y);
+        ini["translation"]["z"] = std::to_string(translation.z);
+        ini["rotation"]["x"] = std::to_string(rotation.x);
+        ini["rotation"]["y"] = std::to_string(rotation.y);
+        ini["rotation"]["z"] = std::to_string(rotation.z);
+        ini["rotation"]["w"] = std::to_string(rotation.w);
+        file.generate(ini);
+    } else {
+        auto& settings_ini = erhe::configuration::get_ini_file("fly_camera.ini");
+        glm::vec3 translation{};
+        const auto& translation_section = settings_ini.get_section("translation");
+        translation_section.get("x", translation.x);
+        translation_section.get("y", translation.y);
+        translation_section.get("z", translation.z);
+        glm::quat rotation{};
+        const auto& rotation_section = settings_ini.get_section("rotation");
+        rotation_section.get("x", rotation.x);
+        rotation_section.get("y", rotation.y);
+        rotation_section.get("z", rotation.z);
+        rotation_section.get("w", rotation.w);
+        const erhe::scene::Trs_transform& world_from_node{translation, rotation};
+        m_node->set_world_from_node(world_from_node);
+    }
+}
 
 Fly_camera_tool::Fly_camera_tool(
     erhe::commands::Commands&    commands,
@@ -404,6 +455,8 @@ Fly_camera_tool::Fly_camera_tool(
     , m_rotate_x_command              {commands, editor_context, Variable::rotate_x,     0.6f}
     , m_rotate_y_command              {commands, editor_context, Variable::rotate_y,    -0.6f}
     , m_rotate_z_command              {commands, editor_context, Variable::rotate_z,     0.6f}
+    , m_serialize_transform_command   {commands, editor_context, true}
+    , m_deserialize_transform_command {commands, editor_context, false}
 
     , m_velocity_graph                {"Velocity",           "time", "ms", "velocity",           "m/s"}
     , m_distance_graph                {"Distance",           "time", "ms", "distance",           "m"}
@@ -480,19 +533,23 @@ Fly_camera_tool::Fly_camera_tool(
     commands.register_command(&m_rotate_x_command);
     commands.register_command(&m_rotate_y_command);
     commands.register_command(&m_rotate_z_command);
+    commands.register_command(&m_serialize_transform_command);
+    commands.register_command(&m_deserialize_transform_command);
 
-    commands.bind_command_to_key(&m_move_up_active_command,         erhe::window::Key_q, true );
-    commands.bind_command_to_key(&m_move_up_inactive_command,       erhe::window::Key_q, false);
-    commands.bind_command_to_key(&m_move_down_active_command,       erhe::window::Key_e, true );
-    commands.bind_command_to_key(&m_move_down_inactive_command,     erhe::window::Key_e, false);
-    commands.bind_command_to_key(&m_move_left_active_command,       erhe::window::Key_a, true );
-    commands.bind_command_to_key(&m_move_left_inactive_command,     erhe::window::Key_a, false);
-    commands.bind_command_to_key(&m_move_right_active_command,      erhe::window::Key_d, true );
-    commands.bind_command_to_key(&m_move_right_inactive_command,    erhe::window::Key_d, false);
-    commands.bind_command_to_key(&m_move_forward_active_command,    erhe::window::Key_w, true );
-    commands.bind_command_to_key(&m_move_forward_inactive_command,  erhe::window::Key_w, false);
-    commands.bind_command_to_key(&m_move_backward_active_command,   erhe::window::Key_s, true );
-    commands.bind_command_to_key(&m_move_backward_inactive_command, erhe::window::Key_s, false);
+    commands.bind_command_to_key(&m_move_up_active_command,         erhe::window::Key_q,  true );
+    commands.bind_command_to_key(&m_move_up_inactive_command,       erhe::window::Key_q,  false);
+    commands.bind_command_to_key(&m_move_down_active_command,       erhe::window::Key_e,  true );
+    commands.bind_command_to_key(&m_move_down_inactive_command,     erhe::window::Key_e,  false);
+    commands.bind_command_to_key(&m_move_left_active_command,       erhe::window::Key_a,  true );
+    commands.bind_command_to_key(&m_move_left_inactive_command,     erhe::window::Key_a,  false);
+    commands.bind_command_to_key(&m_move_right_active_command,      erhe::window::Key_d,  true );
+    commands.bind_command_to_key(&m_move_right_inactive_command,    erhe::window::Key_d,  false);
+    commands.bind_command_to_key(&m_move_forward_active_command,    erhe::window::Key_w,  true );
+    commands.bind_command_to_key(&m_move_forward_inactive_command,  erhe::window::Key_w,  false);
+    commands.bind_command_to_key(&m_move_backward_active_command,   erhe::window::Key_s,  true );
+    commands.bind_command_to_key(&m_move_backward_inactive_command, erhe::window::Key_s,  false);
+    commands.bind_command_to_key(&m_serialize_transform_command,    erhe::window::Key_page_up, true);
+    commands.bind_command_to_key(&m_deserialize_transform_command,  erhe::window::Key_page_down, true);
 
     commands.register_command(&m_turn_command);
     commands.bind_command_to_mouse_drag(&m_turn_command, erhe::window::Mouse_button_left, false, 0);
