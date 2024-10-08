@@ -64,7 +64,7 @@ void main() {
 
     // compute V by reflecting L across H
     vec3 V = 2 * dot(H, L) * H - L;
-    vec3 b = brdf(
+    vec3 b = anisotropic_brdf(
         material.base_color.rgb,
         material.roughness.x,
         material.roughness.y,
