@@ -1,12 +1,11 @@
-in vec3  v_position;
-in vec2  v_start;
-in vec2  v_line;
-in vec4  v_color;
-in float v_l2;
-in float v_line_width;
+layout(location = 0) in vec3  v_position;
+layout(location = 1) in vec2  v_start;
+layout(location = 2) in vec2  v_line;
+layout(location = 3) in vec4  v_color;
+layout(location = 4) in float v_l2;
+layout(location = 5) in float v_line_width;
 
-void main(void)
-{
+void main(void) {
     float t                      = dot(gl_FragCoord.xy - v_start, v_line) / v_l2;
     vec2  projection             = v_start + clamp(t, 0.0, 1.0) * v_line;
     vec2  delta                  = gl_FragCoord.xy - projection;

@@ -1,17 +1,14 @@
-in vec2 v_texcoord;
+layout(location = 0) in vec2 v_texcoord;
 
-bool is_nan(float val)
-{
+bool is_nan(float val) {
     return ( val < 0.0 || 0.0 < val || val == 0.0 ) ? false : true;
 }
 
-float fix(float value)
-{
+float fix(float value) {
     return is_nan(value) ? 0.0 : value;
 }
 
-vec3 fix(vec3 value)
-{
+vec3 fix(vec3 value) {
     return vec3(
         fix(value.r),
         fix(value.g),
@@ -20,13 +17,11 @@ vec3 fix(vec3 value)
 }
 
 
-float rcp(float _v)
-{
+float rcp(float _v) {
     return 1.0 / _v;
 }
 
-vec3 rcp(vec3 _v)
-{
+vec3 rcp(vec3 _v) {
     return vec3(1.0) / _v;
 }
 
@@ -37,39 +32,32 @@ float luminance(vec3 _color)
 }
 
 // https://github.com/hughsk/glsl-luma/blob/master/index.glsl
-float luma(vec3 _color)
-{
+float luma(vec3 _color) {
     vec3 W = vec3(0.299, 0.587, 0.114);
     return dot(_color, W);
 }
 
-vec3 tonemap(vec3 _c)
-{
+vec3 tonemap(vec3 _c) {
     return _c * rcp(max(_c.r, max(_c.g, _c.b)) + 1.0);
 }
 
-vec3 tonemap_with_weight(vec3 _c, float _w)
-{
+vec3 tonemap_with_weight(vec3 _c, float _w) {
     return _c * (_w * rcp(max(_c.r, max(_c.g, _c.b)) + 1.0));
 }
 
-vec3 tonemap_invert(vec3 _c)
-{
+vec3 tonemap_invert(vec3 _c) {
     return _c * rcp(1.0 - max(_c.r, max(_c.g, _c.b)));
 }
 
-vec3 tonemap_reinhard(vec3 color)
-{
+vec3 tonemap_reinhard(vec3 color) {
     return color / (color + vec3(1.0));
 }
 
-vec3 tonemap_reinhard2(vec3 color)
-{
+vec3 tonemap_reinhard2(vec3 color) {
     return color / (color + vec3(1.0));
 }
 
-vec3 tonemap_simple(vec3 x)
-{
+vec3 tonemap_simple(vec3 x) {
     vec3 a = vec3(
         pow(x.r, 1.25),
         pow(x.g, 1.25),
@@ -78,16 +66,14 @@ vec3 tonemap_simple(vec3 x)
     return a / (a + vec3(1.0));
 }
 
-vec3 tonemap_ue3(vec3 x)
-{
+vec3 tonemap_ue3(vec3 x) {
     // Used in Unreal Engine 3 up to 4.14. (I think, might be wrong).
     // They've since moved to ACES for output on a larger variety of devices.
     // Very simple and intented for use with color-lut afterwards.
     return x / (x + vec3(0.187)) * vec3(1.035);
 }
 
-vec3 tonemap_log(vec3 x)
-{
+vec3 tonemap_log(vec3 x) {
     float D_max       =  1.0;
     float D_min       =  0.0;
     float tau         =  1.0;
@@ -104,8 +90,7 @@ vec3 tonemap_log(vec3 x)
     //return x * scale + Y_in * 0.03;
 }
 
-void main()
-{
+void main() {
 #if defined(ERHE_BINDLESS_TEXTURE)
     vec4 base_color = texture(sampler2D(post_processing.source_texture[0]), v_texcoord);
 #else

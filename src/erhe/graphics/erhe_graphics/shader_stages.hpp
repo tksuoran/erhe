@@ -3,9 +3,17 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/gl_objects.hpp"
 
+#include "glslang/Public/ShaderLang.h"
+
 #include <filesystem>
 #include <map>
 #include <string>
+#include <unordered_map>
+
+namespace glslang {
+    class TShader;
+    class TProgram;
+}
 
 namespace erhe::graphics {
 
@@ -88,14 +96,15 @@ public:
     [[nodiscard]] auto create_info() const -> const Shader_stages_create_info&;
     [[nodiscard]] auto is_valid   () -> bool;
 
-    void compile_shaders();
-    auto link_program   () -> bool;
-    void dump_reflection() const;
-
+    void compile_shaders ();
+    auto link_program    () -> bool;
+    void dump_reflection () const;
     auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
 
 private:
-    void post_link();
+    void post_link           ();
+    auto compile_glslang     (const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
+    auto link_glslang_program() -> bool;
 
     [[nodiscard]] auto compile     (const Shader_stage& shader) -> Gl_shader;
     [[nodiscard]] auto post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool;
@@ -108,15 +117,18 @@ private:
     static constexpr int state_ready                      = 3;
     static constexpr int state_fail                       = 4;
 
-    Instance&                                           m_graphics_instance;
-    Shader_stages_create_info                           m_create_info;
-    Gl_program                                          m_handle;
-    std::vector<Gl_shader>                              m_prelink_shaders;
-    int                                                 m_state{state_init};
-    Shader_resource                                     m_default_uniform_block;
-    std::map<std::string, Shader_resource, std::less<>> m_resources;
-    std::map<unsigned int, std::string>                 m_final_sources;
-    std::vector<std::filesystem::path>                  m_paths;
+    Instance&                                                    m_graphics_instance;
+    Shader_stages_create_info                                    m_create_info;
+    Gl_program                                                   m_handle;
+    std::vector<Gl_shader>                                       m_prelink_shaders;
+    std::vector<std::shared_ptr<glslang::TShader>>               m_glslang_shaders;
+    std::unordered_map<::EShLanguage, std::vector<unsigned int>> m_spirv_shaders;
+    std::shared_ptr<glslang::TProgram>                           m_glslang_program;
+    int                                                          m_state{state_init};
+    Shader_resource                                              m_default_uniform_block;
+    std::map<std::string, Shader_resource, std::less<>>          m_resources;
+    std::map<unsigned int, std::string>                          m_final_sources;
+    std::vector<std::filesystem::path>                           m_paths;
 };
 
 class Shader_stages
@@ -134,10 +146,10 @@ public:
     [[nodiscard]] auto is_valid() const -> bool;
 
 private:
-    std::string            m_name;
-    Gl_program             m_handle;
-    bool                   m_is_valid{false};
-    std::vector<Gl_shader> m_attached_shaders;
+    std::string                        m_name;
+    Gl_program                         m_handle;
+    bool                               m_is_valid{false};
+    std::vector<Gl_shader>             m_attached_shaders;
 };
 
 class Reloadable_shader_stages

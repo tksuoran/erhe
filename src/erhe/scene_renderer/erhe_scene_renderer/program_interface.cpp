@@ -29,6 +29,12 @@ Program_interface::Program_interface(erhe::graphics::Instance& graphics_instance
         {
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 0,
+                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
+                .name            = "a_position",
+                .src_usage       = { Vertex_attribute::Usage_type::position }
+            },
+            erhe::graphics::Vertex_attribute_mapping{
+                .layout_location = 1,
                 .shader_type     = erhe::graphics::Glsl_type::float_vec4,
                 .name            = "a_position_texcoord",
                 .src_usage       = {
@@ -38,13 +44,7 @@ Program_interface::Program_interface(erhe::graphics::Instance& graphics_instance
                 }
             },
             erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 0,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
-                .name            = "a_position",
-                .src_usage       = { Vertex_attribute::Usage_type::position }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 1,
+                .layout_location = 2,
                 .shader_type     = erhe::graphics::Glsl_type::float_vec3,
                 .name            = "a_normal",
                 .src_usage       = { Vertex_attribute::Usage_type::normal }
@@ -55,12 +55,12 @@ Program_interface::Program_interface(erhe::graphics::Instance& graphics_instance
                 .name            = "a_normal_smooth",
                 .src_usage       = { Vertex_attribute::Usage_type::normal, 1 }
             },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 2,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
-                .name            = "a_normal_flat",
-                .src_usage       = { Vertex_attribute::Usage_type::normal, 2 }
-            },
+            //erhe::graphics::Vertex_attribute_mapping{
+            //    .layout_location = 2,
+            //    .shader_type     = erhe::graphics::Glsl_type::float_vec3,
+            //    .name            = "a_normal_flat",
+            //    .src_usage       = { Vertex_attribute::Usage_type::normal, 2 }
+            //},
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 4,
                 .shader_type     = erhe::graphics::Glsl_type::float_vec4,

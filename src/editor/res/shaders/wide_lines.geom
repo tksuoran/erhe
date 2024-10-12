@@ -22,8 +22,7 @@ out layout(location = 2) vec4  v_color;
 out layout(location = 3) float v_l2;
 out layout(location = 4) float v_line_width;
 
-void main(void)
-{
+void main(void) {
     //  a - - - - - - - - - - - - - - - - b
     //  |      |                   |      |
     //  |      |                   |      |

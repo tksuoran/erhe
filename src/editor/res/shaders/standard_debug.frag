@@ -3,16 +3,16 @@
 #include "erhe_srgb.glsl"
 #include "erhe_texture.glsl"
 
-in vec2      v_texcoord;
-in vec4      v_position;
-in vec4      v_color;
-in vec2      v_aniso_control;
-in mat3      v_TBN;
-in flat uint v_material_index;
-in float     v_tangent_scale;
-in float     v_line_width;
-in vec4      v_bone_color;
-in flat uvec2 v_valency_edge_count;
+layout(location =  0) in vec4       v_position;
+layout(location =  1) in vec2       v_texcoord;
+layout(location =  2) in vec4       v_color;
+layout(location =  3) in vec2       v_aniso_control;
+layout(location =  4) in mat3       v_TBN;
+layout(location =  7) in flat uint  v_material_index;
+layout(location =  8) in float      v_tangent_scale;
+layout(location =  9) in float      v_line_width;
+layout(location = 10) in vec4       v_bone_color;
+layout(location = 11) in flat uvec2 v_valency_edge_count;
 
 void main()
 {

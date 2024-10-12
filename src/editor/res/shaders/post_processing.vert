@@ -1,7 +1,6 @@
-out vec2 v_texcoord;
+layout(location = 0) out vec2 v_texcoord;
 
-void main()
-{
+void main() {
     //  Vertices of a fullscreen triangle:          .
     //                                              .
     //  gl_Position           v_texcoord            .

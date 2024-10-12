@@ -1,9 +1,10 @@
-out vec2      v_texcoord;
-out vec4      v_position;
-out mat3      v_TBN;
-out flat uint v_material_index;
-out float     v_tangent_scale;
-out vec4      v_color;
+layout(location = 0) out vec4      v_position;
+layout(location = 1) out vec2      v_texcoord;
+layout(location = 2) out vec4      v_color;
+layout(location = 3) out mat3      v_TBN;
+layout(location = 6) out flat uint v_material_index;
+layout(location = 7) out float     v_tangent_scale;
+layout(location = 8) out float     v_line_width;
 
 void main()
 {

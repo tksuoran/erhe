@@ -100,6 +100,10 @@ FetchContent_MakeAvailable(glm)
 # Enable GLM_GTX_component_wise
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
+message("Fetching glslang")
+include(glslang)
+FetchContent_MakeAvailable_glslang()
+
 message("Fetching MathGeoLib")
 FetchContent_MakeAvailable(MathGeoLib)
 

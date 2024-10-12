@@ -1,10 +1,9 @@
 //// TODO #include "erhe_texture.glsl"
 
-in      vec2  v_texcoord;
-in flat uvec2 v_texture;
+layout(location = 0) in      vec2  v_texcoord;
+layout(location = 1) in flat uvec2 v_texture;
 
-vec4 sample_texture(vec2 texcoord)
-{
+vec4 sample_texture(vec2 texcoord) {
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
     return texture(s_texture, v_texcoord);
@@ -13,8 +12,7 @@ vec4 sample_texture(vec2 texcoord)
 #endif
 }
 
-vec4 sample_texture_lod_bias(vec2 texcoord, float lod_bias)
-{
+vec4 sample_texture_lod_bias(vec2 texcoord, float lod_bias) {
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
     return texture(s_texture, texcoord, lod_bias);
@@ -23,8 +21,7 @@ vec4 sample_texture_lod_bias(vec2 texcoord, float lod_bias)
 #endif
 }
 
-vec2 get_texture_size()
-{
+vec2 get_texture_size() {
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
     return textureSize(s_texture, 0);
@@ -33,8 +30,7 @@ vec2 get_texture_size()
 #endif
 }
 
-void main()
-{
+void main() {
     // This does not seem to give better image quality.
     // I observed only very little difference, except
     // when image was viewed in really steep angle.

@@ -1,9 +1,8 @@
-in float v_line_width;
-in vec4  v_color;
-in vec4  v_start_end;
+layout(location = 0) in float v_line_width;
+layout(location = 1) in vec4  v_color;
+layout(location = 2) in vec4  v_start_end;
 
-void main(void)
-{
+void main(void) {
     vec2  start = v_start_end.xy;
     vec2  end   = v_start_end.zw;
     vec2  line  = end - start;

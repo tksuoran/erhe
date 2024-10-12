@@ -33,13 +33,13 @@ using std::make_unique;
 namespace {
 
 constexpr std::string_view c_vertex_shader_source = R"NUL(
-out vec4 v_color;
-out vec2 v_texcoord;
+layout(location = 0) out vec4 v_color;
+layout(location = 1) out vec2 v_texcoord;
 
 #if defined(ERHE_BINDLESS_TEXTURE)
-out flat uvec2 v_texture;
+layout(location = 2) out flat uvec2 v_texture;
 #else
-out flat uint v_texture_id;
+layout(location = 2) out flat uint v_texture_id;
 #endif
 
 out gl_PerVertex {
@@ -47,8 +47,7 @@ out gl_PerVertex {
     float gl_ClipDistance[4];
 };
 
-float srgb_to_linear(float x)
-{
+float srgb_to_linear(float x) {
     if (x <= 0.04045) {
         return x / 12.92;
     } else {
@@ -56,8 +55,7 @@ float srgb_to_linear(float x)
     }
 }
 
-vec3 srgb_to_linear(vec3 v)
-{
+vec3 srgb_to_linear(vec3 v) {
     return vec3(
         srgb_to_linear(v.r),
         srgb_to_linear(v.g),
@@ -65,8 +63,7 @@ vec3 srgb_to_linear(vec3 v)
     );
 }
 
-void main()
-{
+void main() {
     vec2 scale         = draw.scale.xy;
     vec2 translate     = draw.translate.xy;
     vec4 clip_rect     = draw.draw_parameters[gl_DrawID].clip_rect;
@@ -87,17 +84,16 @@ void main()
 )NUL";
 
 const std::string_view c_fragment_shader_source = R"NUL(
-in vec4 v_color;
-in vec2 v_texcoord;
+layout(location = 0) in vec4 v_color;
+layout(location = 1) in vec2 v_texcoord;
 
 #if defined(ERHE_BINDLESS_TEXTURE)
-in flat uvec2 v_texture;
+layout(location = 2) in flat uvec2 v_texture;
 #else
-in flat uint v_texture_id;
+layout(location = 2) in flat uint v_texture_id;
 #endif
 
-void main()
-{
+void main() {
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
     vec4 texture_sample = texture(s_texture, v_texcoord.st);

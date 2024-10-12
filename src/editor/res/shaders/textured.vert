@@ -1,8 +1,7 @@
-out      vec2  v_texcoord;
-out flat uvec2 v_texture;
+layout(location = 0) out      vec2  v_texcoord;
+layout(location = 1) out flat uvec2 v_texture;
 
-void main()
-{
+void main() {
     mat4 world_from_node = primitive.primitives[gl_DrawID].world_from_node;
     mat4 clip_from_world = camera.cameras[0].clip_from_world;
     uint material_index  = primitive.primitives[gl_DrawID].material_index;

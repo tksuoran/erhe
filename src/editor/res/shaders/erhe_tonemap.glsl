@@ -1,15 +1,13 @@
 #ifndef ERHE_TONEMAP_GLSL
 #define ERHE_TONEMAP_GLSL
 
-float luminance(vec3 c) // BT.709
-{
+float luminance(vec3 c) { // BT.709
     return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }
 
 // Tone Mapping for HDR Image using Optimization – A New Closed Form Solution
 // http://www.cs.nott.ac.uk/~pszqiu/webpages/Papers/icpr2006-hdri-camera.pdf
-vec3 tonemap_log(vec3 x)
-{
+vec3 tonemap_log(vec3 x) {
     float small_value      = 1.0 /    32.0; // 0.03125
     float very_small_value = 0.5 / 65536.0; // 0.00000762939
     float D_max            = 1.0; // maximum display luminance

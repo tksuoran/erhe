@@ -1,8 +1,7 @@
-in      vec3 v_position;
-in flat uint v_material_index;
+layout(location = 0) in      vec3 v_position;
+layout(location = 1) in flat uint v_material_index;
 
-void main()
-{
+void main() {
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],

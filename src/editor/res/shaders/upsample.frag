@@ -1,16 +1,14 @@
 #include "erhe_tonemap.glsl"
 
-in vec2 v_texcoord;
+layout(location = 0) in vec2 v_texcoord;
 
-float get_weight()
-{
+float get_weight() {
     float level_count = post_processing.level_count;
     float k = level_count - post_processing.source_lod;
     return 1.0 / k;
 }
 
-void main()
-{
+void main() {
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_downsample = sampler2D(post_processing.downsample_texture);
     sampler2D s_upsample   = sampler2D(post_processing.upsample_texture);

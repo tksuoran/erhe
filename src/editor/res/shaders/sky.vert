@@ -1,7 +1,6 @@
-out vec4 v_position;
+layout(location = 0) out vec4 v_position;
 
-void main()
-{
+void main() {
     //  Vertices of a fullscreen triangle:          .
     //                                              .
     //  gl_Position           v_texcoord            .

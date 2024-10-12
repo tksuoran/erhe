@@ -1,12 +1,12 @@
 #include "erhe_srgb.glsl"
 
-in vec2      v_texcoord;
-in vec4      v_position;
-in vec4      v_color;
-in mat3      v_TBN;
-in flat uint v_material_index;
-in float     v_tangent_scale;
-in float     v_line_width;
+layout(location = 0) in vec4      v_position;
+layout(location = 1) in vec2      v_texcoord;
+layout(location = 2) in vec4      v_color;
+layout(location = 3) in mat3      v_TBN;
+layout(location = 6) in flat uint v_material_index;
+layout(location = 7) in float     v_tangent_scale;
+layout(location = 8) in float     v_line_width;
 
 void main() {
     vec3 view_position_in_world = vec3(

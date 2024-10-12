@@ -1,7 +1,6 @@
-in vec4 v_position;
+layout(location = 0) in vec4 v_position;
 
-void main()
-{
+void main() {
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],

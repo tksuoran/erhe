@@ -1,8 +1,7 @@
-out      vec3 v_position;
-out flat uint v_material_index;
+layout(location = 0) out      vec3 v_position;
+layout(location = 1) out flat uint v_material_index;
 
-void main()
-{
+void main() {
     mat4 world_from_node = primitive.primitives[gl_DrawID].world_from_node;
     mat4 clip_from_world = camera.cameras[0].clip_from_world;
     vec4 position        = world_from_node * vec4(a_position, 1.0);

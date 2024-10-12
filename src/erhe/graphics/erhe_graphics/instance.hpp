@@ -98,8 +98,10 @@ public:
         int max_compute_uniform_blocks               {0};
         int max_vertex_shader_storage_blocks         {0};
         int max_vertex_uniform_blocks                {0};
+        int max_vertex_uniform_vectors               {0};
         int max_fragment_shader_storage_blocks       {0};
         int max_fragment_uniform_blocks              {0};
+        int max_fragment_uniform_vectors             {0};
         int max_geometry_shader_storage_blocks       {0};
         int max_geometry_uniform_blocks              {0};
         int max_tess_control_shader_storage_blocks   {0};

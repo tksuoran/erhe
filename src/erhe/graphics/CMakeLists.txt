@@ -21,6 +21,10 @@ erhe_target_sources_grouped(
     erhe_graphics/gl_objects.hpp
     erhe_graphics/glsl_file_loader.cpp
     erhe_graphics/glsl_file_loader.hpp
+    erhe_graphics/glsl_format_source.cpp
+    erhe_graphics/glsl_format_source.hpp
+    erhe_graphics/glsl_to_spirv.cpp
+    erhe_graphics/glsl_to_spirv.hpp
     erhe_graphics/gpu_timer.cpp
     erhe_graphics/gpu_timer.hpp
     erhe_graphics/graphics_log.cpp
@@ -84,6 +88,8 @@ target_link_libraries(${_target}
         erhe::window
         fmt::fmt
         glm::glm-header-only
+        glslang
+        glslang::glslang-default-resource-limits
         mango
         #### wuffs
         #### glslang

@@ -1,12 +1,10 @@
-in vec2 v_texcoord;
+layout(location = 0) in vec2 v_texcoord;
 
-float luminance(vec3 c) // BT.709
-{
+float luminance(vec3 c) {// BT.709
     return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }
 
-vec3 karis_average(vec3 c1, vec3 c2, vec3 c3, vec3 c4)
-{
+vec3 karis_average(vec3 c1, vec3 c2, vec3 c3, vec3 c4) {
     float w1 = 1.0 / (luminance(c1.rgb) + 1.0);
     float w2 = 1.0 / (luminance(c2.rgb) + 1.0);
     float w3 = 1.0 / (luminance(c3.rgb) + 1.0);
@@ -15,8 +13,7 @@ vec3 karis_average(vec3 c1, vec3 c2, vec3 c3, vec3 c4)
     return (c1 * w1 + c2 * w2 + c3 * w3 + c4 * w4) / (w1 + w2 + w3 + w4);
 }
 
-void main()
-{
+void main() {
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_downsample = sampler2D(post_processing.downsample_texture);
 #endif

@@ -1,5 +1,5 @@
-out vec3 v_normal;
-out vec4 v_color;
+layout(location = 0) out vec3 v_normal;
+layout(location = 1) out vec4 v_color;
 
 out gl_PerVertex
 {

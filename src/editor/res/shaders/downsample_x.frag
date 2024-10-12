@@ -1,23 +1,14 @@
-in vec2 v_texcoord;
+layout(location = 0) in vec2 v_texcoord;
 
-float fix(float value)
-{
-    return isnan(value) || isinf(value)
-        ? 0.0
-        : value;
+float fix(float value) {
+    return isnan(value) || isinf(value) ? 0.0 : value;
 }
 
-vec3 fix(vec3 value)
-{
-    return vec3(
-        fix(value.r),
-        fix(value.g),
-        fix(value.b)
-    );
+vec3 fix(vec3 value) {
+    return vec3(fix(value.r), fix(value.g), fix(value.b));
 }
 
-void main()
-{
+void main() {
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_source = sampler2D(post_processing.source_texture[0]);
 #endif

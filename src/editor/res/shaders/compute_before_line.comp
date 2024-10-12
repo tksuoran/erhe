@@ -1,8 +1,6 @@
-
 layout(local_size_x = 32) in;
 
-float get_line_width(vec4 position, float thickness)
-{
+float get_line_width(vec4 position, float thickness) {
     float fov_left         = view.fov[0];
     float fov_right        = view.fov[1];
     float fov_width        = fov_right - fov_left;
@@ -20,8 +18,7 @@ bool clip_line(
     out vec4  clipped_v1,
     out float tmin,
     out float tmax
-)
-{
+) {
     vec4  l      = v1 - v0;
     // Clipping in X and Y axis is disabled so that wide lines that
     // are outside (left/right/above/below) viewport don't get culled
@@ -92,8 +89,7 @@ bool clip_line(
     return true;
 }
 
-void do_wide_line(uint in_line_index, uint out_triangle_index)
-{
+void do_wide_line(uint in_line_index, uint out_triangle_index) {
     uint in_i0           = 2 * in_line_index;
     uint in_i1           = 2 * in_line_index + 1; 
     uint out_i0          = 3 * out_triangle_index;
@@ -199,8 +195,7 @@ void do_wide_line(uint in_line_index, uint out_triangle_index)
     triangle_vertex_buffer.vertices[out_i0 + 5].custom_0   = l_in_screen;
 }
 
-void main(void)
-{
+void main(void) {
     uint in_line_index      = gl_GlobalInvocationID.x;
     uint out_triangle_index = 2 * in_line_index;
     do_wide_line(in_line_index, out_triangle_index);

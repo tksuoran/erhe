@@ -1,5 +1,4 @@
-void main()
-{
+void main() {
     mat4 world_from_node;
 
     if (primitive.primitives[gl_DrawID].skinning_factor < 0.5) {

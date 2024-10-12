@@ -1,11 +1,10 @@
-out vec2      v_texcoord;
-out vec4      v_position;
-out vec4      v_color;
-out mat3      v_TBN;
-out flat uint v_material_index;
+layout(location = 0) out vec4      v_position;
+layout(location = 1) out vec2      v_texcoord;
+layout(location = 2) out vec4      v_color;
+layout(location = 3) out mat3      v_TBN;
+layout(location = 6) out flat uint v_material_index;
 
-void main()
-{
+void main() {
     mat4 world_from_node         ;
     mat4 world_from_node_cofactor;
 

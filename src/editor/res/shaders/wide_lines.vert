@@ -1,8 +1,7 @@
 out layout(location = 0) vec4  vs_color;
 out layout(location = 1) float vs_line_width;
 
-void main()
-{
+void main() {
     mat4 world_from_node         ;
     mat4 world_from_node_cofactor;
 
