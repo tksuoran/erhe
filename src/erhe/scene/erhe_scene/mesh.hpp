@@ -68,7 +68,6 @@ public:
     float                 line_width{1.0f};
 
 private:
-
     std::vector<erhe::primitive::Primitive>          m_primitives;
     erhe::raytrace::IScene*                          m_rt_scene{nullptr};
     std::vector<std::unique_ptr<Raytrace_primitive>> m_rt_primitives;

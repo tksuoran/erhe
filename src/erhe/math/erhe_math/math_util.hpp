@@ -634,11 +634,37 @@ auto safe_normalize_cross(
     }
 
     const auto c0 = glm::cross(lhs, rhs);
-    if (glm::length(c0) < glm::epsilon<T>())
-    {
+    if (glm::length(c0) < glm::epsilon<T>()) {
         return min_axis<T>(lhs);
     }
     return glm::normalize(c0);
+}
+
+template <typename T>
+[[nodiscard]] auto project(
+    const typename vector_types<T>::vec3& a,
+    const typename vector_types<T>::vec3& b
+) -> const typename vector_types<T>::vec3
+{
+	return glm::dot(a, b) / glm::dot(b, b) * b;
+}
+
+template <typename T>
+void gram_schmidt(
+    const typename vector_types<T>::vec3& a,
+    const typename vector_types<T>::vec3& b,
+    const typename vector_types<T>::vec3& c,
+    typename vector_types<T>::vec3&       out_a,
+    typename vector_types<T>::vec3&       out_b,
+    typename vector_types<T>::vec3&       out_c
+)
+{
+    out_a = a;
+    out_b = b - project<T>(b, a);
+    out_c = c - project<T>(c, out_b) - project<T>(c, out_a);
+    out_a = glm::normalize(out_a);
+    out_b = glm::normalize(out_b);
+    out_c = glm::normalize(out_c);
 }
 
 class Bounding_box

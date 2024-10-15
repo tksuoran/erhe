@@ -99,6 +99,8 @@ private:
 
     [[nodiscard]] auto get_polygon_normal() -> glm::vec3;
 
+    void build_tangent_frame();
+
     void build_vertex_position     ();
     void build_vertex_normal       (bool normal, bool smooth_normal);
     void build_vertex_tangent      ();
@@ -115,6 +117,11 @@ private:
 
     void build_corner_point_index  ();
     void build_triangle_fill_index ();
+
+    glm::vec3 v_position {};
+    glm::vec3 v_normal   {};
+    glm::vec4 v_tangent  {};
+    glm::vec4 v_bitangent{};
 
     erhe::geometry::Polygon_id        polygon_id       {0};
     erhe::geometry::Polygon_corner_id polygon_corner_id{0};

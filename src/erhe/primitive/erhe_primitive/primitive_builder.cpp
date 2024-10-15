@@ -315,6 +315,25 @@ void Build_context::build_polygon_id()
     }
 }
 
+void Build_context::build_vertex_position()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // if (!root.attributes.position.is_valid()) {
+    //     return;
+    // }
+
+    //// ERHE_VERIFY(property_maps.point_locations != nullptr);
+    v_position = property_maps.point_locations->get(point_id);
+    vertex_writer.write(root.attributes.position, v_position);
+
+    SPDLOG_LOGGER_TRACE(
+        log_primitive_builder,
+        "polygon {} corner {} point {} vertex {} location {}",
+        polygon_index, corner_id, point_id, vertex_index, v_position
+    );
+}
+
 auto Build_context::get_polygon_normal() -> vec3
 {
     ERHE_PROFILE_FUNCTION();
@@ -326,37 +345,14 @@ auto Build_context::get_polygon_normal() -> vec3
     return polygon_normal;
 }
 
-void Build_context::build_vertex_position()
+/////////////////////////////
+
+void Build_context::build_tangent_frame()
 {
-    ERHE_PROFILE_FUNCTION();
-
-    // if (!root.attributes.position.is_valid()) {
-    //     return;
-    // }
-
-    //// ERHE_VERIFY(property_maps.point_locations != nullptr);
-    const vec3 position = property_maps.point_locations->get(point_id);
-    vertex_writer.write(root.attributes.position, position);
-
-    SPDLOG_LOGGER_TRACE(
-        log_primitive_builder,
-        "polygon {} corner {} point {} vertex {} location {}",
-        polygon_index, corner_id, point_id, vertex_index, position
-    );
-}
-
-void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    /// if (!root.attributes.normal.is_valid() && !root.attributes.normal_smooth.is_valid()) {
-    ///     return;
-    /// }
-
-    vec3 normal{0.0f, 1.0f, 0.0f};
+    v_normal = vec3{0.0f, 1.0f, 0.0f};
     bool found_normal{false};
     if (property_maps.corner_normals != nullptr) {
-        found_normal = property_maps.corner_normals->maybe_get(corner_id, normal) && (glm::length(normal) > 0.9f);
+        found_normal = property_maps.corner_normals->maybe_get(corner_id, v_normal) && (glm::length(v_normal) > 0.9f);
     }
     if (!found_normal) {
         vec3 point_normal{0.0f, 1.0f, 0.0f};
@@ -367,10 +363,10 @@ void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
         if (!found_point_normal && (property_maps.point_normals_smooth != nullptr)) {
             found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
         }
-        normal = point_normal;
+        v_normal = point_normal;
     }
 
-    if (do_normal) {
+    {
         ERHE_PROFILE_SCOPE("n");
         switch (normal_style) {
             //using enum Normal_style;
@@ -381,8 +377,6 @@ void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
 
             case Normal_style::corner_normals: {
                 //// ERHE_VERIFY(glm::length(normal) > 0.9f);
-                vertex_writer.write(root.attributes.normal, normal);
-                SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} normal {}", point_id, corner_id, normal);
                 break;
             }
 
@@ -396,17 +390,14 @@ void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
                 if (!found_point_normal && (property_maps.point_normals_smooth != nullptr)) {
                     found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
                 }
-
-                vertex_writer.write(root.attributes.normal, point_normal);
-                SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point normal {}", point_id, corner_id, point_normal);
+                v_normal = point_normal;
                 break;
             }
 
             case Normal_style::polygon_normals: {
                 const vec3 polygon_normal = get_polygon_normal();
                 //// ERHE_VERIFY(glm::length(polygon_normal) > 0.9f);
-                vertex_writer.write(root.attributes.normal, polygon_normal);
-                SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} polygon normal {}", point_id, corner_id, polygon_normal);
+                v_normal = polygon_normal;
                 break;
             }
 
@@ -414,6 +405,85 @@ void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
                 ERHE_FATAL("bad normal style");
             }
         }
+    }
+
+    v_tangent = vec4{1.0f, 0.0f, 0.0, 1.0f};
+    bool found_tangent{false};
+    if (property_maps.corner_tangents != nullptr) {
+        found_tangent = property_maps.corner_tangents->maybe_get(corner_id, v_tangent) && (glm::length(v_tangent) > 0.9f);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found_tangent) {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} tangent {}", point_id, corner_id, tangent);
+        }
+#endif
+    }
+    if (!found_tangent && (property_maps.point_tangents != nullptr)) {
+        found_tangent = property_maps.point_tangents->maybe_get(point_id, v_tangent) && (glm::length(v_tangent) > 0.9f);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found_tangent) {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point tangent {}", point_id, corner_id, tangent);
+        }
+#endif
+    }
+    if (!found_tangent) {
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point_id {} corner {} fallback tangent", point_id, corner_id);
+        v_tangent = glm::vec4{erhe::math::min_axis<float>(v_normal), 1.0f};
+        used_fallback_tangent = true;
+    }
+
+    v_bitangent = vec4{0.0f, 0.0f, 1.0, 1.0f};
+    bool found_bitangent{false};
+    if (property_maps.corner_bitangents != nullptr) {
+        found_bitangent = property_maps.corner_bitangents->maybe_get(corner_id, v_bitangent) && (glm::length(v_bitangent) > 0.9f);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found_bitangent) {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} bitangent {}", point_id, corner_id, bitangent);
+        }
+#endif
+    }
+    if (!found_bitangent && (property_maps.point_bitangents != nullptr)) {
+        found_bitangent = property_maps.point_bitangents->maybe_get(point_id, v_bitangent) && (glm::length(v_bitangent) > 0.9f);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found_bitangent) {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point bitangent {}", point_id, corner_id, bitangent);
+        }
+#endif
+    }
+    if (!found_bitangent) {
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} fallback bitangent", point_id, corner_id);
+        glm::vec3 n0{v_normal};
+        glm::vec3 t0{v_tangent};
+        ERHE_VERIFY(glm::length(n0) > 0.9f);
+        ERHE_VERIFY(glm::length(t0) > 0.9f);
+        //glm::vec3 b0 = glm::cross(n, t);
+        //ERHE_VERIFY(glm::length(b0) > 0.9f);
+        //glm::vec3 b  = glm::normalize(b0);
+        glm::vec3 b0 = erhe::math::safe_normalize_cross<float>(n0, t0);
+        used_fallback_bitangent = true;
+    }
+    glm::vec3 n0{v_normal};
+    glm::vec3 t0{v_tangent};
+    glm::vec3 b0{v_bitangent};
+    glm::vec3 n{v_normal};
+    glm::vec3 t{v_tangent};
+    glm::vec3 b{v_bitangent};
+    erhe::math::gram_schmidt<float>(t0, b0, n0, t, b, n);
+    v_tangent = glm::vec4{t, 1.0f};
+    v_bitangent = glm::vec4{b, 1.0f};
+}
+
+/////////////////////////////
+
+void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    /// if (!root.attributes.normal.is_valid() && !root.attributes.normal_smooth.is_valid()) {
+    ///     return;
+    /// }
+
+    if (do_normal) {
+        vertex_writer.write(root.attributes.normal, v_normal);
     }
 
     // if (features.normal_flat && root.attributes.normal_flat.is_valid()) {
@@ -436,7 +506,6 @@ void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
                 used_fallback_smooth_normal = true;
             }
         }
-    
         vertex_writer.write(root.attributes.normal_smooth, smooth_point_normal);
     }
 }
@@ -445,69 +514,14 @@ void Build_context::build_vertex_tangent()
 {
     ERHE_PROFILE_FUNCTION();
 
-    // if (!root.attributes.tangent.is_valid()) {
-    //     return;
-    // }
-
-    vec4 tangent{1.0f, 0.0f, 0.0, 1.0f};
-    bool found{false};
-    if (property_maps.corner_tangents != nullptr) {
-        found = property_maps.corner_tangents->maybe_get(corner_id, tangent) && (glm::length(tangent) > 0.9f);
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-        if (found)
-        {
-            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} tangent {}", point_id, corner_id, tangent);
-        }
-#endif
-    }
-    if (!found && (property_maps.point_tangents != nullptr)) {
-        found = property_maps.point_tangents->maybe_get(point_id, tangent) && (glm::length(tangent) > 0.9f);
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-        if (found) {
-            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point tangent {}", point_id, corner_id, tangent);
-        }
-#endif
-    }
-    if (!found) {
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point_id {} corner {} unit x tangent", point_id, corner_id);
-        used_fallback_tangent = true;
-    }
-
-    vertex_writer.write(root.attributes.tangent, tangent);
+    vertex_writer.write(root.attributes.tangent, v_tangent);
 }
 
 void Build_context::build_vertex_bitangent()
 {
     ERHE_PROFILE_FUNCTION();
 
-    // if (!root.attributes.bitangent.is_valid()) {
-    //     return;
-    // }
-
-    vec4 bitangent{0.0f, 0.0f, 1.0, 1.0f};
-    bool found{false};
-    if (property_maps.corner_bitangents != nullptr) {
-        found = property_maps.corner_bitangents->maybe_get(corner_id, bitangent) && (glm::length(bitangent) > 0.9f);
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-        if (found) {
-            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} bitangent {}", point_id, corner_id, bitangent);
-        }
-#endif
-    }
-    if (!found && (property_maps.point_bitangents != nullptr)) {
-        found = property_maps.point_bitangents->maybe_get(point_id, bitangent) && (glm::length(bitangent) > 0.9f);
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-        if (found) {
-            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point bitangent {}", point_id, corner_id, bitangent);
-        }
-#endif
-    }
-    if (!found) {
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} unit z bitangent", point_id, corner_id);
-        used_fallback_bitangent = true;
-    }
-
-    vertex_writer.write(root.attributes.bitangent, bitangent);
+    vertex_writer.write(root.attributes.bitangent, v_bitangent);
 }
 
 void Build_context::build_vertex_texcoord()
@@ -799,6 +813,7 @@ void Build_context::build_polygon_fill()
     const bool do_joint_weights        = root.attributes.joint_weights     .is_valid();
     const bool do_vertex_valency       = root.attributes.valency_edge_count.is_valid();
     const bool do_corner_points        = root.build_info.primitive_types.corner_points;
+    const bool do_tangent_frame = do_vertex_normal_either || do_vertex_tangent || do_vertex_bitangent;
 
     for (polygon_id = 0; polygon_id < polygon_id_end; ++polygon_id) {
         ERHE_PROFILE_SCOPE("polygon");
@@ -824,6 +839,8 @@ void Build_context::build_polygon_fill()
             root.element_mappings.corner_to_vertex_id[corner_id] = vertex_index;
 
             if (do_polygon_id          ) build_polygon_id          ();
+
+            if (do_tangent_frame       ) build_tangent_frame       ();
             if (do_vertex_position     ) build_vertex_position     ();
             if (do_vertex_normal_either) build_vertex_normal       (do_vertex_normal, do_vertex_normal_smooth);
             if (do_vertex_tangent      ) build_vertex_tangent      ();
