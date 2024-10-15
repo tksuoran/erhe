@@ -20,8 +20,9 @@ public:
     Timer         (Timer&&)      = delete;
     auto operator=(Timer&&)      = delete;
 
-    [[nodiscard]] auto duration() const -> std::optional<std::chrono::steady_clock::duration>;
-    [[nodiscard]] auto label   () const -> const char*;
+    [[nodiscard]] auto duration       () const -> std::optional<std::chrono::steady_clock::duration>;
+    [[nodiscard]] auto label          () const -> const char*;
+    [[nodiscard]] auto format_duration() const -> std::string;
     void begin();
     void end  ();
 
@@ -45,5 +46,7 @@ public:
 private:
     Timer& m_timer;
 };
+
+[[nodiscard]] auto format_duration(std::chrono::steady_clock::duration duration) -> std::string;
 
 } // namespace erhe::time
