@@ -13,12 +13,7 @@
 namespace erhe::scene_renderer {
 
 Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
-    : joint_block{
-        graphics_instance,
-        "joint",
-        4,
-        erhe::graphics::Shader_resource::Type::shader_storage_block
-    }
+    : joint_block{graphics_instance, "joint", 4, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , joint_struct{graphics_instance, "Joint"}
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
@@ -47,7 +42,7 @@ Joint_buffer::Joint_buffer(erhe::graphics::Instance& graphics_instance, Joint_in
         gl::Buffer_target::shader_storage_buffer,
         m_joint_interface.joint_block.binding_point(),
         // TODO Separate update joint (and other) buffers outside composer renderpasses. Also consider multiple viewports
-        m_joint_interface.offsets.joint_struct + m_joint_interface.joint_struct.size_bytes() * m_joint_interface.max_joint_count
+        8 * m_joint_interface.offsets.joint_struct + m_joint_interface.joint_struct.size_bytes() * m_joint_interface.max_joint_count
     );
 }
 
@@ -59,12 +54,7 @@ auto Joint_buffer::update(
 {
     ERHE_PROFILE_FUNCTION();
 
-    SPDLOG_LOGGER_TRACE(
-        log_render,
-        "skins.size() = {}, m_writer.write_offset = {}",
-        skins.size(),
-        m_writer.write_offset
-    );
+    SPDLOG_LOGGER_TRACE(log_render, "skins.size() = {}, m_writer.write_offset = {}", skins.size(), m_writer.write_offset);
 
     std::size_t joint_count = 0;
     std::size_t skin_index = 0;
