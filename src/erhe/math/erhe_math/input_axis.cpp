@@ -36,6 +36,9 @@ auto Input_axis::checked_pow(double base, double exponent) -> double
 auto Input_axis::checked_log(double a) -> double
 {
     ERHE_VERIFY(std::isfinite(a));
+    if (a <= 0.0) {
+        return 0.0; // TODO Fix
+    }
     double result = std::log(a);
     ERHE_VERIFY(std::isfinite(result));
     return result;
