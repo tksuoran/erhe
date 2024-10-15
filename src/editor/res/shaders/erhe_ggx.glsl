@@ -17,7 +17,11 @@ float ggx_anisotropic_ndf(float alpha_t, float alpha_b, float T_dot_H, float B_d
     );
     float v2 = dot(v, v);
     float a2 = alpha_t * alpha_b;
-    float w2 = a2 / v2;
+    float w2 = 0.0;
+    //if (v2 != 0.0)
+    {
+        w2 = a2 / v2;
+    }
     return a2 * w2 * w2 * m_i_pi;
 }
 
@@ -92,6 +96,9 @@ float slope_ndf_ggx_anisotropic(vec3 omega_h, float alpha_x, float alpha_y) {
     float cos_2_theta = cos_theta * cos_theta;
     float cos_4_theta = cos_2_theta * cos_2_theta;
     float ggx_p22     = p22_ggx_anisotropic(slope_x, slope_y, alpha_x, alpha_y);
+    if (cos_4_theta == 0.0) {
+        return 1.0;
+    }
     return ggx_p22 / cos_4_theta;
 }
 

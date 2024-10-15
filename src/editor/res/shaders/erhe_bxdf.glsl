@@ -44,7 +44,7 @@ vec3 isotropic_brdf(
     vec3  N
 ) {
     vec3  H       = normalize(L + V);
-    float N_dot_L = dot(N, L);
+    float N_dot_L = clamped_dot(N, L);
     float N_dot_V = clamped_dot(N, V);
     float N_dot_H = dot(N, H);
     float V_dot_H = dot(V, H); // Note: H.L == L.H == H.V == V.H
@@ -91,19 +91,19 @@ vec3 anisotropic_brdf(
 
     float alpha_x = roughness_x * roughness_x;
     float alpha_y = roughness_y * roughness_y;
-    specular_anti_aliasing(wh, alpha_x, alpha_y);
+    //specular_anti_aliasing(wh, alpha_x, alpha_y);
 
     vec3  H       = normalize(L + V);
     float N_dot_H = dot(N, H);
-    float N_dot_V = dot(N, V);
-    float N_dot_L = dot(N, L);
+    float N_dot_V = clamped_dot(N, V);
+    float N_dot_L = clamped_dot(N, L);
     float T_dot_V = dot(T, V);
     float B_dot_V = dot(B, V);
     float T_dot_L = dot(T, L);
     float B_dot_L = dot(B, L);
     float T_dot_H = dot(T, H);
     float B_dot_H = dot(B, H);
-    float V_dot_H = dot(V, H); // Note: H.L == L.H == H.V == V.H
+    float V_dot_H = clamped_dot(V, H); // Note: H.L == L.H == H.V == V.H
 
     // Computing Normal Distribution Term
     float D   = ggx_anisotropic_ndf(alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
@@ -145,7 +145,7 @@ vec3 slope_brdf(
     vec3  wg        = normalize(TBN_t * N);
     vec3  wi        = normalize(TBN_t * L);
     vec3  wh        = normalize(wo + wi);
-    float wi_dot_wh = clamp(dot(wi, wh), 0.0, 1.0);
+    float wi_dot_wh = clamp(  dot(wi, wh), 0.0, 1.0);
     float wg_dot_wi = clamp(cos_theta(wi), 0.0, 1.0);
     float lambda_wo = lambda_ggx_anisotropic(wo, alpha_x, alpha_y);
     float lambda_wi = lambda_ggx_anisotropic(wi, alpha_x, alpha_y);

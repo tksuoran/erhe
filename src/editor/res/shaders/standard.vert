@@ -1,9 +1,11 @@
-out vec2      v_texcoord;
-out vec4      v_position;
-out vec4      v_color;
-out vec2      v_aniso_control;
-out mat3      v_TBN;
-out flat uint v_material_index;
+layout(location = 0) out vec4      v_position;
+layout(location = 1) out vec2      v_texcoord;
+layout(location = 2) out vec4      v_color;
+layout(location = 3) out vec2      v_aniso_control;
+layout(location = 4) out vec3      v_T;
+layout(location = 5) out vec3      v_B;
+layout(location = 6) out vec3      v_N;
+layout(location = 7) out flat uint v_material_index;
 
 void main()
 {
@@ -32,7 +34,9 @@ void main()
     vec3 bitangent       = normalize(cross(normal, tangent)) * a_tangent.w;
     vec4 position        = world_from_node * vec4(a_position, 1.0);
 
-    v_TBN            = mat3(tangent, bitangent, normal);
+    v_T              = tangent;
+    v_B              = bitangent;
+    v_N              = normal;
     v_position       = position;
     gl_Position      = clip_from_world * position;
     v_material_index = primitive.primitives[gl_DrawID].material_index;

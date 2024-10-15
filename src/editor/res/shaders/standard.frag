@@ -2,12 +2,14 @@
 #include "erhe_light.glsl"
 #include "erhe_texture.glsl"
 
-in vec2      v_texcoord;
-in vec4      v_position;
-in vec4      v_color;
-in vec2      v_aniso_control;
-in mat3      v_TBN;
-in flat uint v_material_index;
+layout(location = 0) in vec4      v_position;
+layout(location = 1) in vec2      v_texcoord;
+layout(location = 2) in vec4      v_color;
+layout(location = 3) in vec2      v_aniso_control;
+layout(location = 4) in vec3      v_T;
+layout(location = 5) in vec3      v_B;
+layout(location = 6) in vec3      v_N;
+layout(location = 7) in flat uint v_material_index;
 
 void main() {
     vec3 view_position_in_world = vec3(
@@ -17,9 +19,9 @@ void main() {
     ); 
 
     vec3  V       = normalize(view_position_in_world - v_position.xyz);
-    vec3  T       = normalize(v_TBN[0]);
-    vec3  B       = normalize(v_TBN[1]);
-    vec3  N       = normalize(v_TBN[2]);
+    vec3  T       = normalize(v_T);
+    vec3  B       = normalize(v_B);
+    vec3  N       = normalize(v_N);
 
     mat3  TBN     = mat3(T, B, N);
     mat3  TBN_t   = transpose(TBN);

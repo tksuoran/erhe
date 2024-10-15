@@ -3,19 +3,20 @@
 #include "erhe_srgb.glsl"
 #include "erhe_texture.glsl"
 
-in vec2      v_texcoord;
-in vec4      v_position;
-in vec4      v_color;
-in vec2      v_aniso_control;
-in mat3      v_TBN;
-in flat uint v_material_index;
-in float     v_tangent_scale;
-in float     v_line_width;
-in vec4      v_bone_color;
-in flat uvec2 v_valency_edge_count;
+layout(location =  0) in vec4       v_position;
+layout(location =  1) in vec2       v_texcoord;
+layout(location =  2) in vec4       v_color;
+layout(location =  3) in vec2       v_aniso_control;
+layout(location =  4) in vec3       v_T;
+layout(location =  5) in vec3       v_B;
+layout(location =  6) in vec3       v_N;
+layout(location =  7) in flat uint  v_material_index;
+layout(location =  8) in float      v_tangent_scale;
+layout(location =  9) in float      v_line_width;
+layout(location = 10) in vec4       v_bone_color;
+layout(location = 11) in flat uvec2 v_valency_edge_count;
 
-void main()
-{
+void main() {
     const vec3 palette[24] = vec3[24](
         vec3(0.0, 0.0, 0.0), //  0
         vec3(1.0, 0.0, 0.0), //  1
@@ -50,9 +51,9 @@ void main()
     );
 
     vec3  V     = normalize(view_position_in_world - v_position.xyz);
-    vec3  T0    = normalize(v_TBN[0]);
-    vec3  B0    = normalize(v_TBN[1]);
-    vec3  N     = normalize(v_TBN[2]);
+    vec3  T0    = normalize(v_T);
+    vec3  B0    = normalize(v_B);
+    vec3  N     = normalize(v_N);
 
     Light light          = light_block.lights[0];
     vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
@@ -96,7 +97,19 @@ void main()
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * T0);
 #endif
 #if defined(ERHE_DEBUG_BITANGENT)
-    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B0);
+    {
+        //vec3 b = normalize(cross(v_N, v_T)) * v_tangent_scale;
+        //vec3 b = normalize(cross(v_N, v_T)) * v_tangent_scale;
+        //vec3 b = v_TBN[1];
+        //float len = length(v_B);
+        //if (len < 0.9) {
+        //    out_color.rgb = vec3(1.0, 0.0, 0.0);
+        //} else { 
+        //    out_color.rgb = vec3(0.0, 1.0, 0.0);
+        //}
+        out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * v_B);
+        //out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * b);
+    }
 #endif
 #if defined(ERHE_DEBUG_TANGENT_W)
     out_color.rgb = srgb_to_linear(vec3(0.5 + 0.5 * v_tangent_scale));
