@@ -6,6 +6,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_renderer/buffer_writer.cpp
     erhe_renderer/buffer_writer.hpp
+    erhe_renderer/debug_renderer.cpp
+    erhe_renderer/debug_renderer.hpp
     erhe_renderer/draw_indirect_buffer.cpp
     erhe_renderer/draw_indirect_buffer.hpp
     erhe_renderer/line_renderer.cpp
@@ -23,6 +25,15 @@ erhe_target_sources_grouped(
     erhe_renderer/text_renderer.cpp
     erhe_renderer/text_renderer.hpp
 )
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_renderer/debug_renderer.cpp
+        erhe_renderer/debug_renderer.hpp
+    )
+    target_link_libraries(${_target} PUBLIC Jolt)
+endif ()
+
 target_link_libraries(
     ${_target}
     PUBLIC

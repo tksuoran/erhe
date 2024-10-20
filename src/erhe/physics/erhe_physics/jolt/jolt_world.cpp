@@ -5,6 +5,7 @@
 #include "erhe_physics/jolt/glm_conversions.hpp"
 #include "erhe_physics/idebug_draw.hpp"
 #include "erhe_physics/physics_log.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <Jolt/RegisterTypes.h>
@@ -348,15 +349,12 @@ auto Jolt_world::get_constraint_count() const -> std::size_t
     return m_physics_system.GetConstraints().size();
 }
 
-void Jolt_world::set_debug_drawer(IDebug_draw* debug_draw)
+void Jolt_world::debug_draw(erhe::renderer::Debug_renderer& debug_renderer)
 {
-    static_cast<void>(debug_draw);
-    // TODO m_debug_renderer->set_debug_draw(debug_draw);
-}
-
-void Jolt_world::debug_draw()
-{
-    // TODO
+    m_physics_system.DrawBodies(JPH::BodyManager::DrawSettings{}, &debug_renderer);
+    m_physics_system.DrawConstraintLimits(&debug_renderer);
+    m_physics_system.DrawConstraintReferenceFrame(&debug_renderer);
+    m_physics_system.DrawConstraints(&debug_renderer);
 }
 
 auto Jolt_world::get_physics_system() -> JPH::PhysicsSystem&

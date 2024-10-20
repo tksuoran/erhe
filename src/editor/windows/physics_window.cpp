@@ -52,6 +52,7 @@ void Physics_window::imgui()
         ImGui::BeginDisabled();
     }
     ImGui::Checkbox("Physics enabled", &m_context.editor_settings->physics.dynamic_enable);
+    ImGui::Checkbox("Debug draw", &m_context.editor_settings->physics.debug_draw);
     if (!m_context.editor_settings->physics.static_enable) {
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered()) {

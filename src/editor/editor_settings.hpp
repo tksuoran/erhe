@@ -26,6 +26,7 @@ public:
     // Physics
     bool static_enable {true};
     bool dynamic_enable{true};
+    bool debug_draw    {false};
 };
 
 class Graphics_preset

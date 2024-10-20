@@ -76,8 +76,8 @@ public:
     // Public API
     void begin       ();
     auto get         (const Line_renderer_config& config) -> Scoped_line_renderer;
-    auto get         (unsigned int stencil, bool visible, bool hidden) -> erhe::renderer::Scoped_line_renderer;
-    auto get_indirect(unsigned int stencil, bool visible, bool hidden) -> erhe::renderer::Scoped_line_renderer;
+    auto get         (unsigned int stencil, bool visible, bool hidden) -> Scoped_line_renderer;
+    auto get_indirect(unsigned int stencil, bool visible, bool hidden) -> Scoped_line_renderer;
 
     void end       ();
     void next_frame();

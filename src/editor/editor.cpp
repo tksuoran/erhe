@@ -83,6 +83,9 @@
 #include "erhe_net/net_log.hpp"
 #include "erhe_physics/physics_log.hpp"
 #include "erhe_physics/iworld.hpp"
+#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
+#   include "erhe_renderer/debug_renderer.hpp"
+#endif
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_renderer/line_renderer.hpp"
@@ -395,6 +398,13 @@ public:
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_rendergraph = std::make_unique<erhe::rendergraph::Rendergraph>(*m_graphics_instance.get());
             })  .name("Rendergraph");
+
+#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
+            auto debug_renderer_task = taskflow.emplace([this](){
+                erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
+                m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_line_renderer.get());
+            }).name("Debug_renderer").succeed(line_renderer_task);
+#endif
 
             auto text_renderer_task = taskflow.emplace([this](){
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
@@ -836,6 +846,9 @@ public:
         m_editor_context.graphics_instance      = m_graphics_instance     .get();
         m_editor_context.imgui_renderer         = m_imgui_renderer        .get();
         m_editor_context.imgui_windows          = m_imgui_windows         .get();
+#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
+        m_editor_context.debug_renderer         = m_debug_renderer        .get();
+#endif
         m_editor_context.line_renderer          = m_line_renderer         .get();
         m_editor_context.text_renderer          = m_text_renderer         .get();
         m_editor_context.rendergraph            = m_rendergraph           .get();
@@ -960,6 +973,9 @@ public:
     std::unique_ptr<erhe::scene_renderer::Program_interface> m_program_interface;
     std::unique_ptr<erhe::rendergraph::Rendergraph         > m_rendergraph;
     std::unique_ptr<erhe::renderer::Text_renderer          > m_text_renderer;
+#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
+    std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;
+#endif
 
     std::unique_ptr<Programs                              >  m_programs;
     std::unique_ptr<erhe::scene_renderer::Forward_renderer>  m_forward_renderer;

@@ -227,7 +227,7 @@ auto Line_renderer::get(const Line_renderer_config& config) -> Scoped_line_rende
     return Scoped_line_renderer{*this, bucket, config.indirect};
 }
 
-auto Line_renderer::get(unsigned int stencil, bool visible, bool hidden) -> erhe::renderer::Scoped_line_renderer
+auto Line_renderer::get(unsigned int stencil, bool visible, bool hidden) -> Scoped_line_renderer
 {
     return get(
         Line_renderer_config{
@@ -240,7 +240,7 @@ auto Line_renderer::get(unsigned int stencil, bool visible, bool hidden) -> erhe
     );
 }
 
-auto Line_renderer::get_indirect(unsigned int stencil, bool visible, bool hidden) -> erhe::renderer::Scoped_line_renderer
+auto Line_renderer::get_indirect(unsigned int stencil, bool visible, bool hidden) -> Scoped_line_renderer
 {
     return get(
         Line_renderer_config{

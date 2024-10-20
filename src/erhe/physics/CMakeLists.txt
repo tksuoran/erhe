@@ -67,6 +67,7 @@ target_link_libraries(
         erhe::log
         erhe::primitive
         erhe::profile
+        erhe::renderer
         fmt::fmt
         glm::glm-header-only
 )

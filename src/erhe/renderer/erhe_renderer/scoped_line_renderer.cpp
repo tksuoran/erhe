@@ -112,7 +112,7 @@ void Scoped_line_renderer::add_line(const glm::vec4& color0, float width0, glm::
 {
     ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
 
-    allocate(2);
+    allocate(1);
     put(p0, width0, color0);
     put(p1, width1, color1);
 }

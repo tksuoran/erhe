@@ -13,6 +13,9 @@ namespace erhe::imgui {
 namespace erhe::renderer {
     class Line_renderer;
     class Text_renderer;
+#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
+    class Debug_renderer;
+#endif
 }
 namespace erhe::rendergraph {
     class Rendergraph;
@@ -89,6 +92,9 @@ public:
     erhe::graphics::Instance*               graphics_instance     {nullptr};
     erhe::imgui::Imgui_renderer*            imgui_renderer        {nullptr};
     erhe::imgui::Imgui_windows*             imgui_windows         {nullptr};
+#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
+    erhe::renderer::Debug_renderer*         debug_renderer        {nullptr};
+#endif
     erhe::renderer::Line_renderer*          line_renderer         {nullptr};
     erhe::renderer::Text_renderer*          text_renderer         {nullptr};
     erhe::rendergraph::Rendergraph*         rendergraph           {nullptr};
