@@ -54,6 +54,10 @@
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id)
 #   define ERHE_PROFILE_GPU_CONTEXT
 #   define ERHE_PROFILE_FRAME_END
+#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) Type mutex_variable
+#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) Type mutex_variable
+#   define ERHE_PROFILE_LOCKABLE_BASE(Type) Type
+
 #elif defined(ERHE_PROFILE_LIBRARY_NVTX)
 #   define ERHE_CONCAT(x,y) ERHE_CONCAT_INDIRECT(x,y)
 #   define ERHE_CONCAT_INDIRECT(x,y) x##y
@@ -73,6 +77,9 @@
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
 #   define ERHE_PROFILE_GPU_CONTEXT
 #   define ERHE_PROFILE_FRAME_END
+#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) Type mutex_variable
+#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) Type mutex_variable
+#   define ERHE_PROFILE_LOCKABLE_BASE(Type) Type
 
 #else
 #   define ERHE_PROFILE_FUNCTION();
@@ -84,4 +91,7 @@
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
 #   define ERHE_PROFILE_GPU_CONTEXT
 #   define ERHE_PROFILE_FRAME_END
+#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) Type mutex_variable
+#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) Type mutex_variable
+#   define ERHE_PROFILE_LOCKABLE_BASE(Type) Type
 #endif

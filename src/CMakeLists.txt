@@ -26,7 +26,11 @@ add_subdirectory(RectangleBinPack)
 add_subdirectory(mango)
 
 add_subdirectory(erhe)
-add_subdirectory(editor)
+
+if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
+    add_subdirectory(editor)
+endif ()    
+
 add_subdirectory(example)
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")

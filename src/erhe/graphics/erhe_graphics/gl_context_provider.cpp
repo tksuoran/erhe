@@ -77,7 +77,7 @@ auto Gl_context_provider::acquire_gl_context() -> Gl_worker_context
     while (!m_worker_context_pool.try_dequeue(context)) {
         log_context->trace("Waiting for available GL context");
         //ERHE_PROFILE_MESSAGE_LITERAL("Waiting for available GL context");
-        std::unique_lock<LockableBase(std::mutex)> lock(m_mutex);
+        std::unique_lock<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock(m_mutex);
         m_condition_variable.wait(lock, []{ return true; });
     }
     //const std::string text = fmt::format("Got GL context {}", context.id);

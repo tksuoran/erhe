@@ -111,13 +111,13 @@
 #   include <nvtx3/nvToolsExt.h>
 #endif
 
-//#if defined(ERHE_PROFILE_LIBRARY_TRACY)
-//#   include <tracy/Tracy.hpp>
+#if defined(ERHE_PROFILE_LIBRARY_TRACY)
 #   include <tracy/TracyC.h>
-//#endif
+#endif
 
 namespace editor {
 
+#if defined(ERHE_PROFILE_LIBRARY_TRACY)
 class Tracy_observer : public tf::ObserverInterface {
 public:
     void set_up(std::size_t) override final {};
@@ -162,6 +162,7 @@ private:
 };
 
 thread_local std::vector<Tracy_observer::Entry> Tracy_observer::st_entries;
+#endif
 
 
 class Editor : public erhe::window::Input_event_handler
@@ -331,7 +332,9 @@ public:
 
         try {
             tf::Taskflow taskflow;
+#if defined(ERHE_PROFILE_LIBRARY_TRACY)
             std::shared_ptr<Tracy_observer> observer = m_executor->make_observer<Tracy_observer>();
+#endif
 
             m_commands           = std::make_unique<erhe::commands::Commands      >();
             m_scene_message_bus  = std::make_unique<erhe::scene::Scene_message_bus>();
