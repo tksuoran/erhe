@@ -3,6 +3,10 @@
 #include <algorithm>
 #include <type_traits>
 
+#include "erhe_math/math_util.hpp"
+
+#include <glm/gtx/matrix_operation.hpp>
+
 #if !defined(ERHE_PROFILE_FUNCTION)
 #   define ERHE_PROFILE_FUNCTION()
 #   define ERHE_PROFILE_FUNCTION_DUMMY
@@ -200,7 +204,8 @@ Property_map<Key_type, Value_type>::interpolate(
         }
 
         // Special treatment for normal and other direction vectors
-        if constexpr (std::is_same_v<Value_type, glm::vec3>) {
+        constexpr bool is_vec3 = std::is_same_v<Value_type, glm::vec3>;
+        if constexpr (is_vec3) {
             if (m_descriptor.interpolation_mode == Interpolation_mode::normalized) {
                 new_value = glm::normalize(new_value);
                 SPDLOG_LOGGER_TRACE(log_interpolate, "\tnormalized", new_value);
@@ -281,6 +286,9 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
 
     ERHE_VERIFY(values.size() == present.size());
 
+    //const glm::mat4 normal_transform = glm::transpose(glm::adjugate(transform)); TODO
+    const glm::mat4 normal_transform = glm::transpose(glm::inverse(transform));
+
     if constexpr(transform_properties<Value_type>::is_transformable) {
         switch (m_descriptor.transform_mode) {
             //using enum Transform_mode;
@@ -289,7 +297,7 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
                 break;
             }
 
-            case Transform_mode::position: {
+            case Transform_mode::mat_mul_vec3_one: {
                 for (std::size_t i = 0, end = values.size(); i < end; ++i) {
                     if (present[i]) {
                         values[i] = apply_transform(values[i], transform, 1.0f);
@@ -298,38 +306,59 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
                 break;
             }
 
-            // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::direction: {
-                if constexpr (std::is_same_v<Value_type, glm::vec3>) {
-                    const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
+            case Transform_mode::mat_mul_vec3_zero: {
+                for (std::size_t i = 0, end = values.size(); i < end; ++i) {
+                    if (present[i]) {
+                        values[i] = apply_transform(values[i], transform, 0.0f);
+                    }
+                }
+                break;
+            }
+
+            case Transform_mode::normalize_mat_mul_vec3_zero: {
+                for (std::size_t i = 0, end = values.size(); i < end; ++i) {
+                    if (present[i]) {
+                        values[i] = glm::normalize(apply_transform(values[i], transform, 0.0f));
+                    }
+                }
+                break;
+            }
+
+            case Transform_mode::normalize_mal_mul_vec3_zero_and_float: {
+                if constexpr (std::is_same_v<Value_type, glm::vec4>) {
                     for (std::size_t i = 0, end = values.size(); i < end; ++i) {
                         if (present[i]) {
-                            values[i] = glm::normalize(
-                                apply_transform(
-                                    values[i],
-                                    inverse_transpose_transform,
-                                    0.0f
-                                )
-                            );
+                            values[i] = glm::vec4{
+                                glm::normalize(
+                                    apply_transform(
+                                        glm::vec3{values[i]},
+                                        transform,
+                                        0.0f
+                                    )
+                                ),
+                                values[i].w
+                            };
                         }
                     }
                 }
                 break;
             }
 
-            // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::direction_vec3_float: {
-                if constexpr (std::is_same_v<Value_type, glm::vec4>) {
-                    const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
-                    for (std::size_t i = 0, end = values.size(); i < end; ++i) {
-                        if (present[i]) {
-                            values[i] = glm::vec4{
-                                glm::normalize(
-                                    apply_transform(glm::vec3{values[i]}, inverse_transpose_transform, 0.0f)
-                                ),
-                                values[i].w
-                            };
-                        }
+            case Transform_mode::normal_mat_mul_vec3_zero: {
+                for (std::size_t i = 0, end = values.size(); i < end; ++i) {
+                    if (present[i]) {
+                        values[i] = apply_transform(values[i], normal_transform, 0.0f);
+                    }
+                }
+                break;
+            }
+
+            case Transform_mode::normalize_normal_mat_mul_vec3_zero: {
+                for (std::size_t i = 0, end = values.size(); i < end; ++i) {
+                    if (present[i]) {
+                        values[i] = glm::normalize(
+                            apply_transform(values[i], normal_transform, 0.0f)
+                        );
                     }
                 }
                 break;
@@ -352,7 +381,10 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
     ERHE_VERIFY(values.size() == present.size());
     ERHE_VERIFY(source->values.size() == source->present.size());
 
-    const auto combined_values_size = values.size()  + source->values.size();
+    //const glm::mat4 normal_transform = glm::transpose(glm::adjugate(transform)); TODO
+    const glm::mat4 normal_transform = glm::transpose(glm::inverse(transform));
+
+    const auto combined_values_size  = values.size()  + source->values.size();
     const auto combined_present_size = present.size() + source->present.size();
     values .reserve(combined_values_size);
     present.reserve(combined_present_size);
@@ -368,7 +400,7 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
                 break;
             }
 
-            case Transform_mode::position: {
+            case Transform_mode::mat_mul_vec3_one: {
                 for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                     const Value_type source_value = source->values[i];
                     const Value_type result       = present[i] ? apply_transform(source_value, transform, 1.0f) : Value_type{};
@@ -377,34 +409,62 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
                 break;
             }
 
-            // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::direction: {
+            case Transform_mode::mat_mul_vec3_zero: {
                 if constexpr (std::is_same_v<Value_type, glm::vec3>) {
-                    const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                         const Value_type source_value = source->values[i];
-                        const Value_type result       = present[i]
-                            ? glm::normalize(apply_transform(source_value, inverse_transpose_transform, 0.0f))
-                            : Value_type{};
+                        const Value_type result       = present[i] ? apply_transform(source_value, transform, 0.0f) : Value_type{};
                         values.push_back(result);
                     }
                 }
                 break;
             }
 
-            // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::direction_vec3_float: {
+            case Transform_mode::normalize_mat_mul_vec3_zero: {
+                if constexpr (std::is_same_v<Value_type, glm::vec3>) {
+                    for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
+                        const Value_type source_value = source->values[i];
+                        const Value_type result       = present[i] ? glm::normalize(apply_transform(source_value, transform, 0.0f)) : Value_type{};
+                        values.push_back(result);
+                    }
+                }
+                break;
+            }
+
+            case Transform_mode::normalize_mal_mul_vec3_zero_and_float: {
                 if constexpr (std::is_same_v<Value_type, glm::vec4>) {
                     const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                         if (present[i]) {
                             const Value_type source_value     = source->values[i];
-                            const glm::vec3  transformed_vec3 = glm::normalize(apply_transform(glm::vec3{source_value}, inverse_transpose_transform, 0.0f));
+                            const glm::vec3  transformed_vec3 = glm::normalize(apply_transform(glm::vec3{source_value}, transform, 0.0f));
                             const Value_type result           = glm::vec4{transformed_vec3, source_value.w};
                             values.push_back(result);
                         } else {
                             values.push_back(Value_type{});
                         }
+                    }
+                }
+                break;
+            }
+
+            case Transform_mode::normal_mat_mul_vec3_zero: {
+                if constexpr (std::is_same_v<Value_type, glm::vec3>) {
+                    for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
+                        const Value_type source_value = source->values[i];
+                        const Value_type result       = present[i] ? apply_transform(source_value, normal_transform, 0.0f) : Value_type{};
+                        values.push_back(result);
+                    }
+                }
+                break;
+            }
+
+            case Transform_mode::normalize_normal_mat_mul_vec3_zero   : {
+                if constexpr (std::is_same_v<Value_type, glm::vec3>) {
+                    for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
+                        const Value_type source_value = source->values[i];
+                        const Value_type result       = present[i] ? glm::normalize(apply_transform(source_value, normal_transform, 0.0f)) : Value_type{};
+                        values.push_back(result);
                     }
                 }
                 break;

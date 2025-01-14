@@ -7,9 +7,9 @@ namespace erhe::geometry::operation {
 class Triangulate : public Geometry_operation
 {
 public:
-    Triangulate(Geometry& src, Geometry& destination);
+    Triangulate(const Geometry& src, Geometry& destination);
 };
 
-[[nodiscard]] auto triangulate(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto triangulate(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

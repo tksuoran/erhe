@@ -7,7 +7,7 @@
 
 namespace erhe::geometry::operation {
 
-Triangulate::Triangulate(Geometry& src, Geometry& destination)
+Triangulate::Triangulate(const Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -33,7 +33,7 @@ Triangulate::Triangulate(Geometry& src, Geometry& destination)
     post_processing();
 }
 
-auto triangulate(Geometry& source) -> Geometry
+auto triangulate(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("triangulate({})", source.name),

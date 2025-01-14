@@ -4,12 +4,12 @@
 
 namespace erhe::geometry::operation {
 
-class Reverse : public Geometry_operation
+class Repair : public Geometry_operation
 {
 public:
-    Reverse(const Geometry& source, Geometry& destination);
+    Repair(const Geometry& source, Geometry& destination);
 };
 
-[[nodiscard]] auto reverse(const Geometry& source) -> Geometry;
+[[nodiscard]] auto repair(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

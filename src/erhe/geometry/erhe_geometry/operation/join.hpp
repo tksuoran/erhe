@@ -7,9 +7,9 @@ namespace erhe::geometry::operation {
 class Join : public Geometry_operation
 {
 public:
-    Join(Geometry& src, Geometry& destination);
+    Join(const Geometry& src, Geometry& destination);
 };
 
-[[nodiscard]] auto join(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto join(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

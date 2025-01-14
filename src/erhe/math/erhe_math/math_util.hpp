@@ -947,60 +947,6 @@ private:
         0xff000000u;
 }
 
-[[nodiscard]] static inline auto compute_cofactor(glm::mat4 const& m) -> glm::mat4
-{
-    ERHE_PROFILE_FUNCTION();
-
-    using namespace glm;
-
-    float coef_00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
-    float coef_02 = m[1][2] * m[3][3] - m[3][2] * m[1][3];
-    float coef_03 = m[1][2] * m[2][3] - m[2][2] * m[1][3];
-
-    float coef_04 = m[2][1] * m[3][3] - m[3][1] * m[2][3];
-    float coef_06 = m[1][1] * m[3][3] - m[3][1] * m[1][3];
-    float coef_07 = m[1][1] * m[2][3] - m[2][1] * m[1][3];
-
-    float coef_08 = m[2][1] * m[3][2] - m[3][1] * m[2][2];
-    float coef_10 = m[1][1] * m[3][2] - m[3][1] * m[1][2];
-    float coef_11 = m[1][1] * m[2][2] - m[2][1] * m[1][2];
-
-    float coef_12 = m[2][0] * m[3][3] - m[3][0] * m[2][3];
-    float coef_14 = m[1][0] * m[3][3] - m[3][0] * m[1][3];
-    float coef_15 = m[1][0] * m[2][3] - m[2][0] * m[1][3];
-
-    float coef_16 = m[2][0] * m[3][2] - m[3][0] * m[2][2];
-    float coef_18 = m[1][0] * m[3][2] - m[3][0] * m[1][2];
-    float coef_19 = m[1][0] * m[2][2] - m[2][0] * m[1][2];
-
-    float coef_20 = m[2][0] * m[3][1] - m[3][0] * m[2][1];
-    float coef_22 = m[1][0] * m[3][1] - m[3][0] * m[1][1];
-    float coef_23 = m[1][0] * m[2][1] - m[2][0] * m[1][1];
-
-    vec4 fac_0(coef_00, coef_00, coef_02, coef_03);
-    vec4 fac_1(coef_04, coef_04, coef_06, coef_07);
-    vec4 fac_2(coef_08, coef_08, coef_10, coef_11);
-    vec4 fac_3(coef_12, coef_12, coef_14, coef_15);
-    vec4 fac_4(coef_16, coef_16, coef_18, coef_19);
-    vec4 fac_5(coef_20, coef_20, coef_22, coef_23);
-
-    vec4 vec_0(m[1][0], m[0][0], m[0][0], m[0][0]);
-    vec4 vec_1(m[1][1], m[0][1], m[0][1], m[0][1]);
-    vec4 vec_2(m[1][2], m[0][2], m[0][2], m[0][2]);
-    vec4 vec_3(m[1][3], m[0][3], m[0][3], m[0][3]);
-
-    vec4 inv_0(vec_1 * fac_0 - vec_2 * fac_1 + vec_3 * fac_2);
-    vec4 inv_1(vec_0 * fac_0 - vec_2 * fac_3 + vec_3 * fac_4);
-    vec4 inv_2(vec_0 * fac_1 - vec_1 * fac_3 + vec_3 * fac_5);
-    vec4 inv_3(vec_0 * fac_2 - vec_1 * fac_4 + vec_2 * fac_5);
-
-    vec4 sign_A(+1, -1, +1, -1);
-    vec4 sign_B(-1, +1, -1, +1);
-    mat4 inverse(inv_0 * sign_A, inv_1 * sign_B, inv_2 * sign_A, inv_3 * sign_B);
-
-    return transpose(inverse);
-}
-
 [[nodiscard]] auto compose(
     glm::vec3 scale,
     glm::quat rotation,

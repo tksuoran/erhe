@@ -6,6 +6,8 @@ set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/MP>)
 #add_compile_options(-fsanitize=address)
 #add_link_options(-fsanitize=address)
+#add_definitions(-DUNICODE -D_UNICODE)
+
 
 function (erhe_target_settings target)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)

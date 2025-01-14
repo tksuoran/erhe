@@ -63,6 +63,24 @@ public:
     std::vector<std::string> contents;
 };
 
+class Asset_file_geogram : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_geogram>
+{
+public:
+    explicit Asset_file_geogram(const Asset_file_geogram& src);
+    Asset_file_geogram& operator=(const Asset_file_geogram& src);
+    ~Asset_file_geogram() noexcept override;
+
+    explicit Asset_file_geogram(const std::filesystem::path& path);
+
+    // Implements Item_base
+    static constexpr std::string_view static_type_name{"Asset_file_geogram"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
+
+    std::vector<std::string> contents;
+};
+
 class Asset_file_other : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_other>
 {
 public:
@@ -119,6 +137,8 @@ private:
 
     auto try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
     auto try_open  (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
+
+    auto try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool;
 
     Editor_context& m_context;
     Asset_node*     m_popup_node{nullptr};

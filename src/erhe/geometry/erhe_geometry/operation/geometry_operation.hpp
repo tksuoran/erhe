@@ -14,14 +14,26 @@ namespace erhe::geometry::operation {
 class Geometry_operation
 {
 public:
-    Geometry_operation(Geometry& source, Geometry& destination)
+    Geometry_operation(const Geometry& source, Geometry& destination)
         : source     {source}
+        , lhs        {source}
+        , rhs        {nullptr}
+        , destination{destination}
+    {
+    }
+
+    Geometry_operation(const Geometry& lhs, const Geometry& rhs, Geometry& destination)
+        : source     {lhs}
+        , lhs        {lhs}
+        , rhs        {&rhs}
         , destination{destination}
     {
     }
 
     static constexpr std::size_t s_grow_size = 4096;
-    Geometry&                                              source;
+    const Geometry&                                        source;
+    const Geometry&                                        lhs;
+    const Geometry*                                        rhs;
     Geometry&                                              destination;
     std::vector<Point_id  >                                point_old_to_new;
     std::vector<Polygon_id>                                polygon_old_to_new;

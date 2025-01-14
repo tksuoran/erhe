@@ -21,13 +21,13 @@ namespace erhe::scene_renderer
 class Primitive_struct
 {
 public:
-    std::size_t world_from_node;            // mat4 16 * 4 bytes
-    std::size_t world_from_node_cofactor;   // mat4 16 * 4 bytes
-    std::size_t color;                      // vec4  4 * 4 bytes - id_offset / wire frame color
-    std::size_t material_index;             // uint  1 * 4 bytes
-    std::size_t size;                       // float 1 * 4 bytes - point size / line width
-    std::size_t skinning_factor;            // float 1 * 4 bytes
-    std::size_t base_joint_index;           // uint  1 * 4 bytes
+    std::size_t world_from_node;    // mat4 16 * 4 bytes
+    std::size_t normal_transform;   // mat4 16 * 4 bytes
+    std::size_t color;              // vec4  4 * 4 bytes - id_offset / wire frame color
+    std::size_t material_index;     // uint  1 * 4 bytes
+    std::size_t size;               // float 1 * 4 bytes - point size / line width
+    std::size_t skinning_factor;    // float 1 * 4 bytes
+    std::size_t base_joint_index;   // uint  1 * 4 bytes
 };
 
 class Primitive_interface

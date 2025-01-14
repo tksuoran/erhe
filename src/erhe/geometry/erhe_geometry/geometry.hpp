@@ -15,33 +15,37 @@ namespace spdlog {
     class logger;
 }
 
+namespace GEO {
+    class Mesh;
+}
+
 namespace erhe::geometry {
 
-inline constexpr Property_map_descriptor c_point_locations      { "point_locations"      , Transform_mode::position            , Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_point_normals        { "point_normals"        , Transform_mode::direction           , Interpolation_mode::none/*Interpolation_mode::normalized*/ };
-inline constexpr Property_map_descriptor c_point_normals_smooth { "point_normals_smooth" , Transform_mode::direction           , Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_point_texcoords      { "point_texcoords"      , Transform_mode::none                , Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_point_tangents       { "point_tangents"       , Transform_mode::direction_vec3_float, Interpolation_mode::normalized_vec3_float };
-inline constexpr Property_map_descriptor c_point_bitangents     { "point_bitangents"     , Transform_mode::direction_vec3_float, Interpolation_mode::normalized_vec3_float };
-inline constexpr Property_map_descriptor c_point_colors         { "point_colors"         , Transform_mode::none                , Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_point_joint_indices  { "point_joint_indices"  , Transform_mode::none                , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_point_joint_weights  { "point_joint_weights"  , Transform_mode::none                , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_point_aniso_control  { "point_aniso_control"  , Transform_mode::none                , Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_corner_normals       { "corner_normals"       , Transform_mode::direction           , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_texcoords     { "corner_texcoords"     , Transform_mode::none                , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_tangents      { "corner_tangents"      , Transform_mode::direction_vec3_float, Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_bitangents    { "corner_bitangents"    , Transform_mode::direction_vec3_float, Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_colors        { "corner_colors"        , Transform_mode::none                , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_aniso_control { "corner_aniso_control" , Transform_mode::none                , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_indices       { "corner_indices"       , Transform_mode::none                , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_centroids    { "polygon_centroids"    , Transform_mode::position            , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_normals      { "polygon_normals"      , Transform_mode::direction           , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_tangents     { "polygon_tangents"     , Transform_mode::direction_vec3_float, Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_bitangents   { "polygon_bitangents"   , Transform_mode::direction_vec3_float, Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_colors       { "polygon_colors"       , Transform_mode::none                , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_aniso_control{ "polygon_aniso_control", Transform_mode::none                , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_ids_vec3     { "polygon_ids_vec"      , Transform_mode::none                , Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_ids_uint     { "polygon_ids_uint"     , Transform_mode::none                , Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_point_locations      { "point_locations"      , Transform_mode::mat_mul_vec3_one,                      Interpolation_mode::linear };
+inline constexpr Property_map_descriptor c_point_normals        { "point_normals"        , Transform_mode::normalize_normal_mat_mul_vec3_zero,    Interpolation_mode::normalized };
+inline constexpr Property_map_descriptor c_point_normals_smooth { "point_normals_smooth" , Transform_mode::normalize_normal_mat_mul_vec3_zero,    Interpolation_mode::normalized };
+inline constexpr Property_map_descriptor c_point_texcoords      { "point_texcoords"      , Transform_mode::none,                                  Interpolation_mode::linear };
+inline constexpr Property_map_descriptor c_point_tangents       { "point_tangents"       , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::normalized_vec3_float };
+inline constexpr Property_map_descriptor c_point_bitangents     { "point_bitangents"     , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::normalized_vec3_float };
+inline constexpr Property_map_descriptor c_point_colors         { "point_colors"         , Transform_mode::none,                                  Interpolation_mode::linear };
+inline constexpr Property_map_descriptor c_point_joint_indices  { "point_joint_indices"  , Transform_mode::none,                                  Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_point_joint_weights  { "point_joint_weights"  , Transform_mode::none,                                  Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_point_aniso_control  { "point_aniso_control"  , Transform_mode::none,                                  Interpolation_mode::linear };
+inline constexpr Property_map_descriptor c_corner_normals       { "corner_normals"       , Transform_mode::normalize_normal_mat_mul_vec3_zero,    Interpolation_mode::none }; // No interpolation; these are? recomputed
+inline constexpr Property_map_descriptor c_corner_texcoords     { "corner_texcoords"     , Transform_mode::none,                                  Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_tangents      { "corner_tangents"      , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_bitangents    { "corner_bitangents"    , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_colors        { "corner_colors"        , Transform_mode::none,                                  Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_aniso_control { "corner_aniso_control" , Transform_mode::none,                                  Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_corner_indices       { "corner_indices"       , Transform_mode::none,                                  Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_centroids    { "polygon_centroids"    , Transform_mode::mat_mul_vec3_one,                      Interpolation_mode::none }; // No interpolation; these are recomputed
+inline constexpr Property_map_descriptor c_polygon_normals      { "polygon_normals"      , Transform_mode::normalize_normal_mat_mul_vec3_zero,    Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_tangents     { "polygon_tangents"     , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_bitangents   { "polygon_bitangents"   , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_colors       { "polygon_colors"       , Transform_mode::none,                                  Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_aniso_control{ "polygon_aniso_control", Transform_mode::none,                                  Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_ids_vec3     { "polygon_ids_vec"      , Transform_mode::none,                                  Interpolation_mode::none };
+inline constexpr Property_map_descriptor c_polygon_ids_uint     { "polygon_ids_uint"     , Transform_mode::none,                                  Interpolation_mode::none };
 
 class Point;
 class Polygon;
@@ -474,7 +478,7 @@ public:
     auto get_polygon_corner_count() const -> uint32_t { return m_next_polygon_corner_id; }
     auto get_edge_count          () const -> uint32_t { return m_next_edge_id; }
 
-    [[nodiscard]] auto find_edge(Point_id a, Point_id b) -> std::optional<Edge>
+    [[nodiscard]] auto find_edge(Point_id a, Point_id b) const -> std::optional<Edge>
     {
         if (b < a) {
             std::swap(a, b);
@@ -523,6 +527,8 @@ public:
     // - Polygon must be already allocated.
     // - Point must be already allocated.
     auto make_polygon_corner(Polygon_id polygon_id, Point_id point_id) -> Corner_id;
+
+    void extract_geogram_mesh(GEO::Mesh& mesh) const;
 
     // Calculates the number of triangles as if all faces were triangulated
     [[nodiscard]] auto count_polygon_triangles() const -> std::size_t;
@@ -823,6 +829,8 @@ public:
     uint64_t                        m_serial_corner_bitangents          {0};
     uint64_t                        m_serial_corner_texture_coordinates {0};
 };
+
+void geometry_from_geogram(Geometry& destination, GEO::Mesh& mesh);
 
 } // namespace erhe::geometry
 

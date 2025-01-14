@@ -26,15 +26,30 @@ auto Polygon::compute_normal(const Geometry& geometry, const Property_map<Point_
     for_each_corner_neighborhood_const(
         geometry,
         [&newell_normal, &point_locations](const Polygon_corner_neighborhood_context_const& i) {
-            const Point_id a     = i.corner     .point_id;
-            const Point_id b     = i.next_corner.point_id;
-            const auto     pos_a = point_locations.get(a);
-            const auto     pos_b = point_locations.get(b);
-            newell_normal += glm::cross(pos_a, pos_b);
+            const Point_id  a     = i.corner     .point_id;
+            const Point_id  b     = i.next_corner.point_id;
+            ERHE_VERIFY(a != b);
+            const glm::vec3 pos_a = point_locations.get(a);
+            const glm::vec3 pos_b = point_locations.get(b);
+            const glm::vec3 delta = pos_b - pos_a;
+            if (glm::length(delta) > 0.0f) {
+                const vec3 cross = glm::cross(pos_a, pos_b);
+                newell_normal += cross;
+            } else {
+                // degenerate edge - breakpoint placeholder
+                static int counter = 0;
+                ++counter;
+            }
         }
     );
 
     newell_normal = glm::normalize(newell_normal);
+    float length = glm::length(newell_normal);
+    if (length < 0.9f) {
+        // degenerate?
+        return {};
+    }
+
     return newell_normal;
 }
 
@@ -52,7 +67,11 @@ void Polygon::compute_normal(
     }
 
     glm::vec3 normal = compute_normal(geometry, point_locations);
-    polygon_normals.put(this_polygon_id, normal);
+    if (glm::length(normal) > 0.9f) { // Non-planar polygons may end up without polygon normal
+        polygon_normals.put(this_polygon_id, normal);
+    } else {
+        log_geometry->warn("Could not compute polygon {} normal - degenerate polygon?", this_polygon_id);
+    }
 }
 
 auto Polygon::compute_centroid(
@@ -210,6 +229,9 @@ void Polygon::compute_planar_texture_coordinates(
 
     if (corner_count < 3) {
         return;
+    }
+    if (!polygon_normals.has(this_polygon_id)) {
+        return; // degenerate polygon
     }
 
     const Polygon_corner_id p0_polygon_corner_id = first_polygon_corner_id;

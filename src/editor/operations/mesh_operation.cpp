@@ -114,7 +114,7 @@ void Mesh_operation::undo(Editor_context&)
 
 void Mesh_operation::make_entries(
     const std::function<
-        erhe::geometry::Geometry(erhe::geometry::Geometry&)
+        erhe::geometry::Geometry(const erhe::geometry::Geometry&)
     > operation
 )
 {

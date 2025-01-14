@@ -12,19 +12,21 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <glm/gtx/matrix_operation.hpp>
+
 namespace erhe::scene_renderer {
 
 Primitive_interface::Primitive_interface(erhe::graphics::Instance& graphics_instance)
     : primitive_block {graphics_instance, "primitive", 3, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , primitive_struct{graphics_instance, "Primitive"}
     , offsets{
-        .world_from_node          = primitive_struct.add_mat4 ("world_from_node"         )->offset_in_parent(),
-        .world_from_node_cofactor = primitive_struct.add_mat4 ("world_from_node_cofactor")->offset_in_parent(),
-        .color                    = primitive_struct.add_vec4 ("color"                   )->offset_in_parent(),
-        .material_index           = primitive_struct.add_uint ("material_index"          )->offset_in_parent(),
-        .size                     = primitive_struct.add_float("size"                    )->offset_in_parent(),
-        .skinning_factor          = primitive_struct.add_float("skinning_factor"         )->offset_in_parent(),
-        .base_joint_index         = primitive_struct.add_uint ("base_joint_index"        )->offset_in_parent()
+        .world_from_node  = primitive_struct.add_mat4 ("world_from_node"         )->offset_in_parent(),
+        .normal_transform = primitive_struct.add_mat4 ("world_from_node_cofactor")->offset_in_parent(), // TODO rename normal_transform
+        .color            = primitive_struct.add_vec4 ("color"                   )->offset_in_parent(),
+        .material_index   = primitive_struct.add_uint ("material_index"          )->offset_in_parent(),
+        .size             = primitive_struct.add_float("size"                    )->offset_in_parent(),
+        .skinning_factor  = primitive_struct.add_float("skinning_factor"         )->offset_in_parent(),
+        .base_joint_index = primitive_struct.add_uint ("base_joint_index"        )->offset_in_parent()
     }
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
@@ -135,7 +137,8 @@ auto Primitive_buffer::update(
         const glm::mat4 world_from_node = node->world_from_node();
 
         // TODO Use compute shader
-        const glm::mat4 world_from_node_cofactor = erhe::math::compute_cofactor(world_from_node);
+        //const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_node)); TODO
+        const glm::mat4 normal_transform = glm::transpose(glm::inverse(world_from_node));
 
         std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh->get_primitives()) {
@@ -193,13 +196,13 @@ auto Primitive_buffer::update(
             {
                 //ZoneScopedN("write");
                 using erhe::graphics::write;
-                write(primitive_gpu_data, writer.write_offset + offsets.world_from_node,          as_span(world_from_node         ));
-                write(primitive_gpu_data, writer.write_offset + offsets.world_from_node_cofactor, as_span(world_from_node_cofactor));
-                write(primitive_gpu_data, writer.write_offset + offsets.color,                    color_span                       );
-                write(primitive_gpu_data, writer.write_offset + offsets.material_index,           as_span(material_index          ));
-                write(primitive_gpu_data, writer.write_offset + offsets.size,                     size_span                        );
-                write(primitive_gpu_data, writer.write_offset + offsets.skinning_factor,          as_span(skinning_factor         ));
-                write(primitive_gpu_data, writer.write_offset + offsets.base_joint_index,         as_span(base_joint_index        ));
+                write(primitive_gpu_data, writer.write_offset + offsets.world_from_node,  as_span(world_from_node ));
+                write(primitive_gpu_data, writer.write_offset + offsets.normal_transform, as_span(normal_transform));
+                write(primitive_gpu_data, writer.write_offset + offsets.color,            color_span               );
+                write(primitive_gpu_data, writer.write_offset + offsets.material_index,   as_span(material_index  ));
+                write(primitive_gpu_data, writer.write_offset + offsets.size,             size_span                );
+                write(primitive_gpu_data, writer.write_offset + offsets.skinning_factor,  as_span(skinning_factor ));
+                write(primitive_gpu_data, writer.write_offset + offsets.base_joint_index, as_span(base_joint_index));
 
             }
             writer.write_offset += entry_size;

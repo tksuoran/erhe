@@ -21,7 +21,7 @@ namespace erhe::geometry::operation {
 //  (2) S(p) := (1 - alpha_n) p + alpha_n 1/n SUM p_i
 //
 //  (6) alpha_n = (4 - 2 cos(2Pi/n)) / 9
-Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
+Sqrt3_subdivision::Sqrt3_subdivision(const Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -66,7 +66,7 @@ Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
     post_processing();
 }
 
-auto sqrt3_subdivision(Geometry& source) -> Geometry
+auto sqrt3_subdivision(const Geometry& source) -> Geometry
 {
     return Geometry(
         fmt::format("sqrt3({})", source.name),

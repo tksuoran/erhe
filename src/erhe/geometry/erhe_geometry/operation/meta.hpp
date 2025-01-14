@@ -8,9 +8,9 @@ namespace erhe::geometry::operation {
 class Meta : public Geometry_operation
 {
 public:
-    Meta(Geometry& src, Geometry& destination);
+    Meta(const Geometry& src, Geometry& destination);
 };
 
-[[nodiscard]] auto meta(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto meta(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

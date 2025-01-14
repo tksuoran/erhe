@@ -5,7 +5,7 @@
 
 namespace erhe::geometry::operation {
 
-Reverse::Reverse(Geometry& source, Geometry& destination)
+Reverse::Reverse(const Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
     destination.points                               = source.points;
@@ -46,7 +46,7 @@ Reverse::Reverse(Geometry& source, Geometry& destination)
     destination.reverse_polygons();
 }
 
-auto reverse(Geometry& source) -> Geometry
+auto reverse(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("reverse({})", source.name),

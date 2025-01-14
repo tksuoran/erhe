@@ -1,6 +1,8 @@
 #pragma once
 
 #include "operations/mesh_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/compound_operation.hpp"
 
 namespace editor {
 
@@ -95,11 +97,61 @@ public:
     auto describe() const -> std::string override;
 };
 
+#if 0
 class Weld_operation : public Mesh_operation
 {
 public:
     explicit Weld_operation(Mesh_operation_parameters&& context);
     auto describe() const -> std::string override;
+};
+#endif
+
+class Repair_operation : public Mesh_operation
+{
+public:
+    explicit Repair_operation(Mesh_operation_parameters&& context);
+    auto describe() const -> std::string override;
+};
+
+class Binary_mesh_operation : public Compound_operation
+{
+public:
+    Binary_mesh_operation(
+        Mesh_operation_parameters&& parameters,
+        std::function<erhe::geometry::Geometry(
+            const erhe::geometry::Geometry& lhs,
+            const erhe::geometry::Geometry& rhs
+        )> operation
+    );
+    auto describe() const -> std::string override { return m_description; }
+
+protected:
+    auto make_operations(
+        Mesh_operation_parameters&& parameters,
+        std::function<erhe::geometry::Geometry(
+            const erhe::geometry::Geometry& lhs,
+            const erhe::geometry::Geometry& rhs
+        )> operation
+    ) -> Compound_operation::Parameters;
+    std::string m_description;
+};
+
+class Union_operation : public Binary_mesh_operation
+{
+public:
+    explicit Union_operation(Mesh_operation_parameters&& parameters);
+};
+
+class Intersection_operation : public Binary_mesh_operation
+{
+public:
+    explicit Intersection_operation(Mesh_operation_parameters&& parameters);
+};
+
+class Difference_operation : public Binary_mesh_operation
+{
+public:
+    explicit Difference_operation(Mesh_operation_parameters&& parameters);
 };
 
 } // namespace editor

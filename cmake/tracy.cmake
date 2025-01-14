@@ -1,5 +1,0 @@
-function (FetchContent_MakeAvailable_tracy)
-    set(TRACY_ENABLE ON CACHE BOOL "Enable profiling")
-    option(TRACY_ENABLE "Enable profiling" ON)
-    FetchContent_MakeAvailable(tracy)
-endfunction()

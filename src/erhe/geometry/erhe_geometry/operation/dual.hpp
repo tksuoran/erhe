@@ -8,9 +8,9 @@ namespace erhe::geometry::operation {
 class Dual : public Geometry_operation
 {
 public:
-    Dual(Geometry& source, Geometry& destination, bool post_process = true);
+    Dual(const Geometry& source, Geometry& destination);
 };
 
-[[nodiscard]] auto dual(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto dual(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

@@ -8,9 +8,9 @@ namespace erhe::geometry::operation {
 class Subdivide : public Geometry_operation
 {
 public:
-    Subdivide(Geometry& src, Geometry& destination);
+    Subdivide(const Geometry& src, Geometry& destination);
 };
 
-[[nodiscard]] auto subdivide(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto subdivide(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

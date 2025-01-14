@@ -7,6 +7,7 @@ erhe_target_sources_grouped(
     erhe_geometry/geometry.cpp
     erhe_geometry/geometry.hpp
     erhe_geometry/geometry.inl
+    erhe_geometry/geometry_geogram_mesh.cpp
     erhe_geometry/geometry_iterators.cpp
     erhe_geometry/geometry_log.cpp
     erhe_geometry/geometry_log.hpp
@@ -19,12 +20,16 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/catmull_clark_subdivision.hpp
     erhe_geometry/operation/clone.cpp
     erhe_geometry/operation/clone.hpp
+    erhe_geometry/operation/difference.cpp
+    erhe_geometry/operation/difference.hpp
     erhe_geometry/operation/dual.cpp
     erhe_geometry/operation/dual.hpp
     erhe_geometry/operation/geometry_operation.cpp
     erhe_geometry/operation/geometry_operation.hpp
     erhe_geometry/operation/gyro.cpp
     erhe_geometry/operation/gyro.hpp
+    erhe_geometry/operation/intersection.cpp
+    erhe_geometry/operation/intersection.hpp
     erhe_geometry/operation/join.cpp
     erhe_geometry/operation/join.hpp
     erhe_geometry/operation/kis.cpp
@@ -33,6 +38,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/meta.hpp
     erhe_geometry/operation/normalize.cpp
     erhe_geometry/operation/normalize.hpp
+    erhe_geometry/operation/repair.cpp
+    erhe_geometry/operation/repair.hpp
     erhe_geometry/operation/reverse.cpp
     erhe_geometry/operation/reverse.hpp
     erhe_geometry/operation/sqrt3_subdivision.cpp
@@ -43,8 +50,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/triangulate.hpp
     erhe_geometry/operation/truncate.cpp
     erhe_geometry/operation/truncate.hpp
-    erhe_geometry/operation/weld.cpp
-    erhe_geometry/operation/weld.hpp
+    erhe_geometry/operation/union.cpp
+    erhe_geometry/operation/union.hpp
     erhe_geometry/polygon.cpp
     erhe_geometry/polygon.inl
     erhe_geometry/property_map.hpp
@@ -79,6 +86,7 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm-header-only
     PRIVATE
+        geogram
         erhe::log
         erhe::math
         erhe::profile

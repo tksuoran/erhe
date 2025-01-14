@@ -21,8 +21,9 @@ project(
     LANGUAGES    C CXX
 )
 
+include(cmake/CPM.cmake)
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-#set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/../cache")
 set(ERHE_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/src")
 
 #set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Do not update everytime I run cmake, please")
@@ -58,7 +59,6 @@ message("Compiler = ${CMAKE_CXX_COMPILER_ID}")
 include(${CMAKE_CXX_COMPILER_ID})
 include(common_options)
 include(functions)
-include(libraries)
 
 if (WIN32)
     message("Detected Windows platform")
@@ -78,57 +78,128 @@ endif ()
 
 # Dependencies
 message("Fetching dependencies")
+CPMAddPackage(
+    NAME              geogram
+    #GIT_TAG           tksuoran/unicode
+    #GITHUB_REPOSITORY tksuoran/geogram
+    VERSION            1.9.2
+    GITHUB_REPOSITORY  BrunoLevy/geogram
+    OPTIONS
+        "GEOGRAM_SUB_BUILD ON"
+        "GEOGRAM_WITH_GRAPHICS OFF"
+        "GEOGRAM_WITH_LEGACY_NUMERICS OFF"
+        "GEOGRAM_WITH_HLBFGS ON"
+        "GEOGRAM_WITH_TETGEN ON"
+        "GEOGRAM_WITH_TRIANGLE ON"
+        "GEOGRAM_WITH_LUA OFF"
+        "GEOGRAM_LIB_ONLY ON"
+        "GEOGRAM_WITH_FPG ON"
+        "GEOGRAM_USE_SYSTEM_GLFW3 OFF"
+        "GEOGRAM_WITH_GARGANTUA OFF"
+        "GEOGRAM_WITH_TBB OFF"
+)
 
-message("Fetching fmt")
-FetchContent_MakeAvailable(fmt)
+CPMAddPackage(
+    NAME              fmt
+    VERSION           11.0.2
+    GIT_TAG           11.0.2
+    GITHUB_REPOSITORY fmtlib/fmt
+)
 
-message("Fetching spdlog")
-include(spdlog)
-FetchContent_MakeAvailable_spdlog()
+CPMAddPackage(
+    NAME              spdlog
+    VERSION           1.14.1
+    GITHUB_REPOSITORY gabime/spdlog
+    OPTIONS "SPDLOG_FMT_EXTERNAL ON"
+)
 
-message("Fetching concurrentqueue")
-FetchContent_MakeAvailable(concurrentqueue)
+CPMAddPackage(
+    NAME              concurrentqueue 
+    GIT_TAG           master
+    GITHUB_REPOSITORY cameron314/concurrentqueue
+)
 
-message("Fetching cxxopts")
-FetchContent_MakeAvailable(cxxopts)
+CPMAddPackage(
+    NAME              cxxopts 
+    VERSION           3.2.1
+    GITHUB_REPOSITORY jarro2783/cxxopts
+)
 
-message("Fetching etl")
-FetchContent_MakeAvailable(etl)
+CPMAddPackage(
+    NAME              etl
+    VERSION           20.38.17
+    GIT_TAG           20.38.17
+    GITHUB_REPOSITORY ETLCPP/etl
+)
 
-message("Fetching glm")
-FetchContent_MakeAvailable(glm)
+CPMAddPackage(
+    NAME              glm
+    VERSION           1.0.1
+    GIT_TAG           1.0.1
+    GITHUB_REPOSITORY g-truc/glm
+)
 # Enable GLM_GTX_component_wise
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
-message("Fetching MathGeoLib")
-FetchContent_MakeAvailable(MathGeoLib)
+CPMAddPackage(
+    NAME              MathGeoLib
+    GIT_TAG           origin/winver
+    GITHUB_REPOSITORY tksuoran/MathGeoLib
+)
 
-#message("Fetching meshoptimizer")
-#FetchContent_MakeAvailable(meshoptimizer)
-
-message("Fetching nlohmann_json")
-FetchContent_MakeAvailable(nlohmann_json)
+CPMAddPackage(
+    NAME              nlohmann_json
+    VERSION           3.11.3
+    GITHUB_REPOSITORY nlohmann/json
+)
 
 include(vscode)
 vscode_support()
 
-message("Fetching simdjson")
-FetchContent_MakeAvailable(simdjson)
-
-include(taskflow)
-FetchContent_MakeAvailable_taskflow()
-
-message("Fetching wuffs")
-FetchContent_MakeAvailable(wuffs)
-
-if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
-    message("Fetching cpp-terminal")
-    FetchContent_MakeAvailable(cpp-terminal)
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
+    CPMAddPackage(
+        NAME              glfw
+        VERSION           3.4
+        GIT_TAG           3.4
+        GITHUB_REPOSITORY glfw/glfw
+        OPTIONS
+            "BUILD_SHARED_LIBS OFF"
+            "GLFW_BUILD_EXAMPLES OFF"
+            "GLFW_BUILD_TESTS OFF"
+            "GLFW_BUILD_DOCS OFF"
+            "GLFW_INSTALL OFF"
+            "GLFW_VULKAN_STATIC OFF"
+    )
+    message(STATUS "Erhe configured to use glfw for OpenGL context window.")
+    add_definitions(-DERHE_WINDOW_LIBRARY_GLFW)
+else ()
+    message(STATUS "Erhe configured to disable OpenGL Context window.")
+    add_definitions(-DERHE_WINDOW_LIBRARY_NONE)
 endif ()
 
+CPMAddPackage(
+    NAME              simdjson
+    VERSION           3.9.4
+    GITHUB_REPOSITORY simdjson/simdjson
+)
+
+CPMAddPackage(
+    NAME              taskflow
+    VERSION           3.7.0
+    GITHUB_REPOSITORY taskflow/taskflow
+    OPTIONS
+        "TF_BUILD_TESTS OFF"
+        "TF_BUILD_EXAMPLES OFF"
+)
+
+CPMAddPackage(
+    NAME              wuffs
+    VERSION           0.4.0-alpha.5
+    GITHUB_REPOSITORY google/wuffs
+)
+
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
-    message("Fetching cpp-terminal")
-    FetchContent_MakeAvailable(cpp-terminal)
+    CPMAddPackage(NAME cpp-terminal GITHUB_REPOSITORY jupyter-xeus/cpp-terminal)
     message(STATUS "Erhe configured to use cpp-terminal.")
     add_definitions(-DERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
 else ()
@@ -145,8 +216,11 @@ else ()
 endif ()
 
 if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
-    message("Fetching lunasvg")
-    FetchContent_MakeAvailable(lunasvg)
+    CPMAddPackage(
+        NAME              lunasvg
+        VERSION           2.4.0
+        GITHUB_REPOSITORY sammycage/lunasvg
+    )
     message(STATUS "Erhe configured to use lunasvg for SVG.")
     add_definitions(-DERHE_SVG_LIBRARY_LUNASVG)
 else ()
@@ -155,8 +229,11 @@ else ()
 endif ()
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
-    message("Fetching fastgltf")
-    FetchContent_MakeAvailable(fastgltf)
+    CPMAddPackage(
+        NAME              fastgltf
+        VERSION           0.8.0
+        GITHUB_REPOSITORY spnda/fastgltf
+    )
     message(STATUS "Erhe configured to use fastgltf for glTF.")
     add_definitions(-DERHE_GLTF_LIBRARY_FASTGLTF)
 else ()
@@ -165,16 +242,21 @@ else ()
 endif ()
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
-    message("Fetching nvtx")
-    include(nvtx)
-    FetchContent_MakeAvailable_nvtx()
+    CPMAddPackage(
+        NAME              nvtx
+        VERSION           3.1.0
+        GITHUB_REPOSITORY NVIDIA/NVTX
+    )
     message(STATUS "Erhe configured to use nvtx for profiling.")
     add_definitions(-DERHE_PROFILE_LIBRARY_NVTX)
     set(ERHE_PROFILE_TARGET nvtx3-cpp) # CACHE STRING "" FORCE)
 elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
-    message("Fetching tracy")
-    include(tracy)
-    FetchContent_MakeAvailable_tracy()
+    CPMAddPackage(
+        NAME              tracy
+        VERSION           0.11.1
+        GITHUB_REPOSITORY wolfpld/tracy
+        OPTIONS 
+    )
     message(STATUS "Erhe configured to use Tracy for profiling.")
     add_definitions(-DERHE_PROFILE_LIBRARY_TRACY)
     set(ERHE_PROFILE_TARGET TracyClient) # CACHE STRING "" FORCE)
@@ -196,8 +278,12 @@ else ()
 endif ()
 
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
-    message("Fetching freetype")
-    FetchContent_MakeAvailable(freetype)
+    CPMAddPackage(
+        NAME              freetype
+        VERSION           2.13.2
+        GIT_TAG           VER-2-13-2
+        GITHUB_REPOSITORY freetype/freetype
+    )
     message(STATUS "Erhe configured to use freetype for font rasterization.")
     add_definitions(-DERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
 else ()
@@ -206,8 +292,11 @@ else ()
 endif ()
 
 if (${ERHE_TEXT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
-    message("Fetching harfbuzz")
-    FetchContent_MakeAvailable(harfbuzz)
+    CPMAddPackage(
+        NAME              harfbuzz
+        GIT_TAG           fix-bigobj
+        GITHUB_REPOSITORY tksuoran/harfbuzz
+    )
     message(STATUS "Erhe configured to use harfbuzz for text layout.")
     add_definitions(-DERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 else ()
@@ -215,26 +304,17 @@ else ()
     add_definitions(-DERHE_TEXT_LAYOUT_LIBRARY_NONE)
 endif ()
 
-if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
-    message("Fetching glfw")
-    include(glfw)
-    FetchContent_MakeAvailable_glfw()
-    message(STATUS "Erhe configured to use glfw for OpenGL context window.")
-    add_definitions(-DERHE_WINDOW_LIBRARY_GLFW)
-else ()
-    message(STATUS "Erhe configured to disable OpenGL Context window.")
-    add_definitions(-DERHE_WINDOW_LIBRARY_NONE)
-endif ()
-
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
-    message("Fetching Embree")
-    FetchContent_MakeAvailable(embree)
+    CPMAddPackage(NAME embree VERSION 3.13.3 GITHUB_REPOSITORY embree/embree)
     message(STATUS "Erhe configured to use Embree for raytracing.")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_EMBREE)
     set(ERHE_RAYTRACE_TARGET embree)
 elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
-    message("Fetching bvh")
-    FetchContent_MakeAvailable(bvh)
+    CPMAddPackage(
+        NAME              bvh
+        GIT_TAG           master
+        GITHUB_REPOSITORY madmann91/bvh
+    )
     message(STATUS "Erhe configured to use bvh for raytracing.")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_BVH)
     set(ERHE_RAYTRACE_TARGET bvh)
@@ -244,9 +324,20 @@ else ()
 endif ()
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
-    message("Fetching JoltPhysics")
-    include(JoltPhysics)
-    FetchContent_MakeAvailable_JoltPhysics()
+    CPMAddPackage(
+        NAME              JoltPhysics
+        GIT_TAG           cpm
+        GITHUB_REPOSITORY tksuoran/JoltPhysics
+        DOWNLOAD_ONLY     YES
+    )
+    if (JoltPhysics_ADDED)
+        set(OVERRIDE_CXX_FLAGS OFF)
+        set(INTERPROCEDURAL_OPTIMIZATION OFF)
+        set(CPP_RTTI_ENABLED ON)
+        set(ENABLE_INSTALL OFF)
+        set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF)
+        add_subdirectory(${JoltPhysics_SOURCE_DIR}/build ${JoltPhysics_BINARY_DIR})
+    endif ()
     message(STATUS "Erhe configured to use jolt for physics.")
     add_definitions(-DERHE_PHYSICS_LIBRARY_JOLT)
 else ()
@@ -255,8 +346,12 @@ else ()
 endif ()
 
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
-    message("Fetching OpenXR-SDK")
-    FetchContent_MakeAvailable(OpenXR-SDK)
+    CPMAddPackage(
+        NAME              OpenXR-SDK
+        VERSION           1.1.38
+        GIT_TAG           release-1.1.38
+        GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK
+    )
     message(STATUS "Erhe configured to use OpenXR for XR.")
     add_definitions(-DERHE_XR_LIBRARY_OPENXR)
 else ()

@@ -6,6 +6,7 @@
 #include "graphics/icon_set.hpp"
 #include "operations/ioperation.hpp"
 #include "operations/operation_stack.hpp"
+#include "parsers/geogram.hpp"
 #include "parsers/gltf.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/content_library.hpp"
@@ -132,6 +133,14 @@ Asset_file_gltf& Asset_file_gltf::operator=(const Asset_file_gltf&) = default;
 Asset_file_gltf::~Asset_file_gltf() noexcept                        = default;
 Asset_file_gltf::Asset_file_gltf(const std::filesystem::path& path) : Item{path} {}
 
+auto Asset_file_geogram::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_file_geogram; }
+auto Asset_file_geogram::get_type       () const -> uint64_t        { return get_static_type(); }
+auto Asset_file_geogram::get_type_name  () const -> std::string_view{ return static_type_name; }
+Asset_file_geogram::Asset_file_geogram(const Asset_file_geogram&)            = default;
+Asset_file_geogram& Asset_file_geogram::operator=(const Asset_file_geogram&) = default;
+Asset_file_geogram::~Asset_file_geogram() noexcept                        = default;
+Asset_file_geogram::Asset_file_geogram(const std::filesystem::path& path) : Item{path} {}
+
 auto Asset_file_other::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_file_other; }
 auto Asset_file_other::get_type       () const -> uint64_t        { return get_static_type(); }
 auto Asset_file_other::get_type_name  () const -> std::string_view{ return static_type_name; }
@@ -153,11 +162,15 @@ auto Asset_browser::make_node(const std::filesystem::path& path, Asset_node* con
         path.extension() == std::filesystem::path{".gltf"} ||
         path.extension() == std::filesystem::path{".glb"};
 
+    const bool is_geogram = path.extension() == std::filesystem::path{".geogram"};
+
     std::shared_ptr<Asset_node> new_node;
     if (is_directory) {
         new_node = std::make_shared<Asset_folder>(path);
     } else if (is_gltf) {
         new_node = std::make_shared<Asset_file_gltf>(path);
+    } else if (is_geogram) {
+        new_node = std::make_shared<Asset_file_geogram>(path);
     } else {
         new_node = std::make_shared<Asset_file_other>(path);
     }
@@ -298,6 +311,29 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
     return false;
 }
 
+auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool
+{
+    std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(geogram->get_source_path()));
+    if (ImGui::MenuItem(import_label.c_str())) {
+        import_geogram(
+            erhe::primitive::Build_info{
+                .primitive_types = {
+                    .fill_triangles  = true,
+                    .edge_lines      = true,
+                    .corner_points   = true,
+                    .centroid_points = true
+                },
+                .buffer_info = m_context.mesh_memory->buffer_info
+            },
+            *m_context.scene_builder->get_scene_root().get(),
+            geogram->get_source_path()
+        );
+        ImGui::CloseCurrentPopup();
+        return true;
+    }
+    return false;
+}
+
 auto Asset_browser::try_open(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool
 {
     std::string open_label = fmt::format("Open '{}'", erhe::file::to_string(gltf->get_source_path()));
@@ -316,53 +352,87 @@ auto Asset_browser::try_open(const std::shared_ptr<Asset_file_gltf>& gltf) -> bo
 
 auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
-    const auto gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
-    if (!gltf) {
+    const auto geogram = std::dynamic_pointer_cast<Asset_file_geogram>(item);
+    if (geogram) {
+        const ImGuiID popup_id{ImGui::GetID("asset_browser_node_popup")};
+
+        if (
+            ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
+            ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
+            m_popup_node == nullptr
+        ) {
+            m_popup_node = geogram.get();
+            ImGui::OpenPopupEx(popup_id, ImGuiPopupFlags_MouseButtonRight);
+        }
+
+        if (m_popup_node == geogram.get()) {
+            ERHE_PROFILE_SCOPE("popup");
+            if (ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None)) {
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
+                const bool begin_popup_context_item = ImGui::BeginPopupEx(
+                    popup_id,
+                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
+                );
+                if (begin_popup_context_item) {
+                    if (try_import(geogram)) {
+                        m_popup_node = nullptr;
+                    }
+
+                    ImGui::EndPopup();
+                }
+                ImGui::PopStyleVar();
+            } else {
+                m_popup_node = nullptr;
+            }
+        }
         return false;
     }
 
-    if (!gltf->is_scanned) {
-        gltf->contents = scan_gltf(gltf->get_source_path());
-        gltf->is_scanned = true;
-    }
-
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
-        ImGui::BeginTooltip();
-        for (const auto& line : gltf->contents) {
-            ImGui::TextUnformatted(line.c_str());
+    const auto gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
+    if (gltf) {
+        if (!gltf->is_scanned) {
+            gltf->contents = scan_gltf(gltf->get_source_path());
+            gltf->is_scanned = true;
         }
-        ImGui::EndTooltip();
-    }
 
-    const ImGuiID popup_id{ImGui::GetID("asset_browser_node_popup")};
-
-    if (
-        ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
-        ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
-        m_popup_node == nullptr
-    ) {
-        m_popup_node = gltf.get();
-        ImGui::OpenPopupEx(popup_id, ImGuiPopupFlags_MouseButtonRight);
-    }
-
-    if (m_popup_node == gltf.get()) {
-        ERHE_PROFILE_SCOPE("popup");
-        if (ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None)) {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
-            const bool begin_popup_context_item = ImGui::BeginPopupEx(
-                popup_id,
-                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
-            );
-            if (begin_popup_context_item) {
-                if (try_import(gltf) || try_open(gltf)) {
-                    m_popup_node = nullptr;
-                }
-
-                ImGui::EndPopup();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
+            ImGui::BeginTooltip();
+            for (const auto& line : gltf->contents) {
+                ImGui::TextUnformatted(line.c_str());
             }
-            ImGui::PopStyleVar();
-        } else {
-            m_popup_node = nullptr;
+            ImGui::EndTooltip();
+        }
+
+        const ImGuiID popup_id{ImGui::GetID("asset_browser_node_popup")};
+
+        if (
+            ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
+            ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
+            m_popup_node == nullptr
+        ) {
+            m_popup_node = gltf.get();
+            ImGui::OpenPopupEx(popup_id, ImGuiPopupFlags_MouseButtonRight);
+        }
+
+        if (m_popup_node == gltf.get()) {
+            ERHE_PROFILE_SCOPE("popup");
+            if (ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None)) {
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
+                const bool begin_popup_context_item = ImGui::BeginPopupEx(
+                    popup_id,
+                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
+                );
+                if (begin_popup_context_item) {
+                    if (try_import(gltf) || try_open(gltf)) {
+                        m_popup_node = nullptr;
+                    }
+
+                    ImGui::EndPopup();
+                }
+                ImGui::PopStyleVar();
+            } else {
+                m_popup_node = nullptr;
+            }
         }
     }
 

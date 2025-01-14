@@ -24,6 +24,10 @@ public:
     public:
         Editor_context&             context;
         erhe::primitive::Build_info build_info;
+        std::function<erhe::geometry::Geometry(
+            const erhe::geometry::Geometry& lhs,
+            const erhe::geometry::Geometry& rhs)
+        >                           operation;
     };
 
     explicit Merge_operation(Parameters&& parameters);

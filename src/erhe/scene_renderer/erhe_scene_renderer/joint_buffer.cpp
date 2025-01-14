@@ -10,6 +10,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <glm/gtx/matrix_operation.hpp>
+
 namespace erhe::scene_renderer {
 
 Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
@@ -26,8 +28,8 @@ Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
     offsets.extra3                  = joint_block.add_uint ("extra3")->offset_in_parent(),
     offsets.debug_joint_colors      = joint_block.add_vec4 ("debug_joint_colors", 32)->offset_in_parent();
     offsets.joint = {
-        .world_from_bind          = joint_struct.add_mat4("world_from_bind"         )->offset_in_parent(),
-        .world_from_bind_cofactor = joint_struct.add_mat4("world_from_bind_cofactor")->offset_in_parent()
+        .world_from_bind  = joint_struct.add_mat4("world_from_bind"         )->offset_in_parent(),
+        .normal_transform = joint_struct.add_mat4("world_from_bind_cofactor")->offset_in_parent() // TODO rename normal_transform
     };
 
     offsets.joint_struct = joint_block.add_struct("joints", &joint_struct, erhe::graphics::Shader_resource::unsized_array)->offset_in_parent();
@@ -131,10 +133,11 @@ auto Joint_buffer::update(
             const glm::mat4 world_from_bind  = world_from_joint * joint_from_bind;
 
             // TODO Use compute shader
-            const glm::mat4 world_from_bind_cofactor = erhe::math::compute_cofactor(world_from_bind);
+            //const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_bind)); TODO
+            const glm::mat4 normal_transform = glm::transpose(glm::inverse(world_from_bind));
 
-            write(primitive_gpu_data, writer.write_offset + offsets.joint.world_from_bind,          as_span(world_from_bind         ));
-            write(primitive_gpu_data, writer.write_offset + offsets.joint.world_from_bind_cofactor, as_span(world_from_bind_cofactor));
+            write(primitive_gpu_data, writer.write_offset + offsets.joint.world_from_bind,  as_span(world_from_bind ));
+            write(primitive_gpu_data, writer.write_offset + offsets.joint.normal_transform, as_span(normal_transform));
             writer.write_offset += entry_size;
             ++joint_index;
             ERHE_VERIFY(writer.write_offset <= writer.write_end);

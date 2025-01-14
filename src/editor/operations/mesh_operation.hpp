@@ -57,7 +57,7 @@ protected:
 
     // Public API
     void add_entry   (Entry&& entry);
-    void make_entries(const std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation);
+    void make_entries(const std::function<erhe::geometry::Geometry(const erhe::geometry::Geometry&)> operation);
 
 protected:
     Mesh_operation_parameters m_parameters;

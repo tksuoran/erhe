@@ -7,7 +7,7 @@
 
 namespace erhe::geometry::operation {
 
-Dual::Dual(Geometry& source, Geometry& destination, bool post_process)
+Dual::Dual(const Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -23,12 +23,10 @@ Dual::Dual(Geometry& source, Geometry& destination, bool post_process)
         });
     });
 
-    if (post_process) {
-        post_processing();
-    }
+    post_processing();
 }
 
-auto dual(Geometry& source) -> Geometry
+auto dual(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("dual({})", source.name),
