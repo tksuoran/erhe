@@ -78,6 +78,7 @@ public:
     void triangulate();
     void normalize();
     void reverse();
+    void repair();
 
     // Subdivision
     void catmull_clark();
@@ -103,6 +104,7 @@ private:
     erhe::commands::Lambda_command m_triangulate_command;
     erhe::commands::Lambda_command m_normalize_command;
     erhe::commands::Lambda_command m_reverse_command;
+    erhe::commands::Lambda_command m_repair_command;
 
     // Subdivision
     erhe::commands::Lambda_command m_catmull_clark_command;

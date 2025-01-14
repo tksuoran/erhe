@@ -7,6 +7,7 @@ erhe_target_sources_grouped(
     erhe_geometry/geometry.cpp
     erhe_geometry/geometry.hpp
     erhe_geometry/geometry.inl
+    erhe_geometry/geometry_geogram_mesh.cpp
     erhe_geometry/geometry_iterators.cpp
     erhe_geometry/geometry_log.cpp
     erhe_geometry/geometry_log.hpp
@@ -33,6 +34,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/meta.hpp
     erhe_geometry/operation/normalize.cpp
     erhe_geometry/operation/normalize.hpp
+    erhe_geometry/operation/repair.cpp
+    erhe_geometry/operation/repair.hpp
     erhe_geometry/operation/reverse.cpp
     erhe_geometry/operation/reverse.hpp
     erhe_geometry/operation/sqrt3_subdivision.cpp
@@ -79,6 +82,7 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm-header-only
     PRIVATE
+        geogram
         erhe::log
         erhe::math
         erhe::profile

@@ -478,16 +478,14 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
 
     log_geometry->trace("{} for {}", __func__, name);
 
-    auto* const point_normals   = point_attributes().find_or_create<vec3>(descriptor);
-    const auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
-    if (polygon_normals == nullptr) {
-        const bool polygon_normals_ok = compute_polygon_normals();
-        if (!polygon_normals_ok) {
-            return false;
-        }
-        polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
+    const bool polygon_normals_ok = compute_polygon_normals();
+    if (!polygon_normals_ok) {
+        return false;
     }
+    const auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
 
+    const auto* const point_locations = point_attributes().find<vec3>(c_point_locations);
+    auto* const point_normals = point_attributes().find_or_create<vec3>(descriptor);
     point_normals->clear();
 
     for_each_point([&](auto& i) {
@@ -495,10 +493,18 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
         i.point.for_each_corner(*this, [&](auto& j) {
             if (polygon_normals->has(j.corner.polygon_id)) {
                 normal_sum += polygon_normals->get(j.corner.polygon_id);
+            } else {
+                const glm::vec3 polygon_normal = polygons[j.corner.polygon_id].compute_normal(*this, *point_locations);
+                normal_sum += polygon_normal;
             }
-            // TODO else
         });
-        point_normals->put(i.point_id, normalize(normal_sum));
+        glm::vec3 normal = glm::normalize(normal_sum);
+        float length = glm::length(normal);
+        if (length > 0.9f) {
+            point_normals->put(i.point_id, normalize(normal));
+        } else {
+            log_geometry->warn("{} point {} - Unable to compute normal", __func__, i.point_id);
+        }
     });
 
     m_serial_point_normals = m_serial;
@@ -698,7 +704,50 @@ void Geometry::sanity_check() const
 {
     std::size_t error_count = 0;
 
+    Property_map<Point_id,   glm::vec3>* point_locations      = point_attributes  ().find<glm::vec3>(c_point_locations);
+    Property_map<Point_id,   glm::vec3>* point_normals        = point_attributes  ().find<glm::vec3>(c_point_normals);
+    Property_map<Point_id,   glm::vec3>* point_normals_smooth = point_attributes  ().find<glm::vec3>(c_point_normals_smooth);
+    Property_map<Polygon_id, glm::vec3>* polygon_normals      = polygon_attributes().find<glm::vec3>(c_polygon_normals);
+    Property_map<Corner_id,  glm::vec3>* corner_normals       = corner_attributes ().find<glm::vec3>(c_corner_normals);
+
+    if (point_locations == nullptr) {
+        log_geometry->error("Sanity check failure: Point locations attribute is missing");
+        ++error_count;
+    }
+
     for_each_point_const([&](auto& i) {
+        if (point_locations != nullptr) {
+            if (!point_locations->has(i.point_id)) {
+                log_geometry->error("Sanity check failure: Point {} has no location value", i.point_id);
+                ++error_count;
+            }
+        }
+
+        glm::vec3 n;
+        if (point_normals != nullptr) {
+            if (point_normals->maybe_get(i.point_id, n)){
+                if (glm::length(n) < 0.9f) {
+                    log_geometry->error("Sanity check failure: Point {} has normal with bad length", i.point_id);
+                    ++error_count;
+                }
+                if (!std::isfinite(n.x) || !std::isfinite(n.y) || !std::isfinite(n.z)) {
+                    log_geometry->error("Sanity check failure: Point {} has normal has inf / nan", i.point_id);
+                    ++error_count;
+                }
+            }
+        }
+        if (point_normals_smooth != nullptr) {
+            if (point_normals_smooth->maybe_get(i.point_id, n)) {
+                if (glm::length(n) < 0.9f) {
+                    log_geometry->error("Sanity check failure: Point {} has normal with bad length", i.point_id);
+                    ++error_count;
+                }
+                if (!std::isfinite(n.x) || !std::isfinite(n.y) || !std::isfinite(n.z)) {
+                    log_geometry->error("Sanity check failure: Point {} has normal has inf / nan", i.point_id);
+                    ++error_count;
+                }
+            }
+        }
         i.point.for_each_corner_const(*this, [&](auto& j) {
             if (j.corner.point_id != i.point_id) {
                 log_geometry->error(
@@ -718,6 +767,37 @@ void Geometry::sanity_check() const
     });
 
     for_each_polygon_const([&](auto& i) {
+        glm::vec3 n;
+        if (polygon_normals != nullptr) {
+            if (polygon_normals->maybe_get(i.polygon_id, n)){
+                if (glm::length(n) < 0.9f) {
+                    log_geometry->error("Sanity check failure: Polygon {} has normal with bad length", i.polygon_id);
+                    ++error_count;
+                }
+                if (!std::isfinite(n.x) || !std::isfinite(n.y) || !std::isfinite(n.z)) {
+                    log_geometry->error("Sanity check failure: Polygon {} has normal has inf / nan", i.polygon_id);
+                    ++error_count;
+                }
+            }
+        }
+
+        i.polygon.for_each_corner_neighborhood_const(
+            *this,
+            [&](const Polygon::Polygon_corner_neighborhood_context_const& j) {
+                const Point_id a = j.corner     .point_id;
+                const Point_id b = j.next_corner.point_id;
+                if (a == b) {
+                    log_geometry->error(
+                        "Sanity check failure: Polygon {} has duplicate corner points: corner {} point {}, corner {} point {}",
+                        i.polygon_id,
+                        j.corner_id, j.corner.point_id,
+                        j.next_corner_id, j.next_corner.point_id
+                    );
+                    ++error_count;
+                }
+            }
+        );
+
         i.polygon.for_each_corner_const(*this, [&](auto& j) {
             if (j.corner.polygon_id != i.polygon_id) {
                 log_geometry->error(
@@ -747,6 +827,19 @@ void Geometry::sanity_check() const
                         i.polygon_id, j.corner_id, j.corner.point_id
                     );
                     ++error_count;
+                }
+            }
+
+            if (corner_normals != nullptr) {
+                if (corner_normals->maybe_get(j.corner_id, n)) {
+                    if (glm::length(n) < 0.9f) {
+                        log_geometry->error("Sanity check failure: Corner {} (polygon {} point {}) has normal with bad length", j.corner_id, j.corner.polygon_id, j.corner.point_id);
+                        ++error_count;
+                    }
+                    if (!std::isfinite(n.x) || !std::isfinite(n.y) || !std::isfinite(n.z)) {
+                        log_geometry->error("Sanity check failure: Corner {} (polygon {} point {}) has normal has inf / nan", j.corner_id, j.corner.polygon_id, j.corner.point_id);
+                        ++error_count;
+                    }
                 }
             }
         });

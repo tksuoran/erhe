@@ -339,10 +339,19 @@ auto Build_context::get_polygon_normal() -> vec3
     ERHE_PROFILE_FUNCTION();
     vec3 polygon_normal{0.0f, 1.0f, 0.0f};
     if (property_maps.polygon_normals != nullptr) {
-        property_maps.polygon_normals->maybe_get(polygon_id, polygon_normal);
+        if (property_maps.polygon_normals->maybe_get(polygon_id, polygon_normal)) {
+            if (glm::length(polygon_normal) > 0.9f) {
+                return polygon_normal;
+            }
+        }
     }
 
-    return polygon_normal;
+    polygon_normal = root.geometry.polygons[polygon_id].compute_normal(root.geometry, *property_maps.point_locations);
+    if (glm::length(polygon_normal) > 0.9f) {
+        return polygon_normal;
+    }
+    SPDLOG_LOGGER_WARN(log_primitive_builder, "Polygon {} - no normal - using fallback (0, 1, 0)", polygon_id);
+    return glm::vec3{0.0f, 1.0f, 0.0f};
 }
 
 /////////////////////////////
@@ -363,7 +372,23 @@ void Build_context::build_tangent_frame()
         if (!found_point_normal && (property_maps.point_normals_smooth != nullptr)) {
             found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
         }
-        v_normal = point_normal;
+        if (found_point_normal) {
+            v_normal = point_normal;
+            found_normal = true;
+        }
+    }
+    if (!found_normal) {
+        vec3 polygon_normal{0.0f, 1.0f, 0.0f};
+        bool found_polygon_normal{false};
+        if (property_maps.polygon_normals != nullptr) {
+            found_polygon_normal = property_maps.polygon_normals->maybe_get(point_id, polygon_normal) && (glm::length(polygon_normal) > 0.9f);
+        }
+        if (found_polygon_normal) {
+            v_normal = polygon_normal;
+            found_normal;
+        } else {
+            v_normal = get_polygon_normal();
+        }
     }
 
     {
@@ -381,22 +406,29 @@ void Build_context::build_tangent_frame()
             }
 
             case Normal_style::point_normals: {
-                //// ERHE_VERIFY(glm::length(point_normal) > 0.9f);
-                vec3 point_normal{0.0f, 1.0f, 0.0f};
-                bool found_point_normal{false};
+                vec3 normal{0.0f, 1.0f, 0.0f};
+                bool found{false};
                 if (property_maps.point_normals != nullptr) {
-                    found_point_normal = property_maps.point_normals->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
+                    found = property_maps.point_normals->maybe_get(point_id, normal) && (glm::length(normal) > 0.9f);
                 }
-                if (!found_point_normal && (property_maps.point_normals_smooth != nullptr)) {
-                    found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
+                if (!found && (property_maps.point_normals_smooth != nullptr)) {
+                    found = property_maps.point_normals_smooth->maybe_get(point_id, normal) && (glm::length(normal) > 0.9f);
                 }
-                v_normal = point_normal;
+                if (!found)
+                {
+                    const vec3 polygon_normal = get_polygon_normal();
+                    found = glm::length(polygon_normal) > 0.9f;
+                    if (found) {
+                        normal = polygon_normal;
+                    }
+                }
+                v_normal = normal;
                 break;
             }
 
             case Normal_style::polygon_normals: {
                 const vec3 polygon_normal = get_polygon_normal();
-                //// ERHE_VERIFY(glm::length(polygon_normal) > 0.9f);
+                ERHE_VERIFY(glm::length(polygon_normal) > 0.9f);
                 v_normal = polygon_normal;
                 break;
             }
@@ -566,9 +598,10 @@ void Build_context::build_vertex_joint_indices()
     //    return;
     //}
 
-    const uvec4 joint_indices = (property_maps.point_joint_indices != nullptr)
-        ? property_maps.point_joint_indices->get(point_id)
-        : uvec4{0u, 0u, 0u, 0u};
+    uvec4 joint_indices{0u, 0u, 0u, 0u};
+    if (property_maps.point_joint_indices != nullptr) {
+        property_maps.point_joint_indices->maybe_get(point_id, joint_indices);
+    }
     vertex_writer.write(root.attributes.joint_indices, joint_indices);
 
     SPDLOG_LOGGER_TRACE(
@@ -586,9 +619,10 @@ void Build_context::build_vertex_joint_weights()
     //    return;
     //}
 
-    const vec4 joint_weights = (property_maps.point_joint_weights != nullptr)
-        ? property_maps.point_joint_weights->get(point_id)
-        : vec4{1.0f, 0.0f, 0.0f, 0.0f};
+    vec4 joint_weights{1.0f, 0.0f, 0.0f, 0.0f};
+    if (property_maps.point_joint_weights != nullptr) {
+        property_maps.point_joint_weights->maybe_get(point_id, joint_weights);
+    }
     vertex_writer.write(root.attributes.joint_weights, joint_weights);
 
     SPDLOG_LOGGER_TRACE(

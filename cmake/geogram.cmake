@@ -1,0 +1,22 @@
+function (FetchContent_MakeAvailable_geogram)
+    FetchContent_GetProperties(geogram)
+    string(TOLOWER "geogram" lc_geogram)
+    if (NOT ${lc_geogram}_POPULATED)
+        FetchContent_Populate(geogram)
+
+        # Disable features not needed
+        option(GEOGRAM_WITH_GRAPHICS "Viewers and geogram_gfx library" OFF)
+        option(GEOGRAM_WITH_LEGACY_NUMERICS "Legacy numerical libraries" OFF)
+        option(GEOGRAM_WITH_HLBFGS "Non-linear solver (Yang Liu's HLBFGS)" ON)
+        option(GEOGRAM_WITH_TETGEN "Tetrahedral mesher (Hang Si's TetGen)" ON)
+        option(GEOGRAM_WITH_TRIANGLE "Triangle mesher (Jonathan Shewchuk's triangle)" ON)
+        option(GEOGRAM_WITH_LUA "Built-in LUA interpreter" OFF)
+        option(GEOGRAM_LIB_ONLY "Libraries only (no example programs/no viewer)" ON)
+        option(GEOGRAM_WITH_FPG "Predicate generator (Sylvain Pion's FPG)" ON)
+        option(GEOGRAM_USE_SYSTEM_GLFW3 "Use the version of GLFW3 installed in the system if found" OFF)
+        option(GEOGRAM_WITH_GARGANTUA "64-bit indices" OFF)
+        option(GEOGRAM_WITH_TBB "Use TBB for multi-threading" OFF)
+        
+        add_subdirectory(${${lc_geogram}_SOURCE_DIR} ${${lc_geogram}_BINARY_DIR})
+    endif ()
+endfunction ()

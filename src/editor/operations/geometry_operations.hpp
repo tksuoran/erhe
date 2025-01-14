@@ -102,4 +102,11 @@ public:
     auto describe() const -> std::string override;
 };
 
+class Repair_operation : public Mesh_operation
+{
+public:
+    explicit Repair_operation(Mesh_operation_parameters&& context);
+    auto describe() const -> std::string override;
+};
+
 } // namespace editor

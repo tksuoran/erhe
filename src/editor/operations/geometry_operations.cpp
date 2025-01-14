@@ -15,6 +15,7 @@
 #include "erhe_geometry/operation/triangulate.hpp"
 #include "erhe_geometry/operation/truncate.hpp"
 #include "erhe_geometry/operation/weld.hpp"
+#include "erhe_geometry/operation/repair.hpp"
 
 #include <fmt/format.h>
 
@@ -172,6 +173,17 @@ Weld_operation::Weld_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::weld);
+}
+
+auto Repair_operation::describe() const -> std::string
+{
+    return fmt::format("Repair {}", Mesh_operation::describe());
+}
+
+Repair_operation::Repair_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    make_entries(erhe::geometry::operation::repair);
 }
 
 } // namespace editor

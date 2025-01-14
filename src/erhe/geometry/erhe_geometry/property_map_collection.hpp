@@ -2,6 +2,7 @@
 
 #include "erhe_geometry/property_map.hpp"
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -79,6 +80,15 @@ public:
     auto clone               () -> Property_map_collection<Key_type>;
     void transform           (const glm::mat4 matrix);
     auto clone_with_transform(const glm::mat4 matrix) -> Property_map_collection<Key_type>;
+
+    void for_each(
+        std::function<
+            void(
+                const std::string& entry_key,
+                Property_map_base<Key_type>* entry_value
+            )
+        > callback
+    );
 
 private:
     Collection_type m_entries;

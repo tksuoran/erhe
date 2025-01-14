@@ -121,6 +121,12 @@ FetchContent_MakeAvailable_taskflow()
 message("Fetching wuffs")
 FetchContent_MakeAvailable(wuffs)
 
+message("Fetching geogram")
+include(geogram)
+FetchContent_MakeAvailable_geogram()
+#message(STATUS "Erhe configured to use geogram.")
+add_definitions(-DERHE_USE_GEOGRAM)
+
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
     message("Fetching cpp-terminal")
     FetchContent_MakeAvailable(cpp-terminal)

@@ -13,17 +13,20 @@ namespace erhe::geometry {
 
 // TODO Use cofactor matrix for bivectors?
 enum class Transform_mode : unsigned int {
-    none = 0,             // texture coordinates, colors, ...
-    position,             // position vectors
-    direction,            // normal and other plain direction vectors
-    direction_vec3_float, // tangent and bitangent with extra float that is not to be transformed
+    none = 0,                              // texture coordinates, colors, ...
+    mat_mul_vec3_one,                      // position vectors
+    mat_mul_vec3_zero,                     // transform using vec4(v, 0.0)
+    normalize_mat_mul_vec3_zero,           // transform using vec4(v, 0.0), normalize
+    normalize_mal_mul_vec3_zero_and_float, // tangent and bitangent with extra float that is not to be transformed
+    cofactor_mat_mul_vec3_zero,            // normal - transform using cofactor
+    normalize_cofactor_mat_mul_vec3_zero   // normal - transform using cofactor, normalize
 };
 
 enum class Interpolation_mode : unsigned int {
     none = 0,
     linear,                // transform with matrix - position
-    normalized,            // normalize(transform with cofactor matrix) = normal, tagent, bitangent
-    normalized_vec3_float, // normalize(transform with cofactor matrix) = normal, tagent, bitangent
+    normalized,            // normalize after transform (normal, tagent, bitangent)
+    normalized_vec3_float, // normalize after tarnsform (tangent, bitangent), extra float not normalized
 };
 
 class Property_map_descriptor

@@ -49,7 +49,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     using glm::mat4;
 
     erhe::physics::Compound_shape_create_info  compound_shape_create_info;
-    erhe::geometry::Geometry                   combined_geometry;
+    std::shared_ptr<erhe::geometry::Geometry>  combined_geometry = std::make_shared<erhe::geometry::Geometry>();
     std::shared_ptr<erhe::primitive::Material> material;
     Scene_root* scene_root                = nullptr;
     bool        first_mesh                = true;
@@ -136,7 +136,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             }
             const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
             if (geometry) {
-                combined_geometry.merge(*geometry, transform);
+                combined_geometry->merge(*geometry, transform);
                 if (normal_style == Normal_style::none) {
                     normal_style = shape->get_normal_style();
                 }
@@ -171,11 +171,11 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
     }
 
-    std::shared_ptr<erhe::geometry::Geometry> welded_geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::operation::weld(combined_geometry)
-    );
+    //// std::shared_ptr<erhe::geometry::Geometry> welded_geometry = std::make_shared<erhe::geometry::Geometry>(
+    ////     erhe::geometry::operation::weld(combined_geometry)
+    //// );
 
-    erhe::primitive::Primitive after_primitive{welded_geometry, material};
+    erhe::primitive::Primitive after_primitive{combined_geometry, material};
     const bool renderable_ok = after_primitive.make_renderable_mesh(parameters.build_info, normal_style);
     const bool raytrace_ok   = after_primitive.make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);

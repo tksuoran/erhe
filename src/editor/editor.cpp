@@ -116,6 +116,10 @@
 #   include <tracy/TracyC.h>
 //#endif
 
+#include <geogram/basic/common.h>
+#include <geogram/basic/command_line.h>
+#include <geogram/basic/command_line_args.h>
+
 namespace editor {
 
 class Tracy_observer : public tf::ObserverInterface {
@@ -1089,6 +1093,11 @@ void run_editor()
     erhe::time::sleep_initialize();
     erhe::physics::initialize_physics_system();
 
+    {
+        ERHE_PROFILE_SCOPE("initialize geogram");
+        GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
+        GEO::CmdLine::import_arg_group("algo");
+    }
 
     {
         ERHE_PROFILE_SCOPE("init renderdoc");

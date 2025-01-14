@@ -345,6 +345,7 @@ target_link_libraries(
     erhe::ui
     erhe::verify
     #meshoptimizer
+    geogram
     imgui
     mINI
     RectangleBinPack
@@ -386,6 +387,7 @@ erhe_target_sources_grouped(
 target_link_libraries(
     ${_target}
     PRIVATE
+        geogram
         erhe::log
         erhe::net
         cxxopts

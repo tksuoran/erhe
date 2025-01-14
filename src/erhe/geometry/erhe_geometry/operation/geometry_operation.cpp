@@ -13,10 +13,12 @@ void Geometry_operation::post_processing()
     destination.make_point_corners();
     destination.build_edges();
     interpolate_all_property_maps();
+    destination.sanity_check();
     destination.compute_point_normals(c_point_normals_smooth);
     destination.compute_polygon_centroids();
     destination.generate_polygon_texture_coordinates();
     destination.compute_tangents();
+    destination.sanity_check();
 }
 
 void Geometry_operation::make_points_from_points()

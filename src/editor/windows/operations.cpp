@@ -37,6 +37,7 @@ Operations::Operations(
     , m_triangulate_command  {commands, "Geometry.Triangulate",               [this]() -> bool { triangulate  (); return true; } }
     , m_normalize_command    {commands, "Geometry.Normalize",                 [this]() -> bool { normalize    (); return true; } }
     , m_reverse_command      {commands, "Geometry.Reverse",                   [this]() -> bool { reverse      (); return true; } }
+    , m_repair_command       {commands, "Geometry.Repair",                    [this]() -> bool { repair       (); return true; } }
 
     , m_catmull_clark_command{commands, "Geometry.Subdivision.Catmull-Clark", [this]() -> bool { catmull_clark(); return true; } }
     , m_sqrt3_command        {commands, "Geometry.Subdivision.Sqrt3",         [this]() -> bool { sqrt3        (); return true; } }
@@ -72,6 +73,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_triangulate_command, "Geometry.Triangulate");
     commands.bind_command_to_menu(&m_normalize_command,   "Geometry.Normalize");
     commands.bind_command_to_menu(&m_reverse_command,     "Geometry.Reverse");
+    commands.bind_command_to_menu(&m_repair_command,      "Geometry.Repair");
 
     commands.bind_command_to_menu(&m_catmull_clark_command, "Geometry.Subdivision.Catmull-Clark");
     commands.bind_command_to_menu(&m_sqrt3_command,         "Geometry.Subdivision.Sqrt(3)");
@@ -285,6 +287,9 @@ void Operations::imgui()
     if (make_button("Reverse", has_selection_mode, button_size)) {
         reverse();
     }
+    if (make_button("Repair", has_selection_mode, button_size)) {
+        repair();
+    }
     //// if (make_button("GUI Quad", erhe::imgui::Item_mode::normal, button_size)) {
     ////     Scene_builder* scene_builder = get<Scene_builder>().get();
     ////
@@ -338,6 +343,12 @@ void Operations::reverse()
 {
     tf::Executor& executor = m_context.operation_stack->get_executor();
     executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Reverse_operation>(mesh_context()));});
+}
+
+void Operations::repair()
+{
+    tf::Executor& executor = m_context.operation_stack->get_executor();
+    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Repair_operation>(mesh_context()));});
 }
 
 void Operations::catmull_clark()

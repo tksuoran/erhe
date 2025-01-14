@@ -256,6 +256,21 @@ inline auto Property_map_collection<Key_type>::clone_with_transform(const glm::m
     return result;
 }
 
+template <typename Key_type>
+void Property_map_collection<Key_type>::for_each(
+    std::function<
+        void(
+            const std::string& entry_key,
+            Property_map_base<Key_type>* entry_value
+        )
+    > callback
+)
+{
+    for (auto& entry : m_entries) {
+        callback(entry.key, entry.value.get());
+    }
+}
+
 } // namespace erhe::geometry
 
 #ifdef ERHE_PROFILE_FUNCTION_DUMMY

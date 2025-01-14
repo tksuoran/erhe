@@ -81,6 +81,17 @@ FetchContent_Declare(
     GIT_TAG        VER-2-13-2
 )
 
+
+FetchContent_Declare(
+    geogram
+    GIT_REPOSITORY https://github.com/tksuoran/geogram.git
+    GIT_TAG        cmake-fetchcontent
+    # GIT_REPOSITORY https://github.com/BrunoLevy/geogram.git
+    # GIT_TAG        v1.9.2
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
 # Not in use yet
 #FetchContent_Declare(
 #    GeometricTools
