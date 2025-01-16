@@ -830,6 +830,8 @@ public:
     uint64_t                        m_serial_corner_texture_coordinates {0};
 };
 
+void geometry_from_geogram(Geometry& destination, GEO::Mesh& mesh);
+
 } // namespace erhe::geometry
 
 #include "corner.inl"

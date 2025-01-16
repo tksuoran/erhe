@@ -192,7 +192,18 @@ auto Geometry::compute_tangents(
         {
             static_cast<void>(iVert);
             const Polygon_id polygon_id = get_polygon_id(iFace);
-            const vec3 normal = polygon_normals->get(polygon_id);
+            vec3 normal{0.0f, 1.0f, 0.0f};
+            bool has_polygon_normal = polygon_normals->maybe_get(polygon_id, normal);
+            if (!has_polygon_normal) {
+                const Corner_id corner_id = get_corner_id(iFace, iVert);
+                bool has_corner_normal = corner_normals->maybe_get(corner_id, normal);
+                if (!has_corner_normal) {
+                    const Point_id point_id = get_point_id(iFace, iVert);
+                    bool has_point_normal = point_normals->maybe_get(point_id, normal);
+                    static_cast<void>(has_point_normal);
+                }
+            }
+
             return normal;
 #if 0
             if (iVert == 0) {
@@ -241,7 +252,8 @@ auto Geometry::compute_tangents(
                     } else if ((point_texcoords != nullptr) && point_texcoords->has(point_id)) {
                         texcoord += point_texcoords->get(point_id);
                     } else {
-                        ERHE_FATAL("No texcoord");
+                        // If we get here, polygon is likely degenerate
+                        return vec2{0.0f, 0.0f};
                     }
                 }
                 const vec2 average_texcoord = texcoord / static_cast<float>(polygon.corner_count);
@@ -256,8 +268,8 @@ auto Geometry::compute_tangents(
                 const vec2 texcoord = point_texcoords->get(point_id);
                 return texcoord;
             }
-            ERHE_FATAL("No texture coordinate");
-            // unreachable return vec2{0.0f, 0.0f};
+            // degenerate polygon;
+            return vec2{0.0f, 0.0f};
         }
 
         void set_tangent(

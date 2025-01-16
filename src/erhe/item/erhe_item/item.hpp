@@ -94,15 +94,16 @@ public:
     static constexpr uint64_t index_node                   = 20;
     static constexpr uint64_t index_asset_folder           = 21;
     static constexpr uint64_t index_asset_file_gltf        = 22;
-    static constexpr uint64_t index_asset_file_other       = 23;
-    static constexpr uint64_t index_content_library_folder = 24;
-    static constexpr uint64_t index_content_library_node   = 25;
-    static constexpr uint64_t index_physics                = 26;
-    static constexpr uint64_t index_raytrace               = 27;
-    static constexpr uint64_t index_node_attachment        = 28;
-    static constexpr uint64_t index_brush_placement        = 29;
-    static constexpr uint64_t index_render_style           = 30;
-    static constexpr uint64_t count                        = 31;
+    static constexpr uint64_t index_asset_file_geogram     = 23;
+    static constexpr uint64_t index_asset_file_other       = 24;
+    static constexpr uint64_t index_content_library_folder = 25;
+    static constexpr uint64_t index_content_library_node   = 26;
+    static constexpr uint64_t index_physics                = 27;
+    static constexpr uint64_t index_raytrace               = 28;
+    static constexpr uint64_t index_node_attachment        = 29;
+    static constexpr uint64_t index_brush_placement        = 30;
+    static constexpr uint64_t index_render_style           = 31;
+    static constexpr uint64_t count                        = 32;
 
     static constexpr uint64_t none                   =  0u;
     static constexpr uint64_t animation              = (1u << index_animation             );
@@ -127,6 +128,7 @@ public:
     static constexpr uint64_t node                   = (1u << index_node                  );
     static constexpr uint64_t asset_folder           = (1u << index_asset_folder          );
     static constexpr uint64_t asset_file_gltf        = (1u << index_asset_file_gltf       );
+    static constexpr uint64_t asset_file_geogram     = (1u << index_asset_file_geogram    );
     static constexpr uint64_t asset_file_other       = (1u << index_asset_file_other      );
     static constexpr uint64_t content_library_folder = (1u << index_content_library_folder);
     static constexpr uint64_t content_library_node   = (1u << index_content_library_node  );

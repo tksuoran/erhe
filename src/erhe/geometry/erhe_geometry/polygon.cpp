@@ -36,6 +36,7 @@ auto Polygon::compute_normal(const Geometry& geometry, const Property_map<Point_
                 const vec3 cross = glm::cross(pos_a, pos_b);
                 newell_normal += cross;
             } else {
+                // degenerate edge - breakpoint placeholder
                 static int counter = 0;
                 ++counter;
             }
@@ -45,6 +46,7 @@ auto Polygon::compute_normal(const Geometry& geometry, const Property_map<Point_
     newell_normal = glm::normalize(newell_normal);
     float length = glm::length(newell_normal);
     if (length < 0.9f) {
+        // degenerate?
         return {};
     }
 
@@ -67,6 +69,8 @@ void Polygon::compute_normal(
     glm::vec3 normal = compute_normal(geometry, point_locations);
     if (glm::length(normal) > 0.9f) { // Non-planar polygons may end up without polygon normal
         polygon_normals.put(this_polygon_id, normal);
+    } else {
+        log_geometry->warn("Could not compute polygon {} normal - degenerate polygon?", this_polygon_id);
     }
 }
 
@@ -225,6 +229,9 @@ void Polygon::compute_planar_texture_coordinates(
 
     if (corner_count < 3) {
         return;
+    }
+    if (!polygon_normals.has(this_polygon_id)) {
+        return; // degenerate polygon
     }
 
     const Polygon_corner_id p0_polygon_corner_id = first_polygon_corner_id;

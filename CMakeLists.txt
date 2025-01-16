@@ -80,8 +80,10 @@ endif ()
 message("Fetching dependencies")
 CPMAddPackage(
     NAME              geogram
-    GIT_TAG           cmake-fetchcontent
-    GITHUB_REPOSITORY tksuoran/geogram
+    #GIT_TAG           tksuoran/unicode
+    #GITHUB_REPOSITORY tksuoran/geogram
+    VERSION            1.9.2
+    GITHUB_REPOSITORY  BrunoLevy/geogram
     OPTIONS
         "GEOGRAM_SUB_BUILD ON"
         "GEOGRAM_WITH_GRAPHICS OFF"
