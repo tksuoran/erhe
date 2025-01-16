@@ -20,7 +20,7 @@ namespace erhe::geometry::operation {
 //
 // For each corner in the old polygon, add one quad
 // (centroid, previous edge 'edge midpoint', corner, next edge 'edge midpoint')
-Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& destination)
+Catmull_clark_subdivision::Catmull_clark_subdivision(const Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -130,7 +130,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(Geometry& src, Geometry& de
     log_catmull_clark->trace("Done");
 }
 
-auto catmull_clark_subdivision(Geometry& source) -> Geometry
+auto catmull_clark_subdivision(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("catmull_clark({})", source.name),

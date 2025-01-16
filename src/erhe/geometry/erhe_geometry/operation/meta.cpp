@@ -10,7 +10,7 @@
 
 namespace erhe::geometry::operation {
 
-Meta::Meta(Geometry& src, Geometry& destination)
+Meta::Meta(const Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -54,7 +54,7 @@ Meta::Meta(Geometry& src, Geometry& destination)
     post_processing();
 }
 
-auto meta(Geometry& source) -> Geometry
+auto meta(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("meta({})", source.name),

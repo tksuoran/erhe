@@ -7,9 +7,9 @@ namespace erhe::geometry::operation {
 class Truncate : public Geometry_operation
 {
 public:
-    Truncate(Geometry& source, Geometry& destination);
+    Truncate(const Geometry& source, Geometry& destination);
 };
 
-[[nodiscard]] auto truncate(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto truncate(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

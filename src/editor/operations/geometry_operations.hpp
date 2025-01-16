@@ -95,12 +95,14 @@ public:
     auto describe() const -> std::string override;
 };
 
+#if 0
 class Weld_operation : public Mesh_operation
 {
 public:
     explicit Weld_operation(Mesh_operation_parameters&& context);
     auto describe() const -> std::string override;
 };
+#endif
 
 class Repair_operation : public Mesh_operation
 {

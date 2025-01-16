@@ -177,7 +177,8 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::interpolate(
     Property_map_collection<Key_type>&                          destination,
-    const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds)
+    const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
+) const
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -219,7 +220,7 @@ Property_map_collection<Key_type>::merge_to(
 
 template <typename Key_type>
 inline auto
-Property_map_collection<Key_type>::clone() -> Property_map_collection<Key_type>
+Property_map_collection<Key_type>::clone() const -> Property_map_collection<Key_type>
 {
     Property_map_collection<Key_type> result;
     for (auto& entry : m_entries) {
@@ -233,7 +234,7 @@ Property_map_collection<Key_type>::clone() -> Property_map_collection<Key_type>
 }
 
 template <typename Key_type>
-inline void Property_map_collection<Key_type>::transform(const glm::mat4 matrix)
+inline void Property_map_collection<Key_type>::transform(const glm::mat4& matrix)
 {
     Property_map_collection<Key_type> result;
     for (auto& entry : m_entries) {
@@ -243,7 +244,7 @@ inline void Property_map_collection<Key_type>::transform(const glm::mat4 matrix)
 }
 
 template <typename Key_type>
-inline auto Property_map_collection<Key_type>::clone_with_transform(const glm::mat4 transform) -> Property_map_collection<Key_type>
+inline auto Property_map_collection<Key_type>::clone_with_transform(const glm::mat4& transform) const -> Property_map_collection<Key_type>
 {
     Property_map_collection<Key_type> result;
     for (auto& entry : m_entries) {

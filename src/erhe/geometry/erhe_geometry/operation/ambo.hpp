@@ -8,9 +8,9 @@ namespace erhe::geometry::operation {
 class Ambo : public Geometry_operation
 {
 public:
-    Ambo(Geometry& source, Geometry& destination);
+    Ambo(const Geometry& source, Geometry& destination);
 };
 
-[[nodiscard]] auto ambo(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto ambo(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

@@ -7,7 +7,7 @@
 
 namespace erhe::geometry::operation {
 
-Ambo::Ambo(Geometry& source, Geometry& destination)
+Ambo::Ambo(const Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -47,7 +47,7 @@ Ambo::Ambo(Geometry& source, Geometry& destination)
     post_processing();
 }
 
-auto ambo(Geometry& source) -> Geometry
+auto ambo(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("ambo({})", source.name),

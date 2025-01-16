@@ -11,7 +11,7 @@
 
 namespace erhe::geometry::operation {
 
-Truncate::Truncate(Geometry& source, Geometry& destination)
+Truncate::Truncate(const Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -41,9 +41,9 @@ Truncate::Truncate(Geometry& source, Geometry& destination)
     });
 
     // New faces from old faces, new face corner for each old corner edge 'midpoint'
-    source.for_each_polygon([&](auto& i) {
+    source.for_each_polygon_const([&](auto& i) {
         const Polygon_id new_polygon_id = destination.make_polygon();
-        i.polygon.for_each_corner_neighborhood(source, [&](auto& j) {
+        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
             const Point_id edge_midpoint = get_edge_new_point(j.corner.point_id, j.next_corner.point_id);
             const Point_id point_a       = edge_midpoint;
             const Point_id point_b       = edge_midpoint + 1;
@@ -60,7 +60,7 @@ Truncate::Truncate(Geometry& source, Geometry& destination)
     post_processing();
 }
 
-auto truncate(Geometry& source) -> Geometry
+auto truncate(const Geometry& source) -> Geometry
 {
     return Geometry(
         fmt::format("truncate({})", source.name),

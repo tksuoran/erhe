@@ -5,7 +5,7 @@
 
 namespace erhe::geometry::operation {
 
-Normalize::Normalize(Geometry& source, Geometry& destination)
+Normalize::Normalize(const Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
     destination.points                               = source.points;
@@ -64,7 +64,7 @@ Normalize::Normalize(Geometry& source, Geometry& destination)
     destination.compute_tangents();
 }
 
-auto normalize(Geometry& source) -> Geometry
+auto normalize(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("normalize({})", source.name),

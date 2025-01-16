@@ -1,3 +1,4 @@
+#if 0
 #pragma once
 
 #include "erhe_geometry/operation/geometry_operation.hpp"
@@ -16,7 +17,7 @@ namespace erhe::geometry::operation {
 class Weld : public Geometry_operation
 {
 public:
-    Weld(Geometry& source, Geometry& destination);
+    Weld(const Geometry& source, Geometry& destination);
 
 private:
     void sort_points_by_location             ();
@@ -37,6 +38,7 @@ private:
     std::vector<Polygon_id> m_polygon_id_remove        ;
 };
 
-[[nodiscard]] auto weld(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto weld(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation
+#endif

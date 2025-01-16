@@ -20,12 +20,16 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/catmull_clark_subdivision.hpp
     erhe_geometry/operation/clone.cpp
     erhe_geometry/operation/clone.hpp
+    erhe_geometry/operation/difference.cpp
+    erhe_geometry/operation/difference.hpp
     erhe_geometry/operation/dual.cpp
     erhe_geometry/operation/dual.hpp
     erhe_geometry/operation/geometry_operation.cpp
     erhe_geometry/operation/geometry_operation.hpp
     erhe_geometry/operation/gyro.cpp
     erhe_geometry/operation/gyro.hpp
+    erhe_geometry/operation/intersection.cpp
+    erhe_geometry/operation/intersection.hpp
     erhe_geometry/operation/join.cpp
     erhe_geometry/operation/join.hpp
     erhe_geometry/operation/kis.cpp
@@ -46,6 +50,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/triangulate.hpp
     erhe_geometry/operation/truncate.cpp
     erhe_geometry/operation/truncate.hpp
+    erhe_geometry/operation/union.cpp
+    erhe_geometry/operation/union.hpp
     erhe_geometry/operation/weld.cpp
     erhe_geometry/operation/weld.hpp
     erhe_geometry/polygon.cpp

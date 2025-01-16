@@ -11,7 +11,7 @@
 
 namespace erhe::geometry::operation {
 
-Join::Join(Geometry& src, Geometry& destination)
+Join::Join(const Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -92,7 +92,7 @@ Join::Join(Geometry& src, Geometry& destination)
     post_processing();
 }
 
-auto join(Geometry& source) -> Geometry
+auto join(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("join({})", source.name),

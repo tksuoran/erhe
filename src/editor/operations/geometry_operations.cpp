@@ -16,6 +16,9 @@
 #include "erhe_geometry/operation/truncate.hpp"
 #include "erhe_geometry/operation/weld.hpp"
 #include "erhe_geometry/operation/repair.hpp"
+#include "erhe_geometry/operation/difference.hpp"
+#include "erhe_geometry/operation/intersection.hpp"
+#include "erhe_geometry/operation/union.hpp"
 
 #include <fmt/format.h>
 
@@ -164,6 +167,7 @@ Normalize_operation::Normalize_operation(Mesh_operation_parameters&& context)
     make_entries(erhe::geometry::operation::normalize);
 }
 
+#if 0
 auto Weld_operation::describe() const -> std::string
 {
     return fmt::format("Weld {}", Mesh_operation::describe());
@@ -174,6 +178,7 @@ Weld_operation::Weld_operation(Mesh_operation_parameters&& context)
 {
     make_entries(erhe::geometry::operation::weld);
 }
+#endif
 
 auto Repair_operation::describe() const -> std::string
 {
@@ -186,6 +191,28 @@ Repair_operation::Repair_operation(Mesh_operation_parameters&& context)
     make_entries(erhe::geometry::operation::repair);
 }
 
+auto Difference_operation::describe() const -> std::string
+{
+    return fmt::format("Difference {}", Mesh_operation::describe());
+}
+
+Difference_operation::Difference_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    //// TODO make_entries(erhe::geometry::operation::difference);
+}
+
+auto Intersection_operation::describe() const -> std::string
+{
+    return fmt::format("Intersection {}", Mesh_operation::describe());
+}
+
+Intersection_operation::Intersection_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    //// TODO make_entries(erhe::geometry::operation::intersection);
+}
+
 auto Union_operation::describe() const -> std::string
 {
     return fmt::format("Union {}", Mesh_operation::describe());
@@ -194,7 +221,7 @@ auto Union_operation::describe() const -> std::string
 Union_operation::Union_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
-    make_entries(erhe::geometry::operation::repair);
+    //// TODO make_entries(erhe::geometry::operation::union_ );
 }
 
 } // namespace editor

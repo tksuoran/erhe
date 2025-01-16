@@ -8,9 +8,9 @@ namespace erhe::geometry::operation {
 class Gyro : public Geometry_operation
 {
 public:
-    Gyro(Geometry& src, Geometry& destination);
+    Gyro(const Geometry& src, Geometry& destination);
 };
 
-[[nodiscard]] auto gyro(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto gyro(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

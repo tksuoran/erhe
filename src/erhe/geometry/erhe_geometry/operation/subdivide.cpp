@@ -10,7 +10,7 @@
 
 namespace erhe::geometry::operation {
 
-Subdivide::Subdivide(Geometry& src, Geometry& destination)
+Subdivide::Subdivide(const Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -64,7 +64,7 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
     post_processing();
 }
 
-auto subdivide(Geometry& source) -> Geometry
+auto subdivide(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("subdivide({})", source.name),

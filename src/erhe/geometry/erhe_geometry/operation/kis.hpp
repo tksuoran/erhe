@@ -7,9 +7,9 @@ namespace erhe::geometry::operation {
 class Kis : public Geometry_operation
 {
 public:
-    Kis(Geometry& src, Geometry& destination);
+    Kis(const Geometry& src, Geometry& destination);
 };
 
-[[nodiscard]] auto kis(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto kis(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

@@ -9,9 +9,9 @@ namespace erhe::geometry::operation {
 class Normalize : public Geometry_operation
 {
 public:
-    Normalize(Geometry& source, Geometry& destination);
+    Normalize(const Geometry& source, Geometry& destination);
 };
 
-[[nodiscard]] auto normalize(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto normalize(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

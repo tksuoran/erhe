@@ -57,29 +57,35 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     auto        normal_style              = Normal_style::none;
 
     m_selection_before = m_parameters.context.selection->get_selection();
-    // Sorting nodes ensures first node is not child of some other node.
-    // Other nodes will be detached from the scene.
 
-    // TODO Re-parent children of nodes that will be detached to
-    //      the remaining (first) node.
-    std::sort(
-        m_selection_before.begin(),
-        m_selection_before.end(),
-        [](const std::shared_ptr<erhe::Item_base>& lhs, const std::shared_ptr<erhe::Item_base>& rhs) {
-            auto lhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(lhs);
-            auto rhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(rhs);
-            if (lhs_hierarchy && !rhs_hierarchy) {
-                return true;
+    if (!parameters.operation) {
+        // Sorting nodes ensures first node is not child of some other node.
+        // Other nodes will be detached from the scene.
+
+        // TODO Re-parent children of nodes that will be detached to
+        //      the remaining (first) node.
+        std::sort(
+            m_selection_before.begin(),
+            m_selection_before.end(),
+            [](const std::shared_ptr<erhe::Item_base>& lhs, const std::shared_ptr<erhe::Item_base>& rhs) {
+                auto lhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(lhs);
+                auto rhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(rhs);
+                if (lhs_hierarchy && !rhs_hierarchy) {
+                    return true;
+                }
+                if (rhs_hierarchy && !lhs_hierarchy) {
+                    return false;
+                }
+                if (!lhs_hierarchy && !rhs_hierarchy) {
+                    return true;
+                }
+                return lhs_hierarchy->get_depth() < rhs_hierarchy->get_depth();
             }
-            if (rhs_hierarchy && !lhs_hierarchy) {
-                return false;
-            }
-            if (!lhs_hierarchy && !rhs_hierarchy) {
-                return true;
-            }
-            return lhs_hierarchy->get_depth() < rhs_hierarchy->get_depth();
-        }
-    );
+        );
+    }
+
+    std::vector<std::shared_ptr<erhe::geometry::Geometry>> geometries;
+    std::vector<mat4> transforms;
 
     for (const auto& item : m_selection_before) {
         auto shared_node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
@@ -136,7 +142,11 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             }
             const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
             if (geometry) {
-                combined_geometry->merge(*geometry, transform);
+                geometries.push_back(geometry);
+                transforms.push_back(transform);
+                if (!parameters.operation) {
+                    combined_geometry->merge(*geometry, transform);
+                }
                 if (normal_style == Normal_style::none) {
                     normal_style = shape->get_normal_style();
                 }

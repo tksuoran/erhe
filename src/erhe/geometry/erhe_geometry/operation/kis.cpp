@@ -7,7 +7,7 @@
 
 namespace erhe::geometry::operation {
 
-Kis::Kis(Geometry& src, Geometry& destination)
+Kis::Kis(const Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -27,7 +27,7 @@ Kis::Kis(Geometry& src, Geometry& destination)
     post_processing();
 }
 
-auto kis(Geometry& source) -> Geometry
+auto kis(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("kis({})", source.name),

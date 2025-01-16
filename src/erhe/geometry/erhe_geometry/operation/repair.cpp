@@ -17,29 +17,30 @@
 
 namespace erhe::geometry::operation {
 
-Repair::Repair(Geometry& source, Geometry& destination)
+Repair::Repair(const Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
     ERHE_PROFILE_FUNCTION();
 
-    GEO::Mesh* mesh = source.extract_geogram_mesh();
+    GEO::Mesh mesh{};
+    source.extract_geogram_mesh(mesh);
 
-    mesh->facets.connect();
+    mesh.facets.connect();
 
     const double merge_vertices_epsilon = 0.001;
     const double fill_hole_max_area = 0.01;
-    GEO::mesh_repair(*mesh, GEO::MESH_REPAIR_DEFAULT, merge_vertices_epsilon);
-    GEO::fill_holes(*mesh, fill_hole_max_area);
-    GEO::MeshSurfaceIntersection intersection(*mesh);
+    GEO::mesh_repair(mesh, GEO::MESH_REPAIR_DEFAULT, merge_vertices_epsilon);
+    GEO::fill_holes(mesh, fill_hole_max_area);
+    GEO::MeshSurfaceIntersection intersection(mesh);
     intersection.intersect();
     intersection.remove_internal_shells();
     intersection.simplify_coplanar_facets();
-    GEO::mesh_repair(*mesh, GEO::MESH_REPAIR_DEFAULT, merge_vertices_epsilon);
+    GEO::mesh_repair(mesh, GEO::MESH_REPAIR_DEFAULT, merge_vertices_epsilon);
 
-    geometry_from_geogram(destination, *mesh);
+    geometry_from_geogram(destination, mesh);
 }
 
-auto repair(Geometry& source) -> Geometry
+auto repair(const Geometry& source) -> Geometry
 {
     return Geometry(
         fmt::format("repair({})", source.name),

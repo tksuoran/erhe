@@ -2,18 +2,14 @@
 
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
-namespace erhe::geometry {
-    class Polygon;
-}
-
 namespace erhe::geometry::operation {
 
 class Repair : public Geometry_operation
 {
 public:
-    Repair(Geometry& source, Geometry& destination);
+    Repair(const Geometry& source, Geometry& destination);
 };
 
-[[nodiscard]] auto repair(erhe::geometry::Geometry& source) -> erhe::geometry::Geometry;
+[[nodiscard]] auto repair(const Geometry& source) -> Geometry;
 
 } // namespace erhe::geometry::operation

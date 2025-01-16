@@ -1,3 +1,4 @@
+#if 0
 #include "erhe_geometry/operation/weld.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/geometry_log.hpp"
@@ -68,22 +69,22 @@ void Weld::find_point_merge_candidates()
 // (after considering point merges) is the first corner.
 void Weld::rotate_polygons_to_least_point_first()
 {
-    source.for_each_polygon([&](auto &i){
-        Polygon&      polygon         = i.polygon;
-        Corner_id     first_corner_id = source.polygon_corners[polygon.first_polygon_corner_id];
-        const Corner& first_corner    = source.corners[first_corner_id];
-        Point_id      min_point_id0   = first_corner.point_id;
-        Point_id      min_point_id    = m_point_id_merge_candidates[min_point_id0];
-        uint32_t      min_point_slot  = 0;
+    source.for_each_polygon_const([&](auto &i){
+        const Polygon&  polygon         = i.polygon;
+        const Corner_id first_corner_id = source.polygon_corners[polygon.first_polygon_corner_id];
+        const Corner&   first_corner    = source.corners[first_corner_id];
+        Point_id        min_point_id0   = first_corner.point_id;
+        Point_id        min_point_id    = m_point_id_merge_candidates[min_point_id0];
+        uint32_t        min_point_slot  = 0;
         std::vector<Corner_id> copy_of_polygon_corners;
 
         // Find corner with smallest Point_id
         for (uint32_t j = 0; j < polygon.corner_count; ++j) {
-            Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + j;
-            const Corner_id   corner_id         = source.polygon_corners[polygon_corner_id];
-            const Corner&     corner            = source.corners[corner_id];
-            const Point_id    point_id0         = corner.point_id;
-            const Point_id    point_id          = m_point_id_merge_candidates[point_id0];
+            const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + j;
+            const Corner_id         corner_id         = source.polygon_corners[polygon_corner_id];
+            const Corner&           corner            = source.corners[corner_id];
+            const Point_id          point_id0         = corner.point_id;
+            const Point_id          point_id          = m_point_id_merge_candidates[point_id0];
             copy_of_polygon_corners.push_back(corner_id);
             if (point_id < min_point_id) {
                 min_point_id = point_id;
@@ -93,8 +94,8 @@ void Weld::rotate_polygons_to_least_point_first()
 
         // Rotate corners of polygon
         for (uint32_t j = 0; j < polygon.corner_count; ++j) {
-            Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + j;
-            const Corner_id   corner_id         = copy_of_polygon_corners.at((j + min_point_slot) % polygon.corner_count);
+            const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + j;
+            const Corner_id         corner_id         = copy_of_polygon_corners.at((j + min_point_slot) % polygon.corner_count);
             source.polygon_corners[polygon_corner_id] = corner_id;
         }
     });
@@ -113,17 +114,17 @@ void Weld::sort_polygons()
         m_polygon_id_sorted.begin(),
         m_polygon_id_sorted.end(),
         [this](const Polygon_id& lhs, const Polygon_id& rhs) {
-            Polygon&      lhs_polygon         = source.polygons       [lhs];
-            Corner_id     lhs_first_corner_id = source.polygon_corners[lhs_polygon.first_polygon_corner_id];
-            const Corner& lhs_first_corner    = source.corners        [lhs_first_corner_id];
-            Point_id      lhs_point_id0       = lhs_first_corner.point_id;
-            Point_id      lhs_point_id        = m_point_id_merge_candidates[lhs_point_id0];
+            const Polygon&  lhs_polygon         = source.polygons       [lhs];
+            const Corner_id lhs_first_corner_id = source.polygon_corners[lhs_polygon.first_polygon_corner_id];
+            const Corner&   lhs_first_corner    = source.corners        [lhs_first_corner_id];
+            const Point_id  lhs_point_id0       = lhs_first_corner.point_id;
+            const Point_id  lhs_point_id        = m_point_id_merge_candidates[lhs_point_id0];
 
-            Polygon&      rhs_polygon         = source.polygons       [rhs];
-            Corner_id     rhs_first_corner_id = source.polygon_corners[rhs_polygon.first_polygon_corner_id];
-            const Corner& rhs_first_corner    = source.corners        [rhs_first_corner_id];
-            Point_id      rhs_point_id0       = rhs_first_corner.point_id;
-            Point_id      rhs_point_id        = m_point_id_merge_candidates[rhs_point_id0];
+            const Polygon&  rhs_polygon         = source.polygons       [rhs];
+            const Corner_id rhs_first_corner_id = source.polygon_corners[rhs_polygon.first_polygon_corner_id];
+            const Corner&   rhs_first_corner    = source.corners        [rhs_first_corner_id];
+            const Point_id  rhs_point_id0       = rhs_first_corner.point_id;
+            const Point_id  rhs_point_id        = m_point_id_merge_candidates[rhs_point_id0];
 
             return lhs_point_id < rhs_point_id;
         }
@@ -305,7 +306,7 @@ void Weld::count_used_points()
     //// log_merge->info("Used point count = {}", m_used_point_count);
 }
 
-Weld::Weld(Geometry& source, Geometry& destination)
+Weld::Weld(const Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -356,7 +357,7 @@ Weld::Weld(Geometry& source, Geometry& destination)
     post_processing();
 }
 
-auto weld(Geometry& source) -> Geometry
+auto weld(const Geometry& source) -> Geometry
 {
     return Geometry(
         fmt::format("weld({})", source.name),
@@ -368,3 +369,4 @@ auto weld(Geometry& source) -> Geometry
 
 
 } // namespace erhe::geometry::operation
+#endif

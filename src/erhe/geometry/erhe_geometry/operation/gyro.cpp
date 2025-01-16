@@ -10,7 +10,7 @@
 
 namespace erhe::geometry::operation {
 
-Gyro::Gyro(Geometry& src, Geometry& destination)
+Gyro::Gyro(const Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
     ERHE_PROFILE_FUNCTION();
@@ -71,7 +71,7 @@ Gyro::Gyro(Geometry& src, Geometry& destination)
     post_processing();
 }
 
-auto gyro(Geometry& source) -> Geometry
+auto gyro(const Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("gyro({})", source.name),

@@ -478,7 +478,7 @@ public:
     auto get_polygon_corner_count() const -> uint32_t { return m_next_polygon_corner_id; }
     auto get_edge_count          () const -> uint32_t { return m_next_edge_id; }
 
-    [[nodiscard]] auto find_edge(Point_id a, Point_id b) -> std::optional<Edge>
+    [[nodiscard]] auto find_edge(Point_id a, Point_id b) const -> std::optional<Edge>
     {
         if (b < a) {
             std::swap(a, b);
@@ -528,7 +528,7 @@ public:
     // - Point must be already allocated.
     auto make_polygon_corner(Polygon_id polygon_id, Point_id point_id) -> Corner_id;
 
-    auto extract_geogram_mesh() const -> GEO::Mesh*;
+    void extract_geogram_mesh(GEO::Mesh& mesh) const;
 
     // Calculates the number of triangles as if all faces were triangulated
     [[nodiscard]] auto count_polygon_triangles() const -> std::size_t;

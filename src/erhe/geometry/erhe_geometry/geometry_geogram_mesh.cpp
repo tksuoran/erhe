@@ -8,11 +8,9 @@
 
 namespace erhe::geometry {
 
-auto Geometry::extract_geogram_mesh() const -> GEO::Mesh*
+void Geometry::extract_geogram_mesh(GEO::Mesh& mesh) const
 {
     ERHE_PROFILE_FUNCTION();
-
-    GEO::Mesh* mesh = new GEO::Mesh(3, false); // false = use double precision
 
     Property_map<Point_id, glm::vec3>*  erhe_point_locations      = point_attributes().find<glm::vec3 >(c_point_locations     );
     Property_map<Point_id, glm::vec3>*  erhe_point_normals        = point_attributes().find<glm::vec3 >(c_point_normals       );
@@ -24,7 +22,7 @@ auto Geometry::extract_geogram_mesh() const -> GEO::Mesh*
     Property_map<Point_id, glm::vec2>*  erhe_point_aniso_control  = point_attributes().find<glm::vec2 >(c_point_aniso_control );
     Property_map<Point_id, glm::uvec4>* erhe_point_joint_indices  = point_attributes().find<glm::uvec4>(c_point_joint_indices );
     Property_map<Point_id, glm::vec4>*  erhe_point_joint_weights  = point_attributes().find<glm::vec4 >(c_point_joint_weights );
-    GEO::MeshVertices&         mesh_vertices     = mesh->vertices;
+    GEO::MeshVertices&         mesh_vertices     = mesh.vertices;
     GEO::AttributesManager&    vertex_attributes = mesh_vertices.attributes();
     GEO::Attribute<GEO::vec3f> mesh_vertex_normal                 {vertex_attributes, "NORMAL"};
     GEO::Attribute<bool>       mesh_vertex_normal_present         {vertex_attributes, "NORMAL_present"};
@@ -115,8 +113,8 @@ auto Geometry::extract_geogram_mesh() const -> GEO::Mesh*
     Property_map<Corner_id, glm::vec2>*  erhe_corner_texcoords      = corner_attributes ().find<glm::vec2 >(c_corner_texcoords     );
     Property_map<Corner_id, glm::vec4>*  erhe_corner_colors         = corner_attributes ().find<glm::vec4 >(c_corner_colors        );
     Property_map<Corner_id, glm::vec2>*  erhe_corner_aniso_control  = corner_attributes ().find<glm::vec2 >(c_corner_aniso_control );
-    GEO::MeshFacets&            mesh_facets        = mesh->facets;
-    GEO::MeshFacetCornersStore& mesh_facet_corners = mesh->facet_corners;
+    GEO::MeshFacets&            mesh_facets        = mesh.facets;
+    GEO::MeshFacetCornersStore& mesh_facet_corners = mesh.facet_corners;
     GEO::Attribute<GEO::vec3f> mesh_facet_normal                      {mesh_facets.attributes(),        "NORMAL"};
     GEO::Attribute<bool>       mesh_facet_normal_present              {mesh_facets.attributes(),        "NORMAL_present"};
     GEO::Attribute<GEO::vec4f> mesh_facet_color_0                     {mesh_facets.attributes(),        "COLOR_0"};
@@ -206,8 +204,6 @@ auto Geometry::extract_geogram_mesh() const -> GEO::Mesh*
             }
         }
     );
-
-    return mesh;
 }
 
 void geometry_from_geogram(Geometry& destination, GEO::Mesh& mesh)

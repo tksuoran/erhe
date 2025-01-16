@@ -79,6 +79,9 @@ public:
     void normalize();
     void reverse();
     void repair();
+    void difference();
+    void intersection();
+    void union_();
 
     // Subdivision
     void catmull_clark();
@@ -105,6 +108,9 @@ private:
     erhe::commands::Lambda_command m_normalize_command;
     erhe::commands::Lambda_command m_reverse_command;
     erhe::commands::Lambda_command m_repair_command;
+    erhe::commands::Lambda_command m_difference_command;
+    erhe::commands::Lambda_command m_intersection_command;
+    erhe::commands::Lambda_command m_union_command;
 
     // Subdivision
     erhe::commands::Lambda_command m_catmull_clark_command;
