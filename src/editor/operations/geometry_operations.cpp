@@ -186,4 +186,15 @@ Repair_operation::Repair_operation(Mesh_operation_parameters&& context)
     make_entries(erhe::geometry::operation::repair);
 }
 
+auto Union_operation::describe() const -> std::string
+{
+    return fmt::format("Union {}", Mesh_operation::describe());
+}
+
+Union_operation::Union_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    make_entries(erhe::geometry::operation::repair);
+}
+
 } // namespace editor

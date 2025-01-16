@@ -109,4 +109,25 @@ public:
     auto describe() const -> std::string override;
 };
 
+class Union_operation : public Mesh_operation
+{
+public:
+    explicit Union_operation(Mesh_operation_parameters&& context);
+    auto describe() const -> std::string override;
+};
+
+class Intersection_operation : public Mesh_operation
+{
+public:
+    explicit Intersection_operation(Mesh_operation_parameters&& context);
+    auto describe() const -> std::string override;
+};
+
+class Difference_operation : public Mesh_operation
+{
+public:
+    explicit Difference_operation(Mesh_operation_parameters&& context);
+    auto describe() const -> std::string override;
+};
+
 } // namespace editor
