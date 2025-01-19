@@ -4,6 +4,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
+#include "operations/node_transform_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_builder.hpp"
@@ -31,33 +32,41 @@ Operations::Operations(
     erhe::imgui::Imgui_windows&  imgui_windows,
     Editor_context&              editor_context
 )
-    : Imgui_window           {imgui_renderer, imgui_windows, "Operations", "operations"}
-    , m_context              {editor_context}
-    , m_merge_command        {commands, "Geometry.Merge",                     [this]() -> bool { merge        (); return true; } }
-    , m_triangulate_command  {commands, "Geometry.Triangulate",               [this]() -> bool { triangulate  (); return true; } }
-    , m_normalize_command    {commands, "Geometry.Normalize",                 [this]() -> bool { normalize    (); return true; } }
-    , m_reverse_command      {commands, "Geometry.Reverse",                   [this]() -> bool { reverse      (); return true; } }
-    , m_repair_command       {commands, "Geometry.Repair",                    [this]() -> bool { repair       (); return true; } }
-    , m_difference_command   {commands, "Geometry.Difference",                [this]() -> bool { difference   (); return true; } }
-    , m_intersection_command {commands, "Geometry.Intersection",              [this]() -> bool { intersection (); return true; } }
-    , m_union_command        {commands, "Geometry.Union",                     [this]() -> bool { union_       (); return true; } }
+    : Imgui_window            {imgui_renderer, imgui_windows, "Operations", "operations"}
+    , m_context               {editor_context}
+    , m_merge_command         {commands, "Geometry.Merge",                     [this]() -> bool { merge         (); return true; } }
+    , m_triangulate_command   {commands, "Geometry.Triangulate",               [this]() -> bool { triangulate   (); return true; } }
+    , m_normalize_command     {commands, "Geometry.Normalize",                 [this]() -> bool { normalize     (); return true; } }
+    , m_bake_transform_command{commands, "Geometry.BakeTransform",             [this]() -> bool { bake_transform(); return true; } }
+    , m_reverse_command       {commands, "Geometry.Reverse",                   [this]() -> bool { reverse       (); return true; } }
+    , m_repair_command        {commands, "Geometry.Repair",                    [this]() -> bool { repair        (); return true; } }
 
-    , m_catmull_clark_command{commands, "Geometry.Subdivision.Catmull-Clark", [this]() -> bool { catmull_clark(); return true; } }
-    , m_sqrt3_command        {commands, "Geometry.Subdivision.Sqrt3",         [this]() -> bool { sqrt3        (); return true; } }
+    , m_difference_command    {commands, "Geometry.Difference",                [this]() -> bool { difference    (); return true; } }
+    , m_intersection_command  {commands, "Geometry.Intersection",              [this]() -> bool { intersection  (); return true; } }
+    , m_union_command         {commands, "Geometry.Union",                     [this]() -> bool { union_        (); return true; } }
 
-    , m_dual_command         {commands, "Geometry.Conway.Dual",               [this]() -> bool { dual         (); return true; } }
-    , m_join_command         {commands, "Geometry.Conway.Join",               [this]() -> bool { join         (); return true; } }
-    , m_kis_command          {commands, "Geometry.Conway.Kis",                [this]() -> bool { kis          (); return true; } }
-    , m_meta_command         {commands, "Geometry.Conway.Meta",               [this]() -> bool { meta         (); return true; } }
-    , m_ortho_command        {commands, "Geometry.Conway.Ortho",              [this]() -> bool { ortho        (); return true; } }
-    , m_ambo_command         {commands, "Geometry.Conway.Ambo",               [this]() -> bool { ambo         (); return true; } }
-    , m_truncate_command     {commands, "Geometry.Conway.Truncate",           [this]() -> bool { truncate     (); return true; } }
-    , m_gyro_command         {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro         (); return true; } }
+    , m_catmull_clark_command {commands, "Geometry.Subdivision.Catmull-Clark", [this]() -> bool { catmull_clark (); return true; } }
+    , m_sqrt3_command         {commands, "Geometry.Subdivision.Sqrt3",         [this]() -> bool { sqrt3         (); return true; } }
+
+    , m_dual_command          {commands, "Geometry.Conway.Dual",               [this]() -> bool { dual          (); return true; } }
+    , m_join_command          {commands, "Geometry.Conway.Join",               [this]() -> bool { join          (); return true; } }
+    , m_kis_command           {commands, "Geometry.Conway.Kis",                [this]() -> bool { kis           (); return true; } }
+    , m_meta_command          {commands, "Geometry.Conway.Meta",               [this]() -> bool { meta          (); return true; } }
+    , m_ortho_command         {commands, "Geometry.Conway.Ortho",              [this]() -> bool { ortho         (); return true; } }
+    , m_ambo_command          {commands, "Geometry.Conway.Ambo",               [this]() -> bool { ambo          (); return true; } }
+    , m_truncate_command      {commands, "Geometry.Conway.Truncate",           [this]() -> bool { truncate      (); return true; } }
+    , m_gyro_command          {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
 {
-    commands.register_command(&m_merge_command      );
-    commands.register_command(&m_triangulate_command);
-    commands.register_command(&m_normalize_command  );
-    commands.register_command(&m_reverse_command    );
+    commands.register_command(&m_merge_command         );
+    commands.register_command(&m_triangulate_command   );
+    commands.register_command(&m_normalize_command     );
+    commands.register_command(&m_bake_transform_command);
+    commands.register_command(&m_reverse_command       );
+    commands.register_command(&m_repair_command        );
+
+    commands.register_command(&m_difference_command);
+    commands.register_command(&m_intersection_command);
+    commands.register_command(&m_union_command);
 
     commands.register_command(&m_catmull_clark_command);
     commands.register_command(&m_sqrt3_command        );
@@ -72,14 +81,16 @@ Operations::Operations(
     commands.register_command(&m_truncate_command);
     commands.register_command(&m_gyro_command    );
 
-    commands.bind_command_to_menu(&m_merge_command,        "Geometry.Merge");
-    commands.bind_command_to_menu(&m_triangulate_command,  "Geometry.Triangulate");
-    commands.bind_command_to_menu(&m_normalize_command,    "Geometry.Normalize");
-    commands.bind_command_to_menu(&m_reverse_command,      "Geometry.Reverse");
-    commands.bind_command_to_menu(&m_repair_command,       "Geometry.Repair");
-    commands.bind_command_to_menu(&m_difference_command,   "Geometry.CSG.Difference");
-    commands.bind_command_to_menu(&m_intersection_command, "Geometry.CSG.Intersection");
-    commands.bind_command_to_menu(&m_union_command,        "Geometry.CSG.Union");
+    commands.bind_command_to_menu(&m_merge_command,          "Geometry.Merge");
+    commands.bind_command_to_menu(&m_triangulate_command,    "Geometry.Triangulate");
+    commands.bind_command_to_menu(&m_normalize_command,      "Geometry.Normalize");
+    commands.bind_command_to_menu(&m_bake_transform_command, "Geometry.Bake-Transform");
+    commands.bind_command_to_menu(&m_reverse_command,        "Geometry.Reverse");
+    commands.bind_command_to_menu(&m_repair_command,         "Geometry.Repair");
+
+    commands.bind_command_to_menu(&m_difference_command,     "Geometry.CSG.Difference");
+    commands.bind_command_to_menu(&m_intersection_command,   "Geometry.CSG.Intersection");
+    commands.bind_command_to_menu(&m_union_command,          "Geometry.CSG.Union");
 
     commands.bind_command_to_menu(&m_catmull_clark_command, "Geometry.Subdivision.Catmull-Clark");
     commands.bind_command_to_menu(&m_sqrt3_command,         "Geometry.Subdivision.Sqrt(3)");
@@ -343,6 +354,36 @@ void Operations::normalize()
 {
     tf::Executor& executor = m_context.operation_stack->get_executor();
     executor.silent_async([this](){ m_context.operation_stack->queue(std::make_shared<Normalize_operation>(mesh_context()));});
+}
+
+void Operations::bake_transform()
+{
+    tf::Executor& executor = m_context.operation_stack->get_executor();
+    executor.silent_async(
+        [this](){
+            Compound_operation::Parameters compound_operation_parameters;
+            // First: Transform geometries using node transforms
+            compound_operation_parameters.operations.push_back(
+                std::make_shared<Bake_transform_operation>(mesh_context())
+            );
+            // Second: Reset transform in all nodes
+            const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = m_context.selection->get_all<erhe::scene::Node>();
+            for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+                compound_operation_parameters.operations.push_back(
+                    std::make_shared<Node_transform_operation>(
+                        Node_transform_operation::Parameters{
+                            .node = node,
+                            .parent_from_node_before = node->parent_from_node_transform(),
+                            .parent_from_node_after = {}
+                        }
+                    )
+                );
+            }
+            m_context.operation_stack->queue(
+                std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::reverse()

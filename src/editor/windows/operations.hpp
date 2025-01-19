@@ -77,8 +77,11 @@ public:
     void merge();
     void triangulate();
     void normalize();
+    void bake_transform();
     void reverse();
     void repair();
+
+    // CSG
     void difference();
     void intersection();
     void union_();
@@ -106,8 +109,10 @@ private:
     erhe::commands::Lambda_command m_merge_command;
     erhe::commands::Lambda_command m_triangulate_command;
     erhe::commands::Lambda_command m_normalize_command;
+    erhe::commands::Lambda_command m_bake_transform_command;
     erhe::commands::Lambda_command m_reverse_command;
     erhe::commands::Lambda_command m_repair_command;
+
     erhe::commands::Lambda_command m_difference_command;
     erhe::commands::Lambda_command m_intersection_command;
     erhe::commands::Lambda_command m_union_command;

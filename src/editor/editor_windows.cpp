@@ -17,9 +17,33 @@
 
 namespace editor {
 
-Editor_windows::Editor_windows(Editor_context& context)
+Editor_windows::Editor_windows(
+    Editor_context&           context,
+    erhe::commands::Commands& commands
+)
     : m_context{context}
+    , m_renderdoc_capture_command{commands, "RenderDoc.Capture", [this]() -> bool { renderdoc_capture(); return true; } }
 {
+    commands.register_command(&m_renderdoc_capture_command);
+
+    commands.bind_command_to_menu(&m_renderdoc_capture_command, "RenderDoc.Capture");
+    commands.bind_command_to_key(&m_renderdoc_capture_command, erhe::window::Key_f9); //, true, erhe::window::Key_modifier_bit_ctrl);
+
+}
+
+void Editor_windows::renderdoc_capture()
+{
+    if (m_context.renderdoc) {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_context.OpenXR && m_context.headset_view->is_active()) {
+            m_context.editor_rendering->request_renderdoc_capture();
+        }
+        else
+#endif
+        {
+            m_context.editor_rendering->trigger_capture();
+        }
+    }
 }
 
 void Editor_windows::builtin_imgui_window_menu()

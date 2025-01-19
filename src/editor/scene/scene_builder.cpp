@@ -426,12 +426,12 @@ void Scene_builder::make_cylinder_brushes(Editor_settings& editor_settings, Mesh
     for (float h = 0.1f; h < 1.1f; h += 0.9f) {
         auto cylinder_geometry = make_cylinder(
             -h * scale,
-                h * scale,
-                1.0f * scale,
+             h * scale,
+            1.0f * scale,
             true,
             true,
-            9 * std::max(1, m_config.detail),
-            1 * std::max(1, m_config.detail)
+            9 * std::max(1, m_config.detail), // slice count
+            1 * std::max(1, m_config.detail)  // stack count
         ); // always axis = x
         cylinder_geometry.transform(erhe::math::mat4_swap_xy);
 
@@ -460,12 +460,12 @@ void Scene_builder::make_cone_brushes(Editor_settings& editor_settings, Mesh_mem
     Content_library_node& brushes = get_brushes();
 
     auto cone_geometry = make_cone( // always axis = x
-        -1.0f, // * config.object_scale,             // min x
-            1.0f, // * config.object_scale,              // max x
-            1.0f, // * config.object_scale,              // bottom radius
-        true,                             // use bottm
+        -1.0f, // * config.object_scale,    // min x
+         1.0f, // * config.object_scale,    // max x
+         1.0f, // * config.object_scale,    // bottom radius
+        true,                               // use bottm
         10 * std::max(1, m_config.detail),  // slice count
-            5 * std::max(1, m_config.detail)   // stack count
+         5 * std::max(1, m_config.detail)   // stack count
     );
     cone_geometry.transform(erhe::math::mat4_swap_xy); // convert to axis = y
 

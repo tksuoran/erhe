@@ -16,6 +16,8 @@ erhe_target_sources_grouped(
     erhe_geometry/geometry_tangents.cpp
     erhe_geometry/operation/ambo.cpp
     erhe_geometry/operation/ambo.hpp
+    erhe_geometry/operation/bake_transform.cpp
+    erhe_geometry/operation/bake_transform.hpp
     erhe_geometry/operation/catmull_clark_subdivision.cpp
     erhe_geometry/operation/catmull_clark_subdivision.hpp
     erhe_geometry/operation/clone.cpp

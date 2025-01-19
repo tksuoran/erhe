@@ -335,12 +335,12 @@ auto Primitive_shape::make_raytrace() -> bool
 Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<erhe::geometry::Geometry>& geometry)
     : Primitive_shape{geometry}
 {
-    if (geometry->has_point_normals()) {
-        m_normal_style = erhe::primitive::Normal_style::point_normals;
-    } else if (geometry->has_corner_normals()) {
+    if (geometry->has_corner_normals()) {
         m_normal_style = erhe::primitive::Normal_style::corner_normals;
-    } else if (geometry->has_polygon_normals()) {
+    } else if (geometry->has_point_normals()) {
         m_normal_style = erhe::primitive::Normal_style::point_normals;
+    } else if (geometry->has_polygon_normals()) {
+        m_normal_style = erhe::primitive::Normal_style::polygon_normals;
     } else {
         m_normal_style = erhe::primitive::Normal_style::none;
     }

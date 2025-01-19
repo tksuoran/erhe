@@ -359,36 +359,20 @@ auto Build_context::get_polygon_normal() -> vec3
 void Build_context::build_tangent_frame()
 {
     v_normal = vec3{0.0f, 1.0f, 0.0f};
-    bool found_normal{false};
+    vec3 corner_normal {0.0f, 1.0f, 0.0f};
+    vec3 point_normal  {0.0f, 1.0f, 0.0f};
+    vec3 polygon_normal{0.0f, 1.0f, 0.0f};
+    bool found_corner_normal{false};
+    bool found_point_normal{false};
+    bool found_polygon_normal{false};
     if (property_maps.corner_normals != nullptr) {
-        found_normal = property_maps.corner_normals->maybe_get(corner_id, v_normal) && (glm::length(v_normal) > 0.9f);
+        found_corner_normal = property_maps.corner_normals->maybe_get(corner_id, corner_normal) && (glm::length(corner_normal) > 0.9f);
     }
-    if (!found_normal) {
-        vec3 point_normal{0.0f, 1.0f, 0.0f};
-        bool found_point_normal{false};
-        if (property_maps.point_normals != nullptr) {
-            found_point_normal = property_maps.point_normals->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
-        }
-        if (!found_point_normal && (property_maps.point_normals_smooth != nullptr)) {
-            found_point_normal = property_maps.point_normals_smooth->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
-        }
-        if (found_point_normal) {
-            v_normal = point_normal;
-            found_normal = true;
-        }
+    if (property_maps.point_normals != nullptr) {
+        found_point_normal = property_maps.point_normals->maybe_get(point_id, point_normal) && (glm::length(point_normal) > 0.9f);
     }
-    if (!found_normal) {
-        vec3 polygon_normal{0.0f, 1.0f, 0.0f};
-        bool found_polygon_normal{false};
-        if (property_maps.polygon_normals != nullptr) {
-            found_polygon_normal = property_maps.polygon_normals->maybe_get(point_id, polygon_normal) && (glm::length(polygon_normal) > 0.9f);
-        }
-        if (found_polygon_normal) {
-            v_normal = polygon_normal;
-            found_normal;
-        } else {
-            v_normal = get_polygon_normal();
-        }
+    if (property_maps.polygon_normals != nullptr) {
+        found_polygon_normal = property_maps.polygon_normals->maybe_get(polygon_id, polygon_normal) && (glm::length(polygon_normal) > 0.9f);
     }
 
     {
@@ -402,34 +386,17 @@ void Build_context::build_tangent_frame()
 
             case Normal_style::corner_normals: {
                 //// ERHE_VERIFY(glm::length(normal) > 0.9f);
+                v_normal = found_corner_normal ? corner_normal : found_point_normal ? point_normal : found_polygon_normal ? polygon_normal : get_polygon_normal();
                 break;
             }
 
             case Normal_style::point_normals: {
-                vec3 normal{0.0f, 1.0f, 0.0f};
-                bool found{false};
-                if (property_maps.point_normals != nullptr) {
-                    found = property_maps.point_normals->maybe_get(point_id, normal) && (glm::length(normal) > 0.9f);
-                }
-                if (!found && (property_maps.point_normals_smooth != nullptr)) {
-                    found = property_maps.point_normals_smooth->maybe_get(point_id, normal) && (glm::length(normal) > 0.9f);
-                }
-                if (!found)
-                {
-                    const vec3 polygon_normal = get_polygon_normal();
-                    found = glm::length(polygon_normal) > 0.9f;
-                    if (found) {
-                        normal = polygon_normal;
-                    }
-                }
-                v_normal = normal;
+                v_normal = found_point_normal ? point_normal : found_polygon_normal ? polygon_normal : get_polygon_normal();
                 break;
             }
 
             case Normal_style::polygon_normals: {
-                const vec3 polygon_normal = get_polygon_normal();
-                ERHE_VERIFY(glm::length(polygon_normal) > 0.9f);
-                v_normal = polygon_normal;
+                v_normal = found_polygon_normal ? polygon_normal : get_polygon_normal();
                 break;
             }
 

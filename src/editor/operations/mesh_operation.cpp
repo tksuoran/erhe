@@ -114,7 +114,25 @@ void Mesh_operation::undo(Editor_context&)
 
 void Mesh_operation::make_entries(
     const std::function<
-        erhe::geometry::Geometry(const erhe::geometry::Geometry&)
+        erhe::geometry::Geometry(
+            const erhe::geometry::Geometry& geometry
+        )
+    > operation
+)
+{
+    make_entries(
+        [&operation](const erhe::geometry::Geometry& geometry, erhe::scene::Node*) -> erhe::geometry::Geometry {
+            return operation(geometry);
+        }
+    );
+}
+
+void Mesh_operation::make_entries(
+    const std::function<
+        erhe::geometry::Geometry(
+            const erhe::geometry::Geometry& geometry,
+            erhe::scene::Node* node
+        )
     > operation
 )
 {
@@ -188,7 +206,7 @@ void Mesh_operation::make_entries(
                 continue;
             }
             auto after_geometry = std::make_shared<erhe::geometry::Geometry>(
-                operation(*geometry.get())
+                operation(*geometry.get(), node)
             );
 
             erhe::primitive::Primitive after_primitive{after_geometry, primitive.material};

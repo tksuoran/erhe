@@ -159,13 +159,16 @@ public:
     [[nodiscard]] auto get_last_selected(uint64_t type) -> std::shared_ptr<erhe::Item_base>;
 
     template <typename T>
-    [[nodiscard]] auto get(std::size_t index = 0) -> std::shared_ptr<T>;
+    [[nodiscard]] auto get(std::size_t index = 0) const -> std::shared_ptr<T>;
 
     template <typename T>
-    [[nodiscard]] auto get_last_selected() -> std::shared_ptr<T>;
+    [[nodiscard]] auto get_all() const -> std::vector<std::shared_ptr<T>>;
 
     template <typename T>
-    [[nodiscard]] auto count() -> std::size_t;
+    [[nodiscard]] auto get_last_selected() const -> std::shared_ptr<T>;
+
+    template <typename T>
+    [[nodiscard]] auto count() const -> std::size_t;
 
     [[nodiscard]] auto get(erhe::Item_filter filter, std::size_t index = 0) -> std::shared_ptr<erhe::Item_base>;
 
@@ -216,7 +219,7 @@ private:
 };
 
 template <typename T>
-auto Selection::get(const std::size_t index) -> std::shared_ptr<T>
+auto Selection::get(const std::size_t index) const -> std::shared_ptr<T>
 {
     std::size_t i = 0;
     for (const auto& item : m_selection) {
@@ -264,7 +267,51 @@ auto Selection::get(const std::size_t index) -> std::shared_ptr<T>
 }
 
 template <typename T>
-auto Selection::get_last_selected() -> std::shared_ptr<T>
+auto Selection::get_all() const -> std::vector<std::shared_ptr<T>>
+{
+    std::vector<std::shared_ptr<T>> result;
+
+    std::size_t i = 0;
+    for (const auto& item : m_selection) {
+        if (!item) {
+            continue;
+        }
+        if (item->get_type() == erhe::Item_type::content_library_node) {
+            const auto node = std::dynamic_pointer_cast<Content_library_node>(item);
+            if (node) {
+                const auto node_item = node->item;
+                if (node_item) {
+                    if (!erhe::bit::test_all_rhs_bits_set(node_item->get_type(), T::get_static_type())) {
+                        continue;
+                    }
+                    result.push_back(std::static_pointer_cast<T>(node_item));
+                    ++i;
+                }
+            }
+        } else {
+            const auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (node) {
+                const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& attachments = node->get_attachments();
+                for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment_item : attachments) {
+                    if (!erhe::bit::test_all_rhs_bits_set(attachment_item->get_type(), T::get_static_type())) {
+                        continue;
+                    }
+                    result.push_back(std::dynamic_pointer_cast<T>(attachment_item));
+                }
+            }
+
+            if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
+                continue;
+            }
+            result.push_back(std::static_pointer_cast<T>(item));
+            ++i;
+        }
+    }
+    return result;
+}
+
+template <typename T>
+auto Selection::get_last_selected() const -> std::shared_ptr<T>
 {
     auto i = m_last_selected_by_type.find(T::get_static_type());
     if (i == m_last_selected_by_type.end()) {
@@ -275,7 +322,7 @@ auto Selection::get_last_selected() -> std::shared_ptr<T>
 }
 
 template <typename T>
-auto Selection::count() -> std::size_t
+auto Selection::count() const -> std::size_t
 {
     std::size_t i = 0;
     for (const auto& item : m_selection) {

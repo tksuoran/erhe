@@ -6,6 +6,7 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/ambo.hpp"
+#include "erhe_geometry/operation/bake_transform.hpp"
 #include "erhe_geometry/operation/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/dual.hpp"
 #include "erhe_geometry/operation/gyro.hpp"
@@ -169,6 +170,27 @@ Normalize_operation::Normalize_operation(Mesh_operation_parameters&& context)
 {
     make_entries(erhe::geometry::operation::normalize);
 }
+
+auto Bake_transform_operation::describe() const -> std::string
+{
+    return fmt::format("Bake tranform {}", Mesh_operation::describe());
+}
+
+Bake_transform_operation::Bake_transform_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    make_entries(
+        [&](
+            const erhe::geometry::Geometry& geometry,
+            erhe::scene::Node* node
+        ) -> erhe::geometry::Geometry
+        {
+            const glm::mat4 transform = node->world_from_node();
+            return erhe::geometry::operation::bake_transform(geometry, transform);
+        }
+    );
+}
+
 
 auto Repair_operation::describe() const -> std::string
 {

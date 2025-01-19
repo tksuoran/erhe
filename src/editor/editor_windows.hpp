@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_commands/command.hpp"
+
 namespace erhe::imgui {
     class Imgui_host;
 };
@@ -23,12 +25,19 @@ public:
 class Editor_windows
 {
 public:
-    explicit Editor_windows(Editor_context& m_context);
+    Editor_windows(
+        Editor_context&           context,
+        erhe::commands::Commands& commands
+    );
 
     void viewport_menu(erhe::imgui::Imgui_host& imgui_host);
 
 private:
     void builtin_imgui_window_menu();
+
+    void renderdoc_capture();
+
+    erhe::commands::Lambda_command m_renderdoc_capture_command;
 
     Editor_context&       m_context;
     Imgui_builtin_windows m_imgui_builtin_windows;

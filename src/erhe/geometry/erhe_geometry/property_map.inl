@@ -231,22 +231,22 @@ Property_map<Key_type, Value_type>::interpolate(
     }
 }
 
-static inline float apply_transform(const float value, const glm::mat4 transform, const float w)
+static inline float apply_transform(const glm::mat4 transform, const float value, const float w)
 {
     return (transform * glm::vec4{value, 0.0f, 0.0f, w})[0];
 }
 
-static inline auto apply_transform(const glm::vec2 value, const glm::mat4 transform, const float w) -> glm::vec2
+static inline auto apply_transform(const glm::mat4 transform, const glm::vec2 value, const float w) -> glm::vec2
 {
     return glm::vec2{transform * glm::vec4{value, 0.0f, w}};
 }
 
-static inline auto apply_transform(const glm::vec3 value, const glm::mat4 transform, const float w) -> glm::vec3
+static inline auto apply_transform(const glm::mat4 transform, const glm::vec3 value, const float w) -> glm::vec3
 {
     return glm::vec3{transform * glm::vec4{value, w}};
 }
 
-static inline auto apply_transform(const glm::vec4 value, const glm::mat4 transform, const float w) -> glm::vec4
+static inline auto apply_transform(const glm::mat4 transform, const glm::vec4 value, const float w) -> glm::vec4
 {
     static_cast<void>(w);
     return transform * glm::vec4{value};
@@ -300,7 +300,7 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
             case Transform_mode::mat_mul_vec3_one: {
                 for (std::size_t i = 0, end = values.size(); i < end; ++i) {
                     if (present[i]) {
-                        values[i] = apply_transform(values[i], transform, 1.0f);
+                        values[i] = apply_transform(transform, values[i], 1.0f);
                     }
                 }
                 break;
@@ -309,7 +309,7 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
             case Transform_mode::mat_mul_vec3_zero: {
                 for (std::size_t i = 0, end = values.size(); i < end; ++i) {
                     if (present[i]) {
-                        values[i] = apply_transform(values[i], transform, 0.0f);
+                        values[i] = apply_transform(transform, values[i], 0.0f);
                     }
                 }
                 break;
@@ -318,7 +318,7 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
             case Transform_mode::normalize_mat_mul_vec3_zero: {
                 for (std::size_t i = 0, end = values.size(); i < end; ++i) {
                     if (present[i]) {
-                        values[i] = glm::normalize(apply_transform(values[i], transform, 0.0f));
+                        values[i] = glm::normalize(apply_transform(transform, values[i], 0.0f));
                     }
                 }
                 break;
@@ -331,8 +331,8 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
                             values[i] = glm::vec4{
                                 glm::normalize(
                                     apply_transform(
-                                        glm::vec3{values[i]},
                                         transform,
+                                        glm::vec3{values[i]},
                                         0.0f
                                     )
                                 ),
@@ -347,7 +347,7 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
             case Transform_mode::normal_mat_mul_vec3_zero: {
                 for (std::size_t i = 0, end = values.size(); i < end; ++i) {
                     if (present[i]) {
-                        values[i] = apply_transform(values[i], normal_transform, 0.0f);
+                        values[i] = apply_transform(normal_transform, values[i], 0.0f);
                     }
                 }
                 break;
@@ -357,7 +357,7 @@ inline void Property_map<Key_type, Value_type>::transform(const glm::mat4 transf
                 for (std::size_t i = 0, end = values.size(); i < end; ++i) {
                     if (present[i]) {
                         values[i] = glm::normalize(
-                            apply_transform(values[i], normal_transform, 0.0f)
+                            apply_transform(normal_transform, values[i], 0.0f)
                         );
                     }
                 }
@@ -381,8 +381,8 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
     ERHE_VERIFY(values.size() == present.size());
     ERHE_VERIFY(source->values.size() == source->present.size());
 
-    //const glm::mat4 normal_transform = glm::transpose(glm::adjugate(transform)); TODO
     const glm::mat4 normal_transform = glm::transpose(glm::inverse(transform));
+    const glm::mat4 adjugate = glm::adjugate(transform);
 
     const auto combined_values_size  = values.size()  + source->values.size();
     const auto combined_present_size = present.size() + source->present.size();
@@ -403,7 +403,7 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
             case Transform_mode::mat_mul_vec3_one: {
                 for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                     const Value_type source_value = source->values[i];
-                    const Value_type result       = present[i] ? apply_transform(source_value, transform, 1.0f) : Value_type{};
+                    const Value_type result       = present[i] ? apply_transform(transform, source_value, 1.0f) : Value_type{};
                     values.push_back(result);
                 }
                 break;
@@ -413,7 +413,7 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
                 if constexpr (std::is_same_v<Value_type, glm::vec3>) {
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                         const Value_type source_value = source->values[i];
-                        const Value_type result       = present[i] ? apply_transform(source_value, transform, 0.0f) : Value_type{};
+                        const Value_type result       = present[i] ? apply_transform(transform, source_value, 0.0f) : Value_type{};
                         values.push_back(result);
                     }
                 }
@@ -424,7 +424,7 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
                 if constexpr (std::is_same_v<Value_type, glm::vec3>) {
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                         const Value_type source_value = source->values[i];
-                        const Value_type result       = present[i] ? glm::normalize(apply_transform(source_value, transform, 0.0f)) : Value_type{};
+                        const Value_type result       = present[i] ? glm::normalize(apply_transform(transform, source_value, 0.0f)) : Value_type{};
                         values.push_back(result);
                     }
                 }
@@ -437,7 +437,7 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                         if (present[i]) {
                             const Value_type source_value     = source->values[i];
-                            const glm::vec3  transformed_vec3 = glm::normalize(apply_transform(glm::vec3{source_value}, transform, 0.0f));
+                            const glm::vec3  transformed_vec3 = glm::normalize(apply_transform(transform, glm::vec3{source_value}, 0.0f));
                             const Value_type result           = glm::vec4{transformed_vec3, source_value.w};
                             values.push_back(result);
                         } else {
@@ -452,19 +452,28 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
                 if constexpr (std::is_same_v<Value_type, glm::vec3>) {
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                         const Value_type source_value = source->values[i];
-                        const Value_type result       = present[i] ? apply_transform(source_value, normal_transform, 0.0f) : Value_type{};
-                        values.push_back(result);
+                        if (present[i]) {
+                            const Value_type normal_transformed = apply_transform(normal_transform, source_value, 0.0f);
+                            values.push_back(normal_transformed);
+                        } else {
+                            values.push_back(Value_type{});
+                        }
                     }
                 }
                 break;
             }
 
-            case Transform_mode::normalize_normal_mat_mul_vec3_zero   : {
+            case Transform_mode::normalize_normal_mat_mul_vec3_zero: {
                 if constexpr (std::is_same_v<Value_type, glm::vec3>) {
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
-                        const Value_type source_value = source->values[i];
-                        const Value_type result       = present[i] ? glm::normalize(apply_transform(source_value, normal_transform, 0.0f)) : Value_type{};
-                        values.push_back(result);
+                        const glm::vec3 source_value = source->values[i];
+                        if (present[i]) {
+                            const Value_type normal_transformed = apply_transform(adjugate, source_value, 0.0f);
+                            const Value_type normalized = glm::normalize(normal_transformed);
+                            values.push_back(normalized);
+                        } else {
+                            values.push_back(Value_type{});
+                        }
                     }
                 }
                 break;
