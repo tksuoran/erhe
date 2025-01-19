@@ -354,9 +354,10 @@ public:
             // GL context creation and Joystick scanning which are two other slow tasks
             Icons icons;
             Icon_loader icon_loader{m_editor_settings->icon_settings};
+            // TODO compare with Icon_set::load_icons()
             icons.queue_load_icons(icon_loader);
             auto icon_rasterization_task = taskflow.emplace([this, &icon_loader](){
-                icon_loader.execute_queue();
+                icon_loader.execute_rasterization_queue();
             })  .name("Icon rasterization");
 
             m_executor->run(taskflow);

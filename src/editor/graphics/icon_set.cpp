@@ -101,6 +101,7 @@ void Icon_set::load_icons(
     loader.upload_to_texture(*m_small.get());
     loader.upload_to_texture(*m_large.get());
     loader.upload_to_texture(*m_hotbar.get());
+    loader.clear_load_queue();
 
     type_icons.resize(erhe::Item_type::count);
     type_icons[erhe::Item_type::index_scene               ] = { .icon = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}};

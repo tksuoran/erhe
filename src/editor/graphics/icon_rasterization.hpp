@@ -58,9 +58,10 @@ class Icon_loader
 public:
     Icon_loader(Icon_settings& icon_settings);
 
-    void queue_icon_load  (glm::vec2& uv, const char* icon_name);
-    void execute_queue    ();
-    void upload_to_texture(Icon_rasterization& icon_rasterization);
+    void queue_icon_load            (glm::vec2& uv, const char* icon_name);
+    void execute_rasterization_queue();
+    void upload_to_texture          (Icon_rasterization& icon_rasterization);
+    void clear_load_queue           ();
 
 private:
     Icon_settings&                               m_icon_settings;

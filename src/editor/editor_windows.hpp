@@ -25,10 +25,7 @@ public:
 class Editor_windows
 {
 public:
-    Editor_windows(
-        Editor_context&           context,
-        erhe::commands::Commands& commands
-    );
+    Editor_windows(Editor_context& context, erhe::commands::Commands& commands);
 
     void viewport_menu(erhe::imgui::Imgui_host& imgui_host);
 

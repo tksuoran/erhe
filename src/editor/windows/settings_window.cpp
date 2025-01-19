@@ -52,7 +52,7 @@ void Settings_window::imgui()
             Icons icons;
             Icon_loader icon_loader{m_context.editor_settings->icon_settings};
             icons.queue_load_icons(icon_loader);
-            icon_loader.execute_queue();
+            icon_loader.execute_rasterization_queue();
 
             m_context.icon_set->load_icons(
                 *m_context.graphics_instance,

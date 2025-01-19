@@ -125,7 +125,7 @@ void Icon_loader::queue_icon_load(glm::vec2& uv, const char* icon_name)
     }
 }
 
-void Icon_loader::execute_queue()
+void Icon_loader::execute_rasterization_queue()
 {
     if (m_rasterization_queue_executed) {
         return;
@@ -150,6 +150,10 @@ void Icon_loader::upload_to_texture(Icon_rasterization& icon_rasterization)
     for (std::unique_ptr<Icon_load_data>& icon_load_data : m_icons_to_load) {
         icon_load_data->upload(size, texture);
     }
+}
+
+void Icon_loader::clear_load_queue()
+{
     m_icons_to_load.clear();
 }
 
