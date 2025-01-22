@@ -10,18 +10,18 @@ erhe_target_sources_grouped(
     erhe_renderer/debug_renderer.hpp
     erhe_renderer/draw_indirect_buffer.cpp
     erhe_renderer/draw_indirect_buffer.hpp
+    erhe_renderer/gpu_ring_buffer.cpp
+    erhe_renderer/gpu_ring_buffer.hpp
     erhe_renderer/line_renderer.cpp
     erhe_renderer/line_renderer.hpp
     erhe_renderer/line_renderer_bucket.cpp
     erhe_renderer/line_renderer_bucket.hpp
-    erhe_renderer/scoped_line_renderer.cpp
-    erhe_renderer/scoped_line_renderer.hpp
-    erhe_renderer/multi_buffer.cpp
-    erhe_renderer/multi_buffer.hpp
     erhe_renderer/pipeline_renderpass.cpp
     erhe_renderer/pipeline_renderpass.hpp
     erhe_renderer/renderer_log.cpp
     erhe_renderer/renderer_log.hpp
+    erhe_renderer/scoped_line_renderer.cpp
+    erhe_renderer/scoped_line_renderer.hpp
     erhe_renderer/text_renderer.cpp
     erhe_renderer/text_renderer.hpp
 )

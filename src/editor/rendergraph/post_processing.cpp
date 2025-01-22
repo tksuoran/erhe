@@ -75,11 +75,10 @@ Post_processing_node::Post_processing_node(
     , parameter_buffer{
         graphics_instance,
         gl::Buffer_target::uniform_buffer,
+        post_processing.get_parameter_block().binding_point(),
         graphics_instance.align_buffer_offset(
             gl::Buffer_target::uniform_buffer, post_processing.get_parameter_block().size_bytes()
         ) * 20, // max 20 levels
-        storage_mask(graphics_instance),
-        access_mask(graphics_instance),
         fmt::format("{}", name)
     }
 {
@@ -228,7 +227,7 @@ void Post_processing_node::update_parameters()
     const std::size_t               entry_size = post_processing.get_parameter_block().size_bytes();
     const Post_processing::Offsets& offsets    = post_processing.get_offsets();
 
-    const std::size_t level_offset_size = graphics_instance.align_buffer_offset(parameter_buffer.target(), entry_size);
+    const std::size_t level_offset_size = graphics_instance.align_buffer_offset(parameter_buffer.get_buffer().target(), entry_size);
 
     const uint64_t downsample_handle = graphics_instance.get_handle(*downsample_texture, sampler);
     const uint64_t upsample_handle   = graphics_instance.get_handle(*upsample_texture,   sampler);
@@ -243,14 +242,15 @@ void Post_processing_node::update_parameters()
     const std::span<const uint32_t> downsample_texture_handle_cpu_data{&downsample_texture_handle[0], 2};
     const std::span<const uint32_t> upsample_texture_handle_cpu_data  {&upsample_texture_handle[0], 2};
 
-    size_t level_count = level_widths.size();
-    erhe::renderer::Buffer_writer parameter_writer{graphics_instance, parameter_buffer};
-    auto parameter_gpu_data = parameter_writer.begin(parameter_buffer.target(), level_count * level_offset_size);
-    std::byte* const          start      = parameter_gpu_data.data();
-    const std::size_t         byte_count = parameter_gpu_data.size_bytes();
-    const std::size_t         word_count = byte_count / sizeof(float);
-    const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    size_t                       level_count        = level_widths.size();
+    erhe::renderer::Buffer_range buffer_range       = parameter_buffer.open_cpu_write(level_count * level_offset_size);
+    std::size_t                  write_offset       = 0;
+    std::span<std::byte>         parameter_gpu_data = buffer_range.get_span();
+    std::byte* const             start              = parameter_gpu_data.data();
+    const std::size_t            byte_count         = parameter_gpu_data.size_bytes();
+    const std::size_t            word_count         = byte_count / sizeof(float);
+    const std::span<float>       gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t>    gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     for (size_t source_level = 0, end = level_count; source_level < end; ++source_level) {
         using erhe::graphics::write;
@@ -258,18 +258,19 @@ void Post_processing_node::update_parameters()
             1.0f / static_cast<float>(level_widths.at(source_level)),
             1.0f / static_cast<float>(level_heights.at(source_level))
         };
-        write<uint32_t>(gpu_uint_data,  parameter_writer.write_offset + offsets.downsample_texture,    downsample_texture_handle_cpu_data);
-        write<uint32_t>(gpu_uint_data,  parameter_writer.write_offset + offsets.upsample_texture,      upsample_texture_handle_cpu_data);
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.texel_scale,           std::span<float>{&texel_scale[0], 2});
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.source_lod,            static_cast<float>(source_level));
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.level_count,           static_cast<float>(level_count));
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.upsample_radius,       upsample_radius);
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.mix_weight,            weights.at(source_level));
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.tonemap_luminance_max, tonemap_luminance_max);
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.tonemap_alpha,         tonemap_alpha);
-        parameter_writer.write_offset += level_offset_size;
+        write<uint32_t>(gpu_uint_data,  write_offset + offsets.downsample_texture,    downsample_texture_handle_cpu_data);
+        write<uint32_t>(gpu_uint_data,  write_offset + offsets.upsample_texture,      upsample_texture_handle_cpu_data);
+        write<float   >(gpu_float_data, write_offset + offsets.texel_scale,           std::span<float>{&texel_scale[0], 2});
+        write<float   >(gpu_float_data, write_offset + offsets.source_lod,            static_cast<float>(source_level));
+        write<float   >(gpu_float_data, write_offset + offsets.level_count,           static_cast<float>(level_count));
+        write<float   >(gpu_float_data, write_offset + offsets.upsample_radius,       upsample_radius);
+        write<float   >(gpu_float_data, write_offset + offsets.mix_weight,            weights.at(source_level));
+        write<float   >(gpu_float_data, write_offset + offsets.tonemap_luminance_max, tonemap_luminance_max);
+        write<float   >(gpu_float_data, write_offset + offsets.tonemap_alpha,         tonemap_alpha);
+        write_offset += level_offset_size;
     }
-    parameter_writer.end();
+    buffer_range.close(write_offset);
+    buffer_range_opt = buffer_range;
 }
 
 void Post_processing_node::viewport_toolbar()
@@ -448,7 +449,7 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 void Post_processing::post_process(Post_processing_node& node)
 {
     const std::size_t level_offset_size = m_context.graphics_instance->align_buffer_offset(
-        node.parameter_buffer.target(),
+        node.parameter_buffer.get_buffer().target(),
         m_parameter_block.size_bytes()
     );
 
@@ -472,9 +473,9 @@ void Post_processing::post_process(Post_processing_node& node)
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
         gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
         gl::bind_buffer_range(
-            node.parameter_buffer.target(),
+            node.parameter_buffer.get_buffer().target(),
             static_cast<GLuint>    (m_parameter_block.binding_point()),
-            static_cast<GLuint>    (node.parameter_buffer.gl_name()),
+            static_cast<GLuint>    (node.parameter_buffer.get_buffer().gl_name()),
             static_cast<GLintptr>  (source_level * level_offset_size),
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );
@@ -506,9 +507,9 @@ void Post_processing::post_process(Post_processing_node& node)
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
         gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
         gl::bind_buffer_range(
-            node.parameter_buffer.target(),
+            node.parameter_buffer.get_buffer().target(),
             static_cast<GLuint>    (m_parameter_block.binding_point()),
-            static_cast<GLuint>    (node.parameter_buffer.gl_name()),
+            static_cast<GLuint>    (node.parameter_buffer.get_buffer().gl_name()),
             static_cast<GLintptr>  (source_level * level_offset_size),
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );

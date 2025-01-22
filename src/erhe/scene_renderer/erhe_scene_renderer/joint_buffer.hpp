@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_renderer/multi_buffer.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 
 namespace erhe::scene {
     class Skin;
@@ -40,7 +40,7 @@ public:
     std::size_t                     max_joint_count{1000};
 };
 
-class Joint_buffer : public erhe::renderer::Multi_buffer
+class Joint_buffer : public erhe::renderer::GPU_ring_buffer
 {
 public:
     Joint_buffer(erhe::graphics::Instance& graphics_instance, Joint_interface& joint_interface);

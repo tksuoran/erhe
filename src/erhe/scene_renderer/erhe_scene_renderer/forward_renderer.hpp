@@ -71,18 +71,17 @@ public:
 
     void render(const Render_parameters& parameters);
     void render_fullscreen(const Render_parameters& parameters, const erhe::scene::Light* light);
-    void next_frame();
 
 private:
     erhe::graphics::Instance&                m_graphics_instance;
     Program_interface&                       m_program_interface;
     int                                      m_base_texture_unit{0};
-    Camera_buffer                            m_camera_buffers;
-    erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffers;
-    Joint_buffer                             m_joint_buffers;
-    Light_buffer                             m_light_buffers;
-    Material_buffer                          m_material_buffers;
-    Primitive_buffer                         m_primitive_buffers;
+    Camera_buffer                            m_camera_buffer;
+    erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffer;
+    Joint_buffer                             m_joint_buffer;
+    Light_buffer                             m_light_buffer;
+    Material_buffer                          m_material_buffer;
+    Primitive_buffer                         m_primitive_buffer;
     erhe::graphics::Sampler                  m_nearest_sampler;
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
 };

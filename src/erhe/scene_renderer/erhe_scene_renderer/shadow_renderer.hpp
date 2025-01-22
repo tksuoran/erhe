@@ -65,8 +65,7 @@ public:
         Light_projections&                                         light_projections;
     };
 
-    auto render    (const Render_parameters& parameters) -> bool;
-    void next_frame();
+    auto render(const Render_parameters& parameters) -> bool;
 
 private:
     class Pipeline_cache_entry

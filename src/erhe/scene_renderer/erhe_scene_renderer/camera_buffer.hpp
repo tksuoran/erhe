@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_renderer/multi_buffer.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_math/viewport.hpp"
 
@@ -39,7 +39,7 @@ public:
     std::size_t                     max_camera_count;
 };
 
-class Camera_buffer : public erhe::renderer::Multi_buffer
+class Camera_buffer : public erhe::renderer::GPU_ring_buffer
 {
 public:
     Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface);

@@ -226,8 +226,6 @@ public:
                 .debug_label            = "example main render"
             }
         );
-
-        m_forward_renderer.next_frame();
     }
 
 private:

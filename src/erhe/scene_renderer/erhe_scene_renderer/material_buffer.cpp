@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene_renderer/material_buffer.hpp"
+#include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/instance.hpp"
@@ -41,32 +42,30 @@ Material_interface::Material_interface(erhe::graphics::Instance& graphics_instan
 }
 
 Material_buffer::Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface)
-    : Multi_buffer        {graphics_instance, "material"}
+    : GPU_ring_buffer{
+        graphics_instance,
+        gl::Buffer_target::shader_storage_buffer,
+        material_interface.material_block.binding_point(),
+        8 * material_interface.material_struct.size_bytes() * material_interface.max_material_count,
+        "material"
+    }
     , m_graphics_instance {graphics_instance}
     , m_material_interface{material_interface}
-{
-    m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
+    , m_nearest_sampler{
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Material_buffer nearest"
         }
-    );
-
-    m_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
+    }
+    , m_linear_sampler{
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
             .debug_label = "Material_buffer linear"
         }
-    );
-
-    Multi_buffer::allocate(
-        gl::Buffer_target::shader_storage_buffer,
-        m_material_interface.material_block.binding_point(),
-        // TODO
-        8 * m_material_interface.material_struct.size_bytes() * m_material_interface.max_material_count
-    );
+    }
+{
 }
 
 constexpr uint32_t c_texture_unused_32 = 4294967295u;
@@ -83,43 +82,33 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
     //     m_writer.write_offset
     // );
 
-    auto&             buffer         = get_current_buffer();
-    auto&             writer         = get_writer();
     const auto        entry_size     = m_material_interface.material_struct.size_bytes();
     const auto&       offsets        = m_material_interface.offsets;
     const std::size_t max_byte_count = materials.size() * entry_size;
-    const auto        gpu_data       = writer.begin(m_material_interface.material_block.get_binding_target(), max_byte_count);
+
+    erhe::renderer::Buffer_range buffer_range = open_cpu_write(max_byte_count);
+    std::span<std::byte>         gpu_data     = buffer_range.get_span();
+    std::size_t                  write_offset = 0;
     
     m_used_handles.clear();
     uint32_t material_index = 0;
     for (const auto& material : materials) {
         ERHE_VERIFY(material);
-        if ((writer.write_offset + entry_size) > writer.write_end) {
-            log_render->critical("material buffer capacity {} exceeded", buffer.capacity_byte_count());
-            ERHE_FATAL("material buffer capacity exceeded");
-            break;
-        }
-        memset(reinterpret_cast<uint8_t*>(gpu_data.data()) + writer.write_offset, 0, entry_size);
+        memset(reinterpret_cast<uint8_t*>(gpu_data.data()) + write_offset, 0, entry_size);
         using erhe::graphics::as_span;
         using erhe::graphics::write;
 
         const uint64_t base_color_handle = material->textures.base_color
-            ?
-                m_graphics_instance.get_handle(
-                    *material->textures.base_color.get(),
-                    material->samplers.base_color
-                        ? *material->samplers.base_color.get()
-                        : *m_linear_sampler.get()
-                )
+            ? m_graphics_instance.get_handle(
+                *material->textures.base_color.get(),
+                material->samplers.base_color ? *material->samplers.base_color.get() : m_linear_sampler
+            )
             : c_texture_unused_64;
         const uint64_t metallic_roughness_handle = material->textures.metallic_roughness
-            ?
-                m_graphics_instance.get_handle(
-                    *material->textures.metallic_roughness.get(),
-                    material->samplers.metallic_roughness
-                        ? *material->samplers.metallic_roughness.get()
-                        : *m_linear_sampler.get()
-                )
+            ? m_graphics_instance.get_handle(
+                *material->textures.metallic_roughness.get(),
+                material->samplers.metallic_roughness ? *material->samplers.metallic_roughness.get() : m_linear_sampler
+            )
             : c_texture_unused_64;
 
         if (base_color_handle != c_texture_unused_64) {
@@ -153,16 +142,16 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
 
         material->material_buffer_index = material_index;
 
-        write(gpu_data, writer.write_offset + offsets.metallic   , as_span(material->metallic   ));
-        write(gpu_data, writer.write_offset + offsets.roughness  , as_span(material->roughness  ));
-        write(gpu_data, writer.write_offset + offsets.reflectance, as_span(material->reflectance));
-        write(gpu_data, writer.write_offset + offsets.base_color , as_span(material->base_color ));
-        write(gpu_data, writer.write_offset + offsets.emissive   , as_span(material->emissive   ));
-        write(gpu_data, writer.write_offset + offsets.opacity    , as_span(material->opacity    ));
+        write(gpu_data, write_offset + offsets.metallic   , as_span(material->metallic   ));
+        write(gpu_data, write_offset + offsets.roughness  , as_span(material->roughness  ));
+        write(gpu_data, write_offset + offsets.reflectance, as_span(material->reflectance));
+        write(gpu_data, write_offset + offsets.base_color , as_span(material->base_color ));
+        write(gpu_data, write_offset + offsets.emissive   , as_span(material->emissive   ));
+        write(gpu_data, write_offset + offsets.opacity    , as_span(material->opacity    ));
 
         if (m_graphics_instance.info.use_bindless_texture) {
-            write(gpu_data, writer.write_offset + offsets.base_color_texture,         as_span(base_color_handle));
-            write(gpu_data, writer.write_offset + offsets.metallic_roughness_texture, as_span(metallic_roughness_handle));
+            write(gpu_data, write_offset + offsets.base_color_texture,         as_span(base_color_handle));
+            write(gpu_data, write_offset + offsets.metallic_roughness_texture, as_span(metallic_roughness_handle));
         } else {
             {
                 std::optional<std::size_t> opt_texture_unit = material->textures.base_color
@@ -177,7 +166,7 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
                 const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : c_texture_unused_32);
                 //const uint64_t reserved     = static_cast<uint64_t>(0);
                 const uint64_t value        = texture_unit; // | (reserved << 32);
-                write(gpu_data, writer.write_offset + offsets.base_color_texture, as_span(value));
+                write(gpu_data, write_offset + offsets.base_color_texture, as_span(value));
             }
             {
                 std::optional<std::size_t> opt_texture_unit = material->textures.metallic_roughness
@@ -186,19 +175,18 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
                 const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : c_texture_unused_32);
                 //const uint64_t reserved     = static_cast<uint64_t>(0);
                 const uint64_t value        = texture_unit; // | (reserved << 32);
-                write(gpu_data, writer.write_offset + offsets.metallic_roughness_texture, as_span(value));
+                write(gpu_data, write_offset + offsets.metallic_roughness_texture, as_span(value));
             }
         }
 
-        writer.write_offset += entry_size;
-        ERHE_VERIFY(writer.write_offset <= writer.write_end);
+        write_offset += entry_size;
         ++material_index;
     }
-    writer.end();
+    buffer_range.close(write_offset);
 
     // SPDLOG_LOGGER_TRACE(log_material_buffer, "wrote {} entries to material buffer", material_index);
 
-    return writer.range;
+    return buffer_range;
 }
 
 auto Material_buffer::used_handles() const -> const std::set<uint64_t>&

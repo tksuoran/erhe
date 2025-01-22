@@ -106,10 +106,6 @@ void Line_renderer_bucket::append_lines(std::size_t first_line, std::size_t line
     m_draws.emplace_back(first_line, line_count);
 }
 
-void Line_renderer_bucket::end_frame()
-{
-}
-
 void Line_renderer_bucket::render(erhe::graphics::Instance& graphics_instance, bool draw_hidden, bool draw_visible)
 {
     if (draw_hidden && m_config.draw_hidden) {

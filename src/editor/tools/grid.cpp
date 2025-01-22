@@ -141,8 +141,7 @@ void Grid::render(const Render_context& context, bool major)
                 }
             );
         }
-        if (minor)
-        {
+        if (minor) {
             for (int i = 0; i < (m_cell_div - 1); ++i) {
                 xz += minor_step;
                 renderer.add_lines(

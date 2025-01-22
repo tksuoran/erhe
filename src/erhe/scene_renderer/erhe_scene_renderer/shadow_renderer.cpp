@@ -97,14 +97,6 @@ auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state)
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
 
-void Shadow_renderer::next_frame()
-{
-    m_joint_buffers        .next_frame();
-    m_light_buffers        .next_frame();
-    m_draw_indirect_buffers.next_frame();
-    m_primitive_buffers    .next_frame();
-}
-
 auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 {
     ERHE_PROFILE_FUNCTION();

@@ -9,7 +9,7 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_renderer/buffer_writer.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 
 #include <string_view>
@@ -75,10 +75,11 @@ public:
     std::vector<float>                                        weights;
     int                                                       level0_width  {0};
     int                                                       level0_height {0};
-    erhe::graphics::Buffer                                    parameter_buffer;
+    erhe::renderer::GPU_ring_buffer                           parameter_buffer;
     float                                                     tonemap_luminance_max{1.5f};
     float                                                     tonemap_alpha{1.0f / 1.5f};
     int                                                       lowpass_count{2};
+    std::optional<erhe::renderer::Buffer_range>               buffer_range_opt;
 };
 
 class Post_processing
@@ -126,6 +127,19 @@ private:
         const std::filesystem::path& fs_path
     ) -> erhe::graphics::Shader_stages_create_info;
 
+    struct Shader_stages {
+        erhe::graphics::Reloadable_shader_stages downsample_with_lowpass;
+        erhe::graphics::Reloadable_shader_stages downsample;
+        erhe::graphics::Reloadable_shader_stages upsample;
+    };
+    struct Pipelines {
+        erhe::graphics::Pipeline downsample_with_lowpass;
+        erhe::graphics::Pipeline downsample;
+        erhe::graphics::Pipeline upsample;
+    };
+
+    static constexpr size_t s_max_level_count = 20;
+
     Editor_context&                                    m_context;
     std::vector<std::shared_ptr<Post_processing_node>> m_nodes;
     erhe::graphics::Fragment_outputs                   m_fragment_outputs;
@@ -138,19 +152,8 @@ private:
     const erhe::graphics::Shader_resource*             m_downsample_texture_resource; // for non bindless textures
     const erhe::graphics::Shader_resource*             m_upsample_texture_resource;   // for non bindless textures
     std::filesystem::path                              m_shader_path;
-
-    struct Shader_stages {
-        erhe::graphics::Reloadable_shader_stages downsample_with_lowpass;
-        erhe::graphics::Reloadable_shader_stages downsample;
-        erhe::graphics::Reloadable_shader_stages upsample;
-    }                                                  m_shader_stages;
-
-    struct Pipelines {
-        erhe::graphics::Pipeline downsample_with_lowpass;
-        erhe::graphics::Pipeline downsample;
-        erhe::graphics::Pipeline upsample;
-    }                                                  m_pipelines;
-
+    Pipelines                                          m_pipelines;
+    Shader_stages                                      m_shader_stages;
     erhe::graphics::Gpu_timer                          m_gpu_timer;
 };
 

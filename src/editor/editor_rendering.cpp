@@ -666,11 +666,7 @@ void Editor_rendering::end_frame()
     m_context.headset_view->end_frame();
 #endif
 
-    m_context.line_renderer   ->next_frame();
-    m_context.text_renderer   ->next_frame();
-    m_context.forward_renderer->next_frame();
-    m_context.shadow_renderer ->next_frame();
-    m_context.id_renderer     ->next_frame();
+    m_context.id_renderer->next_frame();
 
     if (m_trigger_capture) {
         erhe::window::end_frame_capture(*m_context.context_window);

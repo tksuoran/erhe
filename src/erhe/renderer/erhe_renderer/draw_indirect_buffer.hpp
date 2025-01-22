@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_renderer/multi_buffer.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_primitive/enums.hpp"
 
 #include <memory>
@@ -22,7 +22,7 @@ public:
     std::size_t  draw_indirect_count{0};
 };
 
-class Draw_indirect_buffer : public Multi_buffer
+class Draw_indirect_buffer : public GPU_ring_buffer
 {
 public:
     explicit Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance);
@@ -37,6 +37,8 @@ public:
     //// void debug_properties_window();
 
 private:
+    [[nodiscard]] static auto get_max_draw_count() -> int;
+ 
     bool m_max_index_count_enable{false};
     int  m_max_index_count       {256};
     int  m_max_draw_count        {8000};

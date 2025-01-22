@@ -28,14 +28,14 @@ using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
 Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
-    : m_graphics_instance    {graphics_instance}
-    , m_program_interface    {program_interface}
-    , m_camera_buffers       {graphics_instance, program_interface.camera_interface}
-    , m_draw_indirect_buffers{graphics_instance}
-    , m_joint_buffers        {graphics_instance, program_interface.joint_interface}
-    , m_light_buffers        {graphics_instance, program_interface.light_interface}
-    , m_material_buffers     {graphics_instance, program_interface.material_interface}
-    , m_primitive_buffers    {graphics_instance, program_interface.primitive_interface}
+    : m_graphics_instance   {graphics_instance}
+    , m_program_interface   {program_interface}
+    , m_camera_buffer       {graphics_instance, program_interface.camera_interface}
+    , m_draw_indirect_buffer{graphics_instance}
+    , m_joint_buffer        {graphics_instance, program_interface.joint_interface}
+    , m_light_buffer        {graphics_instance, program_interface.light_interface}
+    , m_material_buffer     {graphics_instance, program_interface.material_interface}
+    , m_primitive_buffer    {graphics_instance, program_interface.primitive_interface}
     , m_nearest_sampler{
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
@@ -53,16 +53,6 @@ Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, 
 }
 
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
-
-void Forward_renderer::next_frame()
-{
-    m_camera_buffers       .next_frame();
-    m_draw_indirect_buffers.next_frame();
-    m_joint_buffers        .next_frame();
-    m_light_buffers        .next_frame();
-    m_material_buffers     .next_frame();
-    m_primitive_buffers    .next_frame();
-}
 
 namespace {
 
@@ -110,25 +100,28 @@ void Forward_renderer::render(const Render_parameters& parameters)
     );
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+
+    using Buffer_range = erhe::renderer::Buffer_range;
+    Buffer_range camera_buffer_range{};
     if (camera != nullptr) {
-        const auto range = m_camera_buffers.update(*camera->projection(), *camera->get_node(), viewport, camera->get_exposure());
-        m_camera_buffers.bind(range);
+        camera_buffer_range = m_camera_buffer.update(*camera->projection(), *camera->get_node(), viewport, camera->get_exposure());
+        m_camera_buffer.bind(camera_buffer_range);
     }
 
     if (!m_graphics_instance.info.use_bindless_texture) {
         m_graphics_instance.texture_unit_cache_reset(m_base_texture_unit);
     }
 
-    const auto naterial_range = m_material_buffers.update(materials);
-    m_material_buffers.bind(naterial_range);
+    Buffer_range material_range = m_material_buffer.update(materials);
+    m_material_buffer.bind(material_range);
 
-    const auto joint_range = m_joint_buffers.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
-    m_joint_buffers.bind(joint_range);
+    Buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
+    m_joint_buffer.bind(joint_range);
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    const auto light_range = m_light_buffers.update(lights, parameters.light_projections, parameters.ambient_light);
-    m_light_buffers.bind_light_buffer(light_range);
+    Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
+    m_light_buffer.bind_light_buffer(light_range);
 
     if (m_graphics_instance.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures resident");
@@ -136,7 +129,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         if (enable_shadows) {
             gl::make_texture_handle_resident_arb(shadow_texture_handle);
         }
-        for (const uint64_t handle : m_material_buffers.used_handles()) {
+        for (const uint64_t handle : m_material_buffer.used_handles()) {
             gl::make_texture_handle_resident_arb(handle);
         }
     } else {
@@ -185,29 +178,30 @@ void Forward_renderer::render(const Render_parameters& parameters)
             }
 
             std::size_t primitive_count{0};
-            const auto primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, filter, parameters.primitive_settings, primitive_count);
-            const auto draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, filter);
+            Buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, filter, parameters.primitive_settings, primitive_count);
+            erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(meshes, primitive_mode, filter);
             if (draw_indirect_buffer_range.draw_indirect_count == 0) {
                 continue;
             }
             if (primitive_count != draw_indirect_buffer_range.draw_indirect_count) {
                 log_render->warn("primitive_count != draw_indirect_buffer_range.draw_indirect_count");
             }
-            m_primitive_buffers.bind(primitive_range);
+            m_primitive_buffer.bind(primitive_range);
 
             // Draw indirect buffer is not indexed, this binds the whole buffer
-            m_draw_indirect_buffers.bind(draw_indirect_buffer_range.range);
+            m_draw_indirect_buffer.bind(draw_indirect_buffer_range.range);
 
             {
                 //ERHE_PROFILE_SCOPE("mdi");
                 gl::multi_draw_elements_indirect(
                     pipeline.data.input_assembly.primitive_topology,
                     erhe::graphics::to_gl_index_type(parameters.index_type),
-                    reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+                    reinterpret_cast<const void *>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),
                     static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
                 );
             }
+            draw_indirect_buffer_range.range.submit();
         }
 
         if (pass->end) {
@@ -216,13 +210,19 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
     }
 
+    // These must come after the draw calls have been done
+    camera_buffer_range.submit();
+    material_range.submit();
+    joint_range.submit();
+    light_range.submit();
+
     if (m_graphics_instance.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures non resident");
 
         if (enable_shadows) {
             gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
         }
-        for (const uint64_t handle : m_material_buffers.used_handles()) {
+        for (const uint64_t handle : m_material_buffer.used_handles()) {
             gl::make_texture_handle_non_resident_arb(handle);
         }
     }
@@ -249,33 +249,33 @@ void Forward_renderer::render_fullscreen(const Render_parameters&  parameters, c
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
-    const auto material_range = m_material_buffers.update(parameters.materials);
-    m_material_buffers.bind(material_range);
+    using Buffer_range = erhe::renderer::Buffer_range;
+    Buffer_range material_range = m_material_buffer.update(parameters.materials);
+    material_range.bind(); //m_material_buffer.bind(material_range);
 
     if (camera != nullptr) {
-        const auto camera_range = m_camera_buffers.update(
+        const auto camera_range = m_camera_buffer.update(
             *camera->projection(),
             *camera->get_node(),
             viewport,
             camera->get_exposure()
         );
-        m_camera_buffers.bind(camera_range);
+        m_camera_buffer.bind(camera_range);
     }
 
+    std::optional<Buffer_range> light_control_range{};
     if (light != nullptr) {
         const auto* light_projection_transforms = parameters.light_projections->get_light_projection_transforms_for_light(light);
         if (light_projection_transforms != nullptr) {
-            const auto control_range = m_light_buffers.update_control(light_projection_transforms->index);
-            m_light_buffers.bind_control_buffer(control_range);
+            light_control_range = m_light_buffer.update_control(light_projection_transforms->index);
+            light_control_range.value().bind(); //m_light_buffer.bind_control_buffer(light_control_range);
         } else {
             //// log_render->warn("Light {} has no light projection transforms", light->name());
         }
     }
 
-    {
-        const auto light_range = m_light_buffers.update(lights, parameters.light_projections, parameters.ambient_light);
-        m_light_buffers.bind_light_buffer(light_range);
-    }
+    Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
+    light_range.bind(); //m_light_buffer.bind_light_buffer(light_range);
 
     if (enable_shadows) {
         if (m_graphics_instance.info.use_bindless_texture) {
@@ -304,6 +304,12 @@ void Forward_renderer::render_fullscreen(const Render_parameters&  parameters, c
         if (pass->end) {
             pass->end();
         }
+    }
+
+    material_range.submit();
+
+    if (light_control_range.has_value()) {
+        light_control_range.value().submit();
     }
 
     if (enable_shadows) {

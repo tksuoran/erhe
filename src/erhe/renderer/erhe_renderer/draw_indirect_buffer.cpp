@@ -12,16 +12,22 @@
 
 namespace erhe::renderer {
 
-Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance)
-    : Multi_buffer{graphics_instance, "draw indirect"}
+auto Draw_indirect_buffer::get_max_draw_count() -> int
 {
+    int max_draw_count = 0;
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
-    ini.get("max_draw_count", m_max_draw_count);
+    ini.get("max_draw_count", max_draw_count);
+    return max_draw_count;
+}
 
-    Multi_buffer::allocate(
+Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance)
+    : GPU_ring_buffer{
+        graphics_instance,
         gl::Buffer_target::draw_indirect_buffer,
-        sizeof(gl::Draw_elements_indirect_command) * m_max_draw_count
-    );
+        sizeof(gl::Draw_elements_indirect_command) * get_max_draw_count(),
+        "draw indirect"
+    }
+{
 }
 
 auto Draw_indirect_buffer::update(
@@ -48,11 +54,11 @@ auto Draw_indirect_buffer::update(
         primitive_count += mesh->get_primitives().size();
     }
 
-    auto&             writer         = get_writer();
-    auto&             buffer         = get_current_buffer();
     const std::size_t entry_size     = sizeof(gl::Draw_elements_indirect_command);
     const std::size_t max_byte_count = primitive_count * entry_size;
-    const auto        gpu_data       = writer.begin(gl::Buffer_target::draw_indirect_buffer, max_byte_count);
+    Buffer_range      buffer_range   = open_cpu_write(max_byte_count);
+    const auto        gpu_data       = buffer_range.get_span();
+    size_t            write_offset   = 0;
     uint32_t          instance_count     {1};
     uint32_t          base_instance      {0};
     std::size_t       draw_indirect_count{0};
@@ -68,23 +74,11 @@ auto Draw_indirect_buffer::update(
             continue;
         }
 
-        if ((writer.write_offset + entry_size) > writer.write_end) {
-            log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
-            ERHE_FATAL("draw indirect buffer capacity exceeded");
-            break;
-        }
-
         for (auto& primitive : mesh->get_primitives()) {
             const erhe::primitive::Buffer_mesh& buffer_mesh = primitive.render_shape->get_renderable_mesh();
             const erhe::primitive::Index_range  index_range = buffer_mesh.index_range(primitive_mode);
             if (index_range.index_count == 0) {
                 continue;
-            }
-
-            if ((writer.write_offset + entry_size) > writer.write_end) {
-                log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
-                ERHE_FATAL("draw indirect buffer capacity exceeded");
-                break;
             }
 
             uint32_t index_count = static_cast<uint32_t>(index_range.index_count);
@@ -104,18 +98,17 @@ auto Draw_indirect_buffer::update(
                 base_instance
             };
 
-            erhe::graphics::write(gpu_data, writer.write_offset, erhe::graphics::as_span(draw_command));
+            erhe::graphics::write(gpu_data, write_offset, erhe::graphics::as_span(draw_command));
 
-            writer.write_offset += entry_size;
-            ERHE_VERIFY(writer.write_offset <= writer.write_end);
+            write_offset += entry_size;
             ++draw_indirect_count;
         }
     }
 
-    writer.end();
+    buffer_range.close(write_offset);
 
     SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to draw indirect buffer", draw_indirect_count);
-    return { writer.range, draw_indirect_count };
+    return { buffer_range, draw_indirect_count };
 }
 
-}
+} // namespace erhe::renderer

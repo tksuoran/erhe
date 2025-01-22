@@ -4,9 +4,10 @@ set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 # or maybe not add_link_options($<$<COMPILE_LANGUAGE:CXX>:/DEBUG:FASTLINK>)
 
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/MP>)
-#add_compile_options(-fsanitize=address)
-#add_link_options(-fsanitize=address)
+add_compile_options(-fsanitize=address)
+add_link_options(-fsanitize=address)
 #add_definitions(-DUNICODE -D_UNICODE)
+add_definitions(-D_SILENCE_CXX20_ATOMIC_INIT_DEPRECATION_WARNING)
 
 
 function (erhe_target_settings target)

@@ -1097,11 +1097,13 @@ void run_editor()
     erhe::time::sleep_initialize();
     erhe::physics::initialize_physics_system();
 
+#if 0
     {
         ERHE_PROFILE_SCOPE("initialize geogram");
         GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
         GEO::CmdLine::import_arg_group("algo");
     }
+#endif
 
     {
         ERHE_PROFILE_SCOPE("init renderdoc");

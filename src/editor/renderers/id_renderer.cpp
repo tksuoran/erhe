@@ -146,9 +146,6 @@ void Id_renderer::next_frame()
     if (!m_enabled) {
         return;
     }
-    m_camera_buffers       .next_frame();
-    m_draw_indirect_buffers.next_frame();
-    m_primitive_buffers    .next_frame();
 
     m_current_id_frame_resource_slot = (m_current_id_frame_resource_slot + 1) % s_frame_resources_count;
 }
@@ -259,8 +256,8 @@ void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     std::size_t primitive_count{0};
-    const auto primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, id_filter, settings, primitive_count, true);
-    const auto draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, id_filter);
+    erhe::renderer::Buffer_range               primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, id_filter, settings, primitive_count, true);
+    erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, id_filter);
     if (draw_indirect_buffer_range.draw_indirect_count == 0) {
         return;
     }
@@ -268,8 +265,11 @@ void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh
         log_render->warn("primitive_range != draw_indirect_buffer_range.draw_indirect_count");
     }
 
-    m_primitive_buffers    .bind(primitive_range);
-    m_draw_indirect_buffers.bind(draw_indirect_buffer_range.range);
+    primitive_range.bind();
+    //m_primitive_buffers    .bind(primitive_range);
+
+    draw_indirect_buffer_range.range.bind();
+    //m_draw_indirect_buffers.bind(draw_indirect_buffer_range.range);
 
     {
         static constexpr std::string_view c_draw{"draw"};
@@ -279,11 +279,14 @@ void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh
         gl::multi_draw_elements_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
             erhe::graphics::to_gl_index_type(m_mesh_memory.buffer_info.index_type),
-            reinterpret_cast<const void*>(draw_indirect_buffer_range.range.first_byte_offset),
+            reinterpret_cast<const void*>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),
             static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
         );
     }
+
+    primitive_range.submit();
+    draw_indirect_buffer_range.range.submit();
 }
 
 static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::render() clear"  };
