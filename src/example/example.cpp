@@ -18,6 +18,7 @@
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_item/item_log.hpp"
 #include "erhe_log/log.hpp"
+#include "erhe_math/math_log.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
@@ -209,6 +210,8 @@ public:
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
+                .index_buffer           = &m_mesh_memory.gl_index_buffer,
+                .vertex_buffer          = &m_mesh_memory.gl_vertex_buffer,
                 .ambient_light          = glm::vec3{0.1f, 0.1f, 0.1f},
                 .camera                 = m_camera.get(),
                 .light_projections      = &light_projections,
@@ -226,8 +229,6 @@ public:
                 .debug_label            = "example main render"
             }
         );
-
-        m_forward_renderer.next_frame();
     }
 
 private:
@@ -341,9 +342,10 @@ void run_example()
     example::initialize_logging();
     gl::initialize_logging();
     erhe::dataformat::initialize_logging();
-    erhe::item::initialize_logging();
     erhe::gltf::initialize_logging();
     erhe::graphics::initialize_logging();
+    erhe::item::initialize_logging();
+    erhe::math::initialize_logging();
     erhe::primitive::initialize_logging();
     erhe::raytrace::initialize_logging();
     erhe::renderer::initialize_logging();
@@ -351,7 +353,6 @@ void run_example()
     erhe::scene_renderer::initialize_logging();
     erhe::window::initialize_logging();
     erhe::ui::initialize_logging();
-    erhe::window::initialize_frame_capture();
 
     erhe::window::Context_window window{
         erhe::window::Window_configuration{

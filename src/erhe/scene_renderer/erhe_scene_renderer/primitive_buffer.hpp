@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_renderer/multi_buffer.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_primitive/enums.hpp"
 
 #include <array>
@@ -97,7 +97,7 @@ public:
     float                  constant_size {1.0f};
 };
 
-class Primitive_buffer : public erhe::renderer::Multi_buffer
+class Primitive_buffer : public erhe::renderer::GPU_ring_buffer
 {
 public:
     Primitive_buffer(erhe::graphics::Instance& graphics_instance, Primitive_interface& primitive_interface);

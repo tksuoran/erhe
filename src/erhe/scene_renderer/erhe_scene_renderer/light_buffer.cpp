@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene_renderer/light_buffer.hpp"
+#include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -53,22 +54,21 @@ Light_interface::Light_interface(erhe::graphics::Instance& graphics_instance)
 
 Light_buffer::Light_buffer(erhe::graphics::Instance& graphics_instance, Light_interface& light_interface)
     : m_light_interface{light_interface}
-    , m_light_buffer   {graphics_instance, "light"}
-    , m_control_buffer {graphics_instance, "light_control"}
+    , m_light_buffer{
+        graphics_instance,
+        gl::Buffer_target::uniform_buffer,
+        light_interface.light_block.binding_point(),
+        25 * (light_interface.offsets.light_struct + light_interface.max_light_count * light_interface.light_struct.size_bytes()),
+        "light"
+    }
+    , m_control_buffer{
+        graphics_instance,
+        gl::Buffer_target::uniform_buffer,
+        light_interface.light_control_block.binding_point(),
+        32 * (m_light_interface.light_control_block.size_bytes()),
+        "light_control"
+    }
 {
-    m_light_buffer.allocate(
-        gl::Buffer_target::uniform_buffer,
-        m_light_interface.light_block.binding_point(),
-        // TODO
-        64 * (m_light_interface.offsets.light_struct + m_light_interface.max_light_count * m_light_interface.light_struct.size_bytes())
-    );
-
-    m_control_buffer.allocate(
-        gl::Buffer_target::uniform_buffer,
-        m_light_interface.light_control_block.binding_point(),
-        // TODO
-        256 * (m_light_interface.light_control_block.size_bytes())
-    );
 }
 
 Light_projections::Light_projections()
@@ -138,11 +138,16 @@ auto Light_buffer::update(
 
     SPDLOG_LOGGER_TRACE(log_render, "lights.size() = {}, m_light_buffer.writer().write_offset = {}", lights.size(), m_light_buffer.writer().write_offset);
 
-    auto&          writer            = m_light_buffer.get_writer();
-    const auto     light_struct_size = m_light_interface.light_struct.size_bytes();
-    const auto&    offsets           = m_light_interface.offsets;
-    const size_t   max_byte_count    = offsets.light_struct + (m_light_interface.max_light_count) * light_struct_size;
-    const auto     light_gpu_data    = writer.begin(m_light_interface.light_block.get_binding_target(), max_byte_count);
+    const auto                   light_struct_size = m_light_interface.light_struct.size_bytes();
+    const auto&                  offsets           = m_light_interface.offsets;
+
+    // NOTE: As long as we are using uniform buffer, always fill in data max lights
+    // (m_light_interface.max_light_count) instea of lights.size(), and pad the
+    // unused part of the array with zeros.
+    const size_t                 exact_byte_count  = offsets.light_struct + m_light_interface.max_light_count * light_struct_size;
+    erhe::renderer::Buffer_range buffer_range      = m_light_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, exact_byte_count);
+    std::span<std::byte>         light_gpu_data    = buffer_range.get_span();
+    ERHE_VERIFY(light_gpu_data.size_bytes() >= exact_byte_count);
     uint32_t       directional_light_count{0u};
     uint32_t       spot_light_count       {0u};
     uint32_t       point_light_count      {0u};
@@ -155,10 +160,11 @@ auto Light_buffer::update(
     using erhe::graphics::as_span;
     using erhe::graphics::write;
 
-    const std::size_t common_offset = writer.write_offset;
+    std::size_t write_offset = 0;
+    const std::size_t common_offset = write_offset;
 
-    writer.write_offset += offsets.light_struct;
-    const std::size_t light_array_offset = writer.write_offset;
+    write_offset += offsets.light_struct;
+    const std::size_t light_array_offset = write_offset;
     std::size_t max_light_index{0};
 
     for (const auto& light : lights) {
@@ -195,7 +201,7 @@ auto Light_buffer::update(
         const auto light_index          = light_projection_transforms->index;
         const auto light_offset         = light_array_offset + light_index * light_struct_size;
 
-        ERHE_VERIFY(light_offset < writer.write_end);
+        ERHE_VERIFY(light_offset < exact_byte_count);
         max_light_index = std::max(max_light_index, light_index);
         write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.get_matrix()));
         write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world));
@@ -211,7 +217,7 @@ auto Light_buffer::update(
         0,
         padding_light_count * light_struct_size
     );
-    writer.write_offset += m_light_interface.max_light_count * light_struct_size;
+    write_offset += m_light_interface.max_light_count * light_struct_size;
 
     const auto brdf_phi_incident_phi = light_projections != nullptr ? glm::vec2{light_projections->brdf_phi, light_projections->brdf_incident_phi} : glm::vec2{0.0f, 0.0f};
     const auto brdf_material         = light_projections != nullptr ? (light_projections->brdf_material ? light_projections->brdf_material->material_buffer_index : 0) : 0;
@@ -226,36 +232,31 @@ auto Light_buffer::update(
     write(light_gpu_data, common_offset + offsets.ambient_light,           as_span(ambient_light)            );
     write(light_gpu_data, common_offset + offsets.reserved_2,              as_span(uvec4_zero)               );
 
-    writer.end();
+    buffer_range.close(write_offset);
     SPDLOG_LOGGER_TRACE(log_draw, "wrote up to {} entries to light buffer", padding_light_offset);
 
-    return writer.range;
+    return buffer_range;
 }
 
 auto Light_buffer::update_control(const std::size_t light_index) -> erhe::renderer::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto&      writer     = m_control_buffer.get_writer();
-    const auto entry_size = m_light_interface.light_control_block.size_bytes();
-    const auto gpu_data   = writer.begin(m_light_interface.light_control_block.get_binding_target(), entry_size);
+    const auto                   entry_size   = m_light_interface.light_control_block.size_bytes();
+    erhe::renderer::Buffer_range buffer_range = m_control_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, entry_size);
+    const auto                   gpu_data     = buffer_range.get_span();
+    size_t                       write_offset = 0;
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;
 
     const auto uint_light_index = static_cast<uint32_t>(light_index);
-    write(gpu_data, writer.write_offset + 0, as_span(uint_light_index));
-    writer.write_offset += entry_size;
+    write(gpu_data, write_offset + 0, as_span(uint_light_index));
+    write_offset += entry_size;
 
-    writer.end();
+    buffer_range.close(write_offset);
 
-    return writer.range;
-}
-
-void Light_buffer::next_frame()
-{
-    m_light_buffer.next_frame();
-    m_control_buffer.next_frame();
+    return buffer_range;
 }
 
 void Light_buffer::bind_light_buffer(const erhe::renderer::Buffer_range& range)

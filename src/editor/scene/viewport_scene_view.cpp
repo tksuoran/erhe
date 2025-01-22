@@ -158,10 +158,10 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     m_context.editor_rendering->render_viewport_main(context);
 
-    m_context.line_renderer   ->begin();
+    m_context.line_renderer   ->open();
     m_context.tools           ->render_viewport_tools(context);
     m_context.editor_rendering->render_viewport_renderables(context);
-    m_context.line_renderer   ->end();
+    m_context.line_renderer   ->close();
     m_context.line_renderer   ->render(context.viewport, *context.camera);
 
     m_context.text_renderer->render(context.viewport);

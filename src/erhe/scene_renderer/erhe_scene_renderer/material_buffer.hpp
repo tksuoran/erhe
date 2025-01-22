@@ -1,7 +1,8 @@
 #pragma once
 
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_renderer/multi_buffer.hpp"
+#include "erhe_graphics/sampler.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 
 #include <set>
 
@@ -44,7 +45,7 @@ public:
     std::size_t                     max_material_count;
 };
 
-class Material_buffer : public erhe::renderer::Multi_buffer
+class Material_buffer : public erhe::renderer::GPU_ring_buffer
 {
 public:
     Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface);
@@ -58,8 +59,8 @@ private:
     Material_interface&       m_material_interface;
     std::set<uint64_t>        m_used_handles;
 
-    std::unique_ptr<erhe::graphics::Sampler> m_nearest_sampler;
-    std::unique_ptr<erhe::graphics::Sampler> m_linear_sampler;
+    erhe::graphics::Sampler   m_nearest_sampler;
+    erhe::graphics::Sampler   m_linear_sampler;
 };
 
 } // namespace erhe::scene_renderer

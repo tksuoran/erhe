@@ -91,7 +91,7 @@ auto Line_renderer_bucket::match(const Line_renderer_config& config) const -> bo
     return m_config == config;
 }
 
-void Line_renderer_bucket::begin_frame()
+void Line_renderer_bucket::clear()
 {
     m_draws.clear();
 }
@@ -106,14 +106,17 @@ void Line_renderer_bucket::append_lines(std::size_t first_line, std::size_t line
     m_draws.emplace_back(first_line, line_count);
 }
 
-void Line_renderer_bucket::end_frame()
-{
-}
-
-void Line_renderer_bucket::render(erhe::graphics::Instance& graphics_instance, bool draw_hidden, bool draw_visible)
+void Line_renderer_bucket::render(
+    erhe::graphics::Instance& graphics_instance,
+    erhe::graphics::Buffer*   vertex_buffer,
+    size_t                    vertex_buffer_offset,
+    bool                      draw_hidden,
+    bool                      draw_visible
+)
 {
     if (draw_hidden && m_config.draw_hidden) {
         graphics_instance.opengl_state_tracker.execute(m_pipeline_hidden);
+        graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(vertex_buffer, vertex_buffer_offset, 0);
         for (const Line_draw_entry& draw : m_draws) {
             gl::draw_arrays(
                 m_pipeline_hidden.data.input_assembly.primitive_topology,
@@ -125,6 +128,7 @@ void Line_renderer_bucket::render(erhe::graphics::Instance& graphics_instance, b
 
     if (draw_visible && m_config.draw_visible) {
         graphics_instance.opengl_state_tracker.execute(m_pipeline_visible);
+        graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(vertex_buffer, vertex_buffer_offset, 0);
         for (const Line_draw_entry& draw : m_draws) {
             gl::draw_arrays(
                 m_pipeline_visible.data.input_assembly.primitive_topology,

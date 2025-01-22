@@ -36,11 +36,16 @@ class Line_renderer_bucket
 public:
     Line_renderer_bucket(Line_renderer& line_renderer, Line_renderer_config config);
 
-    void begin_frame ();
+    void clear       ();
     void append_lines(std::size_t first_line, std::size_t line_count);
-    void end_frame   ();
     auto match       (const Line_renderer_config& config) const -> bool;
-    void render      (erhe::graphics::Instance& graphics_instance, bool draw_hiddern, bool draw_visible);
+    void render      (
+        erhe::graphics::Instance& graphics_instance,
+        erhe::graphics::Buffer*   vertex_buffer,
+        size_t                    vertex_buffer_offset,
+        bool                      draw_hidden,
+        bool                      draw_visible
+    );
      
 private:
     [[nodiscard]] auto make_pipeline(bool visible) -> erhe::graphics::Pipeline;

@@ -547,7 +547,6 @@ void Map_window::render()
     int height = static_cast<int>(extent_y);
     m_tile_renderer.render(erhe::math::Viewport{0, 0, width, height});
     m_text_renderer.render(erhe::math::Viewport{0, 0, width, height});
-    m_text_renderer.next_frame();
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 }

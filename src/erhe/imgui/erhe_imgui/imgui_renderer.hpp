@@ -15,7 +15,7 @@
 #include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/pipeline.hpp"
-#include "erhe_renderer/multi_buffer.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 
 #include <imgui/imgui.h>
 
@@ -70,44 +70,14 @@ public:
     std::size_t texture_indices{0}; // uint[4] for non bindless textures
 };
 
-class Multi_pipeline
-{
-public:
-    static constexpr std::size_t s_frame_resources_count = 4;
-
-    explicit Multi_pipeline(const std::string_view name);
-
-    void next_frame();
-    void allocate(
-        const erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
-        const erhe::graphics::Vertex_format&             vertex_format,
-        erhe::graphics::Shader_stages*                   shader_stages,
-        erhe::renderer::Multi_buffer&                    vertex_buffer,
-        erhe::renderer::Multi_buffer&                    index_buffer
-    );
-
-    [[nodiscard]] auto get_current_pipeline() -> erhe::graphics::Pipeline&;
-
-protected:
-    std::vector<std::unique_ptr<erhe::graphics::Vertex_input_state>> m_vertex_inputs;
-    std::array<erhe::graphics::Pipeline, s_frame_resources_count>    m_pipelines;
-    std::size_t                                                      m_current_slot{0};
-    std::string                                                      m_name;
-};
-
 class Imgui_program_interface
 {
 public:
-    explicit Imgui_program_interface(erhe::graphics::Instance& graphics_instance);
-
-    void next_frame();
-
-    // scale, translation, clip rectangle, texture indices
-    static constexpr std::size_t s_max_draw_count     =     8'000;
-    static constexpr std::size_t s_max_index_count    = 2'000'000;
-    static constexpr std::size_t s_max_vertex_count   = 5'000'000;
     static constexpr std::size_t s_texture_unit_count = 32; // for non bindless textures
 
+    explicit Imgui_program_interface(erhe::graphics::Instance& graphics_instance);
+
+    // scale, translation, clip rectangle, texture indices
     erhe::graphics::Shader_resource     draw_parameter_block;
     erhe::graphics::Shader_resource     draw_parameter_struct;
     Imgui_draw_parameter_struct_offsets draw_parameter_struct_offsets{};
@@ -117,12 +87,6 @@ public:
     erhe::graphics::Vertex_attribute_mappings attribute_mappings;
     erhe::graphics::Vertex_format             vertex_format;
     erhe::graphics::Shader_resource           default_uniform_block; // containing sampler uniforms for non bindless textures
-    erhe::graphics::Shader_stages             shader_stages;
-    erhe::renderer::Multi_buffer              vertex_buffer;
-    erhe::renderer::Multi_buffer              index_buffer;
-    erhe::renderer::Multi_buffer              draw_parameter_buffer;
-    erhe::renderer::Multi_buffer              draw_indirect_buffer;
-    Multi_pipeline                            pipeline;
 };
 
 class Imgui_renderer final
@@ -184,8 +148,20 @@ public:
 private:
     void apply_font_config_changes(const Imgui_settings& settings);
 
+    static constexpr std::size_t s_max_draw_count     =   8'000;
+    static constexpr std::size_t s_max_index_count    = 200'000;
+    static constexpr std::size_t s_max_vertex_count   = 200'000;
+
     erhe::graphics::Instance&                m_graphics_instance;
     Imgui_program_interface                  m_imgui_program_interface;
+    erhe::graphics::Shader_stages            m_shader_stages;
+    erhe::renderer::GPU_ring_buffer          m_vertex_buffer;
+    erhe::renderer::GPU_ring_buffer          m_index_buffer;
+    erhe::renderer::GPU_ring_buffer          m_draw_parameter_buffer;
+    erhe::renderer::GPU_ring_buffer          m_draw_indirect_buffer;
+    erhe::graphics::Vertex_input_state       m_vertex_input;
+    erhe::graphics::Pipeline                 m_pipeline;
+
     ImFontAtlas                              m_font_atlas;
     ImFont*                                  m_primary_font   {nullptr};
     ImFont*                                  m_mono_font      {nullptr};

@@ -12,71 +12,129 @@
 
 namespace erhe::renderer {
 
-
 // Note that this relies on bucket being stable, as in etl::vector<> when elements are never removed.
 Scoped_line_renderer::Scoped_line_renderer(
     Line_renderer&        line_renderer,
     Line_renderer_bucket& bucket,
     bool                  indirect
 )
-    : m_line_renderer     {line_renderer}
-    , m_bucket            {bucket}
+    : m_line_renderer     {&line_renderer}
+    , m_bucket            {&bucket}
     , m_indirect          {indirect}
-    , m_line_vertex_stride{line_renderer.get_program_interface().line_vertex_format.stride()}
+    , m_line_vertex_stride{m_line_renderer->get_program_interface().line_vertex_format.stride()}
 {
     if (m_indirect) {
-        // TODO This path is not ready
         m_indirect_buffer.reserve(1000 * m_line_vertex_stride);
     } 
-    m_first_line = m_line_renderer.get_line_offset();
+    m_first_line = m_line_renderer->get_line_offset();
+}
+
+Scoped_line_renderer::Scoped_line_renderer(Scoped_line_renderer&& old)
+    : m_line_renderer               {std::exchange(old.m_line_renderer, nullptr)}
+    , m_bucket                      {std::exchange(old.m_bucket,        nullptr)}
+    , m_indirect                    {std::exchange(old.m_indirect,      0)}
+    , m_first_line                  {std::exchange(old.m_first_line,    0)}
+    , m_line_vertex_stride          {m_line_renderer->get_program_interface().line_vertex_format.stride()}
+    , m_last_allocate_gpu_float_data{nullptr}
+    , m_last_allocate_word_offset   {0}
+    , m_last_allocate_word_count    {0}
+    , m_line_color                  {old.m_line_color}
+    , m_line_thickness              {old.m_line_thickness}
+{
+    ERHE_VERIFY(old.m_last_allocate_gpu_data.empty());
+    ERHE_VERIFY(old.m_last_allocate_gpu_float_data == nullptr);
+    ERHE_VERIFY(old.m_last_allocate_word_offset == 0);
+    ERHE_VERIFY(old.m_last_allocate_word_count == 0);
+    ERHE_VERIFY(old.m_indirect_buffer.empty());
+}
+
+auto Scoped_line_renderer::operator=(Scoped_line_renderer&& old) -> Scoped_line_renderer&
+{
+    m_line_renderer  = std::exchange(old.m_line_renderer, nullptr);
+    m_bucket         = std::exchange(old.m_bucket,        nullptr);
+    m_indirect       = old.m_indirect;
+    m_first_line     = std::exchange(old.m_first_line,    0);
+    m_line_color     = old.m_line_color;
+    m_line_thickness = old.m_line_thickness;
+    ERHE_VERIFY(m_last_allocate_gpu_data.empty());
+    ERHE_VERIFY(m_last_allocate_gpu_float_data == nullptr);
+    ERHE_VERIFY(m_last_allocate_word_offset == 0);
+    ERHE_VERIFY(m_last_allocate_word_count == 0);
+    ERHE_VERIFY(m_indirect_buffer.empty());
+    ERHE_VERIFY(old.m_last_allocate_gpu_data.empty());
+    ERHE_VERIFY(old.m_last_allocate_gpu_float_data == nullptr);
+    ERHE_VERIFY(old.m_last_allocate_word_offset == 0);
+    ERHE_VERIFY(old.m_last_allocate_word_count == 0);
+    ERHE_VERIFY(old.m_indirect_buffer.empty());
+    return *this;
 }
 
 Scoped_line_renderer::~Scoped_line_renderer()
 {
-    std::size_t line_offset = m_line_renderer.get_line_offset();
-    m_bucket.append_lines(m_first_line, line_offset - m_first_line);
+    if (m_line_renderer == nullptr) {
+        return;
+    }
+    ERHE_VERIFY(m_bucket != nullptr);
+    if (m_indirect) {
+        const std::size_t byte_count = m_indirect_buffer.size();
+        if (byte_count > 0) {
+            std::size_t first_line_offset = m_line_renderer->get_line_offset();
+            std::span<std::byte> dst = m_line_renderer->allocate_vertex_subspan(byte_count);
+            std::copy(m_indirect_buffer.begin(), m_indirect_buffer.end(), dst.begin());
+            std::size_t last_line_offset = m_line_renderer->get_line_offset();
+            std::size_t line_count = last_line_offset - m_first_line;
+            m_bucket->append_lines(first_line_offset, line_count);
+        }
+    } else {
+        std::size_t line_offset = m_line_renderer->get_line_offset();
+        std::size_t line_count = line_offset - m_first_line;
+        if (line_count > 0) {
+            m_bucket->append_lines(m_first_line, line_count);
+        }
+    }
 }
 
 void Scoped_line_renderer::allocate(std::size_t line_count)
 {
-    m_byte_count = line_count * 2 * m_line_vertex_stride;
-    m_word_count = m_byte_count / sizeof(float);
+    std::size_t byte_count = line_count * 2 * m_line_vertex_stride;
+    m_last_allocate_word_count = byte_count / sizeof(float);
     if (!m_indirect) {
-        m_gpu_data = m_line_renderer.allocate_vertex_subspan(m_byte_count);
+        m_last_allocate_gpu_data = m_line_renderer->allocate_vertex_subspan(byte_count);
     } else {
-        // TODO This path is not ready
-        m_indirect_buffer.resize(m_byte_count);
-        m_gpu_data = std::span<std::byte>{m_indirect_buffer.data(), m_indirect_buffer.size()};
+        const std::size_t size_before = m_indirect_buffer.size();
+        const std::size_t new_size = size_before + byte_count;
+        m_indirect_buffer.resize(new_size);
+        m_last_allocate_gpu_data = std::span<std::byte>{m_indirect_buffer.data() + size_before, byte_count};
     }
-    m_start          = m_gpu_data.data();
-    m_gpu_float_data = reinterpret_cast<float*>(m_start);
-    m_word_offset    = 0;
+    std::byte* start = m_last_allocate_gpu_data.data();
+    m_last_allocate_gpu_float_data = reinterpret_cast<float*>(start);
+    m_last_allocate_word_offset    = 0;
 }
 
 void Scoped_line_renderer::set_line_color(const float r, const float g, const float b, const float a)
 {
-    ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
+    ERHE_VERIFY(m_line_renderer->verify_is_open());
 
     m_line_color = glm::vec4{r, g, b, a};
 }
 
 void Scoped_line_renderer::set_line_color(const glm::vec3& color)
 {
-    ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
+    ERHE_VERIFY(m_line_renderer->verify_is_open());
 
     m_line_color = glm::vec4{color, 1.0f};
 }
 
 void Scoped_line_renderer::set_line_color(const glm::vec4& color)
 {
-    ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
+    ERHE_VERIFY(m_line_renderer->verify_is_open());
 
     m_line_color = color;
 }
 
 void Scoped_line_renderer::set_thickness(const float thickness)
 {
-    ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
+    ERHE_VERIFY(m_line_renderer->verify_is_open());
 
     m_line_thickness = thickness;
 }
@@ -84,7 +142,7 @@ void Scoped_line_renderer::set_thickness(const float thickness)
 #pragma region add
 void Scoped_line_renderer::add_lines(const glm::mat4& transform, const std::initializer_list<Line> lines)
 {
-    ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
+    ERHE_VERIFY(m_line_renderer->verify_is_open());
 
     allocate(lines.size());
     for (const Line& line : lines) {
@@ -97,7 +155,7 @@ void Scoped_line_renderer::add_lines(const glm::mat4& transform, const std::init
 
 void Scoped_line_renderer::add_lines(const glm::mat4& transform, const std::initializer_list<Line4> lines)
 {
-    ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
+    ERHE_VERIFY(m_line_renderer->verify_is_open());
 
     allocate(lines.size());
     for (const Line4& line : lines) {
@@ -110,7 +168,7 @@ void Scoped_line_renderer::add_lines(const glm::mat4& transform, const std::init
 
 void Scoped_line_renderer::add_line(const glm::vec4& color0, float width0, glm::vec3 p0, const glm::vec4& color1, float width1, glm::vec3 p1)
 {
-    ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
+    ERHE_VERIFY(m_line_renderer->verify_is_open());
 
     allocate(1);
     put(p0, width0, color0);
@@ -119,7 +177,7 @@ void Scoped_line_renderer::add_line(const glm::vec4& color0, float width0, glm::
 
 void Scoped_line_renderer::add_lines(const std::initializer_list<Line> lines)
 {
-    ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
+    ERHE_VERIFY(m_line_renderer->verify_is_open());
 
     allocate(lines.size());
     for (const Line& line : lines) {
@@ -136,7 +194,7 @@ void Scoped_line_renderer::add_cube(
     const bool       z_cross
 )
 {
-    ERHE_VERIFY(m_line_renderer.verify_inside_begin_end());
+    ERHE_VERIFY(m_line_renderer->verify_is_open());
 
     const auto a = min_corner;
     const auto b = max_corner;

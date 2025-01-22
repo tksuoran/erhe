@@ -4,10 +4,6 @@ set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 # or maybe not add_link_options($<$<COMPILE_LANGUAGE:CXX>:/DEBUG:FASTLINK>)
 
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/MP>)
-#add_compile_options(-fsanitize=address)
-#add_link_options(-fsanitize=address)
-#add_definitions(-DUNICODE -D_UNICODE)
-
 
 function (erhe_target_settings target)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
@@ -55,3 +51,15 @@ function (erhe_disable_incremental_linking)
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE           "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
     set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO    "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
 endfunction (erhe_disable_incremental_linking)
+
+if (ERHE_USE_ASAN)
+    erhe_disable_incremental_linking()
+    add_compile_options(-fsanitize=address)
+    add_link_options(-fsanitize=address)
+endif()
+
+#add_definitions(-DUNICODE -D_UNICODE)
+
+# For geogram
+add_definitions(-D_SILENCE_CXX20_ATOMIC_INIT_DEPRECATION_WARNING)
+

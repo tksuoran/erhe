@@ -21,6 +21,7 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
@@ -94,7 +95,6 @@ public:
     void end      ();
 
     void render    (erhe::math::Viewport viewport);
-    void next_frame();
 
 private:
     auto make_prototype(erhe::graphics::Instance& graphics_instance) const -> erhe::graphics::Shader_stages_prototype;
@@ -108,37 +108,6 @@ private:
     std::span<uint32_t> m_gpu_uint_data;
     size_t              m_word_offset{0};
     bool                m_can_blit   {false};
-
-    static constexpr size_t s_frame_resources_count = 4;
-
-    class Frame_resources
-    {
-    public:
-        Frame_resources(
-            erhe::graphics::Instance&                 graphics_instance,
-            size_t                                    vertex_count,
-            erhe::graphics::Shader_stages&            shader_stages,
-            erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-            erhe::graphics::Vertex_format&            vertex_format,
-            erhe::graphics::Buffer&                   index_buffer,
-            size_t                                    slot
-        );
-
-        Frame_resources(const Frame_resources&) = delete;
-        auto operator= (const Frame_resources&) = delete;
-        Frame_resources(Frame_resources&&) = delete;
-        auto operator= (Frame_resources&&) = delete;
-
-        erhe::graphics::Buffer             vertex_buffer;
-        erhe::graphics::Buffer             projection_buffer;
-        erhe::graphics::Vertex_input_state vertex_input;
-        erhe::graphics::Pipeline           pipeline;
-        erhe::renderer::Buffer_writer      vertex_writer;
-        erhe::renderer::Buffer_writer      projection_writer;
-    };
-
-    [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
-    void create_frame_resources(size_t vertex_count);
 
     static constexpr size_t player_color_shade_count = 4;
     struct Player_unit_colors
@@ -176,11 +145,14 @@ private:
     std::shared_ptr<erhe::graphics::Texture>  m_tileset_texture;
     Image                                     m_tileset_image;
 
-    std::deque<Frame_resources>   m_frame_resources;
-    size_t                        m_current_frame_resource_slot{0};
+    erhe::renderer::GPU_ring_buffer           m_vertex_buffer;
+    erhe::renderer::GPU_ring_buffer           m_projection_buffer;
+    erhe::graphics::Vertex_input_state        m_vertex_input;
+    erhe::graphics::Pipeline                  m_pipeline;
 
-    size_t                        m_index_range_first{0};
-    size_t                        m_index_count      {0};
+    std::optional<erhe::renderer::Buffer_range> m_vertex_buffer_range;
+    size_t                                      m_vertex_write_offset{0};
+    size_t                                      m_index_count        {0};
 
     // Tile layout:
     // - 8 * 7 : terrain group tiles 8 x 8, 7 groups

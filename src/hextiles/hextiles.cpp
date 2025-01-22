@@ -102,7 +102,6 @@ public:
         m_commands.tick(timestamp, input_events);
         m_rendergraph   .execute();
         m_imgui_renderer.next_frame();
-        m_tile_renderer .next_frame();
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override

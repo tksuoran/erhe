@@ -136,18 +136,9 @@ Vertex_attribute_mappings::Vertex_attribute_mappings(erhe::graphics::Instance& i
 {
 }
 
-void Vertex_attribute_mappings::collect_attributes(
-    std::vector<Vertex_input_attribute>& attributes,
-    const Buffer*                        vertex_buffer,
-    const Vertex_format&                 vertex_format
-) const
+void Vertex_attribute_mappings::collect_attributes(std::vector<Vertex_input_attribute>& attributes, const Vertex_format& vertex_format) const
 {
     const unsigned int max_attribute_count = std::min(MAX_ATTRIBUTE_COUNT, m_instance.limits.max_vertex_attribs);
-
-    if (vertex_buffer == nullptr) {
-        log_vertex_attribute_mappings->error("error: vertex buffer == nullptr");
-        return;
-    }
 
     for (const auto& mapping : mappings) {
         if (vertex_format.has_attribute(mapping.src_usage.type, static_cast<unsigned int>(mapping.src_usage.index))) {
@@ -171,7 +162,6 @@ void Vertex_attribute_mappings::collect_attributes(
             }
 
             // GLuint                 layout_location{0};
-            // const Buffer*          vertex_buffer;
             // GLsizei                stride;
             // GLint                  dimension;
             // gl::Attribute_type     shader_type;
@@ -186,16 +176,15 @@ void Vertex_attribute_mappings::collect_attributes(
             format_to_gl_attribute(attribute->data_type, type, dimension, normalized);
 
             attributes.push_back(
-                {
+                Vertex_input_attribute{
                     .layout_location = static_cast<GLuint>(mapping.layout_location),  // layout_location
-                    .vertex_buffer   = vertex_buffer,                                 // vertex buffer
+                    .binding         = static_cast<GLuint>(vertex_format.get_binding()),
                     .stride          = static_cast<GLsizei>(vertex_format.stride()),  // stride
                     .dimension       = dimension,                                     // dimension
                     .shader_type     = shader_type,                                   // shader type
                     .data_type       = type,                                          // data type
                     .normalized      = normalized,                                    // normalized
                     .offset          = static_cast<GLuint>(attribute->offset),        // offset
-                    .divisor         = attribute->divisor                             // divisor
                 }
             );
         }

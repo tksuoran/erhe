@@ -32,37 +32,6 @@ Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block)
 // http://cdn2.gran-turismo.com/data/www/pdi_publications/PracticalHDRandWCGinGTS.pdf
 // https://www.elopezr.com/temporal-aa-and-the-quest-for-the-holy-trail/
 
-namespace {
-
-static constexpr gl::Buffer_storage_mask storage_mask_persistent{
-    gl::Buffer_storage_mask::map_coherent_bit   |
-    gl::Buffer_storage_mask::map_persistent_bit |
-    gl::Buffer_storage_mask::map_write_bit
-};
-static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
-    gl::Buffer_storage_mask::map_write_bit
-};
-inline auto storage_mask(erhe::graphics::Instance& instance) -> gl::Buffer_storage_mask
-{
-    return instance.info.use_persistent_buffers ? storage_mask_persistent : storage_mask_not_persistent;
-}
-
-static constexpr gl::Map_buffer_access_mask access_mask_persistent{
-    gl::Map_buffer_access_mask::map_coherent_bit   |
-    gl::Map_buffer_access_mask::map_persistent_bit |
-    gl::Map_buffer_access_mask::map_write_bit
-};
-static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
-    gl::Map_buffer_access_mask::map_write_bit
-};
-
-inline auto access_mask(erhe::graphics::Instance& instance) -> gl::Map_buffer_access_mask
-{
-    return instance.info.use_persistent_buffers ? access_mask_persistent : access_mask_not_persistent;
-}
-
-}
-
 Post_processing_node::Post_processing_node(
     erhe::graphics::Instance&       graphics_instance,
     erhe::rendergraph::Rendergraph& rendergraph,
@@ -78,8 +47,8 @@ Post_processing_node::Post_processing_node(
         graphics_instance.align_buffer_offset(
             gl::Buffer_target::uniform_buffer, post_processing.get_parameter_block().size_bytes()
         ) * 20, // max 20 levels
-        storage_mask(graphics_instance),
-        access_mask(graphics_instance),
+        gl::Buffer_storage_mask::map_write_bit,
+        gl::Map_buffer_access_mask::map_write_bit,
         fmt::format("{}", name)
     }
 {
@@ -243,14 +212,14 @@ void Post_processing_node::update_parameters()
     const std::span<const uint32_t> downsample_texture_handle_cpu_data{&downsample_texture_handle[0], 2};
     const std::span<const uint32_t> upsample_texture_handle_cpu_data  {&upsample_texture_handle[0], 2};
 
-    size_t level_count = level_widths.size();
-    erhe::renderer::Buffer_writer parameter_writer{graphics_instance, parameter_buffer};
-    auto parameter_gpu_data = parameter_writer.begin(parameter_buffer.target(), level_count * level_offset_size);
-    std::byte* const          start      = parameter_gpu_data.data();
-    const std::size_t         byte_count = parameter_gpu_data.size_bytes();
-    const std::size_t         word_count = byte_count / sizeof(float);
-    const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    size_t                       level_count        = level_widths.size();
+    std::size_t                  write_offset       = 0;
+    std::span<std::byte>         parameter_gpu_data = parameter_buffer.map_all_bytes(gl::Map_buffer_access_mask::map_invalidate_buffer_bit | gl::Map_buffer_access_mask::map_write_bit);
+    std::byte* const             start              = parameter_gpu_data.data();
+    const std::size_t            byte_count         = parameter_gpu_data.size_bytes();
+    const std::size_t            word_count         = byte_count / sizeof(float);
+    const std::span<float>       gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t>    gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     for (size_t source_level = 0, end = level_count; source_level < end; ++source_level) {
         using erhe::graphics::write;
@@ -258,18 +227,18 @@ void Post_processing_node::update_parameters()
             1.0f / static_cast<float>(level_widths.at(source_level)),
             1.0f / static_cast<float>(level_heights.at(source_level))
         };
-        write<uint32_t>(gpu_uint_data,  parameter_writer.write_offset + offsets.downsample_texture,    downsample_texture_handle_cpu_data);
-        write<uint32_t>(gpu_uint_data,  parameter_writer.write_offset + offsets.upsample_texture,      upsample_texture_handle_cpu_data);
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.texel_scale,           std::span<float>{&texel_scale[0], 2});
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.source_lod,            static_cast<float>(source_level));
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.level_count,           static_cast<float>(level_count));
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.upsample_radius,       upsample_radius);
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.mix_weight,            weights.at(source_level));
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.tonemap_luminance_max, tonemap_luminance_max);
-        write<float   >(gpu_float_data, parameter_writer.write_offset + offsets.tonemap_alpha,         tonemap_alpha);
-        parameter_writer.write_offset += level_offset_size;
+        write<uint32_t>(gpu_uint_data,  write_offset + offsets.downsample_texture,    downsample_texture_handle_cpu_data);
+        write<uint32_t>(gpu_uint_data,  write_offset + offsets.upsample_texture,      upsample_texture_handle_cpu_data);
+        write<float   >(gpu_float_data, write_offset + offsets.texel_scale,           std::span<float>{&texel_scale[0], 2});
+        write<float   >(gpu_float_data, write_offset + offsets.source_lod,            static_cast<float>(source_level));
+        write<float   >(gpu_float_data, write_offset + offsets.level_count,           static_cast<float>(level_count));
+        write<float   >(gpu_float_data, write_offset + offsets.upsample_radius,       upsample_radius);
+        write<float   >(gpu_float_data, write_offset + offsets.mix_weight,            weights.at(source_level));
+        write<float   >(gpu_float_data, write_offset + offsets.tonemap_luminance_max, tonemap_luminance_max);
+        write<float   >(gpu_float_data, write_offset + offsets.tonemap_alpha,         tonemap_alpha);
+        write_offset += level_offset_size;
     }
-    parameter_writer.end();
+    parameter_buffer.flush_and_unmap_bytes(write_offset);
 }
 
 void Post_processing_node::viewport_toolbar()

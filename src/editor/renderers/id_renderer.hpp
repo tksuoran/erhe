@@ -62,6 +62,9 @@ public:
     class Render_parameters
     {
     public:
+        erhe::graphics::Buffer*      index_buffer        {nullptr};
+        erhe::graphics::Buffer*      vertex_buffer       {nullptr};
+        std::size_t                  vertex_buffer_offset{0};
         const erhe::math::Viewport&  viewport;
         const erhe::scene::Camera&   camera;
         const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;

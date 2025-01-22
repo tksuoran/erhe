@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_renderer/multi_buffer.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_scene/camera.hpp"
@@ -105,9 +105,9 @@ public:
     void bind_control_buffer(const erhe::renderer::Buffer_range& range);
 
 private:
-    Light_interface&             m_light_interface;
-    erhe::renderer::Multi_buffer m_light_buffer;
-    erhe::renderer::Multi_buffer m_control_buffer;
+    Light_interface&                m_light_interface;
+    erhe::renderer::GPU_ring_buffer m_light_buffer;
+    erhe::renderer::GPU_ring_buffer m_control_buffer;
 };
 
 } // namespace erhe::scene_renderer

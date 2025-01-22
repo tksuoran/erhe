@@ -33,72 +33,7 @@
 
 namespace hextiles {
 
-namespace {
-
-static constexpr gl::Buffer_storage_mask storage_mask{
-    gl::Buffer_storage_mask::map_coherent_bit   |
-    gl::Buffer_storage_mask::map_persistent_bit |
-    gl::Buffer_storage_mask::map_write_bit
-};
-
-static constexpr gl::Map_buffer_access_mask access_mask{
-    gl::Map_buffer_access_mask::map_coherent_bit   |
-    gl::Map_buffer_access_mask::map_persistent_bit |
-    gl::Map_buffer_access_mask::map_write_bit
-};
-
-}
-
 using erhe::graphics::Shader_stages;
-
-Tile_renderer::Frame_resources::Frame_resources(
-    erhe::graphics::Instance&                 graphics_instance,
-    const size_t                              vertex_count,
-    erhe::graphics::Shader_stages&            shader_stages,
-    erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-    erhe::graphics::Vertex_format&            vertex_format,
-    erhe::graphics::Buffer&                   index_buffer,
-    const size_t                              slot
-)
-    : vertex_buffer{
-        graphics_instance,
-        gl::Buffer_target::array_buffer,
-        vertex_format.stride() * vertex_count,
-        storage_mask,
-        access_mask
-    }
-    , projection_buffer{
-        graphics_instance,
-        gl::Buffer_target::uniform_buffer,
-        1024, // TODO
-        storage_mask,
-        access_mask
-    }
-    , vertex_input{
-        erhe::graphics::Vertex_input_state_data::make(
-            attribute_mappings,
-            vertex_format,
-            &vertex_buffer,
-            &index_buffer
-        )
-    }
-    , pipeline{
-        erhe::graphics::Pipeline_data{
-            .name           = "Map renderer",
-            .shader_stages  = &shader_stages,
-            .vertex_input   = &vertex_input,
-            .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
-            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
-        }
-    }
-    , vertex_writer{graphics_instance, vertex_buffer}
-    , projection_writer{graphics_instance, projection_buffer}
-{
-    vertex_buffer    .set_debug_label(fmt::format("Map Renderer Vertex {}", slot));
-    projection_buffer.set_debug_label(fmt::format("Map Renderer Projection {}", slot));
-}
 
 constexpr size_t uint32_primitive_restart{0xffffffffu};
 constexpr size_t per_quad_vertex_count   {4}; // corner count
@@ -107,8 +42,7 @@ constexpr size_t max_quad_count          {1'000'000}; // each quad consumes 4 in
 constexpr size_t index_count             {max_quad_count * per_quad_index_count};
 constexpr size_t index_stride            {4};
 
-auto Tile_renderer::make_prototype(erhe::graphics::Instance& graphics_instance) const
--> erhe::graphics::Shader_stages_prototype
+auto Tile_renderer::make_prototype(erhe::graphics::Instance& graphics_instance) const -> erhe::graphics::Shader_stages_prototype
 {
     erhe::graphics::Shader_stages_create_info create_info{
         .name                      = "tile",
@@ -145,9 +79,7 @@ auto Tile_renderer::make_prototype(erhe::graphics::Instance& graphics_instance) 
     return erhe::graphics::Shader_stages_prototype{graphics_instance, create_info};
 }
 
-auto Tile_renderer::make_program(
-    erhe::graphics::Shader_stages_prototype&& prototype
-) const -> erhe::graphics::Shader_stages
+auto Tile_renderer::make_program(erhe::graphics::Shader_stages_prototype&& prototype) const -> erhe::graphics::Shader_stages
 {
     if (!prototype.is_valid()) {
         log_startup->error("current directory is {}", std::filesystem::current_path().string());
@@ -188,9 +120,12 @@ Tile_renderer::Tile_renderer(
         }
     }
     , m_vertex_format{
-        erhe::graphics::Vertex_attribute::position_float2 (),
-        erhe::graphics::Vertex_attribute::color_ubyte4    (),
-        erhe::graphics::Vertex_attribute::texcoord0_float2()
+        0,
+        {
+            erhe::graphics::Vertex_attribute::position_float2 (),
+            erhe::graphics::Vertex_attribute::color_ubyte4    (),
+            erhe::graphics::Vertex_attribute::texcoord0_float2()
+        }
     }
     , m_index_buffer{
         graphics_instance,
@@ -219,7 +154,38 @@ Tile_renderer::Tile_renderer(
     , m_u_texture_offset         {m_texture_handle->offset_in_parent()}
     , m_shader_path              {std::filesystem::path{"res"} / std::filesystem::path{"shaders"}}
     , m_shader_stages            {make_program(make_prototype(graphics_instance))}
+    , m_vertex_buffer{
+        graphics_instance,
+        gl::Buffer_target::array_buffer,
+        m_vertex_format.stride() * max_quad_count * per_quad_vertex_count,
+        "Tile_renderer vertex ring buffer"
+    }
+    , m_projection_buffer{
+        graphics_instance,
+        gl::Buffer_target::uniform_buffer,
+        m_projection_block.binding_point(),
+        20 * m_projection_block.size_bytes(), // TODO proper size estimate
+        "Tile_renderer projection ring buffer"
+    }
+    , m_vertex_input{
+        erhe::graphics::Vertex_input_state_data::make(
+            m_attribute_mappings,
+            { &m_vertex_format }
+        )
+    }
+    , m_pipeline{
+        erhe::graphics::Pipeline_data{
+            .name           = "Map renderer",
+            .shader_stages  = &m_shader_stages,
+            .vertex_input   = &m_vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
+        }
+    }
 {
+    // Prefill index buffer
     erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{
         m_index_buffer,
         0,
@@ -230,8 +196,7 @@ Tile_renderer::Tile_renderer(
     const auto& gpu_index_data = index_buffer_map.span();
     size_t      offset      {0};
     uint32_t    vertex_index{0};
-    for (unsigned int i = 0; i < max_quad_count; ++i)
-    {
+    for (unsigned int i = 0; i < max_quad_count; ++i) {
         gpu_index_data[offset + 0] = vertex_index;
         gpu_index_data[offset + 1] = vertex_index + 1;
         gpu_index_data[offset + 2] = vertex_index + 2;
@@ -240,8 +205,6 @@ Tile_renderer::Tile_renderer(
         vertex_index += 4;
         offset += 5;
     }
-
-    create_frame_resources(max_quad_count * per_quad_vertex_count);
 
     compose_tileset_texture();
 }
@@ -514,9 +477,7 @@ void Tile_renderer::compose_tileset_texture()
     }
 }
 
-auto Tile_renderer::get_multi_unit_tile(
-    std::array<int, Battle_type::bit_count> battle_type_players
-) const -> unit_tile_t
+auto Tile_renderer::get_multi_unit_tile(std::array<int, Battle_type::bit_count> battle_type_players) const -> unit_tile_t
 {
     int tile = s_multiple_unit_tile_offset;
     for (unsigned int battle_type = 0; battle_type < battle_type_players.size(); ++battle_type) {
@@ -546,8 +507,7 @@ auto Tile_renderer::get_special_unit_tile(int special_unit_tile_index) const -> 
     return static_cast<unit_tile_t>(s_special_unit_tile_offset + special_unit_tile_index);
 }
 
-void Tile_renderer::compose_multiple_unit_tile
-(
+void Tile_renderer::compose_multiple_unit_tile(
     Image&                                  scratch,
     const std::vector<Player_unit_colors>&  players_colors,
     std::array<int, Battle_type::bit_count> players,
@@ -589,17 +549,13 @@ void Tile_renderer::compose_multiple_unit_tile
     }
 }
 
-auto Tile_renderer::get_terrain_shape(
-    const terrain_tile_t terrain_tile
-) const -> Pixel_coordinate
+auto Tile_renderer::get_terrain_shape(const terrain_tile_t terrain_tile) const -> Pixel_coordinate
 {
     ERHE_VERIFY(terrain_tile < m_terrain_shapes.size());
     return m_terrain_shapes[terrain_tile];
 }
 
-auto Tile_renderer::get_unit_shape(
-    const unit_tile_t unit_tile
-) const -> Pixel_coordinate
+auto Tile_renderer::get_unit_shape(const unit_tile_t unit_tile) const -> Pixel_coordinate
 {
     ERHE_VERIFY(unit_tile < m_unit_shapes.size());
     return m_unit_shapes[unit_tile];
@@ -638,47 +594,20 @@ auto Tile_renderer::get_grid_tile(const int grid_mode) const -> tile_t
 }
 #endif
 
-void Tile_renderer::create_frame_resources(size_t vertex_count)
-{
-    for (size_t slot = 0; slot < s_frame_resources_count; ++slot) {
-        m_frame_resources.emplace_back(
-            m_graphics_instance,
-            vertex_count,
-            m_shader_stages,
-            m_attribute_mappings,
-            m_vertex_format,
-            m_index_buffer,
-            slot
-        );
-    }
-}
-
-auto Tile_renderer::current_frame_resources() -> Tile_renderer::Frame_resources&
-{
-    return m_frame_resources[m_current_frame_resource_slot];
-}
-
-void Tile_renderer::next_frame()
-{
-    ERHE_VERIFY(m_can_blit == false);
-
-    m_frame_resources[m_current_frame_resource_slot].vertex_writer.reset();
-    m_frame_resources[m_current_frame_resource_slot].projection_writer.reset();
-    m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
-    m_index_range_first = 0;
-    m_index_count       = 0;
-}
-
 void Tile_renderer::begin()
 {
     ERHE_VERIFY(m_can_blit == false);
+    ERHE_VERIFY(!m_vertex_buffer_range.has_value());
+
+    m_vertex_buffer_range = m_vertex_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, 0);
+    m_vertex_write_offset = 0;
+    m_index_count = 0;
 
     // TODO byte_count?
-    auto&            vertex_writer   = m_frame_resources[m_current_frame_resource_slot].vertex_writer;
-    const auto       vertex_gpu_data = vertex_writer.begin(gl::Buffer_target::array_buffer, 0);
-    std::byte* const start           = vertex_gpu_data.data()       + vertex_writer.write_offset;
-    const size_t     byte_count      = vertex_gpu_data.size_bytes() - vertex_writer.write_offset;
-    const size_t     word_count      = byte_count / sizeof(float);
+    const std::span<std::byte> vertex_gpu_data = m_vertex_buffer_range.value().get_span();
+    std::byte* const           start           = vertex_gpu_data.data();
+    const size_t               byte_count      = vertex_gpu_data.size_bytes();
+    const size_t               word_count      = byte_count / sizeof(float);
     m_gpu_float_data = std::span<float>   {reinterpret_cast<float*   >(start), word_count};
     m_gpu_uint_data  = std::span<uint32_t>{reinterpret_cast<uint32_t*>(start), word_count};
     m_word_offset    = 0;
@@ -744,6 +673,10 @@ void Tile_renderer::blit(
     m_gpu_float_data[m_word_offset++] = u0;
     m_gpu_float_data[m_word_offset++] = v1;
 
+    size_t new_offset = m_word_offset * sizeof(float);
+    ERHE_VERIFY(m_vertex_write_offset < new_offset);
+    m_vertex_write_offset = new_offset;
+
     m_index_count += 5;
 }
 
@@ -751,10 +684,8 @@ void Tile_renderer::end()
 {
     ERHE_VERIFY(m_can_blit == true);
 
-    auto& vertex_writer = m_frame_resources[m_current_frame_resource_slot].vertex_writer;
-    vertex_writer.write_offset += m_word_offset * 4;
-    vertex_writer.end();
-
+    ERHE_VERIFY(m_vertex_buffer_range.has_value());
+    m_vertex_buffer_range.value().close(m_vertex_write_offset);
     m_can_blit = false;
 }
 
@@ -765,20 +696,26 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     if (m_index_count == 0) {
         return;
     }
+    if (m_vertex_write_offset == 0) {
+        return;
+    }
+    if (!m_vertex_buffer_range.has_value()) {
+        return;
+    }
 
     erhe::graphics::Scoped_debug_group pass_scope{c_tile_renderer_render};
 
     const auto handle = m_graphics_instance.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
 
-    // TODO byte_count
-    auto* const               projection_buffer   = &current_frame_resources().projection_buffer;
-    auto&                     projection_writer   = m_frame_resources[m_current_frame_resource_slot].projection_writer;
-    const auto                projection_gpu_data = projection_writer.begin(projection_buffer->target(), 0);
-    std::byte* const          start               = projection_gpu_data.data()       + projection_writer.write_offset;
-    const size_t              byte_count          = projection_gpu_data.size_bytes() - projection_writer.write_offset;
-    const size_t              word_count          = byte_count / sizeof(float);
-    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    erhe::renderer::Buffer_range& vertex_buffer_range     = m_vertex_buffer_range.value();
+    erhe::renderer::Buffer_range  projection_buffer_range = m_projection_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
+    const auto                    projection_gpu_data     = projection_buffer_range.get_span();
+    size_t                        projection_write_offset = 0;
+    std::byte* const              start                   = projection_gpu_data.data();
+    const size_t                  byte_count              = projection_gpu_data.size_bytes();
+    const size_t                  word_count              = byte_count / sizeof(float);
+    const std::span<float>        gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t>     gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const glm::mat4 clip_from_window = erhe::math::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
@@ -790,7 +727,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     using erhe::graphics::write;
     write(gpu_float_data, m_u_clip_from_window_offset, as_span(clip_from_window));
 
-    projection_writer.write_offset += m_u_clip_from_window_size * sizeof(float);
+    projection_write_offset += m_u_clip_from_window_size;
 
     const uint32_t texture_handle[2] =
     {
@@ -799,26 +736,20 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     };
     const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
     write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
-    projection_writer.write_offset += m_u_texture_size;
+    projection_write_offset += m_u_texture_size;
 
-    projection_writer.end();
-
-    const auto& pipeline = current_frame_resources().pipeline;
+    projection_buffer_range.close(projection_write_offset);
 
     //m_pipeline_state_tracker->shader_stages.reset();
     //m_pipeline_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
     //gl::invalidate_tex_image()
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_graphics_instance.opengl_state_tracker.execute(pipeline);
+    m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(&m_vertex_buffer.get_buffer(), vertex_buffer_range.get_byte_start_offset_in_buffer(), 0);
 
-    gl::bind_buffer_range(
-        projection_buffer->target(),
-        static_cast<GLuint>    (m_projection_block.binding_point()),
-        static_cast<GLuint>    (projection_buffer->gl_name()),
-        static_cast<GLintptr>  (projection_writer.range.first_byte_offset),
-        static_cast<GLsizeiptr>(projection_writer.range.byte_count)
-    );
+    projection_buffer_range.bind();
 
     if (m_graphics_instance.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
@@ -828,11 +759,14 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     }
 
     gl::draw_elements(
-        pipeline.data.input_assembly.primitive_topology,
+        m_pipeline.data.input_assembly.primitive_topology,
         static_cast<GLsizei>(m_index_count),
         gl::Draw_elements_type::unsigned_int,
-        reinterpret_cast<const void*>(m_index_range_first * 4)
+        nullptr
     );
+
+    projection_buffer_range.submit();
+    vertex_buffer_range.submit();
 
     if (m_graphics_instance.info.use_bindless_texture) {
         gl::make_texture_handle_non_resident_arb(handle);
@@ -840,8 +774,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
 
     gl::disable(gl::Enable_cap::primitive_restart_fixed_index);
 
-    m_index_range_first += m_index_count;
-    m_index_count = 0;
+    m_vertex_buffer_range.reset();
 }
 
 auto Tile_renderer::terrain_image(const terrain_tile_t terrain_tile, const int scale) -> bool

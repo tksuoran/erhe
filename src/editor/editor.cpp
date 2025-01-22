@@ -58,6 +58,7 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_dataformat/dataformat_log.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
@@ -586,14 +587,18 @@ public:
                     *m_time.get()
                 );
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-                m_hand_tracker = std::make_unique<Hand_tracker>(m_editor_context, *m_editor_rendering.get());
+                if (m_editor_context.OpenXR) {
+                    m_hand_tracker = std::make_unique<Hand_tracker>(m_editor_context, *m_editor_rendering.get());
+                }
 #endif
             })  .name("Headset (init)")
                 .succeed(imgui_renderer_task, imgui_windows_task, rendergraph_task, editor_rendering_task);
 
             auto headset_attach_task = taskflow.emplace([this](){
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-                m_headset_view->attach_to_scene(m_default_scene, *m_mesh_memory.get());
+                if (m_editor_context.OpenXR) {
+                    m_headset_view->attach_to_scene(m_default_scene, *m_mesh_memory.get());
+                }
 #endif
             })  .name("Headset (attach)")
                 .succeed(default_scene_task, headset_task, mesh_memory_task, scene_builder_task);
@@ -1071,6 +1076,7 @@ void run_editor()
         ERHE_PROFILE_SCOPE("initialize logging");
         gl::initialize_logging();
         erhe::commands::initialize_logging();
+        erhe::dataformat::initialize_logging();
         erhe::file::initialize_logging();
         erhe::gltf::initialize_logging();
         erhe::geometry::initialize_logging();

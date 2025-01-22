@@ -502,10 +502,10 @@ void Headset_view::render_headset()
                 };
 
                 m_context.editor_rendering->render_composer(render_context);
-                m_context.line_renderer   ->begin();
+                m_context.line_renderer   ->open();
                 m_context.tools           ->render_viewport_tools(render_context);
                 m_context.editor_rendering->render_viewport_renderables(render_context);
-                m_context.line_renderer   ->end();
+                m_context.line_renderer   ->close();
                 m_context.line_renderer   ->render(render_context.viewport, *render_context.camera);
 
                 if (m_renderdoc_capture_started) {

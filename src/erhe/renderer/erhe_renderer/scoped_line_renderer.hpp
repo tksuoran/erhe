@@ -36,6 +36,10 @@ class Scoped_line_renderer
 public:
     Scoped_line_renderer(Line_renderer& line_renderer, Line_renderer_bucket& bucket, bool indirect = false);
     ~Scoped_line_renderer();
+    Scoped_line_renderer(Scoped_line_renderer& other) = delete;
+    auto operator=(Scoped_line_renderer& other) -> Scoped_line_renderer& = delete;
+    Scoped_line_renderer(Scoped_line_renderer&& old);
+    auto operator=(Scoped_line_renderer&& old) -> Scoped_line_renderer&;
 
 #pragma region Draw API
     void set_line_color(float r, float g, float b, float a);
@@ -126,31 +130,31 @@ private:
         const glm::vec4& color
     )
     {
-        ERHE_VERIFY(m_word_offset + 8 <= m_word_count);
-        m_gpu_float_data[m_word_offset++] = point.x;
-        m_gpu_float_data[m_word_offset++] = point.y;
-        m_gpu_float_data[m_word_offset++] = point.z;
-        m_gpu_float_data[m_word_offset++] = thickness;
-        m_gpu_float_data[m_word_offset++] = color.r;
-        m_gpu_float_data[m_word_offset++] = color.g;
-        m_gpu_float_data[m_word_offset++] = color.b;
-        m_gpu_float_data[m_word_offset++] = color.a;
-        ERHE_VERIFY(m_word_offset <= m_word_count);
+        ERHE_VERIFY(m_last_allocate_word_offset + 8 <= m_last_allocate_word_count);
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point.x;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point.y;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point.z;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = thickness;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = color.r;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = color.g;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = color.b;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = color.a;
+        ERHE_VERIFY(m_last_allocate_word_offset <= m_last_allocate_word_count);
     }
 
-    Line_renderer&         m_line_renderer;
-    Line_renderer_bucket&  m_bucket;
+    Line_renderer*         m_line_renderer{nullptr};
+    Line_renderer_bucket*  m_bucket{nullptr};
     bool                   m_indirect;
+
+    // offset (in lines), relative to vertex buffer range in Line_renderer
+    // initialized in Scoped_line_renderer constructor
     std::size_t            m_first_line{0};
-    //std::size_t            m_line_count{0};
     std::size_t            m_line_vertex_stride;
 
-    std::span<std::byte>   m_gpu_data;
-    std::byte*             m_start         {nullptr};
-    std::size_t            m_byte_count    {0};
-    std::size_t            m_word_count    {0};
-    float*                 m_gpu_float_data{nullptr};
-    std::size_t            m_word_offset   {0}; // relative to m_gpu_data
+    std::span<std::byte>   m_last_allocate_gpu_data;
+    float*                 m_last_allocate_gpu_float_data{nullptr};
+    std::size_t            m_last_allocate_word_offset   {0};
+    std::size_t            m_last_allocate_word_count    {0};
 
     // Current state
     std::vector<std::byte> m_indirect_buffer;
