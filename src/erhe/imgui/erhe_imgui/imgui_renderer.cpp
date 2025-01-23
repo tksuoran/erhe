@@ -801,6 +801,7 @@ void Imgui_renderer::render_draw_data()
     size_t draw_indirect_write_offset  = 0;
     size_t vertex_write_offset         = 0;
     size_t index_write_offset          = 0;
+    size_t index_stride                = sizeof(uint16_t);
 
     std::span<std::byte> draw_parameter_gpu_data = draw_parameter_buffer_range.get_span();
     std::span<std::byte> draw_indirect_gpu_data  = draw_indirect_buffer_range .get_span();
@@ -824,8 +825,14 @@ void Imgui_renderer::render_draw_data()
     }
 
     // Pass 2: fill buffers
-    std::size_t list_vertex_offset {0}; // vertex_writer.range.first_byte_offset / vertex_stride};
-    std::size_t list_index_offset  {0}; // index_writer .range.first_byte_offset / index_stride};
+
+    // glVertexArrayVertexBuffer() / set_vertex_buffer() takes in buffer offset, so we can use 0 here
+    std::size_t list_vertex_offset{0};
+
+    // glVertexArrayElementBuffer() / set_index_buffer() does not take offset.
+    // thus index buffer offset must be baked into MDI DrawIndirect records
+    std::size_t list_index_offset{index_buffer_range.get_byte_start_offset_in_buffer() / index_stride};
+
     std::size_t draw_indirect_count{0};
     for (int n = 0; n < draw_data->CmdListsCount; n++) {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];

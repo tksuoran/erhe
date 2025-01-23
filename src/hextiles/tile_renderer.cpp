@@ -136,9 +136,12 @@ Tile_renderer::Tile_renderer(
         }
     }
     , m_vertex_format{
-        erhe::graphics::Vertex_attribute::position_float2 (),
-        erhe::graphics::Vertex_attribute::color_ubyte4    (),
-        erhe::graphics::Vertex_attribute::texcoord0_float2()
+        0,
+        {
+            erhe::graphics::Vertex_attribute::position_float2 (),
+            erhe::graphics::Vertex_attribute::color_ubyte4    (),
+            erhe::graphics::Vertex_attribute::texcoord0_float2()
+        }
     }
     , m_index_buffer{
         graphics_instance,
@@ -182,9 +185,7 @@ Tile_renderer::Tile_renderer(
     , m_vertex_input{
         erhe::graphics::Vertex_input_state_data::make(
             m_attribute_mappings,
-            m_vertex_format,
-            &m_vertex_buffer.get_buffer(),
-            &m_index_buffer
+            { &m_vertex_format }
         )
     }
     , m_pipeline{
@@ -491,9 +492,7 @@ void Tile_renderer::compose_tileset_texture()
     }
 }
 
-auto Tile_renderer::get_multi_unit_tile(
-    std::array<int, Battle_type::bit_count> battle_type_players
-) const -> unit_tile_t
+auto Tile_renderer::get_multi_unit_tile(std::array<int, Battle_type::bit_count> battle_type_players) const -> unit_tile_t
 {
     int tile = s_multiple_unit_tile_offset;
     for (unsigned int battle_type = 0; battle_type < battle_type_players.size(); ++battle_type) {
@@ -566,17 +565,13 @@ void Tile_renderer::compose_multiple_unit_tile
     }
 }
 
-auto Tile_renderer::get_terrain_shape(
-    const terrain_tile_t terrain_tile
-) const -> Pixel_coordinate
+auto Tile_renderer::get_terrain_shape(const terrain_tile_t terrain_tile) const -> Pixel_coordinate
 {
     ERHE_VERIFY(terrain_tile < m_terrain_shapes.size());
     return m_terrain_shapes[terrain_tile];
 }
 
-auto Tile_renderer::get_unit_shape(
-    const unit_tile_t unit_tile
-) const -> Pixel_coordinate
+auto Tile_renderer::get_unit_shape(const unit_tile_t unit_tile) const -> Pixel_coordinate
 {
     ERHE_VERIFY(unit_tile < m_unit_shapes.size());
     return m_unit_shapes[unit_tile];
@@ -716,20 +711,24 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     if (m_index_count == 0) {
         return;
     }
+    if (!m_vertex_buffer_range.has_value()) {
+        return;
+    }
 
     erhe::graphics::Scoped_debug_group pass_scope{c_tile_renderer_render};
 
     const auto handle = m_graphics_instance.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
 
     // TODO byte_count
-    erhe::renderer::Buffer_range projection_buffer_range = m_projection_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, 0);
-    const auto                   projection_gpu_data     = projection_buffer_range.get_span();
-    size_t                       projection_write_offset = 0;
-    std::byte* const             start                   = projection_gpu_data.data();
-    const size_t                 byte_count              = projection_gpu_data.size_bytes();
-    const size_t                 word_count              = byte_count / sizeof(float);
-    const std::span<float>       gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t>    gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    erhe::renderer::Buffer_range& vertex_buffer_range     = m_vertex_buffer_range.value();
+    erhe::renderer::Buffer_range  projection_buffer_range = m_projection_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, 0);
+    const auto                    projection_gpu_data     = projection_buffer_range.get_span();
+    size_t                        projection_write_offset = 0;
+    std::byte* const              start                   = projection_gpu_data.data();
+    const size_t                  byte_count              = projection_gpu_data.size_bytes();
+    const size_t                  word_count              = byte_count / sizeof(float);
+    const std::span<float>        gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t>     gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const glm::mat4 clip_from_window = erhe::math::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
@@ -760,15 +759,10 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(&m_vertex_buffer.get_buffer(), vertex_buffer_range.get_byte_start_offset_in_buffer(), 0);
 
     projection_buffer_range.bind();
-    //gl::bind_buffer_range(
-    //    projection_buffer->target(),
-    //    static_cast<GLuint>    (m_projection_block.binding_point()),
-    //    static_cast<GLuint>    (projection_buffer->gl_name()),
-    //    static_cast<GLintptr>  (projection_writer.range.first_byte_offset),
-    //    static_cast<GLsizeiptr>(projection_writer.range.byte_count)
-    //);
 
     if (m_graphics_instance.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);

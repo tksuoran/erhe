@@ -33,7 +33,10 @@ using erhe::graphics::Color_blend_state;
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
 
-Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
+Shadow_renderer::Shadow_renderer(
+    erhe::graphics::Instance& graphics_instance,
+    Program_interface&        program_interface
+)
     : m_graphics_instance{graphics_instance}
     , m_shader_stages{
         program_interface.make_prototype(
@@ -59,7 +62,6 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
     , m_primitive_buffers    {graphics_instance, program_interface.primitive_interface}
     , m_gpu_timer            {"Shadow_renderer"}
 {
-    ERHE_PROFILE_FUNCTION();
     m_pipeline_cache_entries.resize(8);
 }
 
@@ -83,14 +85,16 @@ auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state)
     ERHE_VERIFY(lru_entry != nullptr);
     const bool reverse_depth = m_graphics_instance.configuration.reverse_depth;
     lru_entry->serial = m_pipeline_cache_serial;
-    lru_entry->pipeline.data = {
-        .name           = "Shadow Renderer",
-        .shader_stages  = &m_shader_stages.shader_stages,
-        .vertex_input   = vertex_input_state,
-        .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_none,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-        .color_blend    = Color_blend_state::color_writes_disabled
+    lru_entry->pipeline = erhe::graphics::Pipeline{
+        erhe::graphics::Pipeline_data{
+            .name           = "Shadow Renderer",
+            .shader_stages  = &m_shader_stages.shader_stages,
+            .vertex_input   = vertex_input_state,
+            .input_assembly = Input_assembly_state::triangles,
+            .rasterization  = Rasterization_state::cull_mode_none,
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+            .color_blend    = Color_blend_state::color_writes_disabled
+        }
     };
     return lru_entry->pipeline;
 }
@@ -100,6 +104,11 @@ static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::ren
 auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 {
     ERHE_PROFILE_FUNCTION();
+
+    ERHE_VERIFY(parameters.vertex_input_state != nullptr);
+    ERHE_VERIFY(parameters.index_buffer != nullptr);
+    ERHE_VERIFY(parameters.vertex_buffer != nullptr);
+    ERHE_VERIFY(parameters.view_camera != nullptr);
 
     log_render->debug("Shadow_renderer::render()");
     log_shadow_renderer->trace(
@@ -130,7 +139,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     auto& pipeline = get_pipeline(parameters.vertex_input_state);
 
+    // TODO Multiple vertex buffer bindings
     m_graphics_instance.opengl_state_tracker.execute(pipeline);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(parameters.vertex_buffer, parameters.vertex_buffer_offset, 0);
+
     gl::viewport(
         parameters.light_camera_viewport.x,
         parameters.light_camera_viewport.y,
@@ -139,9 +152,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     );
 
     erhe::Item_filter shadow_filter{
-        .require_all_bits_set           =
-            erhe::Item_flags::visible |
-            erhe::Item_flags::shadow_cast,
+        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
@@ -201,7 +212,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 gl::multi_draw_elements_indirect(
                     pipeline.data.input_assembly.primitive_topology,
                     erhe::graphics::to_gl_index_type(parameters.index_type),
-                    nullptr, //reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+                    reinterpret_cast<const void *>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),
                     static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
                 );

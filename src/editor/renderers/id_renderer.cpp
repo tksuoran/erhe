@@ -372,6 +372,9 @@ void Id_renderer::render(const Render_parameters& parameters)
     m_primitive_buffers.reset_id_ranges();
 
     m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(parameters.vertex_buffer, parameters.vertex_buffer_offset, 0);
+
     for (auto meshes : content_mesh_spans) {
         //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_content)
         render(meshes);
@@ -392,6 +395,9 @@ void Id_renderer::render(const Render_parameters& parameters)
         //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
 
         m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
+        m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
+        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(parameters.vertex_buffer, parameters.vertex_buffer_offset, 0);
+
         gl::depth_range(0.0f, 1.0f);
 
         for (auto meshes : tool_mesh_spans) {

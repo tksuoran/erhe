@@ -32,37 +32,6 @@ Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block)
 // http://cdn2.gran-turismo.com/data/www/pdi_publications/PracticalHDRandWCGinGTS.pdf
 // https://www.elopezr.com/temporal-aa-and-the-quest-for-the-holy-trail/
 
-namespace {
-
-static constexpr gl::Buffer_storage_mask storage_mask_persistent{
-    gl::Buffer_storage_mask::map_coherent_bit   |
-    gl::Buffer_storage_mask::map_persistent_bit |
-    gl::Buffer_storage_mask::map_write_bit
-};
-static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
-    gl::Buffer_storage_mask::map_write_bit
-};
-inline auto storage_mask(erhe::graphics::Instance& instance) -> gl::Buffer_storage_mask
-{
-    return instance.info.use_persistent_buffers ? storage_mask_persistent : storage_mask_not_persistent;
-}
-
-static constexpr gl::Map_buffer_access_mask access_mask_persistent{
-    gl::Map_buffer_access_mask::map_coherent_bit   |
-    gl::Map_buffer_access_mask::map_persistent_bit |
-    gl::Map_buffer_access_mask::map_write_bit
-};
-static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
-    gl::Map_buffer_access_mask::map_write_bit
-};
-
-inline auto access_mask(erhe::graphics::Instance& instance) -> gl::Map_buffer_access_mask
-{
-    return instance.info.use_persistent_buffers ? access_mask_persistent : access_mask_not_persistent;
-}
-
-}
-
 Post_processing_node::Post_processing_node(
     erhe::graphics::Instance&       graphics_instance,
     erhe::rendergraph::Rendergraph& rendergraph,
@@ -75,10 +44,11 @@ Post_processing_node::Post_processing_node(
     , parameter_buffer{
         graphics_instance,
         gl::Buffer_target::uniform_buffer,
-        post_processing.get_parameter_block().binding_point(),
         graphics_instance.align_buffer_offset(
             gl::Buffer_target::uniform_buffer, post_processing.get_parameter_block().size_bytes()
-        ) * 20 * 3 * 10, // max 20 levels, 3 frames in flight, 10 nodes
+        ) * 20, // max 20 levels
+        gl::Buffer_storage_mask::map_write_bit,
+        gl::Map_buffer_access_mask::map_write_bit,
         fmt::format("{}", name)
     }
 {
@@ -227,7 +197,7 @@ void Post_processing_node::update_parameters()
     const std::size_t               entry_size = post_processing.get_parameter_block().size_bytes();
     const Post_processing::Offsets& offsets    = post_processing.get_offsets();
 
-    const std::size_t level_offset_size = graphics_instance.align_buffer_offset(parameter_buffer.get_buffer().target(), entry_size);
+    const std::size_t level_offset_size = graphics_instance.align_buffer_offset(parameter_buffer.target(), entry_size);
 
     const uint64_t downsample_handle = graphics_instance.get_handle(*downsample_texture, sampler);
     const uint64_t upsample_handle   = graphics_instance.get_handle(*upsample_texture,   sampler);
@@ -243,9 +213,9 @@ void Post_processing_node::update_parameters()
     const std::span<const uint32_t> upsample_texture_handle_cpu_data  {&upsample_texture_handle[0], 2};
 
     size_t                       level_count        = level_widths.size();
-    erhe::renderer::Buffer_range buffer_range       = parameter_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, level_count * level_offset_size);
+    //erhe::renderer::Buffer_range buffer_range       = parameter_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, level_count * level_offset_size);
     std::size_t                  write_offset       = 0;
-    std::span<std::byte>         parameter_gpu_data = buffer_range.get_span();
+    std::span<std::byte>         parameter_gpu_data = parameter_buffer.map_all_bytes(gl::Map_buffer_access_mask::map_invalidate_buffer_bit | gl::Map_buffer_access_mask::map_write_bit);
     std::byte* const             start              = parameter_gpu_data.data();
     const std::size_t            byte_count         = parameter_gpu_data.size_bytes();
     const std::size_t            word_count         = byte_count / sizeof(float);
@@ -269,8 +239,7 @@ void Post_processing_node::update_parameters()
         write<float   >(gpu_float_data, write_offset + offsets.tonemap_alpha,         tonemap_alpha);
         write_offset += level_offset_size;
     }
-    buffer_range.close(write_offset);
-    buffer_range_opt = std::move(buffer_range);
+    parameter_buffer.flush_and_unmap_bytes(write_offset);
 }
 
 void Post_processing_node::viewport_toolbar()
@@ -449,7 +418,7 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 void Post_processing::post_process(Post_processing_node& node)
 {
     const std::size_t level_offset_size = m_context.graphics_instance->align_buffer_offset(
-        node.parameter_buffer.get_buffer().target(),
+        node.parameter_buffer.target(),
         m_parameter_block.size_bytes()
     );
 
@@ -473,9 +442,9 @@ void Post_processing::post_process(Post_processing_node& node)
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
         gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
         gl::bind_buffer_range(
-            node.parameter_buffer.get_buffer().target(),
+            node.parameter_buffer.target(),
             static_cast<GLuint>    (m_parameter_block.binding_point()),
-            static_cast<GLuint>    (node.parameter_buffer.get_buffer().gl_name()),
+            static_cast<GLuint>    (node.parameter_buffer.gl_name()),
             static_cast<GLintptr>  (source_level * level_offset_size),
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );
@@ -507,9 +476,9 @@ void Post_processing::post_process(Post_processing_node& node)
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
         gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
         gl::bind_buffer_range(
-            node.parameter_buffer.get_buffer().target(),
+            node.parameter_buffer.target(),
             static_cast<GLuint>    (m_parameter_block.binding_point()),
-            static_cast<GLuint>    (node.parameter_buffer.get_buffer().gl_name()),
+            static_cast<GLuint>    (node.parameter_buffer.gl_name()),
             static_cast<GLintptr>  (source_level * level_offset_size),
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );

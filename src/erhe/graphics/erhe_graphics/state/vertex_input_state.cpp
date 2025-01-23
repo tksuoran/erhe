@@ -318,11 +318,13 @@ void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
 
 void Vertex_input_state_tracker::set_index_buffer(erhe::graphics::Buffer* buffer) const
 {
+    ERHE_VERIFY(m_last != 0); // Must have VAO bound
     gl::vertex_array_element_buffer(m_last, buffer->gl_name());
 }
 
 void Vertex_input_state_tracker::set_vertex_buffer(erhe::graphics::Buffer* buffer, std::size_t offset, uint32_t binding_index)
 {
+    ERHE_VERIFY(m_last != 0); // Must have VAO bound
     ERHE_VERIFY(buffer != nullptr);
     for (const Vertex_input_binding& binding : m_bindings) {
         if (binding.binding == binding_index) {

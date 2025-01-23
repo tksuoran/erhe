@@ -38,6 +38,20 @@ auto Pipeline::operator=(const Pipeline& other) -> Pipeline&
     return *this;
 }
 
+Pipeline::Pipeline(Pipeline&& old)
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
+
+    s_pipelines.push_back(this);
+    data = old.data;
+}
+
+auto Pipeline::operator=(Pipeline&& old) -> Pipeline&
+{
+    data = old.data;
+    return *this;
+}
+
 Pipeline::~Pipeline() noexcept
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};

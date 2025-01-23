@@ -332,6 +332,8 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(&m_vertex_buffer.get_buffer(), vertex_buffer_range.get_byte_start_offset_in_buffer(), 0);
 
     buffer_range.bind();
     //// gl::bind_buffer_range(

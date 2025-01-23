@@ -167,6 +167,7 @@ Line_renderer::Line_renderer(erhe::graphics::Instance& graphics_instance)
     , m_triangle_vertex_buffer{
         graphics_instance,
         gl::Buffer_target::shader_storage_buffer, // for compute bind range
+        m_program_interface.triangle_vertex_buffer_block->binding_point(),
         m_program_interface.triangle_vertex_format.stride() * 6 * s_max_line_count,
         "Line_renderer triangle vertex ring buffer"
     }
@@ -383,9 +384,9 @@ void Line_renderer::render(const erhe::math::Viewport viewport, const erhe::scen
         bucket.render(m_graphics_instance, triangle_vertex_buffer, triangle_vertex_buffer_offset, false, true);
     }
 
-    vertex_buffer_range.submit(); // this maybe can be moved after gl::dispatch_compute() call
+    vertex_buffer_range  .submit(); // this maybe can be moved after gl::dispatch_compute() call
     triangle_buffer_range.submit();
-    view_buffer_range.submit();
+    view_buffer_range    .submit();
 
     m_vertex_buffer_range.reset();
     m_vertex_write_offset = 0;

@@ -35,8 +35,8 @@ public:
 
     Pipeline(const Pipeline& other);
     auto operator=(const Pipeline& other) -> Pipeline&;
-    Pipeline(Pipeline&&)       = delete; // TODO
-    auto operator=(Pipeline&&) = delete; // TODO
+    Pipeline(Pipeline&& old);
+    auto operator=(Pipeline&& old) -> Pipeline&;
 
     void reset();
 

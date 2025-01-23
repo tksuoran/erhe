@@ -75,11 +75,10 @@ public:
     std::vector<float>                                        weights;
     int                                                       level0_width  {0};
     int                                                       level0_height {0};
-    erhe::renderer::GPU_ring_buffer                           parameter_buffer;
+    erhe::graphics::Buffer                                    parameter_buffer;
     float                                                     tonemap_luminance_max{1.5f};
     float                                                     tonemap_alpha{1.0f / 1.5f};
     int                                                       lowpass_count{2};
-    std::optional<erhe::renderer::Buffer_range>               buffer_range_opt;
 };
 
 class Post_processing

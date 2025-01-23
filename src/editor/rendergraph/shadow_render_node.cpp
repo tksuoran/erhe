@@ -127,7 +127,7 @@ void Shadow_render_node::execute_rendergraph_node()
 
     m_context.shadow_renderer->render(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
-            //.vertex_input_state    = &m_context.mesh_memory->vertex_input,
+            .vertex_input_state    = &m_context.mesh_memory->vertex_input,
             .index_type            = m_context.mesh_memory->buffer_info.index_type,
             .index_buffer          = &m_context.mesh_memory->gl_index_buffer,
             .vertex_buffer         = &m_context.mesh_memory->gl_vertex_buffer,
