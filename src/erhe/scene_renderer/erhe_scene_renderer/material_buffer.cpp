@@ -86,7 +86,7 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
     const auto&       offsets        = m_material_interface.offsets;
     const std::size_t max_byte_count = materials.size() * entry_size;
 
-    erhe::renderer::Buffer_range buffer_range = open_cpu_write(max_byte_count);
+    erhe::renderer::Buffer_range buffer_range = open(erhe::renderer::Ring_buffer_usage::CPU_write, max_byte_count);
     std::span<std::byte>         gpu_data     = buffer_range.get_span();
     std::size_t                  write_offset = 0;
     

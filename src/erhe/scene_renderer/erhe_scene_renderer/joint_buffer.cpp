@@ -68,11 +68,11 @@ auto Joint_buffer::update(
         joint_count += skin_data.joints.size();
     }
 
-    const auto        entry_size     = m_joint_interface.joint_struct.size_bytes();
-    const auto&       offsets        = m_joint_interface.offsets;
-    const std::size_t max_byte_count = offsets.joint_struct + joint_count * entry_size;
+    const auto        entry_size       = m_joint_interface.joint_struct.size_bytes();
+    const auto&       offsets          = m_joint_interface.offsets;
+    const std::size_t exact_byte_count = offsets.joint_struct + joint_count * entry_size;
 
-    erhe::renderer::Buffer_range buffer_range       = open_cpu_write(max_byte_count);
+    erhe::renderer::Buffer_range buffer_range       = open(erhe::renderer::Ring_buffer_usage::CPU_write, exact_byte_count);
     std::span<std::byte>         primitive_gpu_data = buffer_range.get_span();
     std::size_t                  write_offset       = 0;
 

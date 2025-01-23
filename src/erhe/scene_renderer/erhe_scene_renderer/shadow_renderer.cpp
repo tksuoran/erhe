@@ -147,35 +147,30 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         .require_at_least_one_bit_clear = 0u
     };
 
-    const auto joint_range = m_joint_buffers.update(
-        glm::uvec4{0, 0, 0, 0},
-        {},
-        parameters.skins
-    );
-    m_joint_buffers.bind(joint_range);
+    using Buffer_range = erhe::renderer::Buffer_range;
+    using Draw_indirect_buffer_range = erhe::renderer::Draw_indirect_buffer_range;
 
-    const auto light_range = m_light_buffers.update(
-        lights,
-        &parameters.light_projections,
-        glm::vec3{0.0f}
-    );
-    m_light_buffers.bind_light_buffer(light_range);
+    Buffer_range joint_range = m_joint_buffers.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
+    Buffer_range light_range = m_light_buffers.update(lights, &parameters.light_projections, glm::vec3{0.0f});
+    joint_range.bind();
+    light_range.bind();
 
     log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->debug_label());
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     for (const auto& meshes : mesh_spans) {
         std::size_t primitive_count{0};
-        const auto primitive_range = m_primitive_buffers.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
-        const auto draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, shadow_filter);
-        if (primitive_count != draw_indirect_buffer_range.draw_indirect_count) {
-            log_render->warn("primitive_range != draw_indirect_buffer_range.draw_indirect_count");
+        Buffer_range primitive_range = m_primitive_buffers.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
+        Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, shadow_filter);
+        ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
+        if (primitive_count == 0) {
+            primitive_range.cancel();
+            draw_indirect_buffer_range.range.cancel();
+            continue;
         }
 
-        if (draw_indirect_buffer_range.draw_indirect_count > 0) {
-            m_primitive_buffers.bind(primitive_range);
-            m_draw_indirect_buffers.bind(draw_indirect_buffer_range.range);
-        }
+        primitive_range.bind();
+        draw_indirect_buffer_range.range.bind();
 
         for (const auto& light : lights) {
             if (!light->cast_shadow) {
@@ -192,30 +187,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 continue;
             }
 
-            {
-                ERHE_PROFILE_SCOPE("bind fbo");
-                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, parameters.framebuffers[light_index]->gl_name());
-            }
+            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, parameters.framebuffers[light_index]->gl_name());
+            gl::clear_buffer_fv(gl::Buffer::depth, 0, m_graphics_instance.depth_clear_value_pointer());
 
-            {
-                static constexpr std::string_view c_id_clear{"clear"};
-
-                ERHE_PROFILE_SCOPE("clear fbo");
-                //ERHE_PROFILE_GPU_SCOPE(c_id_clear);
-
-                gl::clear_buffer_fv(
-                    gl::Buffer::depth,
-                    0,
-                    m_graphics_instance.depth_clear_value_pointer()
-                );
-            }
-
-            if (draw_indirect_buffer_range.draw_indirect_count == 0) {
-                continue;
-            }
-
-            const auto control_range = m_light_buffers.update_control(light_index);
-            m_light_buffers.bind_control_buffer(control_range);
+            Buffer_range control_range = m_light_buffers.update_control(light_index);
+            control_range.bind();
 
             {
                 static constexpr std::string_view c_id_mdi{"mdi"};
@@ -230,8 +206,16 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
                 );
             }
+            control_range.submit();
         }
+
+        primitive_range.submit();
+        draw_indirect_buffer_range.range.submit();
     }
+
+    joint_range.submit();
+    light_range.submit();
+
     return true;
 }
 

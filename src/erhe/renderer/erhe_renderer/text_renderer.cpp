@@ -127,9 +127,12 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
         }
     }
     , m_vertex_format{
-        erhe::graphics::Vertex_attribute::position_float3(),
-        erhe::graphics::Vertex_attribute::color_ubyte4(),
-        erhe::graphics::Vertex_attribute::texcoord0_float2()
+        0, // TODO
+        {
+            erhe::graphics::Vertex_attribute::position_float3(),
+            erhe::graphics::Vertex_attribute::color_ubyte4(),
+            erhe::graphics::Vertex_attribute::texcoord0_float2()
+        }
     }
     , m_index_buffer{
         graphics_instance,
@@ -154,7 +157,7 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
         "Text renderer projection ring buffer"
     }
     , m_vertex_input{
-        erhe::graphics::Vertex_input_state_data::make(m_attribute_mappings, m_vertex_format, &m_vertex_buffer.get_buffer(), &m_index_buffer)
+        erhe::graphics::Vertex_input_state_data::make(m_attribute_mappings, { &m_vertex_format })
     }
     , m_pipeline{
         erhe::graphics::Pipeline_data{
@@ -229,7 +232,7 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
     const std::size_t         vertex_byte_count = quad_count * 4 * m_vertex_format.stride();
 
     if (!m_vertex_buffer_range.has_value()) {
-        m_vertex_buffer_range = m_vertex_buffer.open_cpu_write(0);
+        m_vertex_buffer_range = m_vertex_buffer.open(Ring_buffer_usage::CPU_write, 0);
         m_vertex_write_offset = 0;
     }
     Buffer_range&             buffer_range      = m_vertex_buffer_range.value();
@@ -294,7 +297,7 @@ void Text_renderer::render(erhe::math::Viewport viewport)
 
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 
-    Buffer_range              buffer_range        = m_projection_buffer.open_cpu_write(m_projection_block.size_bytes());
+    Buffer_range              buffer_range        = m_projection_buffer.open(Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
     const auto                projection_gpu_data = buffer_range.get_span();
     size_t                    write_offset        = 0;
     std::byte* const          start               = projection_gpu_data.data();

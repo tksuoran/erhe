@@ -46,6 +46,8 @@ public:
     {
     public:
         erhe::dataformat::Format                                           index_type       {erhe::dataformat::Format::format_32_scalar_uint};
+        erhe::graphics::Buffer*                                            index_buffer     {nullptr};
+        erhe::graphics::Buffer*                                            vertex_buffer    {nullptr};
 
         const glm::vec3                                                    ambient_light    {0.0f};
         const erhe::scene::Camera*                                         camera           {nullptr};

@@ -1,4 +1,7 @@
 #include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/pipeline.hpp"

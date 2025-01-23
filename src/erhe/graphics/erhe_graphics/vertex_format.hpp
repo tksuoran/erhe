@@ -13,10 +13,11 @@ class Vertex_format final
 {
 public:
     Vertex_format();
-    explicit Vertex_format(const std::initializer_list<Vertex_attribute> attributes);
+    Vertex_format(std::size_t binding, const std::initializer_list<Vertex_attribute> attributes);
 
     void add_attribute(const Vertex_attribute& attribute);
 
+    [[nodiscard]] auto get_binding         () const -> std::size_t;
     [[nodiscard]] auto has_attribute       (Vertex_attribute::Usage_type usage_type, unsigned int index = 0) const -> bool;
     [[nodiscard]] auto find_attribute_maybe(Vertex_attribute::Usage_type usage_type, unsigned int index = 0) const -> const Vertex_attribute*;
     [[nodiscard]] auto find_attribute      (Vertex_attribute::Usage_type usage_type, unsigned int index = 0) const -> const Vertex_attribute*;
@@ -29,6 +30,7 @@ public:
 private:
     void align_to(std::size_t alignment);
 
+    std::size_t                   m_binding{0};
     std::vector<Vertex_attribute> m_attributes;
     std::size_t                   m_stride{0};
 };

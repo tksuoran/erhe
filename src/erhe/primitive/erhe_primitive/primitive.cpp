@@ -51,7 +51,7 @@ Primitive_raytrace::Primitive_raytrace(erhe::geometry::Geometry& geometry, Eleme
 {
     ERHE_PROFILE_FUNCTION();
 
-    const erhe::graphics::Vertex_format vertex_format{erhe::graphics::Vertex_attribute::position_float3()};
+    const erhe::graphics::Vertex_format vertex_format{0, {erhe::graphics::Vertex_attribute::position_float3()}};
     const std::size_t vertex_stride = vertex_format.stride();
     const std::size_t index_stride = 4;
     const erhe::geometry::Mesh_info mesh_info = geometry.get_mesh_info();
@@ -154,7 +154,7 @@ Primitive_raytrace::Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_
 {
     ERHE_PROFILE_FUNCTION();
 
-    const erhe::graphics::Vertex_format vertex_format{erhe::graphics::Vertex_attribute::position_float3()};
+    const erhe::graphics::Vertex_format vertex_format{0, {erhe::graphics::Vertex_attribute::position_float3()}};
     const std::size_t vertex_stride = vertex_format.stride();
     const std::size_t index_stride = 4;
     const std::size_t vertex_count = triangle_soup.get_vertex_count();

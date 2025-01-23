@@ -6,6 +6,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <memory>
@@ -64,15 +65,22 @@ void Vertex_input_state::on_thread_exit()
 }
 
 auto Vertex_input_state_data::make(
-    const Vertex_attribute_mappings& mappings,
-    const Vertex_format&             vertex_format,
-    Buffer* const                    vertex_buffer,
-    Buffer* const                    index_buffer
+    const Vertex_attribute_mappings&            mappings,
+    std::initializer_list<const Vertex_format*> vertex_formats
 ) -> Vertex_input_state_data
 {
     Vertex_input_state_data result;
-    result.index_buffer = index_buffer;
-    mappings.collect_attributes(result.attributes, vertex_buffer, vertex_format);
+    ERHE_VERIFY(vertex_formats.size() == 1); // TODO
+    for (const Vertex_format* vertex_format : vertex_formats) {
+        mappings.collect_attributes(result.attributes, *vertex_format);
+        result.bindings.push_back(
+            Vertex_input_binding{
+                .binding = static_cast<GLuint>(vertex_format->get_binding()),
+                .stride  = static_cast<GLsizei>(vertex_format->stride()),
+                .divisor = 0 // TODO
+            }
+        );
+    }
     return result;
 }
 
@@ -158,32 +166,32 @@ void Vertex_input_state::update()
     ////     erhe::graphics::g_instance->limits.max_vertex_attribs
     //// );
 
-    {
-        const auto ibo_gl_name = (m_data.index_buffer != nullptr)
-            ? m_data.index_buffer->gl_name()
-            : 0;
-        if (ibo_gl_name != 0) {
-            gl::vertex_array_element_buffer(gl_name(), ibo_gl_name);
-        }
-    }
+    /////////// {
+    ///////////     const auto ibo_gl_name = (m_data.index_buffer != nullptr)
+    ///////////         ? m_data.index_buffer->gl_name()
+    ///////////         : 0;
+    ///////////     if (ibo_gl_name != 0) {
+    ///////////         gl::vertex_array_element_buffer(gl_name(), ibo_gl_name);
+    ///////////     }
+    /////////// }
 
     for (const auto& attribute : m_data.attributes) {
-        if (attribute.vertex_buffer == nullptr) {
-            log_vertex_attribute_mappings->error("bad vertex input state: vbo == nullptr");
-            continue;
-        }
+        //// if (attribute.vertex_buffer == nullptr) {
+        ////     log_vertex_attribute_mappings->error("bad vertex input state: vbo == nullptr");
+        ////     continue;
+        //// }
         //// if (attribute.layout_location >= max_attribute_count) {
         ////     log_vertex_attribute_mappings->error("bad vertex input state: layout location >= max attribute count");
         ////     continue;
         //// }
 
-        gl::vertex_array_vertex_buffer(
-            gl_name(),
-            attribute.layout_location,
-            attribute.vertex_buffer->gl_name(),
-            intptr_t{attribute.offset},
-            attribute.stride
-        );
+        //// gl::vertex_array_vertex_buffer(
+        ////     gl_name(),
+        ////     attribute.layout_location,
+        ////     attribute.vertex_buffer->gl_name(),
+        ////     intptr_t{attribute.offset},
+        ////     attribute.stride
+        //// );
 
         switch (attribute.shader_type) {
             //using enum gl::Attribute_type;
@@ -262,8 +270,12 @@ void Vertex_input_state::update()
             }
         }
 
+        gl::vertex_array_attrib_binding(gl_name(), attribute.layout_location, attribute.binding);
         gl::enable_vertex_array_attrib(gl_name(), attribute.layout_location);
-        gl::vertex_array_binding_divisor(gl_name(), attribute.layout_location, attribute.divisor);
+    }
+    // GLuint vaobj, GLuint bindingindex, GLuint divisor
+    for (const Vertex_input_binding& binding : m_data.bindings) {
+        gl::vertex_array_binding_divisor(gl_name(), binding.binding, binding.divisor);
     }
 }
 
@@ -295,6 +307,36 @@ void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
     }
     gl::bind_vertex_array(name);
     m_last = name;
+
+    // For set_vertex_buffer()
+    if (state != nullptr) {
+        m_bindings = state->get_data().bindings;
+    } else {
+        m_bindings.clear();
+    }
+}
+
+void Vertex_input_state_tracker::set_index_buffer(erhe::graphics::Buffer* buffer) const
+{
+    gl::vertex_array_element_buffer(m_last, buffer->gl_name());
+}
+
+void Vertex_input_state_tracker::set_vertex_buffer(erhe::graphics::Buffer* buffer, std::size_t offset, uint32_t binding_index)
+{
+    ERHE_VERIFY(buffer != nullptr);
+    for (const Vertex_input_binding& binding : m_bindings) {
+        if (binding.binding == binding_index) {
+            gl::vertex_array_vertex_buffer(
+                m_last,
+                binding_index,
+                buffer->gl_name(),
+                offset,
+                binding.stride
+            );
+            break;
+        }
+    }
+
 }
 
 } // namespace erhe::graphics

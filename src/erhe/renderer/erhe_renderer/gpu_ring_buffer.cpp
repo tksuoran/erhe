@@ -54,12 +54,14 @@ Buffer_range::Buffer_range()
     , m_wrap_count                      {0}
     , m_byte_span_start_offset_in_buffer{0}
     , m_byte_write_position_in_span     {0}
+    , m_usage                           {Ring_buffer_usage::None}
 {
     SPDLOG_LOGGER_TRACE(log_gpu_ring_buffer, "Buffer_range::Buffer_range()");
 }
 
 Buffer_range::Buffer_range(
     GPU_ring_buffer&     ring_buffer,
+    Ring_buffer_usage    usage,
     std::span<std::byte> span,
     std::size_t          wrap_count,
     size_t               byte_start_offset
@@ -69,7 +71,9 @@ Buffer_range::Buffer_range(
     , m_wrap_count                      {wrap_count}
     , m_byte_span_start_offset_in_buffer{byte_start_offset}
     , m_byte_write_position_in_span     {0}
+    , m_usage                           {usage}
 {
+    ERHE_VERIFY(usage != Ring_buffer_usage::None);
     SPDLOG_LOGGER_TRACE(
         log_gpu_ring_buffer,
         "Buffer_range::Buffer_range() buffer = {} start offset = {} span byte count = {}",
@@ -79,9 +83,45 @@ Buffer_range::Buffer_range(
     );
 }
 
+Buffer_range::Buffer_range(Buffer_range&& old)
+    : m_ring_buffer                     {std::exchange(old.m_ring_buffer,                      nullptr)}
+    , m_span                            {std::exchange(old.m_span,                             {}     )}
+    , m_wrap_count                      {std::exchange(old.m_wrap_count,                       0      )}
+    , m_byte_span_start_offset_in_buffer{std::exchange(old.m_byte_span_start_offset_in_buffer, 0      )}
+    , m_byte_write_position_in_span     {std::exchange(old.m_byte_write_position_in_span,      0      )}
+    , m_byte_flush_position_in_span     {std::exchange(old.m_byte_flush_position_in_span,      0      )}
+    , m_usage                           {std::exchange(old.m_usage,                            Ring_buffer_usage::None)}
+    , m_is_closed                       {std::exchange(old.m_is_closed,                        true   )} 
+    , m_is_submitted                    {std::exchange(old.m_is_submitted,                     false  )} 
+    , m_is_cancelled                    {std::exchange(old.m_is_cancelled,                     true   )} 
+{
+}
+ 
+
+Buffer_range& Buffer_range::operator=(Buffer_range&& old)
+{
+    m_ring_buffer                      = std::exchange(old.m_ring_buffer,                      nullptr);
+    m_span                             = std::exchange(old.m_span,                             {}     );
+    m_wrap_count                       = std::exchange(old.m_wrap_count,                       0      );
+    m_byte_span_start_offset_in_buffer = std::exchange(old.m_byte_span_start_offset_in_buffer, 0      );
+    m_byte_write_position_in_span      = std::exchange(old.m_byte_write_position_in_span,      0      );
+    m_byte_flush_position_in_span      = std::exchange(old.m_byte_flush_position_in_span,      0      );
+    m_usage                            = std::exchange(old.m_usage,                            Ring_buffer_usage::None);
+    m_is_closed                        = std::exchange(old.m_is_closed,                        true   );
+    m_is_submitted                     = std::exchange(old.m_is_submitted,                     false  );
+    m_is_cancelled                     = std::exchange(old.m_is_cancelled,                     true   );
+    return *this;
+}
+
+Buffer_range::~Buffer_range()
+{
+    ERHE_VERIFY((m_ring_buffer == nullptr) || m_is_submitted || m_is_cancelled);
+}
+
 void Buffer_range::close(std::size_t byte_write_position_in_span)
 {
     ERHE_VERIFY(!is_closed());
+    ERHE_VERIFY(!m_is_submitted);
     ERHE_VERIFY(byte_write_position_in_span >= m_byte_write_position_in_span);
     ERHE_VERIFY(byte_write_position_in_span <= m_span.size_bytes());
     ERHE_VERIFY(m_ring_buffer != nullptr);
@@ -92,7 +132,9 @@ void Buffer_range::close(std::size_t byte_write_position_in_span)
 
 void Buffer_range::flush(std::size_t byte_write_position_in_span)
 {
+    ERHE_VERIFY(m_usage == Ring_buffer_usage::CPU_write);
     ERHE_VERIFY(!is_closed());
+    ERHE_VERIFY(!m_is_submitted);
     ERHE_VERIFY(byte_write_position_in_span >= m_byte_write_position_in_span);
     ERHE_VERIFY(byte_write_position_in_span >= m_byte_flush_position_in_span);
     ERHE_VERIFY(m_ring_buffer != nullptr);
@@ -107,6 +149,8 @@ void Buffer_range::flush(std::size_t byte_write_position_in_span)
 auto Buffer_range::bind() -> bool
 {
     ERHE_VERIFY(is_closed());
+    ERHE_VERIFY(!m_is_submitted);
+
     if (m_ring_buffer == nullptr) {
         return false;
     }
@@ -116,7 +160,8 @@ auto Buffer_range::bind() -> bool
 void Buffer_range::submit()
 {
     ERHE_VERIFY(is_closed());
-
+    ERHE_VERIFY(!m_is_submitted);
+    m_is_submitted = true;
     if (m_byte_write_position_in_span == 0) {
         return;
     }
@@ -136,6 +181,7 @@ void Buffer_range::submit()
 void Buffer_range::cancel()
 {
     ERHE_VERIFY(is_closed());
+    m_is_cancelled = true;
     if (m_byte_write_position_in_span == 0) {
         return;
     }
@@ -271,7 +317,6 @@ void GPU_ring_buffer::get_size_available_for_write(std::size_t& out_available_by
     //        ^   ^                     
     //        w2  r1                    
 
-
     if (m_write_wrap_count == m_read_wrap_count + 1) {
         ERHE_VERIFY(m_read_offset >= m_write_position);
         out_available_byte_count_without_wrap = m_read_offset - m_write_position;
@@ -281,15 +326,18 @@ void GPU_ring_buffer::get_size_available_for_write(std::size_t& out_available_by
         ERHE_VERIFY(m_write_position >= m_read_offset);
         out_available_byte_count_without_wrap = m_buffer.capacity_byte_count() - m_write_position;
         out_available_byte_count_with_wrap = m_read_offset;
+        return;
     }
     out_available_byte_count_without_wrap = 0;
     out_available_byte_count_with_wrap = 0;
 }
 
-auto GPU_ring_buffer::open_cpu_write(std::size_t byte_count) -> Buffer_range
+auto GPU_ring_buffer::open(Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
 {
     gl::Buffer_target target = m_buffer.target();
     m_write_position = m_instance.align_buffer_offset(target, m_write_position);
+
+    update_entries();
 
     std::size_t available_byte_count_without_wrap{0};
     std::size_t available_byte_count_with_wrap{0};
@@ -309,10 +357,12 @@ auto GPU_ring_buffer::open_cpu_write(std::size_t byte_count) -> Buffer_range
     }
 
     if (!m_instance.info.use_persistent_buffers) {
-        m_buffer.begin_write(m_write_position, byte_count); // maps requested range
-        return Buffer_range{*this, m_buffer.map(), m_write_wrap_count, m_write_position};
+        if (usage == Ring_buffer_usage::CPU_write) {
+            m_buffer.begin_write(m_write_position, byte_count); // maps requested range
+        }
+        return Buffer_range{*this, usage, m_buffer.map(), m_write_wrap_count, m_write_position};
     } else {
-        return Buffer_range{*this, m_buffer.map().subspan(m_write_position, byte_count), m_write_wrap_count, m_write_position};
+        return Buffer_range{*this, usage, m_buffer.map().subspan(m_write_position, byte_count), m_write_wrap_count, m_write_position};
     }
 }
 
@@ -332,6 +382,17 @@ void GPU_ring_buffer::close(std::size_t byte_offset, std::size_t byte_write_coun
     m_map = {};
 }
 
+GPU_ring_buffer::~GPU_ring_buffer()
+{
+    while (!m_sync_entries.empty()) {
+        Sync_entry& entry = m_sync_entries.front();
+        if (entry.fence_sync != nullptr) {
+            gl::delete_sync((GLsync)(entry.fence_sync));
+        }
+        m_sync_entries.pop_front();
+    }
+}
+
 void GPU_ring_buffer::update_entries()
 {
     // Keep track of how how GPU has completed reads
@@ -347,6 +408,7 @@ void GPU_ring_buffer::update_entries()
             (entry.result == gl::Sync_status::condition_satisfied)
         ) {
             // If entry is ready, we can update read position and remove the entry
+            gl::delete_sync((GLsync)(entry.fence_sync));
             m_read_wrap_count = entry.wrap_count;
             m_read_offset = entry.byte_offset + entry.byte_count;
             m_sync_entries.pop_front();

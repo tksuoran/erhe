@@ -22,11 +22,7 @@ public:
 
     Vertex_attribute_mappings(erhe::graphics::Instance& instance, const std::initializer_list<Vertex_attribute_mapping> mappings);
 
-    void collect_attributes(
-        std::vector<Vertex_input_attribute>& attributes,
-        const Buffer*                        vertex_buffer,
-        const Vertex_format&                 vertex_format
-    ) const;
+    void collect_attributes(std::vector<Vertex_input_attribute>& attributes, const Vertex_format& vertex_format) const;
 
     std::vector<Vertex_attribute_mapping> mappings;
 

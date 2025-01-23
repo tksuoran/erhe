@@ -73,14 +73,11 @@ public:
 class Imgui_program_interface
 {
 public:
+    static constexpr std::size_t s_texture_unit_count = 32; // for non bindless textures
+
     explicit Imgui_program_interface(erhe::graphics::Instance& graphics_instance);
 
     // scale, translation, clip rectangle, texture indices
-    static constexpr std::size_t s_max_draw_count     =   8'000;
-    static constexpr std::size_t s_max_index_count    = 200'000;
-    static constexpr std::size_t s_max_vertex_count   = 200'000;
-    static constexpr std::size_t s_texture_unit_count = 32; // for non bindless textures
-
     erhe::graphics::Shader_resource     draw_parameter_block;
     erhe::graphics::Shader_resource     draw_parameter_struct;
     Imgui_draw_parameter_struct_offsets draw_parameter_struct_offsets{};
@@ -90,13 +87,6 @@ public:
     erhe::graphics::Vertex_attribute_mappings attribute_mappings;
     erhe::graphics::Vertex_format             vertex_format;
     erhe::graphics::Shader_resource           default_uniform_block; // containing sampler uniforms for non bindless textures
-    erhe::graphics::Shader_stages             shader_stages;
-    erhe::renderer::GPU_ring_buffer           vertex_buffer;
-    erhe::renderer::GPU_ring_buffer           index_buffer;
-    erhe::renderer::GPU_ring_buffer           draw_parameter_buffer;
-    erhe::renderer::GPU_ring_buffer           draw_indirect_buffer;
-    erhe::graphics::Vertex_input_state        vertex_input;
-    erhe::graphics::Pipeline                  pipeline;
 };
 
 class Imgui_renderer final
@@ -158,8 +148,20 @@ public:
 private:
     void apply_font_config_changes(const Imgui_settings& settings);
 
+    static constexpr std::size_t s_max_draw_count     =   8'000;
+    static constexpr std::size_t s_max_index_count    = 200'000;
+    static constexpr std::size_t s_max_vertex_count   = 200'000;
+
     erhe::graphics::Instance&                m_graphics_instance;
     Imgui_program_interface                  m_imgui_program_interface;
+    erhe::graphics::Shader_stages            m_shader_stages;
+    erhe::renderer::GPU_ring_buffer          m_vertex_buffer;
+    erhe::renderer::GPU_ring_buffer          m_index_buffer;
+    erhe::renderer::GPU_ring_buffer          m_draw_parameter_buffer;
+    erhe::renderer::GPU_ring_buffer          m_draw_indirect_buffer;
+    erhe::graphics::Vertex_input_state       m_vertex_input;
+    erhe::graphics::Pipeline                 m_pipeline;
+
     ImFontAtlas                              m_font_atlas;
     ImFont*                                  m_primary_font   {nullptr};
     ImFont*                                  m_mono_font      {nullptr};

@@ -56,7 +56,7 @@ auto Draw_indirect_buffer::update(
 
     const std::size_t entry_size     = sizeof(gl::Draw_elements_indirect_command);
     const std::size_t max_byte_count = primitive_count * entry_size;
-    Buffer_range      buffer_range   = open_cpu_write(max_byte_count);
+    Buffer_range      buffer_range   = open(Ring_buffer_usage::CPU_write, max_byte_count);
     const auto        gpu_data       = buffer_range.get_span();
     size_t            write_offset   = 0;
     uint32_t          instance_count     {1};
@@ -108,7 +108,10 @@ auto Draw_indirect_buffer::update(
     buffer_range.close(write_offset);
 
     SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to draw indirect buffer", draw_indirect_count);
-    return { buffer_range, draw_indirect_count };
+    return Draw_indirect_buffer_range{
+        std::move(buffer_range),
+        draw_indirect_count
+    };
 }
 
 } // namespace erhe::renderer

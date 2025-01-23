@@ -62,7 +62,7 @@ auto Camera_buffer::update(
     const auto& offsets          = m_camera_interface.offsets;
     const auto  clip_from_camera = camera_projection.clip_from_node_transform(viewport);
 
-    erhe::renderer::Buffer_range buffer_range = open_cpu_write(entry_size);
+    erhe::renderer::Buffer_range buffer_range = open(erhe::renderer::Ring_buffer_usage::CPU_write, entry_size);
     std::span<std::byte>         gpu_data     = buffer_range.get_span();
     size_t                       write_offset = 0;
 

@@ -95,15 +95,9 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
 
     erhe::graphics::Scoped_debug_group pass_scope{"BRDF Slice"};
 
-    const auto& output_viewport = get_producer_output_viewport(
-        erhe::rendergraph::Routing::Resource_provided_by_consumer,
-        m_output_key
-    );
+    const auto& output_viewport = get_producer_output_viewport(erhe::rendergraph::Routing::Resource_provided_by_consumer, m_output_key);
 
-    gl::bind_framebuffer(
-        gl::Framebuffer_target::draw_framebuffer,
-        m_framebuffer->gl_name()
-    );
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
 
     erhe::scene_renderer::Light_projections light_projections;
     light_projections.brdf_phi          = m_brdf_slice.phi;
@@ -113,6 +107,8 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
     m_forward_renderer.render_fullscreen(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
             .index_type         = erhe::dataformat::Format::format_32_scalar_uint, // Note: Indices are not used by render_fullscreen()
+            .index_buffer       = nullptr,
+            .vertex_buffer      = nullptr,
             .light_projections  = &light_projections,
             .lights             = {},
             .materials          = std::span<const std::shared_ptr<erhe::primitive::Material>>(&m_material, 1),

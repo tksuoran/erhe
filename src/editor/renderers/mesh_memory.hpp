@@ -29,6 +29,11 @@ class Mesh_memory
 public:
     Mesh_memory(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface);
 
+    // TODO
+    //static constexpr std::size_t s_binding_position     = 0;
+    //static constexpr std::size_t s_binding_non_position = 1;
+    static constexpr std::size_t s_vertex_binding  = 0;
+
     erhe::graphics::Instance&             graphics_instance;
     erhe::graphics::Buffer_transfer_queue gl_buffer_transfer_queue;
     erhe::graphics::Vertex_format         vertex_format;

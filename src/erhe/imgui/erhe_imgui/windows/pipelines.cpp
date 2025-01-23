@@ -412,25 +412,30 @@ void pipeline_imgui(erhe::graphics::Pipeline& pipeline)
         if (pipeline.data.vertex_input != nullptr) {
             if (ImGui::TreeNodeEx("Vertex input", ImGuiTreeNodeFlags_Framed)) {
                 const erhe::graphics::Vertex_input_state_data& vertex_input_data = pipeline.data.vertex_input->get_data();
-                if (vertex_input_data.index_buffer != nullptr) {
-                    ImGui::Text("Index buffer: %u %s", vertex_input_data.index_buffer->gl_name(), vertex_input_data.index_buffer->debug_label().c_str());
-                }
                 int attribute_index = 0;
                 for (const erhe::graphics::Vertex_input_attribute& attribute : vertex_input_data.attributes) {
                     std::string attribute_label = fmt::format("Attribute {}", attribute_index++);
                     ImGui::PushID(attribute_index);
                     if (ImGui::TreeNodeEx(attribute_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
                         ImGui::Text("Location: %u", attribute.layout_location);
-                        if (attribute.vertex_buffer != nullptr) {
-                            ImGui::Text("Vertex buffer: %u %s", attribute.vertex_buffer->gl_name(), attribute.vertex_buffer->debug_label().c_str());
-                        }
-                        ImGui::Text("Location: %d", attribute.stride);
+                        ImGui::Text("Stride: %d", attribute.stride);
                         ImGui::Text("Dimension: %d", attribute.dimension);
                         ImGui::Text("Shader type: %s", gl::c_str(attribute.shader_type));
                         ImGui::Text("Data type: %s", gl::c_str(attribute.data_type));
                         ImGui::Text("Normalized: %s", attribute.normalized ? "yes" : "no");
                         ImGui::Text("Offset: %u", attribute.offset);
-                        ImGui::Text("Divisor: %u", attribute.divisor);
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                }
+                int binding_index = 0;
+                for (const erhe::graphics::Vertex_input_binding& binding : vertex_input_data.bindings) {
+                    std::string binding_label = fmt::format("Binding {}", binding_index++);
+                    ImGui::PushID(100 + binding_index);
+                    if (ImGui::TreeNodeEx(binding_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
+                        ImGui::Text("Binding: %u", binding.binding);
+                        ImGui::Text("Stride: %d", binding.stride);
+                        ImGui::Text("Divisor: %d", binding.divisor);
                         ImGui::TreePop();
                     }
                     ImGui::PopID();

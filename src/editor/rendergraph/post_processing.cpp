@@ -78,7 +78,7 @@ Post_processing_node::Post_processing_node(
         post_processing.get_parameter_block().binding_point(),
         graphics_instance.align_buffer_offset(
             gl::Buffer_target::uniform_buffer, post_processing.get_parameter_block().size_bytes()
-        ) * 20, // max 20 levels
+        ) * 20 * 3 * 10, // max 20 levels, 3 frames in flight, 10 nodes
         fmt::format("{}", name)
     }
 {
@@ -243,7 +243,7 @@ void Post_processing_node::update_parameters()
     const std::span<const uint32_t> upsample_texture_handle_cpu_data  {&upsample_texture_handle[0], 2};
 
     size_t                       level_count        = level_widths.size();
-    erhe::renderer::Buffer_range buffer_range       = parameter_buffer.open_cpu_write(level_count * level_offset_size);
+    erhe::renderer::Buffer_range buffer_range       = parameter_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, level_count * level_offset_size);
     std::size_t                  write_offset       = 0;
     std::span<std::byte>         parameter_gpu_data = buffer_range.get_span();
     std::byte* const             start              = parameter_gpu_data.data();
@@ -270,7 +270,7 @@ void Post_processing_node::update_parameters()
         write_offset += level_offset_size;
     }
     buffer_range.close(write_offset);
-    buffer_range_opt = buffer_range;
+    buffer_range_opt = std::move(buffer_range);
 }
 
 void Post_processing_node::viewport_toolbar()

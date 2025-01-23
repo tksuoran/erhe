@@ -620,7 +620,7 @@ void Tile_renderer::begin()
     ERHE_VERIFY(m_can_blit == false);
     ERHE_VERIFY(!m_vertex_buffer_range.has_value());
 
-    m_vertex_buffer_range = m_vertex_buffer.open_cpu_write(0);
+    m_vertex_buffer_range = m_vertex_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, 0);
     m_vertex_write_offset = 0;
 
     // TODO byte_count?
@@ -722,7 +722,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     const auto handle = m_graphics_instance.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
 
     // TODO byte_count
-    erhe::renderer::Buffer_range projection_buffer_range = m_projection_buffer.open_cpu_write(0);
+    erhe::renderer::Buffer_range projection_buffer_range = m_projection_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, 0);
     const auto                   projection_gpu_data     = projection_buffer_range.get_span();
     size_t                       projection_write_offset = 0;
     std::byte* const             start                   = projection_gpu_data.data();

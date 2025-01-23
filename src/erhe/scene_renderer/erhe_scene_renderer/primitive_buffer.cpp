@@ -108,22 +108,19 @@ auto Primitive_buffer::update(
         primitive_count += mesh->get_primitives().size();
     }
 
-    //auto&             buffer             = get_buffer();
-    //auto&             writer             = get_writer();
     const auto        entry_size     = m_primitive_interface.primitive_struct.size_bytes();
     const auto&       offsets        = m_primitive_interface.offsets;
     const std::size_t max_byte_count = primitive_count * entry_size;
 
-    erhe::renderer::Buffer_range buffer_range       = open_cpu_write(max_byte_count);
+    erhe::renderer::Buffer_range buffer_range       = open(erhe::renderer::Ring_buffer_usage::CPU_write, max_byte_count);
     std::span<std::byte>         primitive_gpu_data = buffer_range.get_span();
     std::size_t                  write_offset       = 0;
 
     std::size_t primitive_index = 0;
     mesh_index = 0;
     for (const auto& mesh : meshes) {
-        ++mesh_index;
-
         ERHE_VERIFY(mesh);
+        ++mesh_index;
 
         const auto* node = mesh->get_node();
         if (node == nullptr) {

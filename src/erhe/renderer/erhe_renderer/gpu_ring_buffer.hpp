@@ -18,16 +18,28 @@ struct Sync_entry
     gl::Sync_status result     {gl::Sync_status::timeout_expired};
 };
 
+enum class Ring_buffer_usage : unsigned int
+{
+    None       = 0,
+    CPU_write  = 1,
+    GPU_access = 2
+};
+
 class Buffer_range
 {
 public:
     Buffer_range();
     Buffer_range(
         GPU_ring_buffer&     ring_buffer,
+        Ring_buffer_usage    usage,
         std::span<std::byte> span,
         std::size_t          wrap_count,
         size_t               start_byte_offset
     );
+    Buffer_range(Buffer_range&& old);
+    Buffer_range& operator=(Buffer_range&) = delete;
+    Buffer_range& operator=(Buffer_range&& old);
+    ~Buffer_range();
 
     void flush                          (std::size_t byte_write_position_in_span);
     void close                          (std::size_t byte_write_position_in_span);
@@ -47,7 +59,10 @@ private:
     size_t               m_byte_span_start_offset_in_buffer{0};
     size_t               m_byte_write_position_in_span{0};
     size_t               m_byte_flush_position_in_span{0};
+    Ring_buffer_usage    m_usage{Ring_buffer_usage::None};
     bool                 m_is_closed{false};
+    bool                 m_is_submitted{false};
+    bool                 m_is_cancelled{false};
 };
 
 class GPU_ring_buffer
@@ -66,9 +81,10 @@ public:
         std::size_t               size,
         std::string_view          name
     );
+    ~GPU_ring_buffer();
 
     void get_size_available_for_write(std::size_t& out_available_byte_count_without_wrap, std::size_t& out_available_byte_count_with_wrap) const;
-    auto open_cpu_write              (std::size_t byte_count) -> Buffer_range;
+    auto open                        (Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
     auto bind                        (const Buffer_range& range) -> bool;
 
     // For Buffer_range

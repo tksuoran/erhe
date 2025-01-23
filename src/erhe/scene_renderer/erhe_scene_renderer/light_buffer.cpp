@@ -140,7 +140,7 @@ auto Light_buffer::update(
 
     const auto                   light_struct_size = m_light_interface.light_struct.size_bytes();
     const auto&                  offsets           = m_light_interface.offsets;
-    erhe::renderer::Buffer_range buffer_range      = m_light_buffer.open_cpu_write(0);
+    erhe::renderer::Buffer_range buffer_range      = m_light_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, 0);
     std::span<std::byte>         light_gpu_data    = buffer_range.get_span();
     const size_t                 max_byte_count    = light_gpu_data.size_bytes();
     uint32_t       directional_light_count{0u};
@@ -238,7 +238,7 @@ auto Light_buffer::update_control(const std::size_t light_index) -> erhe::render
     ERHE_PROFILE_FUNCTION();
 
     const auto                   entry_size   = m_light_interface.light_control_block.size_bytes();
-    erhe::renderer::Buffer_range buffer_range = m_control_buffer.open_cpu_write(entry_size);
+    erhe::renderer::Buffer_range buffer_range = m_control_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, entry_size);
     const auto                   gpu_data     = buffer_range.get_span();
     size_t                       write_offset = 0;
 

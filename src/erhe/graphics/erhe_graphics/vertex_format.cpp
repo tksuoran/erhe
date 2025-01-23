@@ -12,7 +12,8 @@ Vertex_format::Vertex_format()
 {
 }
 
-Vertex_format::Vertex_format(std::initializer_list<Vertex_attribute> attributes)
+Vertex_format::Vertex_format(std::size_t binding, std::initializer_list<Vertex_attribute> attributes)
+    : m_binding{binding}
 {
     for (auto& attribute : attributes) {
         add_attribute(attribute);
@@ -53,6 +54,11 @@ auto Vertex_format::match(const Vertex_format& other) const -> bool
     return true;
 }
 
+auto Vertex_format::get_binding() const -> std::size_t
+{
+    return m_binding;
+}
+
 auto Vertex_format::has_attribute(Vertex_attribute::Usage_type usage_type, unsigned int index) const -> bool
 {
     for (const auto& i : m_attributes) {
@@ -76,8 +82,7 @@ auto Vertex_format::find_attribute_maybe(Vertex_attribute::Usage_type usage_type
     return nullptr;
 }
 
-auto Vertex_format::find_attribute(Vertex_attribute::Usage_type usage_type, unsigned int index) const
--> const Vertex_attribute*
+auto Vertex_format::find_attribute(Vertex_attribute::Usage_type usage_type, unsigned int index) const -> const Vertex_attribute*
 {
     for (const auto& i : m_attributes) {
         if ((i.usage.type == usage_type) && (i.usage.index == index)) {
