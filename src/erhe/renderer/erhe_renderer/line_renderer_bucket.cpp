@@ -120,7 +120,7 @@ void Line_renderer_bucket::render(
         for (const Line_draw_entry& draw : m_draws) {
             gl::draw_arrays(
                 m_pipeline_hidden.data.input_assembly.primitive_topology,
-                static_cast<GLsizei>(6 * draw.first_line),
+                static_cast<GLsizei>(0), // 6 * draw.first_line),
                 static_cast<GLint  >(6 * draw.line_count)
             );
         }
@@ -131,7 +131,7 @@ void Line_renderer_bucket::render(
         for (const Line_draw_entry& draw : m_draws) {
             gl::draw_arrays(
                 m_pipeline_visible.data.input_assembly.primitive_topology,
-                static_cast<GLsizei>(6 * draw.first_line),
+                static_cast<GLsizei>(0), //6 * draw.first_line),
                 static_cast<GLint  >(6 * draw.line_count)
             );
         }

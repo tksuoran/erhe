@@ -99,7 +99,6 @@ private:
     std::optional<Buffer_range> m_vertex_buffer_range;
     std::size_t                 m_vertex_write_offset{};
 
-    std::size_t m_index_range_first{0};
     std::size_t m_index_count      {0};
 };
 

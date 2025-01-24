@@ -235,11 +235,11 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
         m_vertex_buffer_range = m_vertex_buffer.open(Ring_buffer_usage::CPU_write, 0);
         m_vertex_write_offset = 0;
     }
-    Buffer_range&             buffer_range      = m_vertex_buffer_range.value();
-    const auto                vertex_gpu_data   = buffer_range.get_span();
-    std::byte* const          start             = vertex_gpu_data.data();
-    const std::size_t         byte_count        = std::min(vertex_gpu_data.size_bytes() - m_vertex_write_offset, vertex_byte_count);
-    const std::size_t         word_count        = byte_count / sizeof(float);
+    Buffer_range&             vertex_buffer_range = m_vertex_buffer_range.value();
+    const auto                vertex_gpu_data     = vertex_buffer_range.get_span();
+    std::byte* const          start               = vertex_gpu_data.data();
+    const std::size_t         byte_count          = std::min(vertex_gpu_data.size_bytes() - m_vertex_write_offset, vertex_byte_count);
+    const std::size_t         word_count          = byte_count / sizeof(float);
     const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
@@ -297,12 +297,12 @@ void Text_renderer::render(erhe::math::Viewport viewport)
 
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 
-    Buffer_range              buffer_range        = m_projection_buffer.open(Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
-    const auto                projection_gpu_data = buffer_range.get_span();
-    size_t                    write_offset        = 0;
-    std::byte* const          start               = projection_gpu_data.data();
-    const std::size_t         byte_count          = projection_gpu_data.size_bytes();
-    const std::size_t         word_count          = byte_count / sizeof(float);
+    Buffer_range              projection_buffer_range = m_projection_buffer.open(Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
+    const auto                projection_gpu_data     = projection_buffer_range.get_span();
+    size_t                    write_offset            = 0;
+    std::byte* const          start                   = projection_gpu_data.data();
+    const std::size_t         byte_count              = projection_gpu_data.size_bytes();
+    const std::size_t         word_count              = byte_count / sizeof(float);
     const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
     const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
@@ -318,8 +318,7 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     write(gpu_float_data, m_u_clip_from_window_offset, as_span(clip_from_window));
     write_offset += m_u_clip_from_window_size;
 
-    const uint32_t texture_handle[2] =
-    {
+    const uint32_t texture_handle[2] = {
         static_cast<uint32_t>((handle & 0xffffffffu)),
         static_cast<uint32_t>(handle >> 32u)
     };
@@ -327,22 +326,19 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
     write_offset += m_u_texture_size;
 
-    buffer_range.close(write_offset);
+    projection_buffer_range.close(write_offset);
+
+    const std::size_t vertex_offset = vertex_buffer_range.get_byte_start_offset_in_buffer();
+    //const std::size_t quad_offset   = vertex_offset / per_quad_vertex_count;
+    //const std::size_t index_offset  = quad_offset   * per_quad_index_count;
 
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
     m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(&m_vertex_buffer.get_buffer(), vertex_buffer_range.get_byte_start_offset_in_buffer(), 0);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(&m_vertex_buffer.get_buffer(), vertex_offset, 0);
 
-    buffer_range.bind();
-    //// gl::bind_buffer_range(
-    ////     projection_buffer->target(),
-    ////     static_cast<GLuint>    (m_projection_block.binding_point()),
-    ////     static_cast<GLuint>    (projection_buffer->gl_name()),
-    ////     static_cast<GLintptr>  (projection_writer.range.first_byte_offset),
-    ////     static_cast<GLsizeiptr>(projection_writer.range.byte_count)
-    //// );
+    projection_buffer_range.bind();
 
     if (m_graphics_instance.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
@@ -355,11 +351,12 @@ void Text_renderer::render(erhe::math::Viewport viewport)
         m_pipeline.data.input_assembly.primitive_topology,
         static_cast<GLsizei>(m_index_count),
         gl::Draw_elements_type::unsigned_short,
-        reinterpret_cast<const void*>(m_index_range_first * 2)
+        0 //reinterpret_cast<const void*>(index_offset * index_stride)
     );
 
     vertex_buffer_range.submit();
-    buffer_range.submit();
+    projection_buffer_range.submit();
+
     m_vertex_buffer_range.reset();
 
     if (m_graphics_instance.info.use_bindless_texture) {
@@ -368,7 +365,6 @@ void Text_renderer::render(erhe::math::Viewport viewport)
 
     gl::disable(gl::Enable_cap::primitive_restart_fixed_index);
 
-    m_index_range_first += m_index_count;
     m_index_count = 0;
 }
 

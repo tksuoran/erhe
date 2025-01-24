@@ -327,6 +327,8 @@ void GPU_ring_buffer::get_size_available_for_write(std::size_t& out_available_by
         out_available_byte_count_without_wrap = m_buffer.capacity_byte_count() - m_write_position;
         out_available_byte_count_with_wrap = m_read_offset;
         return;
+    } else {
+        ERHE_FATAL("buffer issue");
     }
     out_available_byte_count_without_wrap = 0;
     out_available_byte_count_with_wrap = 0;
@@ -409,6 +411,15 @@ void GPU_ring_buffer::update_entries()
         ) {
             // If entry is ready, we can update read position and remove the entry
             gl::delete_sync((GLsync)(entry.fence_sync));
+            size_t new_read_wrap_count = entry.wrap_count;
+            size_t new_read_offset = entry.byte_offset + entry.byte_count;
+            if (m_write_wrap_count == new_read_wrap_count + 1) {
+                ERHE_VERIFY(m_read_offset >= m_write_position);
+            } else if (new_read_wrap_count == m_write_wrap_count) {
+                ERHE_VERIFY(m_write_position >= new_read_offset);
+            } else {
+                ERHE_FATAL("buffer issue");
+            }
             m_read_wrap_count = entry.wrap_count;
             m_read_offset = entry.byte_offset + entry.byte_count;
             m_sync_entries.pop_front();

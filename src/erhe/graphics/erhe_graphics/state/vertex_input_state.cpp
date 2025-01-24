@@ -212,7 +212,7 @@ void Vertex_input_state::update()
                     attribute.layout_location,
                     attribute.dimension,
                     static_cast<gl::Vertex_attrib_i_type>(attribute.data_type),
-                    0
+                    intptr_t{attribute.offset}
                 );
                 break;
             }
@@ -236,7 +236,7 @@ void Vertex_input_state::update()
                     attribute.dimension,
                     attribute.data_type,
                     attribute.normalized ? GL_TRUE : GL_FALSE,
-                    0
+                    intptr_t{attribute.offset}
                 );
                 break;
             }
