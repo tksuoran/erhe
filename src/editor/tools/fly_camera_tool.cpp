@@ -26,6 +26,7 @@
 #   include <imgui/imgui.h>
 #endif
 
+#include <cmath>
 #include <numeric>
 #include <string>
 
@@ -319,7 +320,8 @@ auto Fly_camera_frame_command::try_call() -> bool
     for (float fov_side : { fov_sides.left, fov_sides.right, fov_sides.up, fov_sides.down }) {
         min_fov_side = std::min(std::abs(fov_side), min_fov_side);
     }
-    float tan_fov_side = std::tanf(min_fov_side);
+    ////float tan_fov_side = std::tanf(min_fov_side);
+    float tan_fov_side = tanf(min_fov_side);
     float fit_distance = size / (2.0f * tan_fov_side);
     glm::vec3 new_position = target_position - fit_distance * direction_normalized;
     glm::mat4 new_world_from_node = erhe::math::create_look_at(new_position, target_position, glm::vec3{0.0f, 1.0f, 0.0});

@@ -79,6 +79,29 @@ endif ()
 
 # Dependencies
 message("Fetching dependencies")
+
+if(CMAKE_SYSTEM_NAME MATCHES Linux)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES x86_64)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+            set(VORPALINE_PLATFORM "Linux64-gcc-dynamic")
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            set(VORPALINE_PLATFORM "Linux64-clang-dynamic")
+        endif()
+    else()
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+            set(VORPALINE_PLATFORM "Linux64-nonx86-gcc-dynamic")
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            set(VORPALINE_PLATFORM "Linux64-nonx86-clang-dynamic")
+        endif()
+    endif()
+elseif(CMAKE_SYSTEM_NAME MATCHES Darwin)
+    set(VORPALINE_PLATFORM "Darwin-clang-dynamic")
+elseif(CMAKE_SYSTEM_NAME MATCHES Windows)
+    set(VORPALINE_PLATFORM "Win-vs-generic")
+elseif(CMAKE_SYSTEM_NAME MATCHES Android)
+    set(VORPALINE_PLATFORM "Android-aarch64-gcc-dynamic")
+endif()
+
 CPMAddPackage(
     NAME              geogram
     #GIT_TAG           tksuoran/unicode
@@ -86,6 +109,7 @@ CPMAddPackage(
     VERSION            1.9.2
     GITHUB_REPOSITORY  BrunoLevy/geogram
     OPTIONS
+        "VORPALINE_PLATFORM ${VORPALINE_PLATFORM}"
         "GEOGRAM_SUB_BUILD ON"
         "GEOGRAM_WITH_GRAPHICS OFF"
         "GEOGRAM_WITH_LEGACY_NUMERICS OFF"
@@ -337,7 +361,7 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
         set(CPP_RTTI_ENABLED ON)
         set(ENABLE_INSTALL OFF)
         set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF)
-        add_subdirectory(${JoltPhysics_SOURCE_DIR}/build ${JoltPhysics_BINARY_DIR})
+        add_subdirectory(${JoltPhysics_SOURCE_DIR}/Build ${JoltPhysics_BINARY_DIR})
     endif ()
     message(STATUS "Erhe configured to use jolt for physics.")
     add_definitions(-DERHE_PHYSICS_LIBRARY_JOLT)
