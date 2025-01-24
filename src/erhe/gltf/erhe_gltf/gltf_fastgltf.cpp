@@ -315,11 +315,18 @@ auto get_attribute_index(std::string_view lhs, std::string_view rhs) -> std::siz
     bool is_indexed = is_number(number_part);
     ERHE_VERIFY(is_indexed);
     int integer_value{};
-    auto result = std::from_chars(number_part.data(), number_part.data() + number_part.size(), integer_value);
-    if (result.ec == std::errc::invalid_argument) {
+    std::string number_string{number_part};
+    try {
+        auto result = std::stoi(number_string);
+        return result;
+    } catch (...) {
         return 0;
     }
-    return integer_value;
+    //auto result = std::stoi(number_string);//std::from_chars(number_part.data(), number_part.data() + number_part.size(), integer_value);
+    //if (result.ec == std::errc::invalid_argument) {
+    //    return 0;
+    //}
+    //return integer_value;
 }
 
 auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
@@ -361,13 +368,18 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
     if (!is_indexed) {
         return 0;
     }
-    int integer_value{};
-    auto result = std::from_chars(number_part.data(), number_part.data() + number_part.size(), integer_value);
-    if (result.ec == std::errc::invalid_argument) {
+    std::string number_string{number_part};
+    try {
+        auto result = std::stoi(number_string);
+        return result;
+    } catch (...) {
         return 0;
     }
-
-    return 0;
+    //// auto result = std::from_chars(number_part.data(), number_part.data() + number_part.size(), integer_value);
+    //// if (result.ec == std::errc::invalid_argument) {
+    ////     return 0;
+    //// }
+    //// return 0;
 }
 
 [[nodiscard]] auto to_erhe(std::string_view gltf_attribute_name) -> erhe::graphics::Vertex_attribute::Usage_type
