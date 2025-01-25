@@ -8,6 +8,7 @@
 #include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 namespace erhe::imgui {
 
@@ -54,9 +55,9 @@ void Framebuffer_window::update_framebuffer()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto win_min = ImGui::GetWindowContentRegionMin();
-    const auto win_max = ImGui::GetWindowContentRegionMax();
-
+    ImGuiWindow* window = GImGui->CurrentWindow;
+    const ImVec2 win_min = window->ContentRegionRect.Min;
+    const ImVec2 win_max = window->ContentRegionRect.Max;
     const ImVec2 win_size{win_max.x - win_min.x, win_max.y - win_min.y};
 
     const auto imgui_available_size = win_size;

@@ -535,12 +535,12 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
 {
     ImGuiIO& io = imgui_context->IO;
 
-    IM_ASSERT(io.BackendRendererUserData == NULL && "Already initialized a platform backend renderer");
+    IM_ASSERT((io.BackendRendererUserData == nullptr) && "Already initialized a platform backend renderer");
 
     io.BackendRendererUserData = this;
     io.BackendRendererName     = "erhe";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
-    io.ConfigFlags  |= ImGuiConfigFlags_NavNoCaptureKeyboard;
+    io.ConfigNavCaptureKeyboard = false;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 
     auto& style = imgui_context->Style;
@@ -620,7 +620,7 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     colors[ImGuiCol_TableRowBgAlt]             = ImVec4(0.00f, 0.00f, 0.00f, 0.12f);
     colors[ImGuiCol_TextSelectedBg]            = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
     colors[ImGuiCol_DragDropTarget]            = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
-    colors[ImGuiCol_NavHighlight]              = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
+    colors[ImGuiCol_NavCursor]                 = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
     colors[ImGuiCol_NavWindowingHighlight]     = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
     colors[ImGuiCol_NavWindowingDimBg]         = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
     colors[ImGuiCol_ModalWindowDimBg]          = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);

@@ -10,15 +10,22 @@ erhe_target_sources_grouped(
     imgui/imgui.cpp
     imgui/misc/cpp/imgui_stdlib.cpp
     imgui/misc/cpp/imgui_stdlib.h
-    #backends/imgui_impl_glfw.cpp
 )
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
-    add_definitions(-DIMGUI_ENABLE_FREETYPE -DIMGUI_DISABLE_STB_TRUETYPE_IMPLEMENTATION)
+    add_definitions(
+        -DIMGUI_ENABLE_FREETYPE        
+        -DIMGUI_DISABLE_STB_TRUETYPE_IMPLEMENTATION
+    )
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         imgui/misc/freetype/imgui_freetype.cpp
         imgui/misc/freetype/imgui_freetype.h
     )
+    if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
+        add_definitions(-DIMGUI_ENABLE_FREETYPE_LUNASVG)
+        target_link_libraries(${_target} PRIVATE lunasvg)
+    endif ()
+
     target_link_libraries(${_target} PUBLIC freetype)
 endif()
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/imgui)

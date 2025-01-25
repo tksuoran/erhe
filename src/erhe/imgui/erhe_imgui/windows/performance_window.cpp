@@ -218,7 +218,7 @@ void Plot::imgui()
 
         // Tooltip on hover
         ImGuiContext* context = ImGui::GetCurrentContext();
-        const bool hovered = ImGui::ItemHoverable(frame_bb, id, context->LastItemData.InFlags);
+        const bool hovered = ImGui::ItemHoverable(frame_bb, id, context->LastItemData.ItemFlags);
         if (hovered && inner_bb.Contains(io.MousePos)) {
             const float box_width = inner_bb.Max.x - inner_bb.Min.x;
 

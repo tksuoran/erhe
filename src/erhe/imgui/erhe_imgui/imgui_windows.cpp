@@ -13,6 +13,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <imgui/imgui_internal.h>
+
 namespace erhe::imgui {
 
 Imgui_windows::Imgui_windows(
@@ -141,13 +143,12 @@ void Imgui_windows::imgui_windows()
 
     //Scoped_imgui_context scoped_context{m_imgui_context};
     m_iterating = true;
+    int window_id = 0;
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& imgui_host : imgui_hosts) {
         Scoped_imgui_context imgui_context{*imgui_host};
 
         if (imgui_host->begin_imgui_frame()) {
-            std::size_t i = 0;
-
             bool window_wants_keyboard{false};
             bool window_wants_mouse   {false};
 
@@ -158,11 +159,10 @@ void Imgui_windows::imgui_windows()
                 bool hidden = true;
                 if (imgui_window->is_window_visible()) {
                     bool toolbar_hovered = false;
-                    auto window_id = fmt::format("##window-{}", ++i);
-                    ImGui::PushID(window_id.c_str());
-                    const auto is_window_visible = imgui_window->begin();
+                    ImGui::PushID(++window_id);
+                    const bool is_window_visible = imgui_window->begin();
                     if (is_window_visible) {
-                        const auto before_cursor_pos = ImGui::GetCursorPos();
+                        const ImVec2 before_cursor_pos = ImGui::GetCursorPos();
                         imgui_window->imgui();
                         hidden = false;
                         if (imgui_window->has_toolbar()) {
@@ -170,12 +170,6 @@ void Imgui_windows::imgui_windows()
                             imgui_window->toolbar(toolbar_hovered);
                         }
                     }
-                    const auto window_position    = ImGui::GetWindowPos();
-                    const auto window_size        = ImGui::GetWindowSize();
-                    const auto content_region_min = ImGui::GetWindowContentRegionMin();
-                    const auto content_region_max = ImGui::GetWindowContentRegionMin();
-                    const ImVec2 content_region_size{content_region_max.x - content_region_min.x, content_region_max.y - content_region_min.y};
-                    const ImVec2 toolbar_window_position{window_position.x + content_region_min.x, window_position.y + content_region_min.y};
                     const bool window_hovered = ImGui::IsWindowHovered();
                     if (!toolbar_hovered && window_hovered) {
                         window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
