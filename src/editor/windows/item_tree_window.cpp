@@ -691,12 +691,14 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             }
             ImGui::EndMenu();
         }
+#if 0 // TODO
         ImGui::Separator();
         ImGui::MenuItem("Cut");
         ImGui::MenuItem("Copy");
         ImGui::MenuItem("Paste");
         ImGui::MenuItem("Duplicate");
         ImGui::MenuItem("Delete");
+#endif
 
         ImGui::EndPopup();
         if (close) {
