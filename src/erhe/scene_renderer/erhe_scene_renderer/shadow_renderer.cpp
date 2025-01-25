@@ -33,10 +33,7 @@ using erhe::graphics::Color_blend_state;
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
 
-Shadow_renderer::Shadow_renderer(
-    erhe::graphics::Instance& graphics_instance,
-    Program_interface&        program_interface
-)
+Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
     : m_graphics_instance{graphics_instance}
     , m_shader_stages{
         program_interface.make_prototype(

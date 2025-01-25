@@ -60,7 +60,7 @@ erhe_target_sources_grouped(
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
-    presets.ini
+    graphics_presets.ini
     renderable.hpp
     renderers/composer.cpp
     renderers/composer.hpp
