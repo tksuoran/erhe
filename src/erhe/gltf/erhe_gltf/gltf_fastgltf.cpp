@@ -314,14 +314,13 @@ auto get_attribute_index(std::string_view lhs, std::string_view rhs) -> std::siz
     std::string_view number_part = lhs.substr(rhs.length());
     bool is_indexed = is_number(number_part);
     ERHE_VERIFY(is_indexed);
-    int integer_value{};
     std::string number_string{number_part};
+    int integer_value{0};
     try {
-        auto result = std::stoi(number_string);
-        return result;
+        integer_value = std::stoi(number_string);
     } catch (...) {
-        return 0;
     }
+    return integer_value;
     //auto result = std::stoi(number_string);//std::from_chars(number_part.data(), number_part.data() + number_part.size(), integer_value);
     //if (result.ec == std::errc::invalid_argument) {
     //    return 0;
@@ -369,12 +368,12 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
         return 0;
     }
     std::string number_string{number_part};
+    int integer_value{0};
     try {
-        auto result = std::stoi(number_string);
-        return result;
+        integer_value = std::stoi(number_string);
     } catch (...) {
-        return 0;
     }
+    return integer_value;
     //// auto result = std::from_chars(number_part.data(), number_part.data() + number_part.size(), integer_value);
     //// if (result.ec == std::errc::invalid_argument) {
     ////     return 0;
