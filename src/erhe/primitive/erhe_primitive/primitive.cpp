@@ -77,12 +77,15 @@ Primitive_raytrace::Primitive_raytrace(erhe::geometry::Geometry& geometry, Eleme
     };
 
     erhe::primitive::Element_mappings dummy_mappings;
-    m_rt_mesh = make_buffer_mesh(
+
+    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt = make_buffer_mesh(
         geometry, 
         build_info, 
         (element_mappings != nullptr) ? *element_mappings : dummy_mappings, 
         erhe::primitive::Normal_style::none
     );
+    ERHE_VERIFY(buffer_mesh_opt.has_value()); // TODO
+    m_rt_mesh = std::move(buffer_mesh_opt.value());
 
     make_raytrace_geometry(geometry.name);
     m_rt_geometry->set_user_data(nullptr);
@@ -175,7 +178,11 @@ Primitive_raytrace::Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_
         .buffer_sink   = buffer_sink
     };
 
-    m_rt_mesh = build_buffer_mesh_from_triangle_soup(triangle_soup, buffer_info);
+    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(triangle_soup, buffer_info);
+    if (!buffer_mesh_opt.has_value()) {
+        return; // TODO
+    }
+    m_rt_mesh = buffer_mesh_opt.value();
     m_rt_geometry = erhe::raytrace::IGeometry::create_unique(
         "triangle_soup_triangle_geometry",
         erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE
@@ -378,8 +385,18 @@ auto Primitive_render_shape::make_buffer_mesh(const Build_info& build_info, Norm
 
         ERHE_VERIFY(m_element_mappings.primitive_id_to_polygon_id.empty());
         ERHE_VERIFY(m_element_mappings.corner_to_vertex_id.empty());
-        m_renderable_mesh = erhe::primitive::make_buffer_mesh(*m_geometry.get(), build_info, m_element_mappings, normal_style);
-        return true;
+        std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt = erhe::primitive::make_buffer_mesh(
+            *m_geometry.get(),
+            build_info,
+            m_element_mappings,
+            normal_style
+        );
+        if (buffer_mesh_opt.has_value()) {
+            m_renderable_mesh = std::move(buffer_mesh_opt.value());
+            return true;
+        } else {
+            return false;
+        }
     } else {
         return make_buffer_mesh(build_info.buffer_info);
     }
@@ -390,24 +407,34 @@ auto Primitive_render_shape::make_buffer_mesh(const Buffer_info& buffer_info) ->
     if (!m_triangle_soup) {
         return false;
     }
-    m_renderable_mesh = build_buffer_mesh_from_triangle_soup(*m_triangle_soup.get(), buffer_info);
-    return true;
+    std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(*m_triangle_soup.get(), buffer_info);
+    if (buffer_mesh_opt.has_value()) {
+        m_renderable_mesh = buffer_mesh_opt.value();
+    }
+    return buffer_mesh_opt.has_value();
 }
 #pragma endregion Primitive_render_shape
 
-Buffer_mesh build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info)
+auto build_buffer_mesh_from_triangle_soup(
+    const Triangle_soup& triangle_soup,
+    const Buffer_info&   buffer_info
+) -> std::optional<Buffer_mesh>
 {
-    Buffer_mesh buffer_mesh;
-
     // TODO Use index_type from buffer_info
-    const std::size_t sink_vertex_stride   = buffer_info.vertex_format.stride();
-    const std::size_t source_vertex_stride = triangle_soup.vertex_format.stride();
-    const std::size_t vertex_count         = triangle_soup.vertex_data.size() / source_vertex_stride;
-    const std::size_t index_count          = triangle_soup.index_data.size();
-
-    const Buffer_range index_range  = buffer_info.buffer_sink.allocate_index_buffer(index_count, 4);
+    const std::size_t  sink_vertex_stride   = buffer_info.vertex_format.stride();
+    const std::size_t  source_vertex_stride = triangle_soup.vertex_format.stride();
+    const std::size_t  vertex_count         = triangle_soup.vertex_data.size() / source_vertex_stride;
+    const std::size_t  index_count          = triangle_soup.index_data.size();
+    const Buffer_range index_range          = buffer_info.buffer_sink.allocate_index_buffer(index_count, 4);
+    if (index_range.count == 0) {
+        return std::optional<Buffer_mesh>{};
+    }
     const Buffer_range vertex_range = buffer_info.buffer_sink.allocate_vertex_buffer(vertex_count, sink_vertex_stride);
+    if (vertex_range.count == 0) {
+        return std::optional<Buffer_mesh>{};
+    }
 
+    Buffer_mesh buffer_mesh;
     buffer_mesh.triangle_fill_indices.primitive_type = gl::Primitive_type::triangles;
     buffer_mesh.triangle_fill_indices.first_index = 0;
     buffer_mesh.triangle_fill_indices.index_count = index_count;

@@ -55,8 +55,6 @@ Build_context_root::Build_context_root(
     , vertex_format   {build_info.buffer_info.vertex_format}
     , vertex_stride   {vertex_format.stride()}
 {
-    ERHE_PROFILE_FUNCTION();
-
     get_mesh_info         ();
     get_vertex_attributes ();
     allocate_vertex_buffer();
@@ -136,8 +134,6 @@ void Build_context_root::get_vertex_attributes()
 
 void Build_context_root::allocate_vertex_buffer()
 {
-    ERHE_VERIFY(total_vertex_count > 0);
-
     buffer_mesh->vertex_buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(
         total_vertex_count, vertex_stride
     );
@@ -145,8 +141,6 @@ void Build_context_root::allocate_vertex_buffer()
 
 void Build_context_root::allocate_index_buffer()
 {
-    ERHE_PROFILE_FUNCTION();
-
     ERHE_VERIFY(total_index_count > 0);
 
     const erhe::dataformat::Format index_type     {build_info.buffer_info.index_type};
@@ -230,14 +224,22 @@ Primitive_builder::Primitive_builder(
 {
 }
 
-auto Primitive_builder::build() -> Buffer_mesh
+auto Primitive_builder::build() -> std::optional<Buffer_mesh>
 {
+    bool build_ok{false};
     Buffer_mesh buffer_mesh;
-    build(&buffer_mesh);
-    return buffer_mesh;
+    build(&buffer_mesh, build_ok);
+    if (build_ok) {
+        return std::optional<Buffer_mesh>{buffer_mesh};
+    } else {
+        return std::optional<Buffer_mesh>{};
+    }
+    //return build_ok 
+    //    ? std::optional<Buffer_mesh>{buffer_mesh} 
+    //    : std::optional<Buffer_mesh>{};
 }
 
-void Primitive_builder::build(Buffer_mesh* buffer_mesh)
+void Primitive_builder::build(Buffer_mesh* buffer_mesh, bool& out_build_ok)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -259,6 +261,11 @@ void Primitive_builder::build(Buffer_mesh* buffer_mesh)
         buffer_mesh
     };
 
+    if (!build_context.is_ready()) {
+        out_build_ok = false;
+        return;
+    }
+
     const Primitive_types& primitive_types = m_build_info.primitive_types;
     if (primitive_types.fill_triangles) {
         build_context.build_polygon_fill();
@@ -271,6 +278,8 @@ void Primitive_builder::build(Buffer_mesh* buffer_mesh)
     if (primitive_types.centroid_points) {
         build_context.build_centroid_points();
     }
+    out_build_ok = true;
+    return;
 }
 
 Build_context::Build_context(
@@ -780,9 +789,24 @@ void Build_context::build_triangle_fill_index()
     previous_index = vertex_index;
 }
 
+auto Build_context::is_ready() const -> bool
+{
+    const bool ready = 
+        (root.buffer_mesh->index_buffer_range.count != 0) &&
+        (root.buffer_mesh->vertex_buffer_range.count != 0);
+    if (ready) {
+        return true;
+    }
+    return false;
+}
+
 void Build_context::build_polygon_fill()
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (!is_ready()) {
+        return;
+    }
 
     // TODO property_maps.corner_indices needs to be setup
     //      also if edge lines are wanted.
@@ -884,6 +908,10 @@ void Build_context::build_edge_lines()
 {
     ERHE_PROFILE_FUNCTION();
 
+    if (!is_ready()) {
+        return;
+    }
+
     if (!root.build_info.primitive_types.edge_lines) {
         return;
     }
@@ -917,6 +945,10 @@ void Build_context::build_edge_lines()
 void Build_context::build_centroid_points()
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (!is_ready()) {
+        return;
+    }
 
     if (!root.build_info.primitive_types.centroid_points) {
         return;
@@ -952,7 +984,7 @@ auto make_buffer_mesh(
     const Build_info&               build_info,
     Element_mappings&               element_mappings,
     const Normal_style              normal_style
-) -> Buffer_mesh
+) -> std::optional<Buffer_mesh>
 {
     ERHE_PROFILE_FUNCTION();
 

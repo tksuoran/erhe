@@ -188,23 +188,30 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     m_node = std::make_shared<erhe::scene::Node>("Material Preview Node");
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
-    m_mesh->add_primitive(
-        erhe::primitive::Primitive{
-            erhe::primitive::make_buffer_mesh(
-                erhe::geometry::shapes::make_sphere(
-                    m_radius,
-                    std::max(1, m_slice_count),
-                    std::max(1, m_stack_count)
-                ),
-                erhe::primitive::Build_info{
-                    .primitive_types = { .fill_triangles = true },
-                    .buffer_info     = mesh_memory.buffer_info
-                },
-                dummy,
-                erhe::primitive::Normal_style::corner_normals
-            )
-        }
-    );
+    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt =
+        erhe::primitive::make_buffer_mesh(
+            erhe::geometry::shapes::make_sphere(
+                m_radius,
+                std::max(1, m_slice_count),
+                std::max(1, m_stack_count)
+            ),
+            erhe::primitive::Build_info{
+                .primitive_types = { .fill_triangles = true },
+                .buffer_info     = mesh_memory.buffer_info
+            },
+            dummy,
+            erhe::primitive::Normal_style::corner_normals
+        );
+    if (buffer_mesh_opt.has_value()) {
+        m_mesh->add_primitive(
+            erhe::primitive::Primitive{
+                std::move(buffer_mesh_opt.value())
+            }
+        );
+    } else {
+        // TODO
+        log_render->error("Unable to create material preview mesh - out of memory?");
+    }
 
     using Item_flags = erhe::Item_flags;
     m_mesh->layer_id = m_scene_root->layers().content()->id;

@@ -332,19 +332,19 @@ void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
     );
 
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
+    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt = erhe::primitive::make_buffer_mesh(
+        *disc_geometry_shared.get(),
+        erhe::primitive::Build_info{
+            .primitive_types = { .fill_triangles = true },
+            .buffer_info     = mesh_memory.buffer_info
+        },
+        dummy
+    );
+    ERHE_VERIFY(buffer_mesh_opt.has_value());
+
     m_radial_menu_background_mesh = std::make_shared<erhe::scene::Mesh>(
         "Radiaul Menu Mesh",
-        erhe::primitive::Primitive{
-            erhe::primitive::make_buffer_mesh(
-                *disc_geometry_shared.get(),
-                erhe::primitive::Build_info{
-                    .primitive_types = { .fill_triangles = true },
-                    .buffer_info     = mesh_memory.buffer_info
-                },
-                dummy
-            ),
-            disc_material
-        }
+        erhe::primitive::Primitive{buffer_mesh_opt.value(),  disc_material}
     );
 
     erhe::scene::Scene* scene = scene_root.get_hosted_scene();

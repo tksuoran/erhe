@@ -31,7 +31,8 @@ Controller_visualization::Controller_visualization(erhe::scene::Node* view_root,
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
 
     erhe::primitive::Element_mappings dummy;
-    erhe::primitive::Primitive primitive{
+
+    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt =
         erhe::primitive::make_buffer_mesh(
             controller_geometry,
             erhe::primitive::Build_info{
@@ -40,7 +41,11 @@ Controller_visualization::Controller_visualization(erhe::scene::Node* view_root,
             },
             dummy, // TODO make element mappings optional
             erhe::primitive::Normal_style::corner_normals
-        ),
+        );
+    ERHE_VERIFY(buffer_mesh_opt.has_value());
+
+    erhe::primitive::Primitive primitive{
+        buffer_mesh_opt.value(),
         controller_material
     };
 

@@ -867,13 +867,18 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
     constexpr int   z_count = 20;
 
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
-    const erhe::primitive::Primitive primitive{
+
+    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt =
         make_buffer_mesh(
             make_cube(0.1f),
             build_info(mesh_memory),
             dummy,
             Normal_style::polygon_normals
-        ),
+        );
+    ERHE_VERIFY(buffer_mesh_opt.has_value()); // TODO
+
+    const erhe::primitive::Primitive primitive{
+        std::move(buffer_mesh_opt.value()),
         material
     };
     for (int i = 0; i < x_count; ++i) {

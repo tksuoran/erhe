@@ -258,17 +258,22 @@ auto Buffer::debug_label() const noexcept -> const std::string&
     return m_debug_label;
 }
 
-auto Buffer::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::size_t
+auto Buffer::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::optional<std::size_t>
 {
     ERHE_VERIFY(alignment > 0);
 
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_allocate_mutex};
 
-    while ((m_next_free_byte % alignment) != 0) {
-        ++m_next_free_byte;
+    std::size_t offset = m_next_free_byte;
+    while ((offset % alignment) != 0) {
+        ++offset;
     }
-    const auto offset = m_next_free_byte;
-    m_next_free_byte += byte_count;
+    std::size_t next_free_byte = offset + byte_count;
+    if (next_free_byte > m_capacity_byte_count) {
+        return std::nullopt;
+    }
+
+    m_next_free_byte = next_free_byte;
     ERHE_VERIFY(m_next_free_byte <= m_capacity_byte_count);
 
     log_buffer->trace("buffer {}: allocated {} bytes at offset {}", gl_name(), byte_count, offset);

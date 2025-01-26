@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 
 #include <cstddef>
+#include <optional>
 
 namespace erhe::graphics {
     class Buffer;
@@ -88,6 +89,8 @@ public:
     );
     ~Build_context() noexcept;
 
+    auto is_ready() const -> bool;
+
     void build_polygon_fill   ();
     void build_edge_lines     ();
     void build_centroid_points();
@@ -153,9 +156,9 @@ public:
         Normal_style                    normal_style
     );
 
-    [[nodiscard]] auto build() -> Buffer_mesh;
+    [[nodiscard]] auto build() -> std::optional<Buffer_mesh>;
 
-    void build(Buffer_mesh* buffer_mesh);
+    void build(Buffer_mesh* buffer_mesh, bool& out_build_ok);
 
 private:
     const erhe::geometry::Geometry& m_geometry;
@@ -169,6 +172,6 @@ private:
     const Build_info&               build_info,
     Element_mappings&               element_mappings,
     Normal_style                    normal_style = Normal_style::corner_normals
-) -> Buffer_mesh;
+) -> std::optional<Buffer_mesh>;
 
 } // namespace erhe::primitive

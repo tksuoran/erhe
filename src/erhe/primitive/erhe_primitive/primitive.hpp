@@ -146,7 +146,7 @@ public:
     std::shared_ptr<Material>               material;
 };
 
-Buffer_mesh build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info);
+auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>;
 
 [[nodiscard]] auto primitive_type(Primitive_mode primitive_mode) -> std::optional<gl::Primitive_type>;
 
