@@ -205,55 +205,64 @@ void Create::imgui()
 
     {
         const auto& selection = m_context.selection->get_selection();
-        if (!selection.empty()) {
-            std::shared_ptr<erhe::geometry::Geometry> source_geometry;
-            for (const auto& item : selection) {
-                const auto& mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
-                if (mesh) {
-                    for (const auto& primitive : mesh->get_primitives()) {
-                        if (primitive.render_shape) {
-                            source_geometry = primitive.render_shape->get_geometry();
-                            if (source_geometry) {
-                                break;
-                            }
-                        }
-                    }
+        if (selection.empty()) {
+            return;
+        }
+        std::shared_ptr<erhe::geometry::Geometry> source_geometry;
+        for (const auto& item : selection) {
+            const auto& mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+            if (!mesh) {
+                continue;
+            }
+            for (const auto& primitive : mesh->get_primitives()) {
+                if (!primitive.render_shape) {
+                    continue;
+                }
+                source_geometry = primitive.render_shape->get_geometry();
+                if (source_geometry) {
+                    break;
                 }
             }
-            if (source_geometry) {
-                if (m_create_shape == nullptr) {
-                    erhe::imgui::make_combo(
-                        "Normal Style",
-                        m_normal_style,
-                        erhe::primitive::c_normal_style_strings,
-                        IM_ARRAYSIZE(erhe::primitive::c_normal_style_strings)
-                    );
-                    ImGui::InputText("Brush Name", &m_brush_name);
-                }
+        }
+        if (!source_geometry) {
+            return;
+        }
+        if (m_create_shape == nullptr) {
+            erhe::imgui::make_combo(
+                "Normal Style",
+                m_normal_style,
+                erhe::primitive::c_normal_style_strings,
+                IM_ARRAYSIZE(erhe::primitive::c_normal_style_strings)
+            );
+            ImGui::InputText("Brush Name", &m_brush_name);
+        }
 
-                ImGui::Text("Selected Primitive: %s", source_geometry->name.c_str());
-                if (ImGui::Button("Selected Mesh to Brush")) {
-                    Brush_data brush_create_info{
-                        .context         = m_context,
-                        .editor_settings = *m_context.editor_settings,
-                        .name            = m_brush_name,
-                        .build_info      = erhe::primitive::Build_info{
-                            .primitive_types = { .fill_triangles = true, .edge_lines = true, .corner_points = true, .centroid_points = true },
-                            .buffer_info     = m_context.mesh_memory->buffer_info
-                        },
-                        .normal_style    = m_normal_style,
-                        .geometry        = source_geometry,
-                        .density         = m_density
-                    };
-                    //// source_geometry->build_edges();
-                    //// source_geometry->compute_polygon_normals();
-                    //// source_geometry->compute_tangents();
-                    //// source_geometry->compute_polygon_centroids();
-                    //// source_geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
-                    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-                    content_library->brushes->make<Brush>(brush_create_info);
-                }
-            }
+        //// ImGui::Text("Selected Primitive: %s", source_geo_mesh->name.c_str());
+        if (ImGui::Button("Selected Mesh to Brush")) {
+            Brush_data brush_create_info{
+                .context         = m_context,
+                .editor_settings = *m_context.editor_settings,
+                .name            = m_brush_name,
+                .build_info      = erhe::primitive::Build_info{
+                    .primitive_types = {
+                        .fill_triangles  = true,
+                        .edge_lines      = true,
+                        .corner_points   = true,
+                        .centroid_points = true
+                    },
+                    .buffer_info     = m_context.mesh_memory->buffer_info
+                },
+                .normal_style    = m_normal_style,
+                .geometry        = source_geometry,
+                .density         = m_density
+            };
+            //// source_geometry->build_edges();
+            //// source_geometry->compute_polygon_normals();
+            //// source_geometry->compute_tangents();
+            //// source_geometry->compute_polygon_centroids();
+            //// source_geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+            content_library->brushes->make<Brush>(brush_create_info);
         }
     }
 

@@ -59,8 +59,9 @@ void import_geogram(
     ioFlags.set_attributes(GEO::MeshAttributesFlags::MESH_ALL_ATTRIBUTES);
     ioFlags.set_elements(GEO::MeshElementsFlags::MESH_ALL_ELEMENTS); // | MESH_ALL_SUBELEMENTS?
     const std::string path_string = path.string();
-    GEO::Mesh geogram_mesh{};
-    bool load_ok = GEO::mesh_load(path_string.c_str(), geogram_mesh, ioFlags);
+    std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>();
+    GEO::Mesh& geo_mesh = geometry->get_mesh();
+    bool load_ok = GEO::mesh_load(path_string.c_str(), geo_mesh, ioFlags);
     if (!load_ok) {
         return;
     }
@@ -77,9 +78,6 @@ void import_geogram(
         erhe::Item_flags::content     |
         erhe::Item_flags::show_in_ui;
     constexpr erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::corner_normals;
-
-    std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(path_string);
-    erhe::geometry::geometry_from_geogram(*geometry.get(), geogram_mesh);
 
     erhe::primitive::Primitive primitive{
         geometry,

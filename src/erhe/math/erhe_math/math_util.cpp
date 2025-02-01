@@ -699,4 +699,14 @@ auto Point_vector_bounding_volume_source::get_point(std::size_t element_index, s
     return m_points[element_index];
 }
 
+auto torus_volume(const float major_radius, const float minor_radius) -> float
+{
+    return
+        glm::pi<float>() *
+        minor_radius *
+        minor_radius *
+        glm::two_pi<float>() *
+        major_radius;
+}
+
 } // namespace erhe::math

@@ -1,4 +1,4 @@
-// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "scene/scene_view.hpp"
 
@@ -13,6 +13,8 @@
 #include "rendergraph/shadow_render_node.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_log/log_geogram.hpp"
+#include "erhe_log/log_glm.hpp"
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/iscene.hpp"
@@ -21,6 +23,10 @@
 #include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
+
+#include <geogram/mesh/mesh_geometry.h>
+
+#include <glm/gtx/matrix_operation.hpp>
 
 namespace editor {
 
@@ -33,8 +39,8 @@ void Hover_entry::reset()
 
 auto Hover_entry::get_name() const -> const std::string&
 {
-    if (mesh) {
-        return mesh->get_name();
+    if (scene_mesh) {
+        return scene_mesh->get_name();
     }
     if (grid) {
         return grid->get_name();
@@ -52,8 +58,8 @@ Scene_view::~Scene_view() noexcept = default;
 
 void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
 {
-    const bool mesh_changed = m_hover_entries[slot].mesh != entry.mesh;
-    const bool grid_changed = m_hover_entries[slot].grid != entry.grid;
+    const bool mesh_changed = m_hover_entries[slot].scene_mesh != entry.scene_mesh;
+    const bool grid_changed = m_hover_entries[slot].grid       != entry.grid;
     m_hover_entries[slot]      = entry;
     m_hover_entries[slot].slot = slot;
 
@@ -230,10 +236,12 @@ void Scene_view::update_grid_hover()
     Hover_entry entry;
     entry.valid = (hover_position.grid != nullptr);
     if (entry.valid) {
+        const glm::mat4  world_from_grid        = hover_position.grid->world_from_grid();
+        const glm::mat4  normal_world_from_grid = glm::transpose(glm::adjugate(world_from_grid));
+        const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_grid * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+        const glm::vec3  unit_normal_in_world   = glm::normalize(normal_in_world);
         entry.position = hover_position.position;
-        entry.normal   = glm::vec3{
-            hover_position.grid->world_from_grid() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}
-        };
+        entry.normal   = unit_normal_in_world;
         entry.grid     = hover_position.grid;
     }
 
@@ -318,40 +326,42 @@ void Scene_view::update_hover_with_raytrace()
             void* node_instance_user_data = hit.instance->get_user_data();
             auto* raytrace_primitive      = static_cast<erhe::scene::Raytrace_primitive*>(node_instance_user_data);
             ERHE_VERIFY(raytrace_primitive != nullptr);
-            entry.uv                      = hit.uv;
-            entry.position                = ray.origin + ray.t_far * ray.direction;
-            entry.triangle_id             = std::numeric_limits<std::size_t>::max();
+            entry.uv                         = hit.uv;
+            entry.position                   = ray.origin + ray.t_far * ray.direction;
+            entry.normal                     = hit.normal;
+            entry.triangle                   = std::numeric_limits<uint32_t>::max();
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit position: {}", Hover_entry::slot_names[slot], entry.position.value());
-            entry.mesh            = raytrace_primitive->mesh;
-            entry.primitive_index = raytrace_primitive->primitive_index;
-            ERHE_VERIFY(entry.mesh != nullptr);
-            auto* const node = entry.mesh->get_node();
+            SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit normal: {}", Hover_entry::slot_names[slot], hit.normal);
+            entry.scene_mesh                 = raytrace_primitive->mesh;
+            entry.scene_mesh_primitive_index = raytrace_primitive->primitive_index;
+            ERHE_VERIFY(entry.scene_mesh != nullptr);
+            auto* const node = entry.scene_mesh->get_node();
             ERHE_VERIFY(node != nullptr);
-            const std::vector<erhe::primitive::Primitive>& mesh_primitives = entry.mesh->get_primitives();
-            ERHE_VERIFY(raytrace_primitive->primitive_index < mesh_primitives.size());
-            const erhe::primitive::Primitive& primitive = mesh_primitives[raytrace_primitive->primitive_index];
+            const std::vector<erhe::primitive::Primitive>& scene_mesh_primitives = entry.scene_mesh->get_primitives();
+            ERHE_VERIFY(raytrace_primitive->primitive_index < scene_mesh_primitives.size());
+            const erhe::primitive::Primitive& scene_mesh_primitive = scene_mesh_primitives[raytrace_primitive->primitive_index];
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit node: {}", Hover_entry::slot_names[slot], node->get_name());
             ERHE_VERIFY(raytrace_primitive->rt_instance);
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: RT instance {}", Hover_entry::slot_names[slot], raytrace_primitive->rt_instance->is_enabled());
-            entry.normal = hit.normal;
-            const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
+            const std::shared_ptr<erhe::primitive::Primitive_shape> shape = scene_mesh_primitive.get_shape_for_raytrace();
             ERHE_VERIFY(shape);
-            entry.geometry = shape->get_geometry_const();
+            entry.geometry = shape->get_geometry();
             if (entry.geometry) {
-                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit geometry: {}", Hover_entry::slot_names[slot], entry.geometry->name);
+                GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit geometry: {}", Hover_entry::slot_names[slot], entry.geometry->get_name());
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit triangle: {}", Hover_entry::slot_names[slot], hit.triangle_id);
-                const auto polygon_id = shape->get_polygon_id_from_primitive_id(hit.triangle_id);
-                ERHE_VERIFY(polygon_id < entry.geometry->get_polygon_count());
-                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit polygon: {}", Hover_entry::slot_names[slot], polygon_id);
-                entry.polygon_id = polygon_id;
-                ///// entry.normal = {};
-                ///// auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
-                ///// if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id)) {
-                /////     const auto local_normal    = polygon_normals->get(polygon_id);
-                /////     const auto world_from_node = node->world_from_node();
-                /////     entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                /////     SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
-                ///// }
+                const GEO::index_t facet = shape->get_mesh_facet_from_triangle(hit.triangle_id);
+                ERHE_VERIFY(facet < geo_mesh.facets.nb());
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit facet: {}", Hover_entry::slot_names[slot], facet);
+                entry.facet = facet;
+                const GEO::vec3f facet_normal           = GEO::vec3f{GEO::Geom::mesh_facet_normal(geo_mesh, facet)};
+                const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
+                const glm::mat4  world_from_node        = node->world_from_node();
+                const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
+                const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
+                const glm::vec3  unit_normal_in_world   = glm::normalize(normal_in_world);
+                entry.normal = unit_normal_in_world;
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit normal: {} ***", Hover_entry::slot_names[slot], unit_normal_in_world);
             }
         } else {
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: no hit", Hover_entry::slot_names[slot]);

@@ -2,7 +2,7 @@
 
 #include "erhe_primitive/buffer_info.hpp"
 
-#include <glm/glm.hpp>
+#include <geogram/mesh/mesh.h>
 
 #include <cstdint>
 #include <vector>
@@ -27,18 +27,20 @@ class Build_info
 public:
     Primitive_types                            primitive_types;
     Buffer_info                                buffer_info;
-    glm::vec4                                  constant_color           {1.0f};
+    GEO::vec4f                                 constant_color           {1.0f, 1.0f, 1.0f, 1.0f};
     bool                                       keep_geometry            {false};
     Normal_style                               normal_style             {Normal_style::corner_normals};
     erhe::graphics::Vertex_attribute_mappings* vertex_attribute_mappings{nullptr};
+    bool                                       vertex_id_vec3           {false};
     bool                                       autocolor                {false};
 };
 
 class Element_mappings
 {
 public:
-    std::vector<uint32_t> primitive_id_to_polygon_id;
-    std::vector<uint32_t> corner_to_vertex_id;
+    std::vector<uint32_t> triangle_to_mesh_facet;
+    std::vector<uint32_t> mesh_corner_to_vertex_buffer_index;
+    std::vector<uint32_t> mesh_vertex_to_vertex_buffer_index;
 };
 
 } // namespace erhe::primitive

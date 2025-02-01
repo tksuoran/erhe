@@ -17,6 +17,10 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <geogram/mesh/mesh_geometry.h>
+
+#include <glm/gtx/matrix_operation.hpp>
+
 namespace editor {
 
 using erhe::raytrace::IGeometry;
@@ -75,20 +79,17 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
     using namespace erhe::primitive;
     const std::shared_ptr<Primitive_shape> shape = primitive.get_shape_for_raytrace();
     ERHE_VERIFY(shape);
-    const auto polygon_id = shape->get_polygon_id_from_primitive_id(hit.triangle_id);
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
+    const GEO::index_t facet = shape->get_mesh_facet_from_triangle(hit.triangle_id);
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
     if (!geometry) {
         return hit.normal;
     }
-    ERHE_VERIFY(polygon_id < geometry->get_polygon_count());
-    auto* const polygon_normals = geometry->polygon_attributes().find<glm::vec3>(
-        erhe::geometry::c_polygon_normals
-    );
-    if ((polygon_normals == nullptr) || !polygon_normals->has(polygon_id)) {
-        return {};
-    }
-
-    return polygon_normals->get(polygon_id);
+    const GEO::Mesh& geo_mesh               = geometry->get_mesh();
+    const GEO::vec3f facet_normal           = GEO::normalize(GEO::vec3f{GEO::Geom::mesh_facet_normal(geo_mesh, facet)});
+    const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
+    const glm::mat4  world_from_node        = node->world_from_node();
+    const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
+    return glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
 }
 
 void draw_ray_hit(

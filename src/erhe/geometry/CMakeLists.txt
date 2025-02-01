@@ -3,16 +3,10 @@ add_library(${_target})
 add_library(erhe::geometry ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe_geometry/corner.inl
     erhe_geometry/geometry.cpp
     erhe_geometry/geometry.hpp
-    erhe_geometry/geometry.inl
-    erhe_geometry/geometry_geogram_mesh.cpp
-    erhe_geometry/geometry_iterators.cpp
     erhe_geometry/geometry_log.cpp
     erhe_geometry/geometry_log.hpp
-    erhe_geometry/geometry_make.cpp
-    erhe_geometry/geometry_merge.cpp
     erhe_geometry/geometry_tangents.cpp
     erhe_geometry/operation/ambo.cpp
     erhe_geometry/operation/ambo.hpp
@@ -20,8 +14,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/bake_transform.hpp
     erhe_geometry/operation/catmull_clark_subdivision.cpp
     erhe_geometry/operation/catmull_clark_subdivision.hpp
-    erhe_geometry/operation/clone.cpp
-    erhe_geometry/operation/clone.hpp
+    erhe_geometry/operation/chamfer.cpp
+    erhe_geometry/operation/chamfer.hpp
     erhe_geometry/operation/difference.cpp
     erhe_geometry/operation/difference.hpp
     erhe_geometry/operation/dual.cpp
@@ -54,13 +48,6 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/truncate.hpp
     erhe_geometry/operation/union.cpp
     erhe_geometry/operation/union.hpp
-    erhe_geometry/polygon.cpp
-    erhe_geometry/polygon.inl
-    erhe_geometry/property_map.hpp
-    erhe_geometry/property_map.inl
-    erhe_geometry/property_map_collection.hpp
-    erhe_geometry/property_map_collection.inl
-    erhe_geometry/remapper.hpp
     erhe_geometry/shapes/box.cpp
     erhe_geometry/shapes/box.hpp
     erhe_geometry/shapes/cone.cpp
@@ -86,9 +73,9 @@ endif ()
 target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
+        geogram
         glm::glm-header-only
     PRIVATE
-        geogram
         erhe::log
         erhe::math
         erhe::profile

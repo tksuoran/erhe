@@ -1,59 +1,43 @@
 #include "erhe_geometry/operation/reverse.hpp"
-#include "erhe_geometry/geometry.hpp"
-
-#include <fmt/format.h>
+#include "erhe_geometry/operation/geometry_operation.hpp"
 
 namespace erhe::geometry::operation {
+
+class Reverse : public Geometry_operation
+{
+public:
+    Reverse(const Geometry& source, Geometry& destination);
+
+    void build();
+};
 
 Reverse::Reverse(const Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
-    destination.points                               = source.points;
-    destination.polygons                             = source.polygons;
-    destination.edges                                = source.edges;
-    destination.corners                              = source.corners;
-    destination.point_corners                        = source.point_corners;
-    destination.polygon_corners                      = source.polygon_corners;
-    destination.m_next_corner_id                     = source.m_next_corner_id;
-    destination.m_next_point_id                      = source.m_next_point_id;
-    destination.m_next_polygon_id                    = source.m_next_polygon_id;
-    destination.m_next_edge_id                       = source.m_next_edge_id;
-    destination.m_next_point_corner_reserve          = source.m_next_point_corner_reserve;
-    destination.m_next_polygon_corner_id             = source.m_next_polygon_corner_id;
-    destination.m_serial                             = source.m_serial                            ;
-    destination.m_serial_edges                       = source.m_serial_edges                      ;
-    destination.m_serial_polygon_normals             = source.m_serial_polygon_normals            ;
-    destination.m_serial_polygon_centroids           = source.m_serial_polygon_centroids          ;
-    destination.m_serial_polygon_tangents            = source.m_serial_polygon_tangents           ;
-    destination.m_serial_polygon_bitangents          = source.m_serial_polygon_bitangents         ;
-    destination.m_serial_polygon_texture_coordinates = source.m_serial_polygon_texture_coordinates;
-    destination.m_serial_point_normals               = source.m_serial_point_normals              ;
-    destination.m_serial_point_tangents              = source.m_serial_point_tangents             ;
-    destination.m_serial_point_bitangents            = source.m_serial_point_bitangents           ;
-    destination.m_serial_point_texture_coordinates   = source.m_serial_point_texture_coordinates  ;
-    destination.m_serial_smooth_point_normals        = source.m_serial_smooth_point_normals       ;
-    destination.m_serial_corner_normals              = source.m_serial_corner_normals             ;
-    destination.m_serial_corner_tangents             = source.m_serial_corner_tangents            ;
-    destination.m_serial_corner_bitangents           = source.m_serial_corner_bitangents          ;
-    destination.m_serial_corner_texture_coordinates  = source.m_serial_corner_texture_coordinates ;
-
-    destination.m_next_edge_polygon_id            = source.m_next_edge_polygon_id;
-    destination.m_point_property_map_collection   = source.m_point_property_map_collection  .clone();
-    destination.m_corner_property_map_collection  = source.m_corner_property_map_collection .clone();
-    destination.m_polygon_property_map_collection = source.m_polygon_property_map_collection.clone();
-    destination.m_edge_property_map_collection    = source.m_edge_property_map_collection   .clone();
-
-    destination.reverse_polygons();
 }
 
-auto reverse(const Geometry& source) -> Geometry
+void Reverse::build()
 {
-    return Geometry{
-        fmt::format("reverse({})", source.name),
-        [&source](auto& result) {
-            Reverse operation{source, result};
-        }
-    };
+    destination_mesh.copy(source_mesh, true);
+    copy_mesh_attributes();
+
+    for (GEO::index_t facet : destination_mesh.facets) {
+        destination_mesh.facets.flip(facet);
+    }
+
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_facet_centroids |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+    destination.process(flags);
+}
+
+void reverse(const Geometry& source, Geometry& destination)
+{
+    Reverse operation{source, destination};
+    operation.build();
 }
 
 } // namespace erhe::geometry::operation

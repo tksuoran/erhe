@@ -1,8 +1,6 @@
 #pragma once
 
-namespace erhe::geometry {
-    class Geometry;
-}
+namespace erhe::geometry { class Geometry; }
 
 #include <filesystem>
 #include <memory>
@@ -10,8 +8,6 @@ namespace erhe::geometry {
 
 namespace editor {
 
-[[nodiscard]] auto parse_obj_geometry(
-    const std::filesystem::path& path
-) -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>;
+[[nodiscard]] auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>;
 
 }

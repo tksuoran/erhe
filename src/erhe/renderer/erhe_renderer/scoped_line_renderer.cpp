@@ -1,6 +1,7 @@
 #include "erhe_renderer/scoped_line_renderer.hpp"
 #include "erhe_renderer/line_renderer.hpp"
 #include "erhe_renderer/line_renderer_bucket.hpp"
+#include "erhe_renderer/renderer_log.hpp"
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/vertex_format.hpp"
@@ -80,6 +81,10 @@ Scoped_line_renderer::~Scoped_line_renderer()
         if (byte_count > 0) {
             std::size_t first_line_offset = m_line_renderer->get_line_offset();
             std::span<std::byte> dst = m_line_renderer->allocate_vertex_subspan(byte_count);
+            if (dst.size_bytes() < byte_count) {
+                log_render->warn("Not enough space in Line_renderer vertex buffer");
+                return;
+            }
             std::copy(m_indirect_buffer.begin(), m_indirect_buffer.end(), dst.begin());
             std::size_t last_line_offset = m_line_renderer->get_line_offset();
             std::size_t line_count = last_line_offset - m_first_line;
@@ -106,9 +111,14 @@ void Scoped_line_renderer::allocate(std::size_t line_count)
         m_indirect_buffer.resize(new_size);
         m_last_allocate_gpu_data = std::span<std::byte>{m_indirect_buffer.data() + size_before, byte_count};
     }
-    std::byte* start = m_last_allocate_gpu_data.data();
-    m_last_allocate_gpu_float_data = reinterpret_cast<float*>(start);
-    m_last_allocate_word_offset    = 0;
+    if (m_last_allocate_gpu_data.size_bytes() < byte_count) {
+        m_last_allocate_gpu_float_data = nullptr;
+        m_last_allocate_word_offset    = 0;
+    } else {
+        std::byte* start = m_last_allocate_gpu_data.data();
+        m_last_allocate_gpu_float_data = reinterpret_cast<float*>(start);
+        m_last_allocate_word_offset    = 0;
+    }
 }
 
 void Scoped_line_renderer::set_line_color(const float r, const float g, const float b, const float a)

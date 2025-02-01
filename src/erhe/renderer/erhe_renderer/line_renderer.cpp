@@ -236,7 +236,11 @@ auto Line_renderer::get_line_offset() const -> std::size_t
 auto Line_renderer::allocate_vertex_subspan(std::size_t byte_count) -> std::span<std::byte>
 {
     ERHE_VERIFY(m_vertex_buffer_range.has_value());
+    std::span<std::byte> current_spant = m_vertex_buffer_range.value().get_span();
     std::size_t span_start = m_vertex_write_offset;
+    if (current_spant.size_bytes() - span_start < byte_count) {
+        return {};
+    }
     m_vertex_write_offset += byte_count;
     return m_vertex_buffer_range.value().get_span().subspan(span_start, byte_count);
 }

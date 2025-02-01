@@ -3,7 +3,9 @@
 #include "erhe_renderer/buffer_writer.hpp"
 #include "erhe_graphics/buffer.hpp"
 
+#include <chrono>
 #include <deque>
+#include <optional>
 
 namespace erhe::renderer {
 
@@ -118,7 +120,9 @@ private:
 
     std::string               m_name;
 
-    std::deque<Sync_entry> m_sync_entries;
+    std::deque<Sync_entry>    m_sync_entries;
+
+    std::optional<std::chrono::steady_clock::time_point> m_last_warning_time;
 };
 
 } // namespace erhe::renderer

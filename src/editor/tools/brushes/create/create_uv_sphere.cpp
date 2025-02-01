@@ -51,19 +51,20 @@ void Create_uv_sphere::imgui()
 
 auto Create_uv_sphere::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
-    brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::shapes::make_sphere(
-            m_radius,
-            std::max(1, m_slice_count), // slice count
-            std::max(1, m_stack_count)  // stack count
-        )
+    auto geometry = std::make_shared<erhe::geometry::Geometry>("sphere");
+    erhe::geometry::shapes::make_sphere(
+        geometry->get_mesh(),
+        m_radius,
+        std::max(1, m_slice_count), // slice count
+        std::max(1, m_stack_count)  // stack count
     );
+    brush_create_info.geometry = geometry;
 
-    brush_create_info.geometry->build_edges();
-    brush_create_info.geometry->compute_polygon_normals();
-    brush_create_info.geometry->compute_tangents();
-    brush_create_info.geometry->compute_polygon_centroids();
-    brush_create_info.geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
+    // geometry->build_edges();
+    // geometry->compute_polygon_normals();
+    // geometry->compute_tangents();
+    // geometry->compute_polygon_centroids();
+    // geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
     brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_sphere_shape_shared(m_radius);
 
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);

@@ -6,15 +6,10 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <geogram/mesh/mesh_geometry.h>
+
 namespace editor {
 
-using erhe::geometry::Polygon; // Resolve conflict with wingdi.h BOOL Polygon(HDC,const POINT *,int)
-using erhe::geometry::c_polygon_centroids;
-using erhe::geometry::c_polygon_normals;
-using erhe::geometry::c_point_locations;
-using erhe::geometry::Corner_id;
-using erhe::geometry::Point_id;
-using erhe::geometry::Polygon_id;
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
@@ -22,72 +17,74 @@ using glm::vec4;
 Reference_frame::Reference_frame() = default;
 
 Reference_frame::Reference_frame(
-    const erhe::geometry::Geometry&  geometry,
-    const erhe::geometry::Polygon_id in_polygon_id,
-    const uint32_t                   face_offset,
-    const uint32_t                   in_corner_offset
+    const GEO::Mesh&   mesh,
+    const GEO::index_t facet,
+    const GEO::index_t face_offset,
+    const GEO::index_t in_corner_offset
 )
-    : face_offset{face_offset}
-    , polygon_id {std::min(in_polygon_id, geometry.get_polygon_count() - 1)}
+    : m_face_offset{face_offset}
+    , m_facet      {std::min(facet, mesh.facets.nb() - 1)}
 {
-    const auto* const polygon_centroids = geometry.polygon_attributes().find<vec3>(c_polygon_centroids);
-    const auto* const polygon_normals   = geometry.polygon_attributes().find<vec3>(c_polygon_normals);
-    const auto* const point_locations   = geometry.point_attributes  ().find<vec3>(c_point_locations);
-    ERHE_VERIFY(point_locations != nullptr);
+    // Mesh_attributes attributes{mesh};
 
-    const auto& polygon = geometry.polygons[polygon_id];
-    if (polygon.corner_count == 0) {
+    m_corner_count = mesh.facets.nb_corners(facet);
+    if (m_corner_count == 0) {
         log_brush->warn("Polygon with 0 corners");
         return;
     }
 
-    this->corner_offset = in_corner_offset % polygon.corner_count;
+    m_corner_offset = in_corner_offset % m_corner_count;
+    m_corner        = mesh.facets.corner(facet, m_corner_offset);
 
-    centroid = (polygon_centroids != nullptr) && polygon_centroids->has(polygon_id)
-        ? polygon_centroids->get(polygon_id)
-        : polygon.compute_centroid(geometry, *point_locations);
+    const GEO::index_t next_corner   = mesh.facets.next_corner_around_facet(m_facet, m_corner);
+    const GEO::index_t vertex        = mesh.facet_corners.vertex(m_corner);
+    const GEO::index_t next_vertex   = mesh.facet_corners.vertex(next_corner);
+                       m_N           = GEO::normalize(GEO::Geom::mesh_facet_normal(mesh, m_facet));
+                       m_centroid    = GEO::Geom::mesh_facet_center(mesh, m_facet);
+                       m_position    = mesh.vertices.point(vertex);
+    const GEO::vec3    next_position = mesh.vertices.point(next_vertex);
+    const GEO::vec3    edge_midpoint = 0.5 * (m_position + next_position);
 
-    N = (polygon_normals != nullptr) && polygon_normals->has(polygon_id)
-        ? polygon_normals->get(polygon_id)
-        : polygon.compute_normal(geometry, *point_locations);
+    m_scale = GEO::distance(m_centroid, m_position);
 
-    corner_id                 = geometry.polygon_corners[polygon.first_polygon_corner_id + corner_offset];
-    const auto&     corner    = geometry.corners[corner_id];
-    const Point_id  point     = corner.point_id;
-    ERHE_VERIFY(point_locations->has(point));
-    position = point_locations->get(point);
-    const vec3 midpoint = polygon.compute_edge_midpoint(geometry, *point_locations, corner_offset);
-    T = normalize(midpoint - centroid);
-    B = normalize(cross(N, T));
-    N = normalize(cross(T, B));
-    T = normalize(cross(B, N));
-    corner_count = polygon.corner_count;
+    m_T = GEO::normalize(edge_midpoint - m_centroid);
+    m_B = GEO::normalize(GEO::cross(m_N, m_T));
+    m_N = GEO::normalize(GEO::cross(m_T, m_B));
+    m_T = GEO::normalize(GEO::cross(m_B, m_N));
 }
 
-void Reference_frame::transform_by(const mat4& m)
+void Reference_frame::transform_by(const GEO::mat4& transform)
 {
-    centroid = m * vec4{centroid, 1.0f};
-    position = m * vec4{position, 1.0f};
-    B        = m * vec4{B, 0.0f};
-    T        = m * vec4{T, 0.0f};
-    N        = m * vec4{N, 0.0f};
-    B        = glm::normalize(cross(N, T));
-    N        = glm::normalize(cross(T, B));
-    T        = glm::normalize(cross(B, N));
+    // TODO Use adjugate as normal_transform
+    //// GEO::mat4 inverse;
+    //// transform.compute_inverse(inve  rse);
+    //// const GEO::mat4 normal_transform = inverse.transpose();
+    m_centroid = GEO::vec3{transform * GEO::vec4{m_centroid, 1.0}};
+    m_position = GEO::vec3{transform * GEO::vec4{m_position, 1.0}};
+    m_scale    = GEO::distance(m_centroid, m_position);
+    m_B        = GEO::vec3{transform * GEO::vec4{m_B, 0.0}};
+    m_T        = GEO::vec3{transform * GEO::vec4{m_T, 0.0}};
+    m_N        = GEO::vec3{transform * GEO::vec4{m_N, 0.0}};
+    m_B        = GEO::normalize(GEO::cross(m_N, m_T));
+    m_N        = GEO::normalize(GEO::cross(m_T, m_B));
+    m_T        = GEO::normalize(GEO::cross(m_B, m_N));
 }
 
-auto Reference_frame::scale() const -> float
+auto Reference_frame::scale() const -> double
 {
-    return glm::distance(centroid, position);
+    return m_scale;
 }
 
-auto Reference_frame::transform(float hover_distance) const -> mat4
+auto Reference_frame::transform(double hover_distance) const -> GEO::mat4
 {
-    return mat4{
-        vec4{-T, 0.0f},
-        vec4{-N, 0.0f},
-        vec4{-B, 0.0f},
-        vec4{centroid + hover_distance * N, 1.0f}
+    const GEO::vec3 O = m_centroid + hover_distance * m_N;
+    return GEO::mat4{
+        {
+            { -m_T.x, -m_N.x, -m_B.x, O.x },
+            { -m_T.y, -m_N.y, -m_B.y, O.y },
+            { -m_T.z, -m_N.z, -m_B.z, O.z },
+            {    0.0,    0.0,    0.0, 1.0 }
+        }
     };
 }
 

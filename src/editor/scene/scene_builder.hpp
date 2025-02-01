@@ -13,8 +13,8 @@
 
 class btCollisionShape;
 
-namespace erhe::geometry {
-    class Geometry;
+namespace GEO {
+    class Mesh;
 }
 namespace erhe::graphics {
     class Buffer_transfer_queue;
@@ -124,12 +124,12 @@ private:
 
     auto make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>;
 
-    auto make_brush(
-        Content_library_node&      folder,
-        Editor_settings&           editor_settings,
-        Mesh_memory&               mesh_memory,
-        erhe::geometry::Geometry&& geometry
-    ) -> std::shared_ptr<Brush>;
+    //// auto make_brush(
+    ////     Content_library_node& folder,
+    ////     Editor_settings&      editor_settings,
+    ////     Mesh_memory&          mesh_memory,
+    ////     GEO::Mesh&&           geo_mesh
+    //// ) -> std::shared_ptr<Brush>;
 
     auto make_brush(
         Content_library_node&                            folder,

@@ -318,33 +318,35 @@ void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
     auto disc_material = std::make_shared<erhe::primitive::Material>("Circular Menu Disc", glm::vec4{0.1f, 0.2f, 0.3f, 1.0f});
     disc_material->opacity = 0.5f;
 
-    const auto disc_geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::shapes::make_disc(
-            outer_radius,
-            inner_radius,
-            slice_count,
-            stack_count,
-            20,
-            30,
-            0,
-            2
-        )
+    GEO::Mesh disc_geo_mesh_shared;
+    erhe::geometry::shapes::make_disc(
+        disc_geo_mesh_shared,
+        outer_radius,
+        inner_radius,
+        slice_count,
+        stack_count,
+        20,
+        30,
+        0,
+        2
     );
 
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
-    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt = erhe::primitive::make_buffer_mesh(
-        *disc_geometry_shared.get(),
+    erhe::primitive::Buffer_mesh buffer_mesh{};
+    const bool buffer_mesh_ok = erhe::primitive::make_buffer_mesh(
+        buffer_mesh,
+        disc_geo_mesh_shared,
         erhe::primitive::Build_info{
             .primitive_types = { .fill_triangles = true },
             .buffer_info     = mesh_memory.buffer_info
         },
         dummy
     );
-    ERHE_VERIFY(buffer_mesh_opt.has_value());
+    ERHE_VERIFY(buffer_mesh_ok); // TODO
 
     m_radial_menu_background_mesh = std::make_shared<erhe::scene::Mesh>(
         "Radiaul Menu Mesh",
-        erhe::primitive::Primitive{buffer_mesh_opt.value(),  disc_material}
+        erhe::primitive::Primitive{buffer_mesh, disc_material}
     );
 
     erhe::scene::Scene* scene = scene_root.get_hosted_scene();

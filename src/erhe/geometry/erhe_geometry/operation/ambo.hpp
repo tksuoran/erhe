@@ -1,16 +1,11 @@
 #pragma once
 
-#include "erhe_geometry/operation/geometry_operation.hpp"
+namespace erhe::geometry { class Geometry; }
 
 namespace erhe::geometry::operation {
 
 // Conway ambo operator
-class Ambo : public Geometry_operation
-{
-public:
-    Ambo(const Geometry& source, Geometry& destination);
-};
 
-[[nodiscard]] auto ambo(const Geometry& source) -> Geometry;
+void ambo(const Geometry& source, Geometry& destination);
 
 } // namespace erhe::geometry::operation

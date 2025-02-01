@@ -584,7 +584,7 @@ auto Selection::on_viewport_select_try_ready() -> bool
     const auto& content      = m_hover_scene_view->get_hover(Hover_entry::content_slot);
     const auto& tool         = m_hover_scene_view->get_hover(Hover_entry::tool_slot);
     const auto& rendertarget = m_hover_scene_view->get_hover(Hover_entry::rendertarget_slot);
-    m_hover_mesh    = content.mesh;
+    m_hover_mesh    = content.scene_mesh;
     m_hover_content = content.valid;
     m_hover_tool    = tool.valid;
 

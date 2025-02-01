@@ -96,8 +96,8 @@ private:
 
     [[nodiscard]] auto get_hover_mesh_transform(Brush& brush, float hover_distance) -> glm::mat4; // Places brush in parent (hover) mesh
     [[nodiscard]] auto get_hover_grid_transform(Brush& brush, float hover_distance) -> glm::mat4;
-    [[nodiscard]] auto get_placement_polygon_id() const -> erhe::geometry::Polygon_id;
-    [[nodiscard]] auto get_placement_corner_id () const -> erhe::geometry::Corner_id;
+    [[nodiscard]] auto get_placement_facet () const -> GEO::index_t;
+    [[nodiscard]] auto get_placement_corner() const -> GEO::index_t;
 
     Brush_tool_preview_command              m_preview_command;
     Brush_tool_insert_command               m_insert_command;

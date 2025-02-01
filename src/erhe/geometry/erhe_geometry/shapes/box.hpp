@@ -1,13 +1,12 @@
 #pragma once
 
-#include "erhe_geometry/geometry.hpp"
-#include <cmath>
+#include <geogram/mesh/mesh.h>
 
 namespace erhe::geometry::shapes {
 
-[[nodiscard]] auto make_box(double x_size, double y_size, double z_size) -> Geometry;
-[[nodiscard]] auto make_box(float min_x, float max_x, float min_y, float max_y, float min_z, float max_z) -> Geometry;
-[[nodiscard]] auto make_box(double r) -> Geometry;
-[[nodiscard]] auto make_box(glm::vec3 size, glm::ivec3 div, float p = 1.0f) -> Geometry;
+void make_box(GEO::Mesh& mesh, double x_size, double y_size, double z_size);
+void make_box(GEO::Mesh& mesh, float min_x, float max_x, float min_y, float max_y, float min_z, float max_z);
+void make_box(GEO::Mesh& mesh, double r);
+void make_box(GEO::Mesh& mesh, GEO::vec3f size, GEO::vec3i div, double p = 1.0);
 
 } // namespace erhe::geometry::shapes

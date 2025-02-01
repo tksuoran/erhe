@@ -2,11 +2,11 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
-#include "erhe_scene/transform.hpp"
-
-#include <vector>
 #include <memory>
 
+namespace GEO {
+    class Mesh;
+}
 namespace erhe {
     class Item_base;
 }
@@ -52,7 +52,7 @@ private:
     void camera_properties            (erhe::scene::Camera& camera) const;
     void light_properties             (erhe::scene::Light& light) const;
     void texture_properties           (const std::shared_ptr<erhe::graphics::Texture>& texture) const;
-    void geometry_properties          (const erhe::geometry::Geometry* geometry) const;
+    void geometry_properties          (erhe::geometry::Geometry& geometry) const;
     void buffer_mesh_properties       (const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh) const;
     void primitive_raytrace_properties(erhe::primitive::Primitive_raytrace* primitive_raytrace) const;
     void shape_properties             (const char* label, erhe::primitive::Primitive_shape* shape) const;

@@ -120,7 +120,7 @@ auto Joint_buffer::update(
             const glm::mat4 joint_from_bind  = skin->skin_data.inverse_bind_matrices[i];
             const glm::mat4 world_from_joint = joint->world_from_node();
             const glm::mat4 world_from_bind  = world_from_joint * joint_from_bind;
-            const glm::mat4 normal_transform = glm::adjugate(world_from_bind); // TODO compute shader pass?
+            const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_bind)); // TODO compute shader pass?
 
             write(primitive_gpu_data, write_offset + offsets.joint.world_from_bind,  as_span(world_from_bind ));
             write(primitive_gpu_data, write_offset + offsets.joint.normal_transform, as_span(normal_transform));

@@ -104,10 +104,10 @@ endif()
 
 CPMAddPackage(
     NAME              geogram
-    #GIT_TAG           tksuoran/unicode
-    #GITHUB_REPOSITORY tksuoran/geogram
-    VERSION            1.9.2
-    GITHUB_REPOSITORY  BrunoLevy/geogram
+    GIT_TAG           pull_requests
+    GITHUB_REPOSITORY tksuoran/geogram
+    #VERSION            1.9.2
+    #GITHUB_REPOSITORY  BrunoLevy/geogram
     OPTIONS
         "VORPALINE_PLATFORM ${VORPALINE_PLATFORM}"
         "GEOGRAM_SUB_BUILD ON"

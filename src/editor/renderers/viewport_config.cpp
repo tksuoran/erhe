@@ -9,10 +9,10 @@ auto Viewport_config::default_config() -> Viewport_config
     config.render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
     config.render_style_not_selected.edge_lines = false;
     config.render_style_selected.edge_lines     = false;
-    config.selection_highlight_low              = glm::vec4{  0.0f,  0.0f, 0.0f, 0.0f};
-    config.selection_highlight_high             = glm::vec4{200.0f, 10.0f, 1.0f, 0.5f};
-    config.selection_highlight_width_low        =  0.0f;
-    config.selection_highlight_width_high       = -3.0f;
+    config.selection_highlight_low              = glm::vec4{2.0f, 1.0f, 0.0f, 0.8f};
+    config.selection_highlight_high             = glm::vec4{2.0f, 1.0f, 0.0f, 0.8f};
+    config.selection_highlight_width_low        = -1.0f;
+    config.selection_highlight_width_high       = -1.0f;
     config.selection_highlight_frequency        =  1.0f;
 
     auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");

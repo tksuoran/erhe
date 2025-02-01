@@ -13,21 +13,17 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_math/viewport.hpp"
 
+#include <geogram/mesh/mesh.h>
+
 #include <glm/glm.hpp>
 
 #include <cstdint>
 #include <memory>
 #include <optional>
 
-namespace erhe::rendergraph {
-    class Rendergraph_node;
-}
-namespace erhe::geometry {
-    class Geometry;
-}
-namespace erhe::graphics {
-    class Texture;
-}
+namespace erhe::rendergraph { class Rendergraph_node; }
+namespace erhe::geometry    { class Geometry; }
+namespace erhe::graphics    { class Texture; }
 namespace erhe::scene {
     class Camera;
     class Mesh;
@@ -83,18 +79,18 @@ public:
 
     void reset();
 
-    std::size_t                               slot           {slot_count};
-    uint32_t                                  mask           {0};
-    bool                                      valid          {false};
-    erhe::scene::Mesh*                        mesh           {nullptr};
-    const Grid*                               grid           {nullptr};
-    std::size_t                               primitive_index{std::numeric_limits<std::size_t>::max()};
-    std::shared_ptr<erhe::geometry::Geometry> geometry       {};
-    std::optional<glm::vec3>                  position       {};
-    std::optional<glm::vec3>                  normal         {};
-    std::optional<glm::vec2>                  uv             {};
-    std::size_t                               triangle_id    {std::numeric_limits<std::size_t>::max()};
-    std::size_t                               polygon_id     {std::numeric_limits<std::size_t>::max()};
+    std::size_t                               slot                      {slot_count};
+    uint32_t                                  mask                      {0};
+    bool                                      valid                     {false};
+    erhe::scene::Mesh*                        scene_mesh                {nullptr};
+    const Grid*                               grid                      {nullptr};
+    std::size_t                               scene_mesh_primitive_index{std::numeric_limits<std::size_t>::max()};
+    std::shared_ptr<erhe::geometry::Geometry> geometry                  {};
+    std::optional<glm::vec3>                  position                  {};
+    std::optional<glm::vec3>                  normal                    {};
+    std::optional<glm::vec2>                  uv                        {};
+    uint32_t                                  triangle                  {std::numeric_limits<uint32_t>::max()};
+    GEO::index_t                              facet                     {GEO::NO_INDEX};
 };
 
 class Scene_view

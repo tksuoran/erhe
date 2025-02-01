@@ -115,7 +115,7 @@ Buffer_range& Buffer_range::operator=(Buffer_range&& old)
 
 Buffer_range::~Buffer_range()
 {
-    ERHE_VERIFY((m_ring_buffer == nullptr) || m_is_submitted || m_is_cancelled);
+    //ERHE_VERIFY((m_ring_buffer == nullptr) || m_is_submitted || m_is_cancelled);
 }
 
 void Buffer_range::close(std::size_t byte_write_position_in_span)
@@ -387,7 +387,18 @@ auto GPU_ring_buffer::open(Ring_buffer_usage usage, std::size_t byte_count) -> B
 
         wrap = (byte_count > available_byte_count_without_wrap);
         if (wrap && (byte_count > available_byte_count_with_wrap)) {
-            log_gpu_ring_buffer->warn("CPU stalling waiting for GPU");
+            std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+            bool show_warning = true;
+            if (m_last_warning_time.has_value()) {
+                const auto duration = now - m_last_warning_time.value();
+                if (duration < std::chrono::milliseconds(500)) {
+                    show_warning = false;
+                }
+            }
+            m_last_warning_time = std::chrono::steady_clock::now();
+            if (show_warning) {
+                log_gpu_ring_buffer->warn("CPU stalling waiting for GPU");
+            }
             std::this_thread::yield();
             continue;
         } else {

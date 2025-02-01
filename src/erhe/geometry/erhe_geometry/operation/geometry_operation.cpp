@@ -1,467 +1,426 @@
 #include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/geometry_log.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <geogram/mesh/mesh.h>
 
 namespace erhe::geometry::operation {
 
-void Geometry_operation::post_processing()
+auto Geometry_operation::get_size_to_include(std::size_t size, std::size_t i) -> size_t
 {
-    ERHE_PROFILE_FUNCTION();
-
-    destination.make_point_corners();
-    destination.build_edges();
-    interpolate_all_property_maps();
-    destination.sanity_check();
-    destination.compute_point_normals(c_point_normals_smooth);
-    destination.compute_polygon_centroids();
-    destination.generate_polygon_texture_coordinates();
-    destination.compute_tangents();
-    destination.sanity_check();
-}
-
-void Geometry_operation::make_points_from_points()
-{
-    ERHE_PROFILE_FUNCTION();
-
-    point_old_to_new.reserve(source.get_point_count());
-    source.for_each_point_const([&](auto& i) {
-        make_new_point_from_point(i.point_id);
-    });
-}
-
-void Geometry_operation::make_polygon_centroids()
-{
-    ERHE_PROFILE_FUNCTION();
-
-    old_polygon_centroid_to_new_points.reserve(source.get_polygon_count());
-    source.for_each_polygon_const([&](auto& i) {
-        make_new_point_from_polygon_centroid(i.polygon_id);
-    });
-}
-
-void Geometry_operation::reserve_edge_to_new_points()
-{
-    const uint32_t point_count = source.get_point_count();
-    m_old_edge_to_new_points.resize(static_cast<std::size_t>(point_count) * s_max_edge_point_slots);
-    std::fill(
-        begin(m_old_edge_to_new_points),
-        end(m_old_edge_to_new_points),
-        std::numeric_limits<uint32_t>::max()
-    );
-}
-
-auto Geometry_operation::find_or_make_point_from_edge(const Point_id point_a, const Point_id point_b, const std::size_t count) -> Point_id
-{
-    const Point_id a = std::min(point_a, point_b);
-    const Point_id b = std::max(point_a, point_b);
-
-    for (uint32_t slot = a * s_max_edge_point_slots, end = slot + s_max_edge_point_slots; slot < end;) {
-        Point_id& edge_b       = m_old_edge_to_new_points[slot++];
-        Point_id& new_point_id = m_old_edge_to_new_points[slot++];
-        if (edge_b == std::numeric_limits<uint32_t>::max()) {
-            edge_b       = b;
-            new_point_id = destination.make_point();
-            // log_geometry.trace("created edge {} - {} point {}\n", a, b, new_point_id);
-            for (std::size_t i = 1; i < count; ++i) {
-                destination.make_point();
-            }
-            return new_point_id;
+    if (size == 0) {
+        size = 20;
+    }
+    for (;;) {
+        if (i < size) {
+            return size;
         }
-        if (edge_b == b) {
-            return new_point_id;
+        size += size / 2 + size / 4;
+    }
+}
+
+void Geometry_operation::make_dst_vertices_from_src_vertices()
+{
+    GEO::index_t src_vertex_count = source_mesh.vertices.nb();
+    m_vertex_src_to_dst.reserve(src_vertex_count);
+
+    for (GEO::index_t src_vertex = 0; src_vertex < src_vertex_count; ++src_vertex) {
+        make_new_dst_vertex_from_src_vertex(src_vertex);
+    }
+}
+
+void Geometry_operation::make_facet_centroids()
+{
+    GEO::index_t src_facet_count = source_mesh.facets.nb();
+    m_src_facet_centroid_to_dst_vertex.reserve(src_facet_count);
+    for (GEO::index_t src_facet : source_mesh.facets) {
+        make_new_dst_vertex_from_src_facet_centroid(src_facet);
+    }
+}
+
+void Geometry_operation::build_edge_to_facets_map(
+    const GEO::Mesh& mesh, 
+    std::unordered_map<
+        std::pair<GEO::index_t, GEO::index_t>,
+        std::vector<GEO::index_t>,
+        pair_hash
+    >& edge_to_facets
+)
+{
+    for (GEO::index_t facet = 0; facet < mesh.facets.nb(); ++facet) {
+        for (GEO::index_t corner = mesh.facets.corners_begin(facet), end = mesh.facets.corners_end(facet); corner < end; ++corner) {
+            GEO::index_t next_corner = mesh.facets.next_corner_around_facet(facet, corner);
+            GEO::index_t v1 = mesh.facet_corners.vertex(corner);
+            GEO::index_t v2 = mesh.facet_corners.vertex(next_corner);
+            if (v1 > v2) {
+                std::swap(v1, v2);
+            }
+            edge_to_facets[std::make_pair(v1, v2)].push_back(facet);
         }
     }
-    ERHE_FATAL("s_max_edge_point_slots too low");
 }
 
 void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> relative_positions)
 {
-    ERHE_PROFILE_FUNCTION();
-
-    const std::size_t split_count = relative_positions.size();
-    reserve_edge_to_new_points();
-
-    source.for_each_polygon_const([&](auto& i) {
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
-            const bool      in_order = j.corner.point_id < j.next_corner.point_id;
-            const Point_id  point_a  = j.corner.point_id;
-            const Point_id  point_b  = j.next_corner.point_id;
-            const Corner_id corner_a = j.corner_id;
-            const Corner_id corner_b = j.next_corner_id;
-
-            Point_id new_point_id = find_or_make_point_from_edge(
-                j.corner.point_id,
-                j.next_corner.point_id,
-                split_count
+    geo_assert(relative_positions.size() != 0);
+    GEO::MeshVertices& dst_vertices = destination_mesh.vertices;
+    const GEO::index_t split_count  = static_cast<GEO::index_t>(relative_positions.size());
+    ERHE_VERIFY(m_src_edge_to_dst_vertex.empty());
+    const GEO::index_t new_dst_vertex_count = split_count * source_mesh.edges.nb();
+    const GEO::index_t new_dst_vertex_start = dst_vertices.create_vertices(new_dst_vertex_count);
+    const GEO::index_t new_dst_vertex_end   = new_dst_vertex_start + new_dst_vertex_count;
+    GEO::index_t new_dst_vertex = new_dst_vertex_start;
+    for (GEO::index_t src_edge : source_mesh.edges) {
+        const std::vector<GEO::index_t>&            src_edge_facets = source.get_edge_facets(src_edge);
+        const GEO::index_t                          src_vertex_a    = source_mesh.edges.vertex(src_edge, 0);
+        const GEO::index_t                          src_vertex_b    = source_mesh.edges.vertex(src_edge, 1);
+        const std::pair<GEO::index_t, GEO::index_t> src_edge_key    = std::make_pair(src_vertex_a, src_vertex_b);
+        ERHE_VERIFY(src_vertex_a < src_vertex_b);
+        GEO::index_t split_slot = 0;
+        for (auto t : relative_positions) {
+            const float weight_a = t;
+            const float weight_b = 1.0f - t;
+            log_operation->trace(
+                "creating edge midpoint: src edge {} slot {}: w0 = {}, v0 = {}, w1 = {} v1 = {}, new dst vertex = {}",
+                src_edge, split_slot, weight_a, src_vertex_a, weight_b, src_vertex_b, new_dst_vertex
             );
-            //log_subdivide.trace(
-            //    "Polygon {} edge {}-{} midpoint {} count {}\n",
-            //    i.polygon_id,
-            //    point_a,
-            //    point_b,
-            //    new_point_id,
-            //    split_count
-            //);
-            if (!in_order) {
-                new_point_id = static_cast<Point_id>(new_point_id + split_count - 1);
+            m_src_edge_to_dst_vertex[src_edge_key].push_back(new_dst_vertex);
+            for (const GEO::index_t src_facet : src_edge_facets) {
+                const GEO::index_t local_src_corner_a = source_mesh.facets.find_vertex(src_facet, src_vertex_a);
+                const GEO::index_t local_src_corner_b = source_mesh.facets.find_vertex(src_facet, src_vertex_b);
+                const GEO::index_t src_corner_a       = source_mesh.facets.corner(src_facet, local_src_corner_a);
+                const GEO::index_t src_corner_b       = source_mesh.facets.corner(src_facet, local_src_corner_b);
+                add_vertex_source       (new_dst_vertex, weight_a, src_vertex_a);
+                add_vertex_source       (new_dst_vertex, weight_b, src_vertex_b);
+                add_vertex_corner_source(new_dst_vertex, weight_a, src_corner_a);
+                add_vertex_corner_source(new_dst_vertex, weight_b, src_corner_b);
             }
-            for (auto t : relative_positions) {
-                const float weight_a = t;
-                const float weight_b = 1.0f - t;
-                //log_subdivide.trace(
-                //    "   new point {} source point a {} weight {}\n"
-                //    "   new point {} source point b {} weight {}\n",
-                //    new_point_id, point_a, weight_a,
-                //    new_point_id, point_b, weight_b
-                //);
-                add_point_source       (new_point_id, weight_a, point_a); // TODO only add these once per edge?
-                add_point_source       (new_point_id, weight_b, point_b); // TODO only add these once per edge?
-                add_point_corner_source(new_point_id, weight_a, corner_a);
-                add_point_corner_source(new_point_id, weight_b, corner_b);
-                if (in_order) {
-                    ++new_point_id;
-                } else {
-                    --new_point_id;
-                }
-            }
-        });
-    });
-}
-
-auto Geometry_operation::get_edge_new_point(const Point_id point_a, const Point_id point_b, const Point_id split_position, const Point_id split_count) const -> Point_id
-{
-    const bool     in_order = point_a < point_b;
-    const Point_id a        = std::min(point_a, point_b);
-    const Point_id b        = std::max(point_a, point_b);
-
-    for (uint32_t slot = a * s_max_edge_point_slots, end = slot + s_max_edge_point_slots; slot < end;) {
-        const Point_id edge_b       = m_old_edge_to_new_points[slot++];
-        const Point_id new_point_id = m_old_edge_to_new_points[slot++];
-        if (edge_b == std::numeric_limits<uint32_t>::max()) {
-            break;
-        }
-        if (edge_b == b) {
-            const auto edge_point = in_order
-                ? new_point_id + split_count - 1 - split_position
-                : new_point_id + split_position;
-            //log_subdivide.trace(
-            //    "Edge {} {} midpoint {}/{} = {}\n",
-            //    point_a,
-            //    point_b,
-            //    split_position,
-            //    split_count,
-            //    edge_point
-            //);
-            return edge_point;
+            ++new_dst_vertex;
+            ++split_slot;
         }
     }
-
-    log_catmull_clark->error("edge point {}-{} not found", point_a, point_b);
-    // log_catmull_clark.error("point {} edge end points: ", a);
-    // for (
-    //     uint32_t slot = a * s_max_edge_point_slots,
-    //     end = slot + s_max_edge_point_slots;
-    //     slot < end;
-    // )
-    // {
-    //     const Point_id edge_b       = m_old_edge_to_new_points[slot++];
-    //     const Point_id new_point_id = m_old_edge_to_new_points[slot++];
-    //     if (edge_b == std::numeric_limits<uint32_t>::max())
-    //     {
-    //         continue;
-    //     }
-    //     log_catmull_clark.error(" {:3}", edge_b);
-    // }
-    // log_catmull_clark.error("\n");
-
-    return Point_id{0};
+    ERHE_VERIFY(new_dst_vertex == new_dst_vertex_end);
 }
 
-auto Geometry_operation::make_new_point_from_point(const float point_weight, const Point_id old_point) -> Point_id
+auto Geometry_operation::get_src_edge_new_vertex(GEO::index_t src_vertex_a, GEO::index_t src_vertex_b, GEO::index_t vertex_split_position) const -> GEO::index_t
 {
-    const auto new_point = destination.make_point();
-    // log_operation.trace(
-    //     "make_new_point_from_point (weight = {}, old_point = {}) new_point = {}\n",
-    //     weight, old_point, new_point
-    // );
-    // const erhe::log::Indenter scope_indent;
-    add_point_source(new_point, point_weight, old_point);
-    const std::size_t i = static_cast<std::size_t>(old_point);
-    if (point_old_to_new.size() <= i) {
-        point_old_to_new.resize(i + s_grow_size);
+    const bool swapped = src_vertex_a > src_vertex_b;
+    if (swapped) {
+        std::swap(src_vertex_a, src_vertex_b);
     }
-    point_old_to_new[i] = new_point;
-    return new_point;
+
+    const std::pair<GEO::index_t, GEO::index_t> src_edge_key = std::make_pair(src_vertex_a, src_vertex_b);
+    const auto i = m_src_edge_to_dst_vertex.find(src_edge_key);
+    ERHE_VERIFY(i != m_src_edge_to_dst_vertex.end());
+    const std::vector<GEO::index_t>& dst_vertices = i->second;
+    ERHE_VERIFY(vertex_split_position < dst_vertices.size());
+    return dst_vertices[!swapped ? dst_vertices.size() - vertex_split_position - 1 : vertex_split_position];
 }
 
-auto Geometry_operation::make_new_point_from_point(const Point_id old_point) -> Point_id
+auto Geometry_operation::make_new_dst_vertex_from_src_vertex(const float vertex_weight, const GEO::index_t src_vertex) -> GEO::index_t
 {
-    const auto new_point = destination.make_point();
-    // log_operation.trace(
-    //     "make_new_point_from_point (old_point = {}) new_point = {})\n",
-    //     old_point, new_point
-    // );
-    // const erhe::log::Indenter scope_indent;
-    add_point_source(new_point, 1.0f, old_point);
-    const std::size_t i = static_cast<std::size_t>(old_point);
-    if (point_old_to_new.size() <= i) {
-        point_old_to_new.resize(i + s_grow_size);
+    const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertices(1);
+
+    add_vertex_source(new_dst_vertex, vertex_weight, src_vertex);
+    const std::size_t i = static_cast<std::size_t>(src_vertex);
+    const std::size_t old_size = m_vertex_src_to_dst.size();
+    if (old_size <= i) {
+        m_vertex_src_to_dst.resize(get_size_to_include(old_size, i));
     }
-    point_old_to_new[i] = new_point;
-    return new_point;
+    m_vertex_src_to_dst[i] = new_dst_vertex;
+    return new_dst_vertex;
 }
 
-auto Geometry_operation::make_new_point_from_polygon_centroid(const Polygon_id old_polygon) -> Point_id
+auto Geometry_operation::make_new_dst_vertex_from_src_vertex(const GEO::index_t src_vertex) -> GEO::index_t
 {
-    const auto new_point = destination.make_point();
-    // log_operation.trace(
-    //     "make_new_point_from_polygon_centroid (old_polygon = {}) new_point = {}\n",
-    //     old_polygon, new_point
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const std::size_t i = static_cast<size_t>(old_polygon);
-    if (old_polygon_centroid_to_new_points.size() <= i) {
-        old_polygon_centroid_to_new_points.resize(i + s_grow_size);
+    const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertices(1);
+
+    add_vertex_source(new_dst_vertex, 1.0f, src_vertex);
+    const std::size_t i = static_cast<std::size_t>(src_vertex);
+    const std::size_t old_size = m_vertex_src_to_dst.size();
+    if (old_size <= i) {
+        m_vertex_src_to_dst.resize(get_size_to_include(old_size, i));
     }
-    old_polygon_centroid_to_new_points[i] = new_point;
-    add_polygon_centroid(new_point, 1.0f, old_polygon);
-    return new_point;
+    m_vertex_src_to_dst[i] = new_dst_vertex;
+    return new_dst_vertex;
 }
 
-void Geometry_operation::add_polygon_centroid(const Point_id new_point_id, const float polygon_weight, const Polygon_id old_polygon_id)
+auto Geometry_operation::make_new_dst_vertex_from_src_facet_centroid(const GEO::index_t src_facet) -> GEO::index_t
 {
-    const Polygon& old_polygon = source.polygons[old_polygon_id];
-    // log_operation.trace(
-    //     "add_polygon_centroid (new_point_id = {}, weight = {}, old_polygon_id = {})\n",
-    //     new_point_id, weight, old_polygon_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    old_polygon.for_each_corner_const(source, [&](auto& i) {
-        add_point_corner_source(new_point_id, polygon_weight, i.corner_id);
-        add_point_source(new_point_id, polygon_weight, i.corner.point_id);
-    });
-}
-
-void Geometry_operation::add_point_ring(const Point_id new_point_id, const float point_weight, const Point_id old_point_id)
-{
-    // log_operation.trace(
-    //     "add_point_ring (new_point_id = {}, weight = {}, old_point_id = {})\n",
-    //     new_point_id, weight, old_point_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const Point& old_point = source.points[old_point_id];
-    old_point.for_each_corner_const(source, [&](auto& i) {
-        const Polygon_id ring_polygon_id     = i.corner.polygon_id;
-        const Polygon&   ring_polygon        = source.polygons[ring_polygon_id];
-        const Corner_id  next_ring_corner_id = ring_polygon.next_corner(source, i.corner_id);
-        const Corner&    next_ring_corner    = source.corners[next_ring_corner_id];
-        const Point_id   next_ring_point_id  = next_ring_corner.point_id;
-        add_point_source(new_point_id, point_weight, next_ring_point_id);
-    });
-}
-
-auto Geometry_operation::make_new_polygon_from_polygon(const Polygon_id old_polygon_id) -> Polygon_id
-{
-    const auto new_polygon_id = destination.make_polygon();
-    // log_operation.trace(
-    //     "make_new_polygon_from_polygon (old_polygon_id = {}) new_polygon_id = {}\n",
-    //     old_polygon_id, new_polygon_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    add_polygon_source(new_polygon_id, 1.0f, old_polygon_id);
-    const std::size_t i = static_cast<std::size_t>(old_polygon_id);
-    if (polygon_old_to_new.size() <= i) {
-        polygon_old_to_new.resize(i + s_grow_size);
+    const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertices(1);
+    const std::size_t i = static_cast<size_t>(src_facet);
+    const std::size_t old_size = m_src_facet_centroid_to_dst_vertex.size();
+    if (old_size <= i) {
+        m_src_facet_centroid_to_dst_vertex.resize(get_size_to_include(old_size, i));
     }
-    polygon_old_to_new[i] = new_polygon_id;
-    return new_polygon_id;
+    m_src_facet_centroid_to_dst_vertex[i] = new_dst_vertex;
+    add_facet_centroid(new_dst_vertex, 1.0f, src_facet);
+    return new_dst_vertex;
 }
 
-auto Geometry_operation::make_new_corner_from_polygon_centroid(const Polygon_id new_polygon_id, const Polygon_id old_polygon_id) -> Corner_id
+void Geometry_operation::add_facet_centroid(const GEO::index_t dst_vertex, const float facet_weight, const GEO::index_t src_facet)
 {
-    // log_operation.trace(
-    //     "make_new_corner_from_polygon_centroid (new_polygon_id = {}, old_polygon_id = {})\n",
-    //     new_polygon_id, old_polygon_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const auto new_point_id  = old_polygon_centroid_to_new_points[old_polygon_id];
-    const auto new_corner_id = destination.make_polygon_corner(new_polygon_id, new_point_id);
-    // log_operation.trace(
-    //     "new_point_id = {}, new_corner_id = {}\n",
-    //     new_point_id, new_corner_id
-    // );
-    distribute_corner_sources(new_corner_id, 1.0f, new_point_id);
-    return new_corner_id;
-}
-
-auto Geometry_operation::make_new_corner_from_point(const Polygon_id new_polygon_id, const Point_id new_point_id) -> Corner_id
-{
-    // log_operation.trace(
-    //     "make_new_corner_from_point (new_polygon_id = {}, new_point_id = {})\n",
-    //     new_polygon_id, new_point_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const auto new_corner_id = destination.make_polygon_corner(new_polygon_id, new_point_id);
-    distribute_corner_sources(new_corner_id, 1.0f, new_point_id);
-    return new_corner_id;
-}
-
-auto Geometry_operation::make_new_corner_from_corner(const Polygon_id new_polygon_id, const Corner_id old_corner_id) -> Corner_id
-{
-    // const log_operation.trace(
-    //     "make_new_corner_from_corner (new_polygon_id = {}, old_corner_id = {})\n",
-    //     new_polygon_id, old_corner_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const Corner old_corner    = source.corners[old_corner_id];
-    const auto   old_point_id  = old_corner.point_id;
-    const auto   new_point_id  = point_old_to_new[old_point_id];
-    const auto   new_corner_id = destination.make_polygon_corner(new_polygon_id, new_point_id);
-    // log_operation.trace(
-    //     "old_point_id = {}, new_point_id = {}, new_corner_id = {}\n",
-    //     old_point_id, new_point_id, new_corner_id
-    // );
-    add_corner_source(new_corner_id, 1.0f, old_corner_id);
-    return new_corner_id;
-}
-
-void Geometry_operation::add_polygon_corners(const Polygon_id new_polygon_id, const Polygon_id old_polygon_id)
-{
-    // log_operation.trace(
-    //     "add_polygon_corners (new_polygon_id = {}, old_polygon_id = {})\n",
-    //     new_polygon_id, old_polygon_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const Polygon& old_polygon = source.polygons[old_polygon_id];
-    old_polygon.for_each_corner_const(source, [&](auto& i) {
-        const Point_id  old_point_id  = i.corner.point_id;
-        const Point_id  new_point_id  = point_old_to_new[old_point_id];
-        const Corner_id new_corner_id = destination.make_polygon_corner(new_polygon_id, new_point_id);
-        add_corner_source(new_corner_id, 1.0f, i.corner_id);
-    });
-}
-
-void Geometry_operation::add_point_source(const Point_id new_point_id, const float point_weight, const Point_id old_point_id)
-{
-    // log_operation.trace(
-    //     "add_point_source (new_point_id = {}, weight = {}, old_point_id = {})\n",
-    //     new_point_id, weight, old_point_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const std::size_t i = static_cast<std::size_t>(new_point_id);
-    if (new_point_sources.size() <= i) {
-        new_point_sources.resize(i + s_grow_size);
-    }
-    new_point_sources[i].emplace_back(point_weight, old_point_id);
-}
-
-void Geometry_operation::add_point_corner_source(const Point_id new_point_id, const float corner_weight, const Corner_id old_corner_id)
-{
-    // log_operation.trace(
-    //     "add_point_corner_source (new_point_id = {}, weight = {}, old_corner_id = {})\n",
-    //     new_point_id, weight, old_corner_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const std::size_t i = static_cast<std::size_t>(new_point_id);
-    if (new_point_corner_sources.size() <= i) {
-        new_point_corner_sources.resize(i + s_grow_size);
-    }
-    new_point_corner_sources[new_point_id].emplace_back(corner_weight, old_corner_id);
-}
-
-void Geometry_operation::add_corner_source(const Corner_id new_corner_id, const float corner_weight, const Corner_id old_corner_id)
-{
-    // log_operation.trace(
-    //     "add_corner_source (new_corner_id = {}, weight = {}, old_corner_id = {})\n",
-    //     new_corner_id, weight, old_corner_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const std::size_t i = static_cast<std::size_t>(new_corner_id);
-    if (new_corner_sources.size() <= i) {
-        new_corner_sources.resize(i + s_grow_size);
-    }
-    new_corner_sources[i].emplace_back(corner_weight, old_corner_id);
-}
-
-void Geometry_operation::distribute_corner_sources(const Corner_id new_corner_id, const float point_weight, const Point_id new_point_id)
-{
-    // log_operation.trace(
-    //     "distribute_corner_sources (new_corner_id = {}, weight = {}, new_point_id = {})\n",
-    //     new_corner_id, weight, new_point_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const auto point_corner_sources = new_point_corner_sources[new_point_id];
-    for (const auto& point_corner_source : point_corner_sources) {
-        const float     corner_weight = point_weight * point_corner_source.first;
-        const Corner_id corner_id     = point_corner_source.second;
-        add_corner_source(new_corner_id, corner_weight, corner_id);
+    log_operation->trace(
+        "add_facet_centroid(dst_vertex = {}, facet_weight = {}, src_facet = {})",
+        dst_vertex, facet_weight, src_facet
+    );
+    for (GEO::index_t src_corner : source_mesh.facets.corners(src_facet)) {
+        const GEO::index_t src_vertex = source_mesh.facet_corners.vertex(src_corner);
+        add_vertex_corner_source(dst_vertex, facet_weight, src_corner);
+        add_vertex_source(dst_vertex, facet_weight, src_vertex);
     }
 }
 
-void Geometry_operation::add_polygon_source(const Polygon_id new_polygon_id, const float polygon_weight, const Polygon_id old_polygon_id)
+void Geometry_operation::add_vertex_ring(const GEO::index_t dst_vertex, const float vertex_weight, const GEO::index_t src_vertex)
 {
-    // log_operation.trace(
-    //     "add_polygon_source (new_polygon_id = {}, weight = {}, old_polygon_id = {})\n",
-    //     new_polygon_id, weight, old_polygon_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const std::size_t i = static_cast<std::size_t>(new_polygon_id);
-    if (new_polygon_sources.size() <= i) {
-        new_polygon_sources.resize(i + s_grow_size);
+    for (GEO::index_t src_corner : source.get_vertex_corners(src_vertex)) {
+        const GEO::index_t src_facet       = source.get_corner_facet(src_corner);
+        const GEO::index_t next_src_corner = source_mesh.facets.next_corner_around_facet(src_facet, src_corner);
+        const GEO::index_t next_src_vertex = source_mesh.facet_corners.vertex(next_src_corner);
+        add_vertex_source(dst_vertex, vertex_weight, next_src_vertex);
     }
-    new_polygon_sources[i].emplace_back(polygon_weight, old_polygon_id);
 }
 
-void Geometry_operation::add_edge_source(const Edge_id new_edge_id, const float edge_weight, const Edge_id old_edge_id)
+auto Geometry_operation::make_new_dst_facet_from_src_facet(const GEO::index_t src_facet, const GEO::index_t corner_count) -> GEO::index_t
 {
-    // log_operation.trace(
-    //     "add_edge_source (new_edge_id = {}, weight = {}, old_edge_id = {})\n",
-    //     new_edge_id, weight, old_edge_id
-    // );
-    // const erhe::log::Indenter scope_indent;
-    const std::size_t i = static_cast<std::size_t>(new_edge_id);
-    if (new_edge_sources.size() <= i) {
-        new_edge_sources.resize(i + s_grow_size);
+    const GEO::index_t new_dst_facet = destination_mesh.facets.create_polygon(corner_count);
+    add_facet_source(new_dst_facet, 1.0f, src_facet);
+    const std::size_t i = static_cast<std::size_t>(src_facet);
+    const std::size_t old_size = m_facet_src_to_dst.size();
+    if (old_size <= i) {
+        m_facet_src_to_dst.resize(get_size_to_include(old_size, i));
     }
-    new_edge_sources[i].emplace_back(edge_weight, old_edge_id);
+    m_facet_src_to_dst[i] = new_dst_facet;
+    return new_dst_facet;
 }
 
-void Geometry_operation::build_destination_edges_with_sourcing()
+auto Geometry_operation::make_new_dst_corner_from_src_facet_centroid(
+    const GEO::index_t dst_facet,
+    const GEO::index_t dst_local_facet_corner,
+    const GEO::index_t src_facet
+) -> GEO::index_t
 {
-    // log_operation.trace("build_destination_edges_with_sourcing()\n");
-    // const erhe::log::Indenter scope_indent;
+    geo_assert(m_src_facet_centroid_to_dst_vertex.size() >= source_mesh.facets.nb());
+    const GEO::index_t dst_vertex = m_src_facet_centroid_to_dst_vertex[src_facet];
+    destination_mesh.facets.set_vertex(dst_facet, dst_local_facet_corner, dst_vertex);
+    const GEO::index_t new_dst_corner = destination_mesh.facets.corner(dst_facet, dst_local_facet_corner);
+    distribute_corner_sources(new_dst_corner, 1.0f, dst_vertex);
+    return new_dst_corner;
+}
 
-    destination.build_edges();
+auto Geometry_operation::make_new_dst_corner_from_dst_vertex(
+    const GEO::index_t dst_facet,
+    const GEO::index_t dst_local_facet_corner,
+    const GEO::index_t dst_vertex
+) -> GEO::index_t
+{
+    destination_mesh.facets.set_vertex(dst_facet, dst_local_facet_corner, dst_vertex);
+    const GEO::index_t dst_corner = destination_mesh.facets.corner(dst_facet, dst_local_facet_corner);
+    distribute_corner_sources(dst_corner, 1.0f, dst_vertex);
+    return dst_corner;
+}
 
-    source.for_each_edge_const([&](auto& i) {
-        const Point_id new_a       = point_old_to_new[i.edge.a];
-        const Point_id new_b       = point_old_to_new[i.edge.b];
-        const Point_id new_a_      = std::min(new_a, new_b);
-        const Point_id new_b_      = std::max(new_a, new_b);
-        const Edge_id  new_edge_id = destination.make_edge(new_a_, new_b_);
-        add_edge_source(new_edge_id, 1.0f, i.edge_id);
-        const std::size_t index = static_cast<std::size_t>(i.edge_id);
-        if (edge_old_to_new.size() <= index) {
-            edge_old_to_new.resize(index + s_grow_size);
+auto Geometry_operation::make_new_dst_corner_from_src_corner(
+    const GEO::index_t dst_facet,
+    const GEO::index_t dst_local_facet_corner,
+    const GEO::index_t src_corner
+) -> GEO::index_t
+{
+    const GEO::index_t src_vertex = source_mesh.facet_corners.vertex(src_corner);
+    const GEO::index_t dst_vertex = m_vertex_src_to_dst[src_vertex];
+    destination_mesh.facets.set_vertex(dst_facet, dst_local_facet_corner, dst_vertex);
+    const GEO::index_t new_dst_corner = destination_mesh.facets.corner(dst_facet, dst_local_facet_corner);
+    add_corner_source(new_dst_corner, 1.0f, src_corner);
+    return new_dst_corner;
+}
+
+void Geometry_operation::add_facet_corners(const GEO::index_t dst_facet, const GEO::index_t src_facet)
+{
+    const GEO::index_t local_facet_corner_count = source_mesh.facets.nb_vertices(src_facet);
+    for (GEO::index_t local_facet_corner = 0; local_facet_corner < local_facet_corner_count; ++local_facet_corner) {
+        const GEO::index_t src_corner = source_mesh.facets.corner(src_facet, local_facet_corner);
+        const GEO::index_t src_vertex = source_mesh.facet_corners.vertex(src_corner);
+        const GEO::index_t dst_vertex = m_vertex_src_to_dst[src_vertex];
+        destination_mesh.facets.set_vertex(dst_facet, local_facet_corner, dst_vertex);
+        const GEO::index_t new_dst_corner = destination_mesh.facets.corner(dst_facet, local_facet_corner);
+        add_corner_source(new_dst_corner, 1.0f, src_corner);
+    }
+}
+
+void Geometry_operation::add_vertex_source(const GEO::index_t dst_vertex, const float vertex_weight, const GEO::index_t src_vertex)
+{
+    const std::size_t i = static_cast<std::size_t>(dst_vertex);
+    const std::size_t old_size = m_dst_vertex_sources.size();
+    if (old_size <= i) {
+        m_dst_vertex_sources.resize(get_size_to_include(old_size, i));
+    }
+    m_dst_vertex_sources[i].emplace_back(vertex_weight, src_vertex);
+}
+
+void Geometry_operation::add_vertex_corner_source(const GEO::index_t dst_vertex, const float corner_weight, const GEO::index_t src_corner)
+{
+    log_operation->trace(
+        "add_vertex_corner_source(dst_vertex= {}, weight = {}, src_corner = {})",
+        dst_vertex, corner_weight, src_corner
+    );
+
+    const std::size_t i = static_cast<std::size_t>(dst_vertex);
+    const std::size_t old_size = m_dst_vertex_corner_sources.size();
+    if (old_size <= i) {
+        m_dst_vertex_corner_sources.resize(get_size_to_include(old_size, i));
+    }
+    m_dst_vertex_corner_sources[dst_vertex].emplace_back(corner_weight, src_corner);
+}
+
+void Geometry_operation::add_corner_source(const GEO::index_t dst_corner, const float corner_weight, const GEO::index_t src_corner)
+{
+    const std::size_t i = static_cast<std::size_t>(dst_corner);
+    const std::size_t old_size = m_dst_corner_sources.size();
+    if (old_size <= i) {
+        m_dst_corner_sources.resize(get_size_to_include(old_size, i));
+    }
+    m_dst_corner_sources[i].emplace_back(corner_weight, src_corner);
+}
+
+void Geometry_operation::distribute_corner_sources(const GEO::index_t dst_corner, const float vertex_weight, const GEO::index_t dst_vertex)
+{
+    const auto vertex_corner_sources = m_dst_vertex_corner_sources[dst_vertex];
+    for (const auto& vertex_corner_source : vertex_corner_sources) {
+        const float        corner_weight = vertex_weight * vertex_corner_source.first;
+        const GEO::index_t corner        = vertex_corner_source.second;
+        add_corner_source(dst_corner, corner_weight, corner);
+    }
+}
+
+void Geometry_operation::add_facet_source(const GEO::index_t dst_facet, const float facet_weight, const GEO::index_t src_facet)
+{
+    const std::size_t i = static_cast<std::size_t>(dst_facet);
+    const std::size_t old_size = m_dst_facet_sources.size();
+    if (old_size <= i) {
+        m_dst_facet_sources.resize(get_size_to_include(old_size, i));
+    }
+    m_dst_facet_sources[i].emplace_back(facet_weight, src_facet);
+}
+
+void Geometry_operation::add_edge_source(const GEO::index_t dst_edge, const float edge_weight, const GEO::index_t src_edge)
+{
+    const std::size_t i = static_cast<std::size_t>(dst_edge);
+    const std::size_t old_size = m_dst_edge_sources.size();
+    if (old_size) {
+        m_dst_edge_sources.resize(get_size_to_include(old_size, i));
+    }
+    m_dst_edge_sources[i].emplace_back(edge_weight, src_edge);
+}
+
+void Geometry_operation::interpolate_mesh_attributes()
+{
+    m_dst_vertex_sources.resize(destination_mesh.vertices.nb());
+    m_dst_facet_sources .resize(destination_mesh.facets.nb());
+    m_dst_corner_sources.resize(destination_mesh.facet_corners.nb());
+    m_dst_edge_sources  .resize(destination_mesh.edges.nb());
+
+    const Mesh_attributes& s = source.get_attributes();
+    Mesh_attributes&       d = destination.get_attributes();
+
+    for (GEO::index_t vertex : destination_mesh.vertices) {
+        const std::vector<std::pair<float, GEO::index_t>>& src_keys = m_dst_vertex_sources[vertex];
+        float sum_weights{0.0f};
+        for (auto j : src_keys) {
+            //const GEO::index_t src_key = j.second;
+            sum_weights += j.first;
         }
-        edge_old_to_new[index] = new_edge_id;
-    });
+
+        if (sum_weights == 0.0f) {
+            continue;
+        }
+
+        GEO::vec3 dst_value{0.0f, 0.0f, 0.0f};
+        for (auto j : src_keys) {
+            const GEO::index_t src_key = j.second;
+
+            const float     weight    = j.first;
+            const GEO::vec3 src_value = source_mesh.vertices.point(src_key);
+            dst_value += static_cast<GEO::vec3>((weight / sum_weights) * src_value);
+        }
+
+        destination_mesh.vertices.point(vertex) = dst_value;
+    }
+
+    // Recompute facet_id, facet_centroid, facet_normal
+    interpolate_attribute<GEO::vec4f>(s.facet_color_0,          d.facet_color_0,          m_dst_facet_sources);
+    interpolate_attribute<GEO::vec4f>(s.facet_color_1,          d.facet_color_1,          m_dst_facet_sources);
+    interpolate_attribute<GEO::vec2f>(s.facet_aniso_control,    d.facet_aniso_control,    m_dst_facet_sources);
+    interpolate_attribute<GEO::vec3f>(s.vertex_normal,          d.vertex_normal,          m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec3f>(s.vertex_normal_smooth,   d.vertex_normal_smooth,   m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0,      m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1,      m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent,         m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent,       m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0,         m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec4f>(s.vertex_color_1,         d.vertex_color_1,         m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_0, d.vertex_joint_weights_0, m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_1, d.vertex_joint_weights_1, m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_0, d.vertex_joint_indices_0, m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_1, d.vertex_joint_indices_1, m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec2f>(s.vertex_aniso_control,   d.vertex_aniso_control,   m_dst_vertex_sources);
+    interpolate_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal,          m_dst_corner_sources);
+    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0,      m_dst_corner_sources);
+    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_1,      d.corner_texcoord_1,      m_dst_corner_sources);
+    interpolate_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent,         m_dst_corner_sources);
+    interpolate_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent,       m_dst_corner_sources);
+    interpolate_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0,         m_dst_corner_sources);
+    interpolate_attribute<GEO::vec4f>(s.corner_color_1,         d.corner_color_1,         m_dst_corner_sources);
+    interpolate_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control,   m_dst_corner_sources);
+
+    // TODO edge attributes
 }
 
-void Geometry_operation::interpolate_all_property_maps()
+void Geometry_operation::copy_mesh_attributes()
 {
-    ERHE_PROFILE_FUNCTION();
+    const Mesh_attributes& s = source.get_attributes();
+    Mesh_attributes&       d = destination.get_attributes();
 
-    new_point_sources  .resize(destination.get_point_count());
-    new_polygon_sources.resize(destination.get_polygon_count());
-    new_corner_sources .resize(destination.get_corner_count());
-    new_edge_sources   .resize(destination.get_edge_count());
-    source.point_attributes()  .interpolate(destination.point_attributes(),   new_point_sources);
-    source.polygon_attributes().interpolate(destination.polygon_attributes(), new_polygon_sources);
-    source.corner_attributes() .interpolate(destination.corner_attributes(),  new_corner_sources);
-    source.edge_attributes()   .interpolate(destination.edge_attributes(),    new_edge_sources);
+    copy_attribute<GEO::vec4f>(s.facet_color_0,          d.facet_color_0          );
+    copy_attribute<GEO::vec4f>(s.facet_color_1,          d.facet_color_1          );
+    copy_attribute<GEO::vec2f>(s.facet_aniso_control,    d.facet_aniso_control    );
+    copy_attribute<GEO::vec3f>(s.vertex_normal,          d.vertex_normal          );
+    copy_attribute<GEO::vec3f>(s.vertex_normal_smooth,   d.vertex_normal_smooth   );
+    copy_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0      );
+    copy_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1      );
+    copy_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent         );
+    copy_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent       );
+    copy_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0         );
+    copy_attribute<GEO::vec4f>(s.vertex_color_1,         d.vertex_color_1         );
+    copy_attribute<GEO::vec4f>(s.vertex_joint_weights_0, d.vertex_joint_weights_0 );
+    copy_attribute<GEO::vec4f>(s.vertex_joint_weights_1, d.vertex_joint_weights_1 );
+    copy_attribute<GEO::vec4u>(s.vertex_joint_indices_0, d.vertex_joint_indices_0 );
+    copy_attribute<GEO::vec4u>(s.vertex_joint_indices_1, d.vertex_joint_indices_1 );
+    copy_attribute<GEO::vec2f>(s.vertex_aniso_control,   d.vertex_aniso_control   );
+    copy_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal          );
+    copy_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0      );
+    copy_attribute<GEO::vec2f>(s.corner_texcoord_1,      d.corner_texcoord_1      );
+    copy_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent         );
+    copy_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent       );
+    copy_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0         );
+    copy_attribute<GEO::vec4f>(s.corner_color_1,         d.corner_color_1         );
+    copy_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control   );
+}
+
+void Geometry_operation::post_processing()
+{
+    //destination.sanity_check();
+    //destination.compute_tangents();
+
+    interpolate_mesh_attributes();
+
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_facet_centroids |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+    destination.process(flags);
 }
 
 } // namespace erhe::geometry::operation

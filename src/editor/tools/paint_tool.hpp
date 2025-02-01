@@ -6,6 +6,8 @@
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_geometry/types.hpp"
 
+#include <geogram/mesh/mesh.h>
+
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -86,17 +88,23 @@ public:
     void paint();
 
 private:
+    static auto vertex_buffer_index_from_scnene_mesh_primitive_corner(
+        const erhe::scene::Mesh& scene_mesh,
+        const std::size_t        scene_mesh_primitive_index,
+        const GEO::index_t       geo_mesh_corner
+    ) -> std::optional<uint32_t>;
+
     void paint_corner(
-        erhe::scene::Mesh&              mesh,
-        const erhe::geometry::Geometry& geometry,
-        erhe::geometry::Corner_id       corner_id,
-        const glm::vec4                 color
+        erhe::scene::Mesh& scene_mesh,
+        std::size_t        scene_mesh_primitive_index,
+        GEO::index_t       corner,
+        const glm::vec4    color
     );
     void paint_vertex(
-        erhe::scene::Mesh&              mesh,
-        const erhe::geometry::Geometry& geometry,
-        uint32_t                        vertex_id,
-        const glm::vec4                 color
+        erhe::scene::Mesh& scene_mesh_mesh,
+        std::size_t        scene_mesh_primitive_index,
+        GEO::index_t       vertex,
+        const glm::vec4    color
     );
 
     Paint_vertex_command                m_paint_vertex_command;
@@ -106,8 +114,8 @@ private:
     Paint_mode              m_paint_mode{Paint_mode::Point};
     size_t                  m_selected_palette_slot{0};
 
-    std::optional<uint32_t> m_point_id;
-    std::optional<uint32_t> m_corner_id;
+    GEO::index_t            m_vertex;
+    GEO::index_t            m_corner;
     std::vector<glm::vec4>  m_ngon_colors;
     bool                    m_edit_palette{false};
     std::vector<glm::vec4>  m_palette;

@@ -1,41 +1,33 @@
 #include "scene/mesh_intersect.hpp"
 #include "editor_log.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace editor {
 
-using erhe::geometry::c_point_locations;
-using erhe::geometry::Corner;
-using erhe::geometry::Corner_id;
-using erhe::geometry::Point_id;
-using erhe::geometry::Polygon_id;
-using erhe::geometry::Polygon_corner_id;
-using glm::vec3;
-using glm::vec4;
-
 namespace {
 
 #define CULLING 0
 
 auto ray_triangle_intersect(
-    const vec3& origin,
-    const vec3& direction,
-    const vec3& v0,
-    const vec3& v1,
-    const vec3& v2,
-    float& t,
-    float& u,
-    float& v
+    const GEO::vec3& origin,
+    const GEO::vec3& direction,
+    const GEO::vec3& v0,
+    const GEO::vec3& v1,
+    const GEO::vec3& v2,
+    double&          out_t,
+    double&          out_u,
+    double&          out_v
 ) -> bool
 {
-    const vec3 v0v1 = v1 - v0;
-    const vec3 v0v2 = v2 - v0;
-    const vec3 pvec = glm::cross(direction, v0v2);
-    const float det = glm::dot(v0v1, pvec);
+    const GEO::vec3 v0v1 = v1 - v0;
+    const GEO::vec3 v0v2 = v2 - v0;
+    const GEO::vec3 pvec = GEO::cross(direction, v0v2);
+    const double det = GEO::dot(v0v1, pvec);
 #ifdef CULLING
-    constexpr float epsilon = 0.00001f;
+    constexpr double epsilon = 0.00001f;
 
     // if the determinant is negative the triangle is backfacing
     // if the determinant is close to 0, the ray misses the triangle
@@ -48,20 +40,24 @@ auto ray_triangle_intersect(
         return false;
     }
 #endif
-    const float inv_det = 1.0f / det;
+    const double inv_det = 1.0 / det;
 
-    const vec3 tvec = origin - v0;
-    u = glm::dot(tvec, pvec) * inv_det;
-    if ((u < 0.0f) || (u > 1.0f)) {
+    const GEO::vec3 tvec = origin - v0;
+    double u = GEO::dot(tvec, pvec) * inv_det;
+    if ((u < 0.0) || (u > 1.0)) {
         return false;
     }
-    const vec3 qvec = glm::cross(tvec, v0v1);
-    v = glm::dot(direction, qvec) * inv_det;
-    if ((v < 0.0f) || (u + v > 1.0f)) {
+    const GEO::vec3 qvec = GEO::cross(tvec, v0v1);
+    double v = GEO::dot(direction, qvec) * inv_det;
+    if ((v < 0.0) || (u + v > 1.0f)) {
         return false;
     }
 
-    t = glm::dot(v0v2, qvec) * inv_det;
+    double t = GEO::dot(v0v2, qvec) * inv_det;
+
+    out_t = t;
+    out_u = u;
+    out_v = v;
 
     return true;
 }
@@ -69,85 +65,76 @@ auto ray_triangle_intersect(
 } // namespace
 
 auto intersect(
-    const erhe::scene::Mesh&    mesh,
-    const vec3                  origin_in_world,
-    const vec3                  direction_in_world,
-    erhe::geometry::Geometry*&  out_geometry,
-    erhe::geometry::Polygon_id& out_polygon_id,
-    float&                      out_t,
-    float&                      out_u,
-    float&                      out_v
+    const erhe::scene::Mesh&                  mesh,
+    const GEO::vec3                           origin_in_world,
+    const GEO::vec3                           direction_in_world,
+    std::shared_ptr<erhe::geometry::Geometry> out_geometry,
+    GEO::index_t&                             out_facet,
+    double&                                   out_t,
+    double&                                   out_u,
+    double&                                   out_v
 ) -> bool
 {
     const erhe::scene::Node* node = mesh.get_node();
     ERHE_VERIFY(node != nullptr);
-    const auto mesh_from_world   = node->node_from_world();
-    const vec3 origin_in_mesh    = vec3{mesh_from_world * vec4{origin_in_world, 1.0f}};
-    const vec3 direction_in_mesh = vec3{mesh_from_world * vec4{direction_in_world, 0.0f}};
+    const glm::mat4 mesh_from_world_  = node->node_from_world();
+    const GEO::mat4 mesh_from_world   = to_geo_mat4(mesh_from_world_);
+    const GEO::vec3 origin_in_mesh    = GEO::vec3{mesh_from_world * GEO::vec4{origin_in_world, 1.0}};
+    const GEO::vec3 direction_in_mesh = GEO::vec3{mesh_from_world * GEO::vec4{direction_in_world, 0.0}};
 
     out_t = std::numeric_limits<float>::max();
 
     for (auto& primitive : mesh.get_primitives()) {
         const std::shared_ptr<erhe::primitive::Primitive_shape>& shape = primitive.get_shape_for_raytrace();
-        if (shape) {
+        if (!shape) {
             continue;
         }
-        erhe::geometry::Geometry* geometry = shape->get_geometry().get();
-        if (geometry == nullptr) {
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
+        if (!geometry) {
             continue;
         }
-
-        const auto* const point_locations = geometry->point_attributes().find<vec3>(c_point_locations);
-        if (point_locations == nullptr) {
-            return false;
-        }
+        GEO::Mesh& geo_mesh = geometry->get_mesh();
 
         //erhe::raytrace::log_geometry.trace("raytrace {}\n", geometry->name);
-        geometry->for_each_polygon_const([&](auto& i) {
-            const Corner_id first_corner_id = geometry->polygon_corners[i.polygon.first_polygon_corner_id];
-            const Corner&   first_corner    = geometry->corners[first_corner_id];
-            const Point_id  first_point_id  = first_corner.point_id;
-            const vec3 v0 = point_locations->get(first_point_id);
+        for (GEO::index_t facet : geo_mesh.facets) {
+            const GEO::index_t first_corner = geo_mesh.facets.corner(facet, 0);
+            const GEO::index_t first_vertex = geo_mesh.facet_corners.vertex(first_corner);
+            const GEO::vec3    v0           = geo_mesh.vertices.point(first_vertex);
 
-            for (Polygon_corner_id j = 0; j < i.polygon.corner_count; ++j) {
-                const std::size_t corner_index      = static_cast<std::size_t>(i.polygon.first_polygon_corner_id) + static_cast<size_t>(j);
-                const std::size_t next_corner_index = static_cast<std::size_t>(i.polygon.first_polygon_corner_id) + (static_cast<size_t>(j) + 1) % static_cast<size_t>(i.polygon.corner_count);
-                const Corner_id   corner_id         = geometry->polygon_corners[corner_index];
-                const Corner_id   next_corner_id    = geometry->polygon_corners[next_corner_index];
-                const Corner&     corner            = geometry->corners[corner_id];
-                const Corner&     next_corner       = geometry->corners[next_corner_id];
-                const Point_id    point_id          = corner.point_id;
-                const Point_id    next_point_id     = next_corner.point_id;
-                const vec3        v1                = point_locations->get(point_id);
-                const vec3        v2                = point_locations->get(next_point_id);
+            for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
+                const GEO::index_t next_corner = geo_mesh.facets.next_corner_around_facet(facet, corner);
+                const GEO::index_t vertex      = geo_mesh.facet_corners.vertex(corner);
+                const GEO::index_t next_vertex = geo_mesh.facet_corners.vertex(next_corner);
+                const GEO::vec3    v1          = geo_mesh.vertices.point(vertex);
+                const GEO::vec3    v2          = geo_mesh.vertices.point(next_vertex);
 
-                float hit_t;
-                float hit_u;
-                float hit_v;
+                double hit_t;
+                double hit_u;
+                double hit_v;
                 const bool hit = ray_triangle_intersect(origin_in_mesh, direction_in_mesh, v0, v1, v2, hit_t, hit_u, hit_v);
                 if (hit) {
                     log_raytrace->trace(
                         "hit polygon {} {}-{}-{} with t = {}",
-                        i.polygon_id,
-                        first_point_id,
-                        point_id,
-                        next_point_id,
+                        facet,
+                        first_vertex,
+                        vertex,
+                        next_vertex,
                         hit_t
                     );
                 }
                 if (hit && (hit_t < out_t)) {
-                    out_geometry   = geometry;
-                    out_polygon_id = i.polygon_id;
-                    out_t          = hit_t;
-                    out_u          = hit_u;
-                    out_v          = hit_v;
+                    out_geometry = geometry;
+                    out_facet    = facet;
+                    out_t        = hit_t;
+                    out_u        = hit_u;
+                    out_v        = hit_v;
                 }
             }
-        });
+        }
     }
 
     if (out_t != std::numeric_limits<float>::max()) {
-        log_raytrace->trace("final hit polygon {} with t = {}", out_polygon_id, out_t);
+        log_raytrace->trace("final hit polygon {} with t = {}", out_facet, out_t);
     }
     return out_t != std::numeric_limits<float>::max();
 }

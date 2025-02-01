@@ -13,33 +13,33 @@ auto Brush_placement::get_brush() const -> std::shared_ptr<Brush>
     return m_brush;
 }
 
-auto Brush_placement::get_polygon() const -> erhe::geometry::Polygon_id
+auto Brush_placement::get_facet() const -> GEO::index_t
 {
-    return m_polygon;
+    return m_facet;
 }
 
-auto Brush_placement::get_corner() const -> erhe::geometry::Corner_id
+auto Brush_placement::get_corner() const -> GEO::index_t
 {
     return m_corner;
 }
 
 Brush_placement::Brush_placement(
     const std::shared_ptr<Brush>& brush,
-    erhe::geometry::Polygon_id    polygon,
-    erhe::geometry::Corner_id     corner
+    const GEO::index_t            facet,
+    const GEO::index_t            corner
 )
-    : Item     {"brush placement"}
-    , m_brush  {brush}
-    , m_polygon{polygon}
-    , m_corner {corner}
+    : Item    {"brush placement"}
+    , m_brush {brush}
+    , m_facet {facet}
+    , m_corner{corner}
 {
 }
 
 Brush_placement::Brush_placement()
-    : Item{"brush placement"}
-    , m_brush  {}
-    , m_polygon{}
-    , m_corner {}
+    : Item    {"brush placement"}
+    , m_brush {}
+    , m_facet {GEO::NO_INDEX}
+    , m_corner{GEO::NO_INDEX}
 {
 }
 

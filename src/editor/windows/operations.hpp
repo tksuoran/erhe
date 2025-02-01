@@ -80,6 +80,7 @@ public:
     void bake_transform();
     void reverse();
     void repair();
+    void weld();
 
     // CSG
     void difference();
@@ -99,6 +100,7 @@ public:
     void ambo();
     void truncate();
     void gyro();
+    void chamfer();
 
 private:
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
@@ -112,6 +114,7 @@ private:
     erhe::commands::Lambda_command m_bake_transform_command;
     erhe::commands::Lambda_command m_reverse_command;
     erhe::commands::Lambda_command m_repair_command;
+    erhe::commands::Lambda_command m_weld_command;
 
     erhe::commands::Lambda_command m_difference_command;
     erhe::commands::Lambda_command m_intersection_command;
@@ -130,6 +133,7 @@ private:
     erhe::commands::Lambda_command m_ambo_command;
     erhe::commands::Lambda_command m_truncate_command;
     erhe::commands::Lambda_command m_gyro_command;
+    erhe::commands::Lambda_command m_chamfer_command;
 
     Make_mesh_config m_make_mesh_config{};
 };

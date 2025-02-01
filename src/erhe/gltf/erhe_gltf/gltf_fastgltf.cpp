@@ -13,6 +13,8 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_graphics/vertex_format.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_log/log_geogram.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
@@ -47,6 +49,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <string_view>
 
 namespace erhe::gltf {
 
@@ -279,7 +282,7 @@ void to_erhe_attribute(const fastgltf::Accessor& accessor, erhe::graphics::Glsl_
 
 } // anonymous namespace
 
-using namespace glm;
+//using namespace glm;
 using namespace erhe::geometry;
 
 namespace {
@@ -1580,7 +1583,7 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
 
     timer.end();
     if (timer.duration().has_value()) {
-        log_geometry->info("glTF scanned {} in {}", path.string(), format_duration(timer.duration().value()));
+        log_gltf->info("glTF scanned {} in {}", path.string(), format_duration(timer.duration().value()));
     }
 
     return result;

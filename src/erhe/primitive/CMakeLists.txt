@@ -28,8 +28,6 @@ erhe_target_sources_grouped(
     erhe_primitive/primitive_log.hpp
     erhe_primitive/primitive.cpp
     erhe_primitive/primitive.hpp
-    erhe_primitive/property_maps.cpp
-    erhe_primitive/property_maps.hpp
     erhe_primitive/triangle_soup.cpp
     erhe_primitive/triangle_soup.hpp
     erhe_primitive/vertex_attribute_info.cpp
@@ -41,6 +39,7 @@ if (${ERHE_USE_PRECOMPILED_HEADERS})
 endif ()
 target_link_libraries(${_target}
     PUBLIC
+        geogram
         glm::glm-header-only
         etl::etl
         erhe::geometry

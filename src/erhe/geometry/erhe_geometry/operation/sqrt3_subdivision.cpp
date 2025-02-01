@@ -1,15 +1,23 @@
 #include "erhe_geometry/operation/sqrt3_subdivision.hpp"
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_profile/profile.hpp"
-
-#include <fmt/format.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
+#include "erhe_geometry/operation/geometry_operation.hpp"
 
 namespace erhe::geometry::operation {
 
+class Sqrt3_subdivision : public Geometry_operation
+{
+public:
+    Sqrt3_subdivision(const Geometry& source, Geometry& destination);
+
+    void build();
+};
+
+Sqrt3_subdivision::Sqrt3_subdivision(const Geometry& source, Geometry& destination)
+    : Geometry_operation{source, destination}
+{
+}
+
 //  Sqrt(3): Replace edges with two triangles
-//  For each corner in the old polygon, add one triangle
+//  For each corner in the src facet, add one triangle
 //  (centroid, corner, opposite centroid)
 //
 //  Centroids:
@@ -21,59 +29,48 @@ namespace erhe::geometry::operation {
 //  (2) S(p) := (1 - alpha_n) p + alpha_n 1/n SUM p_i
 //
 //  (6) alpha_n = (4 - 2 cos(2Pi/n)) / 9
-Sqrt3_subdivision::Sqrt3_subdivision(const Geometry& src, Geometry& destination)
-    : Geometry_operation{src, destination}
+void Sqrt3_subdivision::build()
 {
-    ERHE_PROFILE_FUNCTION();
+    constexpr static float pi = 3.141592653589793238462643383279502884197169399375105820974944592308f;
 
-    source.for_each_point_const([&](auto& i) {
-        const float    alpha            = (4.0f - 2.0f * std::cos(2.0f * glm::pi<float>() / i.point.corner_count)) / 9.0f;
-        const float    alpha_per_n      = alpha / static_cast<float>(i.point.corner_count);
-        const float    alpha_complement = 1.0f - alpha;
-        const Point_id new_point        = make_new_point_from_point(alpha_complement, i.point_id);
-        add_point_ring(new_point, alpha_per_n, i.point_id);
-    });
+    // TODO At least assert these are available
+    // build_src_vertex_to_src_corners();
 
-    make_polygon_centroids();
+    for (GEO::index_t src_vertex : source_mesh.vertices) {
+        const std::vector<GEO::index_t> src_corners      = source.get_vertex_corners(src_vertex);
+        const float                     n                = static_cast<float>(src_corners.size());
+        const float                     alpha            = (4.0f - 2.0f * std::cos(2.0f * pi / n)) / 9.0f;
+        const float                     alpha_per_n      = alpha / static_cast<float>(n);
+        const float                     alpha_complement = 1.0f - alpha;
+        const GEO::index_t              new_dst_vertex   = make_new_dst_vertex_from_src_vertex(alpha_complement, src_vertex);
+        add_vertex_ring(new_dst_vertex, alpha_per_n, src_vertex);
+    }
 
-    source.for_each_polygon_const([&](auto& i) {
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
-            const Point_id src_point_id      = j.corner.point_id;
-            const Point_id src_next_point_id = j.next_corner.point_id;
+    make_facet_centroids();
 
-            const auto edge_opt = source.find_edge(src_point_id, src_next_point_id);
-            if (!edge_opt.has_value()) {
-                return;
+    for (const GEO::index_t src_facet : source_mesh.facets) {
+        const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
+        for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < src_corner_count; ++local_src_facet_corner) {
+            const GEO::index_t src_corner         = source_mesh.facets.corner(src_facet, local_src_facet_corner);
+            const GEO::index_t local_src_edge     = local_src_facet_corner;
+            const GEO::index_t opposite_src_facet = source_mesh.facets.adjacent(src_facet, local_src_edge);
+            if (opposite_src_facet == GEO::NO_INDEX) {
+                continue;
             }
-            const auto& edge = edge_opt.value();
-            Polygon_id opposite_polygon_id = i.polygon_id;
-            edge.for_each_polygon_const(source, [&](auto& k) {
-                if (k.polygon_id != i.polygon_id) {
-                    opposite_polygon_id = k.polygon_id;
-                    return k.break_iteration();
-                }
-            });
-            if (opposite_polygon_id == i.polygon_id) {
-                return;
-            }
-            const Polygon_id new_polygon_id = make_new_polygon_from_polygon(i.polygon_id);
-            make_new_corner_from_polygon_centroid(new_polygon_id, i.polygon_id);
-            make_new_corner_from_corner          (new_polygon_id, j.corner_id);
-            make_new_corner_from_polygon_centroid(new_polygon_id, opposite_polygon_id);
-        });
-    });
+            const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, 3);
+            make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 0, src_facet);
+            make_new_dst_corner_from_src_corner        (new_dst_facet, 1, src_corner);
+            make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 2, opposite_src_facet);
+        }
+    }
 
     post_processing();
 }
 
-auto sqrt3_subdivision(const Geometry& source) -> Geometry
+void sqrt3_subdivision(const Geometry& source, Geometry& destination)
 {
-    return Geometry(
-        fmt::format("sqrt3({})", source.name),
-        [&source](auto& result) {
-            Sqrt3_subdivision operation{source, result};
-        }
-    );
+    Sqrt3_subdivision operation{source, destination};
+    operation.build();
 }
 
 } // namespace erhe::geometry::operation

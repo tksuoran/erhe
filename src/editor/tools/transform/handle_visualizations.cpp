@@ -16,6 +16,7 @@
 #include "tools/transform/scale_tool.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/box.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
 #include "erhe_geometry/shapes/torus.hpp"
@@ -433,113 +434,105 @@ auto Handle_visualizations::make_arrow_cylinder(Mesh_memory& mesh_memory) -> Par
 {
     ERHE_PROFILE_FUNCTION();
 
-    return Part{
-        mesh_memory,
-        std::make_shared<erhe::geometry::Geometry>(
-            erhe::geometry::shapes::make_cylinder(
-                -arrow_cylinder_length / 2.0f,
-                arrow_cylinder_length / 2.0f,
-                arrow_cylinder_radius_render,
-                true,
-                true,
-                32,
-                4
-            )
-        ),
-        std::make_shared<erhe::geometry::Geometry>(
-            erhe::geometry::shapes::make_cylinder(
-                -arrow_cylinder_length / 2.0f,
-                arrow_cylinder_length / 2.0f,
-                arrow_cylinder_radius_collision,
-                true,
-                true,
-                20,
-                1
-            )
-        )
-    };
+    auto render_geometry = std::make_shared<erhe::geometry::Geometry>();
+    auto raytrace_geometry = std::make_shared<erhe::geometry::Geometry>();
+    erhe::geometry::shapes::make_cylinder(
+        render_geometry->get_mesh(),
+        -arrow_cylinder_length / 2.0f,
+        arrow_cylinder_length / 2.0f,
+        arrow_cylinder_radius_render,
+        true,
+        true,
+        32,
+        4
+    );
+    erhe::geometry::shapes::make_cylinder(
+        raytrace_geometry->get_mesh(),
+        -arrow_cylinder_length / 2.0f,
+        arrow_cylinder_length / 2.0f,
+        arrow_cylinder_radius_collision,
+        true,
+        true,
+        20,
+        1
+    );
+    return Part{mesh_memory, render_geometry, raytrace_geometry};
 }
 
 auto Handle_visualizations::make_arrow_cone(Mesh_memory& mesh_memory) -> Part
 {
     ERHE_PROFILE_FUNCTION();
 
-    return Part{
-        mesh_memory,
-        std::make_shared<erhe::geometry::Geometry>(
-            erhe::geometry::shapes::make_cone(
-                arrow_cylinder_length,
-                arrow_tip_render,
-                arrow_cone_radius_render,
-                true,
-                32,
-                4
-            )
-        ),
-        std::make_shared<erhe::geometry::Geometry>(
-            erhe::geometry::shapes::make_cone(
-                arrow_cylinder_length,
-                arrow_tip_collision,
-                arrow_cone_radius_collision,
-                true,
-                22,
-                1
-            )
-        )
-    };
+    auto render_geometry = std::make_shared<erhe::geometry::Geometry>();
+    auto raytrace_geometry = std::make_shared<erhe::geometry::Geometry>();
+    erhe::geometry::shapes::make_cone(
+        render_geometry->get_mesh(),
+        arrow_cylinder_length,
+        arrow_tip_render,
+        arrow_cone_radius_render,
+        true,
+        32,
+        4
+    );
+    erhe::geometry::shapes::make_cone(
+        raytrace_geometry->get_mesh(),
+        arrow_cylinder_length,
+        arrow_tip_collision,
+        arrow_cone_radius_collision,
+        true,
+        22,
+        1
+    );
+    return Part{mesh_memory, render_geometry, raytrace_geometry};
 }
 
 auto Handle_visualizations::make_box(Mesh_memory& mesh_memory, const bool uniform) -> Part
 {
     ERHE_PROFILE_FUNCTION();
 
-    return Part{
-        mesh_memory,
-        std::make_shared<erhe::geometry::Geometry>(
-            erhe::geometry::shapes::make_box(
-                -box_length_render,
-                 box_length_render,
-                -box_length_render,
-                 box_length_render,
-                (uniform ? -box_length_render : -box_half_thickness_render),
-                (uniform ?  box_length_render :  box_half_thickness_render)
-            )
-        ),
-        std::make_shared<erhe::geometry::Geometry>(
-            erhe::geometry::shapes::make_box(
-                -box_length_collision,
-                 box_length_collision,
-                -box_length_collision,
-                 box_length_collision,
-                (uniform ? -box_length_collision : -box_half_thickness_collision),
-                (uniform ?  box_length_collision :  box_half_thickness_collision)
-            )
-        )
-    };
+    auto render_geometry = std::make_shared<erhe::geometry::Geometry>();
+    auto raytrace_geometry = std::make_shared<erhe::geometry::Geometry>();
+    erhe::geometry::shapes::make_box(
+        render_geometry->get_mesh(),
+        -box_length_render,
+         box_length_render,
+        -box_length_render,
+         box_length_render,
+        (uniform ? -box_length_render : -box_half_thickness_render),
+        (uniform ?  box_length_render :  box_half_thickness_render)
+    );
+    erhe::geometry::shapes::make_box(
+        raytrace_geometry->get_mesh(),
+        -box_length_collision,
+         box_length_collision,
+        -box_length_collision,
+         box_length_collision,
+        (uniform ? -box_length_collision : -box_half_thickness_collision),
+        (uniform ?  box_length_collision :  box_half_thickness_collision)
+    );
+    return Part{mesh_memory, render_geometry, raytrace_geometry};
 }
 
 auto Handle_visualizations::make_rotate_ring(Mesh_memory& mesh_memory) -> Part
 {
     ERHE_PROFILE_FUNCTION();
-    return Part{
-        mesh_memory, 
-        std::make_shared<erhe::geometry::Geometry>(
-            erhe::geometry::shapes::make_torus(
-                rotate_ring_major_radius,
-                rotate_ring_minor_radius_render,
-                80,
-                32
-            )
-        ),
-        std::make_shared<erhe::geometry::Geometry>(
-            erhe::geometry::shapes::make_torus(
-                rotate_ring_major_radius,
-                rotate_ring_minor_radius_collision,
-                80,
-                20
-            )
-        )
-    };
+    auto render_geometry = std::make_shared<erhe::geometry::Geometry>();
+    auto raytrace_geometry = std::make_shared<erhe::geometry::Geometry>();
+    erhe::geometry::shapes::make_torus(
+        render_geometry->get_mesh(),
+        rotate_ring_major_radius,
+        rotate_ring_minor_radius_render,
+        80,
+        32
+    );
+    erhe::geometry::shapes::make_torus(
+        raytrace_geometry->get_mesh(),
+        rotate_ring_major_radius,
+        rotate_ring_minor_radius_collision,
+        80,
+        20
+    );
+    return Part{mesh_memory, render_geometry, raytrace_geometry};
 }
 
 auto Handle_visualizations::make_material(
@@ -582,9 +575,7 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
     m_tool_node->set_parent_from_node(world_from_anchor * scale);
 }
 
-void Handle_visualizations::set_anchor(
-    const erhe::scene::Trs_transform& world_from_anchor
-)
+void Handle_visualizations::set_anchor(const erhe::scene::Trs_transform& world_from_anchor)
 {
     m_world_from_anchor = world_from_anchor;
 }

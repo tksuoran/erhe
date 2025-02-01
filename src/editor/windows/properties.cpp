@@ -336,25 +336,22 @@ void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Textur
     ImGui::TreePop();
 }
 
-void Properties::geometry_properties(const erhe::geometry::Geometry* geometry) const
+void Properties::geometry_properties(erhe::geometry::Geometry& geometry) const
 {
-    if (geometry == nullptr) {
-        return;
-    }
-
     if (!ImGui::TreeNodeEx("Geometry", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
     ImGui::Indent(indent);
-    int point_count   = geometry->get_point_count();
-    int polygon_count = geometry->get_polygon_count();
-    int edge_count    = geometry->get_edge_count();
-    int corner_count  = geometry->get_corner_count();
-    ImGui::InputInt("Points",   &point_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
-    ImGui::InputInt("Polygons", &polygon_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
-    ImGui::InputInt("Edges",    &edge_count,    0, 0, ImGuiInputTextFlags_ReadOnly);
-    ImGui::InputInt("Corners",  &corner_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
+    GEO::Mesh& geo_mesh = geometry.get_mesh();
+    int vertex_count = static_cast<int>(geo_mesh.vertices.nb());
+    int facet_count  = static_cast<int>(geo_mesh.facets.nb());
+    int edge_count   = static_cast<int>(geo_mesh.edges.nb());
+    int corner_count = static_cast<int>(geo_mesh.facet_corners.nb());
+    ImGui::InputInt("Vertices", &vertex_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputInt("Facets",   &facet_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputInt("Edges",    &edge_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputInt("Corners",  &corner_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
     ImGui::Unindent(indent);
     ImGui::TreePop();
 }
@@ -412,9 +409,9 @@ void Properties::shape_properties(const char* label, erhe::primitive::Primitive_
     }
 
     ImGui::Indent(indent);
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
     if (geometry) {
-        geometry_properties(geometry.get());
+        geometry_properties(*geometry.get());
     }
 
     primitive_raytrace_properties(&shape->get_raytrace());
@@ -498,7 +495,7 @@ void Properties::rendertarget_properties(Rendertarget_mesh& rendertarget) const
 void Properties::brush_placement_properties(Brush_placement& brush_placement) const
 {
     ImGui::Text("Brush: %s", brush_placement.get_brush()->get_name().c_str());
-    ImGui::Text("Polygon: %u", brush_placement.get_polygon());
+    ImGui::Text("Facet: %u", brush_placement.get_facet());
     ImGui::Text("Corner: %u", brush_placement.get_corner());
 }
 

@@ -16,9 +16,9 @@ public:
     // TODO Use Render_style instead of Render_style_data?
     Render_style_data render_style_not_selected;
     Render_style_data render_style_selected;
-    glm::vec4         selection_highlight_low       {  1.0f,  1.0f, 1.0f, 1.0f};
-    glm::vec4         selection_highlight_high      {200.0f, 10.0f, 1.0f, 0.5f};
-    float             selection_highlight_width_low { 0.0f};
+    glm::vec4         selection_highlight_low       {2.0f, 1.0f, 0.0f, 0.8f};
+    glm::vec4         selection_highlight_high      {2.0f, 1.0f, 0.0f, 0.8f};
+    float             selection_highlight_width_low {-2.5f};
     float             selection_highlight_width_high{-3.0f};
     float             selection_highlight_frequency {1.0f};
     glm::vec4         clear_color{0.0f, 0.0f, 0.0, 0.4f};

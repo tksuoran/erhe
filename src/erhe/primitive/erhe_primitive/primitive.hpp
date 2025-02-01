@@ -8,6 +8,8 @@
 #include <optional>
 #include <string_view>
 
+namespace GEO { class Mesh; }
+
 namespace erhe::geometry {
     class Geometry;
 }
@@ -27,7 +29,7 @@ class Primitive_raytrace
 {
 public:
     Primitive_raytrace();
-    explicit Primitive_raytrace(erhe::geometry::Geometry& geometry, Element_mappings* element_mappings = nullptr);
+    explicit Primitive_raytrace(GEO::Mesh& mesh, Element_mappings* element_mappings = nullptr);
     explicit Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_soup);
     Primitive_raytrace(const Primitive_raytrace& other);
     Primitive_raytrace& operator=(const Primitive_raytrace& other);
@@ -36,7 +38,7 @@ public:
     ~Primitive_raytrace() noexcept;
 
     auto has_raytrace_triangles() const -> bool;
-    void make_raytrace_geometry(std::string_view debug_label);
+    void make_raytrace_geometry();
 
     [[nodiscard]] auto get_raytrace_mesh    () const -> const Buffer_mesh&;
     [[nodiscard]] auto get_raytrace_geometry() const -> const std::shared_ptr<erhe::raytrace::IGeometry>&;
@@ -62,22 +64,23 @@ public:
 
     auto make_geometry() -> bool;
     auto make_raytrace() -> bool;
-    [[nodiscard]] auto has_raytrace_triangles          () const -> bool;
-    [[nodiscard]] auto get_geometry                    () -> const std::shared_ptr<erhe::geometry::Geometry>&;
-    [[nodiscard]] auto get_geometry_const              () const -> const std::shared_ptr<erhe::geometry::Geometry>&;
-    [[nodiscard]] auto get_raytrace                    () -> Primitive_raytrace&;
-    [[nodiscard]] auto get_raytrace                    () const -> const Primitive_raytrace&;
-    [[nodiscard]] auto get_triangle_soup               () const -> const std::shared_ptr<Triangle_soup>&;
-    [[nodiscard]] auto get_polygon_id_from_primitive_id(unsigned int primitive_id) const -> uint32_t;
-    [[nodiscard]] auto get_vertex_id_from_corner_id    (uint32_t corner_id) const -> uint32_t;
-    [[nodiscard]] auto get_element_mappings            () const -> const erhe::primitive::Element_mappings&;
+    [[nodiscard]] auto has_raytrace_triangles      () const -> bool;
+    [[nodiscard]] auto get_geometry                () -> const std::shared_ptr<erhe::geometry::Geometry>&;
+    [[nodiscard]] auto get_geometry_const          () const -> const std::shared_ptr<erhe::geometry::Geometry>&;
+    //[[nodiscard]] auto get_mesh                    () -> const std::shared_ptr<GEO::Mesh>&;
+    //[[nodiscard]] auto get_mesh_const              () const -> const std::shared_ptr<GEO::Mesh>&;
+    [[nodiscard]] auto get_raytrace                () -> Primitive_raytrace&;
+    [[nodiscard]] auto get_raytrace                () const -> const Primitive_raytrace&;
+    [[nodiscard]] auto get_triangle_soup           () const -> const std::shared_ptr<Triangle_soup>&;
+    [[nodiscard]] auto get_mesh_facet_from_triangle(unsigned int triangle) const -> GEO::index_t;
+    [[nodiscard]] auto get_element_mappings        () const -> const erhe::primitive::Element_mappings&;
 
 protected:
     // Keep this before members - at least m_renderable_mesh - which initialization
     // in constructors uses m_element_mappings.
     erhe::primitive::Element_mappings         m_element_mappings;
-    std::shared_ptr<erhe::geometry::Geometry> m_geometry       {};
-    std::shared_ptr<Triangle_soup>            m_triangle_soup  {};
+    std::shared_ptr<erhe::geometry::Geometry> m_geometry{};
+    std::shared_ptr<Triangle_soup>            m_triangle_soup{};
     Primitive_raytrace                        m_raytrace{};
 };
 

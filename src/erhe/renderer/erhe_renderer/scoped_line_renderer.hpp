@@ -130,6 +130,9 @@ private:
         const glm::vec4& color
     )
     {
+        if (m_last_allocate_gpu_float_data == nullptr) {
+            return;
+        }
         ERHE_VERIFY(m_last_allocate_word_offset + 8 <= m_last_allocate_word_count);
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point.x;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point.y;

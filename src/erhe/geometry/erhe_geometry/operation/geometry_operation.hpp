@@ -1,129 +1,150 @@
 #pragma once
 
-#include "erhe_geometry/types.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include <geogram/mesh/mesh.h>
 
-#include <set>
+#include <cctype>
+#include <utility>
 #include <vector>
+#include <unordered_map>
 
-namespace erhe::geometry {
-    class Geometry;
-}
+struct pair_hash {
+    template <typename T1, typename T2>
+    auto operator() (const std::pair<T1, T2>& p) const -> std::size_t {
+        auto hash1 = std::hash<T1>{}(p.first);
+        auto hash2 = std::hash<T2>{}(p.second);
+        return hash1 ^ (hash2 << 1);
+    }
+};
 
 namespace erhe::geometry::operation {
 
 class Geometry_operation
 {
 public:
-    Geometry_operation(const Geometry& source, Geometry& destination)
-        : source     {source}
-        , lhs        {source}
-        , rhs        {nullptr}
-        , destination{destination}
+    Geometry_operation(const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination)
+        : source          {source}
+        , lhs             {source}
+        , rhs             {nullptr}
+        , destination     {destination}
+        , source_mesh     {source.get_mesh()}
+        , lhs_mesh        {source.get_mesh()}
+        , rhs_mesh        {nullptr}
+        , destination_mesh{destination.get_mesh()}
     {
     }
 
-    Geometry_operation(const Geometry& lhs, const Geometry& rhs, Geometry& destination)
-        : source     {lhs}
-        , lhs        {lhs}
-        , rhs        {&rhs}
-        , destination{destination}
+    Geometry_operation(const erhe::geometry::Geometry& lhs, const erhe::geometry::Geometry& rhs, erhe::geometry::Geometry& destination)
+        : source          {lhs}
+        , lhs             {lhs}
+        , rhs             {&rhs}
+        , destination     {destination}
+        , source_mesh     {source.get_mesh()}
+        , lhs_mesh        {source.get_mesh()}
+        , rhs_mesh        {&rhs.get_mesh()}
+        , destination_mesh{destination.get_mesh()}
     {
     }
 
-    static constexpr std::size_t s_grow_size = 4096;
-    const Geometry&                                        source;
-    const Geometry&                                        lhs;
-    const Geometry*                                        rhs;
-    Geometry&                                              destination;
-    std::vector<Point_id  >                                point_old_to_new;
-    std::vector<Polygon_id>                                polygon_old_to_new;
-    std::vector<Corner_id >                                corner_old_to_new;
-    std::vector<Edge_id   >                                edge_old_to_new;
-    std::vector<Point_id  >                                old_polygon_centroid_to_new_points;
-    std::vector<std::vector<std::pair<float, Point_id  >>> new_point_sources;
-    std::vector<std::vector<std::pair<float, Corner_id >>> new_point_corner_sources;
-    std::vector<std::vector<std::pair<float, Corner_id >>> new_corner_sources;
-    std::vector<std::vector<std::pair<float, Polygon_id>>> new_polygon_sources;
-    std::vector<std::vector<std::pair<float, Edge_id   >>> new_edge_sources;
+protected:
+    void post_processing();
 
-private:
-    static constexpr std::size_t s_max_edge_point_slots = 300;
-    std::vector<Point_id> m_old_edge_to_new_points;
+    const erhe::geometry::Geometry&                          source;
+    const erhe::geometry::Geometry&                          lhs;
+    const erhe::geometry::Geometry*                          rhs;
+    erhe::geometry::Geometry&                                destination;
 
-public:
-    void post_processing           ();
-    void make_points_from_points   ();
-    void make_polygon_centroids    ();
-    void reserve_edge_to_new_points();
+    const GEO::Mesh&                                         source_mesh;
+    const GEO::Mesh&                                         lhs_mesh;
+    const GEO::Mesh*                                         rhs_mesh;
+    GEO::Mesh&                                               destination_mesh;
 
-    [[nodiscard]] auto find_or_make_point_from_edge(
-        Point_id    a,
-        Point_id    b,
-        std::size_t count = 1
-    ) -> Point_id;
+    std::vector<GEO::index_t>                                m_vertex_src_to_dst;
+    std::vector<GEO::index_t>                                m_facet_src_to_dst;
+    //  std::vector<GEO::index_t>                                m_corner_src_to_dst;
+    std::vector<GEO::index_t>                                m_edge_src_to_dst;
+    std::vector<GEO::index_t>                                m_src_facet_centroid_to_dst_vertex;
+    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_vertex_sources;
+    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_vertex_corner_sources;
+    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_corner_sources;
+    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_facet_sources;
+    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_edge_sources;
 
-    void make_edge_midpoints(
-        const std::initializer_list<float> relative_positions = { 0.5f }
+    std::unordered_map<
+        std::pair<GEO::index_t, GEO::index_t>,
+        std::vector<GEO::index_t>,
+        pair_hash
+    > m_src_edge_to_dst_vertex;
+
+    void make_dst_vertices_from_src_vertices();
+    void make_facet_centroids               ();
+    void build_edge_to_facets_map(
+        const GEO::Mesh& mesh, 
+        std::unordered_map<
+            std::pair<GEO::index_t, GEO::index_t>,
+            std::vector<GEO::index_t>,
+            pair_hash
+        >& edge_to_facets
     );
 
-    [[nodiscard]] auto get_edge_new_point(
-        Point_id a,
-        Point_id b,
-        Point_id split_position = 0,
-        Point_id split_count    = 1
-    ) const -> Point_id;
+    //// [[nodiscard]] auto get_dst_vertex_from_src_edge(GEO::index_t src_edge) -> GEO::index_t;
 
-    // Creates a new point to Destination from old point.
-    // The new point is linked to the old point in Source.
-    // Old point is set as source for the new point with specified weight.
+    void make_edge_midpoints(const std::initializer_list<float> relative_positions);
+
+    [[nodiscard]] auto get_src_edge_new_vertex(GEO::index_t src_vertex_a, GEO::index_t src_vertex_b, GEO::index_t vertex_split_position) const -> GEO::index_t;
+
+    // Creates a new vertex to Destination from given src_vertex in Source and
+    // registers src_vertex as source for the new vertex with specified weight.
     //
-    // weight      Weight for old point as source
-    // old_point   Old point used as source for the new point
-    // return      The new point.
-    auto make_new_point_from_point(float point_weight, Point_id old_point) -> Point_id;
+    // weight      Weight for old vertex as source.
+    // src_vertex  Vertex in source used as source for the new vertex.
+    // returns     The new vertex in destination.
+    auto make_new_dst_vertex_from_src_vertex(float vertex_weight, GEO::index_t src_vertex) -> GEO::index_t;
 
-    // Creates a new point to Destination from old point.
-    // The new point is linked to the old point in Source.
-    // Old point is set as source for the new point with weight 1.0.
+    // Creates a new vertex to Destination from given src_vertex in Source and
+    // registers src_vertex as source for the new vertex with weight 1.0.
     //
-    // old_point   Old point used as source for the new point
-    // returns     The new point.
-    auto make_new_point_from_point(Point_id old_point) -> Point_id;
+    // src_vertex  Vertex in source used as source for the new vertex.
+    // returns     The new vertex in destination.
+    auto make_new_dst_vertex_from_src_vertex(GEO::index_t src_vertex) -> GEO::index_t;
 
-    // Creates a new point to Destination from centroid of old polygon.
-    // The new point is linked to the old polygon in Source.
-    // Each corner of the old polygon is added as source for the new point with weight 1.0.
-    auto make_new_point_from_polygon_centroid(Polygon_id old_polygon) -> Point_id;
+    // Creates a new vertex to Destination from centroid of given src_vertex in Source and
+    // registers each corner of the src_facet as source for the new vertex with weight 1.0.
+    auto make_new_dst_vertex_from_src_facet_centroid(GEO::index_t src_facet) -> GEO::index_t;
 
-    void add_polygon_centroid(Point_id new_point, float polygon_weight, Polygon_id old_polygon);
-    void add_point_ring(Point_id new_point, float point_weight, Point_id old_point);
+    void add_facet_centroid(GEO::index_t dst_vertex, float facet_weight, GEO::index_t src_facet);
 
-    auto make_new_polygon_from_polygon(Polygon_id old_polygon) -> Polygon_id;
+    void add_vertex_ring(GEO::index_t dst_vertex, float vertex_weight, GEO::index_t src_vertex);
 
-    auto make_new_corner_from_polygon_centroid(Polygon_id new_polygon, Polygon_id old_polygon) -> Corner_id;
+    auto make_new_dst_facet_from_src_facet(GEO::index_t src_facet, GEO::index_t corner_count) -> GEO::index_t;
 
-    auto make_new_corner_from_point(Polygon_id new_polygon, Point_id new_point) -> Corner_id;
+    auto make_new_dst_corner_from_src_facet_centroid(GEO::index_t dst_facet, GEO::index_t dst_local_facet_corner, GEO::index_t src_facet) -> GEO::index_t;
 
-    auto make_new_corner_from_corner(Polygon_id new_polygon, Corner_id old_corner) -> Corner_id;
+    auto make_new_dst_corner_from_dst_vertex(GEO::index_t dst_facet, GEO::index_t dst_local_facet_corner, GEO::index_t dst_point) -> GEO::index_t;
 
-    void add_polygon_corners(Polygon_id new_polygon, Polygon_id old_polygon);
+    auto make_new_dst_corner_from_src_corner(GEO::index_t dst_facet, GEO::index_t dst_local_facet_corner, GEO::index_t src_corner) -> GEO::index_t;
 
-    void add_point_source(Point_id new_point, float point_weight, Point_id old_point);
+    void add_facet_corners(GEO::index_t dst_facet, GEO::index_t src_facet);
 
-    void add_point_corner_source(Point_id new_point, float corner_weight, Corner_id old_corner);
+    void add_vertex_source(GEO::index_t dst_vertex, float point_weight, GEO::index_t src_vertex);
 
-    void add_corner_source(Corner_id new_corner, float corner_weight, Corner_id old_corner);
+    void add_vertex_corner_source(GEO::index_t dst_vertex, float corner_weight, GEO::index_t src_corner);
 
-    // Inherit point sources to corner
-    void distribute_corner_sources(Corner_id new_corner, float point_weight, Point_id new_point);
+    void add_corner_source(GEO::index_t dst_corner, float corner_weight, GEO::index_t src_corner);
 
-    void add_polygon_source(Polygon_id new_polygon, float polygon_weight, Polygon_id old_polygon);
+    // Inherit vertex sources to corner
+    void distribute_corner_sources(GEO::index_t dst_corner, float point_weight, GEO::index_t dst_vertex);
 
-    void add_edge_source(Edge_id new_edge, float edge_weight, Edge_id old_edge);
+    void add_facet_source(GEO::index_t dst_facet, float polygon_weight, GEO::index_t src_facet);
 
-    void build_destination_edges_with_sourcing();
+    void add_edge_source(GEO::index_t dst_edge, float edge_weight, GEO::index_t src_edge);
 
-    void interpolate_all_property_maps();
+    void interpolate_mesh_attributes();
+
+    void copy_mesh_attributes();
+
+protected:
+    [[nodiscard]] static auto get_size_to_include(std::size_t old_size, std::size_t i) -> size_t;
 };
 
 } // namespace namespace geometry

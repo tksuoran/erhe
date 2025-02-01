@@ -1,12 +1,12 @@
 #pragma once
 
-#include "erhe_geometry/geometry.hpp"
-
 #include "rapidjson/document.h"
 
 #include <filesystem>
 #include <string>
 #include <vector>
+
+namespace erhe::geometry { class Geometry; }
 
 namespace editor {
 
@@ -27,7 +27,7 @@ public:
     Json_library();
     explicit Json_library(const std::filesystem::path& path);
 
-    [[nodiscard]] auto make_geometry(const std::string& key_name) const -> erhe::geometry::Geometry;
+    auto make_geometry(erhe::geometry::Geometry& geometry, const std::string& key_name) const -> bool;
 
     std::vector<std::string> names;       // all meshes
     std::vector<Category>    categories;  // categories

@@ -119,6 +119,7 @@
 #include <geogram/basic/common.h>
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/command_line_args.h>
+#include <geogram/basic/logger.h>
 
 namespace editor {
 
@@ -1107,6 +1108,9 @@ void run_editor()
         ERHE_PROFILE_SCOPE("initialize geogram");
         GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
         GEO::CmdLine::import_arg_group("algo");
+        // TODO
+        // GEO::Logger::unregister_all_clients();
+        // GEO::Logger::register_client(s_geogram_logger_client.get());
     }
 
     {
