@@ -1,316 +1,57 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_geometry/shapes/cone.hpp"
-#include "erhe_geometry/geometry_log.hpp"
-#include "erhe_log/log_glm.hpp"
-#include "erhe_profile/profile.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_verify/verify.hpp"
-
-#include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
+#include "erhe_profile/profile.hpp"
 
 #include <map>
-#include <sstream>
-#include <vector>
 
 namespace erhe::geometry::shapes {
 
-using glm::vec2;
-using glm::vec3;
-using glm::vec4;
-
-// Stack numbering example
-//
-//                      rel    known
-// stack                stack  as
-// --------------------------------------------------------------------------------.
-// 6         /\         1.0    top       (singular = single vertex in this case)   .
-// 5        /--\                                                                   .
-// 4       /----\                                                                  .
-// 3      /------\                                                                 .
-// 2     /--------\                                                                .
-// 1    /----------\                                                               .
-// 0   /============\   0.0    bottom    (not singular in this case)               .
-//
-// bottom: stack == 0
-// top:    stack == stack_count
+// Stack numbering example:          
+//                                   
+// 0 1 2 3 4                         
+// . . . . .                         
+// |\. . . .                         
+// | \ . . .                         
+// | :\. . .                         
+// | : \ . .                         
+// | : :\. .        Y                
+// | : : \ .        ^                
+// | : : :\.        |                
+// | : : : *        O---> X          
+// | : : :/                          
+// | : : /                           
+// | : :/                            
+// | : /                             
+// | :/    ^                         
+// | /     top: stack == stack_count 
+// |/           rel_stacl = 1.0      
+//              singular in this case
+// ^                                 
+// bottom: stack == 0                
+//         rel_stack == 0            
+//         not singular in this case 
 
 class Conical_frustum_builder
 {
 public:
-    Geometry& geometry;
+    constexpr static double pi = 3.141592653589793238462643383279502884197169399375105820974944592308;
+    constexpr static double half_pi = 0.5 * pi;
 
-    double min_x         {0.0};
-    double max_x         {0.0};
-    double bottom_radius {0.0};
-    double top_radius    {0.0};
-    bool   use_bottom    {false};
-    bool   use_top       {false};
-    int    slice_count   {0};
-    int    stack_count   {0};
-    bool   bottom_singular{false};
-    bool   top_singular   {false};
-
-    std::map<std::pair<int, int>, Point_id> points;
-
-    Point_id top_point_id   {0};
-    Point_id bottom_point_id{0};
-
-    Property_map<Point_id  , vec3>* point_locations      {nullptr};
-    Property_map<Point_id  , vec3>* point_normals        {nullptr};
-    Property_map<Point_id  , vec4>* point_tangents       {nullptr};
-    Property_map<Point_id  , vec4>* point_bitangents     {nullptr};
-    Property_map<Point_id  , vec2>* point_texcoords      {nullptr};
-    Property_map<Corner_id , vec3>* corner_normals       {nullptr};
-    Property_map<Corner_id , vec4>* corner_tangents      {nullptr};
-    Property_map<Corner_id , vec4>* corner_bitangents    {nullptr};
-    Property_map<Corner_id , vec2>* corner_texcoords     {nullptr};
-    Property_map<Corner_id , vec2>* corner_aniso_control {nullptr};
-    Property_map<Polygon_id, vec3>* polygon_centroids    {nullptr};
-    Property_map<Polygon_id, vec3>* polygon_normals      {nullptr};
-    Property_map<Polygon_id, vec2>* polygon_aniso_control{nullptr};
-
-    auto get_point(const int slice, const int stack) -> Point_id
-    {
-        return points[std::make_pair(slice == slice_count ? 0 : slice, stack)];
-    }
-
-    class Point_data
+    class Vertex_data
     {
     public:
-        glm::vec3 position {0.0f};
-        glm::vec3 normal   {0.0f};
-        glm::vec4 tangent  {0.0f};
-        glm::vec4 bitangent{0.0f};
-        glm::vec2 texcoord {0.0f};
+        GEO::vec3  position {0.0};
+        GEO::vec3f normal   {0.0f};
+        GEO::vec4f tangent  {0.0f};
+        GEO::vec3f bitangent{0.0f};
+        GEO::vec2f texcoord {0.0f};
     };
 
-    auto make_point_data(const double rel_slice, const double rel_stack) const -> Point_data
-    {
-        ERHE_PROFILE_FUNCTION();
-
-        const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
-        const double sin_phi             = std::sin(phi);
-        const double cos_phi             = std::cos(phi);
-        const double one_minus_rel_stack = 1.0 - rel_stack;
-
-        const vec3 position{
-            static_cast<float>(one_minus_rel_stack * (min_x                  ) + rel_stack * (max_x)),
-            static_cast<float>(one_minus_rel_stack * (bottom_radius * sin_phi) + rel_stack * (top_radius * sin_phi)),
-            static_cast<float>(one_minus_rel_stack * (bottom_radius * cos_phi) + rel_stack * (top_radius * cos_phi))
-        };
-
-        const vec3 bottom{
-            static_cast<float>(min_x),
-            static_cast<float>(bottom_radius * sin_phi),
-            static_cast<float>(bottom_radius * cos_phi)
-        };
-
-        const vec3 top{
-            static_cast<float>(max_x),
-            static_cast<float>(top_radius * sin_phi),
-            static_cast<float>(top_radius * cos_phi)
-        };
-
-        const vec3 B = glm::normalize(top - bottom); // generatrix
-        const vec3 T{
-            0.0f,
-            static_cast<float>(std::sin(phi + glm::half_pi<double>())),
-            static_cast<float>(std::cos(phi + glm::half_pi<double>()))
-        };
-        const vec3 N0 = glm::cross(B, T);
-        const vec3 N  = glm::normalize(N0);
-
-        const vec3  t_xyz = glm::normalize(T - N * glm::dot(N, T));
-        const float t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
-        const vec3  b_xyz = glm::normalize(B - N * glm::dot(N, B));
-        const float b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
-
-        const double s = rel_slice;
-        const double t = rel_stack;
-
-        return Point_data{
-            .position  = position,
-            .normal    = N,
-            .tangent   = vec4{t_xyz, t_w},
-            .bitangent = vec4{b_xyz, b_w},
-            .texcoord  = vec2{static_cast<float>(s), static_cast<float>(t)}
-        };
-    }
-
-    [[nodiscard]] auto cone_point(const double rel_slice, const double rel_stack) -> Point_id
-    {
-        ERHE_PROFILE_FUNCTION();
-
-        const Point_id point_id = geometry.make_point();
-
-        const auto data = make_point_data(rel_slice, rel_stack);
-
-        point_locations ->put(point_id, data.position);
-        point_normals   ->put(point_id, data.normal);
-        point_tangents  ->put(point_id, data.tangent);
-        point_bitangents->put(point_id, data.bitangent);
-        point_texcoords ->put(point_id, data.texcoord);
-        SPDLOG_LOGGER_TRACE(
-            log_cone,
-            "point_id = {:3}, rel_slice = {: 3.1}, rel_stack = {: 3.1}, "
-            "position = {}, texcoord = {}, normal = {}, tangent = {}",
-            point_id, static_cast<float>(rel_slice), static_cast<float>(rel_stack),
-            data.position,
-            data.texcoord,
-            data.normal,
-            data.tangent
-        );
-        return point_id;
-    }
-
-    auto make_corner(const Polygon_id polygon, const int slice, const int stack) -> Corner_id
-    {
-        return make_corner(polygon, slice, stack, false);
-    }
-
-    auto get_point_id(const int slice, const int stack)
-    {
-        ERHE_PROFILE_FUNCTION();
-
-        if ((stack == 0) && bottom_singular) {
-            return bottom_point_id;
-        } else if ((stack == stack_count) && top_singular) {
-            return top_point_id;
-        } else if (slice == slice_count) {
-            return points[std::make_pair(0, stack)];
-        } else {
-            return points[std::make_pair(slice, stack)];
-        }
-    }
-
-    auto make_corner(const Polygon_id polygon_id, const int slice, const int stack, const bool base) -> Corner_id
-    {
-        ERHE_PROFILE_FUNCTION();
-
-        const auto rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
-        const auto rel_stack = static_cast<double>(stack) / static_cast<double>(stack_count);
-
-        const bool is_slice_seam       = (slice == 0) || (slice == slice_count);
-        const bool is_bottom           = (stack == 0);
-        const bool is_top              = (stack == stack_count);
-        const bool is_uv_discontinuity = is_slice_seam || is_bottom || is_top;
-
-        Point_id point_id{0};
-
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-        std::stringstream ss;
-
-        ss << fmt::format(
-            "polygon_id = {:2}, slice = {: 3}, stack = {: 3}, rel_slice = {: 3.1}, rel_stack = {: 3.1}, "
-            "base = {:>5}, point_id = ",
-            polygon_id,
-            slice,
-            stack,
-            rel_slice,
-            rel_stack,
-            base
-        );
-#endif
-        if (is_top && (top_radius == 0.0)) {
-            point_id = top_point_id;
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-            ss << fmt::format("{:2} (top)        ", point_id);
-#endif
-        } else if (is_bottom && (bottom_radius == 0.0)) {
-            point_id = bottom_point_id;
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-            ss << fmt::format("{:2} (bottom)     ", point_id);
-#endif
-        } else if (slice == slice_count) {
-            point_id = points[std::make_pair(0, stack)];
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-            ss << fmt::format("{:2} (slice seam) ", point_id);
-#endif
-        } else {
-            point_id = points[std::make_pair(slice, stack)];
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-            ss << fmt::format("{:2}              ", point_id);
-#endif
-        }
-
-        const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-        ss << fmt::format("corner = {:2}", corner_id);
-#endif
-
-        if (is_uv_discontinuity) {
-            float s, t;
-            if (base) {
-                const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
-                const double sin_phi             = std::sin(phi);
-                const double cos_phi             = std::cos(phi);
-                const double one_minus_rel_stack = 1.0 - rel_stack;
-
-                s = static_cast<float>(one_minus_rel_stack * sin_phi + rel_stack * sin_phi);
-                t = static_cast<float>(one_minus_rel_stack * cos_phi + rel_stack * cos_phi);
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-                ss << fmt::format(" base");
-#endif
-            } else {
-                s = static_cast<float>(rel_slice);
-                t = static_cast<float>(rel_stack);
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-                ss << fmt::format(" slice seam rel_slice = {: 3.1} rel_stack = {: 3.1}", rel_slice, rel_stack);
-#endif
-            }
-            corner_texcoords->put(corner_id, vec2{s, t});
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-            ss << fmt::format(" UV discontinuity, texcoord = {: 3.1}, {: 3.1}", s, t);
-#endif
-        }
-
-        if (is_top || is_bottom) {
-            if (base && is_bottom && (bottom_radius != 0.0) && use_bottom) {
-                corner_normals->put(corner_id, vec3{-1.0f, 0.0f, 0.0f});
-                corner_tangents->put(
-                    corner_id,
-                    bottom_singular
-                        ? vec4{0.0f, 0.0f, 0.0f, 0.0f}
-                        : vec4{0.0f, 1.0f, 0.0f, 1.0f}
-                );
-                corner_bitangents->put(
-                    corner_id,
-                    bottom_singular
-                        ? vec4{0.0f, 0.0f, 0.0f, 0.0f}
-                        : vec4{0.0f, 0.0f, 1.0f, 1.0f}
-                );
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-                ss << fmt::format(" forced bottom normal and tangent");
-#endif
-            }
-
-            if (base && is_top && (top_radius != 0.0) && use_top) {
-                corner_normals->put(corner_id, vec3{1.0f, 0.0f, 0.0f});
-                corner_tangents->put(
-                    corner_id,
-                    bottom_singular
-                        ? vec4{0.0f, 0.0f, 0.0f, 0.0f}
-                        : vec4{0.0f, 1.0f, 0.0f, 1.0f}
-                );
-                corner_bitangents->put(
-                    corner_id,
-                    bottom_singular
-                        ? vec4{0.0f, 0.0f, 0.0f, 0.0f}
-                        : vec4{0.0f, 0.0f, 1.0f, 1.0f}
-                );
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-                ss << fmt::format(" forced top normal and tangent");
-#endif
-            }
-        }
-        SPDLOG_LOGGER_TRACE(log_cone, ss.str());
-
-        return corner_id;
-    }
-
     Conical_frustum_builder(
-        Geometry&    geometry,
+        GEO::Mesh&   mesh,
         const double min_x,
         const double max_x,
         const double bottom_radius,
@@ -320,7 +61,7 @@ public:
         const int    slice_count,
         const int    stack_count
     )
-        : geometry       {geometry}
+        : mesh           {mesh}
         , min_x          {min_x}
         , max_x          {max_x}
         , bottom_radius  {bottom_radius}
@@ -331,244 +72,362 @@ public:
         , stack_count    {stack_count}
         , bottom_singular{bottom_radius == 0.0}
         , top_singular   {top_radius    == 0.0}
+        , attributes     {mesh}
     {
-        ERHE_PROFILE_FUNCTION();
-
-        ERHE_VERIFY(slice_count != 0);
-        ERHE_VERIFY(stack_count != 0);
-        point_locations       = geometry.point_attributes  ().create<vec3>(c_point_locations      );
-        point_normals         = geometry.point_attributes  ().create<vec3>(c_point_normals        );
-        point_tangents        = geometry.point_attributes  ().create<vec4>(c_point_tangents       );
-        point_bitangents      = geometry.point_attributes  ().create<vec4>(c_point_bitangents     );
-        point_texcoords       = geometry.point_attributes  ().create<vec2>(c_point_texcoords      );
-        corner_normals        = geometry.corner_attributes ().create<vec3>(c_corner_normals       );
-        corner_tangents       = geometry.corner_attributes ().create<vec4>(c_corner_tangents      );
-        corner_bitangents     = geometry.corner_attributes ().create<vec4>(c_corner_bitangents    );
-        corner_texcoords      = geometry.corner_attributes ().create<vec2>(c_corner_texcoords     );
-        corner_aniso_control  = geometry.corner_attributes ().create<vec2>(c_corner_aniso_control );
-        polygon_centroids     = geometry.polygon_attributes().create<vec3>(c_polygon_centroids    );
-        polygon_normals       = geometry.polygon_attributes().create<vec3>(c_polygon_normals      );
-        polygon_aniso_control = geometry.polygon_attributes().create<vec2>(c_polygon_aniso_control);
+        geo_assert(slice_count != 0);
+        geo_assert(stack_count != 0);
     }
 
     void build()
     {
-        ERHE_PROFILE_FUNCTION();
-
         // X = anisotropy strength
         // Y = apply texture coordinate to anisotropy
-        const glm::vec2 non_anisotropic          {0.0f, 0.0f}; // Used on tips
-        const glm::vec2 anisotropic_no_texcoord  {1.0f, 0.0f}; // Used on lateral surface
-        const glm::vec2 anisotropic_with_texcoord{1.0f, 1.0f}; // Used on bottom / top ends
+        const GEO::vec2f non_anisotropic          {0.0f, 0.0f}; // Used on tips
+        const GEO::vec2f anisotropic_no_texcoord  {1.0f, 0.0f}; // Used on lateral surface
+        const GEO::vec2f anisotropic_with_texcoord{1.0f, 1.0f}; // Used on bottom / top ends
 
         // Points
-        SPDLOG_LOGGER_TRACE(log_cone, "Points:");
         const int stack_bottom              = 0;
         const int stack_top                 = stack_count;
         const int stack_non_singular_bottom = bottom_singular ? 1               : 0;
         const int stack_non_singular_top    = top_singular    ? stack_count - 1 : stack_count;
-        for (
-            int stack = stack_non_singular_bottom;
-            stack <= stack_non_singular_top;
-            ++stack
-        ) {
-            const auto rel_stack = static_cast<double>(stack) / static_cast<double>(stack_count);
+        const int vertex_extent_1  = stack_non_singular_top - stack_non_singular_bottom + 1;
+        const int vertex_extent_2  = slice_count;
+        const int tip_vertex_count = (bottom_singular ? 1 : 0) + (top_singular ? 1 : 0);
+        const int vertex_count     = vertex_extent_1 * vertex_extent_2 + tip_vertex_count;
+        
+        GEO::index_t vertex = mesh.vertices.create_vertices(vertex_count);
+        for (int stack = stack_non_singular_bottom; stack <= stack_non_singular_top; ++stack) {
+            const double rel_stack = static_cast<double>(stack) / static_cast<double>(stack_count);
             for (int slice = 0; slice < slice_count; ++slice) {
-                const auto rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
-
-                SPDLOG_LOGGER_TRACE(log_cone, "slice {:2} stack {: 2}: ", slice, stack);
-                points[std::make_pair(slice, stack)] = cone_point(rel_slice, rel_stack);
+                const double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
+                cone_vertex(vertex, rel_slice, rel_stack);
+                key_to_vertex[std::make_pair(slice, stack)] = vertex;
+                ++vertex;
             }
         }
+        ERHE_VERIFY(static_cast<int>(vertex + tip_vertex_count) == static_cast<int>(vertex_count));
 
-        // Bottom parts
         if (bottom_singular) {
-            SPDLOG_LOGGER_TRACE(log_cone, "Bottom - point / triangle fan");
-            bottom_point_id = geometry.make_point(min_x, 0.0, 0.0); // Apex
+            // Bottom vertex triangle fan
+            bottom_vertex = vertex++;
+            mesh.vertices.point(bottom_vertex) = GEO::vec3{min_x, 0.0, 0.0}; // Apex
+            attributes.vertex_normal       .set(bottom_vertex, GEO::vec3f{-1.0f, 0.0f, 0.0f});
+            attributes.vertex_normal_smooth.set(bottom_vertex, GEO::vec3f{-1.0f, 0.0f, 0.0f});
+            const GEO::index_t facet_start = mesh.facets.create_triangles(slice_count);
+            const GEO::index_t facet_end = facet_start + slice_count;
+            GEO::index_t facet = facet_start;
             for (int slice = 0; slice < slice_count; ++slice) {
                 const int  stack              = stack_non_singular_bottom;
                 const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
                 const auto rel_stack_centroid = (static_cast<double>(stack) - 0.5) / static_cast<double>(slice_count);
 
-                const Polygon_id polygon_id   = geometry.make_polygon();
-                const Point_data average_data = make_point_data(rel_slice_centroid, 0.0);
+                const Vertex_data  average_data = make_vertex_data(rel_slice_centroid, 0.0);
 
-                make_corner(polygon_id, slice + 1, stack);
-                make_corner(polygon_id, slice,     stack);
-                const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack_bottom);
+                make_corner(facet, 2, slice + 1, stack);
+                make_corner(facet, 1, slice,     stack);
+                const GEO::index_t tip_corner_id = make_corner(facet, 0, slice, stack_bottom);
 
-                const auto p0 = get_point(slice,     stack);
-                const auto p1 = get_point(slice + 1, stack);
+                const GEO::index_t p0 = get_vertex(slice,     stack);
+                const GEO::index_t p1 = get_vertex(slice + 1, stack);
 
-                corner_normals      ->put(tip_corner_id, average_data.normal);
-                corner_tangents     ->put(tip_corner_id, average_data.tangent);
-                corner_bitangents   ->put(tip_corner_id, average_data.bitangent);
-                corner_texcoords    ->put(tip_corner_id, average_data.texcoord);
-                corner_aniso_control->put(tip_corner_id, non_anisotropic);
+                attributes.corner_normal       .set(tip_corner_id, average_data.normal);
+                attributes.corner_tangent      .set(tip_corner_id, average_data.tangent);
+                attributes.corner_bitangent    .set(tip_corner_id, average_data.bitangent);
+                attributes.corner_texcoord_0   .set(tip_corner_id, average_data.texcoord);
+                attributes.corner_aniso_control.set(tip_corner_id, non_anisotropic);
 
-                const Point_data centroid_data = make_point_data(rel_slice_centroid, rel_stack_centroid);
-                const auto flat_centroid_location = (1.0f / 3.0f) *
-                    (
-                        point_locations->get(p0) +
-                        point_locations->get(p1) +
-                        glm::vec3{min_x, 0.0, 0.0}
-                    );
-                polygon_centroids    ->put(polygon_id, flat_centroid_location);
-                polygon_normals      ->put(polygon_id, centroid_data.normal);
-                polygon_aniso_control->put(polygon_id, anisotropic_no_texcoord);
+                const Vertex_data centroid_data = make_vertex_data(rel_slice_centroid, rel_stack_centroid);
+                const GEO::vec3 flat_centroid_location = (1.0f / 3.0f) * (mesh.vertices.point(p0) + mesh.vertices.point(p1) + GEO::vec3{min_x, 0.0, 0.0});
+                attributes.facet_centroid     .set(facet, GEO::vec3f{flat_centroid_location});
+                //attributes.facet_normal       .set(facet, centroid_data.normal);
+                attributes.facet_aniso_control.set(facet, anisotropic_no_texcoord);
+                ++facet;
             }
+            ERHE_VERIFY(facet == facet_end);
         } else {
             if (use_bottom) {
-                SPDLOG_LOGGER_TRACE(log_cone, "Bottom - flat polygon");
-                const Polygon_id polygon_id = geometry.make_polygon();
-
-                polygon_centroids    ->put(polygon_id, vec3{static_cast<float>(min_x), 0.0f, 0.0f});
-                polygon_normals      ->put(polygon_id, vec3{-1.0f, 0.0f, 0.0f});
-                polygon_aniso_control->put(polygon_id, anisotropic_with_texcoord);
+                // Bottom facet
+                const GEO::index_t facet        = mesh.facets.create_polygon(slice_count);
+                const GEO::vec3f   facet_normal = GEO::vec3f{-1.0f, 0.0f, 0.0f};
+                attributes.facet_centroid     .set(facet, GEO::vec3f{static_cast<float>(min_x), 0.0f, 0.0f});
+                attributes.facet_normal       .set(facet, facet_normal);
+                attributes.facet_aniso_control.set(facet, anisotropic_with_texcoord);
 
                 for (int slice = 0; slice < slice_count; ++slice) {
-                    make_corner(polygon_id, slice, 0, true);
+                    const int reverse_slice = slice_count - 1 - slice;
+                    GEO::index_t vertex_ = GEO::NO_INDEX;
+                    make_corner(facet, slice, reverse_slice, 0, true, &vertex_);
+                    const GEO::vec3f vertex_normal = attributes.vertex_normal.get(vertex_);
+                    const GEO::vec3f vertex_normal_smooth = GEO::normalize(facet_normal + vertex_normal);
+                    attributes.vertex_normal_smooth.set(vertex_, vertex_normal_smooth);
                 }
 
-                geometry.polygons[polygon_id].compute_planar_texture_coordinates(
-                    polygon_id,
-                    geometry,
-                    *corner_texcoords,
-                    *polygon_centroids,
-                    *polygon_normals,
-                    *point_locations,
-                    false
-                );
+                generate_mesh_facet_texture_coordinates(mesh, facet, attributes);
             } else {
-                SPDLOG_LOGGER_TRACE(log_cone, "Bottom - none");
+                // No bottom
             }
         }
 
         // Middle quads, bottom up
-        SPDLOG_LOGGER_TRACE(log_cone, "Middle quads, bottom up");
-        for (
-            int stack = stack_non_singular_bottom;
-            stack < stack_non_singular_top;
-            ++stack
-        ) {
-            const double rel_stack_centroid =
-                (static_cast<double>(stack) + 0.5) / static_cast<double>(stack_count);
+        {
+            int quad_extent_1 = stack_non_singular_top - stack_non_singular_bottom;
+            int quad_extent_2 = slice_count;
+            int quad_count    = quad_extent_1 * quad_extent_2;
+            const GEO::index_t facet_start = mesh.facets.create_quads(quad_count);
+            const GEO::index_t facet_end   = facet_start + quad_count;
+            GEO::index_t       facet       = facet_start;
+            for (int stack = stack_non_singular_bottom; stack < stack_non_singular_top; ++stack) {
+                const double rel_stack_centroid = (static_cast<double>(stack) + 0.5) / static_cast<double>(stack_count);
 
-            for (int slice = 0; slice < slice_count; ++slice) {
-                const auto rel_slice_centroid =
-                    (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                for (int slice = 0; slice < slice_count; ++slice) {
+                    const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
 
-                const Polygon_id polygon_id = geometry.make_polygon();
-                make_corner(polygon_id, slice + 1, stack    );
-                make_corner(polygon_id, slice,     stack    );
-                make_corner(polygon_id, slice,     stack + 1);
-                make_corner(polygon_id, slice + 1, stack + 1);
+                    make_corner(facet, 0, slice + 1, stack + 1);
+                    make_corner(facet, 1, slice,     stack + 1);
+                    make_corner(facet, 2, slice,     stack    );
+                    make_corner(facet, 3, slice + 1, stack    );
 
-                const Point_data centroid_data = make_point_data(rel_slice_centroid, rel_stack_centroid);
-                const auto flat_centroid_location = (1.0f / 4.0f) *
-                    (
-                        point_locations->get(get_point_id(slice + 1, stack    )) +
-                        point_locations->get(get_point_id(slice,     stack    )) +
-                        point_locations->get(get_point_id(slice,     stack + 1)) +
-                        point_locations->get(get_point_id(slice + 1, stack + 1))
-                    );
-                polygon_centroids    ->put(polygon_id, flat_centroid_location);
-                polygon_normals      ->put(polygon_id, centroid_data.normal);
-                polygon_aniso_control->put(polygon_id, anisotropic_no_texcoord);
+                    const Vertex_data centroid_data = make_vertex_data(rel_slice_centroid, rel_stack_centroid);
+                    const GEO::vec3 flat_centroid_location = (1.0f / 4.0f) *
+                        (
+                            mesh.vertices.point(get_vertex(slice + 1, stack + 1)) +
+                            mesh.vertices.point(get_vertex(slice,     stack + 1)) +
+                            mesh.vertices.point(get_vertex(slice,     stack    )) +
+                            mesh.vertices.point(get_vertex(slice + 1, stack    )) 
+                        );
+                    attributes.facet_centroid     .set(facet, GEO::vec3f{flat_centroid_location});
+                    //attributes.facet_normal       .set(facet, centroid_data.normal);
+                    attributes.facet_aniso_control.set(facet, anisotropic_no_texcoord);
+                    facet++;
+                }
             }
+            ERHE_VERIFY(facet == facet_end);
         }
 
         // Top parts
         if (top_singular) {
-            SPDLOG_LOGGER_TRACE(log_cone, "Top - point / triangle fan");
-            top_point_id = geometry.make_point(max_x, 0.0, 0.0); //  apex
+            // Top point triangle fan
+            top_vertex = vertex++;
+            mesh.vertices.point(top_vertex) = GEO::vec3{max_x, 0.0, 0.0}; //  apex
+            attributes.vertex_normal       .set(top_vertex, GEO::vec3f{1.0f, 0.0f, 0.0f});
+            attributes.vertex_normal_smooth.set(top_vertex, GEO::vec3f{1.0f, 0.0f, 0.0f});
 
+            const GEO::index_t facet_start = mesh.facets.create_triangles(slice_count);
+            const GEO::index_t facet_end   = facet_start + slice_count;
+            GEO::index_t       facet       = facet_start;
             for (int slice = 0; slice < slice_count; ++slice) {
                 const int  stack              = stack_non_singular_top;
                 const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
                 const auto rel_stack_centroid = (static_cast<double>(stack) + 0.5) / static_cast<double>(stack_count);
 
-                const Polygon_id polygon_id   = geometry.make_polygon();
-                const Point_data average_data = make_point_data(rel_slice_centroid, 1.0);
+                const Vertex_data average_data = make_vertex_data(rel_slice_centroid, 1.0);
 
-                make_corner(polygon_id, slice + 1, stack);
-                make_corner(polygon_id, slice,     stack);
-                const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack_top);
+                const GEO::index_t tip_corner = make_corner(facet, 0, slice, stack_top);
+                make_corner(facet, 1, slice,     stack);
+                make_corner(facet, 2, slice + 1, stack);
 
-                SPDLOG_LOGGER_TRACE(log_cone, "polygon {} tip tangent {}", polygon_id, average_data.tangent);
-                corner_normals      ->put(tip_corner_id, average_data.normal);
-                corner_tangents     ->put(tip_corner_id, average_data.tangent);
-                corner_bitangents   ->put(tip_corner_id, average_data.bitangent);
-                corner_texcoords    ->put(tip_corner_id, average_data.texcoord);
-                corner_aniso_control->put(tip_corner_id, non_anisotropic);
+                attributes.corner_normal       .set(tip_corner, average_data.normal);
+                attributes.corner_tangent      .set(tip_corner, average_data.tangent);
+                attributes.corner_bitangent    .set(tip_corner, average_data.bitangent);
+                attributes.corner_texcoord_0   .set(tip_corner, average_data.texcoord);
+                attributes.corner_aniso_control.set(tip_corner, non_anisotropic);
 
-                const Point_data centroid_data = make_point_data(rel_slice_centroid, rel_stack_centroid);
+                const Vertex_data centroid_data = make_vertex_data(rel_slice_centroid, rel_stack_centroid);
 
-                const auto p0           = get_point(slice,     stack);
-                const auto p1           = get_point(slice + 1, stack);
-                const vec3 position_p0  = point_locations->get(p0);
-                const vec3 position_p1  = point_locations->get(p1);
-                const vec3 position_tip = glm::vec3{max_x, 0.0, 0.0};
+                const GEO::index_t p0           = get_vertex(slice,     stack);
+                const GEO::index_t p1           = get_vertex(slice + 1, stack);
+                const GEO::vec3    position_p0  = mesh.vertices.point(p0);
+                const GEO::vec3    position_p1  = mesh.vertices.point(p1);
+                const GEO::vec3    position_tip = GEO::vec3{max_x, 0.0, 0.0};
 
-                const auto flat_centroid_location = (1.0f / 3.0f) *
-                    (
-                        position_p0 +
-                        position_p1 +
-                        position_tip
-                    );
-                SPDLOG_LOGGER_TRACE(
-                    log_cone,
-                    "p0 {}: {}, p1 {}: {}, tip {} {} - centroid: {} polygon {}",
-                    p0, position_p0,
-                    p1, position_p1,
-                    top_point_id, position_tip,
-                    flat_centroid_location,
-                    polygon_id
-                );
+                const GEO::vec3 flat_centroid_location = (1.0f / 3.0f) * (position_p0 + position_p1 + position_tip);
 
-                polygon_centroids    ->put(polygon_id, flat_centroid_location);
-                polygon_normals      ->put(polygon_id, centroid_data.normal);
-                polygon_aniso_control->put(polygon_id, anisotropic_no_texcoord);
+                attributes.facet_centroid     .set(facet, GEO::vec3f{flat_centroid_location});
+                //attributes.facet_normal       .set(facet, centroid_data.normal);
+                attributes.facet_aniso_control.set(facet, anisotropic_no_texcoord);
+                ++facet;
             }
+            ERHE_VERIFY(facet == facet_end);
         } else {
             if (use_top) {
-                SPDLOG_LOGGER_TRACE(log_cone, "Top - flat polygon");
-                const Polygon_id polygon_id = geometry.make_polygon();
+                // Top facet
+                const GEO::index_t facet        = mesh.facets.create_polygon(slice_count);
+                const GEO::vec3f   facet_normal = GEO::vec3f{1.0f, 0.0f, 0.0f};
 
-                polygon_centroids    ->put(polygon_id, vec3{static_cast<float>(max_x), 0.0f, 0.0f});
-                polygon_normals      ->put(polygon_id, vec3{1.0f, 0.0f, 0.0f});
-                polygon_aniso_control->put(polygon_id, anisotropic_with_texcoord);
+                attributes.facet_centroid     .set(facet, GEO::vec3f{static_cast<float>(max_x), 0.0f, 0.0f});
+                attributes.facet_normal       .set(facet, facet_normal);
+                attributes.facet_aniso_control.set(facet, anisotropic_with_texcoord);
 
                 for (int slice = 0; slice < slice_count; ++slice) {
-                    const int reverse_slice = slice_count - 1 - slice;
-                    make_corner(polygon_id, reverse_slice, stack_top, true);
+                    GEO::index_t vertex_ = GEO::NO_INDEX;
+                    make_corner(facet, slice, slice, stack_top, true, &vertex_);
+                    const GEO::vec3f vertex_normal = attributes.vertex_normal.get(vertex_);
+                    const GEO::vec3f vertex_normal_smooth = GEO::normalize(facet_normal + vertex_normal);
+                    attributes.vertex_normal_smooth.set(vertex_, vertex_normal_smooth);
                 }
 
-                geometry.polygons[polygon_id].compute_planar_texture_coordinates(
-                    polygon_id,
-                    geometry,
-                    *corner_texcoords,
-                    *polygon_centroids,
-                    *polygon_normals,
-                    *point_locations,
-                    false
-                );
+                generate_mesh_facet_texture_coordinates(mesh, facet, attributes);
             } else {
-                SPDLOG_LOGGER_TRACE(log_cone, "Top - none");
+                // no top
             }
         }
-        geometry.make_point_corners();
-        geometry.build_edges();
-        geometry.promise_has_polygon_normals();
-        geometry.promise_has_polygon_centroids();
-        geometry.promise_has_normals();
-        geometry.promise_has_tangents();
-        geometry.promise_has_bitangents();
-        geometry.promise_has_texture_coordinates();
     }
+
+private:
+    auto make_vertex_data(const double rel_slice, const double rel_stack) const -> Vertex_data
+    {
+        const double phi                 = pi * 2.0 * rel_slice;
+        const double sin_phi             = std::sin(phi);
+        const double cos_phi             = std::cos(phi);
+        const double one_minus_rel_stack = 1.0 - rel_stack;
+
+        const GEO::vec3 position{
+            one_minus_rel_stack * (min_x                  ) + rel_stack * (max_x),
+            one_minus_rel_stack * (bottom_radius * sin_phi) + rel_stack * (top_radius * sin_phi),
+            one_minus_rel_stack * (bottom_radius * cos_phi) + rel_stack * (top_radius * cos_phi)
+        };
+
+        const GEO::vec3 bottom{
+            min_x,
+            bottom_radius * sin_phi,
+            bottom_radius * cos_phi
+        };
+
+        const GEO::vec3 top{
+            max_x,
+            top_radius * sin_phi,
+            top_radius * cos_phi
+        };
+
+        const GEO::vec3  Bd = GEO::normalize(top - bottom); // generatrix
+        const GEO::vec3f B  = GEO::vec3f(Bd);
+        const GEO::vec3f T{
+            0.0f,
+            static_cast<float>(std::sin(phi + 0.5 * pi)),
+            static_cast<float>(std::cos(phi + 0.5 * pi))
+        };
+        const GEO::vec3f N0 = GEO::cross(B, T);
+        const GEO::vec3f N  = GEO::normalize(N0);
+
+        const GEO::vec3f t_xyz = GEO::normalize(T - N * GEO::dot(N, T));
+        const float      t_w   = (GEO::dot(GEO::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
+        const GEO::vec3f b_xyz = GEO::normalize(B - N * GEO::dot(N, B));
+        //const float      b_w   = (GEO::dot(GEO::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
+
+        const double s = rel_slice;
+        const double t = rel_stack;
+
+        return Vertex_data{
+            .position  = position,
+            .normal    = N,
+            .tangent   = GEO::vec4f{t_xyz.x, t_xyz.y, t_xyz.z, t_w},
+            .bitangent = GEO::vec3f{b_xyz}, // , b_w},
+            .texcoord  = GEO::vec2f{static_cast<float>(s), static_cast<float>(t)}
+        };
+    }
+
+    void cone_vertex(const GEO::index_t vertex, const double rel_slice, const double rel_stack)
+    {
+        const Vertex_data data = make_vertex_data(rel_slice, rel_stack);
+        mesh.vertices.point(vertex) = data.position;
+
+        attributes.vertex_normal       .set(vertex, data.normal);
+        attributes.vertex_normal_smooth.set(vertex, data.normal);
+        attributes.vertex_tangent      .set(vertex, data.tangent);
+        attributes.vertex_bitangent    .set(vertex, data.bitangent);
+        attributes.vertex_texcoord_0   .set(vertex, data.texcoord);
+    }
+
+    auto make_corner(const GEO::index_t facet, const GEO::index_t facet_local_corner, const int slice, const int stack) -> GEO::index_t
+    {
+        return make_corner(facet, facet_local_corner, slice, stack, false);
+    }
+
+    [[nodiscard]] auto get_vertex(const int slice, const int stack) -> GEO::index_t
+    {
+        if ((stack == stack_count) && top_singular) {
+            ERHE_VERIFY(top_vertex != GEO::NO_INDEX);
+            return top_vertex;
+        } else if ((stack == 0) && bottom_singular) {
+            ERHE_VERIFY(bottom_vertex != GEO::NO_INDEX);
+            return bottom_vertex;
+        } else if (slice == slice_count) {
+            return key_to_vertex[std::make_pair(0, stack)];
+        } else {
+            return key_to_vertex[std::make_pair(slice, stack)];
+        }
+    }
+
+    auto make_corner(const GEO::index_t facet, const GEO::index_t local_facet_corner, const int slice, const int stack, const bool base, GEO::index_t* p_vertex = nullptr) -> GEO::index_t
+    {
+        const double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
+        const double rel_stack = static_cast<double>(stack) / static_cast<double>(stack_count);
+
+        const bool is_slice_seam       = (slice == 0) || (slice == slice_count);
+        const bool is_bottom           = (stack == 0);
+        const bool is_top              = (stack == stack_count);
+        const bool is_uv_discontinuity = is_slice_seam || is_bottom || is_top;
+
+        const GEO::index_t vertex = get_vertex(slice, stack);
+        if (p_vertex != nullptr) {
+            *p_vertex = vertex;
+        }
+        mesh.facets.set_vertex(facet, local_facet_corner, vertex);
+        const GEO::index_t corner = mesh.facets.corner(facet, local_facet_corner);
+        if (is_uv_discontinuity) {
+            float s, t;
+            if (base) {
+                const double phi                 = pi * 2.0 * rel_slice;
+                const double sin_phi             = std::sin(phi);
+                const double cos_phi             = std::cos(phi);
+                const double one_minus_rel_stack = 1.0 - rel_stack;
+
+                s = static_cast<float>(one_minus_rel_stack * sin_phi + rel_stack * sin_phi);
+                t = static_cast<float>(one_minus_rel_stack * cos_phi + rel_stack * cos_phi);
+            } else {
+                s = static_cast<float>(rel_slice);
+                t = static_cast<float>(rel_stack);
+            }
+            attributes.corner_texcoord_0.set(corner, GEO::vec2f{s, t});
+        }
+
+        if (is_top || is_bottom) {
+            if (base && is_bottom && !bottom_singular && use_bottom) {
+                attributes.corner_normal   .set(corner, GEO::vec3f{-1.0f, 0.0f, 0.0f});
+                attributes.corner_tangent  .set(corner, bottom_singular ? GEO::vec4f{0.0f, 0.0f, 0.0f, 0.0f} : GEO::vec4f{0.0f, 1.0f, 0.0f, 1.0f});
+                attributes.corner_bitangent.set(corner, bottom_singular ? GEO::vec3f{0.0f, 0.0f, 0.0f}       : GEO::vec3f{0.0f, 0.0f, 1.0f});
+            }
+
+            if (base && is_top && !top_singular && use_top) {
+                attributes.corner_normal   .set(corner, GEO::vec3f{1.0f, 0.0f, 0.0f});
+                attributes.corner_tangent  .set(corner, bottom_singular ? GEO::vec4f{0.0f, 0.0f, 0.0f, 0.0f} : GEO::vec4f{0.0f, 1.0f, 0.0f, 1.0f});
+                attributes.corner_bitangent.set(corner, bottom_singular ? GEO::vec3f{0.0f, 0.0f, 0.0f}       : GEO::vec3f{0.0f, 0.0f, 1.0f});
+            }
+        }
+
+        return corner;
+    }
+
+    GEO::Mesh&       mesh;
+    double           min_x          {0.0};
+    double           max_x          {0.0};
+    double           bottom_radius  {0.0};
+    double           top_radius     {0.0};
+    bool             use_bottom     {false};
+    bool             use_top        {false};
+    int              slice_count    {0};
+    int              stack_count    {0};
+    bool             bottom_singular{false};
+    bool             top_singular   {false};
+    std::map<std::pair<int, int>, GEO::index_t> key_to_vertex;
+    GEO::index_t     top_vertex   {GEO::NO_INDEX};
+    GEO::index_t     bottom_vertex{GEO::NO_INDEX};
+    Mesh_attributes  attributes;
 };
 
-auto make_conical_frustum(
+void make_conical_frustum(
+    GEO::Mesh&   mesh,
     const double min_x,
     const double max_x,
     const double bottom_radius,
@@ -577,60 +436,49 @@ auto make_conical_frustum(
     const bool   use_top,
     const int    slice_count,
     const int    stack_division
-) -> Geometry
+)
 {
-    ERHE_PROFILE_FUNCTION();
-
-    return Geometry{
-        "conical frustum",
-        [=](auto& geometry) {
-            Conical_frustum_builder builder{
-                geometry,
-                min_x,
-                max_x,
-                bottom_radius,
-                top_radius,
-                use_bottom,
-                use_top,
-                slice_count,
-                stack_division
-            };
-            builder.build();
-        }
+    Conical_frustum_builder builder{
+        mesh,
+        min_x,
+        max_x,
+        bottom_radius,
+        top_radius,
+        use_bottom,
+        use_top,
+        slice_count,
+        stack_division
     };
+    builder.build();
 }
 
-auto make_cone(
+void make_cone(
+    GEO::Mesh&   mesh,
     const double min_x,
     const double max_x,
     const double bottom_radius,
     const bool   use_bottom,
     const int    slice_count,
     const int    stack_division
-) -> Geometry
+)
 {
-    ERHE_PROFILE_FUNCTION();
 
-    return Geometry{
-        "cone",
-        [=](auto& geometry) {
-            Conical_frustum_builder builder{
-                geometry,
-                min_x,          // min x
-                max_x,          // max x
-                bottom_radius,  // bottom raidus
-                0.0,            // top radius
-                use_bottom,     // use_bottom
-                false,          // use top
-                slice_count,    // stack count
-                stack_division  // stack division
-            };
-            builder.build();
-        }
+    Conical_frustum_builder builder{
+        mesh,
+        min_x,          // min x
+        max_x,          // max x
+        bottom_radius,  // bottom raidus
+        0.0,            // top radius
+        use_bottom,     // use_bottom
+        false,          // use top
+        slice_count,    // stack count
+        stack_division  // stack division
     };
+    builder.build();
 }
 
-auto make_cylinder(
+void make_cylinder(
+    GEO::Mesh&   mesh,
     const double min_x,
     const double max_x,
     const double radius,
@@ -638,28 +486,10 @@ auto make_cylinder(
     const bool   use_top,
     const int    slice_count,
     const int    stack_division
-) -> Geometry
+)
 {
-    ERHE_PROFILE_FUNCTION();
-
-    return Geometry{
-        "cylinder",
-        [=](auto& geometry) {
-            Conical_frustum_builder builder{
-                geometry,
-                min_x,
-                max_x,
-                radius,
-                radius,
-                use_bottom,
-                use_top,
-                slice_count,
-                stack_division
-            };
-            builder.build();
-        }
-    };
+    Conical_frustum_builder builder{mesh, min_x, max_x, radius, radius, use_bottom, use_top, slice_count, stack_division};
+    builder.build();
 }
 
 } // namespace erhe::geometry::shapes
-

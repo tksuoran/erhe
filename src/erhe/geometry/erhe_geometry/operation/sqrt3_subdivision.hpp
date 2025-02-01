@@ -1,15 +1,9 @@
 #pragma once
 
-#include "erhe_geometry/operation/geometry_operation.hpp"
+namespace erhe::geometry { class Geometry; }
 
 namespace erhe::geometry::operation {
 
-class Sqrt3_subdivision : public Geometry_operation
-{
-public:
-    Sqrt3_subdivision(const Geometry& src, Geometry& destination);
-};
-
-[[nodiscard]] auto sqrt3_subdivision(const Geometry& source) -> Geometry;
+void sqrt3_subdivision(const Geometry& source, Geometry& destination);
 
 } // namespace erhe::geometry::operation

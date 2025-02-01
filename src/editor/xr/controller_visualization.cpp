@@ -25,29 +25,26 @@ Controller_visualization::Controller_visualization(erhe::scene::Node* view_root,
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
 
-    auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 40, 14);
-    controller_geometry.transform(erhe::math::mat4_swap_yz);
+    GEO::Mesh controller_geo_mesh;
+    erhe::geometry::shapes::make_torus(controller_geo_mesh, 0.05f, 0.0025f, 40, 14);
+    transform_mesh(controller_geo_mesh, to_geo_mat4(erhe::math::mat4_swap_yz));
 
-    erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
+    erhe::graphics::Buffer_transfer_queue buffer_transfer_queue{};
+    erhe::primitive::Element_mappings dummy{};
+    erhe::primitive::Buffer_mesh buffer_mesh{};
+    const bool buffer_mesh_ok = erhe::primitive::make_buffer_mesh(
+        buffer_mesh,
+        controller_geo_mesh,
+        erhe::primitive::Build_info{
+            .primitive_types = {.fill_triangles = true },
+            .buffer_info = mesh_memory.buffer_info
+        },
+        dummy, // TODO make element mappings optional
+        erhe::primitive::Normal_style::corner_normals
+    );
+    ERHE_VERIFY(buffer_mesh_ok); // TODO handle possible error (out of memory)
 
-    erhe::primitive::Element_mappings dummy;
-
-    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt =
-        erhe::primitive::make_buffer_mesh(
-            controller_geometry,
-            erhe::primitive::Build_info{
-                .primitive_types = {.fill_triangles = true },
-                .buffer_info = mesh_memory.buffer_info
-            },
-            dummy, // TODO make element mappings optional
-            erhe::primitive::Normal_style::corner_normals
-        );
-    ERHE_VERIFY(buffer_mesh_opt.has_value());
-
-    erhe::primitive::Primitive primitive{
-        buffer_mesh_opt.value(),
-        controller_material
-    };
+    erhe::primitive::Primitive primitive(buffer_mesh, controller_material);
 
     m_controller_node = std::make_shared<erhe::scene::Node>("Controller node");
     m_controller_mesh = std::make_shared<erhe::scene::Mesh>("Controller", primitive);

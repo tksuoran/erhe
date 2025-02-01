@@ -133,9 +133,8 @@ auto Primitive_buffer::update(
 
         const glm::mat4 world_from_node = node->world_from_node();
 
-        // TODO Use compute shader
-        //const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_node)); TODO
-        const glm::mat4 normal_transform = glm::transpose(glm::inverse(world_from_node));
+        // TODO Use compute shader ?
+        const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_node));
 
         std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh->get_primitives()) {

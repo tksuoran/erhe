@@ -1,44 +1,34 @@
 #include "erhe_geometry/operation/intersection.hpp"
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_profile/profile.hpp"
+#include "erhe_geometry/operation/geometry_operation.hpp"
 
-#include <geogram/basic/common.h>
-#include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_intersection.h>
 
-#include <fmt/format.h>
-
 namespace erhe::geometry::operation {
+
+class Intersection : public Geometry_operation
+{
+public:
+    Intersection(const Geometry& lhs, const Geometry& rhs, Geometry& destination);
+
+    void build();
+};
 
 Intersection::Intersection(const Geometry& lhs, const Geometry& rhs, Geometry& destination)
     : Geometry_operation{lhs, rhs, destination}
 {
-    ERHE_PROFILE_FUNCTION();
-    GEO::Mesh lhs_mesh{};
-    GEO::Mesh rhs_mesh{};
-    GEO::Mesh result{};
-    lhs.extract_geogram_mesh(lhs_mesh);
-    rhs.extract_geogram_mesh(rhs_mesh);
-    GEO::mesh_boolean_operation(result, lhs_mesh, rhs_mesh, "A*B", true);
-    geometry_from_geogram(destination, result);
-
-    Property_map<Point_id, glm::vec3>* point_normals        = destination.point_attributes  ().find<glm::vec3>(c_point_normals);
-    Property_map<Point_id, glm::vec3>* point_normals_smooth = destination.point_attributes  ().find<glm::vec3>(c_point_normals_smooth);
-    Property_map<Corner_id, glm::vec3>* corner_normals       = destination.corner_attributes ().find<glm::vec3>(c_corner_normals);
-    point_normals->clear();
-    point_normals_smooth->clear();
-    corner_normals->clear();
-    destination.compute_polygon_normals();
 }
 
-auto intersection(const Geometry& lhs, const Geometry& rhs) -> Geometry
+void Intersection::build()
 {
-    return Geometry(
-        fmt::format("difference({}, {})", lhs.name, rhs.name),
-        [&lhs, &rhs](auto& result) {
-            Intersection operation{lhs, rhs, result};
-        }
-    );
+    GEO::mesh_boolean_operation(destination_mesh, lhs_mesh, *rhs_mesh, "A*B", true);
+
+    post_processing();
+}
+
+void intersection(const Geometry& lhs, const Geometry& rhs, Geometry& destination)
+{
+    Intersection operation{lhs, rhs, destination};
+    operation.build();
 }
 
 

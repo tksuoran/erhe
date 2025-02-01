@@ -11,6 +11,7 @@
 #include "tools/tools.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry_renderer/geometry_debug_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_renderer/line_renderer.hpp"
 #include "erhe_renderer/scoped_line_renderer.hpp"
@@ -51,6 +52,8 @@ Hover_tool::Hover_tool(
 
 void Hover_tool::imgui()
 {
+    ImGui::Checkbox("Geometry Debug Facet Hover Only", &m_geometry_debug_hover_facet_only);
+
     auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
         return;
@@ -66,9 +69,9 @@ void Hover_tool::imgui()
     }
     ImGui::Checkbox("Show Snapped Grid Position", &m_show_snapped_grid_position);
     ImGui::Text("Nearest: %s",      nearest->valid ? nearest->get_name().c_str() : "");
-    ImGui::Text("Content: %s",      (hover       .valid && hover       .mesh) ? hover       .mesh->get_name().c_str() : "");
-    ImGui::Text("Tool: %s",         (tool        .valid && tool        .mesh) ? tool        .mesh->get_name().c_str() : "");
-    ImGui::Text("Rendertarget: %s", (rendertarget.valid && rendertarget.mesh) ? rendertarget.mesh->get_name().c_str() : "");
+    ImGui::Text("Content: %s",      (hover       .valid && (hover       .scene_mesh != nullptr)) ? hover       .scene_mesh->get_name().c_str() : "");
+    ImGui::Text("Tool: %s",         (tool        .valid && (tool        .scene_mesh != nullptr)) ? tool        .scene_mesh->get_name().c_str() : "");
+    ImGui::Text("Rendertarget: %s", (rendertarget.valid && (rendertarget.scene_mesh != nullptr)) ? rendertarget.scene_mesh->get_name().c_str() : "");
     if (grid.valid && grid.position.has_value()) {
         const std::string text = fmt::format("Grid: {}", grid.position.value());
         ImGui::TextUnformatted(text.c_str());
@@ -76,15 +79,15 @@ void Hover_tool::imgui()
 
     if (nearest->valid) {
         {
-            const std::string text = fmt::format("Nearest Primitive Index: {}", nearest->primitive_index);
+            const std::string text = fmt::format("Nearest Primitive Index: {}", nearest->scene_mesh_primitive_index);
             ImGui::TextUnformatted(text.c_str());
         }
         {
-            const std::string text = fmt::format("Nearest triangle Id: {}", nearest->triangle_id);
+            const std::string text = fmt::format("Nearest triangle: {}", nearest->triangle);
             ImGui::TextUnformatted(text.c_str());
         }
         {
-            const std::string text = fmt::format("Nearest polygon Id: {}", nearest->polygon_id);
+            const std::string text = fmt::format("Nearest facet: {}", nearest->facet);
             ImGui::TextUnformatted(text.c_str());
         }
         if (nearest->position.has_value()) {
@@ -171,7 +174,7 @@ void Hover_tool::tool_render(const Render_context& context)
         erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
         const auto p0 = entry->position.value();
         const auto p1 = entry->position.value() + entry->normal.value();
-        line_renderer.set_thickness(10.0f);
+        line_renderer.set_thickness(8.0f);
         line_renderer.add_lines(
             get_line_color_from_slot(entry->slot),
             {{ glm::vec3{p0}, glm::vec3{p1} }}
@@ -219,20 +222,35 @@ void Hover_tool::tool_render(const Render_context& context)
         position_in_viewport.y + 16.0f * 2,
         -0.5f
     };
-#if 0
-    if (entry->mesh != nullptr) {
-        const auto* node = entry->mesh->get_node();
-        const glm::vec3 node_position_in_world = glm::vec3{node->position_in_world()};
-        add_line(fmt::format("Node position in world: {}", node_position_in_world));
-        if (entry->position.has_value()) {
-            const glm::vec3 local_position = node->transform_point_from_world_to_local(entry->position.value());
-            add_line(fmt::format("Position in {}: {}", entry->mesh->get_name(), local_position));
-        }
+    //// std::optional<glm::vec3> entity_position;
+    //// std::optional<glm::vec3> local_position;
+    //// std::optional<glm::vec3> local_normal;
+    std::optional<std::string> name;
+    if (entry->scene_mesh != nullptr) {
+        //// const auto* node = entry->scene_mesh->get_node();
+        //// entity_position  = glm::vec3{node->position_in_world()};
+        //// local_position   = node->transform_point_from_world_to_local(entry->position.value());
+        name             = entry->scene_mesh->get_name();
     } else if (entry->grid != nullptr) {
-        const glm::vec3 local_position = glm::vec3{
-            entry->grid->grid_from_world() * glm::vec4{entry->position.value(), 1.0f}
-        };
-        add_line(fmt::format("Position in {}: {}", entry->grid->get_name(), local_position));
+        //// entity_position  = glm::vec3{entry->grid->grid_from_world() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+        //// local_position   = glm::vec3{entry->grid->grid_from_world() * glm::vec4{entry->position.value(), 1.0f}};
+        name = entry->grid->get_name();
+    }
+    if (name.has_value()) {
+        add_line(name.value());
+    }
+#if 0
+    if (entry->position.has_value()) {
+        add_line(fmt::format("Position {}", entry->position.value()));
+    }
+    if (local_position.has_value()) {
+        add_line(fmt::format("Local position {}", local_position.value()));
+    }
+    if (entry->normal.has_value()) {
+        add_line(fmt::format("Normal {}", entry->normal.value()));
+    }
+    if (local_normal.has_value()) {
+        add_line(fmt::format("Local normal {}", local_normal.value()));
     }
 #endif
 
@@ -244,6 +262,49 @@ void Hover_tool::tool_render(const Render_context& context)
         );
         position_at_fixed_depth.y += 16.0f;
     }
+
+
+    auto* scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return;
+    }
+    const Hover_entry& hover = scene_view->get_hover(Hover_entry::content_slot);
+
+    if (
+        !hover.valid ||
+        !hover.position.has_value() ||
+        (hover.scene_mesh == nullptr) ||
+        !hover.geometry
+    )  {
+        return;
+    }
+
+    const erhe::scene::Node* node = hover.scene_mesh->get_node();
+    if (node == nullptr) {
+        return;
+    }
+
+    if (hover.facet == GEO::NO_INDEX) {
+        return;
+    }
+
+    const glm::mat4 world_from_node = node->world_from_node();
+    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+
+    const erhe::scene::Camera* camera                = context.camera;
+    const auto                 projection_transforms = camera->projection_transforms(context.viewport);
+    const glm::mat4            clip_from_world       = projection_transforms.clip_from_world.get_matrix();
+
+    const GEO::index_t facet_filter = m_geometry_debug_hover_facet_only ? hover.facet : GEO::NO_INDEX;
+    erhe::geometry_renderer::debug_draw(
+        context.viewport,
+        clip_from_world,
+        line_renderer,
+        *m_context.text_renderer,
+        world_from_node,
+        *hover.geometry.get(),
+        facet_filter
+    );
 }
 
 } // namespace editor

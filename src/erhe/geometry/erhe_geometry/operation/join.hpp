@@ -1,15 +1,9 @@
 #pragma once
 
-#include "erhe_geometry/operation/geometry_operation.hpp"
+namespace erhe::geometry { class Geometry; }
 
 namespace erhe::geometry::operation {
 
-class Join : public Geometry_operation
-{
-public:
-    Join(const Geometry& src, Geometry& destination);
-};
-
-[[nodiscard]] auto join(const Geometry& source) -> Geometry;
+void join(const Geometry& source, Geometry& destination);
 
 } // namespace erhe::geometry::operation

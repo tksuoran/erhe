@@ -35,7 +35,7 @@ protected:
     {
     public:
         // TODO consider keeping node always alive using std::shared_ptr<erhe::scene::Node> node;
-        std::shared_ptr<erhe::scene::Mesh> mesh;
+        std::shared_ptr<erhe::scene::Mesh> scene_mesh;
 
         class Version
         {
@@ -59,16 +59,18 @@ protected:
     void add_entry   (Entry&& entry);
     void make_entries(
         const std::function<
-            erhe::geometry::Geometry(
-                const erhe::geometry::Geometry& geometry,
-                erhe::scene::Node* node
+            void(
+                const erhe::geometry::Geometry& before_geometry,
+                erhe::geometry::Geometry&       after_geo_mesh,
+                erhe::scene::Node*              node
             )
         > operation
     );
     void make_entries(
         const std::function<
-            erhe::geometry::Geometry(
-                const erhe::geometry::Geometry& geometry
+            void(
+                const erhe::geometry::Geometry& before_geo_mesh,
+                erhe::geometry::Geometry&       after_geo_mesh
             )
         > operation
     );

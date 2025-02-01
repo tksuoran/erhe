@@ -1,29 +1,29 @@
 #include "erhe_geometry/operation/difference.hpp"
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_profile/profile.hpp"
+#include "erhe_geometry/operation/geometry_operation.hpp"
 
-#include <geogram/basic/common.h>
-#include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_intersection.h>
-//#include <geogram/mesh/mesh_CSG.h>
+#include <geogram/mesh/mesh_CSG.h>
 
-#include <fmt/format.h>
 
 namespace erhe::geometry::operation {
+
+class Difference : public Geometry_operation
+{
+public:
+    Difference(const Geometry& lhs, const Geometry& rhs, Geometry& destination);
+
+    void build();
+};
 
 Difference::Difference(const Geometry& lhs, const Geometry& rhs, Geometry& destination)
     : Geometry_operation{lhs, rhs, destination}
 {
-    ERHE_PROFILE_FUNCTION();
+}
 
+void Difference::build()
+{
 #if 1
-    GEO::Mesh lhs_mesh{};
-    GEO::Mesh rhs_mesh{};
-    GEO::Mesh result{};
-    lhs.extract_geogram_mesh(lhs_mesh);
-    rhs.extract_geogram_mesh(rhs_mesh);
-    GEO::mesh_boolean_operation(result, lhs_mesh, rhs_mesh, "A-B", true);
-    geometry_from_geogram(destination, result);
+    GEO::mesh_boolean_operation(destination_mesh, lhs_mesh, *rhs_mesh, "A-B", true);
 #else // TODO does either path make more sense?
     GEO::CSGMesh_var lhs_mesh = new GEO::CSGMesh;
     lhs.extract_geogram_mesh(*lhs_mesh.get());
@@ -49,29 +49,13 @@ Difference::Difference(const Geometry& lhs, const Geometry& rhs, Geometry& desti
     geometry_from_geogram(destination, *out_mesh.get());
 #endif
 
-    Property_map<Point_id, glm::vec3>* point_normals = destination.point_attributes().find<glm::vec3>(c_point_normals);
-    Property_map<Point_id, glm::vec3>* point_normals_smooth = destination.point_attributes().find<glm::vec3>(c_point_normals_smooth);
-    Property_map<Corner_id, glm::vec3>* corner_normals = destination.corner_attributes().find<glm::vec3>(c_corner_normals);
-    if (point_normals != nullptr) {
-        point_normals->clear();
-    }
-    if (point_normals_smooth != nullptr) {
-        point_normals_smooth->clear();
-    }
-    if (corner_normals != nullptr) {
-        corner_normals->clear();
-    }
-    destination.compute_polygon_normals();
+    post_processing();
 }
 
-auto difference(const Geometry& lhs, const Geometry& rhs) -> Geometry
+void difference(const Geometry& lhs, const Geometry& rhs, Geometry& destination)
 {
-    return Geometry(
-        fmt::format("difference({}, {})", lhs.name, rhs.name),
-        [&lhs, &rhs](auto& result) {
-            Difference operation{lhs, rhs, result};
-        }
-    );
+    Difference operation{lhs, rhs, destination};
+    operation.build();
 }
 
 } // namespace erhe::geometry::operation

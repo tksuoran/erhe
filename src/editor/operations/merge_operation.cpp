@@ -9,6 +9,7 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/operation/repair.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene.hpp"
@@ -144,7 +145,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
                 geometries.push_back(geometry);
                 transforms.push_back(transform);
                 if (!parameters.operation) {
-                    combined_geometry->merge(*geometry, transform);
+                    combined_geometry->merge_with_transform(*geometry.get(), to_geo_mat4(transform));
                 }
                 if (normal_style == Normal_style::none) {
                     normal_style = shape->get_normal_style();
@@ -179,6 +180,13 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             m_combined_node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
         }
     }
+
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+    combined_geometry->process(flags);
 
     erhe::primitive::Primitive after_primitive{combined_geometry, material};
     const bool renderable_ok = after_primitive.make_renderable_mesh(parameters.build_info, normal_style);

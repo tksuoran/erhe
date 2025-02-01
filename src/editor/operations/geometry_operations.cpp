@@ -8,6 +8,7 @@
 #include "erhe_geometry/operation/ambo.hpp"
 #include "erhe_geometry/operation/bake_transform.hpp"
 #include "erhe_geometry/operation/catmull_clark_subdivision.hpp"
+#include "erhe_geometry/operation/chamfer.hpp"
 #include "erhe_geometry/operation/dual.hpp"
 #include "erhe_geometry/operation/gyro.hpp"
 #include "erhe_geometry/operation/join.hpp"
@@ -116,6 +117,17 @@ Gyro_operation::Gyro_operation(Mesh_operation_parameters&& context)
     make_entries(erhe::geometry::operation::gyro);
 }
 
+auto Chamfer_operation::describe() const -> std::string
+{
+    return fmt::format("Chamfer {}", Mesh_operation::describe());
+}
+
+Chamfer_operation::Chamfer_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    make_entries(erhe::geometry::operation::chamfer);
+}
+
 auto Dual_operation::describe() const -> std::string
 {
     return fmt::format("Dual {}", Mesh_operation::describe());
@@ -181,12 +193,13 @@ Bake_transform_operation::Bake_transform_operation(Mesh_operation_parameters&& c
 {
     make_entries(
         [&](
-            const erhe::geometry::Geometry& geometry,
-            erhe::scene::Node* node
-        ) -> erhe::geometry::Geometry
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              node
+        ) -> void
         {
             const glm::mat4 transform = node->world_from_node();
-            return erhe::geometry::operation::bake_transform(geometry, transform);
+            erhe::geometry::operation::bake_transform(before_geometry, after_geometry, to_geo_mat4(transform));
         }
     );
 }
@@ -201,6 +214,17 @@ Repair_operation::Repair_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::repair);
+}
+
+auto Weld_operation::describe() const -> std::string
+{
+    return fmt::format("Weld {}", Mesh_operation::describe());
+}
+
+Weld_operation::Weld_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    make_entries(erhe::geometry::operation::weld);
 }
 
 ///
@@ -222,9 +246,10 @@ Union_operation::Union_operation(Mesh_operation_parameters&& parameters)
 
 Binary_mesh_operation::Binary_mesh_operation(
     Mesh_operation_parameters&& parameters,
-    std::function<erhe::geometry::Geometry(
+    std::function<void(
         const erhe::geometry::Geometry& lhs,
-        const erhe::geometry::Geometry& rhs
+        const erhe::geometry::Geometry& rhs,
+        erhe::geometry::Geometry&       result
     )> operation
 )
     : Compound_operation{make_operations(std::move(parameters), operation)}
@@ -233,9 +258,10 @@ Binary_mesh_operation::Binary_mesh_operation(
 
 auto Binary_mesh_operation::make_operations(
     Mesh_operation_parameters&& parameters,
-    std::function<erhe::geometry::Geometry(
+    std::function<void(
         const erhe::geometry::Geometry& lhs,
-        const erhe::geometry::Geometry& rhs
+        const erhe::geometry::Geometry& rhs,
+        erhe::geometry::Geometry&       result
     )> operation
 ) -> Compound_operation::Parameters
 {
@@ -243,7 +269,7 @@ auto Binary_mesh_operation::make_operations(
     struct Entry
     {
         std::shared_ptr<erhe::geometry::Geometry> geometry;
-        glm::mat4 transform;
+        glm::mat4                                 transform;
     };
     std::vector<Entry> lhs_entries;
     std::vector<Entry> rhs_entries;
@@ -309,18 +335,25 @@ auto Binary_mesh_operation::make_operations(
     const auto scene_root_node = scene->get_root_node();
 
     // Merge lhs and rhs inputs
-    erhe::geometry::Geometry lhs_geometry;
-    for (const Entry& entry : lhs_entries) {
-        lhs_geometry.merge(*entry.geometry.get(), entry.transform);
-    }
-    erhe::geometry::Geometry rhs_geometry;
-    for (const Entry& entry : rhs_entries) {
-        rhs_geometry.merge(*entry.geometry.get(), entry.transform);
-    }
-
+    //// TODO Deal with this
+    //// GEO::Mesh lhs_mesh;
+    //// for (const Entry& entry : lhs_entries) {
+    ////     GEO::Mesh entry_transformed{};
+    ////     transform_mesh(entry.geometry->get_mesh(), entry_transformed, to_geo_mat4(entry.transform));
+    ////     merge_mesh(lhs_mesh, entry_transformed);
+    //// }
+    //// GEO::Mesh rhs_mesh;
+    //// for (const Entry& entry : rhs_entries) {
+    ////     GEO::Mesh entry_transformed{};
+    ////     transform_mesh(entry.geometry->get_mesh(), entry_transformed, to_geo_mat4(entry.transform));
+    ////     merge_mesh(rhs_mesh, entry_transformed);
+    //// }
     // Perform operation
-    std::shared_ptr<erhe::geometry::Geometry> out_geometry = std::make_shared<erhe::geometry::Geometry>(
-        operation(lhs_geometry, rhs_geometry)
+    std::shared_ptr<erhe::geometry::Geometry> out_geometry = std::make_shared<erhe::geometry::Geometry>();
+    operation(
+        *lhs_entries.front().geometry.get(),
+        *rhs_entries.front().geometry.get(),
+        *out_geometry.get()
     );
 
     // Create new Primitive

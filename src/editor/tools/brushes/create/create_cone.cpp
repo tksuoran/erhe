@@ -55,25 +55,30 @@ void Create_cone::imgui()
 
 auto Create_cone::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
-    brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::shapes::make_conical_frustum(
-            0.0f,
-            m_height,
-            m_bottom_radius,
-            m_top_radius,
-            m_use_bottom,
-            m_use_top,
-            std::max(3, m_slice_count), // slice count
-            std::max(1, m_stack_count)  // stack count
-        )
+    std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>("cone");;
+    brush_create_info.geometry = geometry;
+    GEO::Mesh& geo_mesh = geometry->get_mesh();
+    erhe::geometry::shapes::make_conical_frustum(
+        geo_mesh,
+        0.0,
+        m_height,
+        m_bottom_radius,
+        m_top_radius,
+        m_use_bottom,
+        m_use_top,
+        std::max(3, m_slice_count), // slice count
+        std::max(1, m_stack_count)  // stack count
     );
 
-    brush_create_info.geometry->transform(erhe::math::mat4_swap_xy);
-    brush_create_info.geometry->build_edges();
-    brush_create_info.geometry->compute_polygon_normals();
-    brush_create_info.geometry->compute_tangents();
-    brush_create_info.geometry->compute_polygon_centroids();
-    brush_create_info.geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
+    transform(*geometry.get(), *geometry.get(), to_geo_mat4(erhe::math::mat4_swap_xy));
+
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+    geometry->process(flags);
+
+    /// brush_create_info.mesh->compute_tangents();
 
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);
     return brush;

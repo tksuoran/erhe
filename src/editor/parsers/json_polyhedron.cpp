@@ -4,7 +4,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_profile/profile.hpp"
 
-#include <string>
+#include <geogram/mesh/mesh_repair.h>
 
 namespace editor {
 
@@ -14,8 +14,6 @@ Json_library::Json_library()
 
 Json_library::Json_library(const std::filesystem::path& path)
 {
-    ERHE_PROFILE_FUNCTION();
-
     const auto opt_text = erhe::file::read("Json_library", path);
     if (!opt_text.has_value()) {
         return;
@@ -23,82 +21,79 @@ Json_library::Json_library(const std::filesystem::path& path)
 
     const std::string& text = opt_text.value();
 
-    {
-        ERHE_PROFILE_SCOPE("parse");
-        m_json.Parse(text.c_str(), text.length());
-    }
+    m_json.Parse(text.c_str(), text.length());
 
-    {
-        ERHE_PROFILE_SCOPE("collect categories");
-        for (auto i = m_json.MemberBegin(), end = m_json.MemberEnd(); i != end; ++i) {
-            const std::string key_name       = (*i).name.GetString();
-            const auto&       category_names = (*i).value["category"].GetArray();
+    for (auto i = m_json.MemberBegin(), end = m_json.MemberEnd(); i != end; ++i) {
+        const std::string key_name       = (*i).name.GetString();
+        const auto&       category_names = (*i).value["category"].GetArray();
 
-            for (auto& category_name_object : category_names) {
-                std::string category_name = category_name_object.GetString();
-                const auto j = std::find_if(
-                    categories.begin(),
-                    categories.end(),
-                    [category_name](const Category& category) {
-                        return category.category_name == category_name;
-                    }
-                );
-                if (j != categories.end()) {
-                    j->key_names.emplace_back(key_name);
-                } else {
-                    auto& category = categories.emplace_back(std::move(category_name));
-                    category.key_names.emplace_back(key_name);
+        for (auto& category_name_object : category_names) {
+            std::string category_name = category_name_object.GetString();
+            const auto j = std::find_if(
+                categories.begin(),
+                categories.end(),
+                [category_name](const Category& category) {
+                    return category.category_name == category_name;
                 }
+            );
+            if (j != categories.end()) {
+                j->key_names.emplace_back(key_name);
+            } else {
+                auto& category = categories.emplace_back(std::move(category_name));
+                category.key_names.emplace_back(key_name);
             }
-            names.emplace_back(key_name);
         }
+        names.emplace_back(key_name);
     }
 }
 
-auto Json_library::make_geometry(const std::string& key_name) const -> erhe::geometry::Geometry
+auto Json_library::make_geometry(erhe::geometry::Geometry& geometry, const std::string& key_name) const -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto mesh = m_json.FindMember(key_name.c_str());
-    if (mesh == m_json.MemberEnd()) {
-        return {};
+    const auto json_mesh = m_json.FindMember(key_name.c_str());
+    if (json_mesh == m_json.MemberEnd()) {
+        return false;
     }
 
-    erhe::geometry::Geometry geometry;
-    geometry.name = (*mesh).value["name"].GetString();
+    GEO::Mesh& mesh = geometry.get_mesh();
 
-    const auto& points = (*mesh).value["vertex"];
-    {
-        ERHE_PROFILE_SCOPE("points");
-        for (auto& i : points.GetArray()) {
-            assert(i.IsArray());
-            const float x = i[0].GetFloat();
-            const float y = i[1].GetFloat();
-            const float z = i[2].GetFloat();
-            geometry.make_point(-x, -y, -z);
-        }
-    }
+    try {
+        geometry.set_name((*json_mesh).value["name"].GetString());
 
-    const auto& polygons = (*mesh).value["face"];
-    {
-        ERHE_PROFILE_SCOPE("faces");
-        for (auto& polygon : polygons.GetArray()) {
-            assert(polygon.IsArray());
-            auto g_polygon = geometry.make_polygon();
-            for (auto& corner : polygon.GetArray()) {
-                const int index = corner.GetInt();
-                if (index < (int)geometry.get_point_count()) {
-                    geometry.make_polygon_corner(g_polygon, index);
-                }
+        const auto& json_vertices = (*json_mesh).value["vertex"];
+        const size_t vertex_count = json_vertices.GetArray().Size();
+        mesh.vertices.create_vertices(static_cast<GEO::index_t>(vertex_count));
+        {
+            GEO::index_t vertex = 0;
+            for (auto& json_vertex : json_vertices.GetArray()) {
+                assert(json_vertex.IsArray());
+                const float x = json_vertex[0].GetFloat();
+                const float y = json_vertex[1].GetFloat();
+                const float z = json_vertex[2].GetFloat();
+                mesh.vertices.point(vertex++) = GEO::vec3{-x, -y, -z}; // TODO do we need to mirror everything?
             }
         }
-    }
 
-    geometry.flip_reversed_polygons(); // This only works for 'round' shapes
-    geometry.make_point_corners();
-    geometry.build_edges();
-    geometry.generate_polygon_texture_coordinates();
-    return geometry;
+        const auto& json_faces = (*json_mesh).value["face"];
+        for (auto& json_face : json_faces.GetArray()) {
+            assert(json_face.IsArray());
+            const size_t corner_count = json_face.GetArray().Size();
+            const GEO::index_t mesh_facet = mesh.facets.create_polygon(static_cast<GEO::index_t>(corner_count));
+            GEO::index_t local_facet_corner = 0;
+            for (auto& corner : json_face.GetArray()) {
+                const int vertex = corner.GetInt();
+                assert(vertex < (int)vertex_count);
+                mesh.facets.set_vertex(mesh_facet, static_cast<GEO::index_t>(corner_count - local_facet_corner - 1), vertex);
+                ++local_facet_corner;
+            }
+        }
+
+        GEO::mesh_reorient(mesh);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 } // namespace editor

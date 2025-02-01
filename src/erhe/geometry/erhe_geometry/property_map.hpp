@@ -1,17 +1,16 @@
 #pragma once
 
-#include <glm/glm.hpp>
-
-#include <algorithm>
-#include <cassert>
-#include <cstdint>
-#include <optional>
-#include <typeinfo>
-#include <vector>
+//#include <glm/glm.hpp>
+//
+//#include <algorithm>
+//#include <cassert>
+//#include <cstdint>
+//#include <optional>
+//#include <typeinfo>
+//#include <vector>
 
 namespace erhe::geometry {
 
-// TODO Use cofactor matrix for bivectors?
 enum class Transform_mode : unsigned int {
     none = 0,                              // texture coordinates, colors, ...
     mat_mul_vec3_one,                      // position vectors
@@ -29,7 +28,7 @@ enum class Interpolation_mode : unsigned int {
     normalized_vec3_float, // linear interpolation then normalize for .xyz, linear for .w
 };
 
-class Property_map_descriptor
+class Attribute_descriptor
 {
 public:
     const char*        name;
@@ -37,6 +36,7 @@ public:
     Interpolation_mode interpolation_mode;
 };
 
+#if 0
 template <typename Key_type>
 class Property_map_base
 {
@@ -109,7 +109,10 @@ public:
 private:
     Property_map_descriptor m_descriptor;
 };
+#endif
 
 } // namespace erhe::geometry
 
+#if 0
 #include "property_map.inl"
+#endif

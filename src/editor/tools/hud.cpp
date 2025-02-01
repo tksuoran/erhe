@@ -260,10 +260,10 @@ auto Hud::try_begin_drag() -> bool
     const auto* drag_entry = scene_view->get_nearest_hover(
         Hover_entry::rendertarget_bit
     );
-    if ((drag_entry == nullptr) || !drag_entry->valid || (drag_entry->mesh == nullptr)) {
+    if ((drag_entry == nullptr) || !drag_entry->valid || (drag_entry->scene_mesh == nullptr)) {
         return false;
     }
-    auto* node = drag_entry->mesh->get_node();
+    auto* node = drag_entry->scene_mesh->get_node();
     if (node == nullptr) {
         return false;
     }

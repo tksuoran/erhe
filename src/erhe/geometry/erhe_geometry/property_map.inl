@@ -144,9 +144,8 @@ inline auto Property_map<Key_type, Value_type>::constructor(const Property_map_d
     return base_ptr;
 }
 
-template <typename Key_type, typename Value_type>
-inline void
-Property_map<Key_type, Value_type>::interpolate(
+template <typename T>
+inline void interpolate_attributes(
     Property_map_base<Key_type>*                                destination_base,
     const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
 ) const
@@ -381,8 +380,7 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
     ERHE_VERIFY(values.size() == present.size());
     ERHE_VERIFY(source->values.size() == source->present.size());
 
-    const glm::mat4 normal_transform = glm::transpose(glm::inverse(transform));
-    const glm::mat4 adjugate = glm::adjugate(transform);
+    const glm::mat4 normal_transform = glm::transpose(glm::adjugate(transform));
 
     const auto combined_values_size  = values.size()  + source->values.size();
     const auto combined_present_size = present.size() + source->present.size();
@@ -468,7 +466,7 @@ inline void Property_map<Key_type, Value_type>::import_from(Property_map_base<Ke
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                         const glm::vec3 source_value = source->values[i];
                         if (present[i]) {
-                            const Value_type normal_transformed = apply_transform(adjugate, source_value, 0.0f);
+                            const Value_type normal_transformed = apply_transform(normal_transform, source_value, 0.0f);
                             const Value_type normalized = glm::normalize(normal_transformed);
                             values.push_back(normalized);
                         } else {

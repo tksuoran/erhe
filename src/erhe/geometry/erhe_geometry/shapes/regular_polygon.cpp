@@ -1,98 +1,85 @@
 ﻿#include "erhe_geometry/shapes/regular_polygon.hpp"
-#include "erhe_profile/profile.hpp"
+#include "erhe_geometry/geometry.hpp"
+
+#include <geogram/mesh/mesh.h>
 
 #include <cmath>  // for sqrt
 
 namespace erhe::geometry::shapes {
 
-auto make_triangle(const double r) -> Geometry
+void make_triangle(GEO::Mesh& mesh, const double r)
 {
-    ERHE_PROFILE_FUNCTION();
-
+    Mesh_attributes attributes{mesh};
     const double a = sqrt(3.0) / 3.0; // 0.57735027
     const double b = sqrt(3.0) / 6.0; // 0.28867513
-    return Geometry{
-        "triangle",
-        [=](auto& geometry) {
-            geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r *  0.5), 0.0f, 0.0f, 1.0f);
-            geometry.make_point(static_cast<float>(r *  a), static_cast<float>(r *  0.0), 0.0f, 1.0f, 1.0f);
-            geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r * -0.5), 0.0f, 1.0f, 0.0f);
 
-            geometry.make_polygon_reverse( {0, 1, 2} ); // TODO reverse or not
+    mesh.vertices.create_vertices(3);
+    mesh.vertices.point(0) = GEO::vec3{r * -b, r * -0.5, 0.0}; // 1.0f, 0.0f
+    mesh.vertices.point(1) = GEO::vec3{r *  a, r *  0.0, 0.0}; // 1.0f, 1.0f
+    mesh.vertices.point(2) = GEO::vec3{r * -b, r *  0.5, 0.0}; // 0.0f, 1.0f
 
-            geometry.make_point_corners();
-            geometry.build_edges();
-        }
-    };
+    GEO::Attribute<GEO::vec2f> vertex_texcoords{mesh.vertices.attributes(), c_texcoord_0};
+    attributes.vertex_texcoord_0.set(0, GEO::vec2f{1.0f, 0.0f});
+    attributes.vertex_texcoord_0.set(1, GEO::vec2f{1.0f, 1.0f});
+    attributes.vertex_texcoord_0.set(2, GEO::vec2f{0.0f, 1.0f});
+
+    mesh.facets.create_triangle(0, 1, 2);
 }
 
-auto make_quad(const double edge) -> Geometry
+void make_quad(GEO::Mesh& mesh, const double edge) 
 {
-    ERHE_PROFILE_FUNCTION();
+    Mesh_attributes attributes{mesh};
+    mesh.vertices.create_vertices(4);
+    mesh.vertices.point(0) = GEO::vec3{edge * -0.5, edge * -0.5, 0.0};
+    mesh.vertices.point(1) = GEO::vec3{edge *  0.5, edge * -0.5, 0.0};
+    mesh.vertices.point(2) = GEO::vec3{edge *  0.5, edge *  0.5, 0.0};
+    mesh.vertices.point(3) = GEO::vec3{edge * -0.5, edge *  0.5, 0.0};
 
-    //
-    //  0.707106781 = sqrt(2) / 2
-    // radius version:
-    // make_point((float)(r * -0.707106781f), (float)(r * -0.707106781f), 0.0f, 0.0f, 0.0f);
-    // make_point((float)(r *  0.707106781f), (float)(r * -0.707106781f), 0.0f, 1.0f, 0.0f);
-    // make_point((float)(r *  0.707106781f), (float)(r *  0.707106781f), 0.0f, 1.0f, 1.0f);
-    // make_point((float)(r * -0.707106781f), (float)(r *  0.707106781f), 0.0f, 0.0f, 1.0f);
-    return Geometry{
-        "quad",
-        [=](auto& geometry) {
-            geometry.make_point(static_cast<float>(edge * -0.5), static_cast<float>(edge * -0.5), 0.0f, 0.0f, 0.0f);
-            geometry.make_point(static_cast<float>(edge *  0.5), static_cast<float>(edge * -0.5), 0.0f, 1.0f, 0.0f);
-            geometry.make_point(static_cast<float>(edge *  0.5), static_cast<float>(edge *  0.5), 0.0f, 1.0f, 1.0f);
-            geometry.make_point(static_cast<float>(edge * -0.5), static_cast<float>(edge *  0.5), 0.0f, 0.0f, 1.0f);
+    attributes.vertex_texcoord_0.set(0, GEO::vec2f{0.0f, 0.0f});
+    attributes.vertex_texcoord_0.set(1, GEO::vec2f{1.0f, 0.0f});
+    attributes.vertex_texcoord_0.set(2, GEO::vec2f{1.0f, 1.0f});
+    attributes.vertex_texcoord_0.set(3, GEO::vec2f{0.0f, 1.0f});
 
-            geometry.make_polygon( {0, 1, 2, 3} );
+    mesh.facets.create_quad(0, 1, 2, 3);
 
-            // Double sided
-            geometry.make_polygon( {3, 2, 1, 0} );
+    // Double sided - TODO Make back face optional?
+    mesh.facets.create_quad(3, 2, 1, 0);
 
-            geometry.make_point_corners();
-            geometry.build_edges();
-        }
-    };
 }
 
-auto make_rectangle(const double width, const double height, const bool front_face, const bool back_face) -> Geometry
+void make_rectangle(GEO::Mesh& mesh, const double width, const double height, const bool front_face, const bool back_face)
 {
-    ERHE_PROFILE_FUNCTION();
+    Mesh_attributes attributes{mesh};
+    mesh.vertices.create_vertices(8);
 
-    return Geometry{
-        "rectangle",
-        [=](auto& geometry) {
-            geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height * -0.5), 0.0f, 0.0f, 0.0f);
-            geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height * -0.5), 0.0f, 1.0f, 0.0f);
-            geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height *  0.5), 0.0f, 1.0f, 1.0f);
-            geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height *  0.5), 0.0f, 0.0f, 1.0f);
+    mesh.vertices.point(0) = GEO::vec3{width * -0.5, height * -0.5, 0.0};
+    mesh.vertices.point(1) = GEO::vec3{width *  0.5, height * -0.5, 0.0};
+    mesh.vertices.point(2) = GEO::vec3{width *  0.5, height *  0.5, 0.0};
+    mesh.vertices.point(3) = GEO::vec3{width * -0.5, height *  0.5, 0.0};
 
-            // Texcoords X-flipped
-            geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height *  0.5), 0.0f, 1.0f, 1.0f);
-            geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height *  0.5), 0.0f, 0.0f, 1.0f);
-            geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height * -0.5), 0.0f, 0.0f, 0.0f);
-            geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height * -0.5), 0.0f, 1.0f, 0.0f);
+    attributes.vertex_texcoord_0.set(0, GEO::vec2f{0.0f, 0.0f});
+    attributes.vertex_texcoord_0.set(1, GEO::vec2f{1.0f, 0.0f});
+    attributes.vertex_texcoord_0.set(2, GEO::vec2f{1.0f, 1.0f});
+    attributes.vertex_texcoord_0.set(3, GEO::vec2f{0.0f, 1.0f});
 
+    // Texcoords X-flipped
+    mesh.vertices.point(4) = GEO::vec3{width * -0.5, height * -0.5, 0.0};
+    mesh.vertices.point(5) = GEO::vec3{width *  0.5, height * -0.5, 0.0};
+    mesh.vertices.point(6) = GEO::vec3{width *  0.5, height *  0.5, 0.0};
+    mesh.vertices.point(7) = GEO::vec3{width * -0.5, height *  0.5, 0.0};
 
-            //   3·······2
-            //   :   ·   :
-            //   ····+····
-            //   :   ·   :
-            //   0·······1
+    attributes.vertex_texcoord_0.set(4, GEO::vec2f{1.0f, 0.0f});
+    attributes.vertex_texcoord_0.set(5, GEO::vec2f{0.0f, 0.0f});
+    attributes.vertex_texcoord_0.set(6, GEO::vec2f{0.0f, 1.0f});
+    attributes.vertex_texcoord_0.set(7, GEO::vec2f{1.0f, 1.0f});
 
-            if (front_face) {
-                geometry.make_polygon( {0, 1, 2, 3} );
-            }
-
-            if (back_face) {
-                geometry.make_polygon( {4, 5, 6, 7} );
-            }
-
-            geometry.make_point_corners();
-            geometry.build_edges();
-        }
-    };
+    if (front_face) {
+        mesh.facets.create_quad(0, 1, 2, 3);
+    }
+    if (back_face) {
+        mesh.facets.create_quad(4, 5, 6, 7);
+        //mesh.facets.create_quad(3, 2, 1, 0);
+    }
 }
 
 } // namespace erhe::geometry::shapes

@@ -329,6 +329,7 @@ target_link_libraries(
     erhe::defer
     erhe::file
     erhe::geometry
+    erhe::geometry_renderer
     erhe::gl
     erhe::gltf
     erhe::graphics

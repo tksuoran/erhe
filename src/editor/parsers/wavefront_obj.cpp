@@ -11,14 +11,6 @@
 
 namespace editor {
 
-using erhe::geometry::Corner_id;
-using erhe::geometry::Point_id;
-using erhe::geometry::Polygon_id;
-using erhe::geometry::c_point_locations;
-using erhe::geometry::c_point_colors;
-using erhe::geometry::c_corner_normals;
-using erhe::geometry::c_corner_texcoords;
-
 // http://paulbourke.net/dataformats/obj/
 // http://www.martinreddy.net/gfx/3d/OBJ.spec
 // https://www.marxentlabs.com/obj-files/
@@ -125,20 +117,19 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
 
     log_parsers->trace("path = {}", path.generic_string());
 
-    std::vector<std::shared_ptr<erhe::geometry::Geometry>> result;
     const auto opt_text = erhe::file::read("parse_obj_geometry", path);
+
+    std::vector<std::shared_ptr<erhe::geometry::Geometry>> result;
+
+    std::shared_ptr<erhe::geometry::Geometry> geometry{};
+    GEO::Mesh* geo_mesh{nullptr};
+    std::unique_ptr<Mesh_attributes> attributes{};
 
     // I dislike this big scope, I'd prefer just to
     // return {} but unfortunately having more than
     // one return kills named return value optimization.
     if (opt_text.has_value()) {
         const std::string& text = opt_text.value();
-
-        std::shared_ptr<erhe::geometry::Geometry> geometry{};
-        erhe::geometry::Property_map<erhe::geometry::Point_id,  glm::vec3>* point_positions {nullptr};
-        erhe::geometry::Property_map<erhe::geometry::Point_id,  glm::vec3>* point_colors    {nullptr};
-        erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec3>* corner_normals  {nullptr};
-        erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec2>* corner_texcoords{nullptr};
 
         const std::string delimiters  = " \t\v";
         const std::string end_of_line = "\n";
@@ -147,13 +138,13 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
 
         std::string::size_type line_last_pos = text.find_first_not_of(end_of_line, 0);
         std::string::size_type line_pos      = text.find_first_of(end_of_line, line_last_pos);
-        std::vector<glm::vec3> positions;
-        std::vector<glm::vec3> colors;
-        std::vector<glm::vec3> normals;
-        std::vector<glm::vec2> texcoords;
+        std::vector<GEO::vec3>  positions;
+        std::vector<GEO::vec4f> colors;
+        std::vector<GEO::vec3f> normals;
+        std::vector<GEO::vec2f> texcoords;
 
-        // Mapping from OBJ point id to erhe::geometry::Geometry::Point_Id
-        std::vector<Point_id>  obj_point_to_geometry_point;
+        // Mapping from OBJ point id to geogram vertex
+        std::vector<GEO::index_t> obj_point_to_mesh_vertex;
 
         bool has_vertex_colors = false;
 
@@ -163,11 +154,7 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
         ) {
             auto line = text.substr(line_last_pos, line_pos - line_last_pos);
             line.erase(
-                std::remove(
-                    line.begin(),
-                    line.end(),
-                    '\r'
-                ),
+                std::remove(line.begin(), line.end(), '\r'),
                 line.end()
             );
 
@@ -214,13 +201,11 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
                         token_pos      = line.find_first_of    (end_of_line, token_last_pos);
                         if (token_last_pos != std::string::npos || token_pos != std::string::npos) {
                             const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
-                            geometry         = std::make_shared<erhe::geometry::Geometry>(arg_text);
-                            point_positions  = geometry->point_attributes().create<glm::vec3>(c_point_locations);
-                            point_colors     = geometry->point_attributes().create<glm::vec3>(c_point_colors);
-                            corner_normals   = geometry->corner_attributes().create<glm::vec3>(c_corner_normals);
-                            corner_texcoords = geometry->corner_attributes().create<glm::vec2>(c_corner_texcoords);
+                            geometry = std::make_shared<erhe::geometry::Geometry>(arg_text);
+                            geo_mesh = &geometry->get_mesh();
+                            attributes = std::make_unique<Mesh_attributes>(*geo_mesh);
                             result.push_back(geometry);
-                            obj_point_to_geometry_point.clear();
+                            obj_point_to_mesh_vertex.clear();
                             log_parsers->trace("arg: {}", arg_text);
                         }
                         break;
@@ -231,13 +216,11 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
                         token_pos      = line.find_first_of(end_of_line, token_last_pos);
                         if (token_last_pos != std::string::npos || token_pos != std::string::npos) {
                             const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
-                            geometry         = std::make_shared<erhe::geometry::Geometry>(arg_text);
-                            point_positions  = geometry->point_attributes().create<glm::vec3>(c_point_locations);
-                            point_colors     = geometry->point_attributes().create<glm::vec3>(c_point_colors);
-                            corner_normals   = geometry->corner_attributes().create<glm::vec3>(c_corner_normals);
-                            corner_texcoords = geometry->corner_attributes().create<glm::vec2>(c_corner_texcoords);
+                            geometry = std::make_shared<erhe::geometry::Geometry>(arg_text);
+                            geo_mesh = &geometry->get_mesh();
+                            attributes = std::make_unique<Mesh_attributes>(*geo_mesh);
                             result.push_back(geometry);
-                            obj_point_to_geometry_point.clear();
+                            obj_point_to_mesh_vertex.clear();
                             //log_parsers->trace("arg: {}", arg_text);
                         }
                         //token_pos = text.find_first_of(end_of_line, token_last_pos);
@@ -339,12 +322,12 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
                 case Command::Vertex_position: {
                     //ZoneScopedN("position");
                     if (float_args.size() >= 3) {
-                        ERHE_VERIFY(geometry);
+                        ERHE_VERIFY(geo_mesh != nullptr);
                         if (float_args.size() >= 6) {
                             while (colors.size() < positions.size()) {
-                                colors.emplace_back(1.0f, 1.0f, 1.0f);
+                                colors.emplace_back(1.0f, 1.0f, 1.0f, 1.0f);
                             }
-                            colors.emplace_back(float_args[3], float_args[4], float_args[5]);
+                            colors.emplace_back(float_args[3], float_args[4], float_args[5], 1.0f);
                             has_vertex_colors = true;
                             //point_colors->put(point_id, glm::vec3{float_args[3], float_args[4], float_args[5]});
                         }
@@ -383,12 +366,12 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
                 }
                 case Command::Face: {
                     //ZoneScopedN("face");
-                    ERHE_VERIFY(geometry);
+                    ERHE_VERIFY(geo_mesh != nullptr);
 
-                    const Polygon_id polygon_id   = geometry->make_polygon();
-                    const int        corner_count = static_cast<int>(face_vertex_position_indices.size());
-                    for (int i = 0; i < corner_count; ++i) {
-                        const int obj_vertex_index = face_vertex_position_indices[i];
+                    const int          corner_count = static_cast<int>(face_vertex_position_indices.size());
+                    const GEO::index_t mesh_facet   = geo_mesh->facets.create_polygon(corner_count);
+                    for (int local_facet_corner = 0; local_facet_corner < corner_count; ++local_facet_corner) {
+                        const int obj_vertex_index = face_vertex_position_indices[local_facet_corner];
                         const int position_index =
                             (obj_vertex_index > 0)
                                 ? obj_vertex_index - 1
@@ -397,43 +380,43 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
                         // Vertex indices in OBJ file are global.
                         // Each erhe::geometry Geometry has it's own namespace for Point_id.
                         // This maps OBJ vertex indices to geometry Point_id.
-                        constexpr auto null_point = std::numeric_limits<Point_id>::max();
-                        while (static_cast<int>(obj_point_to_geometry_point.size()) <= position_index) {
-                            obj_point_to_geometry_point.push_back(null_point);
+                        while (static_cast<int>(obj_point_to_mesh_vertex.size()) <= position_index) {
+                            obj_point_to_mesh_vertex.push_back(GEO::NO_INDEX);
                         }
-                        if (obj_point_to_geometry_point[position_index] == null_point) {
-                            obj_point_to_geometry_point[position_index] = geometry->make_point();
+                        if (obj_point_to_mesh_vertex[position_index] == GEO::NO_INDEX) {
+                            obj_point_to_mesh_vertex[position_index] = geo_mesh->vertices.create_vertices(1);
                         }
 
-                        const Point_id  point_id  = obj_point_to_geometry_point[position_index];
-                        const Corner_id corner_id = geometry->make_polygon_corner(polygon_id, point_id);
+                        const GEO::index_t mesh_vertex = obj_point_to_mesh_vertex[position_index];
+                        const GEO::index_t mesh_corner = geo_mesh->facets.corner(mesh_facet, local_facet_corner);
+                        geo_mesh->facets.set_vertex(mesh_facet, local_facet_corner, mesh_vertex);
                         ERHE_VERIFY(position_index >= 0);
                         ERHE_VERIFY(position_index < static_cast<int>(positions.size()));
 
-                        point_positions->put(point_id, positions[position_index]);
+                        geo_mesh->vertices.point(mesh_vertex) = positions[position_index];
 
                         if (has_vertex_colors) {
-                            point_colors->put(point_id, colors[position_index]);
+                            attributes->vertex_color_0.set(mesh_vertex, colors[position_index]);
                         }
 
-                        if (i < static_cast<int>(face_vertex_texcoord_indices.size())) {
-                            const int obj_texcoord_index = face_vertex_texcoord_indices[i];
+                        if (local_facet_corner < static_cast<int>(face_vertex_texcoord_indices.size())) {
+                            const int obj_texcoord_index = face_vertex_texcoord_indices[local_facet_corner];
                             const int texcoord_index =
                                 (obj_texcoord_index > 0)
                                     ? obj_texcoord_index - 1
                                     : obj_texcoord_index + static_cast<int>(texcoords.size());
                             ERHE_VERIFY(texcoord_index < static_cast<int>(texcoords.size()));
-                            corner_texcoords->put(corner_id, texcoords[texcoord_index]);
+                            attributes->corner_texcoord_0.set(mesh_corner, texcoords[texcoord_index]);
                         }
 
-                        if (i < static_cast<int>(face_vertex_normal_indices.size())) {
-                            const int obj_normal_index = face_vertex_normal_indices[i];
+                        if (local_facet_corner < static_cast<int>(face_vertex_normal_indices.size())) {
+                            const int obj_normal_index = face_vertex_normal_indices[local_facet_corner];
                             const int normal_index =
                                 (obj_normal_index > 0)
                                     ? obj_normal_index - 1
                                     : obj_normal_index + static_cast<int>(normals.size());
                             ERHE_VERIFY(normal_index < static_cast<int>(normals.size()));
-                            corner_normals->put(corner_id, normals[normal_index]);
+                            attributes->corner_normal.set(mesh_corner, normals[normal_index]);
                         }
                     }
                 }
@@ -441,16 +424,6 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
 
             line_last_pos = text.find_first_not_of(end_of_line, line_pos);
             line_pos = text.find_first_of(end_of_line, line_last_pos);
-        }
-
-        for (auto g : result) {
-            ERHE_PROFILE_SCOPE("post processing");
-
-            g->make_point_corners();
-
-            g->build_edges();
-            g->generate_polygon_texture_coordinates();
-            g->compute_tangents();
         }
     }
 

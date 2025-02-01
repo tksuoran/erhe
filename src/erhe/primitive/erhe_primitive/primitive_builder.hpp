@@ -29,20 +29,18 @@ class Material;
 class Vertex_attributes
 {
 public:
-    Vertex_attribute_info position     ;
-    Vertex_attribute_info normal       ;
-    //Vertex_attribute_info normal_flat  ;
-    Vertex_attribute_info normal_smooth; // Editor wireframe bias requires smooth normal
-    Vertex_attribute_info tangent      ;
-    Vertex_attribute_info bitangent    ;
-    Vertex_attribute_info color        ;
-    Vertex_attribute_info aniso_control;
-    Vertex_attribute_info texcoord     ;
-    Vertex_attribute_info id_vec3      ;
-    //// TODO Vertex_attribute_info attribute_id_uint;
-    Vertex_attribute_info joint_indices;
-    Vertex_attribute_info joint_weights;
-    Vertex_attribute_info valency_edge_count;
+    Vertex_attribute_info              position          ;
+    Vertex_attribute_info              normal            ;
+    Vertex_attribute_info              normal_smooth     ; // Editor wireframe bias requires smooth normal
+    Vertex_attribute_info              tangent           ;
+    Vertex_attribute_info              bitangent         ;
+    Vertex_attribute_info              aniso_control     ;
+    Vertex_attribute_info              id_vec3           ;
+    Vertex_attribute_info              valency_edge_count;
+    std::vector<Vertex_attribute_info> color             ;
+    std::vector<Vertex_attribute_info> texcoord          ;
+    std::vector<Vertex_attribute_info> joint_indices     ;
+    std::vector<Vertex_attribute_info> joint_weights     ;
 };
 
 class Element_mappings;
@@ -51,26 +49,26 @@ class Build_context_root
 {
 public:
     Build_context_root(
-        const erhe::geometry::Geometry& geometry,
-        const Build_info&               build_info,
-        Element_mappings&               element_mappings,
-        Buffer_mesh*                    buffer_mesh
+        Buffer_mesh&      buffer_mesh,
+        const GEO::Mesh&  mesh,
+        const Build_info& build_info,
+        Element_mappings& element_mappings
     );
 
     void get_mesh_info            ();
     void get_vertex_attributes    ();
-    void calculate_bounding_volume(erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec3>* point_locations);
+    void calculate_bounding_volume();
     void allocate_vertex_buffer   ();
     void allocate_index_buffer    ();
     void allocate_index_range     (const gl::Primitive_type primitive_type, const std::size_t index_count, Index_range& out_range);
 
-    const erhe::geometry::Geometry&      geometry;
+    Buffer_mesh&                         buffer_mesh;
+    const GEO::Mesh&                     mesh;
     const Build_info&                    build_info;
     Element_mappings&                    element_mappings;
-    Buffer_mesh*                         buffer_mesh{nullptr};
     std::size_t                          next_index_range_start{0};
-    Vertex_attributes                    attributes;
-    erhe::geometry::Mesh_info            mesh_info;
+    Vertex_attributes                    vertex_attributes;
+    Mesh_info                            mesh_info;
     const erhe::graphics::Vertex_format& vertex_format;
     std::size_t                          vertex_stride     {0};
     std::size_t                          total_vertex_count{0};
@@ -81,11 +79,11 @@ class Build_context
 {
 public:
     Build_context(
-        const erhe::geometry::Geometry& geometry,
-        const Build_info&               build_info,
-        Element_mappings&               element_mappings,
-        const Normal_style              normal_style,
-        Buffer_mesh*                    buffer_mesh
+        Buffer_mesh&       buffer_mesh,
+        const GEO::Mesh&   mesh,
+        const Build_info&  build_info,
+        Element_mappings&  element_mappings,
+        const Normal_style normal_style
     );
     ~Build_context() noexcept;
 
@@ -100,7 +98,7 @@ public:
 private:
     void build_polygon_id        ();
 
-    [[nodiscard]] auto get_polygon_normal() -> glm::vec3;
+    [[nodiscard]] auto get_facet_normal() -> GEO::vec3f;
 
     void build_tangent_frame();
 
@@ -108,11 +106,11 @@ private:
     void build_vertex_normal       (bool normal, bool smooth_normal);
     void build_vertex_tangent      ();
     void build_vertex_bitangent    ();
-    void build_vertex_texcoord     ();
-    void build_vertex_color        (const uint32_t polygon_corner_count);
+    void build_vertex_texcoord     (size_t usage_index);
+    void build_vertex_color        (size_t usage_index);
     void build_vertex_aniso_control();
-    void build_vertex_joint_indices();
-    void build_vertex_joint_weights();
+    void build_vertex_joint_indices(size_t usage_index);
+    void build_vertex_joint_weights(size_t usage_index);
 
     void build_centroid_position   ();
     void build_centroid_normal     ();
@@ -121,24 +119,24 @@ private:
     void build_corner_point_index  ();
     void build_triangle_fill_index ();
 
-    glm::vec3 v_position {};
-    glm::vec3 v_normal   {};
-    glm::vec4 v_tangent  {};
-    glm::vec4 v_bitangent{};
+    GEO::vec3  v_position {};
+    GEO::vec3f v_normal   {};
+    GEO::vec4f v_tangent  {};
+    GEO::vec3f v_bitangent{};
 
-    erhe::geometry::Polygon_id        polygon_id       {0};
-    erhe::geometry::Polygon_corner_id polygon_corner_id{0};
-    erhe::geometry::Point_id          point_id         {0};
-    erhe::geometry::Corner_id         corner_id        {0};
-    uint32_t                          vertex_index     {0}; // primitive vertex index    .
-    uint32_t                          first_index      {0}; // primitive first index      . These make triangle primitive
-    uint32_t                          previous_index   {0}; // primitive previous index  .
-    uint32_t                          polygon_index    {0};
-    uint32_t                          primitive_index  {0}; // triangle (TODO quad) index
-    Normal_style                      normal_style     {Normal_style::none};
-    Vertex_buffer_writer              vertex_writer;
-    Index_buffer_writer               index_writer;
-    Property_maps                     property_maps;
+    GEO::index_t         mesh_facet {0};
+    GEO::index_t         mesh_vertex{0};
+    GEO::index_t         mesh_corner{0};
+    uint32_t             vertex_buffer_index{0}; // primitive vertex index    .
+    uint32_t             first_index        {0}; // primitive first index      . These make triangle primitive
+    uint32_t             previous_index     {0}; // primitive previous index  .
+    uint32_t             primitive_index    {0}; // triangle (TODO quad) index
+    Normal_style         normal_style       {Normal_style::none};
+    Vertex_buffer_writer vertex_writer;
+    Index_buffer_writer  index_writer;
+    Mesh_attributes      mesh_attributes;
+    // Use root.element_mappings.corner_to_vertex_id
+    // std::vector<size_t>  corner_indices;
 
     bool used_fallback_smooth_normal{false};
     bool used_fallback_tangent      {false};
@@ -150,28 +148,29 @@ class Primitive_builder final
 {
 public:
     Primitive_builder(
-        const erhe::geometry::Geometry& geometry,
-        const Build_info&               build_info,
-        Element_mappings&               element_mappings,
-        Normal_style                    normal_style
+        Buffer_mesh&      buffer_mesh,
+        const GEO::Mesh&  mesh,
+        const Build_info& build_info,
+        Element_mappings& element_mappings,
+        Normal_style      normal_style
     );
 
-    [[nodiscard]] auto build() -> std::optional<Buffer_mesh>;
-
-    void build(Buffer_mesh* buffer_mesh, bool& out_build_ok);
+    auto build() -> bool;
 
 private:
-    const erhe::geometry::Geometry& m_geometry;
-    const Build_info&               m_build_info;
-    Element_mappings&               m_element_mappings;
-    const Normal_style              m_normal_style;
+    Buffer_mesh&       m_buffer_mesh;
+    const GEO::Mesh&   m_mesh;
+    const Build_info&  m_build_info;
+    Element_mappings&  m_element_mappings;
+    const Normal_style m_normal_style;
 };
 
-[[nodiscard]] auto make_buffer_mesh(
-    const erhe::geometry::Geometry& geometry,
-    const Build_info&               build_info,
-    Element_mappings&               element_mappings,
-    Normal_style                    normal_style = Normal_style::corner_normals
-) -> std::optional<Buffer_mesh>;
+auto make_buffer_mesh(
+    Buffer_mesh&       buffer_mesh,
+    const GEO::Mesh&   source_mesh,
+    const Build_info&  build_info,
+    Element_mappings&  element_mappings,
+    Normal_style       normal_style = Normal_style::corner_normals
+) -> bool;
 
 } // namespace erhe::primitive

@@ -9,6 +9,7 @@
 
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/framebuffer.hpp"
@@ -103,12 +104,17 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Instance& graphics_i
     m_local_width  = static_cast<float>(m_texture->width ()) / m_pixels_per_meter;
     m_local_height = static_cast<float>(m_texture->height()) / m_pixels_per_meter;
 
-    const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::shapes::make_rectangle(m_local_width, m_local_height, true, false)
+    std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>();
+    erhe::geometry::shapes::make_rectangle(
+        geometry->get_mesh(),
+        static_cast<double>(m_local_width),
+        static_cast<double>(m_local_height),
+        true,
+        false
     );
 
     erhe::primitive::Primitive primitive{
-        shared_geometry,
+        geometry,
         m_material,
         erhe::primitive::Build_info{
             .primitive_types{ .fill_triangles = true },

@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
 
 extern std::shared_ptr<spdlog::logger> log_geometry;
 extern std::shared_ptr<spdlog::logger> log_build_edges;

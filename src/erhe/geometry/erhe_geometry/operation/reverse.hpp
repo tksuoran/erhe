@@ -1,15 +1,9 @@
 #pragma once
 
-#include "erhe_geometry/operation/geometry_operation.hpp"
+namespace erhe::geometry { class Geometry; }
 
 namespace erhe::geometry::operation {
 
-class Reverse : public Geometry_operation
-{
-public:
-    Reverse(const Geometry& source, Geometry& destination);
-};
-
-[[nodiscard]] auto reverse(const Geometry& source) -> Geometry;
+void reverse(const Geometry& source, Geometry& destination);
 
 } // namespace erhe::geometry::operation

@@ -36,6 +36,10 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <geogram/mesh/mesh_geometry.h>
+
+#include <glm/gtx/matrix_operation.hpp>
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui/imgui.h>
 #endif
@@ -345,44 +349,42 @@ void Viewport_scene_view::update_hover_with_id_render()
     }
 
     Hover_entry entry{
-        .valid           = id_query.valid,
-        .mesh            = id_query.mesh,
-        .primitive_index = id_query.primitive_index,
-        .position        = position_in_world_viewport_depth(id_query.depth),
-        .triangle_id     = id_query.triangle_id
+        .valid                      = id_query.valid,
+        .scene_mesh                 = id_query.mesh,
+        .scene_mesh_primitive_index = id_query.primitive_index,
+        .position                   = position_in_world_viewport_depth(id_query.depth),
+        .triangle                   = static_cast<uint32_t>(id_query.triangle_id) // TODO Consider these types
     };
 
     SPDLOG_LOGGER_TRACE(log_controller_ray, "position in world = {}", entry.position.value());
 
-    if (entry.mesh != nullptr) {
-        const erhe::scene::Node* node = entry.mesh->get_node();
+    if (entry.scene_mesh != nullptr) {
+        const erhe::scene::Node* node = entry.scene_mesh->get_node();
         ERHE_VERIFY(node != nullptr);
-        const erhe::primitive::Primitive& primitive = entry.mesh->get_primitives()[entry.primitive_index];
+        const erhe::primitive::Primitive& primitive = entry.scene_mesh->get_primitives()[entry.scene_mesh_primitive_index];
         const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
         if (shape) {
-            entry.geometry = shape->get_geometry_const();
+            entry.geometry = shape->get_geometry();
             if (entry.geometry) {
-                const auto triangle_id = static_cast<erhe::geometry::Polygon_id>(entry.triangle_id);
-                const auto polygon_id  = shape->get_polygon_id_from_primitive_id(triangle_id);
-                ERHE_VERIFY(polygon_id < entry.geometry->get_polygon_count());
-                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
-                auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
-                if (
-                    (polygon_normals != nullptr) &&
-                    polygon_normals->has(polygon_id)
-                ) {
-                    const auto local_normal    = polygon_normals->get(polygon_id);
-                    const auto world_from_node = node->world_from_node();
-                    entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                    SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
-                }
+                const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
+                const GEO::index_t facet = shape->get_mesh_facet_from_triangle(entry.triangle);
+                ERHE_VERIFY(facet < geo_mesh.facets.nb());
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", facet);
+                const GEO::vec3f facet_normal           = GEO::vec3f{GEO::Geom::mesh_facet_normal(geo_mesh, facet)};
+                const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
+                const glm::mat4  world_from_node        = node->world_from_node();
+                const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
+                const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
+                const glm::vec3  unit_normal            = glm::normalize(normal_in_world);
+                entry.normal = unit_normal;
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
             }
         }
     }
 
     using namespace erhe::bit;
 
-    const uint64_t flags = (id_query.mesh != nullptr) ? entry.mesh->get_flag_bits() : 0;
+    const uint64_t flags = (id_query.mesh != nullptr) ? entry.scene_mesh->get_flag_bits() : 0;
 
     const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::content     );
     const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::tool        );

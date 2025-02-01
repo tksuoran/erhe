@@ -1,13 +1,12 @@
 #pragma once
 
-#include "erhe_geometry/types.hpp"
 #include "erhe_scene/node_attachment.hpp"
+
+#include <geogram/mesh/mesh.h>
 
 #include <memory>
 
-namespace erhe::scene {
-    class Node;
-}
+namespace erhe::scene { class Node; }
 
 namespace editor {
 
@@ -15,7 +14,7 @@ class Brush;
 
 class Brush_placement : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Brush_placement, erhe::Item_kind::not_clonable>{
 public:
-    Brush_placement(const std::shared_ptr<Brush>& brush, erhe::geometry::Polygon_id polygon, erhe::geometry::Corner_id corner);
+    Brush_placement(const std::shared_ptr<Brush>& brush, GEO::index_t facet, GEO::index_t corner);
     Brush_placement(const Brush_placement&);
     Brush_placement& operator=(const Brush_placement&);
     ~Brush_placement() noexcept override;
@@ -33,14 +32,14 @@ public:
     auto get_type_name() const -> std::string_view override;
 
     // Public API
-    [[nodiscard]] auto get_brush  () const -> std::shared_ptr<Brush>;
-    [[nodiscard]] auto get_polygon() const -> erhe::geometry::Polygon_id;
-    [[nodiscard]] auto get_corner () const -> erhe::geometry::Corner_id;
+    [[nodiscard]] auto get_brush () const -> std::shared_ptr<Brush>;
+    [[nodiscard]] auto get_facet () const -> GEO::index_t;
+    [[nodiscard]] auto get_corner() const -> GEO::index_t;
 
 private:
-    std::shared_ptr<Brush>     m_brush;
-    erhe::geometry::Polygon_id m_polygon;
-    erhe::geometry::Corner_id  m_corner;
+    std::shared_ptr<Brush> m_brush;
+    GEO::index_t           m_facet;
+    GEO::index_t           m_corner;
 };
 
 auto is_brush_placement(const erhe::Item_base* item) -> bool;

@@ -4,7 +4,7 @@
 #include "erhe_primitive/vertex_attribute_info.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 
-#include <glm/glm.hpp>
+#include <geogram/basic/geometry.h>
 
 #include <span>
 #include <vector>
@@ -28,6 +28,17 @@ class Vertex_buffer_writer
 public:
     Vertex_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink);
     virtual ~Vertex_buffer_writer() noexcept;
+
+    void write(const Vertex_attribute_info& attribute, const GEO::vec3  value);
+    void write(const Vertex_attribute_info& attribute, const GEO::vec2f value);
+    void write(const Vertex_attribute_info& attribute, const GEO::vec3f value);
+    void write(const Vertex_attribute_info& attribute, const GEO::vec4f value);
+    void write(const Vertex_attribute_info& attribute, const GEO::vec2u value);
+    void write(const Vertex_attribute_info& attribute, const GEO::vec3u value);
+    void write(const Vertex_attribute_info& attribute, const GEO::vec4u value);
+    void write(const Vertex_attribute_info& attribute, const GEO::vec2i value);
+    void write(const Vertex_attribute_info& attribute, const GEO::vec3i value);
+    void write(const Vertex_attribute_info& attribute, const GEO::vec4i value);
 
     void write(const Vertex_attribute_info& attribute, const glm::vec2 value);
     void write(const Vertex_attribute_info& attribute, const glm::vec3 value);

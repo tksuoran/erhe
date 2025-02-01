@@ -100,7 +100,6 @@ public:
 
     auto update_control(std::size_t light_index) -> erhe::renderer::Buffer_range;
 
-    void next_frame         ();
     void bind_light_buffer  (const erhe::renderer::Buffer_range& range);
     void bind_control_buffer(const erhe::renderer::Buffer_range& range);
 

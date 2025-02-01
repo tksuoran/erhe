@@ -6,7 +6,6 @@
 #include "editor_log.hpp"
 
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_geometry/operation/clone.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
@@ -16,23 +15,14 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 
-namespace editor {
+#include <geogram/mesh/mesh.h>
 
-using erhe::geometry::Polygon; // Resolve conflict with wingdi.h BOOL Polygon(HDC,const POINT *,int)
-using erhe::geometry::c_polygon_centroids;
-using erhe::geometry::c_polygon_normals;
-using erhe::geometry::c_point_locations;
-using erhe::geometry::Corner_id;
-using erhe::geometry::Point_id;
-using erhe::geometry::Polygon_id;
-using glm::mat4;
-using glm::vec3;
-using glm::vec4;
+namespace editor {
 
 auto Brush_data::get_name() const -> const std::string&
 {
     if (name.empty() && geometry) {
-        return geometry->name;
+        return geometry->get_name();
     }
     return name;
 }
@@ -58,42 +48,36 @@ Brush::Brush(const Brush_data& create_info)
 {
     enable_flag_bits(erhe::Item_flags::brush | erhe::Item_flags::show_in_ui);
     if (m_data.geometry) {
-        update_polygon_statistics();
+        update_facet_statistics();
     }
 }
 
-auto Brush::get_max_corner_count() const -> std::size_t
+auto Brush::get_max_corner_count() const -> GEO::index_t
 {
     return m_max_corner_count;
 }
 
-void Brush::update_polygon_statistics()
+void Brush::update_facet_statistics()
 {
     const auto geometry = get_geometry();
     ERHE_VERIFY(geometry);
 
-    m_corner_count_to_polygons.clear();
+    m_corner_count_to_facets.clear();
     m_max_corner_count = 0;
-    geometry->for_each_polygon_const(
-        [this](erhe::geometry::Geometry::Polygon_context_const& i){
-            const uint32_t corner_count = i.polygon.corner_count;
-            m_max_corner_count = std::max(m_max_corner_count, static_cast<std::size_t>(corner_count));
-            auto j = m_corner_count_to_polygons.find(corner_count);
-            if (j == m_corner_count_to_polygons.end()) {
-                m_corner_count_to_polygons.insert({corner_count, {i.polygon_id}});
-                return;
-            }
-            j->second.push_back(i.polygon_id);
-        }
-    );
+    GEO::Mesh& geo_mesh = geometry->get_mesh();
+    for (GEO::index_t facet : geo_mesh.facets) {
+        const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+        m_max_corner_count = std::max(m_max_corner_count, corner_count);
+        m_corner_count_to_facets[corner_count].push_back(facet);
+    }
 }
 
-auto Brush::get_corner_count_to_polygons() -> const std::map<std::size_t, std::vector<erhe::geometry::Polygon_id>>&
+auto Brush::get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&
 {
     if (!m_data.geometry) {
         late_initialize();
     }
-    return m_corner_count_to_polygons;
+    return m_corner_count_to_facets;
 }
 
 void Brush::late_initialize()
@@ -118,54 +102,67 @@ void Brush::late_initialize()
     ) {
         ERHE_PROFILE_SCOPE("make brush convex hull collision shape");
 
+        GEO::Mesh convex_hull{};
+        const bool convex_hull_ok = make_convex_hull(geometry->get_mesh(), convex_hull);
+        ERHE_VERIFY(convex_hull_ok); // TODO handle error
+
+        std::vector<float> coordinates;
+        coordinates.resize(convex_hull.vertices.nb() * 3);
+        for (GEO::index_t vertex : convex_hull.vertices) {
+            const GEO::vec3 p = convex_hull.vertices.point(vertex);
+            coordinates[3 * vertex + 0] = static_cast<float>(p.x);
+            coordinates[3 * vertex + 1] = static_cast<float>(p.y);
+            coordinates[3 * vertex + 2] = static_cast<float>(p.z);
+        }
+
         m_data.collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-            reinterpret_cast<const float*>(
-                geometry->point_attributes().find<vec3>(c_point_locations)->values.data()
-            ),
-            static_cast<int>(geometry->get_point_count()),
-            static_cast<int>(sizeof(vec3))
+            coordinates.data(),
+            static_cast<int>(convex_hull.vertices.nb()),
+            static_cast<int>(3 * sizeof(float))
         );
     }
 
     if ((m_data.volume == 0.0f) && m_data.collision_volume_calculator) {
         ERHE_PROFILE_SCOPE("calculate brush volume");
 
-        m_data.volume = m_data.collision_volume_calculator(1.0f);
+        m_data.volume = m_data.collision_volume_calculator(1.0);
     }
 }
 
 Brush::Brush(Brush&& old) noexcept = default;
 
-auto Brush::get_reference_frame(const uint32_t corner_count, const uint32_t in_face_offset, const uint32_t corner_offset) -> Reference_frame
+auto Brush::get_reference_frame(const GEO::index_t corner_count, const GEO::index_t in_face_offset, const GEO::index_t corner_offset) -> Reference_frame
 {
     for (const auto& reference_frame : m_reference_frames) {
         if (
-            (reference_frame.corner_count  == corner_count  ) &&
-            (reference_frame.face_offset   == in_face_offset) &&
-            (reference_frame.corner_offset == corner_offset )
+            (reference_frame.m_corner_count  == corner_count  ) &&
+            (reference_frame.m_face_offset   == in_face_offset) &&
+            (reference_frame.m_corner_offset == corner_offset )
         ) {
             return reference_frame;
         }
     }
 
     const auto geometry = get_geometry();
+    GEO::Mesh& geo_mesh = geometry->get_mesh();
 
-    uint32_t face_offset = 0;
-    Polygon_id selected_polygon = 0;
-    for (Polygon_id polygon_id = 0, end = geometry->get_polygon_count(); polygon_id < end; ++polygon_id) {
-        const auto& polygon = geometry->polygons[polygon_id];
-        if ((corner_count == 0) || (polygon.corner_count == corner_count) || (polygon_id + 1 == end)) {
-            selected_polygon = polygon_id;
+    GEO::index_t face_offset = 0;
+    GEO::index_t selected_facet = 0;
+    const GEO::index_t facet_end = geo_mesh.facets.nb();
+    for (GEO::index_t facet : geo_mesh.facets) {
+        const GEO::index_t facet_corner_count = geo_mesh.facets.nb_corners(facet);
+        if ((corner_count == 0) || (facet_corner_count == corner_count) || (facet + 1 == facet_end)) {
+            selected_facet = facet;
             if (face_offset == in_face_offset) {
                 break;
             }
             ++face_offset;
         }
     }
-    return m_reference_frames.emplace_back(*geometry.get(), selected_polygon, in_face_offset, corner_offset);
+    return m_reference_frames.emplace_back(geo_mesh, selected_facet, in_face_offset, corner_offset);
 }
 
-auto Brush::get_scaled(const float scale) -> const Scaled&
+auto Brush::get_scaled(const double scale) -> const Scaled&
 {
     late_initialize();
     const int scale_key = static_cast<int>(scale * c_scale_factor);
@@ -194,18 +191,18 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
         if (m_data.editor_settings.physics.static_enable) {
             if (m_data.collision_shape) {
                 ERHE_VERIFY(m_data.collision_shape->is_convex());
-                const auto mass = m_data.density * m_data.volume;
+                const float mass = m_data.density * m_data.volume;
                 m_data.collision_shape->calculate_local_inertia(mass, local_inertia);
                 return Scaled{
-                    .scale_key          = scale_key,
-                    .primitive          = m_primitive,
-                    .collision_shape    = m_data.collision_shape,
-                    .volume             = m_data.volume,
-                    .local_inertia      = local_inertia
+                    .scale_key       = scale_key,
+                    .primitive       = m_primitive,
+                    .collision_shape = m_data.collision_shape,
+                    .volume          = m_data.volume,
+                    .local_inertia   = local_inertia
                 };
             } else if (m_data.collision_shape_generator) {
-                const auto generated_collision_shape = m_data.collision_shape_generator(scale);
-                const auto mass = m_data.density * m_data.volume;
+                const std::shared_ptr<erhe::physics::ICollision_shape> generated_collision_shape = m_data.collision_shape_generator(scale);
+                const float mass = m_data.density * m_data.volume;
                 generated_collision_shape->calculate_local_inertia(mass, local_inertia);
                 return Scaled{
                     .scale_key       = scale_key,
@@ -227,13 +224,10 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
 
     log_brush->trace("create_scaled() scale = {}", scale);
 
-    auto scaled_geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::operation::clone(
-            *m_primitive.render_shape->get_geometry().get(),
-            erhe::math::create_scale(scale)
-        )
-    );
-    scaled_geometry->name = fmt::format("{} scaled by {}", m_primitive.get_name(), scale);
+    // Must create transformed copy for Geometry to deal with Geometry::m_edge_to_facets for example
+    auto scaled_geometry = std::make_shared<erhe::geometry::Geometry>();
+    scaled_geometry->copy_with_transform(*m_primitive.render_shape->get_geometry().get(), GEO::create_scaling_matrix(scale));
+    scaled_geometry->set_name(fmt::format("{} scaled by {}", m_primitive.get_name(), scale));
 
     erhe::primitive::Primitive scaled_primitive{
         scaled_geometry,
@@ -261,11 +255,11 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
                 .local_inertia   = local_inertia
             };
         } else if (m_data.collision_shape_generator) {
-            auto       scaled_collision_shape = m_data.collision_shape_generator(scale);
-            const auto scaled_volume          = m_data.collision_volume_calculator
+            const std::shared_ptr<erhe::physics::ICollision_shape> scaled_collision_shape = m_data.collision_shape_generator(scale);
+            const float scaled_volume = m_data.collision_volume_calculator
                 ? m_data.collision_volume_calculator(scale)
                 : m_data.volume * scale * scale * scale;
-            const auto mass                   = m_data.density * scaled_volume;
+            const float mass = m_data.density * scaled_volume;
             scaled_collision_shape->calculate_local_inertia(mass, local_inertia);
             return Scaled{
                 .scale_key       = scale_key,
@@ -292,7 +286,7 @@ auto Brush::get_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
     if (!m_data.geometry) {
         m_data.geometry = m_data.geometry_generator();
         m_data.geometry_generator = {};
-        update_polygon_statistics();
+        update_facet_statistics();
     }
     return m_data.geometry;
 }
@@ -303,7 +297,7 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
 
     late_initialize();
 
-    const auto& scaled = get_scaled(instance_create_info.scale);
+    const Scaled& scaled = get_scaled(instance_create_info.scale);
 
     const std::string_view name = this->get_name();
 

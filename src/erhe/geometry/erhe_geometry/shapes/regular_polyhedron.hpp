@@ -1,14 +1,14 @@
 #pragma once
 
-#include "erhe_geometry/geometry.hpp"
+namespace GEO { class Mesh; }
 
 namespace erhe::geometry::shapes {
 
-[[nodiscard]] auto make_cuboctahedron(double radius) -> Geometry;
-[[nodiscard]] auto make_dodecahedron (double radius) -> Geometry;
-[[nodiscard]] auto make_icosahedron  (double radius) -> Geometry;
-[[nodiscard]] auto make_octahedron   (double radius) -> Geometry;
-[[nodiscard]] auto make_tetrahedron  (double radius) -> Geometry;
-[[nodiscard]] auto make_cube         (double radius) -> Geometry;
+void make_cuboctahedron(GEO::Mesh& mesh, double radius);
+void make_dodecahedron (GEO::Mesh& mesh, double radius);
+void make_icosahedron  (GEO::Mesh& mesh, double radius);
+void make_octahedron   (GEO::Mesh& mesh, double radius);
+void make_tetrahedron  (GEO::Mesh& mesh, double radius);
+void make_cube         (GEO::Mesh& mesh, double radius);
 
 } // namespace erhe::geometry::shapes

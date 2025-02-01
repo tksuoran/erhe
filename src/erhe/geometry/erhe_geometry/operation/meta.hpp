@@ -1,16 +1,9 @@
 #pragma once
 
-#include "erhe_geometry/operation/geometry_operation.hpp"
-#include <vector>
+namespace erhe::geometry { class Geometry; }
 
 namespace erhe::geometry::operation {
 
-class Meta : public Geometry_operation
-{
-public:
-    Meta(const Geometry& src, Geometry& destination);
-};
-
-[[nodiscard]] auto meta(const Geometry& source) -> Geometry;
+void meta(const Geometry& source, Geometry& destination);
 
 } // namespace erhe::geometry::operation

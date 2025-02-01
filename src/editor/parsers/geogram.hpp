@@ -1,8 +1,6 @@
 #pragma once
 
 #include <filesystem>
-#include <string>
-#include <vector>
 
 namespace erhe::primitive {
     class Build_info;

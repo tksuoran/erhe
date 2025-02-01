@@ -1,9 +1,9 @@
 #pragma once
 
-#include "erhe_geometry/geometry.hpp"
+namespace GEO { class Mesh; }
 
 namespace erhe::geometry::shapes {
 
-[[nodiscard]] auto make_sphere(double radius, unsigned int slice_count, unsigned int stack_division) -> Geometry;
+void make_sphere(GEO::Mesh& mesh, double radius, unsigned int slice_count, unsigned int stack_division);
 
 } // namespace erhe::geometry::shapes

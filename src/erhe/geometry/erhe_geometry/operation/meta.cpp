@@ -1,68 +1,71 @@
 #include "erhe_geometry/operation/meta.hpp"
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_geometry/geometry_log.hpp"
-#include "erhe_profile/profile.hpp"
-
-#include <glm/glm.hpp>
+#include "erhe_geometry/operation/geometry_operation.hpp"
 
 #include <cstdint>
 #include <limits>
 
 namespace erhe::geometry::operation {
 
-Meta::Meta(const Geometry& src, Geometry& destination)
-    : Geometry_operation{src, destination}
+class Meta : public Geometry_operation
 {
-    ERHE_PROFILE_FUNCTION();
+public:
+    Meta(const Geometry& source, Geometry& destination);
 
-    // Add midpoints to edges and connect to polygon center
+    void build();
+};
 
-    // For each corner in the old polygon,
+Meta::Meta(const Geometry& source, Geometry& destination)
+    : Geometry_operation{source, destination}
+{
+}
+
+void Meta::build()
+{
+    // Add midpoints to edges and connect to facet center
+
+    // For each corner in the src facet,
     // add two triangles (centroid, previous edge midpoint, corner), (centroid, corner, next edge midpoint)
 
-    make_points_from_points();
-    make_polygon_centroids();
-    make_edge_midpoints();
+    make_dst_vertices_from_src_vertices();
+    make_facet_centroids();
+    make_edge_midpoints({ 0.5f });
 
-    source.for_each_polygon_const([&](auto& i) {
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
-            const Point_id   a                      = j.prev_corner.point_id;
-            const Point_id   b                      = j.corner     .point_id;
-            const Point_id   c                      = j.next_corner.point_id;
-            const Polygon_id new_polygon_id_a       = make_new_polygon_from_polygon(i.polygon_id);
-            const Polygon_id new_polygon_id_b       = make_new_polygon_from_polygon(i.polygon_id);
-            const Point_id   previous_edge_midpoint = get_edge_new_point(a, b);
-            const Point_id   next_edge_midpoint     = get_edge_new_point(b, c);
-            if (previous_edge_midpoint == std::numeric_limits<uint32_t>::max()) {
-                log_subdivide->warn("midpoint for edge {} {} not found", std::min(a, b), std::max(a, b));
-                return;
+    for (const GEO::index_t src_facet : source_mesh.facets) {
+        const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
+        for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < src_corner_count; ++local_src_facet_corner) {
+            const GEO::index_t prev_src_corner        = source_mesh.facets.corner(src_facet, (local_src_facet_corner + src_corner_count - 1) % src_corner_count);
+            const GEO::index_t src_corner             = source_mesh.facets.corner(src_facet, local_src_facet_corner);
+            const GEO::index_t next_src_corner        = source_mesh.facets.corner(src_facet, (local_src_facet_corner + 1) % src_corner_count);
+            const GEO::index_t a                      = source_mesh.facet_corners.vertex(prev_src_corner);
+            const GEO::index_t b                      = source_mesh.facet_corners.vertex(src_corner     );
+            const GEO::index_t c                      = source_mesh.facet_corners.vertex(next_src_corner);
+            const GEO::index_t previous_edge_midpoint = get_src_edge_new_vertex(a, b, 0);
+            const GEO::index_t next_edge_midpoint     = get_src_edge_new_vertex(b, c, 0);
+            if (previous_edge_midpoint == GEO::NO_INDEX) {
+                continue; // TODO can these every happen?
             }
-            if (next_edge_midpoint == std::numeric_limits<uint32_t>::max()) {
-                log_subdivide->warn("midpoint for edge {} {} not found", std::min(b, c), std::max(b, c));
-                return;
+            if (next_edge_midpoint == GEO::NO_INDEX) {
+                continue;
             }
-            make_new_corner_from_polygon_centroid(new_polygon_id_a, i.polygon_id);
-            make_new_corner_from_point           (new_polygon_id_a, previous_edge_midpoint);
-            make_new_corner_from_corner          (new_polygon_id_a, j.corner_id);
+            const GEO::index_t new_dst_facet_a = make_new_dst_facet_from_src_facet(src_facet, 3);
+            const GEO::index_t new_dst_facet_b = make_new_dst_facet_from_src_facet(src_facet, 3);
+            make_new_dst_corner_from_src_facet_centroid(new_dst_facet_a, 0, src_facet);
+            make_new_dst_corner_from_dst_vertex        (new_dst_facet_a, 1, previous_edge_midpoint);
+            make_new_dst_corner_from_src_corner        (new_dst_facet_a, 2, src_corner);
 
-            make_new_corner_from_polygon_centroid(new_polygon_id_b, i.polygon_id);
-            make_new_corner_from_corner          (new_polygon_id_b, j.corner_id);
-            make_new_corner_from_point           (new_polygon_id_b, next_edge_midpoint);
-        });
-    });
+            make_new_dst_corner_from_src_facet_centroid(new_dst_facet_b, 0, src_facet);
+            make_new_dst_corner_from_src_corner        (new_dst_facet_b, 1, src_corner);
+            make_new_dst_corner_from_dst_vertex        (new_dst_facet_b, 2, next_edge_midpoint);
+        }
+    }
 
     post_processing();
 }
 
-auto meta(const Geometry& source) -> Geometry
+void meta(const Geometry& source, Geometry& destination)
 {
-    return Geometry{
-        fmt::format("meta({})", source.name),
-        [&source](auto& result) {
-            Meta operation{source, result};
-        }
-    };
+    Meta operation{source, destination};
+    operation.build();
 }
-
 
 } // namespace erhe::geometry::operation

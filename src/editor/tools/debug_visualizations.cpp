@@ -47,6 +47,8 @@
 #   include <Jolt/Jolt.h>
 #endif
 
+#include <geogram/mesh/mesh_geometry.h>
+
 namespace editor {
 
 using glm::mat4;
@@ -932,15 +934,15 @@ void Debug_visualizations::raytrace_nodes_visualization(const Render_context& co
     }
 }
 
-void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scene::Mesh* mesh)
+void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scene::Mesh* scene_mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (mesh == nullptr) {
+    if (scene_mesh == nullptr) {
         return;
     }
-    const auto* node   = mesh->get_node();
-    const auto* camera = context.camera;
+    const erhe::scene::Node*   node   = scene_mesh->get_node();
+    const erhe::scene::Camera* camera = context.camera;
     if ((node == nullptr) || (camera == nullptr)) {
         return;
     }
@@ -950,7 +952,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
 
     erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
 
-    for (erhe::primitive::Primitive& primitive : mesh->get_mutable_primitives()) {
+    for (erhe::primitive::Primitive& primitive : scene_mesh->get_mutable_primitives()) {
         if (!primitive.render_shape) {
             continue;
         }
@@ -959,82 +961,67 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
             continue;
         }
 
-        const auto* point_locations = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_locations);
-        const bool selected = mesh->is_selected();
+        const bool             is_mesh_selected = scene_mesh->is_selected();
+        const GEO::Mesh&       geo_mesh         = geometry->get_mesh();
+        const Mesh_attributes& attributes       = geometry->get_attributes();
 
-        if ((point_locations != nullptr) && should_visualize(m_point_labels, selected)) {
-            auto* point_normals        = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_normals);
-            auto* point_normals_smooth = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_normals_smooth);
-
-            const uint32_t end = (std::min)(
-                static_cast<uint32_t>(m_max_labels),
-                geometry->get_point_count()
-            );
-            for (erhe::geometry::Point_id point_id = 0; point_id < end; ++point_id) {
-                if (!point_locations->has(point_id)) {
-                    continue;
-                }
-
-                const auto p0 = point_locations->get(point_id);
-                glm::vec3  n{0.0f, 0.0f, 0.0f};
-                if ((point_normals_smooth == nullptr) || !point_normals_smooth->maybe_get(point_id, n)) {
-                    if (point_normals != nullptr) {
-                        point_normals->maybe_get(point_id, n);
+        if (should_visualize(m_vertex_labels, is_mesh_selected)) {
+            int label_count = 0;
+            for (GEO::index_t vertex : geo_mesh.vertices) {
+                const glm::vec3 p0 = to_glm_vec3(geo_mesh.vertices.point(vertex));
+                glm::vec3 n{0.0f, 0.0f, 0.0f};
+                const std::optional<GEO::vec3f> vertex_normal_smooth = attributes.vertex_normal_smooth.try_get(vertex);
+                if (vertex_normal_smooth.has_value()) {
+                    n = to_glm_vec3(vertex_normal_smooth.value());
+                } else {
+                    const std::optional<GEO::vec3f> vertex_normal = attributes.vertex_normal.try_get(vertex);
+                    if (vertex_normal.has_value()) {
+                        n = to_glm_vec3(vertex_normal.value());
                     }
                 }
-                const auto p  = p0 + m_point_label_line_length * n;
+                const glm::vec3 p = p0 + m_vertex_label_line_length * n;
 
-                line_renderer.set_thickness(m_point_label_line_width);
+                line_renderer.set_thickness(m_vertex_label_line_width);
                 line_renderer.add_lines(
                     world_from_node,
-                    m_point_label_line_color,
+                    m_vertex_label_line_color,
                     { { p0, p } }
                 );
 
-                const std::string label_text = fmt::format("{}", point_id);
-                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_point_label_text_color);
+                const std::string label_text = fmt::format("{}: {}", vertex, p0);
+                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_vertex_label_text_color);
                 label(context, clip_from_world, world_from_node, p, text_color, label_text);
+                if (++label_count >= m_max_labels) {
+                    break;
+                }
             }
         }
 
-        auto polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
-        if (polygon_normals == nullptr) {
-            geometry->compute_polygon_normals();
-            polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
-        }
+        //auto polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
+        //if (polygon_normals == nullptr) {
+        //    geometry->compute_polygon_normals();
+        //    polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
+        //}
 
-        if ((point_locations != nullptr) && should_visualize(m_edge_labels, selected)) {
-            const uint32_t end = (std::min)(
-                static_cast<uint32_t>(m_max_labels),
-                geometry->get_edge_count()
-            );
-
+        if (should_visualize(m_edge_labels, is_mesh_selected)) {
+            int label_count = 0;
             const float t = m_edge_label_line_length;
-            for (erhe::geometry::Edge_id edge_id = 0; edge_id < end; ++edge_id) {
-                const auto& edge = geometry->edges[edge_id];
+            for (GEO::index_t edge : geo_mesh.edges) {
+                const GEO::index_t edge_a = geo_mesh.edges.vertex(edge, 0);
+                const GEO::index_t edge_b = geo_mesh.edges.vertex(edge, 1);
 
-                if (!point_locations->has(edge.a) || !point_locations->has(edge.b)) {
-                    continue;
+                GEO::vec3   normal_sum{0.0f, 0.0f, 0.0f};
+
+                const std::vector<GEO::index_t>& facets = geometry->get_edge_facets(edge);
+                for (GEO::index_t facet : facets) {
+                    GEO::vec3 facet_normal = GEO::normalize(GEO::Geom::mesh_facet_normal(geo_mesh, facet));
+                    normal_sum += facet_normal;
                 }
-
-                glm::vec3   normal_sum{0.0f, 0.0f, 0.0f};
-                std::size_t polygon_count{0};
-                edge.for_each_polygon_const(
-                    *geometry.get(),
-                    [&normal_sum, &polygon_normals, &polygon_count, this, edge_id]
-                    (erhe::geometry::Edge::Edge_polygon_context_const& context) {
-                        glm::vec3 polygon_normal;
-                        if (polygon_normals->maybe_get(context.polygon_id, polygon_normal)) {
-                            normal_sum += polygon_normal;
-                            ++polygon_count;
-                        }
-                    }
-                );
-                const auto n  = glm::normalize(normal_sum);
-                const auto a  = point_locations->get(edge.a) + 0.001f * n;
-                const auto b  = point_locations->get(edge.b) + 0.001f * n;
-                const auto p0 = (a + b) / 2.0f;
-                const auto p  = p0 + m_edge_label_text_offset * n;
+                const GEO::vec3 n  = GEO::normalize(normal_sum);
+                const GEO::vec3 a  = geo_mesh.vertices.point(edge_a) + 0.001f * n;
+                const GEO::vec3 b  = geo_mesh.vertices.point(edge_b) + 0.001f * n;
+                const GEO::vec3 p0 = (a + b) / 2.0f;
+                const GEO::vec3 p  = p0 + m_edge_label_text_offset * n;
 
                 line_renderer.set_thickness(m_edge_label_line_width);
                 line_renderer.add_lines(
@@ -1042,70 +1029,74 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                     m_edge_label_line_color,
                     {
                         {
-                            t * a + (1.0f - t) * p0,
-                            t * b + (1.0f - t) * p0
+                            to_glm_vec3(t * a + (1.0f - t) * p0),
+                            to_glm_vec3(t * b + (1.0f - t) * p0)
                         },
                         {
-                            p0,
-                            p
+                            to_glm_vec3(p0),
+                            to_glm_vec3(p)
                         }
                     }
                 );
 
-                const std::string label_text = fmt::format("{}", edge_id);
+                const std::string label_text = fmt::format("{}", edge);
                 const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_edge_label_text_color);
-                label(context, clip_from_world, world_from_node, p, text_color, label_text);
+                label(context, clip_from_world, world_from_node, to_glm_vec3(p), text_color, label_text);
+                if (++label_count >= m_max_labels) {
+                    break;
+                }
             }
         }
 
-        const auto polygon_centroids = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_centroids);
-        if ((polygon_centroids != nullptr) && should_visualize(m_polygon_labels, selected)) {
-            const uint32_t end = (std::min)(
-                static_cast<uint32_t>(m_max_labels),
-                geometry->get_polygon_count()
-            );
-            for (erhe::geometry::Polygon_id polygon_id = 0; polygon_id < end; ++polygon_id) {
-                if (!polygon_centroids->has(polygon_id)) {
+        if (should_visualize(m_facet_labels, is_mesh_selected)) {
+            int label_count = 0;
+            for (GEO::index_t facet : geo_mesh.facets) {
+                if (!attributes.facet_centroid.has(facet)) {
                     continue;
                 }
-                if (!polygon_normals->has(polygon_id)) {
-                    continue;
-                }
-                const glm::vec3 p = polygon_centroids->get(polygon_id);
-                const glm::vec3 n = polygon_normals  ->get(polygon_id);
-                const glm::vec3 l = p + m_polygon_label_line_length * n;
+                const GEO::vec3f p = attributes.facet_centroid.get(facet);
+                const GEO::vec3  n = GEO::normalize(GEO::Geom::mesh_facet_normal(geo_mesh, facet));
+                const GEO::vec3f l = p + m_facet_label_line_length * GEO::vec3f{n};
 
-                line_renderer.set_thickness(m_polygon_label_line_width);
+                line_renderer.set_thickness(m_facet_label_line_width);
                 line_renderer.add_lines(
                     world_from_node,
-                    m_polygon_label_line_color,
-                    {{ p, l }}
+                    m_facet_label_line_color,
+                    {{ to_glm_vec3(p), to_glm_vec3(l) }}
                 );
 
-                const std::string label_text = fmt::format("{}", polygon_id);
-                const glm::vec4   p4_in_node = glm::vec4{p + m_polygon_label_line_length * n, 1.0f};
-                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_polygon_label_text_color);
+                {
+                    const std::string label_text = fmt::format("{}", facet);
+                    const glm::vec4   p4_in_node = glm::vec4{to_glm_vec3(p) + m_facet_label_line_length * to_glm_vec3(n), 1.0f};
+                    const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_facet_label_text_color);
 
-                label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
+                    label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
+                }
 
-                if (should_visualize(m_corner_labels, selected)) {
-                    const erhe::geometry::Polygon polygon = geometry->polygons.at(polygon_id);
-                    polygon.for_each_corner_const(*geometry.get(), [&](auto& i) {
-                        const auto corner_p    = point_locations->get(i.corner.point_id);
-                        const auto to_centroid = glm::normalize(l - corner_p);
-                        const auto label_p     = corner_p + m_corner_label_line_length * to_centroid;
+                if (should_visualize(m_corner_labels, is_mesh_selected)) {
+                    for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
+                        const GEO::index_t vertex      = geo_mesh.facet_corners.vertex(corner);
+                        const GEO::vec3f   corner_p    = GEO::vec3f{geo_mesh.vertices.point(vertex)};
+                        const GEO::vec3f   to_centroid = GEO::normalize(l - corner_p);
+                        const GEO::vec3f   label_p     = corner_p + m_corner_label_line_length * to_centroid;
 
                         line_renderer.set_thickness(m_corner_label_line_width);
                         line_renderer.add_lines(
                             world_from_node,
                             m_corner_label_line_color,
-                            {{ corner_p, label_p }}
+                            {{ to_glm_vec3(corner_p), to_glm_vec3(label_p) }}
                         );
 
-                        const std::string label_text = fmt::format("{}", i.corner_id);
+                        const std::string label_text = fmt::format("{}", corner);
                         const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_corner_label_text_color);
-                        label(context, clip_from_world, world_from_node, label_p, text_color, label_text);
-                    });
+                        label(context, clip_from_world, world_from_node, to_glm_vec3(label_p), text_color, label_text);
+                        if (++label_count >= m_max_labels) {
+                            break;
+                        }
+                    }
+                }
+                if (++label_count >= m_max_labels) {
+                    break;
                 }
             }
         }
@@ -1286,28 +1277,28 @@ void Debug_visualizations::imgui()
     }
     ImGui::SliderInt("Max Labels",     &m_max_labels, 0, 2000);
     
-    make_combo("Show Points",   m_point_labels);
-    make_combo("Show Polygons", m_polygon_labels);
+    make_combo("Show Vertices", m_vertex_labels);
+    make_combo("Show Facets",   m_facet_labels);
     make_combo("Show Edges",    m_edge_labels);
     make_combo("Show Corners",  m_corner_labels);
 
-    ImGui::ColorEdit4 ("Point Label Text Color",    &m_point_label_text_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Point Label Line Color",    &m_point_label_line_color.x, ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Point Label Line Width",    &m_point_label_line_width,   0.0f, 4.0f);
-    ImGui::SliderFloat("Point Label Line Length",   &m_point_label_line_length,  0.0f, 1.0f);
-    ImGui::ColorEdit4 ("Edge Label Text Color",     &m_edge_label_text_color.x, ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Edge Label Text Offset",    &m_edge_label_text_offset,  0.0f, 1.0f);
-    ImGui::ColorEdit4 ("Edge Label Line Color",     &m_edge_label_line_color.x, ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Edge Label Line Width",     &m_edge_label_line_width,   0.0f, 4.0f);
-    ImGui::SliderFloat("Edge Label Line Length",    &m_edge_label_line_length,  0.0f, 1.0f);
-    ImGui::ColorEdit4 ("Polygon Label Text Color",  &m_polygon_label_text_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Polygon Label Line Color",  &m_polygon_label_line_color.x, ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Polygon Label Line Width",  &m_polygon_label_line_width,   0.0f, 4.0f);
-    ImGui::SliderFloat("Polygon Label Line Length", &m_polygon_label_line_length,  0.0f, 1.0f);
-    ImGui::ColorEdit4 ("Corner Label Text Color",  &m_corner_label_text_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Corner Label Line Color",  &m_corner_label_line_color.x, ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Corner Label Line Width",  &m_corner_label_line_width,   0.0f, 4.0f);
-    ImGui::SliderFloat("Corner Label Line Length", &m_corner_label_line_length,  0.0f, 1.0f);
+    ImGui::ColorEdit4 ("Vertex Label Text Color",   &m_vertex_label_text_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Vertex Label Line Color",   &m_vertex_label_line_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Vertex Label Line Width",   &m_vertex_label_line_width,   0.0f, 4.0f);
+    ImGui::SliderFloat("Vertex Label Line Length",  &m_vertex_label_line_length,  0.0f, 1.0f);
+    ImGui::ColorEdit4 ("Edge Label Text Color",     &m_edge_label_text_color.x,   ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Edge Label Text Offset",    &m_edge_label_text_offset,    0.0f, 1.0f);
+    ImGui::ColorEdit4 ("Edge Label Line Color",     &m_edge_label_line_color.x,   ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Edge Label Line Width",     &m_edge_label_line_width,     0.0f, 4.0f);
+    ImGui::SliderFloat("Edge Label Line Length",    &m_edge_label_line_length,    0.0f, 1.0f);
+    ImGui::ColorEdit4 ("Facet Label Text Color",    &m_facet_label_text_color.x,  ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Facet Label Line Color",    &m_facet_label_line_color.x,  ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Facet Label Line Width",    &m_facet_label_line_width,    0.0f, 4.0f);
+    ImGui::SliderFloat("Facet Label Line Length",   &m_facet_label_line_length,   0.0f, 1.0f);
+    ImGui::ColorEdit4 ("Corner Label Text Color",   &m_corner_label_text_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Corner Label Line Color",   &m_corner_label_line_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Corner Label Line Width",   &m_corner_label_line_width,   0.0f, 4.0f);
+    ImGui::SliderFloat("Corner Label Line Length",  &m_corner_label_line_length,  0.0f, 1.0f);
 #endif
 }
 

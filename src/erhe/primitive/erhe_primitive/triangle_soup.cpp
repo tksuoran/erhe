@@ -1,14 +1,13 @@
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_primitive/build_info.hpp"
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_log/log_glm.hpp"
 #include "erhe_graphics/vertex_attribute.hpp"
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <glm/glm.hpp>
+#include <geogram/mesh/mesh.h>
+#include <geogram/mesh/mesh_geometry.h>
 
 #include <numeric>
 #include <unordered_map>
@@ -68,15 +67,16 @@ auto Triangle_soup::get_index_count() const -> std::size_t
     return index_data.size();
 }
 
-class Geometry_from_triangle_soup
+class Mesh_from_triangle_soup
 {
 public:
-    Geometry_from_triangle_soup(
-        erhe::geometry::Geometry&          geometry,
+    Mesh_from_triangle_soup(
+        GEO::Mesh&                         mesh,
         const Triangle_soup&               triangle_soup,
         erhe::primitive::Element_mappings& element_mappings
     )
-        : m_geometry        {geometry}
+        : m_mesh            {mesh}
+        , m_attributes      {mesh}
         , m_triangle_soup   {triangle_soup}
         , m_element_mappings{element_mappings}
     {
@@ -84,49 +84,10 @@ public:
 
     void build()
     {
-        std::unordered_map<erhe::graphics::Vertex_attribute::Usage_type, std::size_t> attribute_max_index;
-        const std::vector<erhe::graphics::Vertex_attribute>& attributes = m_triangle_soup.vertex_format.get_attributes();
-        for (std::size_t i = 0, end = attributes.size(); i < end; ++i) {
-            const erhe::graphics::Vertex_attribute& attribute = attributes[i];
-            auto j = attribute_max_index.find(attribute.usage.type);
-            if (j != attribute_max_index.end()) {
-                j->second = std::max(j->second, attribute.usage.index);
-            } else {
-                attribute_max_index[attribute.usage.type] = attribute.usage.index;
-            }
-        }
-        for (auto [attribute_usage, last_index] : attribute_max_index) {
-            switch (attribute_usage) {
-                case erhe::graphics::Vertex_attribute::Usage_type::position:      m_point_locations    .resize(last_index + 1); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::normal:        m_corner_normals     .resize(last_index + 1); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::tangent:       m_corner_tangents    .resize(last_index + 1); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::tex_coord:     m_corner_texcoords   .resize(last_index + 1); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::color:         m_corner_colors      .resize(last_index + 1); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: m_point_joint_indices.resize(last_index + 1); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: m_point_joint_weights.resize(last_index + 1); break;
-                default: continue;
-            }
-        }
-        for (std::size_t i = 0, end = attributes.size(); i < end; ++i) {
-            const erhe::graphics::Vertex_attribute& attribute = attributes[i];
-            switch (attribute.usage.type) {
-                case erhe::graphics::Vertex_attribute::Usage_type::position:      m_point_locations    [attribute.usage.index] = m_geometry.point_attributes ().create<glm::vec3 >(erhe::geometry::c_point_locations    ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::normal:        m_corner_normals     [attribute.usage.index] = m_geometry.corner_attributes().create<glm::vec3 >(erhe::geometry::c_corner_normals     ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::tangent:       m_corner_tangents    [attribute.usage.index] = m_geometry.corner_attributes().create<glm::vec4 >(erhe::geometry::c_corner_tangents    ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::tex_coord:     m_corner_texcoords   [attribute.usage.index] = m_geometry.corner_attributes().create<glm::vec2 >(erhe::geometry::c_corner_texcoords   ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::color:         m_corner_colors      [attribute.usage.index] = m_geometry.corner_attributes().create<glm::vec4 >(erhe::geometry::c_corner_colors      ); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: m_point_joint_indices[attribute.usage.index] = m_geometry.point_attributes ().create<glm::uvec4>(erhe::geometry::c_point_joint_indices); break;
-                case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: m_point_joint_weights[attribute.usage.index] = m_geometry.point_attributes ().create<glm::vec4 >(erhe::geometry::c_point_joint_weights); break;
-                default: continue;
-            }
-        }
-
         get_used_indices();
-        make_points();
+        make_vertices();
         parse_triangles();
         parse_vertex_data();
-        m_geometry.make_point_corners();
-        //m_geometry.build_edges();
     }
 
 private:
@@ -151,9 +112,11 @@ private:
             m_min_index = std::min(index, m_min_index);
             m_max_index = std::max(index, m_max_index);
         }
-    }
 
-    void make_points()
+        // TODO non-indexed primitives are not currently supported
+        ERHE_VERIFY(m_min_index != std::numeric_limits<std::size_t>::max());
+    }
+    void make_vertices()
     {
         const erhe::graphics::Vertex_attribute* position_attribute = nullptr;
         const std::vector<erhe::graphics::Vertex_attribute>& attributes = m_triangle_soup.vertex_format.get_attributes();
@@ -176,8 +139,6 @@ private:
         // Get vertex positions and calculate bounding box
         m_vertex_positions.clear();
 
-        glm::vec3 min_corner{std::numeric_limits<float>::max(),    std::numeric_limits<float>::max(),    std::numeric_limits<float>::max()};
-        glm::vec3 max_corner{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
         const std::size_t vertex_count = m_max_index - m_min_index + 1;
         m_vertex_positions.resize(vertex_count);
         std::size_t vertex_stride = m_triangle_soup.vertex_format.stride();
@@ -191,46 +152,52 @@ private:
                 dst, erhe::dataformat::Format::format_32_vec3_float, 
                 1.0f
             );
-            const auto position = glm::vec3{v[0], v[1], v[2]};
+            const GEO::vec3 position{v[0], v[1], v[2]};
             m_vertex_positions.at(index - m_min_index) = position;
-            min_corner = glm::min(min_corner, position);
-            max_corner = glm::max(max_corner, position);
         }
 
         // Sort vertices
-        std::set<glm::vec3::length_type> available_axis = { 0, 1, 2 };
-        std::set<glm::vec3::length_type> used_axis;
+        std::set<GEO::index_t> available_axis = { 0, 1, 2 };
+        std::set<GEO::index_t> used_axis;
 
-        const glm::vec3 bounding_box_size0 = max_corner - min_corner;
-        const auto axis0 = erhe::math::max_axis_index<float>(bounding_box_size0);
+        double xyzmin[3];
+        double xyzmax[3];
+        GEO::get_bbox(m_mesh, xyzmin, xyzmax);
+        const GEO::vec3 min_corner{xyzmin};
+        const GEO::vec3 max_corner{xyzmax};
+
+        const GEO::vec3 bounding_box_size0 = max_corner - min_corner;
+        const GEO::index_t axis0 = max_axis_index(bounding_box_size0);
         available_axis.erase(axis0);
         used_axis.insert(axis0);
-        glm::vec3 bounding_box_size1 = bounding_box_size0;
+        GEO::vec3 bounding_box_size1 = bounding_box_size0;
         bounding_box_size1[axis0] = 0.0f;
 
-        auto axis1 = erhe::math::max_axis_index<float>(bounding_box_size1);
+        GEO::index_t axis1 = max_axis_index(bounding_box_size1);
         if (used_axis.count(axis1) > 0) {
             axis1 = *available_axis.begin();
         }
         available_axis.erase(axis1);
         used_axis.insert(axis1);
 
-        glm::vec3 bounding_box_size2 = bounding_box_size1;
+        GEO::vec3 bounding_box_size2 = bounding_box_size1;
         bounding_box_size2[axis1] = 0.0f;
-        auto axis2 = erhe::math::max_axis_index<float>(bounding_box_size2);
+        GEO::index_t axis2 = max_axis_index(bounding_box_size2);
         if (used_axis.count(axis2) > 0) {
             axis2 = * available_axis.begin();
         }
         available_axis.erase(axis2);
         used_axis.insert(axis2);
 
-        log_primitive->trace("Bounding box   = {}", bounding_box_size0);
-        log_primitive->trace("Primary   axis = {}", "XYZ"[axis0]);
-        log_primitive->trace("Secondary axis = {}", "XYZ"[axis1]);
-        log_primitive->trace("Tertiary  axis = {}", "XYZ"[axis2]);
+        //// TODO
+        ////
+        //// log_primitive->trace("Bounding box   = {}", bounding_box_size0);
+        //// log_primitive->trace("Primary   axis = {}", "XYZ"[axis0]);
+        //// log_primitive->trace("Secondary axis = {}", "XYZ"[axis1]);
+        //// log_primitive->trace("Tertiary  axis = {}", "XYZ"[axis2]);
 
-        m_sorted_vertex_indices    .resize(vertex_count);
-        m_point_id_from_index .resize(vertex_count);
+        m_sorted_vertex_indices.resize(vertex_count);
+        m_vertex_from_index    .resize(vertex_count);
 
         std::fill(
             m_sorted_vertex_indices.begin(),
@@ -238,9 +205,9 @@ private:
             std::numeric_limits<std::size_t>::max()
         );
         std::fill(
-            m_point_id_from_index.begin(),
-            m_point_id_from_index.end(),
-            std::numeric_limits<erhe::geometry::Point_id>::max()
+            m_vertex_from_index.begin(),
+            m_vertex_from_index.end(),
+            GEO::NO_INDEX
         );
         for (std::size_t index : m_used_indices) {
             m_sorted_vertex_indices[index - m_min_index] = index;
@@ -253,8 +220,8 @@ private:
                 if (rhs_index == std::numeric_limits<std::size_t>::max()) {
                     return true;
                 }
-                const glm::vec3 position_lhs = m_vertex_positions[lhs_index - m_min_index];
-                const glm::vec3 position_rhs = m_vertex_positions[rhs_index - m_min_index];
+                const GEO::vec3 position_lhs = m_vertex_positions[lhs_index - m_min_index];
+                const GEO::vec3 position_rhs = m_vertex_positions[rhs_index - m_min_index];
                 if (position_lhs[axis0] != position_rhs[axis0]) {
                     return position_lhs[axis0] < position_rhs[axis0];
                 }
@@ -266,75 +233,73 @@ private:
         );
 
         // Create points for each unique vertex
-        glm::vec3 previous_position{
+        GEO::vec3 previous_position{
             std::numeric_limits<float>::lowest(),
             std::numeric_limits<float>::lowest(),
             std::numeric_limits<float>::lowest()
         };
-        erhe::geometry::Point_id point_id{0};
+        GEO::index_t vertex{0};
         std::size_t point_share_count{0};
         for (std::size_t index : m_sorted_vertex_indices) {
             if (index == std::numeric_limits<std::size_t>::max()) {
                 continue;
             }
-            const glm::vec3 position = m_vertex_positions[index - m_min_index];
-            if (position != previous_position) {
-                point_id = m_geometry.make_point();
+            const GEO::vec3 position = m_vertex_positions[index - m_min_index];
+            if (
+                (position.x != previous_position.x) ||
+                (position.y != previous_position.y) ||
+                (position.z != previous_position.z)
+            ) {
+                vertex = m_mesh.vertices.create_vertices(1);
                 previous_position = position;
             } else {
                 ++point_share_count;
             }
-            m_point_id_from_index[index - m_min_index] = point_id;
+            m_vertex_from_index[index - m_min_index] = vertex;
         }
-        log_primitive->trace(
-            "point count = {}, point share count = {}",
-            m_geometry.get_point_count(),
-            point_share_count
-        );
+        //log_primitive->trace(
+        //    "point count = {}, point share count = {}",
+        //    m_geometry.get_point_count(),
+        //    point_share_count
+        //);
     }
     void parse_triangles()
     {
         const std::size_t triangle_count = m_triangle_soup.index_data.size() / 3;
-        auto& corner_to_vertex_id = m_element_mappings.corner_to_vertex_id;
-        corner_to_vertex_id.resize(triangle_count * 3);
+        auto& corner_to_vertex = m_element_mappings.mesh_corner_to_vertex_buffer_index;
         // Fill in one to one mapping
-        auto& primitive_id_to_polygon_id = m_element_mappings.primitive_id_to_polygon_id;
-        primitive_id_to_polygon_id.resize(triangle_count);
-        std::iota(primitive_id_to_polygon_id.begin(), primitive_id_to_polygon_id.end(), 0);
-
-        log_primitive->trace(
-            "index count = {}, unique vertex count = {}, triangle count = {}",
-            m_triangle_soup.index_data.size(),
-            m_used_indices.size(),
-            triangle_count
-        );
-
-        m_geometry.reserve_polygons(triangle_count);
-        m_corner_id_start = m_geometry.m_next_corner_id;
-        m_index_from_corner_id.resize(3 * m_triangle_soup.index_data.size());
-
-        for (std::size_t i = 0; i < m_triangle_soup.index_data.size();) {
-            uint32_t v0 = m_triangle_soup.index_data[i++];
-            uint32_t v1 = m_triangle_soup.index_data[i++];
-            uint32_t v2 = m_triangle_soup.index_data[i++];
-            erhe::geometry::Point_id   p0         = m_point_id_from_index.at(v0 - m_min_index);
-            erhe::geometry::Point_id   p1         = m_point_id_from_index.at(v1 - m_min_index);
-            erhe::geometry::Point_id   p2         = m_point_id_from_index.at(v2 - m_min_index);
-            erhe::geometry::Polygon_id polygon_id = m_geometry.make_polygon();
-            erhe::geometry::Corner_id  c0         = m_geometry.make_polygon_corner(polygon_id, p0);
-            erhe::geometry::Corner_id  c1         = m_geometry.make_polygon_corner(polygon_id, p1);
-            erhe::geometry::Corner_id  c2         = m_geometry.make_polygon_corner(polygon_id, p2);
-            m_index_from_corner_id[c0 - m_corner_id_start] = v0;
-            m_index_from_corner_id[c1 - m_corner_id_start] = v1;
-            m_index_from_corner_id[c2 - m_corner_id_start] = v2;
-            corner_to_vertex_id[c0] = v0;
-            corner_to_vertex_id[c1] = v1;
-            corner_to_vertex_id[c2] = v2;
-            SPDLOG_LOGGER_TRACE(log_primitive, "vertex {} corner {} for polygon {}", v0, c0, polygon_id);
-            SPDLOG_LOGGER_TRACE(log_primitive, "vertex {} corner {} for polygon {}", v1, c1, polygon_id);
-            SPDLOG_LOGGER_TRACE(log_primitive, "vertex {} corner {} for polygon {}", v2, c2, polygon_id);
+        auto& primitive_to_facet = m_element_mappings.triangle_to_mesh_facet;
+        primitive_to_facet.resize(triangle_count);
+        std::iota(primitive_to_facet.begin(), primitive_to_facet.end(), 0);
+        m_mesh.facets.create_triangles(static_cast<GEO::index_t>(triangle_count));
+        m_index_from_corner.resize(m_mesh.facet_corners.nb());
+        corner_to_vertex.resize(m_mesh.facet_corners.nb());
+        for (GEO::index_t facet : m_mesh.facets) {
+            const uint32_t     i0 = m_triangle_soup.index_data[facet * 3 + 0];
+            const uint32_t     i1 = m_triangle_soup.index_data[facet * 3 + 1];
+            const uint32_t     i2 = m_triangle_soup.index_data[facet * 3 + 2];
+            const GEO::index_t v0 = m_vertex_from_index.at(i0 - m_min_index);
+            const GEO::index_t v1 = m_vertex_from_index.at(i1 - m_min_index);
+            const GEO::index_t v2 = m_vertex_from_index.at(i2 - m_min_index);
+            const GEO::index_t c0 = m_mesh.facets.corner(facet, 0);
+            const GEO::index_t c1 = m_mesh.facets.corner(facet, 1);
+            const GEO::index_t c2 = m_mesh.facets.corner(facet, 2);
+            ERHE_VERIFY(v0 != GEO::NO_INDEX);
+            ERHE_VERIFY(v1 != GEO::NO_INDEX);
+            ERHE_VERIFY(v2 != GEO::NO_INDEX);
+            ERHE_VERIFY(c0 != GEO::NO_INDEX);
+            ERHE_VERIFY(c1 != GEO::NO_INDEX);
+            ERHE_VERIFY(c2 != GEO::NO_INDEX);
+            m_mesh.facets.set_vertex(facet, 0, v0);
+            m_mesh.facets.set_vertex(facet, 1, v1);
+            m_mesh.facets.set_vertex(facet, 2, v2);
+            m_index_from_corner[c0] = i0;
+            m_index_from_corner[c1] = i1;
+            m_index_from_corner[c2] = i2;
+            corner_to_vertex   [c0] = i0;
+            corner_to_vertex   [c1] = i1;
+            corner_to_vertex   [c2] = i2;
         }
-        m_corner_id_end = m_geometry.m_next_corner_id;
     }
     void parse_vertex_data()
     {
@@ -346,23 +311,12 @@ private:
             const erhe::graphics::Vertex_attribute& attribute = attributes[attribute_index];
             const std::uint8_t* attribute_data_base = vertex_data_base + attribute.offset;
 
-            log_primitive->trace(
-                "Primitive attribute[{}]: name = {}, attribute type = {}[{}], "
-                "shader type = {}, data type = {}, offset = {}",
-                attribute_index,
-                attribute.name,
-                erhe::graphics::Vertex_attribute::c_str(attribute.usage.type),
-                attribute.usage.index,
-                erhe::graphics::c_str(attribute.shader_type),
-                erhe::dataformat::c_str(attribute.data_type),
-                attribute.offset
-            );
-
             if (is_per_point(attribute.usage.type)) {
                 for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
                     const std::uint8_t* src = attribute_data_base + vertex_stride * vertex_index;
-                    const auto point_id = m_point_id_from_index.at(vertex_index - m_min_index);
-                    if (point_id == std::numeric_limits<erhe::geometry::Point_id>::max()) {
+                    const GEO::index_t vertex = m_vertex_from_index.at(vertex_index - m_min_index);
+                    ERHE_VERIFY(vertex != GEO::NO_INDEX); // TODO Is this better or worse than using if condition below?
+                    if (vertex == GEO::NO_INDEX) {
                         continue;
                     }
                     switch (erhe::dataformat::get_format_kind(attribute.data_type)) {
@@ -370,44 +324,61 @@ private:
                             uint32_t value[4] = { 0u, 0u, 0u, 0u };
                             std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&value[0]);
                             erhe::dataformat::convert(src, attribute.data_type, dst, erhe::dataformat::Format::format_32_vec4_uint, 1.0f);
-                            put_point_attribute<uint32_t>(attribute, point_id, value);
+                            put_vertex_attribute<uint32_t>(attribute, vertex, value);
+                            break;
                         }
                         case erhe::dataformat::Format_kind::format_kind_signed_integer: {
-                            int32_t value[4] = { 0, 0, 0, 0 };
-                            std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&value[0]);
-                            erhe::dataformat::convert(src, attribute.data_type, dst, erhe::dataformat::Format::format_32_vec4_sint, 1.0f);
-                            put_point_attribute<int32_t>(attribute, point_id, value);
+                            geo_assert(false); // TODO
+                            break;
+                            // int32_t value[4] = { 0, 0, 0, 0 };
+                            // std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&value[0]);
+                            // erhe::dataformat::convert(src, attribute.data_type, dst, erhe::dataformat::Format::format_32_vec4_sint, 1.0f);
+                            // put_vertex_attribute<int32_t>(attribute, vertex, value);
                         }
                         case erhe::dataformat::Format_kind::format_kind_float: {
                             float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
                             std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&value[0]);
                             erhe::dataformat::convert(src, attribute.data_type, dst, erhe::dataformat::Format::format_32_vec4_float, 1.0f);
-                            put_point_attribute<float>(attribute, point_id, value);
+                            put_vertex_attribute<float>(attribute, vertex, value);
+                            break;
+                        }
+                        default: {
+                            geo_assert(false);
+                            break;
                         }
                     }
                 }
             } else {
-                for (erhe::geometry::Corner_id corner_id = m_corner_id_start; corner_id != m_corner_id_end; ++corner_id) {
-                    const std::size_t vertex_index = m_index_from_corner_id.at(corner_id - m_corner_id_start);
+                for (GEO::index_t corner : m_mesh.facet_corners) {
+                    const std::size_t vertex_index = m_index_from_corner.at(corner);
                     const std::uint8_t* src = attribute_data_base + vertex_stride * vertex_index;
                     switch (erhe::dataformat::get_format_kind(attribute.data_type)) {
                         case erhe::dataformat::Format_kind::format_kind_unsigned_integer: {
-                            uint32_t value[4] = { 0u, 0u, 0u, 0u };
-                            std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&value[0]);
-                            erhe::dataformat::convert(src, attribute.data_type, dst, erhe::dataformat::Format::format_32_vec4_uint, 1.0f);
-                            put_corner_attribute<uint32_t>(attribute, corner_id, value);
+                            geo_assert(false); // TOOD
+                            break;
+                            // uint32_t value[4] = { 0u, 0u, 0u, 0u };
+                            // std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&value[0]);
+                            // erhe::dataformat::convert(src, attribute.data_type, dst, erhe::dataformat::Format::format_32_vec4_uint, 1.0f);
+                            // put_corner_attribute<uint32_t>(attribute, corner, value);
                         }
                         case erhe::dataformat::Format_kind::format_kind_signed_integer: {
-                            int32_t value[4] = { 0, 0, 0, 0 };
-                            std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&value[0]);
-                            erhe::dataformat::convert(src, attribute.data_type, dst, erhe::dataformat::Format::format_32_vec4_sint, 1.0f);
-                            put_corner_attribute<int32_t>(attribute, corner_id, value);
+                            geo_assert(false); // TOOD
+                            break;
+                            //int32_t value[4] = { 0, 0, 0, 0 };
+                            //std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&value[0]);
+                            //erhe::dataformat::convert(src, attribute.data_type, dst, erhe::dataformat::Format::format_32_vec4_sint, 1.0f);
+                            //put_corner_attribute<int32_t>(attribute, corner, value);
                         }
                         case erhe::dataformat::Format_kind::format_kind_float: {
                             float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
                             std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&value[0]);
                             erhe::dataformat::convert(src, attribute.data_type, dst, erhe::dataformat::Format::format_32_vec4_float, 1.0f);
-                            put_corner_attribute<float>(attribute, corner_id, value);
+                            put_corner_attribute<float>(attribute, corner, value);
+                            break;
+                        }
+                        default: {
+                            geo_assert(false);
+                            break;
                         }
                     }
                 }
@@ -416,98 +387,95 @@ private:
     }
 
     template <typename T>
-    void put_point_attribute(const erhe::graphics::Vertex_attribute& attribute, erhe::geometry::Point_id point_id, T value[4])
+    void put_vertex_attribute(const erhe::graphics::Vertex_attribute& attribute, GEO::index_t vertex, T value[4])
     {
         switch (attribute.usage.type) {
             case erhe::graphics::Vertex_attribute::Usage_type::position: {
-                glm::vec3 pos = glm::vec3{value[0], value[1], value[2]};
-                m_point_locations[attribute.usage.index]->put(point_id, pos);
+                if constexpr (std::is_floating_point_v<T>) {
+                    m_mesh.vertices.point(vertex) = GEO::vec3{value[0], value[1], value[2]};
+                } else {
+                    geo_assert(false);
+                }
                 break;
             }
             case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: {
-                m_point_joint_indices[attribute.usage.index]->put(point_id, glm::uvec4{value[0], value[1], value[2], value[3]});
+                if constexpr (std::is_integral_v<T>) {
+                    m_attributes.vertex_joint_indices(attribute.usage.index).set(vertex, GEO::vec4u{value[0], value[1], value[2], value[3]});
+                } else {
+                    geo_assert(false);
+                }
                 break;
             }
             case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: {
-                m_point_joint_weights[attribute.usage.index]->put(point_id, glm::vec4{value[0], value[1], value[2], value[3]});
+                if constexpr (std::is_floating_point_v<T>) {
+                    m_attributes.vertex_joint_weights(attribute.usage.index).set(vertex, GEO::vec4f{value[0], value[1], value[2], value[3]});
+                } else {
+                    geo_assert(false);
+                }
                 break;
             }
             default: {
-                log_primitive->warn("Unsupported attribute {} {} {}", erhe::graphics::Vertex_attribute::c_str(attribute.usage.type), attribute.usage.index, attribute.name);
+                geo_assert(false);
                 break;
             }
         }
     }
 
     template <typename T>
-    void put_corner_attribute(const erhe::graphics::Vertex_attribute& attribute, erhe::geometry::Corner_id corner_id, T value[4])
+    void put_corner_attribute(const erhe::graphics::Vertex_attribute& attribute, GEO::index_t corner, T value[4])
     {
         switch (attribute.usage.type) {
             case erhe::graphics::Vertex_attribute::Usage_type::normal: {
-                glm::vec3 n = glm::vec3{value[0], value[1], value[2]};
-                m_corner_normals[attribute.usage.index]->put(corner_id, n);
+                geo_assert(attribute.usage.index == 0);
+                m_attributes.corner_normal.set(corner, GEO::vec3f{value[0], value[1], value[2]});
                 break; 
             }
 
             case erhe::graphics::Vertex_attribute::Usage_type::tangent: {
-                glm::vec4 t = glm::vec4{value[0], value[1], value[2], value[3]};
-                m_corner_tangents[attribute.usage.index]->put(corner_id, t);
+                geo_assert(attribute.usage.index == 0);
+                m_attributes.corner_tangent.set(corner, GEO::vec4f{value[0], value[1], value[2], value[3]});
                 break;
             }
 
             case erhe::graphics::Vertex_attribute::Usage_type::tex_coord: {
-                m_corner_texcoords[attribute.usage.index]->put(corner_id, glm::vec2{value[0], value[1]}); break;
+                m_attributes.corner_texcoord(attribute.usage.index).set(corner, GEO::vec2f{value[0], value[1]});
                 break;
             }
             case erhe::graphics::Vertex_attribute::Usage_type::color: {
-                m_corner_colors[attribute.usage.index]->put(corner_id, glm::vec4{value[0], value[1], value[2], value[3]});
+                m_attributes.corner_color(attribute.usage.index).set(corner, GEO::vec4f{value[0], value[1], value[2], value[3]});
                 break;
             }
             default: {
-                log_primitive->warn("Unsupported attribute {} {} {}", erhe::graphics::Vertex_attribute::c_str(attribute.usage.type), attribute.usage.index, attribute.name);
+                geo_assert(false);
                 break;
             }
         }
     }
 
-    erhe::geometry::Geometry&                 m_geometry;
-    const Triangle_soup&                      m_triangle_soup;
-    erhe::primitive::Element_mappings&        m_element_mappings;
-    std::size_t                               m_min_index            {0};
-    std::size_t                               m_max_index            {0};
-    std::vector<uint32_t>                     m_used_indices         {};
-    std::vector<glm::vec3>                    m_vertex_positions     {};
-    std::vector<std::size_t>                  m_sorted_vertex_indices{};
-    std::vector<erhe::geometry::Point_id>     m_point_id_from_index  {};
-    erhe::geometry::Corner_id                 m_corner_id_start      {};
-    erhe::geometry::Corner_id                 m_corner_id_end        {};
-    std::vector<std::size_t>                  m_index_from_corner_id {};
+    GEO::Mesh&                         m_mesh;
+    Mesh_attributes                    m_attributes;
+    const Triangle_soup&               m_triangle_soup;
+    erhe::primitive::Element_mappings& m_element_mappings;
+    std::size_t                        m_min_index            {0};
+    std::size_t                        m_max_index            {0};
+    std::vector<uint32_t>              m_used_indices         {};
+    std::vector<GEO::vec3>             m_vertex_positions     {};
+    std::vector<std::size_t>           m_sorted_vertex_indices{};
+    std::vector<GEO::index_t>          m_vertex_from_index    {};
+    GEO::index_t                       m_corner_start         {};
+    GEO::index_t                       m_corner_end           {};
+    std::vector<GEO::index_t>          m_index_from_corner    {};
 
-    std::vector<erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec3>*> m_corner_normals     ;
-    std::vector<erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec4>*> m_corner_tangents    ;
-    std::vector<erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec4>*> m_corner_bitangents  ;
-    std::vector<erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec2>*> m_corner_texcoords   ;
-    std::vector<erhe::geometry::Property_map<erhe::geometry::Corner_id, glm::vec4>*> m_corner_colors      ;
-    std::vector<erhe::geometry::Property_map<erhe::geometry::Corner_id, uint32_t>* > m_corner_indices     ;
-    std::vector<erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec3>* > m_point_locations    ;
-    std::vector<erhe::geometry::Property_map<erhe::geometry::Point_id, glm::uvec4>*> m_point_joint_indices;
-    std::vector<erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec4>* > m_point_joint_weights;
+    GEO::Attribute<GEO::Numeric::int32> m_corner_indices;
 };
 
-auto geometry_from_triangle_soup(const Triangle_soup& triangle_soup, erhe::primitive::Element_mappings& element_mappings) -> erhe::geometry::Geometry
+void mesh_from_triangle_soup(const Triangle_soup& triangle_soup, GEO::Mesh& mesh, erhe::primitive::Element_mappings& element_mappings)
 {
-    ERHE_PROFILE_FUNCTION();
+    ERHE_VERIFY(element_mappings.mesh_corner_to_vertex_buffer_index.empty());
+    ERHE_VERIFY(element_mappings.triangle_to_mesh_facet.empty());
 
-    ERHE_VERIFY(element_mappings.corner_to_vertex_id.empty());
-    ERHE_VERIFY(element_mappings.primitive_id_to_polygon_id.empty());
-
-    return erhe::geometry::Geometry{
-        "triangle_soup",
-        [&](erhe::geometry::Geometry& geometry) {
-            Geometry_from_triangle_soup builder{geometry, triangle_soup, element_mappings};
-            builder.build();
-        }
-    };
+    Mesh_from_triangle_soup builder{mesh, triangle_soup, element_mappings};
+    builder.build();
 }
 
 } // amespace erhe::primitive

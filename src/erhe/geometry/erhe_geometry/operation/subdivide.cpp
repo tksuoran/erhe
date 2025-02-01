@@ -1,77 +1,73 @@
 #include "erhe_geometry/operation/subdivide.hpp"
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_geometry/geometry_log.hpp"
-#include "erhe_profile/profile.hpp"
-
-#include <glm/glm.hpp>
+#include "erhe_geometry/operation/geometry_operation.hpp"
 
 #include <cstdint>
 #include <limits>
 
 namespace erhe::geometry::operation {
 
-Subdivide::Subdivide(const Geometry& src, Geometry& destination)
-    : Geometry_operation{src, destination}
+class Subdivide : public Geometry_operation
 {
-    ERHE_PROFILE_FUNCTION();
+public:
+    Subdivide(const Geometry& source, Geometry& destination);
 
+    void build();
+};
+
+Subdivide::Subdivide(const Geometry& source, Geometry& destination)
+    : Geometry_operation{source, destination}
+{
+}
+
+void Subdivide::build()
+{
     // Add midpoints to edges and connect to polygon center
 
-    // For each corner in the old polygon,
+    // For each corner in the src facet,
     // add one quad (centroid, previous edge midpoint, corner, next edge midpoint)
 
-    make_points_from_points();
-    make_polygon_centroids();
-    make_edge_midpoints();
+    make_dst_vertices_from_src_vertices();
+    make_facet_centroids();
+    make_edge_midpoints({ 0.5f });
 
-    source.for_each_polygon_const([&](auto& i) {
+    for (const GEO::index_t src_facet : source_mesh.facets) {
         //if (src_polygon.corner_count == 3)
         //{
         //    Polygon_id new_polygon_id = make_new_polygon_from_polygon(src_polygon_id);
         //    add_polygon_corners(new_polygon_id, src_polygon_id);
         //    continue;
         //}
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
-            const Point_id   a                      = j.prev_corner.point_id;
-            const Point_id   b                      = j.corner     .point_id;
-            const Point_id   c                      = j.next_corner.point_id;
-            const Polygon_id new_polygon_id         = make_new_polygon_from_polygon(i.polygon_id);
-            const Point_id   previous_edge_midpoint = get_edge_new_point(a, b);
-            const Point_id   next_edge_midpoint     = get_edge_new_point(b, c);
-            if (previous_edge_midpoint == std::numeric_limits<uint32_t>::max()) {
-                log_subdivide->warn("midpoint for edge {} {} not found", std::min(a, b), std::max(a, b));
-                return;
+        const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
+        for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < src_corner_count; ++local_src_facet_corner) {
+            const GEO::index_t prev_src_corner        = source_mesh.facets.corner(src_facet, (local_src_facet_corner + src_corner_count - 1) % src_corner_count);
+            const GEO::index_t src_corner             = source_mesh.facets.corner(src_facet, local_src_facet_corner);
+            const GEO::index_t next_src_corner        = source_mesh.facets.corner(src_facet, (local_src_facet_corner + 1) % src_corner_count);
+            const GEO::index_t a                      = source_mesh.facet_corners.vertex(prev_src_corner);
+            const GEO::index_t b                      = source_mesh.facet_corners.vertex(src_corner     );
+            const GEO::index_t c                      = source_mesh.facet_corners.vertex(next_src_corner);
+            const GEO::index_t previous_edge_midpoint = get_src_edge_new_vertex(a, b, 0);
+            const GEO::index_t next_edge_midpoint     = get_src_edge_new_vertex(b, c, 0);
+            if (previous_edge_midpoint == GEO::NO_INDEX) {
+                continue;
             }
             if (next_edge_midpoint == std::numeric_limits<uint32_t>::max()) {
-                log_subdivide->warn("midpoint for edge {} {} not found", std::min(b, c), std::max(b, c));
-                return;
+                continue;
             }
-            make_new_corner_from_point           (new_polygon_id, previous_edge_midpoint);
-            make_new_corner_from_corner          (new_polygon_id, j.corner_id);
-            make_new_corner_from_point           (new_polygon_id, next_edge_midpoint);
-            make_new_corner_from_polygon_centroid(new_polygon_id, i.polygon_id);
-            //log_subdivide.warn(
-            //    "Polygon {} = {} {} {} {}\n",
-            //    new_polygon_id,
-            //    previous_edge_midpoint,
-            //    source.corners[j.corner_id].point_id,
-            //    next_edge_midpoint,
-            //    old_polygon_centroid_to_new_points[i.polygon_id]
-            //);
-        });
-    });
+            const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, 4);
+            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 0, previous_edge_midpoint);
+            make_new_dst_corner_from_src_corner        (new_dst_facet, 1, src_corner);
+            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 2, next_edge_midpoint);
+            make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 3, src_facet);
+        }
+    }
 
     post_processing();
 }
 
-auto subdivide(const Geometry& source) -> Geometry
+void subdivide(const Geometry& source, Geometry& destination)
 {
-    return Geometry{
-        fmt::format("subdivide({})", source.name),
-        [&source](auto& result) {
-            Subdivide operation{source, result};
-        }
-    };
+    Subdivide operation{source, destination};
+    operation.build();
 }
 
 } // namespace erhe::geometry::operation

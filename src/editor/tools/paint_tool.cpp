@@ -83,27 +83,6 @@ auto Paint_vertex_command::try_call() -> bool
 
 #pragma endregion Commands
 
-namespace {
-
-auto vertex_id_from_corner_id(
-    erhe::scene::Mesh&              mesh,
-    const erhe::geometry::Geometry& geometry,
-    const erhe::geometry::Corner_id corner_id
-) -> std::optional<uint32_t>
-{
-    for (const auto& primitive : mesh.get_primitives()) {
-        if (primitive.render_shape) {
-            const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_primitive = primitive.render_shape->get_geometry_const();
-            if (geometry_in_primitive.get() == &geometry) {
-                return primitive.render_shape->get_vertex_id_from_corner_id(corner_id);
-            }
-        }
-    }
-    return std::nullopt;
-}
-
-}
-
 Paint_tool::Paint_tool(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
@@ -122,10 +101,10 @@ Paint_tool::Paint_tool(
 {
     ERHE_PROFILE_FUNCTION();
 
-    set_base_priority(c_priority);
-    set_description  ("Paint Tool");
-    set_flags        (Tool_flags::toolbox);
-    set_icon         (icon_set.icons.brush_small);
+    set_base_priority  (c_priority);
+    set_description    ("Paint Tool");
+    set_flags          (Tool_flags::toolbox);
+    set_icon           (icon_set.icons.brush_small);
     tools.register_tool(this);
 
     m_paint_vertex_command        .set_host(this);
@@ -214,71 +193,70 @@ void Paint_tool::tool_render(const Render_context& context)
     erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
     line_renderer.set_thickness(5.0f);
 
-    auto* scene_view = get_hover_scene_view();
+    Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
         return;
     }
 
     const Hover_entry& content = scene_view->get_hover(Hover_entry::content_slot);
     if (
-        !content.valid                ||
-        !content.position.has_value() ||
-        !content.normal.has_value()   ||
+        !content.valid                  ||
+        !content.position.has_value()   ||
+        !content.normal.has_value()     ||
+        (content.scene_mesh == nullptr) ||
         !content.geometry
     ) {
         return;
     }
 
-    ERHE_VERIFY(content.mesh != nullptr);
-    ERHE_VERIFY(content.primitive_index != std::numeric_limits<std::size_t>::max());
+    ERHE_VERIFY(content.scene_mesh != nullptr);
+    ERHE_VERIFY(content.scene_mesh_primitive_index != std::numeric_limits<std::size_t>::max());
 
     erhe::geometry::Geometry& geometry = *content.geometry.get();
-    auto* const point_locations = geometry.point_attributes().find<glm::vec3>(erhe::geometry::c_point_locations);
-    if (point_locations == nullptr) {
-        return;
-    }
+    GEO::Mesh& geo_mesh = geometry.get_mesh();
 
-    const erhe::geometry::Polygon_id polygon_id = static_cast<erhe::geometry::Polygon_id>(content.polygon_id);
-    const erhe::geometry::Polygon&   polygon    = geometry.polygons.at(polygon_id);
-    if (polygon.corner_count == 0) {
+    const GEO::index_t facet = content.facet;
+    const GEO::index_t corner_count = geo_mesh.facets.nb_corners(content.facet);
+    if (corner_count < 3) {
         return;
     }
 
     const glm::vec3 hover_position_in_world = content.position.value();
 
-    const auto* node = content.mesh->get_node();
+    const erhe::scene::Node* node = content.scene_mesh->get_node();
     if (node == nullptr) {
         return;
     }
 
     const glm::vec3 hover_position_in_mesh = node->transform_point_from_world_to_local(hover_position_in_world);
 
-    float                     max_distance_squared = std::numeric_limits<float>::max();
-    erhe::geometry::Point_id  nearest_point_id     = 0;
-    erhe::geometry::Corner_id nearest_corner_id    = 0;
-    std::vector<erhe::geometry::Point_id> corner_points;
-    polygon.for_each_corner_const(
-        geometry,
-        [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i) {
-            const erhe::geometry::Point_id point_id = i.corner.point_id;
-            const glm::vec3 p_in_mesh = point_locations->get(point_id);
-            corner_points.push_back(point_id);
-            const float d2 = glm::distance2(hover_position_in_mesh, p_in_mesh);
-            if (d2 < max_distance_squared) {
-                max_distance_squared = d2;
-                nearest_point_id = point_id;
-                nearest_corner_id = i.corner_id;
-            }
+    float        max_distance_squared = std::numeric_limits<float>::max();
+    GEO::index_t nearest_vertex       = 0;
+    GEO::index_t nearest_corner       = 0;
+    struct Vertex_position {
+        GEO::index_t vertex;
+        glm::vec3    position;
+    };
+    std::vector<Vertex_position> vertex_positions;
+    for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
+        const GEO::index_t vertex = geo_mesh.facet_corners.vertex(corner);
+        const GEO::vec3 p_in_mesh_ = geo_mesh.vertices.point(vertex);
+        const glm::vec3 p_in_mesh = to_glm_vec3(p_in_mesh_);
+        vertex_positions.emplace_back(vertex, p_in_mesh);
+        const float d2 = glm::distance2(hover_position_in_mesh, p_in_mesh);
+        if (d2 < max_distance_squared) {
+            max_distance_squared = d2;
+            nearest_vertex = vertex;
+            nearest_corner = corner;
         }
-    );
+    }
 
     glm::vec3 n = glm::normalize(content.normal.value());
 
-    for (const erhe::geometry::Point_id point_id : corner_points) {
-        const glm::vec3 p_in_mesh = point_locations->get(point_id);
-        const glm::vec3 p = node->transform_point_from_local_to_world(p_in_mesh);
+    for (const Vertex_position& vertex_position : vertex_positions) {
+        const glm::vec3 p = node->transform_point_from_local_to_world(vertex_position.position);
         line_renderer.add_lines(
-            (point_id == nearest_point_id) 
+            (vertex_position.vertex == nearest_vertex) 
                 ? glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
                 : glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
             {{ p, p + 0.2f * n }}
@@ -312,25 +290,46 @@ auto Paint_tool::try_ready() -> bool
     return (hover != nullptr) && (hover->mask == Hover_entry::content_bit) && hover->valid;
 }
 
+auto Paint_tool::vertex_buffer_index_from_scnene_mesh_primitive_corner(
+    const erhe::scene::Mesh& scene_mesh,
+    const std::size_t        scene_mesh_primitive_index,
+    const GEO::index_t       geo_mesh_corner
+) -> std::optional<uint32_t>
+{
+    const std::vector<erhe::primitive::Primitive>& primitives = scene_mesh.get_primitives();
+    if (scene_mesh_primitive_index >= primitives.size()) {
+        return {};
+    }
+    const erhe::primitive::Primitive& primitive = primitives[scene_mesh_primitive_index];
+    if (!primitive.render_shape) {
+        return {};
+    }
+    const erhe::primitive::Element_mappings& element_mappings = primitive.render_shape->get_element_mappings();
+    if (geo_mesh_corner >= element_mappings.mesh_corner_to_vertex_buffer_index.size()) {
+        return {};
+    }
+    return element_mappings.mesh_corner_to_vertex_buffer_index[geo_mesh_corner];
+}
+
 void Paint_tool::paint_corner(
-    erhe::scene::Mesh&              mesh,
-    const erhe::geometry::Geometry& geometry,
-    erhe::geometry::Corner_id       corner_id,
-    const glm::vec4                 color
+    erhe::scene::Mesh& scene_mesh,
+    const std::size_t  scene_mesh_primitive_index,
+    const GEO::index_t corner,
+    const glm::vec4    color
 )
 {
-    const auto vertex_id_opt = vertex_id_from_corner_id(mesh, geometry, corner_id);
+    const auto vertex_id_opt = vertex_buffer_index_from_scnene_mesh_primitive_corner(scene_mesh, scene_mesh_primitive_index, corner);
     if (!vertex_id_opt.has_value()) {
         return;
     }
-    paint_vertex(mesh, geometry, vertex_id_opt.value(), color);
+    paint_vertex(scene_mesh, scene_mesh_primitive_index, vertex_id_opt.value(), color);
 }
 
 void Paint_tool::paint_vertex(
-    erhe::scene::Mesh&              mesh,
-    const erhe::geometry::Geometry& geometry,
-    const uint32_t                  vertex_id,
-    const glm::vec4                 color
+    erhe::scene::Mesh& scene_mesh,
+    const std::size_t  scene_mesh_primitive_index,
+    const uint32_t     vertex_id,
+    const glm::vec4    color
 )
 {
     using Vertex_attribute = erhe::graphics::Vertex_attribute;
@@ -345,52 +344,48 @@ void Paint_tool::paint_vertex(
 
     std::vector<std::uint8_t> buffer;
 
-    for (erhe::primitive::Primitive& primitive : mesh.get_mutable_primitives()) {
-        if (!primitive.render_shape) {
-            continue;
-        }
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry_in_mesh = primitive.render_shape->get_geometry();
-        if (geometry_in_mesh.get() != &geometry) {
-            continue;
-        }
-        const erhe::primitive::Buffer_mesh& buffer_mesh = primitive.render_shape->get_renderable_mesh();
-        const std::size_t range_byte_offset = buffer_mesh.vertex_buffer_range.byte_offset;
-        if (attribute->data_type == erhe::dataformat::Format::format_32_vec4_float) {
-            buffer.resize(sizeof(float) * 4);
-            auto* const ptr = reinterpret_cast<float*>(buffer.data());
-            ptr[0] = color.x;
-            ptr[1] = color.y;
-            ptr[2] = color.z;
-            ptr[3] = color.w;
-            mesh_memory.gl_buffer_transfer_queue.enqueue(
-                mesh_memory.gl_vertex_buffer,
-                range_byte_offset + vertex_offset,
-                std::move(buffer)
-            );
-        } else if (attribute->data_type == erhe::dataformat::Format::format_8_vec4_unorm) {
-            buffer.resize(sizeof(uint8_t) * 4);
-            auto* const ptr = reinterpret_cast<uint8_t*>(buffer.data());
-            ptr[0] = erhe::dataformat::float_to_unorm8(color.x);
-            ptr[1] = erhe::dataformat::float_to_unorm8(color.y);
-            ptr[2] = erhe::dataformat::float_to_unorm8(color.z);
-            ptr[3] = erhe::dataformat::float_to_unorm8(color.w);
-            mesh_memory.gl_buffer_transfer_queue.enqueue(
-                mesh_memory.gl_vertex_buffer,
-                range_byte_offset + vertex_offset,
-                std::move(buffer)
-            );
-        }
+    const std::vector<erhe::primitive::Primitive>& primitives = scene_mesh.get_mutable_primitives();
+    const erhe::primitive::Primitive& primitive = primitives[scene_mesh_primitive_index];
+    if (!primitive.render_shape) {
+        return ;
+    }
 
-        break;
+    //  const std::shared_ptr<GEO::Mesh>& geo_mesh = primitive.render_shape->get_mesh();
+    const erhe::primitive::Buffer_mesh& buffer_mesh = primitive.render_shape->get_renderable_mesh();
+    const std::size_t range_byte_offset = buffer_mesh.vertex_buffer_range.byte_offset;
+    if (attribute->data_type == erhe::dataformat::Format::format_32_vec4_float) {
+        buffer.resize(sizeof(float) * 4);
+        auto* const ptr = reinterpret_cast<float*>(buffer.data());
+        ptr[0] = color.x;
+        ptr[1] = color.y;
+        ptr[2] = color.z;
+        ptr[3] = color.w;
+        mesh_memory.gl_buffer_transfer_queue.enqueue(
+            mesh_memory.gl_vertex_buffer,
+            range_byte_offset + vertex_offset,
+            std::move(buffer)
+        );
+    } else if (attribute->data_type == erhe::dataformat::Format::format_8_vec4_unorm) {
+        buffer.resize(sizeof(uint8_t) * 4);
+        auto* const ptr = reinterpret_cast<uint8_t*>(buffer.data());
+        ptr[0] = erhe::dataformat::float_to_unorm8(color.x);
+        ptr[1] = erhe::dataformat::float_to_unorm8(color.y);
+        ptr[2] = erhe::dataformat::float_to_unorm8(color.z);
+        ptr[3] = erhe::dataformat::float_to_unorm8(color.w);
+        mesh_memory.gl_buffer_transfer_queue.enqueue(
+            mesh_memory.gl_vertex_buffer,
+            range_byte_offset + vertex_offset,
+            std::move(buffer)
+        );
     }
 }
 
 void Paint_tool::paint()
 {
-    m_point_id.reset();
-    m_corner_id.reset();
+    m_vertex = GEO::NO_INDEX;
+    m_corner = GEO::NO_INDEX;
 
-    auto* scene_view = get_hover_scene_view();
+    Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
         return;
     }
@@ -400,77 +395,63 @@ void Paint_tool::paint()
         return;
     }
 
-    ERHE_VERIFY(content.mesh != nullptr);
-    ERHE_VERIFY(content.primitive_index != std::numeric_limits<std::size_t>::max());
+    ERHE_VERIFY(content.scene_mesh != nullptr);
+    ERHE_VERIFY(content.scene_mesh_primitive_index != std::numeric_limits<std::size_t>::max());
 
     erhe::geometry::Geometry& geometry = *content.geometry.get();
-    auto* const point_locations = geometry.point_attributes().find<glm::vec3>(
-        erhe::geometry::c_point_locations
-    );
-    if (point_locations == nullptr) {
-        return;
-    }
+    GEO::Mesh& geo_mesh = geometry.get_mesh();
 
-    const erhe::geometry::Polygon_id polygon_id = static_cast<erhe::geometry::Polygon_id>(content.polygon_id);
-    const erhe::geometry::Polygon&   polygon    = geometry.polygons.at(polygon_id);
-    if (polygon.corner_count == 0) {
+    const GEO::index_t facet = content.facet;
+    const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+    if (corner_count < 3) {
         return;
     }
 
     const glm::vec3 hover_position_in_world = content.position.value();
 
-    const auto* node = content.mesh->get_node();
+    const erhe::scene::Node* node = content.scene_mesh->get_node();
     if (node == nullptr) {
         return;
     }
 
     const glm::vec3 hover_position_in_mesh = node->transform_point_from_world_to_local(hover_position_in_world);
 
-    float                     max_distance_squared = std::numeric_limits<float>::max();
-    erhe::geometry::Point_id  nearest_point_id     = 0;
-    erhe::geometry::Corner_id nearest_corner_id    = 0;
-    polygon.for_each_corner_const(
-        geometry,
-        [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i) {
-            const erhe::geometry::Point_id point_id = i.corner.point_id;
-            const glm::vec3 p = point_locations->get(point_id);
-            const float d2 = glm::distance2(hover_position_in_mesh, p);
-            if (d2 < max_distance_squared) {
-                max_distance_squared = d2;
-                nearest_point_id = point_id;
-                nearest_corner_id = i.corner_id;
-            }
+    float        max_distance_squared = std::numeric_limits<float>::max();
+    GEO::index_t nearest_vertex = GEO::NO_INDEX;
+    GEO::index_t nearest_corner = GEO::NO_INDEX;
+    for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
+        const GEO::index_t vertex = geo_mesh.facet_corners.vertex(corner);
+        const GEO::vec3 p_ = geo_mesh.vertices.point(vertex);
+        const glm::vec3 p = to_glm_vec3(p_);
+        const float d2 = glm::distance2(hover_position_in_mesh, p);
+        if (d2 < max_distance_squared) {
+            max_distance_squared = d2;
+            nearest_vertex = vertex;
+            nearest_corner = corner;
         }
-    );
+    }
 
-    m_point_id  = nearest_point_id;
-    m_corner_id = nearest_corner_id;
+    m_vertex = nearest_vertex;
+    m_corner = nearest_corner;
 
     glm::vec4 color = m_palette.at(m_selected_palette_slot);
     switch (m_paint_mode) {
         case Paint_mode::Corner: {
-            paint_corner(*content.mesh, geometry, nearest_corner_id, color);
+            paint_corner(*content.scene_mesh, content.scene_mesh_primitive_index, nearest_corner, color);
             break;
         }
         case Paint_mode::Point: {
-            const erhe::geometry::Corner& corner = geometry.corners.at(nearest_corner_id);
-            const erhe::geometry::Point&  point  = geometry.points.at(corner.point_id);
-            //const uint32_t vertex_id = content.p
-            point.for_each_corner_const(
-                geometry,
-                [&](const auto& i) {
-                    paint_corner(*content.mesh, geometry, i.corner_id, color);
-                }
-            );
+            const GEO::index_t vertex = geo_mesh.facet_corners.vertex(nearest_corner);
+            const std::vector<GEO::index_t>& vertex_corners = geometry.get_vertex_corners(vertex);
+            for (GEO::index_t corner : vertex_corners) {
+                paint_corner(*content.scene_mesh, content.scene_mesh_primitive_index, corner, color);
+            }
             break;
         }
         case Paint_mode::Polygon: {
-            polygon.for_each_corner_const(
-                geometry,
-                [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i) {
-                    paint_corner(*content.mesh, geometry, i.corner_id, color);
-                }
-            );
+            for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
+                paint_corner(*content.scene_mesh, content.scene_mesh_primitive_index, corner, color);
+            }
             break;
         }
     }
@@ -513,22 +494,24 @@ void Paint_tool::imgui()
     ImGui::SetNextItemWidth(200);
     erhe::imgui::make_combo("Paint mode", m_paint_mode, c_paint_mode_strings, IM_ARRAYSIZE(c_paint_mode_strings));
 
-    if (m_point_id.has_value()) {
-        ImGui::Text("Point: %u", m_point_id.value());
+    if (m_vertex != GEO::NO_INDEX) {
+        ImGui::Text("Vertex: %u", m_vertex);
     }
-    if (m_corner_id.has_value()) {
-        ImGui::Text("Corner: %u", m_corner_id.value());
+    if (m_corner != GEO::NO_INDEX) {
+        ImGui::Text("Corner: %u", m_corner);
     }
 
-    int corner_count = 3;
-    for (auto& ngon_color : m_ngon_colors) {
+    {
+        int corner_count = 3;
+        for (auto& ngon_color : m_ngon_colors) {
+            std::string label = fmt::format("{}-gon", corner_count);
+            ImGui::ColorEdit4(label.c_str(), &ngon_color.x, ImGuiColorEditFlags_Float);
+            ++corner_count;
+        }
         std::string label = fmt::format("{}-gon", corner_count);
-        ImGui::ColorEdit4(label.c_str(), &ngon_color.x, ImGuiColorEditFlags_Float);
-        ++corner_count;
-    }
-    std::string label = fmt::format("{}-gon", corner_count);
-    if (ImGui::Button(label.c_str(), button_size)) {
-        m_ngon_colors.push_back(glm::vec4{1.0f, 1.0f, 1.0f, 1.0f});
+        if (ImGui::Button(label.c_str(), button_size)) {
+            m_ngon_colors.push_back(glm::vec4{1.0f, 1.0f, 1.0f, 1.0f});
+        }
     }
     if (ImGui::Button("Color Selection") && !m_ngon_colors.empty()) {
         const auto& selection = m_context.selection->get_selection();
@@ -543,7 +526,9 @@ void Paint_tool::imgui()
                     continue;
                 }
             }
-            for (erhe::primitive::Primitive& primitive : mesh->get_mutable_primitives()) {
+            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
+            for (size_t primitive_index = 0, end = primitives.size(); primitive_index < end; ++primitive_index) {
+                erhe::primitive::Primitive& primitive = primitives[primitive_index];
                 if (!primitive.render_shape) {
                     continue;
                 }
@@ -551,22 +536,19 @@ void Paint_tool::imgui()
                 if (!geometry) {
                     continue;
                 }
-                geometry->for_each_polygon_const(
-                    [&](const auto& i) {
-                        const std::size_t color_index = std::min(
-                            static_cast<std::size_t>(i.polygon.corner_count),
-                            m_ngon_colors.size() - 1
-                        );
+                const GEO::Mesh& geo_mesh = geometry->get_mesh();
+                for (GEO::index_t facet : geo_mesh.facets) {
+                    const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+                    const std::size_t color_index = std::min(
+                        static_cast<std::size_t>(corner_count),
+                        m_ngon_colors.size() - 1
+                    );
 
-                        const glm::vec4 color = m_ngon_colors.at(color_index);
-                        i.polygon.for_each_corner_const(
-                            *geometry.get(),
-                            [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i) {
-                                paint_corner(*mesh, *geometry.get(), i.corner_id, color);
-                            }
-                        );
+                    const glm::vec4 color = m_ngon_colors.at(color_index);
+                    for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
+                        paint_corner(*mesh, primitive_index, corner, color);
                     }
-                );
+                }
             }
         }
     }

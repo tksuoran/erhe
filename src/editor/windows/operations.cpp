@@ -40,6 +40,7 @@ Operations::Operations(
     , m_bake_transform_command{commands, "Geometry.BakeTransform",             [this]() -> bool { bake_transform(); return true; } }
     , m_reverse_command       {commands, "Geometry.Reverse",                   [this]() -> bool { reverse       (); return true; } }
     , m_repair_command        {commands, "Geometry.Repair",                    [this]() -> bool { repair        (); return true; } }
+    , m_weld_command          {commands, "Geometry.Weld",                      [this]() -> bool { weld          (); return true; } }
 
     , m_difference_command    {commands, "Geometry.Difference",                [this]() -> bool { difference    (); return true; } }
     , m_intersection_command  {commands, "Geometry.Intersection",              [this]() -> bool { intersection  (); return true; } }
@@ -56,6 +57,7 @@ Operations::Operations(
     , m_ambo_command          {commands, "Geometry.Conway.Ambo",               [this]() -> bool { ambo          (); return true; } }
     , m_truncate_command      {commands, "Geometry.Conway.Truncate",           [this]() -> bool { truncate      (); return true; } }
     , m_gyro_command          {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
+    , m_chamfer_command       {commands, "Geometry.Conway.Chamfer",            [this]() -> bool { chamfer       (); return true; } }
 {
     commands.register_command(&m_merge_command         );
     commands.register_command(&m_triangulate_command   );
@@ -63,10 +65,11 @@ Operations::Operations(
     commands.register_command(&m_bake_transform_command);
     commands.register_command(&m_reverse_command       );
     commands.register_command(&m_repair_command        );
+    commands.register_command(&m_weld_command          );
 
-    commands.register_command(&m_difference_command);
+    commands.register_command(&m_difference_command  );
     commands.register_command(&m_intersection_command);
-    commands.register_command(&m_union_command);
+    commands.register_command(&m_union_command       );
 
     commands.register_command(&m_catmull_clark_command);
     commands.register_command(&m_sqrt3_command        );
@@ -80,6 +83,7 @@ Operations::Operations(
     commands.register_command(&m_ambo_command    );
     commands.register_command(&m_truncate_command);
     commands.register_command(&m_gyro_command    );
+    commands.register_command(&m_chamfer_command );
 
     commands.bind_command_to_menu(&m_merge_command,          "Geometry.Merge");
     commands.bind_command_to_menu(&m_triangulate_command,    "Geometry.Triangulate");
@@ -87,6 +91,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_bake_transform_command, "Geometry.Bake-Transform");
     commands.bind_command_to_menu(&m_reverse_command,        "Geometry.Reverse");
     commands.bind_command_to_menu(&m_repair_command,         "Geometry.Repair");
+    commands.bind_command_to_menu(&m_weld_command,           "Geometry.Weld");
 
     commands.bind_command_to_menu(&m_difference_command,     "Geometry.CSG.Difference");
     commands.bind_command_to_menu(&m_intersection_command,   "Geometry.CSG.Intersection");
@@ -103,6 +108,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_ambo_command    , "Geometry.Conway Operations.Ambo");
     commands.bind_command_to_menu(&m_truncate_command, "Geometry.Conway Operations.Truncate");
     commands.bind_command_to_menu(&m_gyro_command    , "Geometry.Conway Operations.Gyro");
+    commands.bind_command_to_menu(&m_chamfer_command , "Geometry.Conway Operations.Chamfer");
 }
 
 auto Operations::mesh_context() -> Mesh_operation_parameters
@@ -289,6 +295,9 @@ void Operations::imgui()
     if (make_button("Gyro", has_selection_mode, button_size)) {
         gyro();
     }
+    if (make_button("Chamfer", has_selection_mode, button_size)) {
+        chamfer();
+    }
     if (make_button("Dual", has_selection_mode, button_size)) {
         dual();
     }
@@ -306,6 +315,9 @@ void Operations::imgui()
     }
     if (make_button("Repair", has_selection_mode, button_size)) {
         repair();
+    }
+    if (make_button("Weld", has_selection_mode, button_size)) {
+        weld();
     }
     //// if (make_button("GUI Quad", erhe::imgui::Item_mode::normal, button_size)) {
     ////     Scene_builder* scene_builder = get<Scene_builder>().get();
@@ -398,6 +410,12 @@ void Operations::repair()
     executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Repair_operation>(mesh_context()));});
 }
 
+void Operations::weld()
+{
+    tf::Executor& executor = m_context.operation_stack->get_executor();
+    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Weld_operation>(mesh_context()));});
+}
+
 void Operations::difference()
 {
     tf::Executor& executor = m_context.operation_stack->get_executor();
@@ -480,6 +498,12 @@ void Operations::gyro()
 {
     tf::Executor& executor = m_context.operation_stack->get_executor();
     executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Gyro_operation>(mesh_context()));});
+}
+
+void Operations::chamfer()
+{
+    tf::Executor& executor = m_context.operation_stack->get_executor();
+    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Chamfer_operation>(mesh_context()));});
 }
 
 } // namespace editor

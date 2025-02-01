@@ -1,393 +1,55 @@
 #pragma once
 
-#include "erhe_geometry/property_map.hpp"
-#include "erhe_geometry/property_map_collection.hpp"
-#include "erhe_geometry/types.hpp"
+#include <geogram/mesh/mesh.h>
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <functional>
 #include <optional>
-#include <string_view>
-#include <vector>
 
 namespace spdlog {
     class logger;
 }
 
-namespace GEO {
-    class Mesh;
-}
-
-namespace erhe::geometry {
-
-inline constexpr Property_map_descriptor c_point_locations      { "point_locations"      , Transform_mode::mat_mul_vec3_one,                      Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_point_normals        { "point_normals"        , Transform_mode::normalize_normal_mat_mul_vec3_zero,    Interpolation_mode::normalized };
-inline constexpr Property_map_descriptor c_point_normals_smooth { "point_normals_smooth" , Transform_mode::normalize_normal_mat_mul_vec3_zero,    Interpolation_mode::normalized };
-inline constexpr Property_map_descriptor c_point_texcoords      { "point_texcoords"      , Transform_mode::none,                                  Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_point_tangents       { "point_tangents"       , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::normalized_vec3_float };
-inline constexpr Property_map_descriptor c_point_bitangents     { "point_bitangents"     , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::normalized_vec3_float };
-inline constexpr Property_map_descriptor c_point_colors         { "point_colors"         , Transform_mode::none,                                  Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_point_joint_indices  { "point_joint_indices"  , Transform_mode::none,                                  Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_point_joint_weights  { "point_joint_weights"  , Transform_mode::none,                                  Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_point_aniso_control  { "point_aniso_control"  , Transform_mode::none,                                  Interpolation_mode::linear };
-inline constexpr Property_map_descriptor c_corner_normals       { "corner_normals"       , Transform_mode::normalize_normal_mat_mul_vec3_zero,    Interpolation_mode::none }; // No interpolation; these are? recomputed
-inline constexpr Property_map_descriptor c_corner_texcoords     { "corner_texcoords"     , Transform_mode::none,                                  Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_tangents      { "corner_tangents"      , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_bitangents    { "corner_bitangents"    , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_colors        { "corner_colors"        , Transform_mode::none,                                  Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_aniso_control { "corner_aniso_control" , Transform_mode::none,                                  Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_corner_indices       { "corner_indices"       , Transform_mode::none,                                  Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_centroids    { "polygon_centroids"    , Transform_mode::mat_mul_vec3_one,                      Interpolation_mode::none }; // No interpolation; these are recomputed
-inline constexpr Property_map_descriptor c_polygon_normals      { "polygon_normals"      , Transform_mode::normalize_normal_mat_mul_vec3_zero,    Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_tangents     { "polygon_tangents"     , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_bitangents   { "polygon_bitangents"   , Transform_mode::normalize_mal_mul_vec3_zero_and_float, Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_colors       { "polygon_colors"       , Transform_mode::none,                                  Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_aniso_control{ "polygon_aniso_control", Transform_mode::none,                                  Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_ids_vec3     { "polygon_ids_vec"      , Transform_mode::none,                                  Interpolation_mode::none };
-inline constexpr Property_map_descriptor c_polygon_ids_uint     { "polygon_ids_uint"     , Transform_mode::none,                                  Interpolation_mode::none };
-
-class Point;
-class Polygon;
-class Geometry;
-class Edge;
-
-class Corner
-{
-public:
-    Point_id   point_id  {0};
-    Polygon_id polygon_id{0};
-
-    template<typename T>
-    void smooth_normalize(
-        const Corner_id                            this_corner_id,
-        const Geometry&                            geometry,
-        Property_map<Corner_id, T>&                corner_attribute,
-        const Property_map<Polygon_id, T>&         polygon_attribute,
-        const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-        const float                                cos_max_smoothing_angle
-    ) const;
-
-    template<typename T>
-    void smooth_average(
-        const Corner_id                           this_corner_id,
-        const Geometry&                           geometry,
-        Property_map<Corner_id, T>&               new_corner_attribute,
-        const Property_map<Corner_id, T>&         old_corner_attribute,
-        const Property_map<Corner_id, glm::vec3>& corner_normals,
-        const Property_map<Point_id,  glm::vec3>& point_normals
-    ) const;
+enum class Transform_mode : unsigned int {
+    none = 0,                              // texture coordinates, colors, ...
+    mat_mul_vec3_one,                      // position vectors
+    mat_mul_vec3_zero,                     // transform using vec4(v, 0.0)
+    normalize_mat_mul_vec3_zero,           // transform using vec4(v, 0.0), normalize
+    normalize_mat_mul_vec3_zero_and_float, // tangent and bitangent with extra float that is not to be transformed
+    normal_mat_mul_vec3_zero,              // normal - transform using normal matrix
+    normalize_normal_mat_mul_vec3_zero     // normal - transform using normal matrix, then normalize
 };
 
-class Point
-{
-public:
-    class Point_corner_context
-    {
-    public:
-        Geometry&       geometry;
-        Point_corner_id point_corner_id{0};
-        Corner_id       corner_id      {0};
-        Corner&         corner;
-        bool            break_         {false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    void for_each_corner(
-        Geometry&                                          geometry,
-        std::function<void(Point_corner_context& context)> callback
-    );
-
-    class Point_corner_context_const
-    {
-    public:
-        const Geometry& geometry;
-        Point_corner_id point_corner_id{0};
-        Corner_id       corner_id      {0};
-        const Corner&   corner;
-        bool            break_         {false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    void for_each_corner_const(
-        const Geometry&                                          geometry,
-        std::function<void(Point_corner_context_const& context)> callback
-    ) const;
-
-    class Point_corner_neighborhood_context
-    {
-    public:
-        Geometry&       geometry;
-        Point_corner_id prev_point_corner_id{0};
-        Point_corner_id point_corner_id     {0};
-        Point_corner_id next_point_corner_id{0};
-        Corner_id       prev_corner_id      {0};
-        Corner_id       corner_id           {0};
-        Corner_id       next_corner_id      {0};
-        Corner&         prev_corner;
-        Corner&         corner;
-        Corner&         next_corner;
-        bool            break_{false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Point_corner_neighborhood_context_const
-    {
-    public:
-        const Geometry& geometry;
-        Point_corner_id prev_point_corner_id{0};
-        Point_corner_id point_corner_id     {0};
-        Point_corner_id next_point_corner_id{0};
-        Corner_id       prev_corner_id      {0};
-        Corner_id       corner_id           {0};
-        Corner_id       next_corner_id      {0};
-        const Corner&   prev_corner;
-        const Corner&   corner;
-        const Corner&   next_corner;
-        bool            break_{false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    void for_each_corner_neighborhood(
-        Geometry&                                                       geometry,
-        std::function<void(Point_corner_neighborhood_context& context)> callback
-    );
-
-    void for_each_corner_neighborhood_const(
-        const Geometry&                                                       geometry,
-        std::function<void(Point_corner_neighborhood_context_const& context)> callback
-    ) const;
-
-    Point_corner_id first_point_corner_id{0};
-    uint32_t        corner_count{0};
-    uint32_t        reserved_corner_count{0};
+enum class Interpolation_mode : unsigned int {
+    none = 0,
+    linear,                // standard linear interpolation
+    normalized,            // linear interpolation then normalize
+    normalized_vec3_float, // linear interpolation then normalize for .xyz, linear for .w
 };
 
-class Polygon
+class Attribute_descriptor
 {
 public:
-    Polygon_corner_id first_polygon_corner_id{0};
-    uint32_t          corner_count{0};
-
-    // Copies polygon property to corners
-    template <typename T>
-    void copy_to_corners(
-        const Polygon_id                   this_polygon_id,
-        const Geometry&                    geometry,
-        Property_map<Corner_id, T>&        corner_attribute,
-        const Property_map<Polygon_id, T>& polygon_attribute
-    ) const;
-
-    template <typename T>
-    void smooth_normalize(
-        const Geometry&                            geometry,
-        Property_map<Corner_id, T>&                corner_attribute,
-        const Property_map<Polygon_id, T>&         polygon_attribute,
-        const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-        const float                                cos_max_smoothing_angle
-    ) const;
-
-    template <typename T>
-    void smooth_average(
-        const Geometry&                           geometry,
-        Property_map<Corner_id, T>&               new_corner_attribute,
-        const Property_map<Corner_id, T>&         old_corner_attribute,
-        const Property_map<Corner_id, glm::vec3>& corner_normals,
-        const Property_map<Point_id, glm::vec3>&  point_normals
-    ) const;
-
-    void compute_normal(
-        const Polygon_id                         this_polygon_id,
-        const Geometry&                          geometry,
-        Property_map<Polygon_id, glm::vec3>&     polygon_normals,
-        const Property_map<Point_id, glm::vec3>& point_locations
-    ) const;
-
-    auto compute_normal  (const Geometry& geometry, const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3;
-    auto compute_centroid(const Geometry& geometry, const Property_map<Point_id, glm::vec3>& point_locations) const -> glm::vec3;
-
-    auto compute_edge_midpoint(
-        const Geometry&                          geometry,
-        const Property_map<Point_id, glm::vec3>& point_locations,
-        uint32_t                                 corner_offset
-    ) const -> glm::vec3;
-
-    void compute_centroid(
-        const Polygon_id                         this_polygon_id,
-        const Geometry&                          geometry,
-        Property_map<Polygon_id, glm::vec3>&     polygon_centroids,
-        const Property_map<Point_id, glm::vec3>& point_locations
-    ) const;
-
-    void compute_planar_texture_coordinates(
-        const Polygon_id                           this_polygon_id,
-        const Geometry&                            geometry,
-        Property_map<Corner_id, glm::vec2>&        corner_texcoords,
-        const Property_map<Polygon_id, glm::vec3>& polygon_centroids,
-        const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-        const Property_map<Point_id, glm::vec3>&   point_locations,
-        const bool                                 overwrite = false
-    ) const;
-
-    [[nodiscard]] auto corner     (const Geometry& geometry, const Point_id point_id) const -> Corner_id;
-    [[nodiscard]] auto next_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id;
-    [[nodiscard]] auto prev_corner(const Geometry& geometry, const Corner_id corner_id) const -> Corner_id;
-
-    void reverse(Geometry& geometry);
-
-    [[nodiscard]] auto format_points(const Geometry& geometry) const -> std::string;
-    [[nodiscard]] auto format_corners(const Geometry& geometry) const -> std::string;
-
-    class Polygon_corner_context
-    {
-    public:
-        Geometry&         geometry;
-        Polygon_corner_id polygon_corner_id{0};
-        Corner_id         corner_id        {0};
-        Corner&           corner;
-        bool              break_           {false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Polygon_corner_context_const
-    {
-    public:
-        const Geometry&   geometry;
-        Polygon_corner_id polygon_corner_id{0};
-        Corner_id         corner_id        {0};
-        const Corner&     corner;
-        bool              break_           {false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    void for_each_corner(Geometry& geometry, std::function<void(Polygon_corner_context& context)> callback);
-
-    void for_each_corner_const(const Geometry& geometry, std::function<void(Polygon_corner_context_const& context)> callback) const;
-
-    class Polygon_corner_neighborhood_context
-    {
-    public:
-        Geometry&         geometry;
-        Polygon_corner_id prev_polygon_corner_id{0};
-        Polygon_corner_id polygon_corner_id     {0};
-        Polygon_corner_id next_polygon_corner_id{0};
-        Corner_id         prev_corner_id        {0};
-        Corner_id         corner_id             {0};
-        Corner_id         next_corner_id        {0};
-        Corner&           prev_corner;
-        Corner&           corner;
-        Corner&           next_corner;
-        bool              break_{false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Polygon_corner_neighborhood_context_const
-    {
-    public:
-        const Geometry&   geometry;
-        Polygon_corner_id prev_polygon_corner_id{0};
-        Polygon_corner_id polygon_corner_id     {0};
-        Polygon_corner_id next_polygon_corner_id{0};
-        Corner_id         prev_corner_id{0};
-        Corner_id         corner_id     {0};
-        Corner_id         next_corner_id{0};
-        const Corner&     prev_corner;
-        const Corner&     corner;
-        const Corner&     next_corner;
-        bool              break_{false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    void for_each_corner_neighborhood(Geometry& geometry, std::function<void(Polygon_corner_neighborhood_context& context)> callback);
-
-    void for_each_corner_neighborhood_const(const Geometry& geometry, std::function<void(Polygon_corner_neighborhood_context_const& context)> callback) const;
-};
-
-class Edge
-{
-public:
-    Point_id        a{0};
-    Point_id        b{0};
-    Edge_polygon_id first_edge_polygon_id{0};
-    uint32_t        polygon_count{0};
-
-    class Edge_polygon_context
-    {
-    public:
-        Geometry&       geometry;
-        Edge_polygon_id edge_polygon_id{0};
-        Polygon_id      polygon_id     {0};
-        Polygon&        polygon;
-        bool            break_{false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Edge_polygon_context_const
-    {
-    public:
-        const Geometry& geometry;
-        Edge_polygon_id edge_polygon_id{0};
-        Polygon_id      polygon_id     {0};
-        const Polygon&  polygon;
-        bool            break_{false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    void for_each_polygon(
-        Geometry&                                          geometry,
-        std::function<void(Edge_polygon_context& context)> callback
+    Attribute_descriptor(
+        int                usage_index,
+        const std::string& name,
+        Transform_mode     transform_mode,
+        Interpolation_mode interpolation_mode
     );
 
-    void for_each_polygon_const(
-        const Geometry&                                          geometry,
-        std::function<void(Edge_polygon_context_const& context)> callback
-    ) const;
+    int                usage_index       {0};
+    std::string        name              {};
+    Transform_mode     transform_mode    {Transform_mode::none};
+    Interpolation_mode interpolation_mode{Interpolation_mode::none};
+    std::string        present_name      {};
 };
 
 class Mesh_info
 {
 public:
-    std::size_t polygon_count              {0};
+    std::size_t facet_count                {0};
     std::size_t corner_count               {0};
     std::size_t triangle_count             {0};
     std::size_t edge_count                 {0};
@@ -401,439 +63,685 @@ public:
     void trace(const std::shared_ptr<spdlog::logger>& log) const;
 };
 
-class Mass_properties
+class Mesh_serials
 {
 public:
-    float     volume;
-    glm::vec3 center_of_gravity;
-    glm::mat3 inertial;
+    uint64_t serial                     {1};
+    uint64_t edges                      {0};
+    uint64_t facet_normals              {0};
+    uint64_t facet_centroids            {0};
+    uint64_t facet_tangents             {0};
+    uint64_t facet_bitangents           {0};
+    uint64_t facet_texture_coordinates  {0};
+    uint64_t vertex_normals             {0};
+    uint64_t vertex_tangents            {0}; // never generated
+    uint64_t vertex_bitangents          {0}; // never generated
+    uint64_t vertex_texture_coordinates {0}; // never generated
+    uint64_t vertex_smooth_normals      {0};
+    uint64_t corner_normals             {0};
+    uint64_t corner_tangents            {0};
+    uint64_t corner_bitangents          {0};
+    uint64_t corner_texture_coordinates {0};
 };
+
+// Standard glTF attributes
+static constexpr const char* c_normal          = "normal"         ;
+static constexpr const char* c_tangent         = "tangent"        ;
+static constexpr const char* c_bitangent       = "bitangent"      ;
+static constexpr const char* c_texcoord_0      = "texcoord_0"     ;
+static constexpr const char* c_texcoord_1      = "texcoord_1"     ;
+static constexpr const char* c_color_0         = "color_0"        ;
+static constexpr const char* c_color_1         = "color_1"        ;
+static constexpr const char* c_joint_indices_0 = "joint_indices_0";
+static constexpr const char* c_joint_indices_1 = "joint_indices_1";
+static constexpr const char* c_joint_weights_0 = "joint_weights_0";
+static constexpr const char* c_joint_weights_1 = "joint_weights_1";
+
+// Extra attributes used by erhe
+static constexpr const char* c_valency_edge_count = "valency_edge_count"; // vertex valency and edge count (per vertex)
+static constexpr const char* c_id                 = "id"                ; // unique color for identifying facet
+static constexpr const char* c_normal_smooth      = "normal_smooth"     ; // vertex normal always averaged from facets
+static constexpr const char* c_centroid           = "centroid"          ; // centroid position for facet
+static constexpr const char* c_aniso_control      = "aniso_control"     ; // controls anisotropy amount
+
+// Anisotropy control:
+// X is used to modulate anisotropy level:
+//   0.0 -- Anisotropic
+//   1.0 -- Isotropic when approaching texcoord (0, 0)
+// Y is used for tangent space selection/control:
+//   0.0 -- Use geometry T and B (from vertex attribute
+//   1.0 -- Use T and B derived from texcoord - circular brushed metal effect
+
+class Attribute_descriptors
+{
+public:
+    static inline const Attribute_descriptor s_normal         { 0, c_normal         , Transform_mode::normalize_normal_mat_mul_vec3_zero,    Interpolation_mode::normalized };
+    static inline const Attribute_descriptor s_tangent        { 0, c_tangent        , Transform_mode::normalize_mat_mul_vec3_zero_and_float, Interpolation_mode::normalized_vec3_float };
+    static inline const Attribute_descriptor s_bitangent      { 0, c_bitangent      , Transform_mode::normalize_mat_mul_vec3_zero,           Interpolation_mode::normalized_vec3_float };
+    static inline const Attribute_descriptor s_texcoord_0     { 0, c_texcoord_0     , Transform_mode::none,                                  Interpolation_mode::linear };
+    static inline const Attribute_descriptor s_texcoord_1     { 1, c_texcoord_1     , Transform_mode::none,                                  Interpolation_mode::linear };
+    static inline const Attribute_descriptor s_color_0        { 0, c_color_0        , Transform_mode::none,                                  Interpolation_mode::linear };
+    static inline const Attribute_descriptor s_color_1        { 1, c_color_1        , Transform_mode::none,                                  Interpolation_mode::linear };
+    static inline const Attribute_descriptor s_joint_indices_0{ 0, c_joint_indices_0, Transform_mode::none,                                  Interpolation_mode::none };
+    static inline const Attribute_descriptor s_joint_indices_1{ 1, c_joint_indices_1, Transform_mode::none,                                  Interpolation_mode::none };
+    static inline const Attribute_descriptor s_joint_weights_0{ 0, c_joint_weights_0, Transform_mode::none,                                  Interpolation_mode::none };
+    static inline const Attribute_descriptor s_joint_weights_1{ 1, c_joint_weights_1, Transform_mode::none,                                  Interpolation_mode::none };
+
+    static inline const Attribute_descriptor s_valency_edge_count{ 0, c_valency_edge_count, Transform_mode::none,                               Interpolation_mode::none };
+    static inline const Attribute_descriptor s_id                { 0, c_id                , Transform_mode::none,                               Interpolation_mode::none };
+    static inline const Attribute_descriptor s_normal_smooth     { 0, c_normal_smooth     , Transform_mode::normalize_normal_mat_mul_vec3_zero, Interpolation_mode::normalized };
+    static inline const Attribute_descriptor s_centroid          { 0, c_centroid          , Transform_mode::mat_mul_vec3_one,                   Interpolation_mode::linear };
+    static inline const Attribute_descriptor s_aniso_control     { 0, c_aniso_control     , Transform_mode::none,                               Interpolation_mode::linear };
+
+    static void init  ();
+    static void insert(const Attribute_descriptor& descriptor);
+    static auto get   (int usage_index, const char* name) -> const Attribute_descriptor*;
+
+private:
+    static std::vector<Attribute_descriptor> s_descriptors;
+};
+
+template <typename T>
+class Attribute_present
+{
+public:
+    Attribute_present(GEO::AttributesManager& attributes_manager, const Attribute_descriptor& descriptor)
+        : descriptor{descriptor}
+        , attribute {attributes_manager, descriptor.name.c_str()}
+        , present   {attributes_manager, descriptor.present_name.c_str()}
+    {
+    }
+
+    void unbind()
+    {
+        if (attribute.is_bound()) {
+            attribute.unbind();
+        }
+        if (present.is_bound()) {
+            present.unbind();
+        }
+    }
+
+    void bind(GEO::AttributesManager& attributes_manager)
+    {
+        if (!attribute.is_bound()) {
+            attribute.bind(attributes_manager, descriptor.name.c_str());
+        }
+        if (!present.is_bound()) {
+            present.bind(attributes_manager, descriptor.present_name.c_str());
+        }
+    }
+
+    void clear()
+    {
+        present.fill(false);
+    }
+    void fill(T value)
+    {
+        attribute.fill(value);
+        present.fill(true);
+    }
+    void set(GEO::index_t key, const T value)
+    {
+        attribute[key] = value;
+        present[key] = true;
+    }
+    auto has(GEO::index_t key) const
+    {
+        if ((key >= present.size()) || (key >= attribute.size())) {
+            return false;
+        }
+        bool result = present[key];
+        return result;
+    }
+    auto get(GEO::index_t key) const -> T
+    {
+        geo_assert(present[key]);
+        return attribute[key];
+    }
+    auto try_get(GEO::index_t key) const -> std::optional<T>
+    {
+        if ((key >= present.size()) || (key >= attribute.size())) {
+            return std::optional<T>{};
+        }
+        return present[key] ? attribute[key] : std::optional<T>{};
+    }
+
+    const Attribute_descriptor& descriptor;
+    GEO::Attribute<T>           attribute;
+    GEO::Attribute<bool>        present;
+};
+
+class Mesh_attributes
+{
+public:
+    Mesh_attributes(const GEO::Mesh& mesh);
+    ~Mesh_attributes();
+
+    void unbind();
+    void bind();
+
+    const GEO::Mesh& m_mesh;
+    Attribute_present<GEO::vec3f> facet_id                 ;
+    Attribute_present<GEO::vec3f> facet_centroid           ;
+    Attribute_present<GEO::vec3f> facet_normal             ;
+    Attribute_present<GEO::vec4f> facet_tangent            ;
+    Attribute_present<GEO::vec3f> facet_bitangent          ;
+    Attribute_present<GEO::vec4f> facet_color_0            ;
+    Attribute_present<GEO::vec4f> facet_color_1            ;
+    Attribute_present<GEO::vec2f> facet_aniso_control      ;
+    Attribute_present<GEO::vec3f> vertex_normal            ;
+    Attribute_present<GEO::vec3f> vertex_normal_smooth     ;
+    Attribute_present<GEO::vec2f> vertex_texcoord_0        ;
+    Attribute_present<GEO::vec2f> vertex_texcoord_1        ;
+    Attribute_present<GEO::vec4f> vertex_tangent           ;
+    Attribute_present<GEO::vec3f> vertex_bitangent         ;
+    Attribute_present<GEO::vec4f> vertex_color_0           ;
+    Attribute_present<GEO::vec4f> vertex_color_1           ;
+    Attribute_present<GEO::vec4u> vertex_joint_indices_0   ;
+    Attribute_present<GEO::vec4u> vertex_joint_indices_1   ;
+    Attribute_present<GEO::vec4f> vertex_joint_weights_0   ;
+    Attribute_present<GEO::vec4f> vertex_joint_weights_1   ;
+    Attribute_present<GEO::vec2f> vertex_aniso_control     ;
+    Attribute_present<GEO::vec2i> vertex_valency_edge_count;
+    Attribute_present<GEO::vec3f> corner_normal            ;
+    Attribute_present<GEO::vec2f> corner_texcoord_0        ;
+    Attribute_present<GEO::vec2f> corner_texcoord_1        ;
+    Attribute_present<GEO::vec4f> corner_tangent           ;
+    Attribute_present<GEO::vec3f> corner_bitangent         ;
+    Attribute_present<GEO::vec4f> corner_color_0           ;
+    Attribute_present<GEO::vec4f> corner_color_1           ;
+    Attribute_present<GEO::vec2f> corner_aniso_control     ;
+    inline auto facet_color         (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? facet_color_0          : facet_color_1         ; }
+    inline auto vertex_texcoord     (size_t i) -> Attribute_present<GEO::vec2f>& { return (i == 0) ? vertex_texcoord_0      : vertex_texcoord_1     ; }
+    inline auto vertex_color        (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? vertex_color_0         : vertex_color_1        ; }
+    inline auto vertex_joint_indices(size_t i) -> Attribute_present<GEO::vec4u>& { return (i == 0) ? vertex_joint_indices_0 : vertex_joint_indices_1; }
+    inline auto vertex_joint_weights(size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? vertex_joint_weights_0 : vertex_joint_weights_1; }
+    inline auto corner_texcoord     (size_t i) -> Attribute_present<GEO::vec2f>& { return (i == 0) ? corner_texcoord_0      : corner_texcoord_1     ; }
+    inline auto corner_color        (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? corner_color_0         : corner_color_1        ; }
+};
+
+[[nodiscard]] auto count_mesh_facet_triangles(const GEO::Mesh& mesh) -> std::size_t;
+[[nodiscard]] auto get_mesh_info             (const GEO::Mesh& mesh) -> Mesh_info;
+void transform_mesh(
+    const GEO::Mesh& source_mesh, const Mesh_attributes& source_attributes,
+    GEO::Mesh& destination_mesh, Mesh_attributes& destination_attributes, const GEO::mat4& transform
+);
+void compute_facet_normals                   (GEO::Mesh& mesh, Mesh_attributes& attributes);
+void compute_facet_centroids                 (GEO::Mesh& mesh, Mesh_attributes& attributes);
+void compute_mesh_vertex_normal_smooth       (GEO::Mesh& mesh, Mesh_attributes& attributes);
+auto compute_mesh_tangents                   (GEO::Mesh& mesh, bool make_facets_flat) -> bool;
+void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, GEO::index_t facet, Mesh_attributes& attributes);
+void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, Mesh_attributes& attributes);
+
+[[nodiscard]] inline auto min_axis(const GEO::vec3f v) -> GEO::vec3f
+{
+    return
+        (std::abs(v.x) <= std::abs(v.y)) && (std::abs(v.x) <= std::abs(v.z)) ? GEO::vec3f{1.0f, 0.0f, 0.0f} :
+        (std::abs(v.y) <= std::abs(v.x)) && (std::abs(v.y) <= std::abs(v.z)) ? GEO::vec3f{0.0f, 1.0f, 0.0f} :
+                                                                               GEO::vec3f{0.0f, 0.0f, 1.0f};
+}
+
+[[nodiscard]] inline auto max_axis_index(const GEO::vec3 v) -> GEO::index_t
+{
+    return 
+        (std::abs(v.x) >= std::abs(v.y)) && (std::abs(v.x) >= std::abs(v.z)) ? 0 :
+        (std::abs(v.y) >= std::abs(v.x)) && (std::abs(v.y) >= std::abs(v.z)) ? 1 :
+                                                                               2;
+}
+
+[[nodiscard]] auto inline safe_normalize_cross(const GEO::vec3f& lhs, const GEO::vec3f& rhs) -> GEO::vec3f
+{
+    const float d = GEO::dot(lhs, rhs);
+    if (std::abs(d) > 0.999f) {
+        return min_axis(lhs);
+    }
+
+    const GEO::vec3f c0 = GEO::cross(lhs, rhs);
+    if (GEO::length(c0) < std::numeric_limits<float>::epsilon()) {
+        return min_axis(lhs);
+    }
+    return GEO::normalize(c0);
+}
+
+[[nodiscard]] inline auto project(const GEO::vec3f& a, const GEO::vec3f& b) -> const GEO::vec3f
+{
+	return GEO::dot(a, b) / GEO::dot(b, b) * b;
+}
+
+inline void gram_schmidt(const GEO::vec3f& a, const GEO::vec3f& b, const GEO::vec3f& c, GEO::vec3f& out_a, GEO::vec3f& out_b, GEO::vec3f& out_c)
+{
+    out_a = a;
+    out_b = b - project(b, a);
+    out_c = c - project(c, out_b) - project(c, out_a);
+    out_a = GEO::normalize(out_a);
+    out_b = GEO::normalize(out_b);
+    out_c = GEO::normalize(out_c);
+}
+
+[[nodiscard]] inline auto vec3_from_index(const GEO::index_t i) -> GEO::vec3f
+{
+    const GEO::index_t r = (i >> 16u) & 0xffu;
+    const GEO::index_t g = (i >>  8u) & 0xffu;
+    const GEO::index_t b = (i >>  0u) & 0xffu;
+
+    return GEO::vec3f{
+        r / 255.0f,
+        g / 255.0f,
+        b / 255.0f
+    };
+}
+
+[[nodiscard]] inline auto to_geo_vec3f(glm::vec3 v) -> GEO::vec3f
+{
+    return GEO::vec3f{v.x, v.y, v.z};
+}
+
+[[nodiscard]] inline auto to_geo_vec3(glm::vec3 v) -> GEO::vec3
+{
+    return GEO::vec3{v.x, v.y, v.z};
+}
+
+[[nodiscard]] inline auto to_geo_vec3i(glm::ivec3 v) -> GEO::vec3i
+{
+    return GEO::vec3i{v.x, v.y, v.z};
+}
+
+[[nodiscard]] inline auto to_glm_vec4(GEO::vec4f v) -> glm::vec4
+{
+    return glm::vec4{v.x, v.y, v.z, v.w};
+}
+
+[[nodiscard]] inline auto to_glm_vec3(GEO::vec3f v) -> glm::vec3
+{
+    return glm::vec3{v.x, v.y, v.z};
+}
+
+[[nodiscard]] inline auto to_glm_vec3(GEO::vec3 v) -> glm::vec3
+{
+    return glm::vec3{v.x, v.y, v.z};
+}
+
+[[nodiscard]] inline auto to_geo_vec4(GEO::vec4f v) -> glm::vec4
+{
+    return glm::vec4{v.x, v.y, v.z, v.w};
+}
+
+// GEO::mat4::operator() (index_t i, index_t j)  i = row, j = column
+// glm::mat4::operator[i] i = column
+[[nodiscard]] inline auto to_geo_mat4(const glm::mat4& m) -> GEO::mat4
+{
+    // GEO::mat4 result;
+    // for (int r = 0; r < 4; ++r) {
+    //     for (int c = 0; c < 4; ++c) {
+    //         result(r, c) = m[c][r]; // Transpose while copying
+    //     }
+    // }
+    // return result;
+    glm::vec4 column_0 = m[0];
+    glm::vec4 column_1 = m[1];
+    glm::vec4 column_2 = m[2];
+    glm::vec4 column_3 = m[3];
+    return GEO::mat4{
+        { column_0[0], column_1[0], column_2[0], column_3[0] },
+        { column_0[1], column_1[1], column_2[1], column_3[1] },
+        { column_0[2], column_1[2], column_2[2], column_3[2] },
+        { column_0[3], column_1[3], column_2[3], column_3[3] }
+        // { column_0[0], column_0[1], column_0[2], column_0[3] },
+        // { column_1[0], column_1[1], column_1[2], column_1[3] },
+        // { column_2[0], column_2[1], column_2[2], column_2[3] },
+        // { column_3[0], column_3[1], column_3[2], column_3[3] }
+    };
+}
+
+[[nodiscard]] inline auto to_glm_mat4(const GEO::mat4& m) -> glm::mat4
+{
+    // glm::mat4 result;
+    // for (int c = 0; c < 4; ++c) {
+    //     for (int r = 0; r < 4; ++r) {
+    //         result[c][r] = static_cast<float>(m(r, c)); // Transpose while copying
+    //     }
+    // }
+    // return result;
+    glm::vec4 column_0{m(0, 0), m(1, 0), m(2, 0), m(3, 0)};
+    glm::vec4 column_1{m(0, 1), m(1, 1), m(2, 1), m(3, 1)};
+    glm::vec4 column_2{m(0, 2), m(1, 2), m(2, 2), m(3, 2)};
+    glm::vec4 column_3{m(0, 3), m(1, 3), m(2, 3), m(3, 3)};
+    //glm::vec4 column_0{m(0, 0), m(0, 1), m(0, 2), m(0, 3)};
+    //glm::vec4 column_1{m(1, 0), m(1, 1), m(1, 2), m(1, 3)};
+    //glm::vec4 column_2{m(2, 0), m(2, 1), m(2, 2), m(2, 3)};
+    //glm::vec4 column_3{m(3, 0), m(3, 1), m(3, 2), m(3, 3)};
+    return glm::mat4{column_0, column_1, column_2, column_3};
+}
+
+[[nodiscard]] auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool;
+
+template <typename T>
+inline void interpolate_attribute(
+    const Attribute_present<T>&                                     source_,
+    Attribute_present<T>&                                           destination_,
+    const std::vector<std::vector<std::pair<float, GEO::index_t>>>& key_dst_to_src
+) 
+{
+    const GEO::Attribute<T>&    source              = source_.attribute;
+    const GEO::Attribute<bool>& source_present      = source_.present;
+    const Attribute_descriptor& source_descriptor   = source_.descriptor;
+    GEO::Attribute<T>&          destination         = destination_.attribute;
+    GEO::Attribute<bool>&       destination_present = destination_.present;
+
+    if (source_descriptor.interpolation_mode == Interpolation_mode::none) {
+        return;
+    }
+
+    for (GEO::index_t dst_key = 0, end = static_cast<GEO::index_t>(key_dst_to_src.size()); dst_key < end; ++dst_key) {
+        const std::vector<std::pair<float, GEO::index_t>>& src_keys = key_dst_to_src[dst_key];
+        float sum_weights{0.0f};
+        for (auto j : src_keys) {
+            const GEO::index_t src_key = j.second;
+            if (!source_present[src_key]) {
+                continue;
+            }
+            sum_weights += j.first;
+        }
+
+        if (sum_weights == 0.0f) {
+            continue;
+        }
+
+        T dst_value{0};
+
+        if constexpr (!std::is_same_v<T, GEO::vec4u>) { // std::is_same_v<T::value_type, Numeric::uint32> ?
+            for (auto j : src_keys) {
+                const GEO::index_t src_key = j.second;
+                if (!source_present[src_key]) {
+                    continue;
+                }
+
+                const float weight    = j.first;
+                const T     src_value = source[src_key];
+                dst_value += static_cast<T>((weight / sum_weights) * static_cast<T>(src_value));
+            }
+        }
+
+        constexpr bool is_vec3 = std::is_same_v<T, GEO::vec3> || std::is_same_v<T, GEO::vec3f>; // T::dim == 3 ?
+        if constexpr (is_vec3) {
+            if (source_descriptor.interpolation_mode == Interpolation_mode::normalized) {
+                dst_value = GEO::normalize(dst_value);
+            }
+        }
+
+        constexpr bool is_vec4 = std::is_same_v<T, GEO::vec4> || std::is_same_v<T, GEO::vec4f>; // T::dim == 4 ?
+        if constexpr (is_vec4) {
+            if (source_descriptor.interpolation_mode == Interpolation_mode::normalized_vec3_float) {
+                using T_vec3       = GEO::vecng<3, typename T::value_type>;
+                using value_type   = T::value_type;
+                const value_type x = dst_value[0];
+                const value_type y = dst_value[1];
+                const value_type z = dst_value[2];
+                const T_vec3 vec3_value{x, y, z};
+                const T_vec3 vec3_normalized = GEO::normalize(vec3_value);
+                dst_value = T{vec3_normalized.x, vec3_normalized.y, vec3_normalized.z, dst_value.w};
+            }
+        }
+
+        destination[dst_key] = dst_value;
+        destination_present[dst_key] = true;
+    }
+}
+
+template <typename T>
+inline void copy_attribute(const Attribute_present<T>& source, Attribute_present<T>& destination)
+{
+    destination.attribute.copy(source.attribute);
+    destination.present.copy(source.present);
+}
+
+template <typename T> struct attribute_transform_traits             { static const bool is_transformable = false; };
+template <>           struct attribute_transform_traits<GEO::vec2f> { static const bool is_transformable = true;  };
+template <>           struct attribute_transform_traits<GEO::vec3f> { static const bool is_transformable = true;  };
+template <>           struct attribute_transform_traits<GEO::vec4f> { static const bool is_transformable = true;  };
+template <>           struct attribute_transform_traits<GEO::vec2u> { static const bool is_transformable = false; };
+template <>           struct attribute_transform_traits<GEO::vec3u> { static const bool is_transformable = false; };
+template <>           struct attribute_transform_traits<GEO::vec4u> { static const bool is_transformable = false; };
+template <>           struct attribute_transform_traits<GEO::vec2i> { static const bool is_transformable = false; };
+template <>           struct attribute_transform_traits<GEO::vec3i> { static const bool is_transformable = false; };
+template <>           struct attribute_transform_traits<GEO::vec4i> { static const bool is_transformable = false; };
+
+namespace GEO {
+    typedef Matrix<4, GEO::Numeric::float32> mat4f;
+}
+
+static inline auto apply_transform(const GEO::mat4f transform, const float value, const float w) -> float
+{
+    const GEO::vec4f result4 = transform * GEO::vec4f{value, 0.0f, 0.0f, w};
+    return result4.x;
+}
+
+static inline auto apply_transform(const GEO::mat4f transform, const GEO::vec2f value, const float w) -> GEO::vec2f
+{
+    const GEO::vec4f result4 = transform * GEO::vec4f{value.x, value.y, 0.0f, w};
+    return GEO::vec2f{result4.x, result4.y};
+}
+
+static inline auto apply_transform(const GEO::mat4f transform, const GEO::vec3f value, const float w) -> GEO::vec3f
+{
+    const GEO::vec4f result4 = transform * GEO::vec4f{value.x, value.y, value.z, w};
+    return GEO::vec3f{result4.x, result4.y, result4.z};
+}
+
+static inline auto apply_transform(const GEO::mat4f transform, const GEO::vec4f value, float) -> GEO::vec4f
+{
+    return transform * value;
+}
+
+template <typename T>
+inline void transform_attribute(
+    const Attribute_present<T>& source_,
+    Attribute_present<T>&       destination_,
+    const GEO::mat4&            transform_
+) 
+{
+    const GEO::Attribute<T>&    source              = source_.attribute;
+    const GEO::Attribute<bool>& source_present      = source_.present;
+    const Attribute_descriptor& source_descriptor   = source_.descriptor;
+    GEO::Attribute<T>&          destination         = destination_.attribute;
+    GEO::Attribute<bool>&       destination_present = destination_.present;
+
+    GEO::mat4f transform;
+    for (GEO::index_t i = 0; i < 4; i++) {
+        for (GEO::index_t j = 0; j < 4; j++) {
+            transform(i, j) = static_cast<float>(transform_(i, j));
+        }
+    }
+
+    // TODO use adjugate for normal_transform
+    GEO::mat4f inverse;
+    transform.compute_inverse(inverse);
+    const GEO::mat4f normal_transform = inverse.transpose();
+
+    if constexpr(attribute_transform_traits<T>::is_transformable) switch (source_descriptor.transform_mode) {
+        //using enum Transform_mode;
+        default:
+        case Transform_mode::none: {
+            if (&source_ != &destination_) {
+                destination.copy(source);
+                destination_present.copy(source_present);
+            }
+            break;
+        }
+
+        case Transform_mode::mat_mul_vec3_one: {
+            for (GEO::index_t key = 0, end = source.size(); key < end; ++key) {
+                destination_present[key] = source_present[key];
+                if (source_present[key]) {
+                    destination[key] = apply_transform(transform, source[key], 1.0f);
+                }
+            }
+            break;
+        }
+
+        case Transform_mode::mat_mul_vec3_zero: {
+            for (GEO::index_t key = 0, end = source.size(); key < end; ++key) {
+                destination_present[key] = source_present[key];
+                if (source_present[key]) {
+                    destination[key] = apply_transform(transform, source[key], 0.0f);
+                }
+            }
+            break;
+        }
+
+        case Transform_mode::normalize_mat_mul_vec3_zero: {
+            for (GEO::index_t key = 0, end = source.size(); key < end; ++key) {
+                destination_present[key] = source_present[key];
+                if (source_present[key]) {
+                    destination[key] = GEO::normalize(apply_transform(transform, source[key], 0.0f));
+                }
+            }
+            break;
+        }
+
+        case Transform_mode::normalize_mat_mul_vec3_zero_and_float: {
+            if constexpr (std::is_same_v<T, GEO::vec4f>) {
+                for (GEO::index_t key = 0, end = source.size(); key < end; ++key) {
+                    destination_present[key] = source_present[key];
+                    if (source_present[key]) {
+                        const GEO::vec4f source_value4 = source[key];
+                        const GEO::vec3f source_value3{source_value4.x, source_value4.y, source_value4.z};
+                        const GEO::vec3f transformed = apply_transform(transform, source_value3, 0.0f);
+                        const GEO::vec3f normalized  = GEO::normalize(transformed);
+                        destination[key] = GEO::vec4f{normalized.x, normalized.y, normalized.z, source_value4.w};
+                    }
+                }
+            } else {
+                geo_assert(false);
+            }
+            break;
+        }
+
+        case Transform_mode::normal_mat_mul_vec3_zero: {
+            for (GEO::index_t key = 0, end = source.size(); key < end; ++key) {
+                destination_present[key] = source_present[key];
+                if (source_present[key]) {
+                    destination[key] = apply_transform(normal_transform, source[key], 0.0f);
+                }
+            }
+            break;
+        }
+
+        case Transform_mode::normalize_normal_mat_mul_vec3_zero: {
+            for (GEO::index_t key = 0, end = source.size(); key < end; ++key) {
+                destination_present[key] = source_present[key];
+                if (source_present[key]) {
+                    const T source_value = source[key];
+                    const T transformed  = apply_transform(normal_transform, source_value, 0.0f);
+                    const T normalized   = GEO::normalize(transformed);
+                    destination[key] = normalized;
+                }
+            }
+            break;
+        }
+    } else {
+        if (&source_ != &destination_) {
+            destination.copy(source);
+            destination_present.copy(source_present);
+        }
+    }
+}
+
+void copy_attributes(const Mesh_attributes& source, Mesh_attributes& destination);
+void transform_mesh(const GEO::Mesh& source_mesh, GEO::Mesh& destination_mesh, const GEO::mat4& transform);
+void transform_mesh(GEO::Mesh& mesh, const GEO::mat4& transform);
+
+namespace erhe::geometry {
 
 class Geometry
 {
 public:
-    using Point_property_map_collection   = Property_map_collection<Point_id>;
-    using Corner_property_map_collection  = Property_map_collection<Corner_id>;
-    using Polygon_property_map_collection = Property_map_collection<Polygon_id>;
-    using Edge_property_map_collection    = Property_map_collection<Edge_id>;
-
-    std::string             name;
-    std::vector<Corner>     corners;
-    std::vector<Point>      points;
-    std::vector<Polygon>    polygons;
-    std::vector<Edge>       edges;
-    std::vector<Corner_id>  point_corners;
-    std::vector<Corner_id>  polygon_corners;
-    std::vector<Polygon_id> edge_polygons;
-
-    Geometry         ();
+    Geometry();
     explicit Geometry(std::string_view name);
-    Geometry         (std::string_view name, std::function<void(Geometry&)>);
-    ~Geometry        () noexcept;
-    Geometry         (const Geometry&)  = delete;
-    void operator=   (const Geometry&)  = delete;
-    Geometry         (Geometry&& other) noexcept;
-    void operator=   (Geometry&&)       = delete;
 
-    void promise_has_normals()
-    {
-        m_serial_point_normals  = m_serial;
-        m_serial_corner_normals = m_serial;
-    }
+    [[nodiscard]] auto get_name          () const -> const std::string&;
+    [[nodiscard]] auto get_mesh          () -> GEO::Mesh&;
+    [[nodiscard]] auto get_mesh          () const -> const GEO::Mesh&;
+    [[nodiscard]] auto get_vertex_corners(GEO::index_t vertex) const -> const std::vector<GEO::index_t>&;
+    [[nodiscard]] auto get_vertex_edges  (GEO::index_t vertex) const -> const std::vector<GEO::index_t>&;
+    [[nodiscard]] auto get_corner_facet  (GEO::index_t corner) const -> GEO::index_t;
+    [[nodiscard]] auto get_edge_facets   (GEO::index_t edge) const -> const std::vector<GEO::index_t>&;
+    [[nodiscard]] auto get_edge          (GEO::index_t v0, GEO::index_t v1) const -> GEO::index_t;
+    [[nodiscard]] auto get_attributes    () -> Mesh_attributes&;
+    [[nodiscard]] auto get_attributes    () const -> const Mesh_attributes&;
 
-    void promise_has_polygon_normals()
-    {
-        m_serial_polygon_normals = m_serial;
-    }
+    void merge_with_transform(const Geometry& src, const GEO::mat4& transform);
+    void copy_with_transform(const Geometry& source, const GEO::mat4& transform);
 
-    void promise_has_polygon_centroids()
-    {
-        m_serial_polygon_centroids = m_serial;
-    }
+    void set_name(std::string_view name);
 
-    void promise_has_tangents()
-    {
-        m_serial_polygon_tangents = m_serial;
-        m_serial_point_tangents   = m_serial;
-        m_serial_corner_tangents  = m_serial;
-    }
+    static constexpr uint64_t process_flag_connect                            = (1u << 0u);
+    static constexpr uint64_t process_flag_build_edges                        = (1u << 1u);
+    static constexpr uint64_t process_flag_compute_facet_centroids            = (1u << 2u);
+    static constexpr uint64_t process_flag_compute_smooth_vertex_normals      = (1u << 3u);
+    static constexpr uint64_t process_flag_generate_facet_texture_coordinates = (1u << 4u);
+    static constexpr uint64_t process_flag_debug_trace                        = (1u << 5u);
 
-    void promise_has_bitangents()
-    {
-        m_serial_polygon_bitangents = m_serial;
-        m_serial_point_bitangents   = m_serial;
-        m_serial_corner_bitangents  = m_serial;
-    }
+    void process(uint64_t flags);
+    void generate_mesh_facet_texture_coordinates();
+    void build_edges();
 
-    void promise_has_texture_coordinates()
-    {
-        m_serial_point_texture_coordinates = m_serial;
-        m_serial_corner_texture_coordinates = m_serial;
-    }
-
-    auto get_corner_count        () const -> uint32_t { return m_next_corner_id; }
-    auto get_point_count         () const -> uint32_t { return m_next_point_id; }
-    auto get_point_corner_count  () const -> uint32_t { return m_next_point_corner_reserve; }
-    auto get_polygon_count       () const -> uint32_t { return m_next_polygon_id; }
-    auto get_polygon_corner_count() const -> uint32_t { return m_next_polygon_corner_id; }
-    auto get_edge_count          () const -> uint32_t { return m_next_edge_id; }
-
-    [[nodiscard]] auto find_edge(Point_id a, Point_id b) const -> std::optional<Edge>
-    {
-        if (b < a) {
-            std::swap(a, b);
-        }
-        for (const auto& edge : edges) {
-            if (edge.a == a && edge.b == b) {
-                return edge;
-            }
-        }
-        return {};
-    }
-
-    // Allocates new Corner / Corner_id
-    // - Point must be allocated.
-    // - Polygon must be allocated
-    auto make_corner(const Point_id point_id, const Polygon_id polygon_id) -> Corner_id;
-
-    // Allocates new Point / Point_id
-    auto make_point() -> Point_id;
-
-    // Allocates new Polygon / Polygon_id
-    auto make_polygon() -> Polygon_id;
-
-    // Allocates new Edge / Edge_id
-    // - Points must be already allocated
-    // - Points must be ordered
-    auto make_edge(Point_id a, Point_id b) -> Edge_id;
-
-    // Reserves new point corner.
-    // - Point must be already allocated.
-    // - Corner must be already allocated.
-    // - Does not actually create point corner, only allocates space
-    void reserve_point_corner(Point_id point_id, Corner_id corner_id);
-
-    // Allocates new edge polygon.
-    // - Edge must be already allocated.
-    // - Polygon must be already allocated.
-    auto make_edge_polygon(Edge_id edge_id, Polygon_id polygon_id) -> Edge_polygon_id;
-
-    // Allocates new polygon corner.
-    // - Polygon must be already allocated.
-    // - Corner must be already allocated.
-    auto make_polygon_corner_(Polygon_id polygon_id, Corner_id corner_id) -> Polygon_corner_id;
-
-    // Allocates new polygon corner.
-    // - Polygon must be already allocated.
-    // - Point must be already allocated.
-    auto make_polygon_corner(Polygon_id polygon_id, Point_id point_id) -> Corner_id;
-
-    void extract_geogram_mesh(GEO::Mesh& mesh) const;
-
-    // Calculates the number of triangles as if all faces were triangulated
-    [[nodiscard]] auto count_polygon_triangles() const -> std::size_t;
-
-    [[nodiscard]] auto get_mesh_info() const -> Mesh_info;
-
-    [[nodiscard]] auto point_attributes() -> Point_property_map_collection&
-    {
-        return m_point_property_map_collection;
-    }
-
-    [[nodiscard]] auto corner_attributes() -> Corner_property_map_collection&
-    {
-        return m_corner_property_map_collection;
-    }
-
-    [[nodiscard]] auto polygon_attributes() -> Polygon_property_map_collection&
-    {
-        return m_polygon_property_map_collection;
-    }
-
-    [[nodiscard]] auto edge_attributes() -> Edge_property_map_collection&
-    {
-        return m_edge_property_map_collection;
-    }
-
-    [[nodiscard]] auto point_attributes() const -> const Point_property_map_collection&
-    {
-        return m_point_property_map_collection;
-    }
-
-    [[nodiscard]] auto corner_attributes() const -> const Corner_property_map_collection&
-    {
-        return m_corner_property_map_collection;
-    }
-
-    [[nodiscard]] auto polygon_attributes() const -> const Polygon_property_map_collection&
-    {
-        return m_polygon_property_map_collection;
-    }
-
-    [[nodiscard]] auto edge_attributes() const -> const Edge_property_map_collection&
-    {
-        return m_edge_property_map_collection;
-    }
-
-    void reserve_points(std::size_t point_count);
-
-    void reserve_polygons(std::size_t polygon_count);
-
-    auto make_point(float x, float y, float z) -> Point_id;
-
-    auto make_point(float x, float y, float z, float s, float t) -> Point_id;
-
-    auto make_point(double x, double y, double z) -> Point_id;
-
-    auto make_point(double x, double y, double z, double s, double t) -> Point_id;
-
-    auto make_polygon(const std::initializer_list<Point_id> point_list) -> Polygon_id;
-
-    auto make_polygon_reverse(const std::initializer_list<Point_id> point_list) -> Polygon_id;
-
-    void compute_polygon_corner_texcoords(Property_map<Corner_id, glm::vec2>* corner_texcoords);
-
-    // Requires point locations.
-    // Returns false if point locations are not available.
-    // Returns true on success.
-    auto compute_polygon_normals() -> bool;
-
-    [[nodiscard]] auto has_polygon_normals() const -> bool;
-
-    // Requires point locations.
-    // Returns false if point locations are not available.
-    // Returns true on success.
-    auto compute_polygon_centroids() -> bool;
-
-    [[nodiscard]] auto has_polygon_centroids() const -> bool;
-
-    // Calculates point normal from polygon normals
-    // Returns incorrect data if there are missing polygon normals.
-    auto compute_point_normal(Point_id point_id) -> glm::vec3;
-
-    [[nodiscard]] auto has_point_normals() const -> bool;
-
-    // Calculates point normals from polygon normals.
-    // If polygon normals are not up to date before this call,
-    // also updates polygon normals.
-    // Returns false if unable to calculate polygon normals
-    // (due to missing point locations).
-    auto compute_point_normals(const Property_map_descriptor& descriptor) -> bool;
-
-    [[nodiscard]] auto has_polygon_tangents  () const -> bool;
-    [[nodiscard]] auto has_polygon_bitangents() const -> bool;
-    [[nodiscard]] auto has_corner_normals    () const -> bool;
-    [[nodiscard]] auto has_corner_tangents   () const -> bool;
-    [[nodiscard]] auto has_corner_bitangents () const -> bool;
-
-    auto compute_tangents(
-        const bool corner_tangents    = true,
-        const bool corner_bitangents  = true,
-        const bool polygon_tangents   = false,
-        const bool polygon_bitangents = false,
-        const bool make_polygons_flat = true,
-        const bool override_existing  = false
-    ) -> bool;
-
-    auto generate_polygon_texture_coordinates(bool overwrite_existing_texture_coordinates = false) -> bool;
-
-    [[nodiscard]] auto has_polygon_texture_coordinates() const -> bool;
-
-    // Experimental
-    void generate_texture_coordinates_spherical();
-
-    template <typename T>
-    void smooth_normalize(
-        Property_map<Corner_id, T>&                corner_attribute,
-        const Property_map<Polygon_id, T>&         polygon_attribute,
-        const Property_map<Polygon_id, glm::vec3>& polygon_normals,
-        const float                                max_smoothing_angle_radians
-    ) const;
-
-    template <typename T>
-    void smooth_average(
-        Property_map<Corner_id, T>&                smoothed_corner_attribute,
-        const Property_map<Corner_id, T>&          corner_attribute,
-        const Property_map<Corner_id, glm::vec3>&  corner_normals,
-        const Property_map<Polygon_id, glm::vec3>& point_normals
-    ) const;
-
-    void sort_point_corners();
-
-    void make_point_corners();
-
-    void build_edges(bool is_manifold = true);
-
-    [[nodiscard]] auto has_edges() const -> bool;
-
-    // returns *this, discard ok
-    auto transform(const glm::mat4& m) -> Geometry&;
-
-    void reverse_polygons();
-
-    void flip_reversed_polygons();
+    void update_connectivity();
 
     void debug_trace() const;
 
-    void merge(Geometry& other, const glm::mat4 transform);
-
-    void rotate_polygons_to_least_point_first();
-
-    void sanity_check() const;
-
-    void compute_bounding_box(glm::vec3& min_corner, glm::vec3& max_corner) const;
-
-    [[nodiscard]] auto get_mass_properties() -> Mass_properties;
-
-    class Corner_context
+    struct Debug_text
     {
-    public:
-        Corner_id corner_id{0};
-        Corner&   corner;
-        bool      break_   {false};
+        GEO::index_t reference_vertex;
+        GEO::index_t reference_facet;
+        glm::vec3 position;
+        uint32_t color;
+        std::string text;
+    };
+    struct Debug_vertex
+    {
+        glm::vec3 position;
+        glm::vec4 color;
+        float width;
+    };
+    struct Debug_line
+    {
+        GEO::index_t reference_vertex;
+        GEO::index_t reference_facet;
+        std::array<Debug_vertex, 2> vertices;
+    };
 
-        void break_iteration()
+    void clear_debug();
+    void add_debug_text(GEO::index_t reference_vertex, GEO::index_t reference_facet, glm::vec3 position, uint32_t color, std::string_view text) const;
+    void add_debug_line(GEO::index_t reference_vertex, GEO::index_t reference_facet, glm::vec3 p0, glm::vec3 p1, glm::vec4 color, float width) const;
+    void access_debug_entries(std::function<void(std::vector<Debug_text>& debug_texts, std::vector<Debug_line>& debug_lines)> op);
+
+private:
+    GEO::Mesh                              m_mesh;
+    Mesh_attributes                        m_attributes;
+    std::string                            m_name;
+    std::vector<std::vector<GEO::index_t>> m_vertex_to_corners;
+    std::vector<GEO::index_t>              m_corner_to_facet;
+    std::vector<std::vector<GEO::index_t>> m_edge_to_facets;
+    std::vector<std::vector<GEO::index_t>> m_vertex_to_edges;
+
+    struct Edge_hash
+    {
+        std::size_t operator()(const std::pair<GEO::index_t, GEO::index_t>& edge) const
         {
-            break_ = true;
+            return
+                std::hash<GEO::index_t>()(edge.first) ^
+                std::hash<GEO::index_t>()(edge.second ^ 0xcafecafe);
         }
     };
 
-    class Corner_context_const
-    {
-    public:
-        Corner_id     corner_id{0};
-        const Corner& corner;
-        bool          break_   {false};
+    std::unordered_map<std::pair<GEO::index_t, GEO::index_t>, GEO::index_t, Edge_hash> m_vertex_pair_to_edge;
 
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Point_context
-    {
-    public:
-        Point_id point_id{0};
-        Point&   point;
-        bool     break_  {false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Point_context_const
-    {
-    public:
-        Point_id     point_id{0};
-        const Point& point;
-        bool         break_  {false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Polygon_context
-    {
-    public:
-        Polygon_id polygon_id{0};
-        Polygon&   polygon;
-        bool       break_    {false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Polygon_context_const
-    {
-    public:
-        Polygon_id     polygon_id{0};
-        const Polygon& polygon;
-        bool           break_    {false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Edge_context
-    {
-    public:
-        Edge_id edge_id{0};
-        Edge&   edge;
-        bool    break_{false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    class Edge_context_const
-    {
-    public:
-        Edge_id     edge_id{0};
-        const Edge& edge;
-        bool        break_ {false};
-
-        void break_iteration()
-        {
-            break_ = true;
-        }
-    };
-
-    void for_each_corner       (std::function<void(Corner_context&       )> callback);
-    void for_each_corner_const (std::function<void(Corner_context_const& )> callback) const;
-    void for_each_point        (std::function<void(Point_context&        )> callback);
-    void for_each_point_const  (std::function<void(Point_context_const&  )> callback) const;
-    void for_each_polygon      (std::function<void(Polygon_context&      )> callback);
-    void for_each_polygon_const(std::function<void(Polygon_context_const&)> callback) const;
-    void for_each_edge         (std::function<void(Edge_context&         )> callback);
-    void for_each_edge_const   (std::function<void(Edge_context_const&   )> callback) const;
-
-    constexpr static std::size_t s_grow = 4096;
-    Corner_id                       m_next_corner_id           {0};
-    Point_id                        m_next_point_id            {0};
-    Polygon_id                      m_next_polygon_id          {0};
-    Edge_id                         m_next_edge_id             {0};
-    Point_corner_id                 m_next_point_corner_reserve{0};
-    Polygon_corner_id               m_next_polygon_corner_id   {0};
-    Edge_polygon_id                 m_next_edge_polygon_id     {0};
-    Polygon_id                      m_polygon_corner_polygon   {0};
-    Edge_id                         m_edge_polygon_edge        {0};
-    Point_property_map_collection   m_point_property_map_collection;
-    Corner_property_map_collection  m_corner_property_map_collection;
-    Polygon_property_map_collection m_polygon_property_map_collection;
-    Edge_property_map_collection    m_edge_property_map_collection;
-    uint64_t                        m_serial                            {1};
-    uint64_t                        m_serial_edges                      {0};
-    uint64_t                        m_serial_polygon_normals            {0};
-    uint64_t                        m_serial_polygon_centroids          {0};
-    uint64_t                        m_serial_polygon_tangents           {0};
-    uint64_t                        m_serial_polygon_bitangents         {0};
-    uint64_t                        m_serial_polygon_texture_coordinates{0};
-    uint64_t                        m_serial_point_normals              {0};
-    uint64_t                        m_serial_point_tangents             {0}; // never generated
-    uint64_t                        m_serial_point_bitangents           {0}; // never generated
-    uint64_t                        m_serial_point_texture_coordinates  {0}; // never generated
-    uint64_t                        m_serial_smooth_point_normals       {0};
-    uint64_t                        m_serial_corner_normals             {0};
-    uint64_t                        m_serial_corner_tangents            {0};
-    uint64_t                        m_serial_corner_bitangents          {0};
-    uint64_t                        m_serial_corner_texture_coordinates {0};
+    mutable std::vector<Debug_text> m_debug_texts;
+    mutable std::vector<Debug_line> m_debug_lines;
 };
 
-void geometry_from_geogram(Geometry& destination, GEO::Mesh& mesh);
+void transform(const Geometry& source, Geometry& destination, const GEO::mat4& transform);
 
-} // namespace erhe::geometry
-
-#include "corner.inl"
-#include "polygon.inl"
-#include "geometry.inl"
+}

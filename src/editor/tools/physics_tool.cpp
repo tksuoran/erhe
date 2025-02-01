@@ -207,7 +207,7 @@ auto Physics_tool::acquire_target() -> bool
     const auto& content = scene_view->get_hover(Hover_entry::content_slot);
     if (
         !content.valid ||
-        (content.mesh == nullptr) ||
+        (content.scene_mesh == nullptr) ||
         !content.position.has_value()
     ) {
         log_physics->warn("Cant target: No content");
@@ -220,7 +220,7 @@ auto Physics_tool::acquire_target() -> bool
         return false;
     }
 
-    auto target_mesh = std::static_pointer_cast<erhe::scene::Mesh>(content.mesh->shared_from_this());
+    auto target_mesh = std::static_pointer_cast<erhe::scene::Mesh>(content.scene_mesh->shared_from_this());
     auto target_node_physics = get_node_physics(target_mesh->get_node());
     if (!target_node_physics) {
         log_physics->warn("Cant target: No physics mesh");
@@ -244,7 +244,7 @@ auto Physics_tool::acquire_target() -> bool
     // Grab position is between pointed position and node center based on "grab depth" parameter
     m_grab_position_world = glm::mix(
         glm::vec3{content.position.value()},
-        glm::vec3{content.mesh->get_node()->position_in_world()},
+        glm::vec3{content.scene_mesh->get_node()->position_in_world()},
         m_depth
     );
     m_goal_position_in_world = m_grab_position_world;
@@ -402,7 +402,7 @@ void Physics_tool::tool_hover(Scene_view* scene_view)
     }
 
     const auto& hover = scene_view->get_hover(Hover_entry::content_slot);
-    m_hover_mesh = std::static_pointer_cast<erhe::scene::Mesh>(hover.mesh->shared_from_this());
+    m_hover_mesh = std::static_pointer_cast<erhe::scene::Mesh>(hover.scene_mesh->shared_from_this());
 }
 
 auto Physics_tool::on_drag() -> bool

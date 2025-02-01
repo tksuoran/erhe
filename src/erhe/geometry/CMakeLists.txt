@@ -20,8 +20,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/bake_transform.hpp
     erhe_geometry/operation/catmull_clark_subdivision.cpp
     erhe_geometry/operation/catmull_clark_subdivision.hpp
-    erhe_geometry/operation/clone.cpp
-    erhe_geometry/operation/clone.hpp
+    erhe_geometry/operation/chamfer.cpp
+    erhe_geometry/operation/chamfer.hpp
     erhe_geometry/operation/difference.cpp
     erhe_geometry/operation/difference.hpp
     erhe_geometry/operation/dual.cpp
@@ -86,9 +86,9 @@ endif ()
 target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
+        geogram
         glm::glm-header-only
     PRIVATE
-        geogram
         erhe::log
         erhe::math
         erhe::profile

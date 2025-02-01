@@ -62,6 +62,13 @@ public:
     auto describe() const -> std::string override;
 };
 
+class Chamfer_operation : public Mesh_operation
+{
+public:
+    explicit Chamfer_operation(Mesh_operation_parameters&& context);
+    auto describe() const -> std::string override;
+};
+
 class Dual_operation : public Mesh_operation
 {
 public:
@@ -111,14 +118,22 @@ public:
     auto describe() const -> std::string override;
 };
 
+class Weld_operation : public Mesh_operation
+{
+public:
+    explicit Weld_operation(Mesh_operation_parameters&& context);
+    auto describe() const -> std::string override;
+};
+
 class Binary_mesh_operation : public Compound_operation
 {
 public:
     Binary_mesh_operation(
         Mesh_operation_parameters&& parameters,
-        std::function<erhe::geometry::Geometry(
+        std::function<void(
             const erhe::geometry::Geometry& lhs,
-            const erhe::geometry::Geometry& rhs
+            const erhe::geometry::Geometry& rhs,
+            erhe::geometry::Geometry&       result
         )> operation
     );
     auto describe() const -> std::string override { return m_description; }
@@ -126,9 +141,10 @@ public:
 protected:
     auto make_operations(
         Mesh_operation_parameters&& parameters,
-        std::function<erhe::geometry::Geometry(
+        std::function<void(
             const erhe::geometry::Geometry& lhs,
-            const erhe::geometry::Geometry& rhs
+            const erhe::geometry::Geometry& rhs,
+            erhe::geometry::Geometry&       result
         )> operation
     ) -> Compound_operation::Parameters;
     std::string m_description;

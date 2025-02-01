@@ -47,22 +47,16 @@ auto c_str(const Normal_style normal_style) -> const char*
 #pragma region Primitive_raytrace
 Primitive_raytrace::Primitive_raytrace() = default;
 
-Primitive_raytrace::Primitive_raytrace(erhe::geometry::Geometry& geometry, Element_mappings* element_mappings)
+Primitive_raytrace::Primitive_raytrace(GEO::Mesh& mesh, Element_mappings* element_mappings)
 {
     ERHE_PROFILE_FUNCTION();
 
     const erhe::graphics::Vertex_format vertex_format{0, {erhe::graphics::Vertex_attribute::position_float3()}};
     const std::size_t vertex_stride = vertex_format.stride();
     const std::size_t index_stride = 4;
-    const erhe::geometry::Mesh_info mesh_info = geometry.get_mesh_info();
-    m_rt_vertex_buffer = erhe::raytrace::IBuffer::create_shared(
-        geometry.name + "_vertex",
-        mesh_info.vertex_count_corners * vertex_stride
-    );
-    m_rt_index_buffer = erhe::raytrace::IBuffer::create_shared(
-        geometry.name + "_index",
-        mesh_info.index_count_fill_triangles * index_stride
-    );
+    const Mesh_info mesh_info = get_mesh_info(mesh);
+    m_rt_vertex_buffer = erhe::raytrace::IBuffer::create_shared("raytrace_vertex", mesh_info.vertex_count_corners * vertex_stride);
+    m_rt_index_buffer  = erhe::raytrace::IBuffer::create_shared("raytrace_index",  mesh_info.index_count_fill_triangles * index_stride);
     erhe::primitive::Raytrace_buffer_sink buffer_sink{*m_rt_vertex_buffer.get(), *m_rt_index_buffer.get()};
     erhe::primitive::Build_info build_info{
         .primitive_types = {
@@ -78,16 +72,15 @@ Primitive_raytrace::Primitive_raytrace(erhe::geometry::Geometry& geometry, Eleme
 
     erhe::primitive::Element_mappings dummy_mappings;
 
-    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt = make_buffer_mesh(
-        geometry, 
+    make_buffer_mesh(
+        m_rt_mesh,
+        mesh, 
         build_info, 
         (element_mappings != nullptr) ? *element_mappings : dummy_mappings, 
         erhe::primitive::Normal_style::none
     );
-    ERHE_VERIFY(buffer_mesh_opt.has_value()); // TODO
-    m_rt_mesh = std::move(buffer_mesh_opt.value());
-
-    make_raytrace_geometry(geometry.name);
+    
+    make_raytrace_geometry();
     m_rt_geometry->set_user_data(nullptr);
 }
 
@@ -110,12 +103,9 @@ auto Primitive_raytrace::has_raytrace_triangles() const -> bool
         m_rt_mesh.index_range(erhe::primitive::Primitive_mode::polygon_fill).index_count > 0;
 }
 
-void Primitive_raytrace::make_raytrace_geometry(std::string_view debug_label)
+void Primitive_raytrace::make_raytrace_geometry()
 {
-    m_rt_geometry = erhe::raytrace::IGeometry::create_unique(
-        fmt::format("{}_rt_geometry", debug_label),
-        erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE
-    );
+    m_rt_geometry = erhe::raytrace::IGeometry::create_unique("rt_geometry", erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE);
 
     const auto& vertex_buffer_range   = m_rt_mesh.vertex_buffer_range;
     const auto& index_buffer_range    = m_rt_mesh.index_buffer_range;
@@ -265,11 +255,10 @@ Primitive_shape::~Primitive_shape() noexcept
 auto Primitive_shape::make_geometry() -> bool
 {
     if (m_triangle_soup) {
-        ERHE_VERIFY(m_element_mappings.primitive_id_to_polygon_id.empty());
-        ERHE_VERIFY(m_element_mappings.corner_to_vertex_id.empty());
-        m_geometry = std::make_shared<erhe::geometry::Geometry>(
-            geometry_from_triangle_soup(*m_triangle_soup.get(), m_element_mappings)
-        );
+        ERHE_VERIFY(m_element_mappings.triangle_to_mesh_facet.empty());
+        ERHE_VERIFY(m_element_mappings.mesh_corner_to_vertex_buffer_index.empty());
+        m_geometry = std::make_shared<erhe::geometry::Geometry>();
+        mesh_from_triangle_soup(*m_triangle_soup.get(), m_geometry->get_mesh(), m_element_mappings);
         return true;
     }
     return false;
@@ -318,11 +307,11 @@ auto Primitive_shape::make_raytrace() -> bool
     }
 
     bool has_element_mappings =
-        !m_element_mappings.primitive_id_to_polygon_id.empty() &&
-        !m_element_mappings.corner_to_vertex_id.empty();
+        !m_element_mappings.triangle_to_mesh_facet.empty() &&
+        !m_element_mappings.mesh_corner_to_vertex_buffer_index.empty();
 
     m_raytrace = Primitive_raytrace{
-        *m_geometry.get(),
+        m_geometry->get_mesh(),
         has_element_mappings ? nullptr : &m_element_mappings
     };
 
@@ -342,15 +331,15 @@ auto Primitive_shape::make_raytrace() -> bool
 Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<erhe::geometry::Geometry>& geometry)
     : Primitive_shape{geometry}
 {
-    if (geometry->has_corner_normals()) {
+    // TODO if (geometry->has_corner_normals()) {
         m_normal_style = erhe::primitive::Normal_style::corner_normals;
-    } else if (geometry->has_point_normals()) {
-        m_normal_style = erhe::primitive::Normal_style::point_normals;
-    } else if (geometry->has_polygon_normals()) {
-        m_normal_style = erhe::primitive::Normal_style::polygon_normals;
-    } else {
-        m_normal_style = erhe::primitive::Normal_style::none;
-    }
+    //} else if (geometry->has_point_normals()) {
+    //    m_normal_style = erhe::primitive::Normal_style::point_normals;
+    //} else if (geometry->has_polygon_normals()) {
+    //    m_normal_style = erhe::primitive::Normal_style::polygon_normals;
+    //} else {
+    //    m_normal_style = erhe::primitive::Normal_style::none;
+    //}
 }
 
 Primitive_render_shape::Primitive_render_shape(Buffer_mesh&& renderable_mesh)
@@ -380,23 +369,15 @@ auto Primitive_render_shape::make_buffer_mesh(const Build_info& build_info, Norm
 {
     if (m_geometry) {
         // TODO temp hack
-        m_element_mappings.primitive_id_to_polygon_id.clear();
-        m_element_mappings.corner_to_vertex_id.clear();
-
-        ERHE_VERIFY(m_element_mappings.primitive_id_to_polygon_id.empty());
-        ERHE_VERIFY(m_element_mappings.corner_to_vertex_id.empty());
-        std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt = erhe::primitive::make_buffer_mesh(
-            *m_geometry.get(),
+        m_element_mappings.triangle_to_mesh_facet.clear();
+        m_element_mappings.mesh_corner_to_vertex_buffer_index.clear();
+        return erhe::primitive::make_buffer_mesh(
+            m_renderable_mesh,
+            m_geometry->get_mesh(),
             build_info,
             m_element_mappings,
             normal_style
         );
-        if (buffer_mesh_opt.has_value()) {
-            m_renderable_mesh = std::move(buffer_mesh_opt.value());
-            return true;
-        } else {
-            return false;
-        }
     } else {
         return make_buffer_mesh(build_info.buffer_info);
     }
@@ -490,16 +471,10 @@ auto build_buffer_mesh_from_triangle_soup(
     return buffer_mesh;
 }
 
-auto Primitive_shape::get_polygon_id_from_primitive_id(const unsigned int primitive_id) const -> uint32_t
+auto Primitive_shape::get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t
 {
-    ERHE_VERIFY(primitive_id < m_element_mappings.primitive_id_to_polygon_id.size());
-    return m_element_mappings.primitive_id_to_polygon_id[primitive_id];
-}
-
-auto Primitive_shape::get_vertex_id_from_corner_id(const uint32_t corner_id) const -> uint32_t
-{
-    ERHE_VERIFY(corner_id < m_element_mappings.corner_to_vertex_id.size());
-    return m_element_mappings.corner_to_vertex_id[corner_id];
+    ERHE_VERIFY(triangle < m_element_mappings.triangle_to_mesh_facet.size());
+    return m_element_mappings.triangle_to_mesh_facet[triangle];
 }
 
 auto Primitive_shape::get_element_mappings() const -> const erhe::primitive::Element_mappings&
@@ -647,7 +622,9 @@ auto Primitive::get_name() const -> std::string_view
 {
     const std::shared_ptr<erhe::geometry::Geometry>& render_geometry    = render_shape ? render_shape->get_geometry_const() : std::shared_ptr<erhe::geometry::Geometry>{};
     const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry = collision_shape ? collision_shape->get_geometry_const() : std::shared_ptr<erhe::geometry::Geometry>{};
-    return render_geometry ? render_geometry->name : collision_geometry ? collision_geometry->name : Primitive__get_name__empty;
+    return
+        render_geometry    ? render_geometry   ->get_name() :
+        collision_geometry ? collision_geometry->get_name() : Primitive__get_name__empty;
 }
 
 auto Primitive::get_bounding_box() const -> erhe::math::Bounding_box

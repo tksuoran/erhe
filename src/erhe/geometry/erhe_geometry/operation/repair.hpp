@@ -1,15 +1,11 @@
 #pragma once
 
-#include "erhe_geometry/operation/geometry_operation.hpp"
+namespace erhe::geometry { class Geometry; }
 
 namespace erhe::geometry::operation {
 
-class Repair : public Geometry_operation
-{
-public:
-    Repair(const Geometry& source, Geometry& destination);
-};
+void repair(const Geometry& source, Geometry& destination);
 
-[[nodiscard]] auto repair(const Geometry& source) -> Geometry;
+void weld(const Geometry& source, Geometry& destination);
 
 } // namespace erhe::geometry::operation

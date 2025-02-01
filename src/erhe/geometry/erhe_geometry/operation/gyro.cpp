@@ -1,28 +1,31 @@
 #include "erhe_geometry/operation/gyro.hpp"
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_geometry/geometry_log.hpp"
-#include "erhe_profile/profile.hpp"
-
-#include <glm/glm.hpp>
-
-#include <cstdint>
-#include <limits>
+#include "erhe_geometry/operation/geometry_operation.hpp"
 
 namespace erhe::geometry::operation {
 
-Gyro::Gyro(const Geometry& src, Geometry& destination)
-    : Geometry_operation{src, destination}
+class Gyro : public Geometry_operation
 {
-    ERHE_PROFILE_FUNCTION();
+public:
+    Gyro(const Geometry& source, Geometry& destination);
 
-    // Add midpoints 1/3 and 2/3 to edges and connect to polygon center
-    // New polygon on each old edge
+    void build();
+};
 
-    // For each corner in the old polygon,
+Gyro::Gyro(const Geometry& source, Geometry& destination)
+    : Geometry_operation{source, destination}
+{
+}
+
+void Gyro::build()
+{
+    // Add midpoints 1/3 and 2/3 to edges and connect to facet center
+    // New facet on each src edge
+
+    // For each corner in the src facet,
     // add one pentagon(centroid, previous edge midpoints 0 and 1, corner, next edge midpoint 0)
 
-    make_points_from_points();
-    make_polygon_centroids();
+    make_dst_vertices_from_src_vertices();
+    make_facet_centroids();
     make_edge_midpoints(
         {
             1.0f / 3.0f,
@@ -30,55 +33,43 @@ Gyro::Gyro(const Geometry& src, Geometry& destination)
         }
     );
 
-    source.for_each_polygon_const([&](auto& i) {
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
-            const Point_id   a                        = j.prev_corner.point_id;
-            const Point_id   b                        = j.corner     .point_id;
-            const Point_id   c                        = j.next_corner.point_id;
-            const Polygon_id new_polygon_id           = make_new_polygon_from_polygon(i.polygon_id);
-            const Point_id   previous_edge_midpoint_0 = get_edge_new_point(a, b, 0, 2);
-            const Point_id   previous_edge_midpoint_1 = get_edge_new_point(a, b, 1, 2);
-            const Point_id   next_edge_midpoint_0     = get_edge_new_point(b, c, 0, 2);
-            if (previous_edge_midpoint_0 == std::numeric_limits<uint32_t>::max()) {
-                log_subdivide->warn("midpoint for edge {} {} [0] not found", a, b);
+    for (const GEO::index_t src_facet : source_mesh.facets) {
+        const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
+        for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < src_corner_count; ++local_src_facet_corner) {
+            const GEO::index_t prev_src_corner          = source_mesh.facets.corner(src_facet, (local_src_facet_corner + src_corner_count - 1) % src_corner_count);
+            const GEO::index_t src_corner               = source_mesh.facets.corner(src_facet, local_src_facet_corner);
+            const GEO::index_t next_src_corner          = source_mesh.facets.corner(src_facet, (local_src_facet_corner + 1) % src_corner_count);
+            const GEO::index_t a                        = source_mesh.facet_corners.vertex(prev_src_corner);
+            const GEO::index_t b                        = source_mesh.facet_corners.vertex(src_corner     );
+            const GEO::index_t c                        = source_mesh.facet_corners.vertex(next_src_corner);
+            const GEO::index_t previous_edge_midpoint_0 = get_src_edge_new_vertex(a, b, 0);
+            const GEO::index_t previous_edge_midpoint_1 = get_src_edge_new_vertex(a, b, 1);
+            const GEO::index_t next_edge_midpoint_0     = get_src_edge_new_vertex(b, c, 0);
+            if (previous_edge_midpoint_0 == GEO::NO_VERTEX) {
+                return; // TODO Can these ever happen?
+            }
+            if (previous_edge_midpoint_1 == GEO::NO_VERTEX) {
                 return;
             }
-            if (previous_edge_midpoint_1 == std::numeric_limits<uint32_t>::max()) {
-                log_subdivide->warn("midpoint for edge {} {} [1] not found", a, b);
+            if (next_edge_midpoint_0 == GEO::NO_VERTEX) {
                 return;
             }
-            if (next_edge_midpoint_0 == std::numeric_limits<uint32_t>::max()) {
-                log_subdivide->warn("midpoint for edge {} {} [0] not found", b, c);
-                return;
-            }
-            make_new_corner_from_point           (new_polygon_id, previous_edge_midpoint_0);
-            make_new_corner_from_point           (new_polygon_id, previous_edge_midpoint_1);
-            make_new_corner_from_corner          (new_polygon_id, j.corner_id);
-            make_new_corner_from_point           (new_polygon_id, next_edge_midpoint_0);
-            make_new_corner_from_polygon_centroid(new_polygon_id, i.polygon_id);
-            //log_subdivide.warn(
-            //    "Polygon {} = {} {} {} {} {}\n",
-            //    new_polygon_id,
-            //    previous_edge_midpoint_0,
-            //    previous_edge_midpoint_1,
-            //    source.corners[j.corner_id].point_id,
-            //    next_edge_midpoint_0,
-            //    old_polygon_centroid_to_new_points[i.polygon_id]
-            //);
-        });
-    });
+            const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, 5);
+            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 0, previous_edge_midpoint_0);
+            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 1, previous_edge_midpoint_1);
+            make_new_dst_corner_from_src_corner        (new_dst_facet, 2, src_corner);
+            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 3, next_edge_midpoint_0);
+            make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 4, src_facet);
+        }
+    }
 
     post_processing();
 }
 
-auto gyro(const Geometry& source) -> Geometry
+void gyro(const Geometry& source, Geometry& destination)
 {
-    return Geometry{
-        fmt::format("gyro({})", source.name),
-        [&source](auto& result) {
-            Gyro operation{source, result};
-        }
-    };
+    Gyro operation{source, destination};
+    operation.build();
 }
 
 

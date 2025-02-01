@@ -4,7 +4,6 @@
 #include "scene/scene_root.hpp"
 #include "tools/brushes/reference_frame.hpp"
 
-#include "erhe_geometry/types.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -21,7 +20,7 @@ namespace erhe::physics {
 namespace erhe::primitive {
     class Material;
     class Renderable_mesh;
-    class Geometry_primitive;
+    class Mesh_primitive;
 }
 namespace erhe::scene {
     class Mesh;
@@ -60,7 +59,7 @@ public:
     Scene_root*                                scene_root     {nullptr};
     glm::mat4                                  world_from_node{1.0f};
     std::shared_ptr<erhe::primitive::Material> material;
-    float                                      scale          {1.0f};
+    double                                     scale          {1.0f};
     bool                                       physics_enabled{true};
     erhe::physics::Motion_mode                 motion_mode    {erhe::physics::Motion_mode::e_dynamic};
 };
@@ -68,7 +67,7 @@ public:
 class Brush : public erhe::Item<erhe::Item_base, erhe::Item_base, Brush, erhe::Item_kind::not_clonable>
 {
 public:
-    static constexpr float c_scale_factor = 65536.0f;
+    static constexpr float c_scale_factor = 65536.0;
 
     class Scaled
     {
@@ -100,24 +99,24 @@ public:
     // Public API
     void late_initialize();
 
-    [[nodiscard]] auto get_reference_frame         (uint32_t corner_count, uint32_t face_offset, uint32_t corner_offset) -> Reference_frame;
-    [[nodiscard]] auto get_scaled                  (float scale) -> const Scaled&;
-    [[nodiscard]] auto create_scaled               (int scale_key) -> Scaled;
-    [[nodiscard]] auto make_instance               (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
-    [[nodiscard]] auto get_bounding_box            () -> erhe::math::Bounding_box;
-    [[nodiscard]] auto get_geometry                () -> std::shared_ptr<erhe::geometry::Geometry>;
-    [[nodiscard]] auto get_corner_count_to_polygons() -> const std::map<std::size_t, std::vector<erhe::geometry::Polygon_id>>&;
-    [[nodiscard]] auto get_max_corner_count        () const -> std::size_t;
+    [[nodiscard]] auto get_reference_frame       (GEO::index_t corner_count, GEO::index_t face_offset, GEO::index_t corner_offset) -> Reference_frame;
+    [[nodiscard]] auto get_scaled                (double scale) -> const Scaled&;
+    [[nodiscard]] auto create_scaled             (int scale_key) -> Scaled;
+    [[nodiscard]] auto make_instance             (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
+    [[nodiscard]] auto get_bounding_box          () -> erhe::math::Bounding_box;
+    [[nodiscard]] auto get_geometry              () -> std::shared_ptr<erhe::geometry::Geometry>;
+    [[nodiscard]] auto get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&;
+    [[nodiscard]] auto get_max_corner_count      () const -> GEO::index_t;
 
 private:
-    void update_polygon_statistics();
+    void update_facet_statistics();
 
     Brush_data                   m_data;
     erhe::primitive::Primitive   m_primitive;
     std::vector<Reference_frame> m_reference_frames;
     std::vector<Scaled>          m_scaled_entries;
-    std::map<std::size_t, std::vector<erhe::geometry::Polygon_id>> m_corner_count_to_polygons;
-    std::size_t                  m_max_corner_count{0};
+    std::map<GEO::index_t, std::vector<GEO::index_t>> m_corner_count_to_facets;
+    GEO::index_t                 m_max_corner_count{0};
 };
 
 }

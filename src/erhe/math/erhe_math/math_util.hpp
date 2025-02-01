@@ -969,4 +969,6 @@ private:
     glm::vec3 skew
 ) -> glm::mat4;
 
+[[nodiscard]] auto torus_volume(const float major_radius, const float minor_radius) -> float;
+
 } // namespace erhe::math

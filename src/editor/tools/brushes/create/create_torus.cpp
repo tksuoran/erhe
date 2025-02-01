@@ -63,21 +63,23 @@ void Create_torus::imgui()
 
 auto Create_torus::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
-    brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::shapes::make_torus(
-            m_major_radius,
-            m_minor_radius,
-            m_major_steps,
-            m_minor_steps
-        )
+    std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>("torus");
+    brush_create_info.geometry = geometry;
+    erhe::geometry::shapes::make_torus(
+        geometry->get_mesh(),
+        m_major_radius,
+        m_minor_radius,
+        m_major_steps,
+        m_minor_steps
     );
 
-    brush_create_info.geometry->transform(erhe::math::mat4_swap_yz);
-    brush_create_info.geometry->build_edges();
-    brush_create_info.geometry->compute_polygon_normals();
-    brush_create_info.geometry->compute_tangents();
-    brush_create_info.geometry->compute_polygon_centroids();
-    brush_create_info.geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
+    transform(*geometry.get(), *geometry.get(), to_geo_mat4(erhe::math::mat4_swap_yz));
+
+    //brush_create_info.geometry->build_edges();
+    //brush_create_info.geometry->compute_polygon_normals();
+    //brush_create_info.geometry->compute_tangents();
+    //brush_create_info.geometry->compute_polygon_centroids();
+    //brush_create_info.geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
 
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);
     return brush;

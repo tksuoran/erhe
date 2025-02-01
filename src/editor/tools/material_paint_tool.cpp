@@ -140,7 +140,7 @@ auto Material_paint_tool::on_paint_ready() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    return hover.valid && hover.mesh;
+    return hover.valid && hover.scene_mesh;
 }
 
 auto Material_paint_tool::on_pick_ready() -> bool
@@ -150,7 +150,7 @@ auto Material_paint_tool::on_pick_ready() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    return hover.valid && hover.mesh;
+    return hover.valid && hover.scene_mesh;
 }
 
 auto Material_paint_tool::on_paint() -> bool
@@ -164,10 +164,10 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    if (!hover.valid || (hover.mesh == nullptr)) {
+    if (!hover.valid || !hover.scene_mesh) {
         return false;
     }
-    auto& hover_primitive = hover.mesh->get_mutable_primitives().at(hover.primitive_index);
+    auto& hover_primitive = hover.scene_mesh->get_mutable_primitives().at(hover.scene_mesh_primitive_index);
     hover_primitive.material = m_material;
 
     return true;
@@ -180,10 +180,10 @@ auto Material_paint_tool::on_pick() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    if (!hover.valid || (hover.mesh == nullptr)) {
+    if (!hover.valid || (hover.scene_mesh == nullptr)) {
         return false;
     }
-    auto& hover_primitive = hover.mesh->get_primitives().at(hover.primitive_index);
+    auto& hover_primitive = hover.scene_mesh->get_primitives().at(hover.scene_mesh_primitive_index);
     m_material = hover_primitive.material;
 
     return true;

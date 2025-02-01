@@ -6,6 +6,7 @@ erhe_target_sources_grouped(
     erhe_log/log.cpp
     erhe_log/log.hpp
     erhe_log/log_glm.hpp
+    erhe_log/log_geogram.hpp
     erhe_log/timestamp.cpp
     erhe_log/timestamp.hpp
 )
@@ -19,6 +20,7 @@ target_link_libraries(${_target}
         spdlog::spdlog_header_only
         fmt::fmt
         glm::glm-header-only
+        geogram
     PRIVATE
         erhe::hash
         erhe::configuration

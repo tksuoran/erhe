@@ -40,23 +40,26 @@ void Create_box::imgui()
 
     ImGui::Text("Box Parameters");
 
-    ImGui::SliderFloat3("Size",  &m_size.x, 0.0f, 10.0f);
-    ImGui::SliderInt3  ("Steps", &m_steps.x, 1, 10);
-    ImGui::SliderFloat ("Power", &m_power, 0.0f, 10.0f);
+    ImGui::SliderFloat3("Size",  &m_size.x,  0.0f, 10.0f);
+    ImGui::SliderInt3  ("Steps", &m_steps.x, 1,    10   );
+    ImGui::SliderFloat ("Power", &m_power,   0.0f, 10.0f);
 }
 
 auto Create_box::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
-    brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::shapes::make_box(m_size, m_steps, m_power)
-    );
+    auto geometry = std::make_shared<erhe::geometry::Geometry>("box");
+    erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(m_size), to_geo_vec3i(m_steps), static_cast<double>(m_power));
+    brush_create_info.geometry = geometry;
+    transform(*geometry.get(), *geometry.get(), to_geo_mat4(erhe::math::mat4_swap_xy));
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+    geometry->process(flags);
 
-    //brush_create_info.geometry->transform(erhe::math::mat4_swap_xy);
-    brush_create_info.geometry->build_edges();
-    brush_create_info.geometry->compute_polygon_normals();
-    brush_create_info.geometry->compute_tangents();
-    brush_create_info.geometry->compute_polygon_centroids();
-    brush_create_info.geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
+    //// brush_create_info.geometry->compute_tangents();
+    //// brush_create_info.geometry->compute_polygon_centroids();
     //// brush_create_info.collision_shape = TODO
 
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);

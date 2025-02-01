@@ -1,40 +1,45 @@
 #include "erhe_geometry/operation/kis.hpp"
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_profile/profile.hpp"
-
-#include <fmt/format.h>
-#include <glm/glm.hpp>
+#include "erhe_geometry/operation/geometry_operation.hpp"
 
 namespace erhe::geometry::operation {
 
-Kis::Kis(const Geometry& src, Geometry& destination)
-    : Geometry_operation{src, destination}
+class Kis : public Geometry_operation
 {
-    ERHE_PROFILE_FUNCTION();
+public:
+    Kis(const Geometry& source, Geometry& destination);
 
-    make_points_from_points();
-    make_polygon_centroids();
+    void build();
+};
 
-    source.for_each_polygon_const([&](auto& i) {
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
-            const Polygon_id new_polygon_id = destination.make_polygon();
-            make_new_corner_from_polygon_centroid(new_polygon_id, i.polygon_id);
-            make_new_corner_from_corner          (new_polygon_id, j.corner_id);
-            make_new_corner_from_corner          (new_polygon_id, j.next_corner_id);
-        });
-    });
+Kis::Kis(const Geometry& source, Geometry& destination)
+    : Geometry_operation{source, destination}
+{
+}
+
+void Kis::build()
+{
+    make_dst_vertices_from_src_vertices();
+    make_facet_centroids();
+
+    for (GEO::index_t src_facet : source_mesh.facets) {
+        const GEO::index_t src_facet_corner_count = source_mesh.facets.nb_corners(src_facet);
+        for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < src_facet_corner_count; ++local_src_facet_corner) {
+            const GEO::index_t src_corner      = source_mesh.facets.corner(src_facet, local_src_facet_corner);
+            const GEO::index_t next_src_corner = source_mesh.facets.corner(src_facet, (local_src_facet_corner + 1) % src_facet_corner_count);
+            const GEO::index_t new_dst_facet   = destination_mesh.facets.create_triangles(1);
+            make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 0, src_facet);
+            make_new_dst_corner_from_src_corner        (new_dst_facet, 1, src_corner);
+            make_new_dst_corner_from_src_corner        (new_dst_facet, 2, next_src_corner);
+        }
+    }
 
     post_processing();
 }
 
-auto kis(const Geometry& source) -> Geometry
+void kis(const Geometry& source, Geometry& destination)
 {
-    return Geometry{
-        fmt::format("kis({})", source.name),
-        [&source](auto& result) {
-            Kis operation{source, result};
-        }
-    };
+    Kis operation{source, destination};
+    operation.build();
 }
 
 } // namespace erhe::geometry::operation
