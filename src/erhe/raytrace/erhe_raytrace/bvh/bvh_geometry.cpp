@@ -338,7 +338,7 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
                 size_t j = should_permute ? i : m_bvh.prim_ids[i];
                 if (auto hit = m_precomputed_triangles[j].intersect(bvh_ray)) {
                     prim_id = i;
-                    std::tie(u, v) = *hit;
+                    std::tie(bvh_ray.tmax, u, v) = *hit;
                 }
             }
             return prim_id != invalid_id;
