@@ -6,6 +6,7 @@
 
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <string>
 
 namespace erhe::log {
@@ -37,16 +38,16 @@ public:
     Store_log_sink();
 
     [[nodiscard]] auto get_serial() const -> uint64_t;
-    [[nodiscard]] auto get_log   () -> std::deque<Entry>&;
     void trim(std::size_t count);
+    void access_entries(std::function<void(std::deque<Entry>& entries)> op);
 
 protected:
     void sink_it_(const spdlog::details::log_msg& msg) override;
     void flush_  ()                                    override;
 
 private:
-    uint64_t          m_serial{0};
-    std::deque<Entry> m_entries;
+    uint64_t           m_serial{0};
+    std::deque<Entry>  m_entries;
 };
 
 [[nodiscard]] auto get_tail_store_log () -> Store_log_sink&;

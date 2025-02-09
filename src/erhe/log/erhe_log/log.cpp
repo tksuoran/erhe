@@ -49,13 +49,15 @@ auto Store_log_sink::get_serial() const -> uint64_t
     return m_serial;
 }
 
-auto Store_log_sink::get_log() -> std::deque<Entry>&
+void Store_log_sink::access_entries(std::function<void(std::deque<Entry>& entries)> op)
 {
-    return m_entries;
+    std::lock_guard<std::mutex> lock{mutex_};
+    op(m_entries);
 }
 
 void Store_log_sink::trim(const std::size_t trim_size)
 {
+    std::lock_guard<std::mutex> lock{mutex_};
     if (m_entries.size() > trim_size) {
         const auto trim_count = m_entries.size() - trim_size;
         m_entries.erase(
