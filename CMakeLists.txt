@@ -337,7 +337,8 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
 elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
     CPMAddPackage(
         NAME              bvh
-        GIT_TAG           master
+        GIT_TAG           fbdc59615112d471409515cd2ab826fcc3100fd7
+        #GIT_TAG           master
         GITHUB_REPOSITORY madmann91/bvh
     )
     message(STATUS "Erhe configured to use bvh for raytracing.")
