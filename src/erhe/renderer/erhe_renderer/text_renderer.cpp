@@ -197,8 +197,8 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
     std::byte* const          start               = vertex_gpu_data.data();
     const std::size_t         byte_count          = std::min(vertex_gpu_data.size_bytes() - m_vertex_write_offset, vertex_byte_count);
     const std::size_t         word_count          = byte_count / sizeof(float);
-    const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start + m_vertex_write_offset), word_count};
+    const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start + m_vertex_write_offset), word_count};
 
     erhe::ui::Rectangle bounding_box;
     const vec3          snapped_position{
