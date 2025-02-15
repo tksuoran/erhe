@@ -24,6 +24,7 @@
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/irigid_body.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/material.hpp"
