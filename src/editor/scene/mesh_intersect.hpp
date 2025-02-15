@@ -4,6 +4,8 @@
 
 #include <glm/glm.hpp>
 
+#include <memory>
+
 namespace erhe::scene    { class Mesh; }
 namespace erhe::geometry { class Geometry; }
 

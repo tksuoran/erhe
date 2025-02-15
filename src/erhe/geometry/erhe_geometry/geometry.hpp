@@ -6,6 +6,7 @@
 
 #include <array>
 #include <functional>
+#include <memory>
 #include <optional>
 
 namespace spdlog {

@@ -1,4 +1,4 @@
-#include "erhe_geometry/operation/Chamfer.hpp"
+#include "erhe_geometry/operation/chamfer.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_verify/verify.hpp"
