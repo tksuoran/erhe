@@ -124,9 +124,9 @@ public:
 
                 const Vertex_data  average_data = make_vertex_data(rel_slice_centroid, 0.0);
 
-                make_corner(facet, 2, slice + 1, stack);
+                make_corner(facet, 0, slice + 1, stack);
                 make_corner(facet, 1, slice,     stack);
-                const GEO::index_t tip_corner_id = make_corner(facet, 0, slice, stack_bottom);
+                const GEO::index_t tip_corner_id = make_corner(facet, 2, slice, stack_bottom);
 
                 const GEO::index_t p0 = get_vertex(slice,     stack);
                 const GEO::index_t p1 = get_vertex(slice + 1, stack);
@@ -155,9 +155,8 @@ public:
                 attributes.facet_aniso_control.set(facet, anisotropic_with_texcoord);
 
                 for (int slice = 0; slice < slice_count; ++slice) {
-                    const int reverse_slice = slice_count - 1 - slice;
                     GEO::index_t vertex_ = GEO::NO_INDEX;
-                    make_corner(facet, slice, reverse_slice, 0, true, &vertex_);
+                    make_corner(facet, slice, slice, 0, true, &vertex_);
                     const GEO::vec3f vertex_normal = attributes.vertex_normal.get(vertex_);
                     const GEO::vec3f vertex_normal_smooth = GEO::normalize(facet_normal + vertex_normal);
                     attributes.vertex_normal_smooth.set(vertex_, vertex_normal_smooth);
@@ -183,10 +182,10 @@ public:
                 for (int slice = 0; slice < slice_count; ++slice) {
                     const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
 
-                    make_corner(facet, 0, slice + 1, stack + 1);
-                    make_corner(facet, 1, slice,     stack + 1);
-                    make_corner(facet, 2, slice,     stack    );
-                    make_corner(facet, 3, slice + 1, stack    );
+                    make_corner(facet, 0, slice + 1, stack    );
+                    make_corner(facet, 1, slice,     stack    );
+                    make_corner(facet, 2, slice,     stack + 1);
+                    make_corner(facet, 3, slice + 1, stack + 1);
 
                     const Vertex_data centroid_data = make_vertex_data(rel_slice_centroid, rel_stack_centroid);
                     const GEO::vec3 flat_centroid_location = (1.0f / 4.0f) *
@@ -223,9 +222,9 @@ public:
 
                 const Vertex_data average_data = make_vertex_data(rel_slice_centroid, 1.0);
 
-                const GEO::index_t tip_corner = make_corner(facet, 0, slice, stack_top);
+                const GEO::index_t tip_corner = make_corner(facet, 2, slice, stack_top);
                 make_corner(facet, 1, slice,     stack);
-                make_corner(facet, 2, slice + 1, stack);
+                make_corner(facet, 0, slice + 1, stack);
 
                 attributes.corner_normal       .set(tip_corner, average_data.normal);
                 attributes.corner_tangent      .set(tip_corner, average_data.tangent);
@@ -260,8 +259,9 @@ public:
                 attributes.facet_aniso_control.set(facet, anisotropic_with_texcoord);
 
                 for (int slice = 0; slice < slice_count; ++slice) {
+                    const int reverse_slice = slice_count - 1 - slice;
                     GEO::index_t vertex_ = GEO::NO_INDEX;
-                    make_corner(facet, slice, slice, stack_top, true, &vertex_);
+                    make_corner(facet, slice, reverse_slice, stack_top, true, &vertex_);
                     const GEO::vec3f vertex_normal = attributes.vertex_normal.get(vertex_);
                     const GEO::vec3f vertex_normal_smooth = GEO::normalize(facet_normal + vertex_normal);
                     attributes.vertex_normal_smooth.set(vertex_, vertex_normal_smooth);

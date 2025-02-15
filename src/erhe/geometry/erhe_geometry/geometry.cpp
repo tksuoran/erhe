@@ -698,6 +698,13 @@ void transform_mesh(
         transform_attribute<GEO::vec4f>(s.corner_color_1,         d.corner_color_1        , transform);
         transform_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control  , transform);
     }
+
+    const double transform_determinant = GEO::det(transform);
+    if (transform_determinant < 0.0) {
+        for (GEO::index_t facet : destination_mesh.facets) {
+            destination_mesh.facets.flip(facet);
+        }
+    }
 }
 
 void transform_mesh(const GEO::Mesh& source_mesh, GEO::Mesh& destination_mesh, const GEO::mat4& transform)
