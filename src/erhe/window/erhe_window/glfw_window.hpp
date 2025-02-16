@@ -100,6 +100,7 @@ private:
     Mouse_cursor             m_current_mouse_cursor{Mouse_cursor_Arrow};
     bool                     m_is_mouse_captured   {false};
     bool                     m_is_window_visible   {false};
+    bool                     m_use_raw_mouse       {false};
     GLFWcursor*              m_mouse_cursor        [Mouse_cursor_COUNT];
     Window_configuration     m_configuration;
     double                   m_last_mouse_x        {0.0};

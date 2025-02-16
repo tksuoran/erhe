@@ -513,6 +513,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
         if (glfwRawMouseMotionSupported()) {
             log_window->info("Enabling GLFW_RAW_MOUSE_MOTION");
+            m_use_raw_mouse = true;
             glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
         }
 
@@ -770,15 +771,19 @@ void Context_window::capture_mouse(const bool capture)
         }
         if (m_is_mouse_captured != capture) {
             m_is_mouse_captured = capture;
+            const int hidden_value = m_use_raw_mouse ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_HIDDEN;
             glfwSetInputMode(
                 window,
                 GLFW_CURSOR,
                 m_is_mouse_captured
-                    ? GLFW_CURSOR_HIDDEN //GLFW_CURSOR_CAPTURED
+                    ? hidden_value
                     : (m_current_mouse_cursor != Mouse_cursor_None)
                         ? GLFW_CURSOR_NORMAL
-                        : GLFW_CURSOR_HIDDEN
+                        : hidden_value
             );
+            if (m_use_raw_mouse) {
+                glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, m_is_mouse_captured ? GLFW_TRUE : GLFW_FALSE);
+            }
         }
     }
 }
