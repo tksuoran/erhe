@@ -58,6 +58,8 @@ Window_imgui_host::~Window_imgui_host()
 
 void Window_imgui_host::process_input_events_from_context_window()
 {
+    // log_frame->info("Window_imgui_host::process_input_events_from_context_window()");
+
     // Process input events from the context window
     std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
     if (input_events.empty()) {

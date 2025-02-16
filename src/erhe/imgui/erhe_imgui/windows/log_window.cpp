@@ -236,7 +236,43 @@ void Tail_log_window::imgui()
 
 void Frame_log_window::imgui()
 {
-    m_logs.frame_log_imgui();
+    //auto& frame = erhe::log::get_frame_store_log();
+    std::deque<erhe::log::Entry>& frame_entries = m_frame_entries;
+    ImGui::PushFont(m_imgui_renderer.mono_font());
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
+    const ImVec2 outer_size{-FLT_MIN, 0.0f};
+    const float  inner_width{4000.0f};  // TODO Need a better way, to make long lines horizontally scrollable
+    const ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
+    if (ImGui::BeginTable("log_content", 3, flags, outer_size, inner_width)) {
+        ImGui::TableSetupScrollFreeze(0, 1);
+        ImGui::TableSetupColumn("TimeStamp", ImGuiTableColumnFlags_WidthFixed, 170.0f);
+        ImGui::TableSetupColumn("Logger",    ImGuiTableColumnFlags_WidthFixed, 140.0f);
+        ImGui::TableSetupColumn("Message",   ImGuiTableColumnFlags_WidthFixed, 4000.0f - 140.0f - 170.0f);
+        ImGui::TableHeadersRow();
+        for (auto& entry : frame_entries) {
+            m_logs.log_entry(entry);
+        }
+        ImGui::EndTable();
+    }
+    ImGui::PopStyleVar();
+
+    ImGui::PopFont();
+}
+
+void Frame_log_window::on_frame_begin()
+{
+}
+
+void Frame_log_window::on_frame_end()
+{
+    auto& frame = erhe::log::get_frame_store_log();
+
+    frame.access_entries(
+        [this](std::deque<erhe::log::Entry>& frame_entries) {
+            m_frame_entries.clear();
+            std::swap(m_frame_entries, frame_entries);
+        }
+    );
 }
 
 void Logs::tail_log_imgui()
@@ -316,37 +352,6 @@ void Logs::tail_log_imgui()
                 ImGui::PopFont();
             }
             ImGui::EndTable();
-        }
-    );
-}
-
-void Logs::frame_log_imgui()
-{
-    auto& frame = erhe::log::get_frame_store_log();
-
-    frame.access_entries(
-        [&](std::deque<erhe::log::Entry>& frame_entries) {
-            ImGui::PushFont(m_imgui_renderer.mono_font());
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
-            const ImVec2 outer_size{-FLT_MIN, 0.0f};
-            const float  inner_width{4000.0f};  // TODO Need a better way, to make long lines horizontally scrollable
-            const ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
-            if (ImGui::BeginTable("log_content", 3, flags, outer_size, inner_width)) {
-                ImGui::TableSetupScrollFreeze(0, 1);
-                ImGui::TableSetupColumn("TimeStamp", ImGuiTableColumnFlags_WidthFixed, 170.0f);
-                ImGui::TableSetupColumn("Logger",    ImGuiTableColumnFlags_WidthFixed, 140.0f);
-                ImGui::TableSetupColumn("Message",   ImGuiTableColumnFlags_WidthFixed, 4000.0f - 140.0f - 170.0f);
-                ImGui::TableHeadersRow();
-                for (auto& entry : frame_entries) {
-                    log_entry(entry);
-                }
-                ImGui::EndTable();
-            }
-            ImGui::PopStyleVar();
-
-            ImGui::PopFont();
-
-            frame_entries.clear();
         }
     );
 }

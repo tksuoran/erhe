@@ -27,6 +27,7 @@
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_log/log_glm.hpp"
 #include "erhe_renderer/line_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene/camera.hpp"
@@ -304,6 +305,8 @@ void Viewport_scene_view::update_hover(bool ray_only)
     const auto near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
     const auto far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
 
+    // log_input_frame->info("Viewport_scene_view::update_hover");
+
     const auto camera = m_camera.lock();
     if (!near_position_in_world.has_value() || !far_position_in_world.has_value() || !camera || !m_is_scene_view_hovered) {
         reset_control_transform();
@@ -369,7 +372,7 @@ void Viewport_scene_view::update_hover_with_id_render()
                 const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
                 const GEO::index_t facet = shape->get_mesh_facet_from_triangle(entry.triangle);
                 ERHE_VERIFY(facet < geo_mesh.facets.nb());
-                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", facet);
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover facet = {}", facet);
                 const GEO::vec3f facet_normal           = GEO::vec3f{GEO::Geom::mesh_facet_normal(geo_mesh, facet)};
                 const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
                 const glm::mat4  world_from_node        = node->world_from_node();
@@ -391,11 +394,11 @@ void Viewport_scene_view::update_hover_with_id_render()
     const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::brush       );
     const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::rendertarget);
     SPDLOG_LOGGER_TRACE(
-        log_frame,
-        "hover mesh = {} primitive = {} local index {} {}{}{}{}",
-        entry.mesh ? entry.mesh->get_name() : "()",
-        entry.primitive,
-        entry.local_index,
+        log_controller_ray,
+        "hover mesh = {} primitive index = {} facet {} {}{}{}{}",
+        entry.scene_mesh ? entry.scene_mesh->get_name() : "()",
+        entry.scene_mesh_primitive_index,
+        entry.facet,
         hover_content      ? "content "      : "",
         hover_tool         ? "tool "         : "",
         hover_brush        ? "brush "        : "",

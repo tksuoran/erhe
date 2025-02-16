@@ -428,11 +428,11 @@ void Scene_views::debug_imgui()
     }
 }
 
-void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
+void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
 {
     ERHE_PROFILE_FUNCTION();
 
-    //SPDLOG_LOGGER_TRACE(log_scene_view, "Scene_views::update_hover(host = {})", imgui_host->get_name());
+    // log_scene_view->info("Scene_views::update_pointer(host = {})", imgui_host->get_name());
 
     ERHE_VERIFY(imgui_host != nullptr);
 
@@ -443,9 +443,9 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
     {
         //const auto mouse_position = m_context.input_state->mouse_position;
         const glm::vec2 mouse_position = imgui_host->get_mouse_position();
-        if (mouse_position.x >= 0.0f && mouse_position.y >= 0.0f) {
-            SPDLOG_LOGGER_TRACE(log_scene_view, "mouse_position: {}, {}", mouse_position.x, mouse_position.y);
-        }
+        // if (mouse_position.x >= 0.0f && mouse_position.y >= 0.0f) {
+        //     log_scene_view->info("mouse_position: {}, {}", mouse_position.x, mouse_position.y);
+        //  }
         for (auto& window : m_imgui_window_scene_view_nodes) {
             if (window->get_imgui_host() == imgui_host) {
                 if (window->is_window_hovered()) {
@@ -455,11 +455,11 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
         }
     }
 
-    update_hover_from_imgui_viewport_windows(imgui_host);
+    update_pointer_from_imgui_viewport_windows(imgui_host);
 
     if (!m_basic_scene_view_nodes.empty()) {
         layout_basic_viewport_windows();
-        update_hover_from_basic_viewport_windows();
+        update_pointer_from_basic_viewport_windows();
     }
 
     m_hover_scene_view = m_hover_stack.empty()
@@ -467,7 +467,7 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
         : m_hover_stack.back().lock();
 
     if (old_scene_view != m_hover_scene_view) {
-        SPDLOG_LOGGER_TRACE(log_scene_view, "Changing hover scene view to: {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
+        // log_scene_view->info("Changing hover scene view to: {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
         m_context.editor_message_bus->send_message(
             Editor_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_viewport | Message_flag_bit::c_flag_bit_hover_scene_view,
@@ -475,13 +475,30 @@ void Scene_views::update_hover(erhe::imgui::Imgui_host* imgui_host)
             }
         );
     } else {
-        SPDLOG_LOGGER_TRACE(log_scene_view, "m_hover_scene_view {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
+        // log_scene_view->info("m_hover_scene_view {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
     }
 }
 
-void Scene_views::update_hover_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host)
+void Scene_views::update_hover_info(erhe::imgui::Imgui_host* imgui_host)
 {
-    SPDLOG_LOGGER_TRACE(log_scene_view, "update_hover_from_imgui_viewport_windows({})", imgui_host->get_name());
+    ERHE_PROFILE_FUNCTION();
+
+    //SPDLOG_LOGGER_TRACE(log_scene_view, "Scene_views::update_hover(host = {})", imgui_host->get_name());
+
+    ERHE_VERIFY(imgui_host != nullptr);
+
+    for (auto& window : m_imgui_window_scene_view_nodes) {
+        if (window->get_imgui_host() == imgui_host) {
+            if (window->is_window_hovered()) {
+                window->update_hover_info();
+            }
+        }
+    }
+}
+
+void Scene_views::update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host)
+{
+    // log_scene_view->info("update_pointer_from_imgui_viewport_windows({})", imgui_host->get_name());
     for (const auto& window : m_imgui_window_scene_view_nodes) {
         if (window->get_imgui_host() != imgui_host) {
             continue;
@@ -493,14 +510,14 @@ void Scene_views::update_hover_from_imgui_viewport_windows(erhe::imgui::Imgui_ho
         }
 
         if (window->is_window_hovered()) {
-            SPDLOG_LOGGER_TRACE(log_scene_view, "pushing {} to hover stack", viewport_scene_view->get_name());
+            // log_scene_view->info("pushing {} to hover stack", viewport_scene_view->get_name());
             m_last_scene_view = viewport_scene_view;
             m_hover_stack.push_back(m_last_scene_view);
         }
     }
 }
 
-void Scene_views::update_hover_from_basic_viewport_windows()
+void Scene_views::update_pointer_from_basic_viewport_windows()
 {
     glm::vec2 pointer_window_position = m_context.input_state->mouse_position;
 
@@ -520,16 +537,13 @@ void Scene_views::update_hover_from_basic_viewport_windows()
         viewport_scene_view->set_is_scene_view_hovered(is_hoverered);
 
         if (is_hoverered) {
-            const glm::vec2 viewport_position = viewport_scene_view->viewport_from_window(
-                pointer_window_position
-            );
-            SPDLOG_LOGGER_TRACE(
-                log_pointer,
-                "window position {} hovers Viewport_scene_view {} @ {}",
-                pointer_window_position,
-                viewport_scene_view->get_name(),
-                viewport_position
-            );
+            const glm::vec2 viewport_position = viewport_scene_view->viewport_from_window(pointer_window_position);
+            // log_pointer->info(
+            //     "window position {} hovers Viewport_scene_view {} @ {}",
+            //     pointer_window_position,
+            //     viewport_scene_view->get_name(),
+            //     viewport_position
+            // );
 
             viewport_scene_view->update_pointer_2d_position(viewport_position);
             ERHE_VERIFY(m_hover_stack.empty());

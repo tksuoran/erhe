@@ -209,6 +209,16 @@ auto Input_axis::get_base_velocity() const -> float
 // t(v) = log(v0/v) / log(a)
 void Input_axis::update(std::chrono::steady_clock::time_point timestamp)
 {
+    auto new_time = std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp.time_since_epoch()).count();
+    log_input_axis->info("update timestamp new value = {}", new_time);
+    if (m_last_timestamp.has_value()) {
+        auto old_time = std::chrono::duration_cast<std::chrono::nanoseconds>(m_last_timestamp.value().time_since_epoch()).count();
+        if (old_time > new_time) {
+            static int counter = 0;
+            ++counter;
+        }
+    }
+
     if (is_power_base_disabled()) {
         return;
     }

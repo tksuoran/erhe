@@ -113,7 +113,9 @@ public:
 
     auto open_new_viewport_scene_view(const std::shared_ptr<Scene_root>& scene_root = {}) -> std::shared_ptr<Viewport_scene_view>;
 
-    void update_hover(erhe::imgui::Imgui_host* imgui_host);
+    void update_pointer(erhe::imgui::Imgui_host* imgui_host);
+
+    void update_hover_info(erhe::imgui::Imgui_host* imgui_host);
 
     void debug_imgui();
 
@@ -133,8 +135,8 @@ private:
     void on_message                      (Editor_message& message);
     void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
 
-    void update_hover_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
-    void update_hover_from_basic_viewport_windows();
+    void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
+    void update_pointer_from_basic_viewport_windows();
     void layout_basic_viewport_windows           ();
 
     Editor_context& m_context;

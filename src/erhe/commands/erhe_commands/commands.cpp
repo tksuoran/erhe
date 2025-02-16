@@ -281,6 +281,8 @@ void Commands::tick(std::chrono::steady_clock::time_point timestamp, std::vector
 {
     ERHE_PROFILE_FUNCTION();
 
+    // log_input_frame->info("Commands::tick()");
+
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_command_mutex};
 
     //if (input_events.empty()) {

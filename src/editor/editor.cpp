@@ -177,10 +177,11 @@ public:
     void tick()
     {
         ERHE_PROFILE_FUNCTION();
-
-        std::vector<erhe::window::Input_event>& input_events = m_context_window->get_input_events();
+        m_frame_log_window->on_frame_begin();
+        // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
 
         std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
+        std::vector<erhe::window::Input_event>& input_events = m_context_window->get_input_events();
 
         m_fly_camera_tool->on_frame_begin();
 
@@ -188,7 +189,7 @@ public:
         if (!m_editor_context.OpenXR) { //if (!m_headset_view.is_active()) {
             auto* imgui_host = m_imgui_windows->get_window_imgui_host().get(); // get glfw window hosted viewport
             if (imgui_host != nullptr) {
-                m_viewport_scene_views->update_hover(imgui_host); // updates what viewport window is being hovered
+                m_viewport_scene_views->update_pointer(imgui_host); // updates what viewport window is being hovered
             }
         }
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -216,6 +217,13 @@ public:
 
         // - Apply all command bindings (OpenXR bindings were already executed above)
         m_commands->tick(timestamp, input_events);
+
+        m_fly_camera_tool->update_once_per_frame(timestamp);
+
+        auto* imgui_host = m_imgui_windows->get_window_imgui_host().get(); // get glfw window hosted viewport
+        if (imgui_host != nullptr) {
+            m_viewport_scene_views->update_hover_info(imgui_host); // updates what viewport window is being hovered
+        }
 
         m_operation_stack->update();
 
@@ -265,6 +273,7 @@ public:
                 m_context_window->swap_buffers();
             }
         }
+        m_frame_log_window->on_frame_end();
     }
 
     [[nodiscard]] static auto get_windows_ini_path() -> std::string
@@ -525,7 +534,6 @@ public:
                     *m_imgui_windows.get(),
                     m_editor_context,
                     *m_editor_message_bus.get(),
-                    *m_time.get(),
                     *m_tools.get()
                 );
             })  .name("Tools")

@@ -10,7 +10,6 @@
 #include "tools/grid.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry_renderer/geometry_debug_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_renderer/line_renderer.hpp"

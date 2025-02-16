@@ -129,6 +129,14 @@ void Imgui_window_scene_view_node::on_mouse_move(glm::vec2 mouse_position_in_win
     }
     const auto mouse_position_in_viewport = viewport_scene_view->viewport_from_window(mouse_position_in_window);
     viewport_scene_view->update_pointer_2d_position(mouse_position_in_viewport);
+}
+
+void Imgui_window_scene_view_node::update_hover_info()
+{
+    auto viewport_scene_view = m_viewport_scene_view.lock();
+    if (!viewport_scene_view) {
+        return;
+    }
     viewport_scene_view->update_hover();
 }
 

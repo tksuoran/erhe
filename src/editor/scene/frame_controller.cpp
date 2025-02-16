@@ -1,4 +1,6 @@
 #include "scene/frame_controller.hpp"
+#include "editor_log.hpp"
+#include "erhe_log/log_glm.hpp"
 
 #include "erhe_scene/node.hpp"
 #include "erhe_bit/bit_helpers.hpp"
@@ -173,6 +175,8 @@ void Frame_controller::update()
 
     m_transform_update = true;
     node->set_world_from_node(erhe::scene::Trs_transform{m_position, m_orientation});
+    const glm::vec4 direction_in_world = node->direction_in_world();
+    // log_input_frame->info("Frame_controller::update() direction_in_world = {}", glm::vec3{direction_in_world});
     m_transform_update = false;
 }
 
@@ -193,6 +197,7 @@ auto Frame_controller::get_axis_z() const -> vec3
 
 void Frame_controller::tick(std::chrono::steady_clock::time_point timestamp)
 {
+    // log_input_frame->info("Frame_controller::tick() begin");
     get_transform_from_node(get_node());
 
     translate_x   .tick(timestamp);
@@ -220,10 +225,13 @@ void Frame_controller::tick(std::chrono::steady_clock::time_point timestamp)
     apply_rotation(rotate_x.get_tick_distance(), rotate_y.get_tick_distance(), 0.0f);
 
     update();
+
+    // log_input_frame->info("Frame_controller::tick() end");
 }
 
 void Frame_controller::apply_rotation(float rx, float ry, float rz)
 {
+    // log_input_frame->info("Frame_controller::apply_rotation() rx = {}, ry = {}, rz = {}", rx, ry, rz);
     glm::mat4 new_orientation = m_orientation;
     if (rx != 0.0f) {
         glm::mat4 rotate = erhe::math::create_rotation<float>(rx, get_axis_x());

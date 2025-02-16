@@ -40,12 +40,11 @@ public:
 
     // Public API
     void tail_log_imgui ();
-    void frame_log_imgui();
     void log_settings_ui();
+    void log_entry      (erhe::log::Entry& entry);
 
 private:
     void save_settings();
-    void log_entry(erhe::log::Entry& entry);
 
     Imgui_renderer&           m_imgui_renderer;
     Logs_toggle_pause_command m_toggle_pause_command;
@@ -83,9 +82,12 @@ class Frame_log_window : public Imgui_window
 public:
     Frame_log_window(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows, Logs& logs);
     void imgui() override;
+    void on_frame_begin();
+    void on_frame_end();
 
 private:
-    Logs& m_logs;
+    Logs&                        m_logs;
+    std::deque<erhe::log::Entry> m_frame_entries;
 };
 
 

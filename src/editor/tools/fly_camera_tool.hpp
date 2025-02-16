@@ -158,8 +158,7 @@ private:
 };
 
 class Fly_camera_tool
-    : public Update_once_per_frame
-    , public erhe::imgui::Imgui_window
+    : public erhe::imgui::Imgui_window
     , public Tool
 {
 public:
@@ -181,19 +180,15 @@ public:
         erhe::imgui::Imgui_windows&  imgui_windows,
         Editor_context&              editor_context,
         Editor_message_bus&          editor_message_bus,
-        Time&                        time,
         Tools&                       tools
     );
 
     // Implements Window
     void imgui() override;
 
-    // Implements Update_once_per_frame
-    void update_once_per_frame(const Time_context& time_context) override;
-    //void tick(std::chrono::steady_clock::time_point timestamp);
-
-    void on_frame_begin();
-    void on_frame_end();
+    void on_frame_begin       ();
+    void on_frame_end         ();
+    void update_once_per_frame(std::chrono::steady_clock::time_point timestamp);
 
     [[nodiscard]] auto get_camera() const -> erhe::scene::Camera*;
     void set_camera (erhe::scene::Camera* camera, erhe::scene::Node* node = nullptr);
@@ -214,7 +209,6 @@ public:
     void serialize_transform     (bool store);
 
     void synthesize_input();
-    void tick_synthesize();
 
     void capture_pointer();
     void release_pointer();

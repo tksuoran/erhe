@@ -57,6 +57,7 @@ public:
     void update_fixed_step    (const Time_context& time_context);
     void update_once_per_frame();
     auto frame_number         () const -> uint64_t;
+    auto get_last_time_context() const -> const Time_context& { return m_last_update; }
 
     void register_update_fixed_step      (Update_fixed_step* entry);
     void register_update_once_per_frame  (Update_once_per_frame* entry);

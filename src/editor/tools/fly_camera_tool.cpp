@@ -590,11 +590,9 @@ Fly_camera_tool::Fly_camera_tool(
     erhe::imgui::Imgui_windows&  imgui_windows,
     Editor_context&              editor_context,
     Editor_message_bus&          editor_message_bus,
-    Time&                        time,
     Tools&                       tools
 )
-    : Update_time_base                {time}
-    , erhe::imgui::Imgui_window       {imgui_renderer, imgui_windows, "Fly Camera", "fly_camera"}
+    : erhe::imgui::Imgui_window       {imgui_renderer, imgui_windows, "Fly Camera", "fly_camera"}
     , Tool                            {editor_context}
     , m_turn_command                  {commands, editor_context}
     , m_tumble_command                {commands, editor_context}
@@ -886,7 +884,6 @@ auto Fly_camera_tool::try_move(std::chrono::steady_clock::time_point timestamp, 
         return false;
     }
 
-    log_fly_camera->trace("begin try_move");
     auto& controller = m_camera_controller->get_variable(variable);
     controller.set(timestamp, control, active);
     if (m_recording) {
@@ -897,7 +894,6 @@ auto Fly_camera_tool::try_move(std::chrono::steady_clock::time_point timestamp, 
         m_events.emplace_back(t, message);
         ++m_sample_count;
     }
-    log_fly_camera->trace("end try_move");
     return true;
 }
 
@@ -1167,18 +1163,18 @@ void Fly_camera_tool::on_frame_end()
     m_jitter.sleep();
 }
 
-void Fly_camera_tool::update_once_per_frame(const Time_context& time_context)
+void Fly_camera_tool::update_once_per_frame(std::chrono::steady_clock::time_point timestamp)
 {
     if (!m_camera_controller) { // TODO
-        return; 
+        return;
     }
 
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     update_camera();
-    m_camera_controller->tick(time_context.timestamp);
+    m_camera_controller->tick(timestamp);
 
-    record_sample(time_context.timestamp);
+    record_sample(timestamp);
 }
 
 auto simple_degrees(const float radians_value) -> float
@@ -1240,7 +1236,7 @@ void Fly_camera_tool::imgui()
 
 
     //erhe::math::Input_axis& control = m_camera_controller->translate_x;
-    if (ImGui::TreeNodeEx("Controls", ImGuiTreeNodeFlags_None)) {
+    if (ImGui::TreeNodeEx("Debug", ImGuiTreeNodeFlags_None)) {
         ImGui::Text("Input events: %zu", m_sample_count);
         m_jitter.imgui();
         ImGui::Separator();
@@ -1249,24 +1245,27 @@ void Fly_camera_tool::imgui()
 
         ImGui::Checkbox   ("Use Viewport Camera", &m_use_viewport_camera);
 
-        //// ImGui::BeginTable("Controls", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_RowBg);
-        //// ImGui::TableSetupScrollFreeze(0, 1);
-        //// ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 5.0f);
-        //// ImGui::TableSetupColumn("Less", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        //// ImGui::TableSetupColumn("More", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        //// ImGui::TableSetupColumn("exp",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        //// ImGui::TableSetupColumn("vel",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        //// ImGui::TableSetupColumn("dst",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        //// ImGui::TableSetupColumn("v0",   ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        //// ImGui::TableHeadersRow();
-        //// show_input_axis_ui(m_camera_controller->translate_x);
-        //// show_input_axis_ui(m_camera_controller->translate_y);
-        //// show_input_axis_ui(m_camera_controller->translate_z);
-        //// show_input_axis_ui(m_camera_controller->rotate_x);
-        //// show_input_axis_ui(m_camera_controller->rotate_y);
-        //// show_input_axis_ui(m_camera_controller->rotate_z);
-        //// show_input_axis_ui(m_camera_controller->speed_modifier);
-        //// ImGui::EndTable();
+        if (ImGui::TreeNodeEx("Controls", ImGuiTreeNodeFlags_None)) {
+            ImGui::BeginTable("Controls", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_RowBg);
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 5.0f);
+            ImGui::TableSetupColumn("Less", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("More", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("exp",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("vel",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("dst",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("v0",   ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableHeadersRow();
+            show_input_axis_ui(m_camera_controller->translate_x);
+            show_input_axis_ui(m_camera_controller->translate_y);
+            show_input_axis_ui(m_camera_controller->translate_z);
+            show_input_axis_ui(m_camera_controller->rotate_x);
+            show_input_axis_ui(m_camera_controller->rotate_y);
+            show_input_axis_ui(m_camera_controller->rotate_z);
+            show_input_axis_ui(m_camera_controller->speed_modifier);
+            ImGui::EndTable();
+            ImGui::TreePop();
+        }
 
                            ImGui::Checkbox("Velocity",           &m_velocity_graph          .plot);
         ImGui::SameLine(); ImGui::Checkbox("Reference Velocity", &m_reference_velocity_graph.plot);

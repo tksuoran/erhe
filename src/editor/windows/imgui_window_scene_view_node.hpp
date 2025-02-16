@@ -50,6 +50,8 @@ public:
     auto want_keyboard_events() const -> bool override;
     void on_mouse_move       (glm::vec2 mouse_position_in_window);
 
+    void update_hover_info   ();
+
     // Implements Rendergraph_node
     auto get_consumer_input_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
