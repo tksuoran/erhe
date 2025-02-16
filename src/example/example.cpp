@@ -132,6 +132,8 @@ public:
     {
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
+            gl::finish();
+            m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
             m_camera_controller->on_frame_begin();
 
             m_window.poll_events();
@@ -141,6 +143,7 @@ public:
             }
             tick();
             m_camera_controller->on_frame_end();
+
             m_window.swap_buffers();
         }
     }

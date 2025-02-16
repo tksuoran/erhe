@@ -67,6 +67,7 @@ public:
     auto open                       (const Window_configuration& configuration) -> bool;
     void make_current               () const;
     void clear_current              () const;
+    auto delay_before_swap          (float seconds) const -> bool;
     void swap_buffers               () const;
     void poll_events                (float wait_time = 0.0f);
     void get_cursor_position        (float& xpos, float& ypos);
@@ -117,6 +118,8 @@ private:
     std::vector<Input_event> m_input_events[2];
     std::thread              m_joystick_scan_task;
     std::function<void(Context_window& context_window)> m_input_event_synthesizer_callback;
+
+    void* m_NV_delay_before_swap{nullptr};
 
     static int s_window_count;
 };

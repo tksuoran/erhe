@@ -14,6 +14,7 @@
 #   define GLFW_EXPOSE_NATIVE_WIN32 1
 #   define GLFW_EXPOSE_NATIVE_WGL 1
 #   include <GLFW/glfw3native.h>
+#   include <GL/wglext.h>
 #endif
 
 #include <cstdlib>
@@ -1039,6 +1040,11 @@ void Context_window::get_extensions()
 {
     ERHE_PROFILE_FUNCTION();
     gl::dynamic_load_init(glfwGetProcAddress);
+
+#if defined(_WIN32)
+    m_NV_delay_before_swap = glfwGetProcAddress("wglDelayBeforeSwapNV");
+#else // TODO
+#endif
 }
 
 void Context_window::make_current() const
@@ -1056,6 +1062,26 @@ void Context_window::make_current() const
 void Context_window::clear_current() const
 {
     glfwMakeContextCurrent(nullptr);
+}
+
+auto Context_window::delay_before_swap(float seconds) const -> bool
+{
+#if defined(_WIN32)
+    if (m_NV_delay_before_swap != nullptr) {
+        auto* window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
+        //HGLRC glrc = glfwGetWGLContext(window);
+        HDC dc = GetDC(glfwGetWin32Window(window));
+
+        PFNWGLDELAYBEFORESWAPNVPROC p_WGL_NV_delay_before_swap = (PFNWGLDELAYBEFORESWAPNVPROC)(m_NV_delay_before_swap);
+        BOOL return_value = p_WGL_NV_delay_before_swap(dc, seconds);
+        return return_value == TRUE;
+    } else {
+        return false;
+    }
+#else
+    // TODO
+    return false;
+#endif
 }
 
 void Context_window::swap_buffers() const
