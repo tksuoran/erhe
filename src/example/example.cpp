@@ -112,6 +112,7 @@ public:
         const erhe::window::Mouse_button_event& mouse_button_event = input_event.u.mouse_button_event;
         if (mouse_button_event.button == erhe::window::Mouse_button_left) {
             m_mouse_pressed = mouse_button_event.pressed;
+            m_window.capture_mouse(m_mouse_pressed);
             return true;
         }
         return false;
@@ -149,7 +150,7 @@ public:
         const auto tick_end_time = std::chrono::steady_clock::now();
 
         gl::enable(gl::Enable_cap::framebuffer_srgb);
-        gl::clear_color(0.01f, 0.01f, 0.01f, 1.0f);
+        gl::clear_color(0.01f, 0.01f, 0.01f, 0.5f);
         gl::clear_stencil(0);
         gl::clear_depth_f(*m_graphics_instance.depth_clear_value_pointer());
         gl::clear(
@@ -362,11 +363,14 @@ void run_example()
 
     erhe::window::Context_window window{
         erhe::window::Window_configuration{
+            .framebuffer_transparency = true,
+            .use_depth         = true,
             .gl_major          = 4,
             .gl_minor          = 6,
             .width             = 1920,
             .height            = 1080,
             .msaa_sample_count = 0,
+            .swap_interval     = 0,
             .title             = "erhe example"
         }
     };
