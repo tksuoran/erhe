@@ -39,7 +39,9 @@ public:
     [[nodiscard]] auto get_segment_distance  (std::size_t i) const -> float;
     [[nodiscard]] auto get_segment_state_time(std::size_t i) const -> float;
     [[nodiscard]] auto evaluate_velocity_at_state_time(float state_time) const -> float;
+    [[nodiscard]] auto is_power_base_disabled() const -> bool;
 
+    void disable_power_base();
     void set_power_base(float base);
     void on_frame_begin();
     void on_frame_end  ();

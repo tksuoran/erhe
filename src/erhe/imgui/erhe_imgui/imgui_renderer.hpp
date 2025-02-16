@@ -149,8 +149,8 @@ private:
     void apply_font_config_changes(const Imgui_settings& settings);
 
     static constexpr std::size_t s_max_draw_count     =   8'000;
-    static constexpr std::size_t s_max_index_count    = 200'000;
-    static constexpr std::size_t s_max_vertex_count   = 200'000;
+    static constexpr std::size_t s_max_index_count    = 500'000;
+    static constexpr std::size_t s_max_vertex_count   = 500'000;
 
     erhe::graphics::Instance&                m_graphics_instance;
     Imgui_program_interface                  m_imgui_program_interface;

@@ -26,6 +26,8 @@
 #   include <imgui/imgui.h>
 #endif
 
+#include <glm/gtx/euler_angles.hpp>
+
 #include <cmath>
 #include <numeric>
 #include <string>
@@ -116,7 +118,13 @@ void Fly_camera_turn_command::try_ready()
     if (m_context.fly_camera_tool->try_ready()) {
         log_fly_camera->trace("Fly camera setting ready");
         set_ready();
+        m_context.fly_camera_tool->capture_pointer();
     }
+}
+
+void Fly_camera_turn_command::on_inactive()
+{
+    m_context.fly_camera_tool->release_pointer();
 }
 
 auto Fly_camera_turn_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
@@ -381,8 +389,162 @@ Fly_camera_serialization_command::Fly_camera_serialization_command(erhe::command
 
 auto Fly_camera_serialization_command::try_call() -> bool
 {
-    m_context.fly_camera_tool->serialize_transform(m_store);
+    //// TODO 
+    m_context.fly_camera_tool->synthesize_input();
+    //// m_context.fly_camera_tool->serialize_transform(m_store);
     return true;
+}
+
+void Fly_camera_tool::synthesize_input()
+{
+    std::random_device                    random_device;
+    std::mt19937                          random_engine{random_device()};
+    std::uniform_real_distribution<float> distribution(0.1f, 20.0f);
+
+    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
+
+    m_before_position    = m_camera_controller->get_position();
+    m_before_orientation = glm::quat_cast(m_camera_controller->get_orientation());
+
+    float mouse_x{0.0f};
+    float mouse_y{0.0f};
+    m_context.context_window->get_cursor_position(mouse_x, mouse_y);
+
+    m_synthetic_input_events.clear();
+
+    timestamp = timestamp + std::chrono::milliseconds(20);
+    m_synthetic_input_events.push_back(
+        erhe::window::Input_event{
+            .type = erhe::window::Input_event_type::key_event,
+            .timestamp = timestamp,
+            .u = {
+                .key_event = {
+                    .keycode       = erhe::window::Key_d,
+                    .modifier_mask = 0,
+                    .pressed       = true
+                }
+            }
+        }
+    );
+
+    timestamp = timestamp + std::chrono::milliseconds(static_cast<int>(m_synth_distance));
+    m_synthetic_input_events.push_back(
+        erhe::window::Input_event{
+            .type = erhe::window::Input_event_type::key_event,
+            .timestamp = timestamp,
+            .u = {
+                .key_event = {
+                    .keycode       = erhe::window::Key_d,
+                    .modifier_mask = 0,
+                    .pressed       = false
+                }
+            }
+        }
+    );
+
+    timestamp = timestamp + std::chrono::milliseconds(300);
+    m_synthetic_input_events.push_back(
+        erhe::window::Input_event{
+            .type = erhe::window::Input_event_type::no_event,
+            .timestamp = timestamp,
+        }
+    );
+
+#if 0
+    // Press left mouse button down
+    timestamp = timestamp + std::chrono::milliseconds(20);
+    m_synthetic_input_events.push_back(
+        erhe::window::Input_event{
+            .type = erhe::window::Input_event_type::mouse_button_event,
+            .timestamp = timestamp,
+            .u = {
+                .mouse_button_event = {
+                    .button        = erhe::window::Mouse_button_left,
+                    .pressed       = true,
+                    .modifier_mask = 0
+                }
+            }
+        }
+    );
+
+    // Move mouse
+    float end_x = mouse_x + m_synth_distance;
+    while (mouse_x < end_x) {
+        //float dx = distribution(random_engine);
+        float dx = m_synth_distance / 100.0f;
+        mouse_x += dx;
+        if (mouse_x > end_x) {
+            dx = end_x - mouse_x;
+            mouse_x = end_x;
+        }
+
+        timestamp = timestamp + std::chrono::milliseconds(4);
+        m_synthetic_input_events.push_back(
+            erhe::window::Input_event{
+                .type = erhe::window::Input_event_type::mouse_move_event,
+                .timestamp = timestamp,
+                .u = {
+                    .mouse_move_event = {
+                        .x             = static_cast<float>(mouse_x),
+                        .y             = static_cast<float>(mouse_y),
+                        .dx            = static_cast<float>(dx),
+                        .dy            = static_cast<float>(0.0f),
+                        .modifier_mask = 0
+                    }
+                }
+            }
+        );
+    }
+
+    // Release mouse button
+    timestamp = timestamp + std::chrono::milliseconds(10);
+    m_synthetic_input_events.push_back(
+        erhe::window::Input_event{
+            .type = erhe::window::Input_event_type::mouse_button_event,
+            .timestamp = timestamp,
+            .u = {
+                .mouse_button_event = {
+                    .button        = erhe::window::Mouse_button_left,
+                    .pressed       = false,
+                    .modifier_mask = 0
+                }
+            }
+        }
+    );
+#endif
+
+    log_input->info("Synthesizing {} input events", m_synthetic_input_events.size());
+
+    m_context.context_window->set_input_event_synthesizer_callback(
+        [this](erhe::window::Context_window& context_window) {
+            std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+            while (!m_synthetic_input_events.empty()) {
+                erhe::window::Input_event event = m_synthetic_input_events.front();
+                if (event.timestamp > now) {
+                    return;
+                }
+                event.timestamp = now;
+                context_window.inject_input_event(event);
+                m_synthetic_input_events.pop_front();
+            }
+            if (m_synthetic_input_events.empty()) {
+                log_input->info("Removing input event synthesizer");
+                context_window.set_input_event_synthesizer_callback({});
+            }
+
+            m_after_position    = m_camera_controller->get_position();
+            m_after_orientation = glm::quat_cast(m_camera_controller->get_orientation());
+
+            const glm::quat orientation_delta = m_after_orientation * glm::inverse(m_before_orientation);
+            const float     yaw_delta         = glm::yaw(orientation_delta);
+            const float     yaw_degrees       = glm::degrees(yaw_delta);
+            const float     distance          = glm::distance(m_before_position, m_after_position);
+            log_input->info("Synthetic distance = {}, rotation = {} degrees", distance, yaw_degrees);
+
+            //const glm::mat4 heading            = m_camera_controller->get_orientation();
+            //const glm::quat before_orientation = glm::quat_cast(heading);
+        }
+    );
 }
 
 void Fly_camera_tool::serialize_transform(bool store)
@@ -466,6 +628,7 @@ Fly_camera_tool::Fly_camera_tool(
     , m_state_time_graph              {"State time",         "time", "ms", "state time",         "ms"}
     , m_deltatime_graph               {"Delta-Time",         "time", "ms", "dt",                 "ms"}
     , m_reference_velocity_graph      {"Reference Velocity", "time", "ms", "reference velocity", "m/s"}
+    , m_heading_graph                 {"Heading",            "time", "ms", "heading",            ""}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -500,9 +663,9 @@ Fly_camera_tool::Fly_camera_tool(
     m_camera_controller->get_variable(Variable::translate_x).set_power_base(config.move_power);
     m_camera_controller->get_variable(Variable::translate_y).set_power_base(config.move_power);
     m_camera_controller->get_variable(Variable::translate_z).set_power_base(config.move_power);
-    m_camera_controller->get_variable(Variable::rotate_x   ).set_power_base(65536.0f * 65536.0f);
-    m_camera_controller->get_variable(Variable::rotate_y   ).set_power_base(65536.0f * 65536.0f);
-    m_camera_controller->get_variable(Variable::rotate_z   ).set_power_base(65536.0f * 65536.0f);
+    m_camera_controller->get_variable(Variable::rotate_x   ).disable_power_base();
+    m_camera_controller->get_variable(Variable::rotate_y   ).disable_power_base();
+    m_camera_controller->get_variable(Variable::rotate_z   ).disable_power_base();
 
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "camera_controls");
     ini.get("invert_x",   config.invert_x);
@@ -568,8 +731,8 @@ Fly_camera_tool::Fly_camera_tool(
     commands.register_command(&m_frame_command);
     commands.bind_command_to_key(&m_frame_command, erhe::window::Key_f, true);
 
-    m_rotate_scale_x = config.invert_x ? -1.0f / 1024.0f : 1.0f / 1024.f;
-    m_rotate_scale_y = config.invert_y ? -1.0f / 1024.0f : 1.0f / 1024.f;
+    m_rotate_scale_x = config.invert_x ? -1.0f / 512.0f : 1.0f / 512.f;
+    m_rotate_scale_y = config.invert_y ? -1.0f / 512.0f : 1.0f / 512.f;
 
     commands.bind_command_to_controller_axis(&m_translate_x_command, 0);
     commands.bind_command_to_controller_axis(&m_translate_y_command, 2);
@@ -732,7 +895,7 @@ auto Fly_camera_tool::try_move(std::chrono::steady_clock::time_point timestamp, 
         float t = 1000.0f * time.count();
         std::string message = fmt::format("{} @ {}ms", active ? "press" : "release", t);
         m_events.emplace_back(t, message);
-        m_log_frame_update_details = true;
+        ++m_sample_count;
     }
     log_fly_camera->trace("end try_move");
     return true;
@@ -763,6 +926,22 @@ auto Fly_camera_tool::turn_relative(std::chrono::steady_clock::time_point timest
     } else {
         m_camera_controller->get_variable(Variable::rotate_x).adjust(timestamp, rx / 2.0f);
         m_camera_controller->get_variable(Variable::rotate_y).adjust(timestamp, ry / 2.0f);
+    }
+
+    if (m_recording) {
+        std::chrono::duration<float> time = timestamp - m_recording_start_time;
+        float t = time.count();
+
+        // record_sample(timestamp);
+        const glm::mat4 orientation_mat4 = m_camera_controller->get_orientation();
+        const glm::quat orientation_quat = glm::quat_cast(orientation_mat4);
+        const float     heading          = glm::yaw(orientation_quat);
+        m_heading_graph.samples.push_back(ImVec2{1000.0f * t, heading});
+        m_sample_count += 1;
+
+        //std::string message = fmt::format("{} @ {}ms", "turn", t);
+        //m_events.emplace_back(t, message);
+        //++m_sample_count;
     }
 
     return true;
@@ -913,6 +1092,10 @@ void Fly_camera_tool::record_sample(std::chrono::steady_clock::time_point)
     if (!m_recording) {
         return;
     }
+    if (m_sample_count >= m_max_samples) {
+        m_recording = false;
+    }
+
     erhe::math::Input_axis& input_axis = m_camera_controller->translate_x;
     erhe::scene::Node* node = m_camera_controller->get_node();
     if (node == nullptr) {
@@ -937,6 +1120,7 @@ void Fly_camera_tool::record_sample(std::chrono::steady_clock::time_point)
     m_distance_dt_graph.samples.push_back({ImVec2{1000.0f * t_0, distance / dt},          ImVec2{1000.0f * t_1, distance / dt}});
     m_state_time_graph .samples.push_back({ImVec2{1000.0f * t_0, 1000.0f * state_time_0}, ImVec2{1000.0f * t_1, 1000.0f * state_time_1}});
     m_deltatime_graph  .samples.push_back({ImVec2{1000.0f * t_0, 1000.0f * dt},           ImVec2{1000.0f * t_1, 1000.0f * dt}});
+
     float state_time_diff         = state_time_1 - state_time_0;
     float last_t                  = t_0;
     float last_reference_velocity = input_axis.evaluate_velocity_at_state_time(state_time_0);
@@ -953,6 +1137,7 @@ void Fly_camera_tool::record_sample(std::chrono::steady_clock::time_point)
                 ImVec2{1000.0f * t,      reference_velocity}
             }
         );
+        ++m_sample_count;
         last_t                  = t;
         last_reference_velocity = reference_velocity;
         if (reference_velocity < velocity_min) {
@@ -1044,7 +1229,6 @@ void Fly_camera_tool::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
-    ImGui::Checkbox   ("Use Viewport Camera", &m_use_viewport_camera);
     ImGui::SliderFloat("Move Power Base", &config.move_power, 1.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
     if (ImGui::IsItemEdited()) {
         m_camera_controller->translate_x.set_power_base(config.move_power);
@@ -1054,26 +1238,51 @@ void Fly_camera_tool::imgui()
     ImGui::SliderFloat("Move Speed", &m_camera_controller->move_speed, 0.01f, 200.0f);
     ImGui::SliderFloat("Turn Speed", &config.turn_speed, 0.2f, 2.0f);
 
+
     //erhe::math::Input_axis& control = m_camera_controller->translate_x;
     if (ImGui::TreeNodeEx("Controls", ImGuiTreeNodeFlags_None)) {
-        ImGui::BeginTable("Controls", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_RowBg);
-        ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 5.0f);
-        ImGui::TableSetupColumn("Less", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("More", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("exp",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("vel",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("dst",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("v0",   ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableHeadersRow();
-        show_input_axis_ui(m_camera_controller->translate_x);
-        show_input_axis_ui(m_camera_controller->translate_y);
-        show_input_axis_ui(m_camera_controller->translate_z);
-        show_input_axis_ui(m_camera_controller->rotate_x);
-        show_input_axis_ui(m_camera_controller->rotate_y);
-        show_input_axis_ui(m_camera_controller->rotate_z);
-        show_input_axis_ui(m_camera_controller->speed_modifier);
-        ImGui::EndTable();
+        ImGui::Text("Input events: %zu", m_sample_count);
+        m_jitter.imgui();
+        ImGui::Separator();
+        ImGui::SliderFloat("Synth Input Distance", &m_synth_distance, 10.0f, 10000.0f);
+        ImGui::Separator();
+
+        ImGui::Checkbox   ("Use Viewport Camera", &m_use_viewport_camera);
+
+        //// ImGui::BeginTable("Controls", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_RowBg);
+        //// ImGui::TableSetupScrollFreeze(0, 1);
+        //// ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 5.0f);
+        //// ImGui::TableSetupColumn("Less", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        //// ImGui::TableSetupColumn("More", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        //// ImGui::TableSetupColumn("exp",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        //// ImGui::TableSetupColumn("vel",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        //// ImGui::TableSetupColumn("dst",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        //// ImGui::TableSetupColumn("v0",   ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        //// ImGui::TableHeadersRow();
+        //// show_input_axis_ui(m_camera_controller->translate_x);
+        //// show_input_axis_ui(m_camera_controller->translate_y);
+        //// show_input_axis_ui(m_camera_controller->translate_z);
+        //// show_input_axis_ui(m_camera_controller->rotate_x);
+        //// show_input_axis_ui(m_camera_controller->rotate_y);
+        //// show_input_axis_ui(m_camera_controller->rotate_z);
+        //// show_input_axis_ui(m_camera_controller->speed_modifier);
+        //// ImGui::EndTable();
+
+                           ImGui::Checkbox("Velocity",           &m_velocity_graph          .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Reference Velocity", &m_reference_velocity_graph.plot);
+        ImGui::SameLine(); ImGui::Checkbox("Distance",           &m_distance_graph          .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Distance / dt",      &m_distance_dt_graph       .plot);
+                           ImGui::Checkbox("State Time",         &m_state_time_graph        .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Delta-Time",         &m_deltatime_graph         .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Heading",            &m_heading_graph           .plot);
+
+        if (m_velocity_graph   .plot) ImGui::SliderFloat("Velocity Scale",      &m_velocity_graph   .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_distance_graph   .plot) ImGui::SliderFloat("Distance Scale",      &m_distance_graph   .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_distance_dt_graph.plot) ImGui::SliderFloat("Distance / dt Scale", &m_distance_dt_graph.y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_state_time_graph .plot) ImGui::SliderFloat("State Time Scale",    &m_state_time_graph .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_deltatime_graph  .plot) ImGui::SliderFloat("Delta Time Scale",    &m_deltatime_graph  .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_heading_graph    .plot) ImGui::SliderFloat("Heading Scale",       &m_heading_graph    .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+
         ImGui::TreePop();
     }
 
@@ -1087,7 +1296,9 @@ void Fly_camera_tool::imgui()
             m_state_time_graph        .clear();
             m_deltatime_graph         .clear();
             m_reference_velocity_graph.clear();
+            m_heading_graph           .clear();
             m_recording_start_time = std::chrono::steady_clock::now();
+            m_sample_count = 0;
             m_recording = true;
         }
     } else {
@@ -1095,21 +1306,6 @@ void Fly_camera_tool::imgui()
             m_recording = false;
         }
     }
-
-    m_jitter.imgui();
-
-                       ImGui::Checkbox("Velocity",           &m_velocity_graph          .plot);
-    ImGui::SameLine(); ImGui::Checkbox("Reference Velocity", &m_reference_velocity_graph.plot);
-    ImGui::SameLine(); ImGui::Checkbox("Distance",           &m_distance_graph          .plot);
-    ImGui::SameLine(); ImGui::Checkbox("Distance / dt",      &m_distance_dt_graph       .plot);
-    ImGui::SameLine(); ImGui::Checkbox("State Time",         &m_state_time_graph        .plot);
-    ImGui::SameLine(); ImGui::Checkbox("Delta-Time",         &m_deltatime_graph         .plot);
-
-    if (m_velocity_graph   .plot) ImGui::SliderFloat("Velocity Scale",      &m_velocity_graph   .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-    if (m_distance_graph   .plot) ImGui::SliderFloat("Distance Scale",      &m_distance_graph   .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-    if (m_distance_dt_graph.plot) ImGui::SliderFloat("Distance / dt Scale", &m_distance_dt_graph.y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-    if (m_state_time_graph .plot) ImGui::SliderFloat("State Time Scale",    &m_state_time_graph .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-    if (m_deltatime_graph  .plot) ImGui::SliderFloat("Delta Time Scale",    &m_deltatime_graph  .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
 
     m_reference_velocity_graph.y_scale = m_velocity_graph.y_scale;
 
@@ -1123,6 +1319,7 @@ void Fly_camera_tool::imgui()
         m_graph_plotter.plot(m_distance_dt_graph       );
         m_graph_plotter.plot(m_state_time_graph        );
         m_graph_plotter.plot(m_deltatime_graph         );
+        m_graph_plotter.plot(m_heading_graph           );
         for (const Event& event : m_events) {
             m_graph_plotter.sample_text(event.x, 0.0f, event.text.c_str(), 0xff00ff00);
         }

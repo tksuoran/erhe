@@ -23,7 +23,6 @@
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_renderer/renderer_log.hpp"
-#include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -32,8 +31,6 @@
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
-#include "erhe_time/timer.hpp"
-#include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window_log.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
@@ -73,7 +70,6 @@ public:
         m_camera_controller = std::make_shared<Frame_controller>();
         m_camera_controller->set_node(m_camera->get_node());
 
-        m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(graphics_instance);
         m_start_time = std::chrono::steady_clock::now();
     }
 
@@ -135,12 +131,15 @@ public:
     {
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
+            m_camera_controller->on_frame_begin();
+
             m_window.poll_events();
             auto& input_events = m_window.get_input_events();
             for (erhe::window::Input_event& input_event : input_events) {
                 static_cast<void>(this->dispatch_input_event(input_event));
             }
             tick();
+            m_camera_controller->on_frame_end();
             m_window.swap_buffers();
         }
     }
@@ -167,9 +166,7 @@ public:
             .reverse_depth = m_graphics_instance.configuration.reverse_depth
         };
 
-#if 0
         m_camera_controller->tick(tick_end_time);
-        m_camera_controller->update_transform();
         m_scene.update_node_transforms();
 
         std::vector<erhe::renderer::Pipeline_renderpass*> passes;
@@ -236,33 +233,6 @@ public:
                 .debug_label            = "example main render"
             }
         );
-#endif
-
-        float center_x = static_cast<float>(viewport.width) / 2.0f;
-        float center_y = static_cast<float>(viewport.height) / 2.0f;
-        const char* text = "Hello, World!";
-        erhe::ui::Rectangle text_rectangle = m_text_renderer->measure(text);
-        const glm::vec2 half_size = text_rectangle.half_size();
-        float offset_x = center_x - half_size.x;
-        float offset_y = center_y - half_size.y;
-        const std::chrono::steady_clock::time_point time_now = std::chrono::steady_clock::now();
-        const std::chrono::duration<float> time = time_now - m_start_time;
-        float t = time.count();
-        float x = offset_x + center_x * 0.9f * std::cos(t);
-        float y = offset_y + center_y * 0.9f * std::sin(t);
-        glm::vec3 text_position{x, y, -0.5f};
-        uint32_t text_color{0xffffffff};
-        m_text_renderer->print(glm::vec3{x, y, -0.5f}, text_color, "Hello, World!");
-        m_text_renderer->print(glm::vec3{x, y + 20.0f, -0.5f}, text_color, "Rock and Roll");
-        //size_t count = 10;
-        //for (size_t i = 0; i < count; ++i) {
-        //    constexpr float pi = 3.141592653589793238462643383279502884197169399375105820974944592308f;
-        //    float rel = static_cast<float>(i) / static_cast<float>(count);
-        //    float xi = x * 50.0f * std::cos(0.431f * t + rel * 2.0f * pi);
-        //    float yi = y * 50.0f * std::sin(0.431f * t + rel * 2.0f * pi);
-        //    m_text_renderer->print(glm::vec3{xi, yi, -0.5f}, text_color, "Rock");
-        //}
-        m_text_renderer->render(viewport);
     }
 
 private:
@@ -366,7 +336,6 @@ private:
     double                                  m_time            {0.0};
     uint64_t                                m_frame_number{0};
 
-    std::unique_ptr<erhe::renderer::Text_renderer> m_text_renderer;
     std::chrono::steady_clock::time_point          m_start_time{};
 
     bool m_mouse_pressed{false};

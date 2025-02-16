@@ -9,8 +9,6 @@
 
 #include <spdlog/sinks/sink.h>
 
-#include <deque>
-#include <vector>
 
 namespace spdlog::level {
     enum level_enum : int;

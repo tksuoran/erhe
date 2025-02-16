@@ -35,7 +35,7 @@ public:
     float            path_thickness{1.0f};
     bool             draw_path     {true};
     bool             draw_keys     {true};
-    bool             plot          {true};
+    bool             plot          {false};
     float            y_scale       {1.0f};
 };
 

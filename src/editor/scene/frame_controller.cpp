@@ -27,9 +27,9 @@ Frame_controller::Frame_controller()
 
 {
     reset();
-    rotate_x      .set_power_base(0.0f);
-    rotate_y      .set_power_base(0.0f);
-    rotate_z      .set_power_base(0.0f);
+    rotate_x      .disable_power_base();
+    rotate_y      .disable_power_base();
+    rotate_z      .disable_power_base();
     translate_x   .set_power_base(4.0f);
     translate_y   .set_power_base(4.0f);
     translate_z   .set_power_base(4.0f);
@@ -217,7 +217,7 @@ void Frame_controller::tick(std::chrono::steady_clock::time_point timestamp)
         m_position += get_axis_z() * translate_z.get_tick_distance() * speed;
     }
 
-    apply_rotation(rotate_x.get_value(), rotate_y.get_value(), 0.0f);
+    apply_rotation(rotate_x.get_tick_distance(), rotate_y.get_tick_distance(), 0.0f);
 
     update();
 }

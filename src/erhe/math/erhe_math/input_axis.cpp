@@ -82,10 +82,20 @@ auto Input_axis::get_less() const -> bool
     return m_less;
 }
 
+auto Input_axis::is_power_base_disabled() const -> bool
+{
+    return m_base == -1.0f;
+}
+
+void Input_axis::disable_power_base()
+{
+    m_base = -1.0f;
+}
+
 void Input_axis::set_power_base(const float value)
 {
     m_base = value;
-    m_log_base = value == 0.0f ? 0.0 : checked_log(value);
+    m_log_base = (value == 1.0f) ? 1.0 : checked_log(value);
 }
 
 void Input_axis::adjust(std::chrono::steady_clock::time_point timestamp, const float delta)
@@ -95,12 +105,17 @@ void Input_axis::adjust(std::chrono::steady_clock::time_point timestamp, const f
 
 void Input_axis::adjust(std::chrono::steady_clock::time_point timestamp, const double delta)
 {
+    if (is_power_base_disabled()) {
+        m_tick_distance += delta;
+        return;
+    }
     // TODO Consider segments
     update(timestamp);
     m_base_velocity = m_velocity + delta;
     m_velocity = m_base_velocity;
     m_direction = 0.0;
     m_state_time = 0.0;
+
     // TODO consider current m_direction != 0.0
     //if (m_direction == 0.0) {
     //    m_state_time = 0.0;
@@ -194,7 +209,7 @@ auto Input_axis::get_base_velocity() const -> float
 // t(v) = log(v0/v) / log(a)
 void Input_axis::update(std::chrono::steady_clock::time_point timestamp)
 {
-    if (m_log_base == 0.0) {
+    if (is_power_base_disabled()) {
         return;
     }
     if (!m_last_timestamp.has_value() || (timestamp == m_last_timestamp.value())) {
@@ -239,7 +254,7 @@ auto Input_axis::evaluate_velocity_at_state_time(float state_time) const -> floa
 
 void Input_axis::set_direction(double direction)
 {
-    ERHE_VERIFY(m_log_base != 0.0);
+    ERHE_VERIFY(!is_power_base_disabled());
     double old_base_velocity = m_base_velocity;
     double old_velocity      = m_velocity;
     double old_state_time    = m_state_time;
@@ -283,7 +298,7 @@ void Input_axis::set_direction(double direction)
 
 void Input_axis::set_more(std::chrono::steady_clock::time_point timestamp, const bool value)
 {
-    ERHE_VERIFY(m_log_base != 0.0);
+    ERHE_VERIFY(!is_power_base_disabled());
     log_input_axis->info("{} begin set_more {}", m_name, value ? "true" : "false");
     update(timestamp);
     m_more = value;
@@ -299,7 +314,7 @@ void Input_axis::set_more(std::chrono::steady_clock::time_point timestamp, const
 
 void Input_axis::set_less(std::chrono::steady_clock::time_point timestamp, const bool value)
 {
-    ERHE_VERIFY(m_log_base != 0.0);
+    ERHE_VERIFY(!is_power_base_disabled());
     log_input_axis->info("{} begin set_less {}", m_name, value ? "true" : "false");
     update(timestamp);
     m_less = value;
@@ -315,7 +330,7 @@ void Input_axis::set_less(std::chrono::steady_clock::time_point timestamp, const
 
 void Input_axis::set(std::chrono::steady_clock::time_point timestamp, const Input_axis_control control, const bool value)
 {
-    ERHE_VERIFY(m_log_base != 0.0);
+    ERHE_VERIFY(!is_power_base_disabled());
     switch (control) {
         //using enum Input_axis_item;
         case Input_axis_control::less: set_less(timestamp, value); break;

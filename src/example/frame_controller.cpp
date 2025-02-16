@@ -28,13 +28,13 @@ Frame_controller::Frame_controller()
 
 {
     reset();
-    rotate_x      .set_power_base(4.0f);
-    rotate_y      .set_power_base(4.0f);
-    rotate_z      .set_power_base(4.0f);
-    translate_x   .set_power_base(4.0f);
-    translate_y   .set_power_base(4.0f);
-    translate_z   .set_power_base(4.0f);
-    speed_modifier.set_power_base(4.0f);
+    rotate_x      .disable_power_base();
+    rotate_y      .disable_power_base();
+    rotate_z      .disable_power_base();
+    translate_x   .set_power_base(10.0f);
+    translate_y   .set_power_base(10.0f);
+    translate_z   .set_power_base(10.0f);
+    speed_modifier.set_power_base(10.0f);
     update_transform();
 }
 
@@ -191,6 +191,28 @@ auto Frame_controller::get_axis_z() const -> vec3
     //return vec3{m_heading_matrix[2]};
 }
 
+void Frame_controller::on_frame_begin()
+{
+    translate_x   .on_frame_begin();
+    translate_y   .on_frame_begin();
+    translate_z   .on_frame_begin();
+    rotate_x      .on_frame_begin();
+    rotate_y      .on_frame_begin();
+    rotate_z      .on_frame_begin();
+    speed_modifier.on_frame_begin();
+}
+
+void Frame_controller::on_frame_end()
+{
+    translate_x   .on_frame_end();
+    translate_y   .on_frame_end();
+    translate_z   .on_frame_end();
+    rotate_x      .on_frame_end();
+    rotate_y      .on_frame_end();
+    rotate_z      .on_frame_end();
+    speed_modifier.on_frame_end();
+}
+
 void Frame_controller::tick(std::chrono::steady_clock::time_point timestamp)
 {
     translate_x.tick(timestamp);
@@ -201,7 +223,7 @@ void Frame_controller::tick(std::chrono::steady_clock::time_point timestamp)
     rotate_z.tick(timestamp);
     speed_modifier.tick(timestamp);
 
-    const float speed_scale = 1.0f + speed_modifier.get_value();
+    const float speed_scale = 10.0f + 10.0f * speed_modifier.get_value();
 
     if (translate_x.get_tick_distance() != 0.0f) {
         m_position += get_axis_x() * translate_x.get_tick_distance() * speed_scale;

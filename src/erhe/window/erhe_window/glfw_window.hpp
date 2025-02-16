@@ -5,6 +5,7 @@
 #include "erhe_window/window_event_handler.hpp"
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -84,6 +85,9 @@ public:
     void handle_window_focus_event  (std::chrono::steady_clock::time_point timestamp, int focused);
     void handle_cursor_enter_event  (std::chrono::steady_clock::time_point timestamp, int entered);
 
+    void set_input_event_synthesizer_callback(std::function<void(Context_window& context_window)> callback);
+    void inject_input_event                  (const Input_event& event);
+
     [[nodiscard]] auto get_modifier_mask () const -> Key_modifier_mask;
     [[nodiscard]] auto get_device_pointer() const -> void*;
     [[nodiscard]] auto get_window_handle () const -> void*;
@@ -111,6 +115,7 @@ private:
     int                      m_input_event_queue_write{0};
     std::vector<Input_event> m_input_events[2];
     std::thread              m_joystick_scan_task;
+    std::function<void(Context_window& context_window)> m_input_event_synthesizer_callback;
 
     static int s_window_count;
 };

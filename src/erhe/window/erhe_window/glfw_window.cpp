@@ -510,6 +510,12 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
     m_configuration = configuration;
     if (primary) {
+
+        if (glfwRawMouseMotionSupported()) {
+            log_window->info("Enabling GLFW_RAW_MOUSE_MOTION");
+            glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+        }
+
         GLFWerrorfun prev_error_callback = glfwSetErrorCallback(nullptr);
         m_mouse_cursor[Mouse_cursor_Arrow     ] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
         m_mouse_cursor[Mouse_cursor_TextInput ] = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
@@ -665,6 +671,10 @@ void Context_window::poll_events(float wait_time)
         }
     }
 
+    if (m_input_event_synthesizer_callback) {
+        m_input_event_synthesizer_callback(*this);
+    }
+
     // Swap input event buffers
     int old_read_buffer = 1 - m_input_event_queue_write;
     // for (const Input_event& input_event : m_input_events[old_read_buffer]) {
@@ -677,6 +687,16 @@ void Context_window::poll_events(float wait_time)
     // }
     m_input_events[old_read_buffer].clear();
     m_input_event_queue_write = old_read_buffer;
+}
+
+void Context_window::inject_input_event(const Input_event& event)
+{
+    m_input_events[m_input_event_queue_write].push_back(event);
+}
+
+void Context_window::set_input_event_synthesizer_callback(std::function<void(Context_window& context_window)> callback)
+{
+    m_input_event_synthesizer_callback = callback;
 }
 
 void Context_window::get_cursor_position(float& xpos, float& ypos)
@@ -807,7 +827,7 @@ void Context_window::handle_window_resize_event(std::chrono::steady_clock::time_
             .timestamp = timestamp,
             .u = {
                 .window_resize_event = {
-                    .width = width,
+                    .width  = width,
                     .height = height
                 }
             }
@@ -917,7 +937,7 @@ void Context_window::handle_mouse_wheel_event(std::chrono::steady_clock::time_po
                 .mouse_wheel_event = {
                     .x             = static_cast<float>(x),
                     .y             = static_cast<float>(y),
-                    .modifier_mask = get_modifier_mask(),
+                    .modifier_mask = get_modifier_mask()
                 }
             }
         }
@@ -939,7 +959,7 @@ void Context_window::handle_mouse_move(std::chrono::steady_clock::time_point tim
                         .y             = static_cast<float>(m_mouse_capture_ypos),
                         .dx            = static_cast<float>(dx),
                         .dy            = static_cast<float>(dy),
-                        .modifier_mask = get_modifier_mask(),
+                        .modifier_mask = get_modifier_mask()
                     }
                 }
             }
@@ -959,7 +979,7 @@ void Context_window::handle_mouse_move(std::chrono::steady_clock::time_point tim
                         .y             = static_cast<float>(y),
                         .dx            = static_cast<float>(dx),
                         .dy            = static_cast<float>(dy),
-                        .modifier_mask = get_modifier_mask(),
+                        .modifier_mask = get_modifier_mask()
                     }
                 }
             }

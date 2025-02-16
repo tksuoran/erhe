@@ -63,7 +63,6 @@ public:
     [[nodiscard]] auto get_axis_y     () const -> glm::vec3;
     [[nodiscard]] auto get_axis_z     () const -> glm::vec3;
     [[nodiscard]] auto get_variable   (const Variable variable) -> erhe::math::Input_axis&;
-    [[nodiscard]] auto get_move_speed () const -> float;
 
     erhe::math::Input_axis rotate_x;
     erhe::math::Input_axis rotate_y;

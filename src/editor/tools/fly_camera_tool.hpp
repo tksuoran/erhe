@@ -11,6 +11,10 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_window/window_event_handler.hpp" // keycode
 
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+#include <deque>
 #include <random>
 #include <vector>
 
@@ -53,6 +57,7 @@ public:
     Fly_camera_turn_command(erhe::commands::Commands& commands, Editor_context& context);
     void try_ready          () override;
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+    void on_inactive        () override;
 
 private:
     Editor_context& m_context;
@@ -208,6 +213,9 @@ public:
     auto zoom                    (std::chrono::steady_clock::time_point timestamp, float delta) -> bool;
     void serialize_transform     (bool store);
 
+    void synthesize_input();
+    void tick_synthesize();
+
     void capture_pointer();
     void release_pointer();
 
@@ -243,8 +251,8 @@ private:
     Fly_camera_serialization_command  m_serialize_transform_command;
     Fly_camera_serialization_command  m_deserialize_transform_command;
     std::shared_ptr<Frame_controller> m_camera_controller;
-    float                             m_rotate_scale_x{1.0f};
-    float                             m_rotate_scale_y{1.0f};
+    float                             m_rotate_scale_x{4.0f};
+    float                             m_rotate_scale_y{4.0f};
     std::optional<glm::vec3>          m_tumble_pivot;
     std::optional<glm::vec3>          m_track_plane_point;
     std::optional<glm::vec3>          m_track_plane_normal;
@@ -261,19 +269,28 @@ private:
         std::string text;
     };
 
+    std::size_t                               m_max_samples{8000};
+    std::size_t                               m_sample_count{0};
+
     bool                                      m_recording{false};
     std::chrono::steady_clock::time_point     m_recording_start_time{};
     std::vector<Event>                        m_events;
-    bool                                      m_log_frame_update_details{false};
     erhe::imgui::Graph<std::array<ImVec2, 2>> m_velocity_graph;
     erhe::imgui::Graph<std::array<ImVec2, 2>> m_distance_graph;
     erhe::imgui::Graph<std::array<ImVec2, 2>> m_distance_dt_graph;
     erhe::imgui::Graph<std::array<ImVec2, 2>> m_state_time_graph; // t0 and t1
     erhe::imgui::Graph<std::array<ImVec2, 2>> m_deltatime_graph;
     erhe::imgui::Graph<std::array<ImVec2, 2>> m_reference_velocity_graph;
+    erhe::imgui::Graph<ImVec2>                m_heading_graph;
     erhe::imgui::Graph_plotter                m_graph_plotter;
 
     Jitter m_jitter;
+    float  m_synth_distance{1000.0f};
+    std::deque<erhe::window::Input_event> m_synthetic_input_events;
+    glm::vec3                             m_before_position   {0.0f, 0.0f, 0.0f};
+    glm::vec3                             m_after_position    {0.0f, 0.0f, 0.0f};
+    glm::quat                             m_before_orientation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::quat                             m_after_orientation {1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 } // namespace editor
