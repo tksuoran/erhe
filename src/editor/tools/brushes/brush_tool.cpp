@@ -349,25 +349,25 @@ auto Brush_tool::get_hover_mesh_transform(Brush& brush, const float hover_distan
     ERHE_VERIFY(m_brush_placement_frame.scale() != 0.0f);
 
     if (m_scale_to_match) {
-        const auto  hover_scale = hover_frame.scale();
-        const auto  brush_scale = m_brush_placement_frame.scale();
-        const float scale       = (brush_scale != 0.0) ? static_cast<float>(hover_scale / brush_scale) : 1.0f;
+        const float hover_scale = hover_frame.scale();
+        const float brush_scale = m_brush_placement_frame.scale();
+        const float scale       = (brush_scale != 0.0f) ? static_cast<float>(hover_scale / brush_scale) : 1.0f;
 
         m_transform_scale = m_scale * scale;
         if (m_transform_scale != 1.0f) {
             const glm::mat4 scale_transform = erhe::math::create_scale(m_transform_scale);
-            m_brush_placement_frame.transform_by(to_geo_mat4(scale_transform));
+            m_brush_placement_frame.transform_by(to_geo_mat4f(scale_transform));
         }
     }
 
     if (!m_snap_to_hover_polygon && m_hover.position.has_value()) {
-        hover_frame.m_centroid = to_geo_vec3(m_hover.position.value());
+        hover_frame.m_centroid = to_geo_vec3f(m_hover.position.value());
     }
 
-    const GEO::mat4 hover_transform = hover_frame.transform(0.0f);
-    const GEO::mat4 brush_transform = m_brush_placement_frame.transform(hover_distance);
-    const GEO::mat4 inverse_brush   = brush_transform.inverse();
-    const GEO::mat4 align           = hover_transform * inverse_brush;
+    const GEO::mat4f hover_transform = hover_frame.transform(0.0f);
+    const GEO::mat4f brush_transform = m_brush_placement_frame.transform(hover_distance);
+    const GEO::mat4f inverse_brush   = brush_transform.inverse();
+    const GEO::mat4f align           = hover_transform * inverse_brush;
     return to_glm_mat4(align);
 }
 
@@ -379,10 +379,10 @@ auto Brush_tool::get_hover_grid_transform(Brush& brush, const float hover_distan
         static_cast<uint32_t>(m_polygon_offset),
         static_cast<uint32_t>(m_corner_offset)
     );
-    const glm::mat4 scale_transform = erhe::math::create_scale(m_scale);
-    m_brush_placement_frame.transform_by(to_geo_mat4(scale_transform));
-    const GEO::mat4 brush_transform = m_brush_placement_frame.transform(hover_distance);
-    const GEO::mat4 inverse_brush   = brush_transform.inverse();
+    const glm::mat4  scale_transform = erhe::math::create_scale(m_scale);
+    m_brush_placement_frame.transform_by(to_geo_mat4f(scale_transform));
+    const GEO::mat4f brush_transform = m_brush_placement_frame.transform(hover_distance);
+    const GEO::mat4f inverse_brush   = brush_transform.inverse();
 
     if (m_hover.grid == nullptr) {
         return glm::mat4{1};
@@ -695,14 +695,14 @@ void Brush_tool::tool_render(const Render_context& render_context)
     hover_frame.m_N *= -1.0f;
     hover_frame.m_B *= -1.0f;
 
-    const GEO::vec3 C_   = hover_frame.m_centroid;
-    const GEO::vec3 C_n_ = hover_frame.m_centroid + hover_frame.m_N;
-    const GEO::vec3 C_t_ = hover_frame.m_centroid + hover_frame.m_T;
-    const GEO::vec3 C_b_ = hover_frame.m_centroid + hover_frame.m_B;
-    const glm::vec3 C    = to_glm_vec3(C_  );
-    const glm::vec3 C_n  = to_glm_vec3(C_n_);
-    const glm::vec3 C_t  = to_glm_vec3(C_t_);
-    const glm::vec3 C_b  = to_glm_vec3(C_b_);
+    const GEO::vec3f C_   = hover_frame.m_centroid;
+    const GEO::vec3f C_n_ = hover_frame.m_centroid + hover_frame.m_N;
+    const GEO::vec3f C_t_ = hover_frame.m_centroid + hover_frame.m_T;
+    const GEO::vec3f C_b_ = hover_frame.m_centroid + hover_frame.m_B;
+    const glm::vec3  C    = to_glm_vec3(C_  );
+    const glm::vec3  C_n  = to_glm_vec3(C_n_);
+    const glm::vec3  C_t  = to_glm_vec3(C_t_);
+    const glm::vec3  C_b  = to_glm_vec3(C_b_);
     constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
     constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
     constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};

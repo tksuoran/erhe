@@ -399,6 +399,7 @@ auto GPU_ring_buffer::open(Ring_buffer_usage usage, std::size_t byte_count) -> B
             if (show_warning) {
                 log_gpu_ring_buffer->warn("CPU stalling waiting for GPU");
             }
+            gl::finish();
             std::this_thread::yield();
             continue;
         } else {

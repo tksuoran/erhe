@@ -48,9 +48,9 @@ void Create_box::imgui()
 auto Create_box::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
     auto geometry = std::make_shared<erhe::geometry::Geometry>("box");
-    erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(m_size), to_geo_vec3i(m_steps), static_cast<double>(m_power));
+    erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(m_size), to_geo_vec3i(m_steps), m_power);
     brush_create_info.geometry = geometry;
-    transform(*geometry.get(), *geometry.get(), to_geo_mat4(erhe::math::mat4_swap_xy));
+    transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |

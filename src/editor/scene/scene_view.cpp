@@ -354,7 +354,7 @@ void Scene_view::update_hover_with_raytrace()
                 ERHE_VERIFY(facet < geo_mesh.facets.nb());
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit facet: {}", Hover_entry::slot_names[slot], facet);
                 entry.facet = facet;
-                const GEO::vec3f facet_normal           = GEO::vec3f{GEO::Geom::mesh_facet_normal(geo_mesh, facet)};
+                const GEO::vec3f facet_normal           = mesh_facet_normalf(geo_mesh, facet);
                 const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
                 const glm::mat4  world_from_node        = node->world_from_node();
                 const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));

@@ -9,7 +9,7 @@ class Bake_transform : public Geometry_operation
 public:
     Bake_transform(const Geometry& source, Geometry& destination);
 
-    void build(const GEO::mat4& transform);
+    void build(const GEO::mat4f& transform);
 };
 
 Bake_transform::Bake_transform(const Geometry& source, Geometry& destination)
@@ -17,12 +17,12 @@ Bake_transform::Bake_transform(const Geometry& source, Geometry& destination)
 {
 }
 
-void Bake_transform::build(const GEO::mat4& transform)
+void Bake_transform::build(const GEO::mat4f& transform)
 {
     destination.copy_with_transform(source, transform);
 }
 
-void bake_transform(const Geometry& source, Geometry& destination, const GEO::mat4& transform)
+void bake_transform(const Geometry& source, Geometry& destination, const GEO::mat4f& transform)
 {
     Bake_transform operation{source, destination};
     operation.build(transform);

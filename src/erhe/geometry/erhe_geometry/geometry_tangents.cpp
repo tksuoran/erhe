@@ -92,38 +92,20 @@ auto compute_mesh_tangents(GEO::Mesh& mesh, const bool make_facets_flat) -> bool
         {
             const GEO::index_t facet = get_facet(iFace);
             if (iVert == 0) {
-                const GEO::vec3f position = attributes.facet_centroid.get(facet);
+                const GEO::vec3f position = mesh_facet_centerf(mesh, facet);
                 return position;
             }
             const GEO::index_t vertex   = get_vertex(iFace, iVert);
-            const GEO::vec3    position = mesh.vertices.point(vertex);
-            return GEO::vec3f{position};
+            const GEO::vec3f   position = get_pointf(mesh.vertices, vertex);
+            return position;
         }
 
         [[nodiscard]] auto get_normal(const int iFace, const int iVert) const -> GEO::vec3f
         {
-            const GEO::index_t facet = get_facet(iFace);
-            const std::optional<GEO::vec3f> facet_normal = attributes.facet_normal.try_get(facet);
-            if (facet_normal.has_value()) {
-                geo_assert(GEO::length2(facet_normal.value()) > 0.9f);
-                return facet_normal.value();
-            }
-
-            const GEO::index_t corner = get_corner(iFace, iVert);
-            const std::optional<GEO::vec3f> corner_normal = attributes.corner_normal.try_get(corner);
-            if (corner_normal.has_value()) {
-                geo_assert(GEO::length2(corner_normal.value()) > 0.9f);
-                return corner_normal.value();
-            }
-
-            const GEO::index_t vertex = get_vertex(iFace, iVert);
-            const std::optional<GEO::vec3f> vertex_normal = attributes.corner_normal.try_get(vertex);
-            if (vertex_normal.has_value()) {
-                geo_assert(GEO::length2(vertex_normal.value()) > 0.9f);
-                return vertex_normal.value();
-            }
-
-            return GEO::vec3f{0.0f, 1.0f, 0.0f};
+            static_cast<void>(iVert);
+            const GEO::index_t facet  = get_facet(iFace);
+            const GEO::vec3f   normal = mesh_facet_normalf(mesh, facet);
+            return normal;
 #if 0
             if (iVert == 0) {
                 const vec3 normal = polygon_normals->get(polygon_id);
@@ -326,10 +308,10 @@ auto compute_mesh_tangents(GEO::Mesh& mesh, const bool make_facets_flat) -> bool
 
             const GEO::index_t corner = context->get_corner  (iFace, iVert); static_cast<void>(corner);
             const GEO::vec3f   P      = context->get_position(iFace, iVert); static_cast<void>(P);
-            const GEO::vec3f   N      = context->get_normal(iFace, iVert);
-            const GEO::vec3f   N_a    = context->get_normal(iFace, 0); static_cast<void>(N_a);
-            const GEO::vec3f   N_b    = context->get_normal(iFace, 1); static_cast<void>(N_b);
-            const GEO::vec3f   N_c    = context->get_normal(iFace, 2); static_cast<void>(N_c);
+            const GEO::vec3f   N      = context->get_normal  (iFace, iVert);
+            const GEO::vec3f   N_a    = context->get_normal  (iFace, 0); static_cast<void>(N_a);
+            const GEO::vec3f   N_b    = context->get_normal  (iFace, 1); static_cast<void>(N_b);
+            const GEO::vec3f   N_c    = context->get_normal  (iFace, 2); static_cast<void>(N_c);
             const GEO::vec3f   T0     = GEO::vec3f{fvTangent  [0], fvTangent  [1], fvTangent  [2]};
             const GEO::vec3f   B0     = GEO::vec3f{fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]};
             const float N_dot_T0 = GEO::dot(N, T0);

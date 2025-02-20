@@ -20,11 +20,11 @@ public:
     class Vertex_data
     {
     public:
-        GEO::vec3  position {0.0, 0.0, 0.0};
-        GEO::vec3f normal   {0.0};
-        GEO::vec4f tangent  {0.0};
-        GEO::vec3f bitangent{0.0};
-        GEO::vec2f texcoord {0.0};
+        GEO::vec3f position {0.0f, 0.0f, 0.0f};
+        GEO::vec3f normal   {0.0f};
+        GEO::vec4f tangent  {0.0f};
+        GEO::vec3f bitangent{0.0f};
+        GEO::vec2f texcoord {0.0f};
     };
 
     Sphere_builder(GEO::Mesh& mesh, const scalar radius, const int slice_count, const int stack_count)
@@ -58,7 +58,7 @@ public:
 
         // Bottom fan
         bottom_vertex = vertex++; //mesh.vertices.create_vertices(1);
-        mesh.vertices.point(bottom_vertex) = GEO::vec3{0.0, -radius, 0.0};
+        set_pointf(mesh.vertices, bottom_vertex, GEO::vec3f{0.0f, -radius, 0.0f});
         attributes.vertex_normal.set(bottom_vertex, GEO::vec3f{0.0f,-1.0f, 0.0f});
         GEO::index_t facet = mesh.facets.create_triangles(slice_count);
         for (int slice = 0; slice < slice_count; ++slice) {
@@ -82,9 +82,9 @@ public:
             const Vertex_data centroid_data = make_vertex_data(rel_slice_centroid, rel_stack_centroid);
             const auto flat_centroid_location =
                 (
-                    mesh.vertices.point(v0) +
-                    mesh.vertices.point(v1) +
-                    GEO::vec3{0.0, -radius, 0.0}
+                    get_pointf(mesh.vertices, v0) +
+                    get_pointf(mesh.vertices, v1) +
+                    GEO::vec3f{0.0f, -radius, 0.0f}
                 ) / 3.0f;
             attributes.facet_centroid     .set(facet, GEO::vec3f{flat_centroid_location});
             //attributes.facet_normal       .set(facet, centroid_data.normal);
@@ -108,10 +108,10 @@ public:
                 const Vertex_data centroid_data = make_vertex_data(rel_slice_centroid, rel_stack_centroid);
                 const auto flat_centroid_location = 
                     (
-                        mesh.vertices.point(get_vertex(slice + 1, stack    )) +
-                        mesh.vertices.point(get_vertex(slice,     stack    )) +
-                        mesh.vertices.point(get_vertex(slice,     stack + 1)) +
-                        mesh.vertices.point(get_vertex(slice + 1, stack + 1))
+                        get_pointf(mesh.vertices, get_vertex(slice + 1, stack    )) +
+                        get_pointf(mesh.vertices, get_vertex(slice,     stack    )) +
+                        get_pointf(mesh.vertices, get_vertex(slice,     stack + 1)) +
+                        get_pointf(mesh.vertices, get_vertex(slice + 1, stack + 1))
                     ) / 4.0f;
                 attributes.facet_centroid     .set(facet, GEO::vec3f{flat_centroid_location});
                 //attributes.facet_normal       .set(facet, centroid_data.normal);
@@ -122,7 +122,7 @@ public:
 
         // Top fan
         top_vertex = vertex++; // mesh.vertices.create_vertices(1);
-        mesh.vertices.point(top_vertex) = GEO::vec3{0.0, radius, 0.0};
+        set_pointf(mesh.vertices, top_vertex, GEO::vec3f{0.0, radius, 0.0});
         attributes.vertex_normal.set(top_vertex, GEO::vec3f{0.0f, 1.0f, 0.0f});
         facet = mesh.facets.create_triangles(slice_count);
         for (int slice = 0; slice < slice_count; ++slice) {
@@ -146,9 +146,9 @@ public:
 
             const GEO::index_t v0 = get_vertex(slice,     stack);
             const GEO::index_t v1 = get_vertex(slice + 1, stack);
-            const GEO::vec3 position_p0  = mesh.vertices.point(v0);
-            const GEO::vec3 position_p1  = mesh.vertices.point(v1);
-            const GEO::vec3 position_tip = GEO::vec3{0.0, radius, 0.0};
+            const GEO::vec3f position_p0  = get_pointf(mesh.vertices, v0);
+            const GEO::vec3f position_p1  = get_pointf(mesh.vertices, v1);
+            const GEO::vec3f position_tip = GEO::vec3f{0.0f, radius, 0.0f};
 
             const auto flat_centroid_location = (position_p0 + position_p1 + position_tip) / 3.0f;
 
@@ -200,7 +200,7 @@ private:
         const auto t = static_cast<float>(rel_stack);
 
         return Vertex_data{
-            .position  = GEO::vec3{xP, yP, zP},
+            .position  = GEO::vec3f{xP, yP, zP},
             .normal    = N,
             .tangent   = GEO::vec4f{T, 1.0f},
             .bitangent = B,
@@ -211,7 +211,7 @@ private:
     void sphere_vertex(const GEO::index_t vertex, const scalar rel_slice, const scalar rel_stack)
     {
         const Vertex_data  data   = make_vertex_data(rel_slice, rel_stack);
-        mesh.vertices.point(vertex) = data.position;
+        set_pointf(mesh.vertices, vertex, data.position);
         attributes.vertex_normal    .set(vertex, data.normal);
         attributes.vertex_tangent   .set(vertex, data.tangent);
         attributes.vertex_bitangent .set(vertex, data.bitangent);
@@ -279,7 +279,7 @@ private:
     }
 };
 
-void make_sphere(GEO::Mesh& mesh, const double radius, const unsigned int slice_count, const unsigned int stack_division)
+void make_sphere(GEO::Mesh& mesh, const float radius, const unsigned int slice_count, const unsigned int stack_division)
 {
     Sphere_builder builder{
         mesh,

@@ -392,7 +392,7 @@ private:
         switch (attribute.usage.type) {
             case erhe::graphics::Vertex_attribute::Usage_type::position: {
                 if constexpr (std::is_floating_point_v<T>) {
-                    m_mesh.vertices.point(vertex) = GEO::vec3{value[0], value[1], value[2]};
+                    set_pointf(m_mesh.vertices, vertex, GEO::vec3f{value[0], value[1], value[2]});
                 } else {
                     geo_assert(false);
                 }

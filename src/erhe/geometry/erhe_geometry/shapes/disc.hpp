@@ -4,12 +4,12 @@ namespace GEO { class Mesh; }
 
 namespace erhe::geometry::shapes {
 
-void make_disc(GEO::Mesh& mesh, double outer_radius, double inner_radius, int slice_count, int stack_count);
+void make_disc(GEO::Mesh& mesh, float outer_radius, float inner_radius, int slice_count, int stack_count);
 
 void make_disc(
     GEO::Mesh& mesh, 
-    double     outer_radius,
-    double     inner_radius,
+    float      outer_radius,
+    float      inner_radius,
     int        slice_count,
     int        stack_count,
     int        slice_begin,

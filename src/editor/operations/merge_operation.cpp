@@ -145,7 +145,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
                 geometries.push_back(geometry);
                 transforms.push_back(transform);
                 if (!parameters.operation) {
-                    combined_geometry->merge_with_transform(*geometry.get(), to_geo_mat4(transform));
+                    combined_geometry->merge_with_transform(*geometry.get(), to_geo_mat4f(transform));
                 }
                 if (normal_style == Normal_style::none) {
                     normal_style = shape->get_normal_style();

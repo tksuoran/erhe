@@ -199,7 +199,7 @@ Bake_transform_operation::Bake_transform_operation(Mesh_operation_parameters&& c
         ) -> void
         {
             const glm::mat4 transform = node->world_from_node();
-            erhe::geometry::operation::bake_transform(before_geometry, after_geometry, to_geo_mat4(transform));
+            erhe::geometry::operation::bake_transform(before_geometry, after_geometry, to_geo_mat4f(transform));
         }
     );
 }

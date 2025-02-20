@@ -10,36 +10,26 @@ auto sign(const float x) -> float
     return x < 0.0f ? -1.0f : 1.0f;
 }
 
-auto sign(const double x) -> double
-{
-    return x < 0.0 ? -1.0 : 1.0;
-}
-
 auto signed_pow(const float x, const float p) -> float
 {
     return sign(x) * std::pow(std::abs(x), p);
 }
 
-auto signed_pow(const double x, const double p) -> double
+void make_box(GEO::Mesh& mesh, const float x_size, const float y_size, const float z_size)
 {
-    return sign(x) * std::pow(std::abs(x), p);
-}
-
-void make_box(GEO::Mesh& mesh, const double x_size, const double y_size, const double z_size)
-{
-    const double x = x_size / 2.0;
-    const double y = y_size / 2.0;
-    const double z = z_size / 2.0;
+    const float x = x_size / 2.0f;
+    const float y = y_size / 2.0f;
+    const float z = z_size / 2.0f;
 
     mesh.vertices.create_vertices(8);
-    mesh.vertices.point(0) = GEO::vec3(-x, -y, -z); // 0    2------4
-    mesh.vertices.point(1) = GEO::vec3( x, -y, -z); // 1   /|     /|
-    mesh.vertices.point(2) = GEO::vec3(-x,  y, -z); // 2  6-+----7 |
-    mesh.vertices.point(3) = GEO::vec3(-x, -y,  z); // 3  | |    | |
-    mesh.vertices.point(4) = GEO::vec3( x,  y, -z); // 4  | |    | |
-    mesh.vertices.point(5) = GEO::vec3( x, -y,  z); // 5  | 0----|-1
-    mesh.vertices.point(6) = GEO::vec3(-x,  y,  z); // 6  |/     |/
-    mesh.vertices.point(7) = GEO::vec3( x,  y,  z); // 7  3------5
+    set_pointf(mesh.vertices, 0, GEO::vec3f(-x, -y, -z)); // 0    2------4
+    set_pointf(mesh.vertices, 1, GEO::vec3f( x, -y, -z)); // 1   /|     /|
+    set_pointf(mesh.vertices, 2, GEO::vec3f(-x,  y, -z)); // 2  6-+----7 |
+    set_pointf(mesh.vertices, 3, GEO::vec3f(-x, -y,  z)); // 3  | |    | |
+    set_pointf(mesh.vertices, 4, GEO::vec3f( x,  y, -z)); // 4  | |    | |
+    set_pointf(mesh.vertices, 5, GEO::vec3f( x, -y,  z)); // 5  | 0----|-1
+    set_pointf(mesh.vertices, 6, GEO::vec3f(-x,  y,  z)); // 6  |/     |/
+    set_pointf(mesh.vertices, 7, GEO::vec3f( x,  y,  z)); // 7  3------5
     mesh.facets.create_quad(1, 4, 7, 5); // x+
     mesh.facets.create_quad(2, 6, 7, 4); // y+
     mesh.facets.create_quad(3, 5, 7, 6); // z+
@@ -59,14 +49,14 @@ void make_box(
 )
 {
     mesh.vertices.create_vertices(8);
-    mesh.vertices.point(0) = GEO::vec3{min_x, min_y, min_z}; // 0    2------4
-    mesh.vertices.point(1) = GEO::vec3{max_x, min_y, min_z}; // 1   /|     /|
-    mesh.vertices.point(2) = GEO::vec3{min_x, max_y, min_z}; // 2  6-+----7 |
-    mesh.vertices.point(3) = GEO::vec3{min_x, min_y, max_z}; // 3  | |    | |
-    mesh.vertices.point(4) = GEO::vec3{max_x, max_y, min_z}; // 4  | |    | |
-    mesh.vertices.point(5) = GEO::vec3{max_x, min_y, max_z}; // 5  | 0----|-1
-    mesh.vertices.point(6) = GEO::vec3{min_x, max_y, max_z}; // 6  |/     |/
-    mesh.vertices.point(7) = GEO::vec3{max_x, max_y, max_z}; // 7  3------5
+    set_pointf(mesh.vertices, 0, GEO::vec3f{min_x, min_y, min_z}); // 0    2------4
+    set_pointf(mesh.vertices, 1, GEO::vec3f{max_x, min_y, min_z}); // 1   /|     /|
+    set_pointf(mesh.vertices, 2, GEO::vec3f{min_x, max_y, min_z}); // 2  6-+----7 |
+    set_pointf(mesh.vertices, 3, GEO::vec3f{min_x, min_y, max_z}); // 3  | |    | |
+    set_pointf(mesh.vertices, 4, GEO::vec3f{max_x, max_y, min_z}); // 4  | |    | |
+    set_pointf(mesh.vertices, 5, GEO::vec3f{max_x, min_y, max_z}); // 5  | 0----|-1
+    set_pointf(mesh.vertices, 6, GEO::vec3f{min_x, max_y, max_z}); // 6  |/     |/
+    set_pointf(mesh.vertices, 7, GEO::vec3f{max_x, max_y, max_z}); // 7  3------5
     mesh.facets.create_quad(1, 4, 7, 5); // x+
     mesh.facets.create_quad(2, 6, 7, 4); // y+
     mesh.facets.create_quad(3, 5, 7, 6); // z+
@@ -75,10 +65,10 @@ void make_box(
     mesh.facets.create_quad(0, 2, 4, 1); // z-
 }
 
-void make_box(GEO::Mesh& mesh, const double r)
+void make_box(GEO::Mesh& mesh, const float r)
 {
-    const double sq3 = std::sqrt(3.0);
-    make_box(mesh, 2.0 * r / sq3, 2.0 * r / sq3, 2.0 * r / sq3);
+    const float sq3 = std::sqrt(3.0f);
+    make_box(mesh, 2.0f * r / sq3, 2.0f * r / sq3, 2.0f * r / sq3);
 }
 
 class Box_builder
@@ -87,7 +77,7 @@ public:
     GEO::Mesh& mesh;
     GEO::vec3f size{0.0f};
     GEO::vec3i div {0};
-    double     p   {0.0};
+    float      p   {0.0f};
 
     std::map<int, GEO::index_t> key_to_vertex;
 
@@ -115,8 +105,8 @@ public:
         const int        y,
         const int        z,
         const GEO::vec3f n,
-        const double     s,
-        const double     t
+        const float      s,
+        const float      t
     ) -> GEO::index_t
     {
         const int key =
@@ -129,16 +119,16 @@ public:
             return i->second;
         }
 
-        const double rel_x  = static_cast<double>(x) / static_cast<double>(div.x);
-        const double rel_y  = static_cast<double>(y) / static_cast<double>(div.y);
-        const double rel_z  = static_cast<double>(z) / static_cast<double>(div.z);
-        const double rel_xp = signed_pow(rel_x, p);
-        const double rel_yp = signed_pow(rel_y, p);
-        const double rel_zp = signed_pow(rel_z, p);
+        const float rel_x  = static_cast<float>(x) / static_cast<float>(div.x);
+        const float rel_y  = static_cast<float>(y) / static_cast<float>(div.y);
+        const float rel_z  = static_cast<float>(z) / static_cast<float>(div.z);
+        const float rel_xp = signed_pow(rel_x, p);
+        const float rel_yp = signed_pow(rel_y, p);
+        const float rel_zp = signed_pow(rel_z, p);
 
-        const double x_p = rel_xp * size.x;
-        const double y_p = rel_yp * size.y;
-        const double z_p = rel_zp * size.z;
+        const float x_p = rel_xp * size.x;
+        const float y_p = rel_yp * size.y;
+        const float z_p = rel_zp * size.z;
 
         const GEO::index_t vertex_id = mesh.vertices.create_vertex();
         const bool         is_discontinuity =
@@ -146,7 +136,7 @@ public:
             (y == -div.y) || (y == div.y) ||
             (z == -div.z) || (z == div.z);
 
-        mesh.vertices.point(vertex_id) = GEO::vec3{x_p, y_p, z_p};
+        set_pointf(mesh.vertices, vertex_id, GEO::vec3f{x_p, y_p, z_p});
         if (!is_discontinuity) {
             attributes.vertex_normal    .set(vertex_id, n);
             attributes.vertex_texcoord_0.set(vertex_id, GEO::vec2f{static_cast<float>(s), static_cast<float>(t)});
@@ -199,7 +189,7 @@ public:
         return corner_id;
     }
 
-    Box_builder(GEO::Mesh& mesh, const GEO::vec3 size, const GEO::vec3i div, const double p)
+    Box_builder(GEO::Mesh& mesh, const GEO::vec3 size, const GEO::vec3i div, const float p)
         : mesh      {mesh}
         , size      {size}
         , div       {div}
@@ -313,7 +303,7 @@ public:
     }
 };
 
-void make_box(GEO::Mesh& mesh, const GEO::vec3f size, const GEO::vec3i div, const double p)
+void make_box(GEO::Mesh& mesh, const GEO::vec3f size, const GEO::vec3i div, const float p)
 {
     Box_builder builder{mesh, GEO::vec3{size / 2.0f}, div, p};
     builder.build();

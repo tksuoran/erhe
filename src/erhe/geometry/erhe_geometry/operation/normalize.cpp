@@ -22,8 +22,8 @@ void Normalize::build()
     copy_mesh_attributes();
 
     for (GEO::index_t vertex : destination_mesh.vertices) {
-        GEO::vec3& p = destination_mesh.vertices.point(vertex);
-        p = GEO::normalize(p);
+        GEO::vec3f p = get_pointf(destination_mesh.vertices, vertex);
+        set_pointf(destination_mesh.vertices, vertex, GEO::normalize(p));
     }
 
     const uint64_t flags =

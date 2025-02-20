@@ -188,7 +188,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     m_node = std::make_shared<erhe::scene::Node>("Material Preview Node");
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
-    GEO::Mesh sphere_mesh{};
+    GEO::Mesh sphere_mesh{3, true};
     erhe::geometry::shapes::make_sphere(
         sphere_mesh,
         m_radius,

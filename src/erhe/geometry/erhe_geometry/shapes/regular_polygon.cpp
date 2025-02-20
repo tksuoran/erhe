@@ -7,16 +7,16 @@
 
 namespace erhe::geometry::shapes {
 
-void make_triangle(GEO::Mesh& mesh, const double r)
+void make_triangle(GEO::Mesh& mesh, const float r)
 {
     Mesh_attributes attributes{mesh};
-    const double a = sqrt(3.0) / 3.0; // 0.57735027
-    const double b = sqrt(3.0) / 6.0; // 0.28867513
+    const float a = std::sqrt(3.0f) / 3.0f; // 0.57735027
+    const float b = std::sqrt(3.0f) / 6.0f; // 0.28867513
 
     mesh.vertices.create_vertices(3);
-    mesh.vertices.point(0) = GEO::vec3{r * -b, r * -0.5, 0.0}; // 1.0f, 0.0f
-    mesh.vertices.point(1) = GEO::vec3{r *  a, r *  0.0, 0.0}; // 1.0f, 1.0f
-    mesh.vertices.point(2) = GEO::vec3{r * -b, r *  0.5, 0.0}; // 0.0f, 1.0f
+    set_pointf(mesh.vertices, 0, GEO::vec3f{r * -b, r * -0.5f, 0.0f}); // 1.0f, 0.0f
+    set_pointf(mesh.vertices, 1, GEO::vec3f{r *  a, r *  0.0f, 0.0f}); // 1.0f, 1.0f
+    set_pointf(mesh.vertices, 2, GEO::vec3f{r * -b, r *  0.5f, 0.0f}); // 0.0f, 1.0f
 
     GEO::Attribute<GEO::vec2f> vertex_texcoords{mesh.vertices.attributes(), c_texcoord_0};
     attributes.vertex_texcoord_0.set(0, GEO::vec2f{1.0f, 0.0f});
@@ -26,14 +26,14 @@ void make_triangle(GEO::Mesh& mesh, const double r)
     mesh.facets.create_triangle(0, 1, 2);
 }
 
-void make_quad(GEO::Mesh& mesh, const double edge) 
+void make_quad(GEO::Mesh& mesh, const float edge) 
 {
     Mesh_attributes attributes{mesh};
     mesh.vertices.create_vertices(4);
-    mesh.vertices.point(0) = GEO::vec3{edge * -0.5, edge * -0.5, 0.0};
-    mesh.vertices.point(1) = GEO::vec3{edge *  0.5, edge * -0.5, 0.0};
-    mesh.vertices.point(2) = GEO::vec3{edge *  0.5, edge *  0.5, 0.0};
-    mesh.vertices.point(3) = GEO::vec3{edge * -0.5, edge *  0.5, 0.0};
+    set_pointf(mesh.vertices, 0, GEO::vec3f{edge * -0.5f, edge * -0.5f, 0.0});
+    set_pointf(mesh.vertices, 1, GEO::vec3f{edge *  0.5f, edge * -0.5f, 0.0});
+    set_pointf(mesh.vertices, 2, GEO::vec3f{edge *  0.5f, edge *  0.5f, 0.0});
+    set_pointf(mesh.vertices, 3, GEO::vec3f{edge * -0.5f, edge *  0.5f, 0.0});
 
     attributes.vertex_texcoord_0.set(0, GEO::vec2f{0.0f, 0.0f});
     attributes.vertex_texcoord_0.set(1, GEO::vec2f{1.0f, 0.0f});
@@ -47,15 +47,15 @@ void make_quad(GEO::Mesh& mesh, const double edge)
 
 }
 
-void make_rectangle(GEO::Mesh& mesh, const double width, const double height, const bool front_face, const bool back_face)
+void make_rectangle(GEO::Mesh& mesh, const float width, const float height, const bool front_face, const bool back_face)
 {
     Mesh_attributes attributes{mesh};
     mesh.vertices.create_vertices(8);
 
-    mesh.vertices.point(0) = GEO::vec3{width * -0.5, height * -0.5, 0.0};
-    mesh.vertices.point(1) = GEO::vec3{width *  0.5, height * -0.5, 0.0};
-    mesh.vertices.point(2) = GEO::vec3{width *  0.5, height *  0.5, 0.0};
-    mesh.vertices.point(3) = GEO::vec3{width * -0.5, height *  0.5, 0.0};
+    set_pointf(mesh.vertices, 0, GEO::vec3f{width * -0.5f, height * -0.5f, 0.0f});
+    set_pointf(mesh.vertices, 1, GEO::vec3f{width *  0.5f, height * -0.5f, 0.0f});
+    set_pointf(mesh.vertices, 2, GEO::vec3f{width *  0.5f, height *  0.5f, 0.0f});
+    set_pointf(mesh.vertices, 3, GEO::vec3f{width * -0.5f, height *  0.5f, 0.0f});
 
     attributes.vertex_texcoord_0.set(0, GEO::vec2f{0.0f, 0.0f});
     attributes.vertex_texcoord_0.set(1, GEO::vec2f{1.0f, 0.0f});
@@ -63,10 +63,10 @@ void make_rectangle(GEO::Mesh& mesh, const double width, const double height, co
     attributes.vertex_texcoord_0.set(3, GEO::vec2f{0.0f, 1.0f});
 
     // Texcoords X-flipped
-    mesh.vertices.point(4) = GEO::vec3{width * -0.5, height * -0.5, 0.0};
-    mesh.vertices.point(5) = GEO::vec3{width *  0.5, height * -0.5, 0.0};
-    mesh.vertices.point(6) = GEO::vec3{width *  0.5, height *  0.5, 0.0};
-    mesh.vertices.point(7) = GEO::vec3{width * -0.5, height *  0.5, 0.0};
+    set_pointf(mesh.vertices, 4, GEO::vec3f{width * -0.5f, height * -0.5f, 0.0f});
+    set_pointf(mesh.vertices, 5, GEO::vec3f{width *  0.5f, height * -0.5f, 0.0f});
+    set_pointf(mesh.vertices, 6, GEO::vec3f{width *  0.5f, height *  0.5f, 0.0f});
+    set_pointf(mesh.vertices, 7, GEO::vec3f{width * -0.5f, height *  0.5f, 0.0f});
 
     attributes.vertex_texcoord_0.set(4, GEO::vec2f{1.0f, 0.0f});
     attributes.vertex_texcoord_0.set(5, GEO::vec2f{0.0f, 0.0f});

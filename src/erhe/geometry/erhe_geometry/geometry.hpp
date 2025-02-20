@@ -13,6 +13,29 @@ namespace spdlog {
     class logger;
 }
 
+namespace GEO {
+    typedef Matrix<4, GEO::Numeric::float32> mat4f;
+
+    inline float det(const mat4f& M) {
+        return det4x4(
+            M(0,0), M(0,1), M(0,2), M(0,3),
+            M(1,0), M(1,1), M(1,2), M(1,3),
+            M(2,0), M(2,1), M(2,2), M(2,3),
+            M(3,0), M(3,1), M(3,2), M(3,3)
+        );
+    }
+
+    inline mat4f create_scaling_matrix(float s) {
+        mat4f result;
+        result.load_identity();
+        result(0,0) = s;
+        result(1,1) = s;
+        result(2,2) = s;
+        return result;
+    }
+
+}
+
 enum class Transform_mode : unsigned int {
     none = 0,                              // texture coordinates, colors, ...
     mat_mul_vec3_one,                      // position vectors
@@ -265,8 +288,11 @@ public:
 [[nodiscard]] auto count_mesh_facet_triangles(const GEO::Mesh& mesh) -> std::size_t;
 [[nodiscard]] auto get_mesh_info             (const GEO::Mesh& mesh) -> Mesh_info;
 void transform_mesh(
-    const GEO::Mesh& source_mesh, const Mesh_attributes& source_attributes,
-    GEO::Mesh& destination_mesh, Mesh_attributes& destination_attributes, const GEO::mat4& transform
+    const GEO::Mesh&       source_mesh,
+    const Mesh_attributes& source_attributes,
+    GEO::Mesh&             destination_mesh,
+    Mesh_attributes&       destination_attributes,
+    const GEO::mat4f&      transform
 );
 void compute_facet_normals                   (GEO::Mesh& mesh, Mesh_attributes& attributes);
 void compute_facet_centroids                 (GEO::Mesh& mesh, Mesh_attributes& attributes);
@@ -372,13 +398,6 @@ inline void gram_schmidt(const GEO::vec3f& a, const GEO::vec3f& b, const GEO::ve
 // glm::mat4::operator[i] i = column
 [[nodiscard]] inline auto to_geo_mat4(const glm::mat4& m) -> GEO::mat4
 {
-    // GEO::mat4 result;
-    // for (int r = 0; r < 4; ++r) {
-    //     for (int c = 0; c < 4; ++c) {
-    //         result(r, c) = m[c][r]; // Transpose while copying
-    //     }
-    // }
-    // return result;
     glm::vec4 column_0 = m[0];
     glm::vec4 column_1 = m[1];
     glm::vec4 column_2 = m[2];
@@ -388,30 +407,38 @@ inline void gram_schmidt(const GEO::vec3f& a, const GEO::vec3f& b, const GEO::ve
         { column_0[1], column_1[1], column_2[1], column_3[1] },
         { column_0[2], column_1[2], column_2[2], column_3[2] },
         { column_0[3], column_1[3], column_2[3], column_3[3] }
-        // { column_0[0], column_0[1], column_0[2], column_0[3] },
-        // { column_1[0], column_1[1], column_1[2], column_1[3] },
-        // { column_2[0], column_2[1], column_2[2], column_2[3] },
-        // { column_3[0], column_3[1], column_3[2], column_3[3] }
+    };
+}
+
+[[nodiscard]] inline auto to_geo_mat4f(const glm::mat4& m) -> GEO::mat4f
+{
+    glm::vec4 column_0 = m[0];
+    glm::vec4 column_1 = m[1];
+    glm::vec4 column_2 = m[2];
+    glm::vec4 column_3 = m[3];
+    return GEO::mat4f{
+        { column_0[0], column_1[0], column_2[0], column_3[0] },
+        { column_0[1], column_1[1], column_2[1], column_3[1] },
+        { column_0[2], column_1[2], column_2[2], column_3[2] },
+        { column_0[3], column_1[3], column_2[3], column_3[3] }
     };
 }
 
 [[nodiscard]] inline auto to_glm_mat4(const GEO::mat4& m) -> glm::mat4
 {
-    // glm::mat4 result;
-    // for (int c = 0; c < 4; ++c) {
-    //     for (int r = 0; r < 4; ++r) {
-    //         result[c][r] = static_cast<float>(m(r, c)); // Transpose while copying
-    //     }
-    // }
-    // return result;
     glm::vec4 column_0{m(0, 0), m(1, 0), m(2, 0), m(3, 0)};
     glm::vec4 column_1{m(0, 1), m(1, 1), m(2, 1), m(3, 1)};
     glm::vec4 column_2{m(0, 2), m(1, 2), m(2, 2), m(3, 2)};
     glm::vec4 column_3{m(0, 3), m(1, 3), m(2, 3), m(3, 3)};
-    //glm::vec4 column_0{m(0, 0), m(0, 1), m(0, 2), m(0, 3)};
-    //glm::vec4 column_1{m(1, 0), m(1, 1), m(1, 2), m(1, 3)};
-    //glm::vec4 column_2{m(2, 0), m(2, 1), m(2, 2), m(2, 3)};
-    //glm::vec4 column_3{m(3, 0), m(3, 1), m(3, 2), m(3, 3)};
+    return glm::mat4{column_0, column_1, column_2, column_3};
+}
+
+[[nodiscard]] inline auto to_glm_mat4(const GEO::mat4f& m) -> glm::mat4
+{
+    glm::vec4 column_0{m(0, 0), m(1, 0), m(2, 0), m(3, 0)};
+    glm::vec4 column_1{m(0, 1), m(1, 1), m(2, 1), m(3, 1)};
+    glm::vec4 column_2{m(0, 2), m(1, 2), m(2, 2), m(3, 2)};
+    glm::vec4 column_3{m(0, 3), m(1, 3), m(2, 3), m(3, 3)};
     return glm::mat4{column_0, column_1, column_2, column_3};
 }
 
@@ -508,10 +535,6 @@ template <>           struct attribute_transform_traits<GEO::vec2i> { static con
 template <>           struct attribute_transform_traits<GEO::vec3i> { static const bool is_transformable = false; };
 template <>           struct attribute_transform_traits<GEO::vec4i> { static const bool is_transformable = false; };
 
-namespace GEO {
-    typedef Matrix<4, GEO::Numeric::float32> mat4f;
-}
-
 static inline auto apply_transform(const GEO::mat4f transform, const float value, const float w) -> float
 {
     const GEO::vec4f result4 = transform * GEO::vec4f{value, 0.0f, 0.0f, w};
@@ -539,7 +562,7 @@ template <typename T>
 inline void transform_attribute(
     const Attribute_present<T>& source_,
     Attribute_present<T>&       destination_,
-    const GEO::mat4&            transform_
+    const GEO::mat4f&           transform
 ) 
 {
     const GEO::Attribute<T>&    source              = source_.attribute;
@@ -547,13 +570,6 @@ inline void transform_attribute(
     const Attribute_descriptor& source_descriptor   = source_.descriptor;
     GEO::Attribute<T>&          destination         = destination_.attribute;
     GEO::Attribute<bool>&       destination_present = destination_.present;
-
-    GEO::mat4f transform;
-    for (GEO::index_t i = 0; i < 4; i++) {
-        for (GEO::index_t j = 0; j < 4; j++) {
-            transform(i, j) = static_cast<float>(transform_(i, j));
-        }
-    }
 
     // TODO use adjugate for normal_transform
     GEO::mat4f inverse;
@@ -650,8 +666,20 @@ inline void transform_attribute(
 }
 
 void copy_attributes(const Mesh_attributes& source, Mesh_attributes& destination);
-void transform_mesh(const GEO::Mesh& source_mesh, GEO::Mesh& destination_mesh, const GEO::mat4& transform);
-void transform_mesh(GEO::Mesh& mesh, const GEO::mat4& transform);
+void transform_mesh(const GEO::Mesh& source_mesh, GEO::Mesh& destination_mesh, const GEO::mat4f& transform);
+void transform_mesh(GEO::Mesh& mesh, const GEO::mat4f& transform);
+
+using pos_scalar = float;
+using pos_vec3 = GEO::vec3f;
+static constexpr bool pos_float = true;
+
+void set_point (GEO::MeshVertices& mesh_vertices, GEO::index_t vertex, GEO::vec3 p);
+void set_pointf(GEO::MeshVertices& mesh_vertices, GEO::index_t vertex, GEO::vec3f p);
+auto get_point (const GEO::MeshVertices& mesh_vertices, GEO::index_t vertex) -> GEO::vec3;
+auto get_pointf(const GEO::MeshVertices& mesh_vertices, GEO::index_t vertex) -> GEO::vec3f;
+
+auto mesh_facet_normalf(const GEO::Mesh& M, GEO::index_t f) -> GEO::vec3f;
+auto mesh_facet_centerf(const GEO::Mesh& M, GEO::index_t f) -> GEO::vec3f;
 
 namespace erhe::geometry {
 
@@ -672,8 +700,8 @@ public:
     [[nodiscard]] auto get_attributes    () -> Mesh_attributes&;
     [[nodiscard]] auto get_attributes    () const -> const Mesh_attributes&;
 
-    void merge_with_transform(const Geometry& src, const GEO::mat4& transform);
-    void copy_with_transform(const Geometry& source, const GEO::mat4& transform);
+    void merge_with_transform(const Geometry& src, const GEO::mat4f& transform);
+    void copy_with_transform(const Geometry& source, const GEO::mat4f& transform);
 
     void set_name(std::string_view name);
 
@@ -743,6 +771,6 @@ private:
     mutable std::vector<Debug_line> m_debug_lines;
 };
 
-void transform(const Geometry& source, Geometry& destination, const GEO::mat4& transform);
+void transform(const Geometry& source, Geometry& destination, const GEO::mat4f& transform);
 
 }

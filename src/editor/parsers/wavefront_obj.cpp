@@ -138,7 +138,7 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
 
         std::string::size_type line_last_pos = text.find_first_not_of(end_of_line, 0);
         std::string::size_type line_pos      = text.find_first_of(end_of_line, line_last_pos);
-        std::vector<GEO::vec3>  positions;
+        std::vector<GEO::vec3f> positions;
         std::vector<GEO::vec4f> colors;
         std::vector<GEO::vec3f> normals;
         std::vector<GEO::vec2f> texcoords;
@@ -393,7 +393,7 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
                         ERHE_VERIFY(position_index >= 0);
                         ERHE_VERIFY(position_index < static_cast<int>(positions.size()));
 
-                        geo_mesh->vertices.point(mesh_vertex) = positions[position_index];
+                        set_pointf(geo_mesh->vertices, mesh_vertex, positions[position_index]);
 
                         if (has_vertex_colors) {
                             attributes->vertex_color_0.set(mesh_vertex, colors[position_index]);

@@ -109,10 +109,10 @@ void Brush::late_initialize()
         std::vector<float> coordinates;
         coordinates.resize(convex_hull.vertices.nb() * 3);
         for (GEO::index_t vertex : convex_hull.vertices) {
-            const GEO::vec3 p = convex_hull.vertices.point(vertex);
-            coordinates[3 * vertex + 0] = static_cast<float>(p.x);
-            coordinates[3 * vertex + 1] = static_cast<float>(p.y);
-            coordinates[3 * vertex + 2] = static_cast<float>(p.z);
+            const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
+            coordinates[3 * vertex + 0] = p.x;
+            coordinates[3 * vertex + 1] = p.y;
+            coordinates[3 * vertex + 2] = p.z;
         }
 
         m_data.collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(

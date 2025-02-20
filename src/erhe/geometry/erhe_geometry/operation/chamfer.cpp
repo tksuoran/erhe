@@ -28,21 +28,42 @@ Chamfer::Chamfer(const Geometry& source, Geometry& destination)
     return std::abs(dot) >= 1.0 - 1e-06;
 }
 
-[[nodiscard]] auto intersect_three_planes(const GEO::Plane& a, const GEO::Plane& b, const GEO::Plane& c) -> std::optional<GEO::vec3>
+struct Planef {
+    Planef(const GEO::vec3f& p1, const GEO::vec3f& p2, const GEO::vec3f& p3) {
+        GEO::vec3f n = cross(p2 - p1, p3 - p1);
+        a = n.x;
+        b = n.y;
+        c = n.z;
+        d = -(a * p1.x + b * p1.y + c * p1.z);
+    }
+    Planef(const GEO::vec3f& p, const GEO::vec3f& n) {
+        a = n.x;
+        b = n.y;
+        c = n.z;
+        d = -(a * p.x + b * p.y + c * p.z);
+    }
+    Planef(float a_in, float b_in, float c_in, float d_in) : a{a_in} , b{b_in} , c{c_in} , d{d_in} {
+    }
+    Planef() { }
+    GEO::vec3f normal() const { return GEO::vec3f(a, b, c); }
+    float a, b, c, d;
+};
+
+[[nodiscard]] auto intersect_three_planes(const Planef& a, const Planef& b, const Planef& c) -> std::optional<GEO::vec3f>
 {
-    const GEO::vec3 a_n   = a.normal();
-    const GEO::vec3 b_n   = b.normal();
-    const GEO::vec3 c_n   = c.normal();
-    const GEO::vec3 bxc   = GEO::cross(b_n, c_n);
-    const GEO::vec3 cxa   = GEO::cross(c_n, a_n);
-    const GEO::vec3 axb   = GEO::cross(a_n, b_n);
-    const double    dot_a = GEO::dot(bxc, a_n);
-    const double    dot_b = GEO::dot(cxa, b_n);
-    const double    dot_c = GEO::dot(axb, c_n);
+    const GEO::vec3f a_n   = a.normal();
+    const GEO::vec3f b_n   = b.normal();
+    const GEO::vec3f c_n   = c.normal();
+    const GEO::vec3f bxc   = GEO::cross(b_n, c_n);
+    const GEO::vec3f cxa   = GEO::cross(c_n, a_n);
+    const GEO::vec3f axb   = GEO::cross(a_n, b_n);
+    const float      dot_a = GEO::dot(bxc, a_n);
+    const float      dot_b = GEO::dot(cxa, b_n);
+    const float      dot_c = GEO::dot(axb, c_n);
     static_cast<void>(dot_a);
     static_cast<void>(dot_b);
     static_cast<void>(dot_c);
-    if (std::abs(dot_c) < 1e-06) {
+    if (std::abs(dot_c) < 1e-06f) {
         return {};
     }
     return (-a.d * bxc - b.d * cxa - c.d * axb) / dot_c;
@@ -53,16 +74,16 @@ Chamfer::Chamfer(const Geometry& source, Geometry& destination)
 //  - n2, h2 = normal of plane 2 (a, b, c), distance of plane 2 (d)
 //  - r      = any point on plane (x, y, z)
 //  - lambda = t parameter for ray
-[[nodiscard]] auto intersect_two_planes(const GEO::Plane& p1, const GEO::Plane& p2, GEO::vec3& out_origin, GEO::vec3& out_direction) -> bool
+[[nodiscard]] auto intersect_two_planes(const Planef& p1, const Planef& p2, GEO::vec3f& out_origin, GEO::vec3f& out_direction) -> bool
 {
-    const double dot = GEO::dot(p1.normal(), p2.normal());
-    if (std::abs(dot) >= 1.0 - 1e-06) {
+    const float dot = GEO::dot(p1.normal(), p2.normal());
+    if (std::abs(dot) >= 1.0 - 1e-06f) {
         return false;
     }
 
-    const double inv_det = 1.0 / (1.0 - dot * dot);
-    const double c0 = (-p1.d + dot * p2.d) * inv_det;
-    const double c1 = (-p2.d + dot * p1.d) * inv_det;
+    const float inv_det = 1.0f / (1.0f - dot * dot);
+    const float c0 = (-p1.d + dot * p2.d) * inv_det;
+    const float c1 = (-p2.d + dot * p1.d) * inv_det;
 
     out_origin = c0 * p1.normal() + c1 * p2.normal();
     out_direction = GEO::cross(p1.normal(), p2.normal());
@@ -70,19 +91,19 @@ Chamfer::Chamfer(const Geometry& source, Geometry& destination)
     return true;
 }
 
-[[nodiscard]] auto get_signed_distance(const GEO::Plane& plane, const GEO::vec3 point) -> double
+[[nodiscard]] auto get_signed_distance(const Planef& plane, const GEO::vec3f point) -> double
 {
-    const double distance = -plane.d;
+    const float distance = -plane.d;
     return GEO::dot(plane.normal(), point) - distance;
 }
 
-[[nodiscard]] auto intersect_plane(const GEO::Plane& plane, const GEO::vec3& ray_origin, const GEO::vec3& ray_direction) -> std::optional<double>
+[[nodiscard]] auto intersect_plane(const Planef& plane, const GEO::vec3f& ray_origin, const GEO::vec3f& ray_direction) -> std::optional<float>
 {
-    const GEO::vec3 plane_normal = plane.normal();
-    const double denominator = GEO::dot(ray_direction, plane_normal);
-    if (std::abs(denominator) <= 1e-6) {
-        if (std::abs(get_signed_distance(plane, ray_origin)) <= 1e-6) {
-            return 0.0;
+    const GEO::vec3f plane_normal = plane.normal();
+    const float denominator = GEO::dot(ray_direction, plane_normal);
+    if (std::abs(denominator) <= 1e-6f) {
+        if (std::abs(get_signed_distance(plane, ray_origin)) <= 1e-6f) {
+            return 0.0f;
         } else {
             return {};
         }
@@ -92,46 +113,46 @@ Chamfer::Chamfer(const Geometry& source, Geometry& destination)
 }
 
 [[nodiscard]] auto closest_points_on_two_lines(
-    const GEO::vec3& P0,
-    const GEO::vec3& P1,
-    const GEO::vec3& Q0,
-    const GEO::vec3& Q1
-) -> std::optional<std::pair<GEO::vec3, GEO::vec3>>
+    const GEO::vec3f& P0,
+    const GEO::vec3f& P1,
+    const GEO::vec3f& Q0,
+    const GEO::vec3f& Q1
+) -> std::optional<std::pair<GEO::vec3f, GEO::vec3f>>
 {
-    const GEO::vec3 u  = P1 - P0;
-    const GEO::vec3 v  = Q1 - Q0;
-    const GEO::vec3 w0 = P0 - Q0;
-    const double    a  = GEO::dot(u, u);
-    const double    b  = GEO::dot(u, v);
-    const double    c  = GEO::dot(v, v);
-    const double    d  = GEO::dot(u, w0);
-    const double    e  = GEO::dot(v, w0);
-    const double    denominator = (a * c) - (b * b);
+    const GEO::vec3f u  = P1 - P0;
+    const GEO::vec3f v  = Q1 - Q0;
+    const GEO::vec3f w0 = P0 - Q0;
+    const float      a  = GEO::dot(u, u);
+    const float      b  = GEO::dot(u, v);
+    const float      c  = GEO::dot(v, v);
+    const float      d  = GEO::dot(u, w0);
+    const float      e  = GEO::dot(v, w0);
+    const float      denominator = (a * c) - (b * b);
 
-    if (denominator < std::numeric_limits<double>::epsilon()) {
+    if (denominator < std::numeric_limits<float>::epsilon()) {
         return {};
     }
 
     const auto sC = ((b * e) - (c * d)) / denominator;
     const auto tC = ((a * e) - (b * d)) / denominator;
 
-    return std::pair<GEO::vec3, GEO::vec3>{ P0 + sC * u, Q0 + tC * v };
+    return std::pair<GEO::vec3f, GEO::vec3f>{ P0 + sC * u, Q0 + tC * v };
 }
 
-[[nodiscard]] auto closest_point_on_line(const GEO::vec3& P0, const GEO::vec3& P1, const GEO::vec3& Q) -> std::optional<GEO::vec3>
+[[nodiscard]] auto closest_point_on_line(const GEO::vec3f& P0, const GEO::vec3f& P1, const GEO::vec3f& Q) -> std::optional<GEO::vec3f>
 {
-    const GEO::vec3 u = P1 - P0;
-    if (dot(u, u) < std::numeric_limits<double>::epsilon()) {
+    const GEO::vec3f u = P1 - P0;
+    if (dot(u, u) < std::numeric_limits<float>::epsilon()) {
         return {};
     }
-    const double t = GEO::dot(u, Q - P0) / dot(u, u);
+    const float t = GEO::dot(u, Q - P0) / dot(u, u);
     return P0 + t * u;
 }
 
 
-auto line_point_distance(const GEO::vec3& P0, const GEO::vec3& P1, const GEO::vec3& Q) -> std::optional<double>
+auto line_point_distance(const GEO::vec3f& P0, const GEO::vec3f& P1, const GEO::vec3f& Q) -> std::optional<float>
 {
-    std::optional<GEO::vec3> PC = closest_point_on_line(P0, P1, Q);
+    std::optional<GEO::vec3f> PC = closest_point_on_line(P0, P1, Q);
     if (!PC.has_value()) {
         return {};
     }
@@ -158,36 +179,36 @@ void Chamfer::build()
     //      - using average of facets normals
 
     // Pass 1: Compute edge planes
-    GEO::vector<GEO::Plane> edge_planes;
+    GEO::vector<Planef> edge_planes;
     edge_planes.resize(source_mesh.edges.nb());
-    double min_edge_length = std::numeric_limits<double>::max();
-    GEO::vector<double> vertex_min_heights;
+    float min_edge_length = std::numeric_limits<float>::max();
+    GEO::vector<float> vertex_min_heights;
     vertex_min_heights.resize(source_mesh.vertices.nb());
-    std::fill(vertex_min_heights.begin(), vertex_min_heights.end(), std::numeric_limits<double>::max());
-    double min_height = std::numeric_limits<double>::max();
+    std::fill(vertex_min_heights.begin(), vertex_min_heights.end(), std::numeric_limits<float>::max());
+    float min_height = std::numeric_limits<float>::max();
     for (GEO::index_t src_edge : source_mesh.edges) {
         const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(src_edge);
-        GEO::vec3 normal_sum{0.0, 0.0, 0.0};
+        GEO::vec3f normal_sum{0.0f, 0.0f, 0.0f};
         for (GEO::index_t facet : edge_facets) {
-            normal_sum += GEO::Geom::mesh_facet_normal(source_mesh, facet);
+            normal_sum += mesh_facet_normalf(source_mesh, facet);
         }
-        const GEO::vec3    normal   = GEO::normalize(normal_sum);
+        const GEO::vec3f   normal   = GEO::normalize(normal_sum);
         const GEO::index_t v0       = source_mesh.edges.vertex(src_edge, 0);
         const GEO::index_t v1       = source_mesh.edges.vertex(src_edge, 1);
-        const GEO::vec3    p0       = source_mesh.vertices.point(v0);
-        const GEO::vec3    p1       = source_mesh.vertices.point(v1);
-        const GEO::vec3    midpoint = 0.5 * (p0 + p1);
-        const double       length   = GEO::distance(p0, p1);
-        edge_planes[src_edge] = GEO::Plane{midpoint, normal};
+        const GEO::vec3f   p0       = get_pointf(source_mesh.vertices, v0);
+        const GEO::vec3f   p1       = get_pointf(source_mesh.vertices, v1);
+        const GEO::vec3f   midpoint = 0.5f * (p0 + p1);
+        const float        length   = GEO::distance(p0, p1);
+        edge_planes[src_edge] = Planef{midpoint, normal};
         min_edge_length = std::min(min_edge_length, length);
         if (edge_facets.size() == 2) {
             const GEO::index_t lhs_facet    = edge_facets[0];
             const GEO::index_t rhs_facet    = edge_facets[1];
-            const GEO::vec3    lhs_centroid = GEO::Geom::mesh_facet_center(source_mesh, lhs_facet);
-            const GEO::vec3    rhs_centroid = GEO::Geom::mesh_facet_center(source_mesh, rhs_facet);
-            const std::optional<double> edge_height = line_point_distance(lhs_centroid, rhs_centroid, midpoint);
+            const GEO::vec3f   lhs_centroid = mesh_facet_centerf(source_mesh, lhs_facet);
+            const GEO::vec3f   rhs_centroid = mesh_facet_centerf(source_mesh, rhs_facet);
+            const std::optional<float> edge_height = line_point_distance(lhs_centroid, rhs_centroid, midpoint);
             if (edge_height.has_value()) {
-                const double height = edge_height.value();
+                const float height = edge_height.value();
                 vertex_min_heights[v0] = std::min(vertex_min_heights[v0], height);
                 vertex_min_heights[v1] = std::min(vertex_min_heights[v1], height);
                 min_height = std::min(min_height, height);
@@ -201,12 +222,12 @@ void Chamfer::build()
     for (GEO::index_t src_edge : source_mesh.edges) {
         const GEO::index_t v0       = source_mesh.edges.vertex(src_edge, 0);
         const GEO::index_t v1       = source_mesh.edges.vertex(src_edge, 1);
-        const GEO::vec3    p0       = source_mesh.vertices.point(v0);
-        const GEO::vec3    p1       = source_mesh.vertices.point(v1);
-        const GEO::vec3    midpoint = 0.5 * (p0 + p1);
-        const double       height   = std::min(vertex_min_heights[v0], vertex_min_heights[v1]);
-        GEO::Plane& plane = edge_planes[src_edge];
-        plane.d += 0.5 * height;
+        const GEO::vec3f   p0       = get_pointf(source_mesh.vertices, v0);
+        const GEO::vec3f   p1       = get_pointf(source_mesh.vertices, v1);
+        const GEO::vec3f   midpoint = 0.5f * (p0 + p1);
+        const float        height   = std::min(vertex_min_heights[v0], vertex_min_heights[v1]);
+        Planef& plane = edge_planes[src_edge];
+        plane.d += 0.5f * height;
         //const GEO::vec3 endpoint = midpoint + 0.1 * plane.normal();
         // Visual verification:
         // source.add_debug_line(GEO::NO_INDEX, GEO::NO_INDEX, to_glm_vec3(midpoint), to_glm_vec3(endpoint), glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}, 1.0f);
@@ -221,11 +242,11 @@ void Chamfer::build()
     //    - For all edges on the vertex, other than edges surrounding the facet corner,
     //      compute intersection of the parametric line and edge plane
     //    - Take average intersection point, accumulate to vertex position
-    GEO::vector<GEO::vec3> vertex_position_sum;
+    GEO::vector<GEO::vec3f> vertex_position_sum;
     GEO::vector<bool> vertex_alternative_method;
     vertex_position_sum.resize(source_mesh.vertices.nb());
     vertex_alternative_method.resize(source_mesh.vertices.nb());
-    std::fill(vertex_position_sum.begin(), vertex_position_sum.end(), GEO::vec3{0.0, 0.0, 0.0});
+    std::fill(vertex_position_sum.begin(), vertex_position_sum.end(), GEO::vec3f{0.0, 0.0, 0.0});
     std::fill(vertex_alternative_method.begin(), vertex_alternative_method.end(), false);
     for (GEO::index_t src_facet : source_mesh.facets) {
         const GEO::index_t corner_count = source_mesh.facets.nb_corners(src_facet);
@@ -243,17 +264,17 @@ void Chamfer::build()
             }
 
             ERHE_VERIFY(lhs_edge != rhs_edge);
-            const GEO::Plane& lhs_plane = edge_planes[lhs_edge];
-            const GEO::Plane& rhs_plane = edge_planes[rhs_edge];
-            GEO::vec3  origin   {0.0, 0.0, 0.0};
-            GEO::vec3  direction{0.0, 0.0, 0.0};
+            const Planef& lhs_plane = edge_planes[lhs_edge];
+            const Planef& rhs_plane = edge_planes[rhs_edge];
+            GEO::vec3f  origin   {0.0f, 0.0f, 0.0f};
+            GEO::vec3f  direction{0.0f, 0.0f, 0.0f};
             const bool line_ok = intersect_two_planes(lhs_plane, rhs_plane, origin, direction);
             if (!line_ok) {
                 continue; // TODO
             }
             ERHE_VERIFY(line_ok); // TODO Handle case when planes are equal, for example
-            double t_sum  {0.0};
-            double t_count{0.0};
+            float t_sum  {0.0};
+            float t_count{0.0};
 
             //// {
             ////     const GEO::vec3 p0   = source_mesh.vertices.point(prev_vertex);
@@ -272,7 +293,7 @@ void Chamfer::build()
                 if ((edge == lhs_edge) || (edge == rhs_edge)) {
                     continue;
                 }
-                const GEO::Plane& plane = edge_planes[edge];
+                const Planef& plane = edge_planes[edge];
 
                 //// {
                 ////     const GEO::vec3 p0   = source_mesh.vertices.point(source_mesh.edges.vertex(edge, 0));
@@ -291,10 +312,10 @@ void Chamfer::build()
                 ////     }
                 //// }
 
-                std::optional t = intersect_plane(plane, origin, direction);
+                std::optional<float> t = intersect_plane(plane, origin, direction);
                 if (t.has_value()) {
                     t_sum += t.value();
-                    t_count += 1.0;
+                    t_count += 1.0f;
                     //// {
                     ////     const GEO::vec3 intersection_position = origin + t.value() * direction;
                     ////     // Visual verification:
@@ -305,9 +326,9 @@ void Chamfer::build()
                     //// }
                 }
             }
-            if (t_count != 0.0) {
-                const double t = t_sum / t_count;
-                const GEO::vec3 vertex_position = origin + t * direction;
+            if (t_count != 0.0f) {
+                const float t = t_sum / t_count;
+                const GEO::vec3f vertex_position = origin + t * direction;
                 vertex_position_sum[vertex] += vertex_position;
             } else {
                 // TODO Can we do something better?
@@ -335,8 +356,8 @@ void Chamfer::build()
         if (!vertex_alternative_method[src_vertex]) {
             const size_t vertex_corner_count = source.get_vertex_corners(src_vertex).size();
             ERHE_VERIFY(vertex_corner_count > 0);
-            const GEO::vec3 new_pos = vertex_position_sum[src_vertex] / static_cast<double>(vertex_corner_count);
-            destination_mesh.vertices.point(new_dst_vertex) = new_pos;
+            const GEO::vec3f new_pos = vertex_position_sum[src_vertex] / static_cast<float>(vertex_corner_count);
+            set_pointf(destination_mesh.vertices, new_dst_vertex, new_pos);
 
             //const GEO::vec3 p0 = source_mesh.vertices.point(src_vertex);
             //source.add_debug_line(src_vertex, GEO::NO_INDEX, to_glm_vec3(p0), to_glm_vec3(new_pos), glm::vec4{0.3f, 0.6f, 1.0f, 1.0f}, 1.0f);
@@ -344,7 +365,7 @@ void Chamfer::build()
             //destination.add_debug_line(new_dst_vertex, GEO::NO_INDEX, to_glm_vec3(p0), to_glm_vec3(new_pos), glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, 1.0f);
             ////destination.add_debug_text(vertex, src_facet, to_glm_vec3(vertex_position), 0xffffffff, fmt::format("{}", vertex));
         } else {
-            destination_mesh.vertices.point(new_dst_vertex) = source_mesh.vertices.point(src_vertex);
+            set_pointf(destination_mesh.vertices, new_dst_vertex, get_pointf(source_mesh.vertices, src_vertex));
         }
     }
 
@@ -356,9 +377,9 @@ void Chamfer::build()
     for (GEO::index_t src_facet : source_mesh.facets) {
         const GEO::index_t corner_count   = source_mesh.facets.nb_corners(src_facet);
         const GEO::index_t new_dst_facet  = destination_mesh.facets.create_polygon(corner_count);
-        const GEO::vec3    facet_normal   = GEO::normalize(GEO::Geom::mesh_facet_normal(source_mesh, src_facet));
-        const GEO::vec3    facet_centroid = GEO::Geom::mesh_facet_center(source_mesh, src_facet);
-        const GEO::Plane   facet_plane{facet_centroid, facet_normal};
+        const GEO::vec3f   facet_normal   = GEO::normalize(mesh_facet_normalf(source_mesh, src_facet));
+        const GEO::vec3f   facet_centroid = mesh_facet_centerf(source_mesh, src_facet);
+        const Planef       facet_plane{facet_centroid, facet_normal};
         for (GEO::index_t local_facet_corner = 0; local_facet_corner < corner_count; ++local_facet_corner) {
             const GEO::index_t prev_corner = source_mesh.facets.corner(src_facet, (local_facet_corner + corner_count - 1) % corner_count);
             const GEO::index_t corner      = source_mesh.facets.corner(src_facet,  local_facet_corner                                   );
@@ -376,25 +397,25 @@ void Chamfer::build()
             src_corner_to_dst_vertex[corner] = dst_corner_vertex;
             destination_mesh.facets.set_vertex(new_dst_facet, local_facet_corner, dst_corner_vertex);
 
-            const GEO::Plane& lhs_plane = edge_planes[lhs_edge];
-            const GEO::Plane& rhs_plane = edge_planes[rhs_edge];
-            std::optional<GEO::vec3> inset_facet_corner_point = intersect_three_planes(facet_plane, lhs_plane, rhs_plane);
+            const Planef& lhs_plane = edge_planes[lhs_edge];
+            const Planef& rhs_plane = edge_planes[rhs_edge];
+            std::optional<GEO::vec3f> inset_facet_corner_point = intersect_three_planes(facet_plane, lhs_plane, rhs_plane);
             if (!inset_facet_corner_point.has_value()) {
                 log_operation->warn("TODO coplanar chamfer is ");
                 //GEO::vec3 fallback_point = 0.5 * (facet_centroid + source_mesh.vertices.point(vertex));
-                const GEO::vec3 fallback_point = 0.5 * (facet_centroid + destination_mesh.vertices.point(vertex));
-                destination_mesh.vertices.point(dst_corner_vertex) = fallback_point;
+                const GEO::vec3f fallback_point = 0.5f * (facet_centroid + get_pointf(destination_mesh.vertices, vertex));
+                set_pointf(destination_mesh.vertices, dst_corner_vertex, fallback_point);
                 static int counter = 0;
                 ++counter;
             } else {
                 ERHE_VERIFY(inset_facet_corner_point.has_value());
-                const double magnitude = GEO::length(inset_facet_corner_point.value());
-                if (magnitude > 100.0) {
+                const float magnitude = GEO::length(inset_facet_corner_point.value());
+                if (magnitude > 100.0f) {
                     static int counter = 0;
                     ++counter;
                 }
-                ERHE_VERIFY(magnitude < 100.0);
-                destination_mesh.vertices.point(dst_corner_vertex) = inset_facet_corner_point.value();
+                ERHE_VERIFY(magnitude < 100.0f);
+                set_pointf(destination_mesh.vertices, dst_corner_vertex, inset_facet_corner_point.value());
             }
         }
     }
@@ -403,10 +424,10 @@ void Chamfer::build()
     for (GEO::index_t src_edge : source_mesh.edges) {
         const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(src_edge);
         ERHE_VERIFY(edge_facets.size() == 2); // TODO
-        const GEO::index_t lo_vertex          = source_mesh.edges.vertex(src_edge, 0);
-        const GEO::index_t hi_vertex          = source_mesh.edges.vertex(src_edge, 1);
-        const GEO::index_t facet0             = edge_facets[0];
-        const GEO::index_t facet1             = edge_facets[1];
+        const GEO::index_t lo_vertex              = source_mesh.edges.vertex(src_edge, 0);
+        const GEO::index_t hi_vertex              = source_mesh.edges.vertex(src_edge, 1);
+        const GEO::index_t facet0                 = edge_facets[0];
+        const GEO::index_t facet1                 = edge_facets[1];
         const GEO::index_t facet0_lo_local_corner = source_mesh.facets.find_edge(facet0, lo_vertex, hi_vertex);
         const GEO::index_t facet0_hi_local_corner = source_mesh.facets.find_edge(facet0, hi_vertex, lo_vertex);
         const bool         facet0_increasing      = facet0_lo_local_corner != GEO::NO_INDEX;

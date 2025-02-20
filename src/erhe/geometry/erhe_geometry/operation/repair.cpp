@@ -31,6 +31,7 @@ void Repair::build()
 {
     destination.get_attributes().unbind();
     destination_mesh.copy(source_mesh, true);
+    destination_mesh.vertices.set_double_precision();
     const double merge_vertices_epsilon = 0.001;
     const double fill_hole_max_area = 0.01;
     GEO::mesh_repair(
@@ -44,6 +45,7 @@ void Repair::build()
     intersection.remove_internal_shells();
     intersection.simplify_coplanar_facets();
     GEO::mesh_repair(destination_mesh, GEO::MESH_REPAIR_DEFAULT, merge_vertices_epsilon);
+    destination_mesh.vertices.set_single_precision();
     destination.get_attributes().bind();
 
     post_processing();
@@ -86,7 +88,7 @@ void Weld::find_vertex_merge_candidates()
     std::vector<GEO::vec3f> points;
     points.resize(source_mesh.vertices.nb());
     for (GEO::index_t src_vertex : source_mesh.vertices) {
-        points[src_vertex] = GEO::vec3f{source_mesh.vertices.point(src_vertex)};
+        points[src_vertex] = get_pointf(source_mesh.vertices, src_vertex);
     }
 
     unibn::Octree<GEO::vec3f> octree;
@@ -307,10 +309,11 @@ Weld::Weld(const Geometry& source, Geometry& destination)
 
 void Weld::build_()
 {
-    GEO::mat4 i{};
+    GEO::mat4f i{};
     i.load_identity();
     destination.copy_with_transform(source, i);
 
+    destination_mesh.vertices.set_double_precision();
     GEO::MeshSurfaceIntersection intersection(destination_mesh);
     intersection.set_delaunay(true);
     intersection.set_detect_intersecting_neighbors(true);
@@ -318,6 +321,7 @@ void Weld::build_()
     intersection.intersect();
     intersection.remove_internal_shells();
     intersection.simplify_coplanar_facets(0.01); // optional
+    destination_mesh.vertices.set_single_precision();
 
     post_processing();
 }

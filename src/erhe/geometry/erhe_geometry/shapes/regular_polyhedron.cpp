@@ -7,8 +7,9 @@
 
 namespace erhe::geometry::shapes {
 
-void make_cuboctahedron(GEO::Mesh& mesh, const double r)
+void make_cuboctahedron(GEO::Mesh& mesh, const float r)
 {
+    mesh.vertices.set_double_precision();
     const double sq2 = std::sqrt(2.0);
 
     const GEO::vec3 vertices[] = {
@@ -45,10 +46,12 @@ void make_cuboctahedron(GEO::Mesh& mesh, const double r)
     mesh.facets.create_triangle( 3, 5,  2);
     mesh.facets.create_triangle( 5, 6,  8);
     mesh.facets.create_triangle(11, 8,  9);
+    mesh.vertices.set_single_precision();
 }
 
-void make_dodecahedron(GEO::Mesh& mesh, const double r)
+void make_dodecahedron(GEO::Mesh& mesh, const float r)
 {
+    mesh.vertices.set_double_precision();
     {
         const double sq3 = std::sqrt(3.0);
         const double sq5 = std::sqrt(5.0);
@@ -106,10 +109,12 @@ void make_dodecahedron(GEO::Mesh& mesh, const double r)
             }
         }
     }
+    mesh.vertices.set_single_precision();
 }
 
-void make_icosahedron(GEO::Mesh& mesh, const double r)
+void make_icosahedron(GEO::Mesh& mesh, const float r)
 {
+    mesh.vertices.set_double_precision();
     {
         const double sq5 = std::sqrt(5.0);
         const double a0  = 2.0 / (1.0 + sq5);
@@ -166,10 +171,12 @@ void make_icosahedron(GEO::Mesh& mesh, const double r)
         }
     }
     mesh.facets.connect();
+    mesh.vertices.set_single_precision();
 }
 
-void make_octahedron(GEO::Mesh& mesh, const double r)
+void make_octahedron(GEO::Mesh& mesh, const float r)
 {
+    mesh.vertices.set_double_precision();
     {
         const GEO::vec3 vertices[] = {
             { 0,  r,  0},
@@ -205,10 +212,12 @@ void make_octahedron(GEO::Mesh& mesh, const double r)
         }
     }
     mesh.facets.connect();
+    mesh.vertices.set_single_precision();
 }
 
-void make_tetrahedron(GEO::Mesh& mesh, double r)
+void make_tetrahedron(GEO::Mesh& mesh, float r)
 {
+    mesh.vertices.set_double_precision();
     {
         const double sq2 = std::sqrt(2.0);
         const double sq3 = std::sqrt(3.0);
@@ -242,10 +251,12 @@ void make_tetrahedron(GEO::Mesh& mesh, double r)
         }
     }
     mesh.facets.connect();
+    mesh.vertices.set_single_precision();
 }
 
-void make_cube(GEO::Mesh& mesh, const double r)
+void make_cube(GEO::Mesh& mesh, const float r)
 {
+    mesh.vertices.set_double_precision();
     {
         const double a =  0.5 * r;
         const double b = -0.5 * r;
@@ -285,6 +296,7 @@ void make_cube(GEO::Mesh& mesh, const double r)
         }
     }
     mesh.facets.connect();
+    mesh.vertices.set_single_precision();
 }
 
 } // namespace erhe::geometry::shapes

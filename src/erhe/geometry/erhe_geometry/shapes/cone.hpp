@@ -6,10 +6,10 @@ namespace erhe::geometry::shapes {
 
 void make_conical_frustum(
     GEO::Mesh& mesh,
-    double     min_x,
-    double     max_x,
-    double     bottom_radius,
-    double     top_radius,
+    float      min_x,
+    float      max_x,
+    float      bottom_radius,
+    float      top_radius,
     bool       use_bottom,
     bool       use_top,
     int        slice_count,
@@ -20,9 +20,9 @@ void make_conical_frustum(
 // top is at max_x, bottom is at min_x
 void make_cone(
     GEO::Mesh& mesh,
-    double     min_x,
-    double     max_x,
-    double     bottom_radius,
+    float      min_x,
+    float      max_x,
+    float      bottom_radius,
     bool       use_bottom,
     int        slice_count,
     int        stack_division
@@ -31,9 +31,9 @@ void make_cone(
 // Cylinder is special of conical frustum which has top radius equal to bottom radius
 void make_cylinder(
     GEO::Mesh& mesh,
-    double     min_x,
-    double     max_x,
-    double     radius,
+    float      min_x,
+    float      max_x,
+    float      radius,
     bool       use_bottom,
     bool       use_top,
     int        slice_count,

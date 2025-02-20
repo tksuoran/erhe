@@ -240,8 +240,8 @@ void Paint_tool::tool_render(const Render_context& context)
     std::vector<Vertex_position> vertex_positions;
     for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
         const GEO::index_t vertex = geo_mesh.facet_corners.vertex(corner);
-        const GEO::vec3 p_in_mesh_ = geo_mesh.vertices.point(vertex);
-        const glm::vec3 p_in_mesh = to_glm_vec3(p_in_mesh_);
+        const GEO::vec3f   p_in_mesh_ = get_pointf(geo_mesh.vertices, vertex);
+        const glm::vec3    p_in_mesh = to_glm_vec3(p_in_mesh_);
         vertex_positions.emplace_back(vertex, p_in_mesh);
         const float d2 = glm::distance2(hover_position_in_mesh, p_in_mesh);
         if (d2 < max_distance_squared) {
@@ -421,7 +421,7 @@ void Paint_tool::paint()
     GEO::index_t nearest_corner = GEO::NO_INDEX;
     for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
         const GEO::index_t vertex = geo_mesh.facet_corners.vertex(corner);
-        const GEO::vec3 p_ = geo_mesh.vertices.point(vertex);
+        const GEO::vec3f p_ = get_pointf(geo_mesh.vertices, vertex);
         const glm::vec3 p = to_glm_vec3(p_);
         const float d2 = glm::distance2(hover_position_in_mesh, p);
         if (d2 < max_distance_squared) {

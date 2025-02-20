@@ -484,7 +484,7 @@ void Scene_builder::make_cylinder_brushes(Editor_settings& editor_settings, Mesh
             9 * std::max(1, m_config.detail), // slice count
             1 * std::max(1, m_config.detail)  // stack count
         ); // always axis = x
-        transform(*cylinder_geometry.get(), *cylinder_geometry.get(), to_geo_mat4(erhe::math::mat4_swap_xy));
+        transform(*cylinder_geometry.get(), *cylinder_geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
         const uint64_t flags =
             erhe::geometry::Geometry::process_flag_connect |
             erhe::geometry::Geometry::process_flag_build_edges |
@@ -524,7 +524,7 @@ void Scene_builder::make_cone_brushes(Editor_settings& editor_settings, Mesh_mem
         10 * std::max(1, m_config.detail),  // slice count
          5 * std::max(1, m_config.detail)   // stack count
     );
-    transform(*cone_geometry.get(), *cone_geometry.get(), to_geo_mat4(erhe::math::mat4_swap_xy)); // convert to axis = y
+    transform(*cone_geometry.get(), *cone_geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy)); // convert to axis = y
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |

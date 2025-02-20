@@ -15,6 +15,70 @@
 #include <cmath>
 #include <unordered_map>
 
+void set_point(GEO::MeshVertices& mesh_vertices, GEO::index_t vertex, GEO::vec3 p)
+{
+    //if (mesh_vertices.single_precision()) {
+    mesh_vertices.point(vertex) = p;
+    //}
+}
+
+void set_pointf(GEO::MeshVertices& mesh_vertices, GEO::index_t vertex, GEO::vec3f p)
+{
+    float* ptr = mesh_vertices.single_precision_point_ptr(vertex);
+    ptr[0] = p.x;
+    ptr[1] = p.y;
+    ptr[2] = p.z;
+}
+
+auto get_point(const GEO::MeshVertices& mesh_vertices, GEO::index_t vertex) -> GEO::vec3
+{
+    return mesh_vertices.point(vertex);
+}
+
+auto get_pointf(const GEO::MeshVertices& mesh_vertices, GEO::index_t vertex) -> GEO::vec3f
+{
+    const float* const p = mesh_vertices.single_precision_point_ptr(vertex);
+    return GEO::vec3f{p[0], p[1], p[2]};
+}
+
+const GEO::vec3f& mesh_vertexf(const GEO::Mesh& M, GEO::index_t v) {
+    geo_debug_assert(M.vertices.dimension() >= 3);
+    return *(const GEO::vec3f*) (M.vertices.single_precision_point_ptr(v));
+}
+
+const GEO::vec3f& mesh_corner_vertex(const GEO::Mesh& M, GEO::index_t c) {
+    return mesh_vertexf(M, M.facet_corners.vertex(c));
+}
+
+auto mesh_facet_normalf(const GEO::Mesh& M, GEO::index_t f) -> GEO::vec3f
+{
+    GEO::vec3f result(0.0f, 0.0f, 0.0f);
+    GEO::index_t c1 = M.facets.corners_begin(f);
+    GEO::index_t v1 = M.facet_corners.vertex(c1);
+    const GEO::vec3f& p1 = mesh_vertexf(M, v1);
+    for(GEO::index_t c2=c1+1; c2<M.facets.corners_end(f); ++c2) {
+        GEO::index_t c3 = M.facets.next_corner_around_facet(f,c2);
+        GEO::index_t v2 = M.facet_corners.vertex(c2);
+        GEO::index_t v3 = M.facet_corners.vertex(c3);
+        const GEO::vec3f& p2 = mesh_vertexf(M, v2);
+        const GEO::vec3f& p3 = mesh_vertexf(M, v3);
+        result += GEO::cross(p2 - p1, p3 - p1);
+    }
+    return result;
+}
+
+auto mesh_facet_centerf(const GEO::Mesh& M, GEO::index_t f) -> GEO::vec3f
+{
+    GEO::vec3f result(0.0f, 0.0f, 0.0f);
+    float count = 0.0f;
+    for(GEO::index_t c = M.facets.corners_begin(f);
+        c < M.facets.corners_end(f); ++c) {
+        result += mesh_corner_vertex(M, c);
+        count += 1.0f;
+    }
+    return (1.0f / count) * result;
+}
+
 Attribute_descriptor::Attribute_descriptor(
     int                usage_index,
     const std::string& name,
@@ -136,7 +200,6 @@ void Mesh_attributes::unbind()
     corner_aniso_control     .unbind();
 }
 
-
 void Mesh_attributes::bind()
 {
     facet_id                 .bind(m_mesh.facets       .attributes());
@@ -217,8 +280,7 @@ void compute_facet_normals(GEO::Mesh& mesh, Mesh_attributes& attributes)
 {
     Attribute_present<GEO::vec3f>& facet_normal_attribute = attributes.facet_normal;
     for (GEO::index_t facet = 0, end = mesh.facets.nb(); facet < end; ++facet) {
-        const GEO::vec3  facet_normal_ = GEO::normalize(GEO::Geom::mesh_facet_normal(mesh, facet));
-        const GEO::vec3f facet_normal  = GEO::vec3f  {facet_normal_};
+        const GEO::vec3f facet_normal = GEO::normalize(mesh_facet_normalf(mesh, facet));
         facet_normal_attribute.set(facet, facet_normal);
     }
 }
@@ -227,8 +289,7 @@ void compute_facet_centroids(GEO::Mesh& mesh, Mesh_attributes& attributes)
 {
     Attribute_present<GEO::vec3f>& facet_centroid = attributes.facet_centroid;
     for (GEO::index_t facet = 0, end = mesh.facets.nb(); facet < end; ++facet) {
-        const GEO::vec3  centroid_ = GEO::Geom::mesh_facet_center(mesh, facet);
-        const GEO::vec3f centroid  = GEO::vec3f{centroid_};
+        const GEO::vec3f centroid = mesh_facet_centerf(mesh, facet);
         facet_centroid.set(facet, centroid);
     }
 }
@@ -238,8 +299,7 @@ void compute_mesh_vertex_normal_smooth(GEO::Mesh& mesh, Mesh_attributes& attribu
     Attribute_present<GEO::vec3f>& vertex_normal_smooth = attributes.vertex_normal_smooth;
     vertex_normal_smooth.fill(GEO::vec3f{0.0f, 0.0f, 0.0f});
     for (GEO::index_t facet : mesh.facets) {
-        GEO::vec3  facet_normal_ = GEO::normalize(GEO::Geom::mesh_facet_normal(mesh, facet));
-        GEO::vec3f facet_normal  = GEO::vec3f{facet_normal_};
+        GEO::vec3f facet_normal = GEO::normalize(mesh_facet_normalf(mesh, facet));
         for (GEO::index_t corner : mesh.facets.corners(facet)) {
             GEO::index_t vertex = mesh.facet_corners.vertex(corner);
             const GEO::vec3f old_sum = vertex_normal_smooth.get(vertex);
@@ -353,12 +413,12 @@ void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, GEO::index_t facet
 
     //const GEO::index_t p0_corner   = mesh_facets.corner(facet, 0);
     const GEO::index_t p0_vertex   = mesh_facets.vertex(facet, 0);
-    const GEO::vec3    p0_position = mesh_vertices.point(p0_vertex);
-    const GEO::vec3    centroid    = GEO::Geom::mesh_facet_center(mesh, facet); // GEO::vec3{attributes.facet_centroid.get(facet)};
-    const GEO::vec3    normal      = GEO::normalize(GEO::Geom::mesh_facet_normal(mesh, facet));
-    const GEO::vec3    view        = normal;
-    const GEO::vec3    edge        = GEO::normalize(p0_position - centroid);
-    const GEO::vec3    side        = GEO::normalize(GEO::cross(view, edge));
+    const GEO::vec3f   p0_position = get_pointf(mesh_vertices, p0_vertex);
+    const GEO::vec3f   centroid    = mesh_facet_centerf(mesh, facet); // GEO::vec3{attributes.facet_centroid.get(facet)};
+    const GEO::vec3f   normal      = GEO::normalize(mesh_facet_normalf(mesh, facet));
+    const GEO::vec3f   view        = normal;
+    const GEO::vec3f   edge        = GEO::normalize(p0_position - centroid);
+    const GEO::vec3f   side        = GEO::normalize(GEO::cross(view, edge));
     const double view_length2 = GEO::length2(view);
     const double edge_length2 = GEO::length2(edge);
     const double side_length2 = GEO::length2(side);
@@ -375,7 +435,7 @@ void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, GEO::index_t facet
         return;
     }
 
-    GEO::mat4 transform;
+    GEO::mat4f transform;
     transform(0, 0) = edge[0]; // X+ axis is column 0
     transform(1, 0) = edge[1];
     transform(2, 0) = edge[2];
@@ -393,27 +453,26 @@ void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, GEO::index_t facet
     transform(2, 3) = centroid[2];
     transform(3, 3) = 1.0f;
 
-    const GEO::mat4 inverse_transform = transform.inverse();
+    const GEO::mat4f inverse_transform = transform.inverse();
 
     // First pass - for scale
-    double max_distance = 0.0;
-    std::vector<std::pair<GEO::index_t, GEO::vec2>> unscaled_uvs;
+    float max_distance = 0.0f;
+    std::vector<std::pair<GEO::index_t, GEO::vec2f>> unscaled_uvs;
     for (GEO::index_t i = 0; i < corner_count; ++i) {
         const GEO::index_t corner          = mesh_facets.corner(facet, i);
         const GEO::index_t vertex          = mesh_facets.vertex(facet, i);
-        const GEO::vec3    position        = mesh_vertices.point(vertex);
-        const GEO::vec3    planar_position = GEO::transform_point(inverse_transform, position);
-        const GEO::vec2    uv              = GEO::vec2{planar_position.x, planar_position.y};
+        const GEO::vec3f   position        = get_pointf(mesh_vertices, vertex);
+        const GEO::vec3f   planar_position = GEO::transform_point(inverse_transform, position);
+        const GEO::vec2f   uv              = GEO::vec2f{planar_position.x, planar_position.y};
         unscaled_uvs.emplace_back(corner, uv);
-        const double distance = GEO::length(uv);
+        const float distance = GEO::length(uv);
         max_distance = std::max(distance, max_distance);
     }
-    const double scale = 1.0 / max_distance;
+    const float scale = 1.0f / max_distance;
 
     // Second pass - generate texture coordinates
     for (const auto& unscaled_uv : unscaled_uvs) {
-        GEO::vec2 uv = scale * unscaled_uv.second;
-        attributes.corner_texcoord_0.set(unscaled_uv.first, GEO::vec2f{static_cast<float>(uv.x), static_cast<float>(uv.y)});
+        attributes.corner_texcoord_0.set(unscaled_uv.first, scale * unscaled_uv.second);
     }
 }
 
@@ -543,9 +602,9 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
         GEO::vector<double> points;
         points.reserve(nb_pts * dim);
         for (GEO::index_t v : source.vertices) {
-            const double* p = source.vertices.point_ptr(v);
+            const float* p = source.vertices.single_precision_point_ptr(v);
             for (GEO::index_t c = 0; c < dim; ++c) {
-                points.push_back(p[c]);
+                points.push_back(static_cast<double>(p[c]));
             }
         }
         GEO::CmdLine::set_arg("algo:delaunay", "PDEL");
@@ -564,6 +623,7 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
         }
         destination.facets.assign_triangle_mesh(3, points, tri2v, true);
         destination.vertices.remove_isolated();
+        destination.vertices.set_single_precision();
         return true;
     } catch (...) {
         return false;
@@ -635,7 +695,7 @@ void transform_mesh(
     const Mesh_attributes& source_attributes,
     GEO::Mesh&             destination_mesh,
     Mesh_attributes&       destination_attributes,
-    const GEO::mat4&       transform
+    const GEO::mat4f&      transform
 )
 {
     if (transform.is_identity()) {
@@ -658,9 +718,9 @@ void transform_mesh(
     Mesh_attributes& d = destination_attributes;
 
     for (GEO::index_t vertex : source_mesh.vertices) {
-        const GEO::vec3 p           = source_mesh.vertices.point(vertex);
-        const GEO::vec3 transformed = GEO::transform_point(transform, p);
-        destination_mesh.vertices.point(vertex) = transformed;
+        const GEO::vec3f p           = get_pointf(source_mesh.vertices, vertex);
+        const GEO::vec3f transformed = GEO::transform_point(transform, p);
+        set_pointf(destination_mesh.vertices, vertex, transformed);
     }
 
     if (transform.is_identity()) {
@@ -699,7 +759,7 @@ void transform_mesh(
         transform_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control  , transform);
     }
 
-    const double transform_determinant = GEO::det(transform);
+    const float transform_determinant = GEO::det(transform);
     if (transform_determinant < 0.0) {
         for (GEO::index_t facet : destination_mesh.facets) {
             destination_mesh.facets.flip(facet);
@@ -707,14 +767,14 @@ void transform_mesh(
     }
 }
 
-void transform_mesh(const GEO::Mesh& source_mesh, GEO::Mesh& destination_mesh, const GEO::mat4& transform)
+void transform_mesh(const GEO::Mesh& source_mesh, GEO::Mesh& destination_mesh, const GEO::mat4f& transform)
 {
     const Mesh_attributes source_attributes{source_mesh};
     Mesh_attributes destination_attributes{destination_mesh};
     transform_mesh(source_mesh, source_attributes, destination_mesh, destination_attributes, transform);
 }
 
-void transform_mesh(GEO::Mesh& mesh, const GEO::mat4& transform)
+void transform_mesh(GEO::Mesh& mesh, const GEO::mat4f& transform)
 {
     Mesh_attributes attributes{mesh};
     transform_mesh(mesh, attributes, mesh, attributes, transform);
@@ -723,19 +783,19 @@ void transform_mesh(GEO::Mesh& mesh, const GEO::mat4& transform)
 namespace erhe::geometry {
 
 Geometry::Geometry()
-    : m_mesh      {}
+    : m_mesh      {3, true}
     , m_attributes{m_mesh}
 {
 }
 
 Geometry::Geometry(std::string_view name)
-    : m_mesh      {}
+    : m_mesh      {3, true}
     , m_attributes{m_mesh}
     , m_name      {name}
 {
 }
 
-void Geometry::merge_with_transform(const Geometry& src, const GEO::mat4& transform)
+void Geometry::merge_with_transform(const Geometry& src, const GEO::mat4f& transform)
 {
     const GEO::Mesh& src_mesh = src.get_mesh();
     GEO::Mesh& dst_mesh = get_mesh();
@@ -752,10 +812,10 @@ void Geometry::merge_with_transform(const Geometry& src, const GEO::mat4& transf
     get_attributes().bind();
 
     for (GEO::index_t src_vertex : src_mesh.vertices) {
-        const GEO::vec3    p           = src_mesh.vertices.point(src_vertex);
-        const GEO::vec3    transformed = GEO::transform_point(transform, p);
+        const GEO::vec3f   p           = get_pointf(src_mesh.vertices, src_vertex);
+        const GEO::vec3f   transformed = GEO::transform_point(transform, p);
         const GEO::index_t dst_vertex  = dst_base_vertex + src_vertex;
-        dst_mesh.vertices.point(dst_vertex) = transformed;
+        set_pointf(dst_mesh.vertices, dst_vertex, transformed);
         log_geometry->trace("add transformed src vertex {} dst vertex {} position = {}", src_vertex, dst_vertex, transformed);
     }
 
@@ -820,12 +880,12 @@ void Geometry::merge_with_transform(const Geometry& src, const GEO::mat4& transf
     dst_mesh.facets.connect();
 }
 
-void transform(const Geometry& source, Geometry& destination, const GEO::mat4& transform)
+void transform(const Geometry& source, Geometry& destination, const GEO::mat4f& transform)
 {
     transform_mesh(source.get_mesh(), source.get_attributes(), destination.get_mesh(), destination.get_attributes(), transform);
 }
 
-void Geometry::copy_with_transform(const Geometry& source, const GEO::mat4& transform_)
+void Geometry::copy_with_transform(const Geometry& source, const GEO::mat4f& transform_)
 {
     // TODO add m_mesh.clear(false, false) ?
     transform(source, *this, transform_);
@@ -1032,9 +1092,9 @@ void Geometry::generate_mesh_facet_texture_coordinates()
 }
 
 void build_extra_connectivity(
-    GEO::Mesh& mesh,
+    GEO::Mesh&                              mesh,
     std::vector<std::vector<GEO::index_t>>& vertex_to_corners,
-    std::vector<GEO::index_t>& corner_to_facet
+    std::vector<GEO::index_t>&              corner_to_facet
 )
 {
     const GEO::index_t corner_count = mesh.facet_corners.nb();
@@ -1136,7 +1196,7 @@ void Geometry::debug_trace() const
     }
 
     for (GEO::index_t vertex : m_mesh.vertices) {
-        GEO::vec3 position = m_mesh.vertices.point(vertex);
+        GEO::vec3f position = get_pointf(m_mesh.vertices, vertex);
         log_geometry->info("vertex {:2} position = {}", vertex, position);
         if (vertex < m_vertex_to_corners.size()) {
             std::stringstream corners_ss;

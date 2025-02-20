@@ -27,7 +27,7 @@ Controller_visualization::Controller_visualization(erhe::scene::Node* view_root,
 
     GEO::Mesh controller_geo_mesh;
     erhe::geometry::shapes::make_torus(controller_geo_mesh, 0.05f, 0.0025f, 40, 14);
-    transform_mesh(controller_geo_mesh, to_geo_mat4(erhe::math::mat4_swap_yz));
+    transform_mesh(controller_geo_mesh, to_geo_mat4f(erhe::math::mat4_swap_yz));
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue{};
     erhe::primitive::Element_mappings dummy{};

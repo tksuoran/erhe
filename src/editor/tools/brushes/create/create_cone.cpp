@@ -70,7 +70,7 @@ auto Create_cone::create(Brush_data& brush_create_info) const -> std::shared_ptr
         std::max(1, m_stack_count)  // stack count
     );
 
-    transform(*geometry.get(), *geometry.get(), to_geo_mat4(erhe::math::mat4_swap_xy));
+    transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
 
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |

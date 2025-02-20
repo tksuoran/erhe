@@ -71,7 +71,7 @@ auto Json_library::make_geometry(erhe::geometry::Geometry& geometry, const std::
                 const float x = json_vertex[0].GetFloat();
                 const float y = json_vertex[1].GetFloat();
                 const float z = json_vertex[2].GetFloat();
-                mesh.vertices.point(vertex++) = GEO::vec3{-x, -y, -z}; // TODO do we need to mirror everything?
+                set_pointf(mesh.vertices, vertex++, GEO::vec3f{x, y, z});
             }
         }
 
@@ -84,7 +84,7 @@ auto Json_library::make_geometry(erhe::geometry::Geometry& geometry, const std::
             for (auto& corner : json_face.GetArray()) {
                 const int vertex = corner.GetInt();
                 assert(vertex < (int)vertex_count);
-                mesh.facets.set_vertex(mesh_facet, static_cast<GEO::index_t>(corner_count - local_facet_corner - 1), vertex);
+                mesh.facets.set_vertex(mesh_facet, local_facet_corner, vertex);
                 ++local_facet_corner;
             }
         }

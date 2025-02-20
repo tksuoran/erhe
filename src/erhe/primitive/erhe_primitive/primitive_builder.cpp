@@ -138,8 +138,8 @@ public:
     auto get_element_point_count(const std::size_t) const -> std::size_t override { return 1;}
     auto get_point(const std::size_t element_index, const std::size_t) const -> std::optional<glm::vec3> override
     {
-        const GEO::vec3 p = m_mesh.vertices.point(static_cast<GEO::index_t>(element_index));
-        return glm::vec3{static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(p.z)};
+        const GEO::vec3f p = get_pointf(m_mesh.vertices, static_cast<GEO::index_t>(element_index));
+        return to_glm_vec3(p);
     }
 
 private:
@@ -242,7 +242,7 @@ void Build_context::build_vertex_position()
 {
     ERHE_PROFILE_FUNCTION();
 
-    v_position = root.mesh.vertices.point(mesh_vertex);
+    v_position = get_pointf(root.mesh.vertices, mesh_vertex);
 
     ERHE_VERIFY(std::isfinite(v_position.x) && std::isfinite(v_position.y) && std::isfinite(v_position.z));
     vertex_writer.write(root.vertex_attributes.position, v_position);
@@ -265,8 +265,8 @@ auto Build_context::get_facet_normal() -> GEO::vec3f
         }
     }
 
-    const GEO::vec3 facet_normal_ = GEO::normalize(GEO::Geom::mesh_facet_normal(root.mesh, mesh_facet));
-    return GEO::vec3f{facet_normal_};
+    const GEO::vec3f facet_normal = GEO::normalize(mesh_facet_normalf(root.mesh, mesh_facet));
+    return facet_normal;
 }
 
 /////////////////////////////
@@ -464,7 +464,10 @@ void Build_context::build_centroid_position()
     }
 
     std::optional<GEO::vec3f> facet_centroid = mesh_attributes.facet_centroid.try_get(mesh_facet);
-    GEO::vec3f position = facet_centroid.has_value() ? facet_centroid.value() : GEO::vec3f{0.0f, 0.0f, 0.0f};
+    GEO::vec3f position = facet_centroid.has_value() 
+        ? facet_centroid.value() 
+        : mesh_facet_centerf(root.mesh, mesh_facet);
+
     vertex_writer.write(root.vertex_attributes.position, position);
 }
 

@@ -335,16 +335,16 @@ void Geometry_operation::interpolate_mesh_attributes()
             continue;
         }
 
-        GEO::vec3 dst_value{0.0f, 0.0f, 0.0f};
+        GEO::vec3f dst_value{0.0f, 0.0f, 0.0f};
         for (auto j : src_keys) {
             const GEO::index_t src_key = j.second;
 
-            const float     weight    = j.first;
-            const GEO::vec3 src_value = source_mesh.vertices.point(src_key);
-            dst_value += static_cast<GEO::vec3>((weight / sum_weights) * src_value);
+            const float      weight    = j.first;
+            const GEO::vec3f src_value = get_pointf(source_mesh.vertices, src_key);
+            dst_value += static_cast<GEO::vec3f>((weight / sum_weights) * src_value);
         }
 
-        destination_mesh.vertices.point(vertex) = dst_value;
+        set_pointf(destination_mesh.vertices, vertex, dst_value);
     }
 
     // Recompute facet_id, facet_centroid, facet_normal

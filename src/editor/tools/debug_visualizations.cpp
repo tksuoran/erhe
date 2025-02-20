@@ -968,7 +968,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
         if (should_visualize(m_vertex_labels, is_mesh_selected)) {
             int label_count = 0;
             for (GEO::index_t vertex : geo_mesh.vertices) {
-                const glm::vec3 p0 = to_glm_vec3(geo_mesh.vertices.point(vertex));
+                const glm::vec3 p0 = to_glm_vec3(get_pointf(geo_mesh.vertices, vertex));
                 glm::vec3 n{0.0f, 0.0f, 0.0f};
                 const std::optional<GEO::vec3f> vertex_normal_smooth = attributes.vertex_normal_smooth.try_get(vertex);
                 if (vertex_normal_smooth.has_value()) {
@@ -1010,18 +1010,18 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                 const GEO::index_t edge_a = geo_mesh.edges.vertex(edge, 0);
                 const GEO::index_t edge_b = geo_mesh.edges.vertex(edge, 1);
 
-                GEO::vec3   normal_sum{0.0f, 0.0f, 0.0f};
+                GEO::vec3f normal_sum{0.0f, 0.0f, 0.0f};
 
                 const std::vector<GEO::index_t>& facets = geometry->get_edge_facets(edge);
                 for (GEO::index_t facet : facets) {
-                    GEO::vec3 facet_normal = GEO::normalize(GEO::Geom::mesh_facet_normal(geo_mesh, facet));
+                    GEO::vec3f facet_normal = GEO::normalize(mesh_facet_normalf(geo_mesh, facet));
                     normal_sum += facet_normal;
                 }
-                const GEO::vec3 n  = GEO::normalize(normal_sum);
-                const GEO::vec3 a  = geo_mesh.vertices.point(edge_a) + 0.001f * n;
-                const GEO::vec3 b  = geo_mesh.vertices.point(edge_b) + 0.001f * n;
-                const GEO::vec3 p0 = (a + b) / 2.0f;
-                const GEO::vec3 p  = p0 + m_edge_label_text_offset * n;
+                const GEO::vec3f n  = GEO::normalize(normal_sum);
+                const GEO::vec3f a  = get_pointf(geo_mesh.vertices, edge_a) + 0.001f * n;
+                const GEO::vec3f b  = get_pointf(geo_mesh.vertices, edge_b) + 0.001f * n;
+                const GEO::vec3f p0 = (a + b) / 2.0f;
+                const GEO::vec3f p  = p0 + m_edge_label_text_offset * n;
 
                 line_renderer.set_thickness(m_edge_label_line_width);
                 line_renderer.add_lines(
@@ -1055,8 +1055,8 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                     continue;
                 }
                 const GEO::vec3f p = attributes.facet_centroid.get(facet);
-                const GEO::vec3  n = GEO::normalize(GEO::Geom::mesh_facet_normal(geo_mesh, facet));
-                const GEO::vec3f l = p + m_facet_label_line_length * GEO::vec3f{n};
+                const GEO::vec3f n = GEO::normalize(mesh_facet_normalf(geo_mesh, facet));
+                const GEO::vec3f l = p + m_facet_label_line_length * n;
 
                 line_renderer.set_thickness(m_facet_label_line_width);
                 line_renderer.add_lines(
@@ -1076,7 +1076,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                 if (should_visualize(m_corner_labels, is_mesh_selected)) {
                     for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
                         const GEO::index_t vertex      = geo_mesh.facet_corners.vertex(corner);
-                        const GEO::vec3f   corner_p    = GEO::vec3f{geo_mesh.vertices.point(vertex)};
+                        const GEO::vec3f   corner_p    = get_pointf(geo_mesh.vertices, vertex);
                         const GEO::vec3f   to_centroid = GEO::normalize(l - corner_p);
                         const GEO::vec3f   label_p     = corner_p + m_corner_label_line_length * to_centroid;
 

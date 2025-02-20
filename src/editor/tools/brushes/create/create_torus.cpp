@@ -73,7 +73,7 @@ auto Create_torus::create(Brush_data& brush_create_info) const -> std::shared_pt
         m_minor_steps
     );
 
-    transform(*geometry.get(), *geometry.get(), to_geo_mat4(erhe::math::mat4_swap_yz));
+    transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_yz));
 
     //brush_create_info.geometry->build_edges();
     //brush_create_info.geometry->compute_polygon_normals();

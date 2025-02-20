@@ -107,8 +107,8 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Instance& graphics_i
     std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>();
     erhe::geometry::shapes::make_rectangle(
         geometry->get_mesh(),
-        static_cast<double>(m_local_width),
-        static_cast<double>(m_local_height),
+        m_local_width,
+        m_local_height,
         true,
         false
     );

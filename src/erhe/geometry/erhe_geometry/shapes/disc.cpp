@@ -10,19 +10,19 @@ namespace erhe::geometry::shapes {
 class Disc_builder
 {
 public:
-    constexpr static double pi      = 3.141592653589793238462643383279502884197169399375105820974944592308;
-    constexpr static double half_pi = 0.5 * pi;
+    constexpr static float pi      = 3.141592653589793238462643383279502884197169399375105820974944592308f;
+    constexpr static float half_pi = 0.5f * pi;
 
     Disc_builder(
-        GEO::Mesh&   mesh,
-        const double inner_radius,
-        const double outer_radius,
-        const int    slice_count,
-        const int    stack_count,
-        const int    slice_begin,
-        const int    slice_end,
-        const int    stack_begin,
-        const int    stack_end
+        GEO::Mesh&  mesh,
+        const float inner_radius,
+        const float outer_radius,
+        const int   slice_count,
+        const int   stack_count,
+        const int   slice_begin,
+        const int   slice_end,
+        const int   stack_begin,
+        const int   stack_end
     )
         : mesh        {mesh}
         , attributes  {mesh}
@@ -41,9 +41,11 @@ public:
     {
         // Make points
         for (int stack = 0; stack < stack_count; ++stack) {
-            const double rel_stack = (stack_count == 1) ? 1.0 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
+            const float rel_stack = (stack_count == 1) 
+                ? 1.0f 
+                : static_cast<float>(stack) / static_cast<float>(stack_count - 1);
             for (int slice = 0; slice <= slice_count; ++slice) {
-                const double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
+                const float rel_slice = static_cast<float>(slice) / static_cast<float>(slice_count);
                 points[std::make_pair(slice, stack)] = make_point(rel_slice, rel_stack);
             }
         }
@@ -63,20 +65,22 @@ public:
         // Make center point if needed
         if (inner_radius == 0.0f) {
             center_vertex = mesh.vertices.create_vertices(1);
-            mesh.vertices.point(center_vertex) = GEO::vec3{0.0, 0.0, 0.0};
+            set_pointf(mesh.vertices, center_vertex, GEO::vec3f{0.0f, 0.0f, 0.0f});
         }
 
         // Quads/triangles
         for (int stack = stack_begin; stack < stack_end - 1; ++stack) {
-            const double rel_stack_centroid = (stack_end == 1) ? 0.5 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
+            const float rel_stack_centroid = (stack_end == 1) 
+                ? 0.5f 
+                : static_cast<float>(stack) / static_cast<float>(stack_count - 1);
 
             for (int slice = slice_begin; slice < slice_end; ++slice) {
                 const bool         is_triangle        = (stack == 0) && (inner_radius == 0.0);
-                const double       rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
+                const float        rel_slice_centroid = (static_cast<float>(slice) + 0.5f) / static_cast<float>(slice_count);
                 const GEO::index_t centroid_vertex    = make_point(rel_slice_centroid, rel_stack_centroid);
                 const GEO::index_t facet              = mesh.facets.create_facets(1, is_triangle ? 3 : 4);
 
-                attributes.facet_centroid.set(facet, GEO::vec3f{mesh.vertices.point(centroid_vertex)});
+                attributes.facet_centroid.set(facet, get_pointf(mesh.vertices, centroid_vertex));
                 attributes.facet_normal  .set(facet, GEO::vec3f{0.0f, 0.0f, 1.0f});
                 if (is_triangle) {
                     make_corner(facet, 0, slice, stack + 1);
@@ -104,24 +108,24 @@ private:
     }
 
     // rel_stack is in range 0..1
-    auto make_point(const double rel_slice, const double rel_stack) -> GEO::index_t
+    auto make_point(const float rel_slice, const float rel_stack) -> GEO::index_t
     {
-        const double phi                 = pi * 2.0 * rel_slice;
-        const double sin_phi             = std::sin(phi);
-        const double cos_phi             = std::cos(phi);
-        const double one_minus_rel_stack = 1.0 - rel_stack;
+        const float phi                 = pi * 2.0f * rel_slice;
+        const float sin_phi             = std::sin(phi);
+        const float cos_phi             = std::cos(phi);
+        const float one_minus_rel_stack = 1.0f - rel_stack;
 
-        const GEO::vec3 position{
+        const GEO::vec3f position{
             one_minus_rel_stack * (outer_radius * cos_phi) + rel_stack * (inner_radius * cos_phi),
             one_minus_rel_stack * (outer_radius * sin_phi) + rel_stack * (inner_radius * sin_phi),
-            0.0
+            0.0f
         };
 
-        const float s = static_cast<float>(rel_slice);
-        const float t = static_cast<float>(rel_stack);
+        const float s = rel_slice;
+        const float t = rel_stack;
 
         const GEO::index_t vertex = mesh.vertices.create_vertex();
-        mesh.vertices.point(vertex) = position;
+        set_pointf(mesh.vertices, vertex, position);
         attributes.vertex_normal    .set(vertex, GEO::vec3f{0.0f, 0.0f, 1.0f});
         attributes.vertex_texcoord_0.set(vertex, GEO::vec2f{s, t});
 
@@ -130,11 +134,11 @@ private:
 
     auto make_corner(const GEO::index_t facet, const GEO::index_t local_facet_corner, const int slice, const int stack) -> GEO::index_t
     {
-        const double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);
-        const double rel_stack           = (stack_count == 1) ? 1.0 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
-        const bool   is_slice_seam       = (slice == 0) || (slice == slice_count);
-        const bool   is_center           = (stack == 0) && (inner_radius == 0.0);
-        const bool   is_uv_discontinuity = is_slice_seam || is_center;
+        const float rel_slice           = static_cast<float>(slice) / static_cast<float>(slice_count);
+        const float rel_stack           = (stack_count == 1) ? 1.0f : static_cast<float>(stack) / static_cast<float>(stack_count - 1);
+        const bool  is_slice_seam       = (slice == 0) || (slice == slice_count);
+        const bool  is_center           = (stack == 0) && (inner_radius == 0.0);
+        const bool  is_uv_discontinuity = is_slice_seam || is_center;
 
         GEO::index_t vertex;
         if (is_center) {
@@ -161,8 +165,8 @@ private:
 
     GEO::Mesh&      mesh;
     Mesh_attributes attributes;
-    double          inner_radius;
-    double          outer_radius;
+    float           inner_radius;
+    float           outer_radius;
     int             slice_count;
     int             stack_count;
     int             slice_begin;
@@ -173,22 +177,22 @@ private:
     std::map<std::pair<int, int>, GEO::index_t> points;
 };
 
-void make_disc(GEO::Mesh& mesh, const double outer_radius, const double inner_radius, const int slice_count, const int stack_count)
+void make_disc(GEO::Mesh& mesh, const float outer_radius, const float inner_radius, const int slice_count, const int stack_count)
 {
     Disc_builder builder{mesh, outer_radius, inner_radius, slice_count, stack_count, 0, slice_count, 0, stack_count};
     builder.build();
 }
 
 void make_disc(
-    GEO::Mesh&   mesh,
-    const double outer_radius,
-    const double inner_radius,
-    const int    slice_count,
-    const int    stack_count,
-    const int    slice_begin,
-    const int    slice_end,
-    const int    stack_begin,
-    const int    stack_end
+    GEO::Mesh&  mesh,
+    const float outer_radius,
+    const float inner_radius,
+    const int   slice_count,
+    const int   stack_count,
+    const int   slice_begin,
+    const int   slice_end,
+    const int   stack_begin,
+    const int   stack_end
 )
 {
     Disc_builder builder{mesh, outer_radius, inner_radius, slice_count, stack_count, slice_begin, slice_end, stack_begin, stack_end};

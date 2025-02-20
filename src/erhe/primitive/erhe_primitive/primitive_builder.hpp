@@ -117,7 +117,7 @@ private:
     void build_corner_point_index  ();
     void build_triangle_fill_index ();
 
-    GEO::vec3  v_position {};
+    GEO::vec3f v_position {};
     GEO::vec3f v_normal   {};
     GEO::vec4f v_tangent  {};
     GEO::vec3f v_bitangent{};
