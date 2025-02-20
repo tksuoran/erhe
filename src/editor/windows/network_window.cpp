@@ -17,11 +17,9 @@ namespace editor
 Network_window::Network_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Time&                        time
+    Editor_context&              editor_context
 )
-    : Update_time_base         {time}
-    , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Network", "network"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Network", "network"}
     , m_context                {editor_context}
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "network");
@@ -43,11 +41,6 @@ Network_window::Network_window(
     );
 
     set_developer();
-}
-
-void Network_window::update_once_per_frame(const Time_context&)
-{
-    update_network();
 }
 
 void Network_window::update_network()

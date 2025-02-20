@@ -29,13 +29,18 @@ public:
     auto get_producer_output_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
 
     // Implements Imgui_host
-    auto begin_imgui_frame() -> bool override;
-    void end_imgui_frame  () override;
+    void begin_imgui_frame  ()                            override;
+    void process_events     (float dt_s, int64_t time_ns) override;
+    void end_imgui_frame    ()                            override;
+    auto is_visible         () const -> bool              override;
+    void set_text_input_area(int x, int y, int w, int h)  override;
+    void start_text_input   ()                            override;
+    void stop_text_input    ()                            override;
 
 private:
-    void process_input_events_from_context_window();
-
     erhe::window::Context_window& m_context_window;
+    bool                          m_is_visible     {false};
+    float                         m_this_frame_dt_s{0.0f};
 };
 
 } // namespace erhe::imgui

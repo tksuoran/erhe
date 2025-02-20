@@ -46,23 +46,23 @@ public:
 
     // Public API
     void reset                  ();
-    void on_frame_begin         ();
-    void on_frame_end           ();
     void update                 ();
-    void tick                   (std::chrono::steady_clock::time_point timestamp);
+    void update_fixed_step      ();
     void set_position           (const glm::vec3 position);
     void set_orientation        (const glm::mat4& orientation);
     void get_transform_from_node(erhe::scene::Node* node);
 
-    void apply_rotation(float rx, float ry, float rz);
-    void apply_tumble  (glm::vec3 pivot, float rx, float ry, float rz);
+    void apply_rotation          (float rx, float ry, float rz);
+    void apply_tumble            (glm::vec3 pivot, float rx, float ry, float rz);
+    void set_active_control_value(const Variable variable, float value);
 
-    [[nodiscard]] auto get_position   () const -> glm::vec3;
-    [[nodiscard]] auto get_orientation() const -> glm::mat4;
-    [[nodiscard]] auto get_axis_x     () const -> glm::vec3;
-    [[nodiscard]] auto get_axis_y     () const -> glm::vec3;
-    [[nodiscard]] auto get_axis_z     () const -> glm::vec3;
-    [[nodiscard]] auto get_variable   (const Variable variable) -> erhe::math::Input_axis&;
+    [[nodiscard]] auto get_position            () const -> glm::vec3;
+    [[nodiscard]] auto get_orientation         () const -> glm::mat4;
+    [[nodiscard]] auto get_axis_x              () const -> glm::vec3;
+    [[nodiscard]] auto get_axis_y              () const -> glm::vec3;
+    [[nodiscard]] auto get_axis_z              () const -> glm::vec3;
+    [[nodiscard]] auto get_variable            (const Variable variable) -> erhe::math::Input_axis&;
+    [[nodiscard]] auto get_active_control_value(const Variable variable) const -> float;
 
     erhe::math::Input_axis rotate_x;
     erhe::math::Input_axis rotate_y;
@@ -70,8 +70,14 @@ public:
     erhe::math::Input_axis translate_x;
     erhe::math::Input_axis translate_y;
     erhe::math::Input_axis translate_z;
+    float                  active_rotate_x{0.0f};
+    float                  active_rotate_y{0.0f};
+    float                  active_rotate_z{0.0f};
+    float                  active_translate_x{0.0f};
+    float                  active_translate_y{0.0f};
+    float                  active_translate_z{0.0f};
     erhe::math::Input_axis speed_modifier;
-    float move_speed{1.0f};
+    float move_speed{0.2f};
 
 private:
     glm::vec3 m_position;

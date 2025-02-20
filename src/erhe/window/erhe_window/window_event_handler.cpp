@@ -156,6 +156,7 @@ auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_
     switch (input_event.type) {
         case Input_event_type::no_event               : break;
         case Input_event_type::key_event              : input_event.handled = on_key_event              (input_event); break;
+        case Input_event_type::text_event             : input_event.handled = on_text_event             (input_event); break;
         case Input_event_type::char_event             : input_event.handled = on_char_event             (input_event); break;
         case Input_event_type::window_focus_event     : input_event.handled = on_window_focus_event     (input_event); break;
         case Input_event_type::cursor_enter_event     : input_event.handled = on_cursor_enter_event     (input_event); break;
@@ -180,6 +181,7 @@ auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_
     switch (type) {
         case Input_event_type::no_event               : return {};
         case Input_event_type::key_event              : return u.key_event.describe();
+        case Input_event_type::text_event             : return u.text_event.describe();
         case Input_event_type::char_event             : return u.char_event.describe();
         case Input_event_type::window_focus_event     : return u.window_focus_event.describe();
         case Input_event_type::cursor_enter_event     : return u.cursor_enter_event.describe();
@@ -201,6 +203,11 @@ auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_
 [[nodiscard]] auto Key_event::describe() const -> std::string
 {
     return fmt::format("Key_event keycode = {}, modifier_mask = {:x}, pressed = {}", keycode, modifier_mask, pressed);
+}
+
+[[nodiscard]] auto Text_event::describe() const -> std::string
+{
+    return fmt::format("Text_event text = {}", utf8_text);
 }
 
 [[nodiscard]] auto Char_event::describe() const -> std::string

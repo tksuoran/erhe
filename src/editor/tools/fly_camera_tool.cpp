@@ -42,6 +42,11 @@ Jitter::Jitter()
 
 void Jitter::imgui()
 {
+    ImGui::Checkbox("Enable Jitter", &m_enabled);
+    if (m_enabled) {
+        ImGui::BeginDisabled();
+    }
+
     ImGui::DragIntRange2("Jitter x 100ns", &m_min, &m_max, 1.0, 0, 1000000, "%d x 100ns", nullptr, ImGuiSliderFlags_Logarithmic);
     if (ImGui::IsItemEdited()) {
         if (m_max < m_min) {
@@ -49,10 +54,17 @@ void Jitter::imgui()
         }
         m_distribution = std::uniform_int_distribution<int>{m_min, m_max};
     }
+
+    if (m_enabled) {
+        ImGui::EndDisabled();
+    }
 }
 
 void Jitter::sleep()
 {
+    if (!m_enabled) {
+        return;
+    }
     if (m_max == 0) {
         return;
     }
@@ -118,13 +130,13 @@ void Fly_camera_turn_command::try_ready()
     if (m_context.fly_camera_tool->try_ready()) {
         log_fly_camera->trace("Fly camera setting ready");
         set_ready();
-        m_context.fly_camera_tool->capture_pointer();
+        m_context.fly_camera_tool->set_cursor_relative_mode(true);
     }
 }
 
 void Fly_camera_turn_command::on_inactive()
 {
-    m_context.fly_camera_tool->release_pointer();
+    m_context.fly_camera_tool->set_cursor_relative_mode(false);
 }
 
 auto Fly_camera_turn_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
@@ -147,7 +159,7 @@ auto Fly_camera_turn_command::try_call_with_input(erhe::commands::Input_argument
         return false;
     }
 
-    m_context.fly_camera_tool->turn_relative(input.timestamp, -value.x, -value.y);
+    m_context.fly_camera_tool->turn_relative(input.timestamp_ns, -value.x, -value.y);
     return true;
 }
 #pragma endregion Fly_camera_turn_command
@@ -163,7 +175,7 @@ void Fly_camera_tumble_command::try_ready()
 {
     if (m_context.fly_camera_tool->try_start_tumble()) {
         set_ready();
-        m_context.fly_camera_tool->capture_pointer();
+        m_context.fly_camera_tool->set_cursor_relative_mode(true);
     }
 }
 
@@ -184,12 +196,12 @@ auto Fly_camera_tumble_command::try_call_with_input(erhe::commands::Input_argume
         return false;
     }
 
-    m_context.fly_camera_tool->tumble_relative(input.timestamp, -value.x, -value.y);
+    m_context.fly_camera_tool->tumble_relative(input.timestamp_ns, -value.x, -value.y);
     return true;
 }
 void Fly_camera_tumble_command::on_inactive()
 {
-    m_context.fly_camera_tool->release_pointer();
+        m_context.fly_camera_tool->set_cursor_relative_mode(false);
 }
 
 #pragma endregion Fly_camera_tumble_command
@@ -260,7 +272,7 @@ auto Fly_camera_zoom_command::try_call_with_input(erhe::commands::Input_argument
     //    return false;
     //}
 
-    m_context.fly_camera_tool->zoom(input.timestamp, value.y);
+    m_context.fly_camera_tool->zoom(input.timestamp_ns, value.y);
     return true;
 }
 #pragma endregion Fly_camera_zoom_command
@@ -356,7 +368,7 @@ Fly_camera_move_command::Fly_camera_move_command(
 
 auto Fly_camera_move_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
-    return m_context.fly_camera_tool->try_move(input.timestamp, m_variable, m_control, m_active);
+    return m_context.fly_camera_tool->try_move(input.timestamp_ns, m_variable, m_control, m_active);
 }
 #pragma endregion Fly_camera_move_command
 
@@ -376,7 +388,27 @@ Fly_camera_variable_float_command::Fly_camera_variable_float_command(
 
 auto Fly_camera_variable_float_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
-    return m_context.fly_camera_tool->adjust(input.timestamp, m_variable, input.variant.float_value * m_scale);
+    return m_context.fly_camera_tool->adjust(input.timestamp_ns, m_variable, input.variant.float_value * m_scale);
+}
+#pragma endregion Fly_camera_variable_float_command
+
+#pragma region Fly_camera_active_axis_float_command
+Fly_camera_active_axis_float_command::Fly_camera_active_axis_float_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           context,
+    Variable                  variable,
+    float                     scale
+)
+    : Command   {commands, "Fly_camera_active_axis_float_command"}
+    , m_context {context}
+    , m_variable{variable}
+    , m_scale   {scale}
+{
+}
+
+auto Fly_camera_active_axis_float_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    return m_context.fly_camera_tool->set_active_control_value(input.timestamp_ns, m_variable, input.variant.float_value * m_scale);
 }
 #pragma endregion Fly_camera_variable_float_command
 
@@ -401,7 +433,7 @@ void Fly_camera_tool::synthesize_input()
     std::mt19937                          random_engine{random_device()};
     std::uniform_real_distribution<float> distribution(0.1f, 20.0f);
 
-    std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
+    int64_t timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 
     m_before_position    = m_camera_controller->get_position();
     m_before_orientation = glm::quat_cast(m_camera_controller->get_orientation());
@@ -412,11 +444,11 @@ void Fly_camera_tool::synthesize_input()
 
     m_synthetic_input_events.clear();
 
-    timestamp = timestamp + std::chrono::milliseconds(20);
+    timestamp_ns = timestamp_ns + int64_t{20'000'000}; // 20 ms
     m_synthetic_input_events.push_back(
         erhe::window::Input_event{
             .type = erhe::window::Input_event_type::key_event,
-            .timestamp = timestamp,
+            .timestamp_ns = timestamp_ns,
             .u = {
                 .key_event = {
                     .keycode       = erhe::window::Key_d,
@@ -427,11 +459,11 @@ void Fly_camera_tool::synthesize_input()
         }
     );
 
-    timestamp = timestamp + std::chrono::milliseconds(static_cast<int>(m_synth_distance));
+    timestamp_ns = timestamp_ns + int64_t{5'000'000}; // 5ms
     m_synthetic_input_events.push_back(
         erhe::window::Input_event{
             .type = erhe::window::Input_event_type::key_event,
-            .timestamp = timestamp,
+            .timestamp_ns = timestamp_ns,
             .u = {
                 .key_event = {
                     .keycode       = erhe::window::Key_d,
@@ -442,11 +474,11 @@ void Fly_camera_tool::synthesize_input()
         }
     );
 
-    timestamp = timestamp + std::chrono::milliseconds(300);
+    timestamp_ns = timestamp_ns + int64_t{300'000'000}; // 300 ms
     m_synthetic_input_events.push_back(
         erhe::window::Input_event{
             .type = erhe::window::Input_event_type::no_event,
-            .timestamp = timestamp,
+            .timestamp_ns = timestamp_ns,
         }
     );
 
@@ -517,13 +549,13 @@ void Fly_camera_tool::synthesize_input()
 
     m_context.context_window->set_input_event_synthesizer_callback(
         [this](erhe::window::Context_window& context_window) {
-            std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+            const int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
             while (!m_synthetic_input_events.empty()) {
                 erhe::window::Input_event event = m_synthetic_input_events.front();
-                if (event.timestamp > now) {
+                if (event.timestamp_ns > now) {
                     return;
                 }
-                event.timestamp = now;
+                event.timestamp_ns = now;
                 context_window.inject_input_event(event);
                 m_synthetic_input_events.pop_front();
             }
@@ -611,46 +643,53 @@ Fly_camera_tool::Fly_camera_tool(
     , m_move_forward_inactive_command {commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::less, false}
     , m_move_backward_active_command  {commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::more, true }
     , m_move_backward_inactive_command{commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::more, false}
+#if defined(ERHE_WINDOW_LIBRARY_GLFW)
     , m_translate_x_command           {commands, editor_context, Variable::translate_x,  128.0f}
     , m_translate_y_command           {commands, editor_context, Variable::translate_y, -128.0f}
     , m_translate_z_command           {commands, editor_context, Variable::translate_z,  128.0f}
     , m_rotate_x_command              {commands, editor_context, Variable::rotate_x,     0.6f}
     , m_rotate_y_command              {commands, editor_context, Variable::rotate_y,    -0.6f}
     , m_rotate_z_command              {commands, editor_context, Variable::rotate_z,     0.6f}
+#endif
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+    , m_active_translate_x_command    {commands, editor_context, Variable::translate_x,  1.0 / 16.0f}
+    , m_active_translate_y_command    {commands, editor_context, Variable::translate_y, -1.0 / 16.0f}
+    , m_active_translate_z_command    {commands, editor_context, Variable::translate_z,  1.0 / 16.0f}
+    , m_active_rotate_x_command       {commands, editor_context, Variable::rotate_x,     1.0 / 128.0f}
+    , m_active_rotate_y_command       {commands, editor_context, Variable::rotate_y,    -1.0 / 128.0f}
+    , m_active_rotate_z_command       {commands, editor_context, Variable::rotate_z,     1.0 / 128.0f}
+#endif
     , m_serialize_transform_command   {commands, editor_context, true}
     , m_deserialize_transform_command {commands, editor_context, false}
 
-    , m_velocity_graph                {"Velocity",           "time", "ms", "velocity",           "m/s"}
-    , m_distance_graph                {"Distance",           "time", "ms", "distance",           "m"}
-    , m_distance_dt_graph             {"Distance / dt",      "time", "ms", "distance / dt",      "m/s"}
-    , m_state_time_graph              {"State time",         "time", "ms", "state time",         "ms"}
-    , m_deltatime_graph               {"Delta-Time",         "time", "ms", "dt",                 "ms"}
-    , m_reference_velocity_graph      {"Reference Velocity", "time", "ms", "reference velocity", "m/s"}
-    , m_heading_graph                 {"Heading",            "time", "ms", "heading",            ""}
+    , m_tx_graph       {"Tx",      "time", "ms", "Tx",      ""}
+    , m_ty_graph       {"Ty",      "time", "ms", "Ty",      ""}
+    , m_tz_graph       {"Tz",      "time", "ms", "Tz",      ""}
+    , m_px_graph       {"Px",      "time", "ms", "Px",      ""}
+    , m_py_graph       {"Py",      "time", "ms", "Py",      ""}
+    , m_pz_graph       {"Pz",      "time", "ms", "Pz",      ""}
+    , m_heading_graph  {"Heading", "time", "ms", "heading", ""}
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_velocity_graph   .path_color  = 0xffcccccc;
-    m_distance_graph   .path_color  = 0xffcc88cc;
-    m_distance_dt_graph.path_color  = 0xff88cccc;
-    m_state_time_graph .path_color  = 0xffcccc88;
-    m_deltatime_graph  .path_color  = 0xff22cc88;
-    m_reference_velocity_graph.path_color = 0x886666ff;
-    m_reference_velocity_graph.draw_keys = false;
-
-    m_velocity_graph   .key_color   = 0xffaaaaaa;
-    m_distance_graph   .key_color   = 0xffaa66aa;
-    m_distance_dt_graph.key_color   = 0xff66aaaa;
-    m_state_time_graph .key_color   = 0xffaaaa66;
-    m_deltatime_graph  .key_color   = 0xff33aa66;
-    m_reference_velocity_graph.key_color = 0x00000000;
-
-    m_velocity_graph   .hover_color = 0xffffffff;
-    m_distance_graph   .hover_color = 0xffffbbff;
-    m_distance_dt_graph.hover_color = 0xffbbffff;
-    m_state_time_graph .hover_color = 0xffffffbb;
-    m_deltatime_graph  .hover_color = 0xffbbffbb;
-    m_reference_velocity_graph.hover_color = 0x88555555;
+    m_tx_graph.path_color  = 0xffcc4444;
+    m_ty_graph.path_color  = 0xff44cc44;
+    m_tz_graph.path_color  = 0xff4444cc;
+    m_px_graph.path_color  = 0xffcc4444;
+    m_py_graph.path_color  = 0xff44cc44;
+    m_pz_graph.path_color  = 0xff4444cc;
+    m_tx_graph.key_color   = 0xffff0000;
+    m_ty_graph.key_color   = 0xff00ff00;
+    m_tz_graph.key_color   = 0xff0000ff;
+    m_px_graph.key_color   = 0xffff0000;
+    m_py_graph.key_color   = 0xff00ff00;
+    m_pz_graph.key_color   = 0xff0000ff;
+    m_tx_graph.hover_color = 0xffff8888;
+    m_ty_graph.hover_color = 0xff88ff88;
+    m_tz_graph.hover_color = 0xff8888ff;
+    m_px_graph.hover_color = 0xffff8888;
+    m_py_graph.hover_color = 0xff88ff88;
+    m_pz_graph.hover_color = 0xff8888ff;
 
     if (editor_context.OpenXR) {
         return;
@@ -658,19 +697,16 @@ Fly_camera_tool::Fly_camera_tool(
 
     m_camera_controller = std::make_shared<Frame_controller>();
 
-    m_camera_controller->get_variable(Variable::translate_x).set_power_base(config.move_power);
-    m_camera_controller->get_variable(Variable::translate_y).set_power_base(config.move_power);
-    m_camera_controller->get_variable(Variable::translate_z).set_power_base(config.move_power);
-    m_camera_controller->get_variable(Variable::rotate_x   ).disable_power_base();
-    m_camera_controller->get_variable(Variable::rotate_y   ).disable_power_base();
-    m_camera_controller->get_variable(Variable::rotate_z   ).disable_power_base();
+    m_camera_controller->get_variable(Variable::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+    m_camera_controller->get_variable(Variable::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+    m_camera_controller->get_variable(Variable::translate_z).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
 
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "camera_controls");
-    ini.get("invert_x",   config.invert_x);
-    ini.get("invert_y",   config.invert_y);
-    ini.get("move_power", config.move_power);
-    ini.get("move_speed", m_camera_controller->move_speed);
-    ini.get("turn_speed", config.turn_speed);
+    ini.get("invert_x",           config.invert_x);
+    ini.get("invert_y",           config.invert_y);
+    ini.get("velocity_damp",      config.velocity_damp);
+    ini.get("velocity_max_delta", config.velocity_max_delta);
+    ini.get("sensitivity",        m_sensitivity);
 
     set_base_priority(c_priority);
     set_description  ("Fly Camera");
@@ -690,12 +726,22 @@ Fly_camera_tool::Fly_camera_tool(
     commands.register_command(&m_move_forward_inactive_command);
     commands.register_command(&m_move_backward_active_command);
     commands.register_command(&m_move_backward_inactive_command);
+#if defined(ERHE_WINDOW_LIBRARY_GLFW)
     commands.register_command(&m_translate_x_command);
     commands.register_command(&m_translate_y_command);
     commands.register_command(&m_translate_z_command);
     commands.register_command(&m_rotate_x_command);
     commands.register_command(&m_rotate_y_command);
     commands.register_command(&m_rotate_z_command);
+#endif
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+    commands.register_command(&m_active_translate_x_command);
+    commands.register_command(&m_active_translate_y_command);
+    commands.register_command(&m_active_translate_z_command);
+    commands.register_command(&m_active_rotate_x_command);
+    commands.register_command(&m_active_rotate_y_command);
+    commands.register_command(&m_active_rotate_z_command);
+#endif
     commands.register_command(&m_serialize_transform_command);
     commands.register_command(&m_deserialize_transform_command);
 
@@ -732,12 +778,22 @@ Fly_camera_tool::Fly_camera_tool(
     m_rotate_scale_x = config.invert_x ? -1.0f / 512.0f : 1.0f / 512.f;
     m_rotate_scale_y = config.invert_y ? -1.0f / 512.0f : 1.0f / 512.f;
 
+#if defined(ERHE_WINDOW_LIBRARY_GLFW)
     commands.bind_command_to_controller_axis(&m_translate_x_command, 0);
     commands.bind_command_to_controller_axis(&m_translate_y_command, 2);
     commands.bind_command_to_controller_axis(&m_translate_z_command, 1);
     commands.bind_command_to_controller_axis(&m_rotate_x_command, 3);
     commands.bind_command_to_controller_axis(&m_rotate_y_command, 5);
     commands.bind_command_to_controller_axis(&m_rotate_z_command, 4);
+#endif
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+    commands.bind_command_to_controller_axis(&m_active_translate_x_command, 0);
+    commands.bind_command_to_controller_axis(&m_active_translate_y_command, 2);
+    commands.bind_command_to_controller_axis(&m_active_translate_z_command, 1);
+    commands.bind_command_to_controller_axis(&m_active_rotate_x_command, 3);
+    commands.bind_command_to_controller_axis(&m_active_rotate_y_command, 5);
+    commands.bind_command_to_controller_axis(&m_active_rotate_z_command, 4);
+#endif
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
@@ -816,25 +872,27 @@ auto Fly_camera_tool::get_camera() const -> erhe::scene::Camera*
     return m_camera;
 }
 
-void Fly_camera_tool::translation(std::chrono::steady_clock::time_point timestamp, const int tx, const int ty, const int tz)
+void Fly_camera_tool::translation(int64_t timestamp_ns, const int tx, const int ty, const int tz)
 {
+    static_cast<void>(timestamp_ns);
     if (!m_camera_controller) {
         return;
     }
 
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
-    float x = static_cast<float>(tx) / 256.0f;
-    float y = static_cast<float>(ty) / 256.0f;
-    float z = static_cast<float>(tz) / 256.0f;
+    float x = static_cast<float>(tx) * m_camera_controller->translate_x.max_delta() / 256.0f;
+    float y = static_cast<float>(ty) * m_camera_controller->translate_y.max_delta() / 256.0f;
+    float z = static_cast<float>(tz) * m_camera_controller->translate_z.max_delta() / 256.0f;
 
-    m_camera_controller->translate_x.adjust(timestamp, x);
-    m_camera_controller->translate_y.adjust(timestamp, y);
-    m_camera_controller->translate_z.adjust(timestamp, z);
+    m_camera_controller->translate_x.adjust(x);
+    m_camera_controller->translate_y.adjust(y);
+    m_camera_controller->translate_z.adjust(z);
 }
 
-void Fly_camera_tool::rotation(std::chrono::steady_clock::time_point timestamp, const int rx, const int ry, const int rz)
+void Fly_camera_tool::rotation(int64_t timestamp_ns, const int rx, const int ry, const int rz)
 {
+    static_cast<void>(timestamp_ns);
     if (!m_camera_controller) {
         return;
     }
@@ -842,9 +900,9 @@ void Fly_camera_tool::rotation(std::chrono::steady_clock::time_point timestamp, 
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     constexpr float scale = 65536.0f;
-    m_camera_controller->rotate_x.adjust(timestamp, config.turn_speed * static_cast<float>(rx) / scale);
-    m_camera_controller->rotate_y.adjust(timestamp, config.turn_speed * static_cast<float>(ry) / scale);
-    m_camera_controller->rotate_z.adjust(timestamp, config.turn_speed * static_cast<float>(rz) / scale);
+    m_camera_controller->rotate_x.adjust(m_sensitivity * static_cast<float>(rx) / scale);
+    m_camera_controller->rotate_y.adjust(m_sensitivity * static_cast<float>(ry) / scale);
+    m_camera_controller->rotate_z.adjust(m_sensitivity * static_cast<float>(rz) / scale);
 }
 
 void Fly_camera_tool::on_hover_viewport_change()
@@ -854,8 +912,9 @@ void Fly_camera_tool::on_hover_viewport_change()
     m_camera_controller->translate_z.reset();
 }
 
-auto Fly_camera_tool::adjust(std::chrono::steady_clock::time_point timestamp, Variable variable, float value) -> bool
+auto Fly_camera_tool::adjust(int64_t timestamp_ns, Variable variable, float value) -> bool
 {
+    static_cast<void>(timestamp_ns);
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     if ((get_hover_scene_view() == nullptr)) {
@@ -869,12 +928,21 @@ auto Fly_camera_tool::adjust(std::chrono::steady_clock::time_point timestamp, Va
     }
 
     auto& controller = m_camera_controller->get_variable(variable);
-    controller.adjust(timestamp, value);
+    controller.adjust(value);
     return true;
 }
 
-auto Fly_camera_tool::try_move(std::chrono::steady_clock::time_point timestamp, const Variable variable, const erhe::math::Input_axis_control control, const bool active) -> bool
+auto Fly_camera_tool::set_active_control_value(int64_t timestamp_ns, Variable variable, float value) -> bool
 {
+    static_cast<void>(timestamp_ns);
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
+    m_camera_controller->set_active_control_value(variable, value);
+    return true;
+}
+
+auto Fly_camera_tool::try_move(int64_t timestamp_ns, const Variable variable, const erhe::math::Input_axis_control control, const bool active) -> bool
+{
+    static_cast<void>(timestamp_ns);
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     if ((get_hover_scene_view() == nullptr) && active) {
@@ -885,75 +953,53 @@ auto Fly_camera_tool::try_move(std::chrono::steady_clock::time_point timestamp, 
     }
 
     auto& controller = m_camera_controller->get_variable(variable);
-    controller.set(timestamp, control, active);
+    controller.set(control, active);
     if (m_recording) {
-        record_sample(timestamp);
-        std::chrono::duration<float> time = timestamp - m_recording_start_time;
-        float t = 1000.0f * time.count();
-        std::string message = fmt::format("{} @ {}ms", active ? "press" : "release", t);
-        m_events.emplace_back(t, message);
-        ++m_sample_count;
+        record_translation_sample(timestamp_ns);
     }
     return true;
 }
 
-auto Fly_camera_tool::zoom(std::chrono::steady_clock::time_point timestamp, const float delta) -> bool
+auto Fly_camera_tool::zoom(int64_t timestamp_ns, const float delta) -> bool
 {
+    static_cast<void>(timestamp_ns);
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     if (delta != 0.0f) {
         glm::vec3 position = m_camera_controller->get_position();
         const float l = glm::length(position);
         const float k = (-1.0f / 32.0f) * l * delta;
-        m_camera_controller->get_variable(Variable::translate_z).adjust(timestamp, k);
+        m_camera_controller->get_variable(Variable::translate_z).adjust(k);
     }
 
     return true;
 }
 
-auto Fly_camera_tool::turn_relative(std::chrono::steady_clock::time_point timestamp, const float dx, const float dy) -> bool
+auto Fly_camera_tool::turn_relative(int64_t timestamp_ns, const float dx, const float dy) -> bool
 {
+    static_cast<void>(timestamp_ns);
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
-    const float rx = config.turn_speed * dy * m_rotate_scale_y;
-    const float ry = config.turn_speed * dx * m_rotate_scale_x;
+    const float rx = m_sensitivity * dy * m_rotate_scale_y;
+    const float ry = m_sensitivity * dx * m_rotate_scale_x;
     if (false) {
         m_camera_controller->apply_rotation(rx, ry, 0.0f);
     } else {
-        m_camera_controller->get_variable(Variable::rotate_x).adjust(timestamp, rx / 2.0f);
-        m_camera_controller->get_variable(Variable::rotate_y).adjust(timestamp, ry / 2.0f);
+        m_camera_controller->get_variable(Variable::rotate_x).adjust(rx / 2.0f);
+        m_camera_controller->get_variable(Variable::rotate_y).adjust(ry / 2.0f);
     }
 
     if (m_recording) {
-        std::chrono::duration<float> time = timestamp - m_recording_start_time;
-        float t = time.count();
-
-        // record_sample(timestamp);
-        const glm::mat4 orientation_mat4 = m_camera_controller->get_orientation();
-        const glm::quat orientation_quat = glm::quat_cast(orientation_mat4);
-        const float     heading          = glm::yaw(orientation_quat);
-        m_heading_graph.samples.push_back(ImVec2{1000.0f * t, heading});
-        m_sample_count += 1;
-
-        //std::string message = fmt::format("{} @ {}ms", "turn", t);
-        //m_events.emplace_back(t, message);
-        //++m_sample_count;
+        record_heading_sample(timestamp_ns);
     }
 
     return true;
 }
 
-void Fly_camera_tool::capture_pointer()
+void Fly_camera_tool::set_cursor_relative_mode(bool relative_mode_enabled)
 {
     if (!m_context.OpenXR) {
-        m_context.context_window->capture_mouse(true);
-    }
-}
-
-void Fly_camera_tool::release_pointer()
-{
-    if (!m_context.OpenXR) {
-        m_context.context_window->capture_mouse(false);
+        m_context.context_window->set_cursor_relative_hold(relative_mode_enabled);
     }
 }
 
@@ -977,9 +1023,9 @@ auto Fly_camera_tool::try_start_tumble() -> bool
     return true;
 }
 
-auto Fly_camera_tool::tumble_relative(std::chrono::steady_clock::time_point timestamp, float dx, float dy) -> bool
+auto Fly_camera_tool::tumble_relative(int64_t timestamp_ns, float dx, float dy) -> bool
 {
-    static_cast<void>(timestamp); // TODO consider how to correctly the time into account here
+    static_cast<void>(timestamp_ns); // TODO consider how to correctly the time into account here
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
@@ -991,8 +1037,8 @@ auto Fly_camera_tool::tumble_relative(std::chrono::steady_clock::time_point time
         return false;
     }
 
-    const float rx = config.turn_speed * dy * m_rotate_scale_y;
-    const float ry = config.turn_speed * dx * m_rotate_scale_x;
+    const float rx = m_sensitivity * dy * m_rotate_scale_y;
+    const float ry = m_sensitivity * dx * m_rotate_scale_x;
     m_camera_controller->apply_tumble(m_tumble_pivot.value(), rx, ry, 0.0f);
     return true;
 }
@@ -1083,7 +1129,7 @@ auto Fly_camera_tool::track() -> bool
 //    m_camera_controller->update_fixed_step();
 //}
 
-void Fly_camera_tool::record_sample(std::chrono::steady_clock::time_point)
+void Fly_camera_tool::record_translation_sample(int64_t time_ns)
 {
     if (!m_recording) {
         return;
@@ -1091,91 +1137,63 @@ void Fly_camera_tool::record_sample(std::chrono::steady_clock::time_point)
     if (m_sample_count >= m_max_samples) {
         m_recording = false;
     }
-
-    erhe::math::Input_axis& input_axis = m_camera_controller->translate_x;
     erhe::scene::Node* node = m_camera_controller->get_node();
     if (node == nullptr) {
         return;
     }
-    auto  timestamp_0  = input_axis.get_segment_timestamp(0);
-    auto  timestamp_1  = input_axis.get_segment_timestamp(1);
-    std::chrono::duration<float> time_0 = timestamp_0 - m_recording_start_time;
-    std::chrono::duration<float> time_1 = timestamp_1 - m_recording_start_time;
-    float t_0          = time_0.count();
-    float t_1          = time_1.count();
-    float dt           = t_1 - t_0;
-    float velocity_0   = input_axis.get_segment_velocity(0);
-    float velocity_1   = input_axis.get_segment_velocity(1);
-    float distance_0   = input_axis.get_segment_distance(0);
-    float distance_1   = input_axis.get_segment_distance(1);
-    float state_time_0 = input_axis.get_segment_state_time(0);
-    float state_time_1 = input_axis.get_segment_state_time(1);
-    float distance     = distance_1 - distance_0;
-    m_velocity_graph   .samples.push_back({ImVec2{1000.0f * t_0, velocity_0},             ImVec2{1000.0f * t_1, velocity_1}});
-    m_distance_graph   .samples.push_back({ImVec2{1000.0f * t_0, distance_0},             ImVec2{1000.0f * t_1, distance_1}});
-    m_distance_dt_graph.samples.push_back({ImVec2{1000.0f * t_0, distance / dt},          ImVec2{1000.0f * t_1, distance / dt}});
-    m_state_time_graph .samples.push_back({ImVec2{1000.0f * t_0, 1000.0f * state_time_0}, ImVec2{1000.0f * t_1, 1000.0f * state_time_1}});
-    m_deltatime_graph  .samples.push_back({ImVec2{1000.0f * t_0, 1000.0f * dt},           ImVec2{1000.0f * t_1, 1000.0f * dt}});
 
-    float state_time_diff         = state_time_1 - state_time_0;
-    float last_t                  = t_0;
-    float last_reference_velocity = input_axis.evaluate_velocity_at_state_time(state_time_0);
-    float velocity_min = std::min(velocity_0, velocity_1);
-    float velocity_max = std::max(velocity_0, velocity_1);
-    for (int i = 1; i <= 10; ++i) {
-        float rel                = static_cast<float>(i) / 10.0f;
-        float t                  = t_0          + rel * dt;
-        float state_time         = state_time_0 + rel * state_time_diff;
-        float reference_velocity = input_axis.evaluate_velocity_at_state_time(state_time);
-        m_reference_velocity_graph.samples.push_back(
-            {
-                ImVec2{1000.0f * last_t, last_reference_velocity},
-                ImVec2{1000.0f * t,      reference_velocity}
-            }
-        );
-        ++m_sample_count;
-        last_t                  = t;
-        last_reference_velocity = reference_velocity;
-        if (reference_velocity < velocity_min) {
-            float diff = std::abs(reference_velocity - velocity_min);
-            if (diff > 0.1f) {
-                log_fly_camera->warn("reference velocity sanity check failed @ {}", 1000.0f * t);
-            }
-        }
-        if (reference_velocity > velocity_max) {
-            float diff = std::abs(reference_velocity - velocity_max);
-            if (diff > 0.1f) {
-                log_fly_camera->warn("reference velocity sanity check failed @ {}", 1000.0f * t);
-            }
-        }
-    }
+    int64_t      time_ns_ = time_ns - m_recording_start_time_ns;
+    const double time_ms_ = static_cast<double>(time_ns_) / 1'000'000.0;
+    const float  time_ms  = static_cast<float>(time_ms_);
+
+    const glm::vec3 p = node->position_in_world();
+    float tx = m_camera_controller->translate_x.current_value();
+    float ty = m_camera_controller->translate_y.current_value();
+    float tz = m_camera_controller->translate_z.current_value();
+    m_tx_graph.samples.push_back(ImVec2{time_ms, tx});
+    m_ty_graph.samples.push_back(ImVec2{time_ms, ty});
+    m_tz_graph.samples.push_back(ImVec2{time_ms, tz});
+    m_px_graph.samples.push_back(ImVec2{time_ms, p.x});
+    m_py_graph.samples.push_back(ImVec2{time_ms, p.y});
+    m_pz_graph.samples.push_back(ImVec2{time_ms, p.z});
+}
+
+void Fly_camera_tool::record_heading_sample(int64_t timestamp_ns)
+{
+    int64_t      time_ns_ = timestamp_ns - m_recording_start_time_ns;
+    const double time_ms_ = static_cast<double>(time_ns_) / 1'000'000.0;
+    const float  time_ms  = static_cast<float>(time_ms_);
+
+    // record_sample(timestamp_ns);
+    const glm::mat4 orientation_mat4 = m_camera_controller->get_orientation();
+    const glm::quat orientation_quat = glm::quat_cast(orientation_mat4);
+    const float     heading          = glm::yaw(orientation_quat);
+    m_heading_graph.samples.push_back(ImVec2{time_ms, heading});
+    m_sample_count += 1;
 }
 
 void Fly_camera_tool::on_frame_begin()
 {
-    m_camera_controller->on_frame_begin();
+    update_camera();
 }
 
 void Fly_camera_tool::on_frame_end()
 {
-    m_camera_controller->on_frame_end();
-
     m_jitter.sleep();
 }
 
-void Fly_camera_tool::update_once_per_frame(std::chrono::steady_clock::time_point timestamp)
+void Fly_camera_tool::update_fixed_step(const Time_context& time_context)
 {
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
+
+    static_cast<void>(time_context);
     if (!m_camera_controller) { // TODO
         return;
     }
-
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
-
-    update_camera();
-    m_camera_controller->tick(timestamp);
-
-    record_sample(timestamp);
+    m_camera_controller->update_fixed_step();
 }
+
+//    record_sample(timestamp_ns);
 
 auto simple_degrees(const float radians_value) -> float
 {
@@ -1186,34 +1204,30 @@ auto simple_degrees(const float radians_value) -> float
         : degrees_mod_360 - 360.0f;
 }
 
-void Fly_camera_tool::show_input_axis_ui(erhe::math::Input_axis& input_axis) const
+void Fly_camera_tool::show_input_axis_ui(const char* label, erhe::math::Input_axis& input_axis) const
 {
-    ImGui::PushID(input_axis.get_name().data());
+    ImGui::PushID(label);
 
-    bool  less       = input_axis.get_less();
-    bool  more       = input_axis.get_more();
-    float power_base = input_axis.get_power_base();
-    float velocity   = input_axis.get_velocity();
-    float distance   = input_axis.get_tick_distance();
-    float v0         = input_axis.get_base_velocity();
+    bool  less  = input_axis.less();
+    bool  more  = input_axis.more();
+    float damp  = input_axis.damp();
+    float value = input_axis.current_value();
 
     ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(input_axis.get_name().data());
+    ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(label);
     if (less) { ImGui::TableSetColumnIndex(1); ImGui::TextUnformatted("<"); }
     if (more) { ImGui::TableSetColumnIndex(2); ImGui::TextUnformatted(">"); }
 
     ImGui::TableSetColumnIndex(3); 
     ImGui::SetNextItemWidth(-FLT_MIN);
     ImGui::PushID(3);
-    ImGui::SliderFloat("##", &power_base, 1.0f, 100000.0, "%.3f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
+    ImGui::SliderFloat("##", &damp, 0.0f, 1.0, "%.3f", ImGuiSliderFlags_NoRoundToFormat);
     if (ImGui::IsItemEdited()) {
-        input_axis.set_power_base(power_base);
+        input_axis.set_damp(damp);
     }
     ImGui::PopID();
 
-    ImGui::TableSetColumnIndex(4); ImGui::SetNextItemWidth(-FLT_MIN); ImGui::Text("%.7f", velocity);
-    ImGui::TableSetColumnIndex(5); ImGui::SetNextItemWidth(-FLT_MIN); ImGui::Text("%.3f", distance);
-    ImGui::TableSetColumnIndex(6); ImGui::SetNextItemWidth(-FLT_MIN); ImGui::Text("%.3f", v0);
+    ImGui::TableSetColumnIndex(4); ImGui::SetNextItemWidth(-FLT_MIN); ImGui::Text("%.7f", value);
 
     ImGui::PopID();
 }
@@ -1225,14 +1239,15 @@ void Fly_camera_tool::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
-    ImGui::SliderFloat("Move Power Base", &config.move_power, 1.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
+    float speed = m_camera_controller->translate_z.max_delta();
+    ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
     if (ImGui::IsItemEdited()) {
-        m_camera_controller->translate_x.set_power_base(config.move_power);
-        m_camera_controller->translate_y.set_power_base(config.move_power);
-        m_camera_controller->translate_z.set_power_base(config.move_power);
+        m_camera_controller->translate_x.set_max_delta(speed);
+        m_camera_controller->translate_y.set_max_delta(speed);
+        m_camera_controller->translate_z.set_max_delta(speed);
     }
-    ImGui::SliderFloat("Move Speed", &m_camera_controller->move_speed, 0.01f, 200.0f);
-    ImGui::SliderFloat("Turn Speed", &config.turn_speed, 0.2f, 2.0f);
+    ImGui::SliderFloat("Move Speed", &m_camera_controller->move_speed, 0.001f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("Turn Speed", &m_sensitivity, 0.2f, 2.0f);
 
 
     //erhe::math::Input_axis& control = m_camera_controller->translate_x;
@@ -1248,55 +1263,53 @@ void Fly_camera_tool::imgui()
         if (ImGui::TreeNodeEx("Controls", ImGuiTreeNodeFlags_None)) {
             ImGui::BeginTable("Controls", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_RowBg);
             ImGui::TableSetupScrollFreeze(0, 1);
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 5.0f);
-            ImGui::TableSetupColumn("Less", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("More", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("exp",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("vel",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("dst",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("v0",   ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("Name",  ImGuiTableColumnFlags_WidthStretch, 5.0f);
+            ImGui::TableSetupColumn("Less",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("More",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("damp",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableHeadersRow();
-            show_input_axis_ui(m_camera_controller->translate_x);
-            show_input_axis_ui(m_camera_controller->translate_y);
-            show_input_axis_ui(m_camera_controller->translate_z);
-            show_input_axis_ui(m_camera_controller->rotate_x);
-            show_input_axis_ui(m_camera_controller->rotate_y);
-            show_input_axis_ui(m_camera_controller->rotate_z);
-            show_input_axis_ui(m_camera_controller->speed_modifier);
+            show_input_axis_ui("Tx", m_camera_controller->translate_x);
+            show_input_axis_ui("Ty", m_camera_controller->translate_y);
+            show_input_axis_ui("Tz", m_camera_controller->translate_z);
+            show_input_axis_ui("Rx", m_camera_controller->rotate_x);
+            show_input_axis_ui("Ry", m_camera_controller->rotate_y);
+            show_input_axis_ui("Rz", m_camera_controller->rotate_z);
+            show_input_axis_ui("sm", m_camera_controller->speed_modifier);
             ImGui::EndTable();
             ImGui::TreePop();
         }
 
-                           ImGui::Checkbox("Velocity",           &m_velocity_graph          .plot);
-        ImGui::SameLine(); ImGui::Checkbox("Reference Velocity", &m_reference_velocity_graph.plot);
-        ImGui::SameLine(); ImGui::Checkbox("Distance",           &m_distance_graph          .plot);
-        ImGui::SameLine(); ImGui::Checkbox("Distance / dt",      &m_distance_dt_graph       .plot);
-                           ImGui::Checkbox("State Time",         &m_state_time_graph        .plot);
-        ImGui::SameLine(); ImGui::Checkbox("Delta-Time",         &m_deltatime_graph         .plot);
-        ImGui::SameLine(); ImGui::Checkbox("Heading",            &m_heading_graph           .plot);
+                           ImGui::Checkbox("Tx",      &m_tx_graph     .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Ty",      &m_ty_graph     .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Tz",      &m_tz_graph     .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Px",      &m_px_graph     .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Py",      &m_py_graph     .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Pz",      &m_pz_graph     .plot);
+        ImGui::SameLine(); ImGui::Checkbox("Heading", &m_heading_graph.plot);
 
-        if (m_velocity_graph   .plot) ImGui::SliderFloat("Velocity Scale",      &m_velocity_graph   .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-        if (m_distance_graph   .plot) ImGui::SliderFloat("Distance Scale",      &m_distance_graph   .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-        if (m_distance_dt_graph.plot) ImGui::SliderFloat("Distance / dt Scale", &m_distance_dt_graph.y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-        if (m_state_time_graph .plot) ImGui::SliderFloat("State Time Scale",    &m_state_time_graph .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-        if (m_deltatime_graph  .plot) ImGui::SliderFloat("Delta Time Scale",    &m_deltatime_graph  .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-        if (m_heading_graph    .plot) ImGui::SliderFloat("Heading Scale",       &m_heading_graph    .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_tx_graph     .plot) ImGui::SliderFloat("Tx Scale",     &m_tx_graph      .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_ty_graph     .plot) ImGui::SliderFloat("Ty Scale",     &m_tx_graph      .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_tz_graph     .plot) ImGui::SliderFloat("Tz Scale",     &m_tx_graph      .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_px_graph     .plot) ImGui::SliderFloat("Px Scale",     &m_tx_graph      .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_py_graph     .plot) ImGui::SliderFloat("Py Scale",     &m_tx_graph      .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_pz_graph     .plot) ImGui::SliderFloat("Pz Scale",     &m_tx_graph      .y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+        if (m_heading_graph.plot) ImGui::SliderFloat("Heading Scale", &m_heading_graph.y_scale, 0.0001f, 1000000.0f, "%.5f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
 
         ImGui::TreePop();
     }
 
     if (!m_recording) {
         if (ImGui::Button("Start Recording")) {
-            m_events           .clear();
-
-            m_velocity_graph          .clear();
-            m_distance_graph          .clear();
-            m_distance_dt_graph       .clear();
-            m_state_time_graph        .clear();
-            m_deltatime_graph         .clear();
-            m_reference_velocity_graph.clear();
-            m_heading_graph           .clear();
-            m_recording_start_time = std::chrono::steady_clock::now();
+            m_events         .clear();
+            m_tx_graph       .clear();
+            m_ty_graph       .clear();
+            m_tz_graph       .clear();
+            m_px_graph       .clear();
+            m_py_graph       .clear();
+            m_pz_graph       .clear();
+            m_heading_graph  .clear();
+            m_recording_start_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
             m_sample_count = 0;
             m_recording = true;
         }
@@ -1306,19 +1319,17 @@ void Fly_camera_tool::imgui()
         }
     }
 
-    m_reference_velocity_graph.y_scale = m_velocity_graph.y_scale;
-
     if (m_graph_plotter.begin()) {
         for (const Event& event : m_events) {
             m_graph_plotter.sample_x_line(event.x, 0x88008800);
         }
-        m_graph_plotter.plot(m_velocity_graph          );
-        m_graph_plotter.plot(m_reference_velocity_graph);
-        m_graph_plotter.plot(m_distance_graph          );
-        m_graph_plotter.plot(m_distance_dt_graph       );
-        m_graph_plotter.plot(m_state_time_graph        );
-        m_graph_plotter.plot(m_deltatime_graph         );
-        m_graph_plotter.plot(m_heading_graph           );
+        m_graph_plotter.plot(m_tx_graph     );
+        m_graph_plotter.plot(m_ty_graph     );
+        m_graph_plotter.plot(m_tz_graph     );
+        m_graph_plotter.plot(m_px_graph     );
+        m_graph_plotter.plot(m_py_graph     );
+        m_graph_plotter.plot(m_pz_graph     );
+        m_graph_plotter.plot(m_heading_graph);
         for (const Event& event : m_events) {
             m_graph_plotter.sample_text(event.x, 0.0f, event.text.c_str(), 0xff00ff00);
         }

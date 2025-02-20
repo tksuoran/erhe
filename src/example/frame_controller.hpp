@@ -38,9 +38,7 @@ public:
     // Public API
     void reset                  ();
     void update_transform       ();
-    void on_frame_begin         ();
-    void tick                   (std::chrono::steady_clock::time_point timestamp);
-    void on_frame_end           ();
+    void update_fixed_step      ();
     void set_position           (const glm::vec3 position);
     void set_elevation          (const float value);
     void set_heading            (const float value);

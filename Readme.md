@@ -110,7 +110,7 @@ erhe with CMake:
 | ERHE_RAYTRACE_LIBRARY           | Raytrace library           | embree, bvh, none               |
 | ERHE_SVG_LIBRARY                | SVG loading library        | lunasvg, none                   |
 | ERHE_TEXT_LAYOUT_LIBRARY        | Text layout library        | harfbuzz, freetype, none        |
-| ERHE_WINDOW_LIBRARY             | Window library             | glfw, none                      |
+| ERHE_WINDOW_LIBRARY             | Window library             | sdl, glfw                       |
 | ERHE_XR_LIBRARY                 | XR library                 | OpenXR, none                    |
 
 Main purposes of these configuration options are
@@ -141,10 +141,7 @@ Superluminal was briefly tested, but support for it is likely rotten.
 
 ### ERHE_WINDOW_LIBRARY
 
-Only `glfw` is currently supported as window library in erhe.
-
-Disabling window library removes ability to show desktop window.
-Such configuration can still be useful if OpenXR is used.
+'SDL' and `glfw` are currently supported as window library in erhe.
 
 ### ERHE_XR_LIBRARY
 

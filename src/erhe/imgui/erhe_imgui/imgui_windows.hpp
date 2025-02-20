@@ -42,7 +42,12 @@ public:
     void flush_queue            ();
     void register_imgui_window  (Imgui_window* window);
     void unregister_imgui_window(Imgui_window* window);
-    void imgui_windows          ();
+
+    void begin_frame            ();
+    void process_events         (float dt_s, int64_t time_ns);
+    void end_frame              ();
+    void draw_imgui_windows     ();
+
     void window_menu_entries    (Imgui_host& imgui_host, bool developer);
     auto get_windows            () -> std::vector<Imgui_window*>&;
     void save_window_state      ();

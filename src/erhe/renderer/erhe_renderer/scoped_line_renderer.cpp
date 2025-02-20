@@ -677,7 +677,7 @@ auto ray_torus_intersection(const glm::vec3 ro, const glm::vec3 rd, const glm::v
 
     //----------------------------------
 
-    float result = 1e20;
+    float result = 1e20f;
 
     h = d1 * d1 - z + d2;
     if (h > 0.0f) {

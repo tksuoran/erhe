@@ -35,9 +35,6 @@ void make_combo(
     value = static_cast<T>(int_value);
 }
 
-auto from_erhe           (const erhe::window::Keycode keycode) -> ImGuiKey;
-void update_key_modifiers(::ImGuiIO& io, uint32_t modifier_mask);
-
 class Value_edit_state
 {
 public:

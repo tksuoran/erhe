@@ -54,7 +54,7 @@ Headset_camera_offset_move_command::Headset_camera_offset_move_command(erhe::com
 
 auto Headset_camera_offset_move_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
-    m_variable.adjust(input.timestamp, input.variant.float_value);
+    m_variable.adjust(input.variant.float_value);
     return true;
 }
 
@@ -84,15 +84,13 @@ Headset_view::Headset_view(
     erhe::window::Context_window&   context_window,
     Editor_context&                 editor_context,
     Editor_rendering&               editor_rendering,
-    Editor_settings&                editor_settings,
-    Time&                           time
+    Editor_settings&                editor_settings
 )
     : Scene_view               {editor_context, Viewport_config::default_config()}
-    , Update_time_base         {time}
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset"}
-    , m_translate_x     {"translate_x"}
-    , m_translate_y     {"translate_y"}
-    , m_translate_z     {"translate_z"}
+    , m_translate_x     {}
+    , m_translate_y     {}
+    , m_translate_z     {}
     , m_offset_x_command{commands, m_translate_x, 'x'}
     , m_offset_y_command{commands, m_translate_y, 'y'}
     , m_offset_z_command{commands, m_translate_z, 'z'}
@@ -121,9 +119,12 @@ Headset_view::Headset_view(
     commands.bind_command_to_controller_axis(&m_offset_x_command, 0);
     commands.bind_command_to_controller_axis(&m_offset_y_command, 2);
     commands.bind_command_to_controller_axis(&m_offset_z_command, 1);
-    m_translate_x.set_power_base(4.0f);
-    m_translate_y.set_power_base(4.0f);
-    m_translate_z.set_power_base(4.0f);
+    m_translate_x.set_damp     (0.92f);
+    m_translate_y.set_damp     (0.92f);
+    m_translate_z.set_damp     (0.92f);
+    m_translate_x.set_max_delta(0.004f);
+    m_translate_y.set_max_delta(0.004f);
+    m_translate_z.set_max_delta(0.004f);
 
     const erhe::xr::Xr_configuration configuration{
         .debug             = config.debug,
@@ -171,14 +172,14 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, Mesh_
 
 }
 
-void Headset_view::update_once_per_frame(const Time_context& time_context)
+void Headset_view::update_fixed_step()
 {
-    m_translate_x.update(time_context.timestamp);
-    m_translate_y.update(time_context.timestamp);
-    m_translate_z.update(time_context.timestamp);
-    const float tx =  m_translate_x.get_tick_distance();
-    const float ty = -m_translate_y.get_tick_distance();
-    const float tz =  m_translate_z.get_tick_distance();
+    m_translate_x.update();
+    m_translate_y.update();
+    m_translate_z.update();
+    const float tx =  m_translate_x.current_value();
+    const float ty = -m_translate_y.current_value();
+    const float tz =  m_translate_z.current_value();
     if (tx != 0.0f || ty != 0.0f || tz != 0.0f) {
         const glm::vec3 translation{tx, ty, tz};
         m_camera_offset += translation;

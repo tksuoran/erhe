@@ -142,6 +142,8 @@ public:
     void unregister_imgui_host(Imgui_host* viewport);
     [[nodiscard]] auto get_imgui_hosts() const -> const std::vector<Imgui_host*>&;
 
+    void set_ime_data(ImGuiViewport* viewport, ImGuiPlatformImeData* data);
+
     void lock_mutex();
     void unlock_mutex();
 
@@ -182,6 +184,8 @@ private:
     std::set<uint64_t>                                 m_used_texture_handles;
 
     std::vector<std::function<void()>> m_at_end_of_frame;
+
+    Imgui_host* m_ime_host{nullptr};
 };
 
 } // namespace erhe::imgui

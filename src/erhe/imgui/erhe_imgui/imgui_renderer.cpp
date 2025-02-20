@@ -531,6 +531,36 @@ void Imgui_renderer::next_frame()
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
 
+
+static void ImGui_Impl_erhe_PlatformSetImeData(ImGuiContext* context, ImGuiViewport* viewport, ImGuiPlatformImeData* data)
+{
+    static_cast<void>(context);
+    void* backend_user_data = ImGui::GetCurrentContext() ? ImGui::GetIO().BackendPlatformUserData : nullptr;
+    Imgui_renderer* imgui_renderer = static_cast<Imgui_renderer*>(backend_user_data);
+    if (imgui_renderer != nullptr) {
+        imgui_renderer->set_ime_data(viewport, data);
+    }
+}
+
+void Imgui_renderer::set_ime_data(ImGuiViewport* viewport, ImGuiPlatformImeData* data)
+{
+    Imgui_host* imgui_host = static_cast<Imgui_host*>(viewport->PlatformHandle);
+    if ((!data->WantVisible || (m_ime_host != imgui_host)) && m_ime_host != nullptr) {
+        imgui_host->stop_text_input();
+        m_ime_host = nullptr;
+    }
+    if (data->WantVisible)
+    {
+        int x = (int)(data->InputPos.x - viewport->Pos.x);
+        int y = (int)(data->InputPos.y - viewport->Pos.y + data->InputLineHeight);
+        int w = 1;
+        int h = (int)data->InputLineHeight;
+        imgui_host->set_text_input_area(x, y, w, h);
+        imgui_host->start_text_input();
+        m_ime_host = imgui_host;
+    }
+}
+
 void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_context)
 {
     ImGuiIO& io = imgui_context->IO;
@@ -540,6 +570,13 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     io.BackendRendererUserData = this;
     io.BackendRendererName     = "erhe";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+
+    ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+    // TODO platform_io.Platform_SetClipboardTextFn = ImGui_ImplSDL3_SetClipboardText;
+    // TODO platform_io.Platform_GetClipboardTextFn = ImGui_ImplSDL3_GetClipboardText;
+    platform_io.Platform_SetImeDataFn = ImGui_Impl_erhe_PlatformSetImeData;
+    // TODO platform_io.Platform_OpenInShellFn = [](ImGuiContext*, const char* url) { return SDL_OpenURL(url) == 0; };
+
     io.ConfigNavCaptureKeyboard = false;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 

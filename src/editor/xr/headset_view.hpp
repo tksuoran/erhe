@@ -1,7 +1,6 @@
 #pragma once
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#include "time.hpp"
 #include "scene/scene_view.hpp"
 #include "xr/hand_tracker.hpp"
 #include "xr/controller_visualization.hpp"
@@ -84,7 +83,6 @@ class Headset_view
     : public std::enable_shared_from_this<Headset_view>
     , public Scene_view
     , public Renderable
-    , public Update_once_per_frame
     , public erhe::imgui::Imgui_window
 {
 public:
@@ -109,8 +107,7 @@ public:
         erhe::window::Context_window&   context_window,
         Editor_context&                 editor_context,
         Editor_rendering&               editor_rendering,
-        Editor_settings&                editor_settings,
-        Time&                           time
+        Editor_settings&                editor_settings
     );
 
     void attach_to_scene(std::shared_ptr<Scene_root> scene_root, Mesh_memory& mesh_memory);
@@ -123,7 +120,7 @@ public:
     void request_renderdoc_capture();
 
     // Implements Update_once_per_frame
-    void update_once_per_frame(const Time_context&) override;
+    void update_fixed_step();
 
     // Implements Scene_view
     auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;

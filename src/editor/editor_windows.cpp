@@ -68,8 +68,8 @@ void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Exit")) {
-                std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
-                m_context.context_window->handle_window_close_event(timestamp);
+                int64_t timestamp_ns = 0; // TODO
+                m_context.context_window->handle_window_close_event(timestamp_ns);
             }
             ImGui::EndMenu();
         }

@@ -164,20 +164,21 @@ extern auto c_str(Mouse_button button) -> const char*;
 enum class Input_event_type : unsigned int {
     no_event                =  0,
     key_event               =  1,
-    char_event              =  2,
-    window_focus_event      =  3,
-    cursor_enter_event      =  4,
-    mouse_move_event        =  5,
-    mouse_button_event      =  6,
-    mouse_wheel_event       =  7,
-    controller_axis_event   =  8,
-    controller_button_event =  9,
-    window_resize_event     = 10,
-    window_refresh_event    = 11,
-    window_close_event      = 12,
-    xr_boolean_event        = 13,
-    xr_float_event          = 14,
-    xr_vector2f_event       = 15
+    text_event              =  2,
+    char_event              =  3,
+    window_focus_event      =  4,
+    cursor_enter_event      =  5,
+    mouse_move_event        =  6,
+    mouse_button_event      =  7,
+    mouse_wheel_event       =  8,
+    controller_axis_event   =  9,
+    controller_button_event = 10,
+    window_resize_event     = 11,
+    window_refresh_event    = 12,
+    window_close_event      = 13,
+    xr_boolean_event        = 14,
+    xr_float_event          = 15,
+    xr_vector2f_event       = 16
 };
 
 class Key_event
@@ -186,6 +187,14 @@ public:
     signed int keycode;
     uint32_t   modifier_mask;
     bool       pressed;
+
+    [[nodiscard]] auto describe() const -> std::string;
+};
+
+class Text_event
+{
+public:
+    char utf8_text[32];
 
     [[nodiscard]] auto describe() const -> std::string;
 };
@@ -321,10 +330,11 @@ class Input_event
 {
 public:
     Input_event_type type;
-    std::chrono::steady_clock::time_point timestamp;
+    int64_t timestamp_ns;
     bool handled{false};
     union Imgui_event_union {
         Key_event               key_event;
+        Text_event              text_event;
         Char_event              char_event;
         Window_focus_event      window_focus_event;
         Cursor_enter_event      cursor_enter_event;
@@ -352,6 +362,7 @@ public:
     
     virtual auto dispatch_input_event      (Input_event& input_event) -> bool;
     virtual auto on_key_event              (const Input_event&) -> bool { return false; }
+    virtual auto on_text_event             (const Input_event&) -> bool { return false; }
     virtual auto on_char_event             (const Input_event&) -> bool { return false; }
     virtual auto on_window_focus_event     (const Input_event&) -> bool { return false; }
     virtual auto on_cursor_enter_event     (const Input_event&) -> bool { return false; }

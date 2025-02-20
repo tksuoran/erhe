@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <vector>
 
@@ -14,66 +15,35 @@ class Time;
 class Time_context
 {
 public:
-    std::chrono::steady_clock::time_point timestamp   {};
-    double                                dt          {0.0};
-    double                                time        {0.0};
-    uint64_t                              frame_number{0};
-};
-
-class Update_time_base
-{
-public:
-    explicit Update_time_base(Time& time);
-    virtual ~Update_time_base() noexcept;
-
-protected:
-    Time& m_time;
-};
-
-class Update_fixed_step : public virtual Update_time_base
-{
-public:
-    Update_fixed_step();
-    ~Update_fixed_step() noexcept override;
-
-    virtual void update_fixed_step(const Time_context&) = 0;
-};
-
-class Update_once_per_frame : public virtual Update_time_base
-{
-public:
-    Update_once_per_frame();
-    ~Update_once_per_frame() noexcept override;
-
-    virtual void update_once_per_frame(const Time_context&) = 0;
+    float    simulation_dt_s    {0.0};
+    int64_t  simulation_dt_ns   {0};
+    int64_t  simulation_time_ns {0};
+    float    host_system_dt_s   {0.0};
+    int64_t  host_system_dt_ns  {0};
+    int64_t  host_system_time_ns{0};
+    uint64_t frame_number       {0};
+    uint64_t subframe           {0};
 };
 
 class Time
 {
 public:
-    [[nodiscard]] auto time() const -> double;
-    void start_time           ();
-    void update               ();
-    void update_fixed_step    (const Time_context& time_context);
-    void update_once_per_frame();
-    auto frame_number         () const -> uint64_t;
-    auto get_last_time_context() const -> const Time_context& { return m_last_update; }
-
-    void register_update_fixed_step      (Update_fixed_step* entry);
-    void register_update_once_per_frame  (Update_once_per_frame* entry);
-    void unregister_update_fixed_step    (Update_fixed_step* entry);
-    void unregister_update_once_per_frame(Update_once_per_frame* entry);
+    [[nodiscard]] auto get_simulation_time_ns () const -> int64_t;
+    [[nodiscard]] auto get_host_system_time_ns() const -> int64_t;
+    [[nodiscard]] auto get_frame_number       () const -> uint64_t;
+    void prepare_update     ();
+    void for_each_fixed_step(std::function<void(const Time_context&)> callback);
 
 private:
-    std::chrono::steady_clock::time_point m_current_time;
-    double                                m_time_accumulator{0.0};
-    double                                m_time            {0.0};
-    uint64_t                              m_frame_number{0};
-    Time_context                          m_last_update;
+    int64_t  m_host_system_last_frame_start_time{0};
+    int64_t  m_host_system_time_ns              {0};
+    int64_t  m_simulation_time_accumulator      {0};
+    int64_t  m_simulation_dt_ns                 {0};
+    int64_t  m_simulation_time_ns               {0};
+    uint64_t m_frame_number                     {0};
 
-    ERHE_PROFILE_MUTEX(std::mutex,      m_mutex);
-    std::vector<Update_fixed_step*>     m_update_fixed_step;
-    std::vector<Update_once_per_frame*> m_update_once_per_frame;
+    ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
+    std::vector<Time_context>      m_this_frame_fixed_steps;
 };
 
 } // namespace editor

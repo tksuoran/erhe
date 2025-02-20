@@ -3,6 +3,9 @@
 #if defined(ERHE_WINDOW_LIBRARY_GLFW)
 #   include "erhe_window/glfw_window.hpp"
 #endif
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+#   include "erhe_window/sdl_window.hpp"
+#endif
 
 #include <string>
 

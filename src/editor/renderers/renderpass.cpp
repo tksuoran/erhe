@@ -58,10 +58,11 @@ void Renderpass::render(const Render_context& context) const
     ERHE_PROFILE_FUNCTION();
 
     // TODO This is a bit hacky, route this better.
-    const float t0     = static_cast<float>(context.editor_context.time->time());
-    const float period = 1.0f / context.viewport_config.selection_highlight_frequency;
-    const float t1     = ::fmodf(t0, period);
-    const float t2     = 0.5f + triangle_wave(t1, period) * 0.5f;
+    const int64_t t0_ns  = context.editor_context.time->get_host_system_time_ns();
+    const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
+    const float   period = 1.0f / context.viewport_config.selection_highlight_frequency;
+    const float   t1     = static_cast<float>(::fmod(t0, period));
+    const float   t2     = static_cast<float>(0.5f + triangle_wave(t1, period) * 0.5f);
     context.editor_context.editor_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
         .color_source   = erhe::scene_renderer::Primitive_color_source::constant_color,
         .constant_color = glm::mix(
@@ -209,7 +210,7 @@ void Renderpass::imgui()
             ImGui::PopID();
         }
         ImGui::TreePop();
-    }
+    }   
     ImGui::Text("Primitive Mode: %s", erhe::primitive::c_str(primitive_mode));
     ImGui::Checkbox("Allow shader stages override", &allow_shader_stages_override);
     if (primitive_settings.has_value()) {

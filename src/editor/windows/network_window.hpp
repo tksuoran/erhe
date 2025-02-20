@@ -1,6 +1,5 @@
 #pragma once
 
-#include "time.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_net/client.hpp"
 #include "erhe_net/server.hpp"
@@ -16,25 +15,21 @@ namespace editor {
 class Editor_context;
 
 class Network_window
-    : public Update_once_per_frame
-    , public erhe::imgui::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
     Network_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
-        Time&                        time
+        Editor_context&              editor_context
     );
 
     // Implements Imgui_window
     void imgui() override;
 
-    // Implements Update_once_per_frame
-    void update_once_per_frame(const Time_context&) override;
+    void update_network();
 
 private:
-    void update_network();
 
     Editor_context&          m_context;
     erhe::net::Client        m_client;

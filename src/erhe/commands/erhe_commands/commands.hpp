@@ -117,7 +117,7 @@ public:
     [[nodiscard]] auto last_mouse_position      () const -> glm::vec2;
     [[nodiscard]] auto last_mouse_position_delta() const -> glm::vec2;
 
-    void tick(std::chrono::steady_clock::time_point timestamp, std::vector<erhe::window::Input_event>& input_events);
+    void tick(int64_t timestamp_ns, std::vector<erhe::window::Input_event>& input_events);
 
     // Implements Input_event_handler
     auto on_key_event              (const erhe::window::Input_event& input_event) -> bool override;

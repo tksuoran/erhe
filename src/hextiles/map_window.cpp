@@ -43,10 +43,8 @@ auto Map_free_zoom_command::try_call_with_input(erhe::commands::Input_arguments&
     const float v = wheel.x + wheel.y;
     const float k = 0.1f;
 
-    //const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
-    //m_map_window.hover(
-    //    window_position
-    //);
+    const glm::vec2 window_position = input.variant.vector2.absolute_value;
+    m_map_window.hover(window_position);
 
     m_map_window.scale_zoom(1.0f + v * k);
     return true;
@@ -589,6 +587,23 @@ void Map_window::print(
         color,
         text
     );
+}
+
+void Map_window::hover(glm::vec2 position_in_root)
+{
+    if (!is_window_visible()) {
+        return;
+    }
+    const glm::vec2 window_position = to_content(position_in_root);
+
+    m_hover_window_position = window_position;
+
+    Pixel_coordinate hover_pixel_position{
+        static_cast<pixel_t>(window_position.x),
+        static_cast<pixel_t>(window_position.y)
+    };
+
+    m_hover_tile_position = pixel_to_tile(hover_pixel_position);
 }
 
 } // namespace hextiles

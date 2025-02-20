@@ -174,8 +174,8 @@ void Brdf_slice::show_brdf_slice(int area_size)
         return;
     }
 
-    ImGui::SliderFloat("Phi",          &phi, 0.0, 1.57);
-    ImGui::SliderFloat("Incident Phi", &incident_phi, 0.0, 1.57);
+    ImGui::SliderFloat("Phi",          &phi,          0.0f, 1.57f);
+    ImGui::SliderFloat("Incident Phi", &incident_phi, 0.0f, 1.57f);
 
     //const auto  available_size = ImGui::GetContentRegionAvail();
     //const float image_size     = available_size.x; //std::min(available_size.x, available_size.y);

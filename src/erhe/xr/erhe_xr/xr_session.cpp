@@ -10,15 +10,6 @@
 #include "erhe_xr/xr_log.hpp"
 #include "erhe_xr/xr_swapchain_image.hpp"
 
-#ifdef _WIN32
-#   define GLFW_EXPOSE_NATIVE_WIN32 1
-#   define GLFW_EXPOSE_NATIVE_WGL   1
-#endif
-#include <GLFW/glfw3.h>
-
-#ifdef _WIN32
-#   include <GLFW/glfw3native.h>
-#endif
 
 #ifdef _WIN32
 #   include <unknwn.h>
@@ -145,18 +136,12 @@ auto Xr_session::create_session() -> bool
         )
     );
 
-    GLFWwindow* const glfw_window = m_context_window.get_glfw_window();
-    if (glfw_window == nullptr) {
-        log_xr->error("No GLFW window");
-        return false;
-    }
-
 #ifdef _WIN32
     XrGraphicsBindingOpenGLWin32KHR graphics_binding_opengl_win32{
         .type  = XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR,
         .next  = nullptr,
-        .hDC   = GetDC(glfwGetWin32Window(glfw_window)),
-        .hGLRC = glfwGetWGLContext(glfw_window)
+        .hDC   = GetDC(static_cast<HWND>(m_context_window.get_window_handle())),
+        .hGLRC = static_cast<HGLRC>(m_context_window.get_device_pointer())
     };
 
     XrSessionCreateInfo session_create_info{

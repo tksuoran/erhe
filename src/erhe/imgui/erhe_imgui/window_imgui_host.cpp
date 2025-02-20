@@ -8,8 +8,6 @@
 #include "erhe_window/window.hpp"
 #include "erhe_profile/profile.hpp"
 
-#include <GLFW/glfw3.h>
-
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
@@ -48,16 +46,21 @@ Window_imgui_host::Window_imgui_host(
     main_viewport->PlatformHandle = this;
 
     ImGui::SetCurrentContext(nullptr);
-
-    m_time = 0.0;
 }
 
 Window_imgui_host::~Window_imgui_host()
 {
 }
 
-void Window_imgui_host::process_input_events_from_context_window()
+void Window_imgui_host::process_events(const float dt_s, const int64_t time_ns)
 {
+    //SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::begin_imgui_frame()");
+
+    ERHE_PROFILE_FUNCTION();
+
+    m_this_frame_dt_s += dt_s;
+    static_cast<void>(time_ns); // TODO filter event processing based on time
+
     // log_frame->info("Window_imgui_host::process_input_events_from_context_window()");
 
     // Process input events from the context window
@@ -66,6 +69,9 @@ void Window_imgui_host::process_input_events_from_context_window()
         SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host - no input events");
     }
     for (erhe::window::Input_event& input_event : input_events) {
+        //// if (input_event.timestamp_ns > time_ns) {
+        ////     break;
+        //// }
         if (!input_event.handled) {
             dispatch_input_event(input_event);
             SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host handled {}", input_event.describe());
@@ -76,38 +82,28 @@ void Window_imgui_host::process_input_events_from_context_window()
     }
 }
 
-auto Window_imgui_host::begin_imgui_frame() -> bool
+void Window_imgui_host::begin_imgui_frame()
 {
     //SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::begin_imgui_frame()");
 
     ERHE_PROFILE_FUNCTION();
 
-#if 1 // TODO Enable only this path permanently
-    process_input_events_from_context_window();
-#endif
-
-    auto* glfw_window    = m_context_window.get_glfw_window();
+    /// auto* glfw_window    = m_context_window.get_glfw_window();
 
     const auto w         = m_context_window.get_width();
     const auto h         = m_context_window.get_height();
-    const bool visible   = glfwGetWindowAttrib(glfw_window, GLFW_VISIBLE  ) == GLFW_TRUE;
-    const bool iconified = glfwGetWindowAttrib(glfw_window, GLFW_ICONIFIED) == GLFW_TRUE;
+    const bool visible   = true;  //// TODO glfwGetWindowAttrib(glfw_window, GLFW_VISIBLE  ) == GLFW_TRUE;
+    const bool iconified = false; ////      glfwGetWindowAttrib(glfw_window, GLFW_ICONIFIED) == GLFW_TRUE;
 
     if ((w < 1) || (h < 1) || !visible || iconified) {
-        return false;
+        m_is_visible = false;
+        return;
     }
+    m_is_visible = true;
 
     ImGuiIO& io = m_imgui_context->IO;
     io.DisplaySize = ImVec2{static_cast<float>(w), static_cast<float>(h)};
-
-    // Setup time step
-    const auto current_time = glfwGetTime();
-    io.DeltaTime = m_time > 0.0 ? static_cast<float>(current_time - m_time) : static_cast<float>(1.0 / 60.0);
-    m_time = current_time;
-
-#if 0 // TODO Temp old path for OpenXR compatibility when Window_imgui_host was used with OpenXR
-    process_input_events_from_context_window();
-#endif
+    io.DeltaTime   = m_this_frame_dt_s > 0.0f ? m_this_frame_dt_s : static_cast<float>(1.0 / 60.0);
 
     // ImGui_ImplGlfw_UpdateMouseCursor
     const auto cursor = static_cast<erhe::window::Mouse_cursor>(ImGui::GetMouseCursor());
@@ -120,8 +116,6 @@ auto Window_imgui_host::begin_imgui_frame() -> bool
     if (m_begin_callback) {
         m_begin_callback(*this);
     }
-
-    return true;
 }
 
 void Window_imgui_host::end_imgui_frame()
@@ -129,6 +123,27 @@ void Window_imgui_host::end_imgui_frame()
     SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::end_imgui_frame()");
     ImGui::EndFrame();
     ImGui::Render();
+    m_this_frame_dt_s = 0.0f;
+}
+
+auto Window_imgui_host::is_visible() const -> bool
+{
+    return m_is_visible;
+}
+
+void Window_imgui_host::set_text_input_area(int x, int y, int w, int h)
+{
+    m_context_window.set_text_input_area(x, y, w, h);
+}
+
+void Window_imgui_host::start_text_input()
+{
+    m_context_window.start_text_input();
+}
+
+void Window_imgui_host::stop_text_input()
+{
+    m_context_window.stop_text_input();
 }
 
 void Window_imgui_host::execute_rendergraph_node()

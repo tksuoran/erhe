@@ -18,24 +18,24 @@ using glm::vec3;
 using glm::vec4;
 
 Frame_controller::Frame_controller()
-    : Item          {"frame controller"}
-    , rotate_x      {"Rotate X"}
-    , rotate_y      {"Rotate Y"}
-    , rotate_z      {"Rotate Z"}
-    , translate_x   {"Translate X"}
-    , translate_y   {"Translate Y"}
-    , translate_z   {"Translate Z"}
-    , speed_modifier{"Speed modifier"}
-
+    : Item{"frame controller"}
 {
     reset();
-    rotate_x      .disable_power_base();
-    rotate_y      .disable_power_base();
-    rotate_z      .disable_power_base();
-    translate_x   .set_power_base(4.0f);
-    translate_y   .set_power_base(4.0f);
-    translate_z   .set_power_base(4.0f);
-    speed_modifier.set_power_base(4.0f);
+    rotate_x      .set_damp     (0.700f);
+    rotate_y      .set_damp     (0.700f);
+    rotate_z      .set_damp     (0.700f);
+    rotate_x      .set_max_delta(0.02f);
+    rotate_y      .set_max_delta(0.02f);
+    rotate_z      .set_max_delta(0.02f);
+    translate_x   .set_damp     (0.92f);
+    translate_y   .set_damp     (0.92f);
+    translate_z   .set_damp     (0.92f);
+    translate_x   .set_max_delta(0.004f);
+    translate_y   .set_max_delta(0.004f);
+    translate_z   .set_max_delta(0.004f);
+    speed_modifier.set_max_value(3.0f);
+    speed_modifier.set_damp     (0.92f);
+    speed_modifier.set_max_delta(0.5f);
     update();
 }
 
@@ -144,28 +144,6 @@ void Frame_controller::reset()
     rotate_z.reset();
 }
 
-void Frame_controller::on_frame_begin()
-{
-    translate_x   .on_frame_begin();
-    translate_y   .on_frame_begin();
-    translate_z   .on_frame_begin();
-    rotate_x      .on_frame_begin();
-    rotate_y      .on_frame_begin();
-    rotate_z      .on_frame_begin();
-    speed_modifier.on_frame_begin();
-}
-
-void Frame_controller::on_frame_end()
-{
-    translate_x   .on_frame_end();
-    translate_y   .on_frame_end();
-    translate_z   .on_frame_end();
-    rotate_x      .on_frame_end();
-    rotate_y      .on_frame_end();
-    rotate_z      .on_frame_end();
-    speed_modifier.on_frame_end();
-}
-
 void Frame_controller::update()
 {
     auto* node = get_node();
@@ -195,38 +173,66 @@ auto Frame_controller::get_axis_z() const -> vec3
     return vec3{m_orientation[2]};
 }
 
-void Frame_controller::tick(std::chrono::steady_clock::time_point timestamp)
+void Frame_controller::set_active_control_value(const Variable variable, float value)
 {
-    // log_input_frame->info("Frame_controller::tick() begin");
+    switch (variable) {
+        case Variable::translate_x: active_translate_x = value; break;
+        case Variable::translate_y: active_translate_y = value; break;
+        case Variable::translate_z: active_translate_z = value; break;
+        case Variable::rotate_x:    active_rotate_x = value; break;
+        case Variable::rotate_y:    active_rotate_y = value; break;
+        case Variable::rotate_z:    active_rotate_z = value; break;
+        default: break;
+    }
+}
+
+auto Frame_controller::get_active_control_value(const Variable variable) const -> float
+{
+    switch (variable) {
+        case Variable::translate_x: return active_translate_x;
+        case Variable::translate_y: return active_translate_y;
+        case Variable::translate_z: return active_translate_z;
+        case Variable::rotate_x:    return active_rotate_x;
+        case Variable::rotate_y:    return active_rotate_y;
+        case Variable::rotate_z:    return active_rotate_z;
+        default: return 0.0f;
+    }
+}
+
+void Frame_controller::update_fixed_step()
+{
+    // TODO Only do once until next update()
     get_transform_from_node(get_node());
 
-    translate_x   .tick(timestamp);
-    translate_y   .tick(timestamp);
-    translate_z   .tick(timestamp);
-    rotate_x      .tick(timestamp);
-    rotate_y      .tick(timestamp);
-    rotate_z      .tick(timestamp);
-    speed_modifier.tick(timestamp);
+    translate_x   .update();
+    translate_y   .update();
+    translate_z   .update();
+    rotate_x      .update();
+    rotate_y      .update();
+    rotate_z      .update();
+    speed_modifier.update();
 
-    const float speed = move_speed + speed_modifier.get_velocity();
-
-    if (translate_x.get_tick_distance() != 0.0f) {
-        m_position += get_axis_x() * translate_x.get_tick_distance() * speed;
+    const float speed = move_speed + speed_modifier.current_value();
+    float tx = translate_x.current_value() + active_translate_x;
+    if (tx != 0.0f) {
+        m_position += get_axis_x() * tx * speed;
     }
 
-    if (translate_y.get_tick_distance() != 0.0f) {
-        m_position += get_axis_y() * translate_y.get_tick_distance() * speed;
+    float ty = translate_y.current_value() + active_translate_y;
+    if (ty != 0.0f) {
+        m_position += get_axis_y() * ty * speed;
     }
 
-    if (translate_z.get_tick_distance() != 0.0f) {
-        m_position += get_axis_z() * translate_z.get_tick_distance() * speed;
+    float tz = translate_z.current_value() + active_translate_z;
+    if (tz != 0.0f) {
+        m_position += get_axis_z() * tz * speed;
     }
 
-    apply_rotation(rotate_x.get_tick_distance(), rotate_y.get_tick_distance(), 0.0f);
+    float rx = rotate_x.current_value() + active_rotate_x;
+    float ry = rotate_y.current_value() + active_rotate_y;
+    apply_rotation(rx, ry, 0.0f);
 
     update();
-
-    // log_input_frame->info("Frame_controller::tick() end");
 }
 
 void Frame_controller::apply_rotation(float rx, float ry, float rz)

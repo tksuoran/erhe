@@ -5,8 +5,6 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_window/renderdoc_capture.cpp
     erhe_window/renderdoc_capture.hpp
-    #erhe_window/space_mouse.cpp
-    #erhe_window/space_mouse.hpp
     erhe_window/window_log.cpp
     erhe_window/window_log.hpp
     erhe_window/window.cpp
@@ -14,6 +12,7 @@ erhe_target_sources_grouped(
     erhe_window/window_event_handler.cpp
     erhe_window/window_event_handler.hpp
 )
+
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -21,6 +20,15 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
         erhe_window/glfw_window.hpp
     )
 endif()
+
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_window/sdl_window.cpp
+        erhe_window/sdl_window.hpp
+    )
+endif()
+
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
@@ -42,8 +50,13 @@ target_link_libraries(
 if (ERHE_TARGET_OS_WINDOWS)
     target_link_libraries(${_target} PUBLIC Setupapi.lib)
 endif ()
+
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     target_link_libraries(${_target} PUBLIC glfw)
 endif ()
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
+    target_link_libraries(${_target} PUBLIC SDL3::SDL3-static)
+endif ()
+
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

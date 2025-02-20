@@ -9,9 +9,6 @@
 #include <thread>
 #include <vector>
 
-struct GLFWwindow;
-struct GLFWcursor;
-
 namespace erhe::window {
 
 using Mouse_cursor = signed int;
@@ -59,7 +56,7 @@ public:
     [[nodiscard]] auto get_width               () const -> int;
     [[nodiscard]] auto get_height              () const -> int;
     [[nodiscard]] auto get_cursor_relative_hold() const -> bool;
-    [[nodiscard]] auto get_glfw_window         () const -> GLFWwindow*;
+    [[nodiscard]] auto get_sdl_window          () const -> void* { return m_sdl_window; }
     [[nodiscard]] auto get_input_events        () -> std::vector<Input_event>&;
 
     auto open                             (const Window_configuration& configuration) -> bool;
@@ -72,47 +69,49 @@ public:
     void get_cursor_relative_hold_position(float& xpos, float& ypos);
     void set_visible                      (bool visible);
     void set_cursor                       (Mouse_cursor cursor);
-    void set_cursor_relative_hold         (bool capture);
-    void handle_key_event                 (int64_t timestamp_ns, int key, int scancode, int action, int glfw_modifiers);
-    void handle_char_event                (int64_t timestamp_ns, unsigned int codepoint);
-    void handle_mouse_button_event        (int64_t timestamp_ns, int button, int action, int glfw_modifiers);
-    void handle_mouse_wheel_event         (int64_t timestamp_ns, double x, double y);
-    void handle_mouse_move                (int64_t timestamp_ns, double x, double y);
-    void handle_window_resize_event       (int64_t timestamp_ns, int width, int height);
-    void handle_window_refresh_event      (int64_t timestamp_ns);
-    void handle_window_close_event        (int64_t timestamp_ns);
-    void handle_window_focus_event        (int64_t timestamp_ns, int focused);
-    void handle_cursor_enter_event        (int64_t timestamp_ns, int entered);
+    void set_cursor_relative_hold         (bool relative_hold_enabled);
+    void set_text_input_area              (int x, int y, int w, int h);
+    void start_text_input                 ();
+    void stop_text_input                  ();
+    void handle_key_event                 (int64_t timestamp, int key, int scancode, bool pressed, int modifiers);
+    void handle_text_event                (int64_t timestamp, const char* utf8_text);
+    void handle_mouse_button_event        (int64_t timestamp, int button, bool pressed);
+    void handle_mouse_wheel_event         (int64_t timestamp, float x, float y);
+    void handle_mouse_move                (int64_t timestamp, float x, float y, float dx, float dy);
+    void handle_controller_axis_event     (int64_t timestamp, int device, int axis, int value);
+    void handle_controller_button_event   (int64_t timestamp, int device, int button, bool pressed);
+    void handle_window_resize_event       (int64_t timestamp, int width, int height);
+    void handle_window_refresh_event      (int64_t timestamp);
+    void handle_window_close_event        (int64_t timestamp);
+    void handle_window_focus_event        (int64_t timestamp, bool focused);
+    void handle_cursor_enter_event        (int64_t timestamp, bool entered);
 
     void set_input_event_synthesizer_callback(std::function<void(Context_window& context_window)> callback);
     void inject_input_event                  (const Input_event& event);
 
-    void set_text_input_area(int x, int y, int w, int h);
-    void start_text_input   ()                          ;
-    void stop_text_input    ()                          ;
-
     [[nodiscard]] auto get_modifier_mask () const -> Key_modifier_mask;
-    [[nodiscard]] auto get_device_pointer() const -> void*;
-    [[nodiscard]] auto get_window_handle () const -> void*;
+    [[nodiscard]] auto get_device_pointer() const -> void*; // This would be an ID3D11Device, HGLRC/GLXContext, ID3D12Device, etc
+    [[nodiscard]] auto get_window_handle () const -> void*; // This would be an HWND, GLXDrawable, etc
     [[nodiscard]] auto get_scale_factor  () const -> float;
 
 private:
     void get_extensions();
 
-    GLFWwindow*              m_glfw_window         {nullptr};
-    Mouse_cursor             m_current_mouse_cursor{Mouse_cursor_Arrow};
-    bool                     m_is_mouse_captured   {false};
-    bool                     m_is_window_visible   {false};
-    bool                     m_use_raw_mouse       {false};
-    GLFWcursor*              m_mouse_cursor        [Mouse_cursor_COUNT];
+    void*                    m_sdl_window                    {nullptr};
+    void*                    m_sdl_gl_context                {nullptr}; // SDL_GLContext 
+    Mouse_cursor             m_current_mouse_cursor          {Mouse_cursor_Arrow};
+    bool                     m_is_mouse_relative_hold_enabled{false};
+    bool                     m_is_window_visible             {false};
+    bool                     m_use_raw_mouse                 {false};
+    //GLFWcursor*              m_mouse_cursor        [Mouse_cursor_COUNT];
     Window_configuration     m_configuration;
-    double                   m_last_mouse_x        {0.0};
-    double                   m_last_mouse_y        {0.0};
-    double                   m_mouse_capture_xpos  {0.0};
-    double                   m_mouse_capture_ypos  {0.0};
-    double                   m_mouse_virtual_xpos  {0.0};
-    double                   m_mouse_virtual_ypos  {0.0};
-    int                      m_glfw_key_modifiers{0};
+    float                    m_last_mouse_x            {0.0f};
+    float                    m_last_mouse_y            {0.0f};
+    float                    m_mouse_relative_hold_xpos{0.0f};
+    float                    m_mouse_relative_hold_ypos{0.0f};
+    float                    m_mouse_virtual_xpos      {0.0f};
+    float                    m_mouse_virtual_ypos      {0.0f};
+    unsigned int             m_key_modifiers{0};
     std::atomic<bool>        m_joystick_scan_done{false};
     std::vector<float>       m_controller_axis_values;
     std::vector<bool>        m_controller_button_values;

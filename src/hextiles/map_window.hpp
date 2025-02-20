@@ -126,7 +126,7 @@ public:
     void grid_cycle            ();
 
     void scroll_to    (const Tile_coordinate center_tile);
-
+    void hover        (glm::vec2 window_position);
     void render       ();
     void blit         (const Pixel_coordinate shape, const Tile_coordinate tile_location, const uint32_t color = 0xffffffff) const;
     void print        (const std::string_view text, const Tile_coordinate tile_location, uint32_t color = 0xffffffff) const;
@@ -141,12 +141,18 @@ public:
     auto tile_image   (terrain_tile_t terrain, const int scale = 1) -> bool;
     auto tile_position(const Tile_coordinate coordinate) const -> glm::vec2;
 
+    auto get_hover_window_position() const -> std::optional<glm::vec2>       { return m_hover_window_position; }
+    auto get_hover_tile_position  () const -> std::optional<Tile_coordinate> { return m_hover_tile_position; }
+
 private:
     auto normalize(Pixel_coordinate pixel_coordinate) const -> Pixel_coordinate;
 
     // Commands
     erhe::renderer::Text_renderer& m_text_renderer;
     Tile_renderer&                 m_tile_renderer;
+
+    std::optional<glm::vec2>       m_hover_window_position;
+    std::optional<Tile_coordinate> m_hover_tile_position;
 
     Map_free_zoom_command         m_free_zoom_command;
     Map_mouse_scroll_command      m_mouse_scroll_command;

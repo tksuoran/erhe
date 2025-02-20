@@ -18,24 +18,23 @@ using glm::vec4;
 
 Frame_controller::Frame_controller()
     : Node_attachment{"frame controller"}
-    , rotate_x{"rotate_x"}
-    , rotate_y{"rotate_y"}
-    , rotate_z{"rotate_z"}
-    , translate_x{"translate_x"}
-    , translate_y{"translate_y"}
-    , translate_z{"translate_z"}
-    , speed_modifier{"speed_modifier"}
-
 {
     reset();
-    rotate_x      .disable_power_base();
-    rotate_y      .disable_power_base();
-    rotate_z      .disable_power_base();
-    translate_x   .set_power_base(10.0f);
-    translate_y   .set_power_base(10.0f);
-    translate_z   .set_power_base(10.0f);
-    speed_modifier.set_power_base(10.0f);
-    update_transform();
+    rotate_x      .set_damp     (0.700f);
+    rotate_y      .set_damp     (0.700f);
+    rotate_z      .set_damp     (0.700f);
+    rotate_x      .set_max_delta(0.02f);
+    rotate_y      .set_max_delta(0.02f);
+    rotate_z      .set_max_delta(0.02f);
+    translate_x   .set_damp     (0.92f);
+    translate_y   .set_damp     (0.92f);
+    translate_z   .set_damp     (0.92f);
+    translate_x   .set_max_delta(0.004f);
+    translate_y   .set_max_delta(0.004f);
+    translate_z   .set_max_delta(0.004f);
+    speed_modifier.set_max_value(3.0f);
+    speed_modifier.set_damp     (0.92f);
+    speed_modifier.set_max_delta(0.5f);    update_transform();
 }
 
 auto Frame_controller::get_controller(const Control control) -> erhe::math::Input_axis&
@@ -191,55 +190,32 @@ auto Frame_controller::get_axis_z() const -> vec3
     //return vec3{m_heading_matrix[2]};
 }
 
-void Frame_controller::on_frame_begin()
+void Frame_controller::update_fixed_step()
 {
-    translate_x   .on_frame_begin();
-    translate_y   .on_frame_begin();
-    translate_z   .on_frame_begin();
-    rotate_x      .on_frame_begin();
-    rotate_y      .on_frame_begin();
-    rotate_z      .on_frame_begin();
-    speed_modifier.on_frame_begin();
-}
+    translate_x.update();
+    translate_y.update();
+    translate_z.update();
+    rotate_x.update();
+    rotate_y.update();
+    rotate_z.update();
+    speed_modifier.update();
+    const float speed_scale = 1.0f + 1.0f * speed_modifier.current_value();
 
-void Frame_controller::on_frame_end()
-{
-    translate_x   .on_frame_end();
-    translate_y   .on_frame_end();
-    translate_z   .on_frame_end();
-    rotate_x      .on_frame_end();
-    rotate_y      .on_frame_end();
-    rotate_z      .on_frame_end();
-    speed_modifier.on_frame_end();
-}
-
-void Frame_controller::tick(std::chrono::steady_clock::time_point timestamp)
-{
-    translate_x.tick(timestamp);
-    translate_y.tick(timestamp);
-    translate_z.tick(timestamp);
-    rotate_x.tick(timestamp);
-    rotate_y.tick(timestamp);
-    rotate_z.tick(timestamp);
-    speed_modifier.tick(timestamp);
-
-    const float speed_scale = 10.0f + 10.0f * speed_modifier.get_value();
-
-    if (translate_x.get_tick_distance() != 0.0f) {
-        m_position += get_axis_x() * translate_x.get_tick_distance() * speed_scale;
+    if (translate_x.current_value() != 0.0f) {
+        m_position += get_axis_x() * translate_x.current_value() * speed_scale;
     }
 
-    if (translate_y.get_tick_distance() != 0.0f) {
-        m_position += get_axis_y() * translate_y.get_tick_distance() * speed_scale;
+    if (translate_y.current_value() != 0.0f) {
+        m_position += get_axis_y() * translate_y.current_value() * speed_scale;
     }
 
-    if (translate_z.get_tick_distance() != 0.0f) {
-        m_position += get_axis_z() * translate_z.get_tick_distance() * speed_scale;
+    if (translate_z.current_value() != 0.0f) {
+        m_position += get_axis_z() * translate_z.current_value() * speed_scale;
     }
 
-    if ((rotate_x.get_tick_distance() != 0.0f) || (rotate_y.get_tick_distance() != 0.0f)) {
-        m_heading += rotate_y.get_tick_distance();
-        m_elevation += rotate_x.get_tick_distance();
+    if ((rotate_x.current_value() != 0.0f) || (rotate_y.current_value() != 0.0f)) {
+        m_heading += rotate_y.current_value();
+        m_elevation += rotate_x.current_value();
         const mat4 elevation_matrix = erhe::math::create_rotation(m_elevation, erhe::math::vector_types<float>::vec3_unit_x());
         m_heading_matrix = erhe::math::create_rotation(m_heading, erhe::math::vector_types<float>::vec3_unit_y());
         m_rotation_matrix = m_heading_matrix * elevation_matrix;

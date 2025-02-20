@@ -1,352 +1,204 @@
 #include "erhe_math/input_axis.hpp"
-#include "erhe_math/math_log.hpp"
-#include "erhe_verify/verify.hpp"
 
 namespace erhe::math {
 
-// https://graphtoy.com/?f1(x,t)=1%20-%20pow(1.5,%20-x)&v1=true&f2(x,t)=1%20-%20pow(2,%20-x)&v2=true&f3(x,t)=1%20-%20pow(4,%20-x)&v3=true&f4(x,t)=1%20-%20pow(8%20-x)&v4=true&f5(x,t)=1%20-%20pow(16,%20-x)&v5=false&f6(x,t)=1%20-%20pow(32,%20-x)&v6=true&grid=1&coords=2.1583584911582627,-0.01832978696472251,2.3741360268016223
-// https://www.wolframalpha.com/input?i=solve+v+%3D+1+-+pow%28a%2C+-t%29+for+t
-
-Input_axis::Input_axis(std::string_view name)
-    : m_name{name}
+Input_axis::Input_axis()
 {
     reset();
 }
 
-auto Input_axis::sign(double a) -> double
+Input_axis::Input_axis(const bool linear, const bool multiply)
 {
-    if (a == 0.0) {
-        return 0.0;
-    }
-    return a < 0.0 ? -1.0 : 1.0;
-}
-
-auto Input_axis::checked_pow(double base, double exponent) -> double
-{
-    ERHE_VERIFY(base > 0.0);
-    if (exponent == 0.0) {
-        return 1.0;
-    }
-    ERHE_VERIFY(std::isfinite(base));
-    ERHE_VERIFY(std::isfinite(exponent));
-    double result = std::pow(base, exponent);
-    ERHE_VERIFY(std::isfinite(result));
-    return result;
-}
-auto Input_axis::checked_log(double a) -> double
-{
-    ERHE_VERIFY(std::isfinite(a));
-    if (a <= 0.0) {
-        return 0.0; // TODO Fix
-    }
-    double result = std::log(a);
-    ERHE_VERIFY(std::isfinite(result));
-    return result;
+    reset();
+    set_damp_mode(linear, multiply);
 }
 
 void Input_axis::reset()
 {
-    m_more                  = false;
-    m_less                  = false;
-    m_velocity              = 0.0;
-    m_tick_distance         = 0.0;
-    m_segment_velocity[0]   = 0.0;
-    m_segment_velocity[1]   = 0.0;
-    m_segment_distance[0]   = 0.0;
-    m_segment_distance[1]   = 0.0;
-    m_segment_state_time[0] = 0.0;
-    m_segment_state_time[1] = 0.0;
-    m_tick_distance         = 0.0;
-    m_direction             = 0.0;
-    m_state_time            = 0.0;
-    m_base_velocity         = 0.0;
+    m_current_value = 0.0f;
+    m_current_delta = 0.0f;
+    m_more          = false;
+    m_less          = false;
+    m_stop          = false;
+    m_active        = false;
 }
 
-auto Input_axis::get_name() const -> std::string_view
+auto Input_axis::damp() const -> float
 {
-    return m_name;
+    return m_damp;
 }
 
-auto Input_axis::get_power_base() const -> float
+void Input_axis::set_damp(const float value)
 {
-    return static_cast<float>(m_base);
+    m_damp = value;
 }
 
-auto Input_axis::get_more() const -> bool
+auto Input_axis::max_value() const -> float
+{
+    return m_max_value;
+}
+
+void Input_axis::set_max_value(const float value)
+{
+    m_max_value = value;
+}
+
+auto Input_axis::max_delta() const -> float
+{
+    return m_max_delta;
+}
+
+void Input_axis::set_max_delta(const float value)
+{
+    m_max_delta = value;
+}
+
+void Input_axis::update()
+{
+    if (m_active) {
+        adjust(m_current_delta);
+    }
+
+    dampen();
+}
+
+void Input_axis::adjust(const float delta)
+{
+    m_current_value += delta;
+    if (m_current_value > m_max_value) {
+        m_current_value = m_max_value;
+    } else if (m_current_value < m_min_value) {
+        m_current_value = m_min_value;
+    }
+}
+
+void Input_axis::adjust(const double delta)
+{
+    adjust(static_cast<float>(delta));
+}
+
+void Input_axis::dampen()
+{
+    // Dampening by multiplying by a constant
+    if (m_dampen_multiply) {
+        const float old_value = m_current_value;
+        m_current_value = m_current_value * m_damp;
+
+        if (m_current_value == old_value) {
+            m_current_value = 0.0f;
+        }
+    } else if (m_dampen_linear && !m_active) { // Constant velocity dampening
+        if (m_current_value > m_max_delta) {
+            m_current_value -= m_max_delta;
+            if (m_current_value < m_max_delta) {
+                m_current_value = 0.0f;
+            }
+        } else if (m_current_value < -m_max_delta) {
+            m_current_value += m_max_delta;
+            if (m_current_value > -m_max_delta) {
+                m_current_value = 0.0f;
+            }
+        } else { // Close to 0.0
+            const float old_value = m_current_value;
+            m_current_value *= m_damp;
+            if (m_current_value == old_value) {
+                m_current_value = 0.0f;
+            }
+        }
+    }
+}
+
+auto Input_axis::more() const -> bool
 {
     return m_more;
 }
 
-auto Input_axis::get_less() const -> bool
+void Input_axis::set_more(const bool value)
+{
+    m_more = value;
+    if (m_more) {
+        m_active        = true;
+        m_current_delta = m_max_delta;
+    } else {
+        if (m_less) {
+            m_current_delta = -m_max_delta;
+        } else {
+            m_active        = false;
+            m_current_delta = 0.0f;
+        }
+    }
+}
+
+auto Input_axis::less() const -> bool
 {
     return m_less;
 }
 
-auto Input_axis::is_power_base_disabled() const -> bool
+void Input_axis::set_less(const bool value)
 {
-    return m_base == -1.0f;
-}
-
-void Input_axis::disable_power_base()
-{
-    m_base = -1.0f;
-}
-
-void Input_axis::set_power_base(const float value)
-{
-    m_base = value;
-    m_log_base = (value == 1.0f) ? 1.0 : checked_log(value);
-}
-
-void Input_axis::adjust(std::chrono::steady_clock::time_point timestamp, const float delta)
-{
-    adjust(timestamp, static_cast<double>(delta));
-}
-
-void Input_axis::adjust(std::chrono::steady_clock::time_point timestamp, const double delta)
-{
-    if (is_power_base_disabled()) {
-        m_tick_distance += delta;
-        return;
-    }
-    // TODO Consider segments
-    update(timestamp);
-    m_base_velocity = m_velocity + delta;
-    m_velocity = m_base_velocity;
-    m_direction = 0.0;
-    m_state_time = 0.0;
-
-    // TODO consider current m_direction != 0.0
-    //if (m_direction == 0.0) {
-    //    m_state_time = 0.0;
-    //} else {
-    //    // t(v) = log(1 / (1 - v)) / log(a)
-    //    m_state_time = checked_log(1.0 / (1.0 - m_velocity)) / m_log_base;
-    //    if (!std::isfinite(m_state_time)) {
-    //        m_state_time = 65536.0; // TODO hack
-    //        log_input_axis->warn("state time clamped for {} in adjust()", m_name);
-    //    }
-    //}
-}
-
-void Input_axis::tick(std::chrono::steady_clock::time_point timestamp)
-{
-    update(timestamp);
-}
-
-void Input_axis::on_frame_begin()
-{
-    ERHE_VERIFY(m_segment_velocity[0]   == 0.0);
-    ERHE_VERIFY(m_segment_velocity[1]   == 0.0);
-    ERHE_VERIFY(m_segment_distance[0]   == 0.0);
-    ERHE_VERIFY(m_segment_distance[1]   == 0.0);
-    ERHE_VERIFY(m_segment_state_time[0] == 0.0);
-    ERHE_VERIFY(m_segment_state_time[1] == 0.0);
-    ERHE_VERIFY(m_tick_distance         == 0.0);
-}
-
-void Input_axis::on_frame_end()
-{
-    m_segment_velocity[0]   = 0.0;
-    m_segment_velocity[1]   = 0.0;
-    m_segment_distance[0]   = 0.0;
-    m_segment_distance[1]   = 0.0;
-    m_segment_state_time[0] = 0.0;
-    m_segment_state_time[1] = 0.0;
-    m_tick_distance         = 0.0;
-}
-
-auto Input_axis::get_value() const -> float
-{
-    return static_cast<float>(m_velocity);
-}
-
-auto Input_axis::get_velocity() const -> float
-{
-    return static_cast<float>(m_velocity);
-}
-
-auto Input_axis::get_segment_timestamp(std::size_t i) const -> std::chrono::steady_clock::time_point
-{
-    return m_segment_timestamp.at(i);
-}
-
-auto Input_axis::get_segment_velocity(std::size_t i) const -> float
-{
-    return static_cast<float>(m_segment_velocity.at(i));
-}
-
-auto Input_axis::get_segment_distance(std::size_t i) const -> float
-{
-    return static_cast<float>(m_segment_distance.at(i));
-}
-
-auto Input_axis::get_segment_state_time(std::size_t i) const -> float
-{
-    return static_cast<float>(m_segment_state_time.at(i));
-}
-
-auto Input_axis::get_tick_distance() const -> float
-{
-    return static_cast<float>(m_tick_distance);
-}
-
-auto Input_axis::get_base_velocity() const -> float
-{
-    return static_cast<float>(m_base_velocity);
-}
-
-// When accelerating (more is pressed, or less is pressed, or both are pressed)
-// 
-// v(t) = 1 - pow(a, -t)
-// s(t) = pow(a, -t) / log(a) + t
-// t(v) = log(1 / (1 - v)) / log(a)
-//
-// When decelerating (neither more or less is active)
-//
-// v(t) = v0 * pow(a, -t)
-// s(t) = -v0 * pow(a, -t) / log(a)
-// t(v) = log(v0/v) / log(a)
-void Input_axis::update(std::chrono::steady_clock::time_point timestamp)
-{
-    auto new_time = std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp.time_since_epoch()).count();
-    log_input_axis->info("update timestamp new value = {}", new_time);
-    if (m_last_timestamp.has_value()) {
-        auto old_time = std::chrono::duration_cast<std::chrono::nanoseconds>(m_last_timestamp.value().time_since_epoch()).count();
-        if (old_time > new_time) {
-            static int counter = 0;
-            ++counter;
-        }
-    }
-
-    if (is_power_base_disabled()) {
-        return;
-    }
-    if (!m_last_timestamp.has_value() || (timestamp == m_last_timestamp.value())) {
-        m_last_timestamp = timestamp;
-        return;
-    }
-    const std::chrono::duration<double> duration = timestamp - m_last_timestamp.value();
-    double dt = duration.count();
-    m_segment_base_velocity = m_base_velocity;
-    m_segment_direction     = m_direction;
-    m_segment_timestamp[0]  = m_last_timestamp.value();
-    m_segment_timestamp[1]  = timestamp;
-    m_segment_state_time[0] = m_state_time;
-    m_segment_state_time[1] = m_state_time + dt;
-    ERHE_VERIFY(dt >= 0.0);
-    m_state_time += dt;
-    if (m_direction == 0.0) {
-        m_segment_velocity[0] =  m_base_velocity * checked_pow(m_base, -m_segment_state_time[0]);
-        m_segment_velocity[1] =  m_base_velocity * checked_pow(m_base, -m_segment_state_time[1]);
-        m_segment_distance[0] = -m_base_velocity * checked_pow(m_base, -m_segment_state_time[0]) / m_log_base;
-        m_segment_distance[1] = -m_base_velocity * checked_pow(m_base, -m_segment_state_time[1]) / m_log_base;
-        m_tick_distance += m_segment_distance[1] - m_segment_distance[0];
-    } else {
-        m_segment_velocity[0] = m_direction * (1.0 - checked_pow(m_base, -m_segment_state_time[0]));
-        m_segment_velocity[1] = m_direction * (1.0 - checked_pow(m_base, -m_segment_state_time[1]));
-        m_segment_distance[0] = m_direction * (checked_pow(m_base, -m_segment_state_time[0]) / m_log_base + m_segment_state_time[0]);
-        m_segment_distance[1] = m_direction * (checked_pow(m_base, -m_segment_state_time[1]) / m_log_base + m_segment_state_time[1]);
-        m_tick_distance += m_segment_distance[1] - m_segment_distance[0]; 
-    }
-    m_velocity = m_segment_velocity[1];
-    m_last_timestamp = timestamp;
-}
-
-auto Input_axis::evaluate_velocity_at_state_time(float state_time) const -> float
-{
-    if (m_segment_direction == 0.0) {
-        return static_cast<float>(m_segment_base_velocity * checked_pow(m_base, -state_time));
-    } else {
-        return static_cast<float>(m_segment_direction * (1.0 - checked_pow(m_base, -state_time)));
-    }
-}
-
-void Input_axis::set_direction(double direction)
-{
-    ERHE_VERIFY(!is_power_base_disabled());
-    double old_base_velocity = m_base_velocity;
-    double old_velocity      = m_velocity;
-    double old_state_time    = m_state_time;
-    double old_direction     = m_direction;
-    if (m_direction == direction) {
-        log_input_axis->warn("{} set_direction {} - redundant", m_name, direction);
-        return;
-    }
-    if (sign(direction) * sign(m_velocity) == -1.0) {
-        log_input_axis->info("{} reverse direction -> instant velocity to 0.0", m_name);
-        m_velocity = 0.0;
-    }
-    m_base_velocity = m_velocity;
-    m_direction = direction;
-    if (direction != 0.0) {
-        // t(v) = log(1 / (1 - v)) / log(a)
-        //double abs_v = (m_direction < 0) ? -m_velocity : m_velocity;
-        m_state_time = checked_log(1.0 / (1.0 - m_velocity)) / m_log_base;
-        if (!std::isfinite(m_state_time)) { // Can happen if m_tick_velocity is very close to 1.0
-            m_state_time = 65536.0; // Some "large" value
-            log_input_axis->warn("state time clamped for {} set_direction {} -> {}, v0 {} -> {}, v {} -> {}, t {} -> {}",
-                m_name,
-                old_direction,     m_direction,
-                old_base_velocity, m_base_velocity,
-                old_velocity,      m_velocity,
-                old_state_time,    m_state_time
-            );
-        }
-    } else {
-        m_state_time = 0.0f;
-        //m_tick_distance = 0.0f;
-    }
-    log_input_axis->info("{} set_direction {} -> {}, v0 {} -> {}, v {} -> {}, state time {} -> {}",
-        m_name, 
-        old_direction,     m_direction,
-        old_base_velocity, m_base_velocity,
-        old_velocity,      m_velocity,
-        old_state_time,    m_state_time
-    );
-}
-
-void Input_axis::set_more(std::chrono::steady_clock::time_point timestamp, const bool value)
-{
-    ERHE_VERIFY(!is_power_base_disabled());
-    log_input_axis->info("{} begin set_more {}", m_name, value ? "true" : "false");
-    update(timestamp);
-    m_more = value;
-    if (m_more) {
-        set_direction(1.0);
-    } else if (m_less) {
-        set_direction(-1.0);
-    } else {
-        set_direction(0.0);
-    }
-    log_input_axis->info("{} end set_more {}", m_name, value ? "true" : "false");
-}
-
-void Input_axis::set_less(std::chrono::steady_clock::time_point timestamp, const bool value)
-{
-    ERHE_VERIFY(!is_power_base_disabled());
-    log_input_axis->info("{} begin set_less {}", m_name, value ? "true" : "false");
-    update(timestamp);
     m_less = value;
     if (m_less) {
-        set_direction(-1.0);
-    } else if (m_more) {
-        set_direction(1.0);
+        m_active = true;
+        m_current_delta = -m_max_delta;
     } else {
-        set_direction(0.0);
+        if (m_more) {
+            m_current_delta = m_max_delta;
+        } else {
+            m_active = false;
+            m_current_delta = 0.0f;
+        }
     }
-    log_input_axis->info("{} end set_less {}", m_name, value ? "true" : "false");
 }
 
-void Input_axis::set(std::chrono::steady_clock::time_point timestamp, const Input_axis_control control, const bool value)
+auto Input_axis::stop() const -> bool
 {
-    ERHE_VERIFY(!is_power_base_disabled());
+    return m_stop;
+}
+
+void Input_axis::set(const Input_axis_control control, const bool value)
+{
     switch (control) {
-        //using enum Input_axis_item;
-        case Input_axis_control::less: set_less(timestamp, value); break;
-        case Input_axis_control::more: set_more(timestamp, value); break;
+        //using enum Simulation_variable_item;
+        case Input_axis_control::less: set_less(value); break;
+        case Input_axis_control::more: set_more(value); break;
+        case Input_axis_control::stop: set_stop(value); break;
         default: break;
     }
+}
+
+void Input_axis::set_stop(const bool value)
+{
+    m_stop = value;
+    if (m_stop) {
+        if (m_current_value > 0.0f) {
+            m_current_delta = -m_max_delta;
+        } else if (m_current_value < 0.0f) {
+            m_current_delta = m_max_delta;
+        }
+    } else {
+        if (m_less && !m_more) {
+            m_current_delta = -m_max_delta;
+        } else if (!m_less && m_more) {
+            m_current_delta = m_max_delta;
+        }
+    }
+}
+
+auto Input_axis::current_value() const -> float
+{
+    return m_current_value;
+}
+
+void Input_axis::set_damp_mode(const bool linear, const bool multiply)
+{
+    m_dampen_linear   = linear;
+    m_dampen_multiply = multiply;
+}
+
+void Input_axis::set_damp_and_max_delta(const float damp, const float max_delta)
+{
+    m_damp      = damp;
+    m_max_delta = max_delta;
 }
 
 } // namespace erhe::math

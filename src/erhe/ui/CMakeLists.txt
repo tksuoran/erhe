@@ -25,7 +25,7 @@ target_link_libraries(
         erhe::primitive
         fmt::fmt
         glm::glm-header-only
-        glfw
+        erhe::window
     PRIVATE
         erhe::log
         erhe::profile

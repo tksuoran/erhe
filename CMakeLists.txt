@@ -47,7 +47,7 @@ set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Ei
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh or none"              "bvh"      "embree;bvh;none")
 set_option(ERHE_SVG_LIBRARY                "SVG loading library. Either lunasvg or none"                                "lunasvg"  "lunasvg;none")
 set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"                     "harfbuzz" "harfbuzz;freetype;none")
-set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw or none"                       "glfw"     "glfw;none")
+set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, sdl or none"                  "sdl"      "sdl;glfw;none")
 set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either openxr, or none"                        "none"     "openxr;none")
 set_option(ERHE_TERMINAL_LIBRARY           "Terminal use with erhe. Either cpp-terminal, or none"                       "none"     "cpp-terminal;none")
 set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "OFF"      "ON;OFF")
@@ -181,7 +181,24 @@ CPMAddPackage(
 include(vscode)
 vscode_support()
 
-if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
+    CPMAddPackage(
+        NAME              sdl
+        VERSION           release-3.2.4
+        GIT_TAG           release-3.2.4
+        GITHUB_REPOSITORY libsdl-org/sdl
+        OPTIONS
+            "SDL_STATIC ON"
+            "SDL_STATIC_DEFAULT ON"
+            "SDL3_MAINPROJECT OFF"
+            "SDL_OPENGLES OFF"
+            "SDL_OPENVR OFF"
+            "SDL_AUDIO OFF"
+            "SDL_RENDER OFF"
+    )
+    message(STATUS "Erhe configured to use SDL for OpenGL context window.")
+    add_definitions(-DERHE_WINDOW_LIBRARY_SDL)
+elseif (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     CPMAddPackage(
         NAME              glfw
         VERSION           3.4
@@ -359,6 +376,7 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     if (JoltPhysics_ADDED)
         set(OVERRIDE_CXX_FLAGS OFF)
         set(INTERPROCEDURAL_OPTIMIZATION OFF)
+        set(CROSS_PLATFORM_DETERMINISTIC ON)
         set(CPP_RTTI_ENABLED ON)
         set(ENABLE_INSTALL OFF)
         set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF)

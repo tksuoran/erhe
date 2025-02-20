@@ -11,7 +11,7 @@ namespace erhe::commands {
 struct Input_arguments
 {
     uint32_t modifier_mask;
-    std::chrono::steady_clock::time_point timestamp;
+    int64_t timestamp_ns;
 
     union Variant {
         bool button_pressed;

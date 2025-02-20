@@ -127,11 +127,20 @@ auto Graph_plotter::begin() -> bool
     {
         float grid_interval = grid_spacing;
         float view_size = std::max(m_view.GetWidth(), m_view.GetHeight());
+        if (view_size <= 0.0f) {
+            return false;
+        }
         while (view_size / grid_interval > 100.0f) {
             grid_interval *= 10.0f;
+            if (grid_interval > 1e8f) {
+                break;
+            }
         }
         while (view_size / grid_interval < 10.0f) {
             grid_interval *= 0.1f;
+            if (grid_interval < 1e-6f) {
+                break;
+            }
         }
         const ImU32 color = ImGui::GetColorU32(ImGuiCol_Separator);
 

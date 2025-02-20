@@ -88,9 +88,9 @@ void Menu_window::imgui()
     if (ImGui::Button("Quit", button_size)) {
         m_input_event_handler.on_window_close_event(
             erhe::window::Input_event{
-                .type      = erhe::window::Input_event_type::window_close_event,
-                .timestamp = std::chrono::steady_clock::now(),
-                .u         = { .dummy = false }
+                .type         = erhe::window::Input_event_type::window_close_event,
+                .timestamp_ns = 0, // TODO
+                .u            = { .dummy = false }
             }
         ); // hacky(ish)?
     }

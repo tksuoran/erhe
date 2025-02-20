@@ -1,4 +1,4 @@
-erhe toolkit
+erhe window
 ============
 
-erhe toolkit is a C++ wrapper for glfw and some helper 3D graphics functions.
+erhe windo is a C++ wrapper/abstraction for SDL / glfw.

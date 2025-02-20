@@ -22,8 +22,6 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 
-#include <GLFW/glfw3.h> // TODO Fix dependency ?
-
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
@@ -168,7 +166,7 @@ auto Rendertarget_imgui_host::on_xr_vector2f_event(const erhe::window::Input_eve
     if (xr_vector2f_event.x != 0.0f || xr_vector2f_event.y != 0.0f) {
         erhe::window::Input_event mouse_wheel_event{
             .type = erhe::window::Input_event_type::mouse_wheel_event,
-            .timestamp = input_event.timestamp,
+            .timestamp_ns = input_event.timestamp_ns,
             .u = {
                 .mouse_wheel_event = {
                     .x             = xr_vector2f_event.x * 0.25f,
@@ -183,11 +181,24 @@ auto Rendertarget_imgui_host::on_xr_vector2f_event(const erhe::window::Input_eve
 }
 #endif
 
-auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
+void Rendertarget_imgui_host::process_events(const float dt_s, const int64_t time_ns)
+{
+    m_this_frame_dt_s += dt_s;
+    m_time_ns = time_ns;
+}
+
+auto Rendertarget_imgui_host::is_visible() const -> bool
+{
+    return m_is_visible;
+}
+
+void Rendertarget_imgui_host::begin_imgui_frame()
 {
     if (m_rendertarget_mesh == nullptr) {
-        return false;
+        m_is_visible = false;
+        return;
     }
+    m_is_visible = true;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_rendertarget_mesh->update_headset_hand_tracking();
@@ -206,7 +217,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 on_cursor_enter_event(
                     erhe::window::Input_event{
                         .type = erhe::window::Input_event_type::cursor_enter_event,
-                        .timestamp = std::chrono::steady_clock::now(),
+                        .timestamp_ns = m_time_ns,
                         .u = {
                             .cursor_enter_event = {
                                 .entered = true
@@ -222,7 +233,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 on_mouse_move_event(
                     erhe::window::Input_event{
                         .type = erhe::window::Input_event_type::mouse_move_event,
-                        .timestamp = std::chrono::steady_clock::now(),
+                        .timestamp_ns = m_time_ns,
                         .u = {
                             .mouse_move_event = {
                                 .x = position.x,
@@ -252,7 +263,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 on_cursor_enter_event(
                     erhe::window::Input_event{
                         .type = erhe::window::Input_event_type::cursor_enter_event,
-                        .timestamp = std::chrono::steady_clock::now(),
+                        .timestamp_ns = m_time_ns,
                         .u = {
                             .cursor_enter_event = {
                                 .entered = false
@@ -265,7 +276,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                 on_mouse_move_event(
                     erhe::window::Input_event{
                         .type = erhe::window::Input_event_type::mouse_move_event,
-                        .timestamp = std::chrono::steady_clock::now(),
+                        .timestamp_ns = m_time_ns,
                         .u = {
                             .mouse_move_event = {
                                 .x = -FLT_MAX,
@@ -316,7 +327,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                         on_cursor_enter_event(
                             erhe::window::Input_event{
                                 .type = erhe::window::Input_event_type::cursor_enter_event,
-                                .timestamp = std::chrono::steady_clock::now(),
+                                .timestamp_ns = m_time_ns,
                                 .u = {
                                     .cursor_enter_event = {
                                         .entered = true
@@ -333,7 +344,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                         on_mouse_move_event(
                             erhe::window::Input_event{
                                 .type = erhe::window::Input_event_type::mouse_move_event,
-                                .timestamp = std::chrono::steady_clock::now(),
+                                .timestamp_ns = m_time_ns,
                                 .u = {
                                     .mouse_move_event = {
                                         .x = position.x,
@@ -373,7 +384,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                     on_cursor_enter_event(
                         erhe::window::Input_event{
                             .type = erhe::window::Input_event_type::cursor_enter_event,
-                            .timestamp = std::chrono::steady_clock::now(),
+                            .timestamp_ns = m_time_ns,
                             .u = {
                                 .cursor_enter_event = {
                                     .entered = false
@@ -386,7 +397,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
                     on_mouse_move_event(
                         erhe::window::Input_event{
                             .type = erhe::window::Input_event_type::mouse_move_event,
-                            .timestamp = std::chrono::steady_clock::now(),
+                            .timestamp_ns = m_time_ns,
                             .u = {
                                 .mouse_move_event = {
                                     .x = -FLT_MAX,
@@ -404,11 +415,7 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     }
 #endif
 
-    const auto current_time = glfwGetTime();
-    io.DeltaTime = m_time > 0.0
-        ? static_cast<float>(current_time - m_time)
-        : static_cast<float>(1.0 / 60.0);
-    m_time = current_time;
+    io.DeltaTime = m_this_frame_dt_s > 0.0f ? m_this_frame_dt_s : static_cast<float>(1.0 / 60.0);
 
     ImGui::NewFrame();
     ////ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
@@ -416,8 +423,6 @@ auto Rendertarget_imgui_host::begin_imgui_frame() -> bool
     if (m_begin_callback) {
         m_begin_callback(*this);
     }
-
-    return true;
 }
 
 void Rendertarget_imgui_host::end_imgui_frame()
@@ -426,6 +431,30 @@ void Rendertarget_imgui_host::end_imgui_frame()
 
     ImGui::EndFrame();
     ImGui::Render();
+
+    m_this_frame_dt_s = 0.0f;
+}
+
+void Rendertarget_imgui_host::set_text_input_area(int x, int y, int w, int h)
+{
+    static_cast<void>(x);
+    static_cast<void>(y);
+    static_cast<void>(w);
+    static_cast<void>(h);
+    //// TODO
+    //// m_context_window.set_text_input_area(x, y, w, h);
+}
+
+void Rendertarget_imgui_host::start_text_input()
+{
+    //// TODO
+    //// m_context_window.start_text_input();
+}
+
+void Rendertarget_imgui_host::stop_text_input()
+{
+    //// TODO
+    //// m_context_window.stop_text_input();
 }
 
 void Rendertarget_imgui_host::set_clear_color(const glm::vec4& value)

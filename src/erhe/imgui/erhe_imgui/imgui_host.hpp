@@ -47,11 +47,16 @@ public:
     );
     virtual ~Imgui_host();
 
-    [[nodiscard]] virtual auto begin_imgui_frame() -> bool = 0;
-    virtual void end_imgui_frame() = 0;
+    virtual void begin_imgui_frame  () = 0;
+    virtual void process_events     (float dt_s, int64_t time_ns) = 0;
+    virtual void end_imgui_frame    () = 0;
+    virtual void set_text_input_area(int x, int y, int w, int h) = 0;
+    virtual void start_text_input   () = 0;
+    virtual void stop_text_input    () = 0;
 
     void set_begin_callback(const std::function<void(Imgui_host& viewport)>& callback);
 
+    [[nodiscard]] virtual auto is_visible     () const -> bool = 0;
     [[nodiscard]] virtual auto get_scale_value() const -> float;
 
     [[nodiscard]] auto name                 () const -> const std::string&;
@@ -65,6 +70,7 @@ public:
     auto on_window_focus_event(const erhe::window::Input_event& input_event) -> bool override;
     auto on_cursor_enter_event(const erhe::window::Input_event& input_event) -> bool override;
     auto on_key_event         (const erhe::window::Input_event& input_event) -> bool override;
+    auto on_text_event        (const erhe::window::Input_event& input_event) -> bool override;
     auto on_char_event        (const erhe::window::Input_event& input_event) -> bool override;
     auto on_mouse_move_event  (const erhe::window::Input_event& input_event) -> bool override;
     auto on_mouse_button_event(const erhe::window::Input_event& input_event) -> bool override;
@@ -77,7 +83,6 @@ public:
 protected:
     std::function<void(Imgui_host& viewport)> m_begin_callback;
     std::string     m_imgui_ini_path;
-    double          m_time            {0.0};
     bool            m_has_cursor      {false};
     bool            m_request_keyboard{false}; // hovered window requests keyboard events
     bool            m_request_mouse   {false}; // hovered winodw requests mouse events

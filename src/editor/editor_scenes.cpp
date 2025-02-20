@@ -14,9 +14,8 @@
 
 namespace editor {
 
-Editor_scenes::Editor_scenes(Editor_context& editor_context, Time& time)
-    : Update_time_base{time}
-    , m_context       {editor_context}
+Editor_scenes::Editor_scenes(Editor_context& editor_context)
+    : m_context{editor_context}
 {
 }
 
@@ -63,7 +62,7 @@ void Editor_scenes::update_physics_simulation_fixed_step(const Time_context& tim
     }
 
     for (const auto& scene_root : m_scene_roots) {
-        scene_root->update_physics_simulation_fixed_step(time_context.dt);
+        scene_root->update_physics_simulation_fixed_step(time_context.simulation_dt_s);
     }
 }
 
@@ -93,13 +92,6 @@ void Editor_scenes::update_node_transforms()
     Scene_root& scene_root = *m_context.tools->get_tool_scene_root().get();
     // TODO ? std::lock_guard<std::mutex> scene_lock{scene_root.item_host_mutex};
     scene_root.get_hosted_scene()->update_node_transforms();
-}
-
-void Editor_scenes::update_fixed_step(const Time_context& time_context)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    update_physics_simulation_fixed_step(time_context);
 }
 
 void Editor_scenes::after_physics_simulation_steps()

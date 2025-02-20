@@ -180,18 +180,19 @@ public:
         m_frame_log_window->on_frame_begin();
         // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
 
-        std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now();
         std::vector<erhe::window::Input_event>& input_events = m_context_window->get_input_events();
 
+        m_time->prepare_update();
         m_fly_camera_tool->on_frame_begin();
 
-        // Apply logic updates
+        // Updating pointer is probably sufficient to be done once per frame
         if (!m_editor_context.OpenXR) { //if (!m_headset_view.is_active()) {
             auto* imgui_host = m_imgui_windows->get_window_imgui_host().get(); // get glfw window hosted viewport
             if (imgui_host != nullptr) {
                 m_viewport_scene_views->update_pointer(imgui_host); // updates what viewport window is being hovered
             }
         }
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         // - updates cameras
         // - updates pointer context for headset scene view from controller
@@ -210,35 +211,52 @@ public:
         }
 #endif
 
+        m_editor_scenes->before_physics_simulation_steps();
+
+        float host_system_dt_s = 0.0f;
+        int64_t host_system_time_ns = 0;
+        m_time->for_each_fixed_step(
+            [this, &input_events, &host_system_dt_s, &host_system_time_ns](const Time_context& time_context) {
+                host_system_dt_s += time_context.host_system_dt_s;
+                host_system_time_ns = time_context.host_system_time_ns;
+                m_headset_view   ->update_fixed_step();
+                m_fly_camera_tool->update_fixed_step(time_context);
+                m_editor_scenes  ->update_physics_simulation_fixed_step(time_context);
+            }
+        );
+        m_editor_scenes->after_physics_simulation_steps();
+        m_imgui_windows->process_events(host_system_dt_s, host_system_time_ns);
+        m_commands     ->tick(host_system_time_ns, input_events);
+
+        // Once per frame updates
+        m_network_window->update_network();
+
         // - Update all ImGui hosts. glfw window host processes input events, converting them to ImGui inputs events
         //   This may consume some input events, so that they will not get processed by m_commands.tick() below
         // - Call all ImGui code (Imgui_window)
-        m_imgui_windows->imgui_windows();
+        m_imgui_windows->begin_frame();
+        m_imgui_windows->draw_imgui_windows();
+        m_imgui_windows->end_frame();
 
         // - Apply all command bindings (OpenXR bindings were already executed above)
-        m_commands->tick(timestamp, input_events);
 
-        m_fly_camera_tool->update_once_per_frame(timestamp);
+        //m_fly_camera_tool->update_once_per_frame(timestamp);
 
-        auto* imgui_host = m_imgui_windows->get_window_imgui_host().get(); // get glfw window hosted viewport
+        auto* imgui_host = m_imgui_windows->get_window_imgui_host().get(); // get window hosted viewport
         if (imgui_host != nullptr) {
             m_viewport_scene_views->update_hover_info(imgui_host); // updates what viewport window is being hovered
         }
 
         m_operation_stack->update();
 
-        m_editor_scenes->before_physics_simulation_steps();
-
         // - Execute all fixes step updates
         // - Execute all once per frame updates
         //    - Editor_scenes (updates physics)
         //    - Fly_camera_tool
         //    - Network_window 
-        m_time->update();
         m_editor_message_bus->update(); // Flushes queued messages
 
         // Apply physics updates
-        m_editor_scenes->after_physics_simulation_steps();
 
         m_fly_camera_tool->on_frame_end();
 
@@ -359,7 +377,6 @@ public:
             m_time               = std::make_unique<Time                          >();
             auto& commands           = *m_commands          .get();
             auto& editor_message_bus = *m_editor_message_bus.get();
-            auto& time               = *m_time              .get();
 
             // Icon rasterization is slow task that can be run in parallel with
             // GL context creation and Joystick scanning which are two other slow tasks
@@ -389,7 +406,7 @@ public:
             );
 
             m_clipboard            = std::make_unique<Clipboard     >(commands, m_editor_context);
-            m_editor_scenes        = std::make_unique<Editor_scenes >(m_editor_context, time);
+            m_editor_scenes        = std::make_unique<Editor_scenes >(m_editor_context);
             m_editor_windows       = std::make_unique<Editor_windows>(m_editor_context, commands);
             m_viewport_scene_views = std::make_unique<Scene_views   >(commands, m_editor_context, editor_message_bus);
             m_selection            = std::make_unique<Selection     >(commands, m_editor_context, editor_message_bus);
@@ -500,7 +517,7 @@ public:
                 m_clipboard_window       = std::make_unique<Clipboard_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_commands_window        = std::make_unique<Commands_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_layers_window          = std::make_unique<Layers_window                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
-                m_network_window         = std::make_unique<Network_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context,       *m_time.get());
+                m_network_window         = std::make_unique<Network_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_operations             = std::make_unique<Operations                      >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_editor_context);
                 m_physics_window         = std::make_unique<Physics_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_post_processing_window = std::make_unique<Post_processing_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
@@ -592,8 +609,7 @@ public:
                     *m_context_window.get(),
                     m_editor_context,
                     *m_editor_rendering.get(),
-                    *m_editor_settings.get(),
-                    *m_time.get()
+                    *m_editor_settings.get()
                 );
 #if defined(ERHE_XR_LIBRARY_OPENXR)
                 if (m_editor_context.OpenXR) {

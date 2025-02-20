@@ -68,8 +68,8 @@ public:
     [[nodiscard]] auto get_hover_tile_position() const -> std::optional<Tile_coordinate>;
 
     // Commands
-    void hover        (glm::vec2 window_position);
     void primary_brush();
+    void hover        (glm::vec2 window_position);
 
 private:
     Map_window&    m_map_window;
@@ -82,13 +82,11 @@ private:
     Terrain_palette_window m_terrain_palette_window;
 
     // Commands
-    Map_hover_command              m_map_hover_command;
-    Map_primary_brush_command      m_map_primary_brush_command;
-    int                            m_brush_size{1};
-    terrain_tile_t                 m_left_brush{Terrain_default};
-    std::optional<glm::vec2>       m_hover_window_position;
-    std::optional<Tile_coordinate> m_hover_tile_position;
-    Map*                           m_map{nullptr};;
+    Map_hover_command         m_map_hover_command;
+    Map_primary_brush_command m_map_primary_brush_command;
+    int                       m_brush_size{1};
+    terrain_tile_t            m_left_brush{Terrain_default};
+    Map*                      m_map{nullptr};;
 };
 
 } // namespace hextiles

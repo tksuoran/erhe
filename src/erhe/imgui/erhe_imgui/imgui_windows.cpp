@@ -135,20 +135,63 @@ void Imgui_windows::save_window_state()
     file.generate(ini);
 }
 
-void Imgui_windows::imgui_windows()
+void Imgui_windows::process_events(const float dt_s, const int64_t time_ns)
+{
+    ERHE_VERIFY(!m_iterating);
+    m_iterating = true;
+    const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
+    for (const auto& imgui_host : imgui_hosts) {
+        Scoped_imgui_context imgui_context{*imgui_host};
+        imgui_host->process_events(dt_s, time_ns);
+    }
+    m_iterating = false;
+}
+
+void Imgui_windows::begin_frame()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    ERHE_VERIFY(!m_iterating);
+    m_iterating = true;
+    const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
+    for (const auto& imgui_host : imgui_hosts) {
+        Scoped_imgui_context imgui_context{*imgui_host};
+        imgui_host->begin_imgui_frame();
+    }
+    m_iterating = false;
+}
+
+void Imgui_windows::end_frame()
 {
     ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(!m_iterating);
 
-    //Scoped_imgui_context scoped_context{m_imgui_context};
+    m_iterating = true;
+    const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
+    for (const auto& imgui_host : imgui_hosts) {
+        Scoped_imgui_context imgui_context{*imgui_host};
+
+        if (imgui_host->is_visible()) {
+            imgui_host->end_imgui_frame();
+        }
+    }
+    m_iterating = false;
+}
+
+void Imgui_windows::draw_imgui_windows()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    ERHE_VERIFY(!m_iterating);
+
     m_iterating = true;
     int window_id = 0;
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& imgui_host : imgui_hosts) {
         Scoped_imgui_context imgui_context{*imgui_host};
 
-        if (imgui_host->begin_imgui_frame()) {
+        if (imgui_host->is_visible()) {
             bool window_wants_keyboard{false};
             bool window_wants_mouse   {false};
 
@@ -186,7 +229,6 @@ void Imgui_windows::imgui_windows()
             }
 
             imgui_host->update_input_request(window_wants_keyboard, window_wants_mouse);
-            imgui_host->end_imgui_frame();
         }
     }
     m_iterating = false;

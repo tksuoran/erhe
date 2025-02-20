@@ -69,8 +69,6 @@ public:
 
         m_camera_controller = std::make_shared<Frame_controller>();
         m_camera_controller->set_node(m_camera->get_node());
-
-        m_start_time = std::chrono::steady_clock::now();
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
@@ -83,10 +81,10 @@ public:
     {
         const bool pressed = input_event.u.key_event.pressed;
         switch (input_event.u.key_event.keycode) {
-            case erhe::window::Key_w: m_camera_controller->translate_z.set_less(input_event.timestamp, pressed); return true;
-            case erhe::window::Key_s: m_camera_controller->translate_z.set_more(input_event.timestamp, pressed); return true;
-            case erhe::window::Key_a: m_camera_controller->translate_x.set_less(input_event.timestamp, pressed); return true;
-            case erhe::window::Key_d: m_camera_controller->translate_x.set_more(input_event.timestamp, pressed); return true;
+            case erhe::window::Key_w: m_camera_controller->translate_z.set_less(pressed); return true;
+            case erhe::window::Key_s: m_camera_controller->translate_z.set_more(pressed); return true;
+            case erhe::window::Key_a: m_camera_controller->translate_x.set_less(pressed); return true;
+            case erhe::window::Key_d: m_camera_controller->translate_x.set_more(pressed); return true;
             default: return false;
         }
     }
@@ -96,11 +94,11 @@ public:
         const erhe::window::Mouse_move_event& mouse_move_event = input_event.u.mouse_move_event;
         if (m_mouse_pressed) {
             if (mouse_move_event.dx != 0.0f) {
-                m_camera_controller->rotate_y.adjust(input_event.timestamp, mouse_move_event.dx * (-1.0f / 1024.0f));
+                m_camera_controller->rotate_y.adjust(mouse_move_event.dx * (-1.0f / 1024.0f));
             }
 
             if (mouse_move_event.dy != 0.0f) {
-                m_camera_controller->rotate_x.adjust(input_event.timestamp, mouse_move_event.dy * (-1.0f / 1024.0f));
+                m_camera_controller->rotate_x.adjust(mouse_move_event.dy * (-1.0f / 1024.0f));
             }
             return true;
         }
@@ -112,7 +110,7 @@ public:
         const erhe::window::Mouse_button_event& mouse_button_event = input_event.u.mouse_button_event;
         if (mouse_button_event.button == erhe::window::Mouse_button_left) {
             m_mouse_pressed = mouse_button_event.pressed;
-            m_window.capture_mouse(m_mouse_pressed);
+            m_window.set_cursor_relative_hold(m_mouse_pressed);
             return true;
         }
         return false;
@@ -124,7 +122,7 @@ public:
         glm::vec3 position = m_camera_controller->get_position();
         const float l = glm::length(position);
         const float k = (-1.0f / 16.0f) * l * l * mouse_wheel_event.y;
-        m_camera_controller->get_controller(Control::translate_z).adjust(input_event.timestamp, k);
+        m_camera_controller->get_controller(Control::translate_z).adjust(k);
         return true;
     }
 
@@ -133,16 +131,15 @@ public:
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
             gl::finish();
-            m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
-            m_camera_controller->on_frame_begin();
+            // m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
 
             m_window.poll_events();
             auto& input_events = m_window.get_input_events();
             for (erhe::window::Input_event& input_event : input_events) {
                 static_cast<void>(this->dispatch_input_event(input_event));
             }
+
             tick();
-            m_camera_controller->on_frame_end();
 
             m_window.swap_buffers();
         }
@@ -152,15 +149,30 @@ public:
     {
         const auto tick_end_time = std::chrono::steady_clock::now();
 
+        // Update fixed steps
+        {
+            const auto new_time   = std::chrono::steady_clock::now();
+            const auto duration   = new_time - m_current_time;
+            double     frame_time = std::chrono::duration<double, std::ratio<1>>(duration).count();
+
+            if (frame_time > 0.25) {
+                frame_time = 0.25;
+            }
+
+            m_current_time = new_time;
+            m_time_accumulator += frame_time;
+            const double dt = 1.0 / 240.0;
+            while (m_time_accumulator >= dt) {
+                m_camera_controller->update_fixed_step();
+                m_time_accumulator -= dt;
+                m_time += dt;
+            }
+        }
         gl::enable(gl::Enable_cap::framebuffer_srgb);
         gl::clear_color(0.01f, 0.01f, 0.01f, 0.5f);
         gl::clear_stencil(0);
         gl::clear_depth_f(*m_graphics_instance.depth_clear_value_pointer());
-        gl::clear(
-            gl::Clear_buffer_mask::color_buffer_bit |
-            gl::Clear_buffer_mask::depth_buffer_bit |
-            gl::Clear_buffer_mask::stencil_buffer_bit
-        );
+        gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 
         erhe::math::Viewport viewport{
             .x             = 0,
@@ -170,7 +182,6 @@ public:
             .reverse_depth = m_graphics_instance.configuration.reverse_depth
         };
 
-        m_camera_controller->tick(tick_end_time);
         m_scene.update_node_transforms();
 
         std::vector<erhe::renderer::Pipeline_renderpass*> passes;
@@ -339,10 +350,7 @@ private:
     double                                  m_time_accumulator{0.0};
     double                                  m_time            {0.0};
     uint64_t                                m_frame_number{0};
-
-    std::chrono::steady_clock::time_point          m_start_time{};
-
-    bool m_mouse_pressed{false};
+    bool                                    m_mouse_pressed{false};
 };
 
 void run_example()

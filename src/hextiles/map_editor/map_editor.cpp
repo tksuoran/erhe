@@ -1,5 +1,6 @@
 #include "map_editor/map_editor.hpp"
 
+#include "hextiles_log.hpp"
 #include "map.hpp"
 #include "map_window.hpp"
 #include "tiles.hpp"
@@ -116,24 +117,12 @@ void Map_editor::show_windows()
 
 void Map_editor::hover(glm::vec2 position_in_root)
 {
-    if (m_map_window.is_window_visible()) {
-        return;
-    }
-    const glm::vec2 window_position = m_map_window.to_content(position_in_root);
-
-    m_hover_window_position = window_position;
-
-    Pixel_coordinate hover_pixel_position{
-        static_cast<pixel_t>(window_position.x),
-        static_cast<pixel_t>(window_position.y)
-    };
-
-    m_hover_tile_position = m_map_window.pixel_to_tile(hover_pixel_position);
+    m_map_window.hover(position_in_root);
 }
 
 void Map_editor::primary_brush()
 {
-    const auto tile_position_opt = m_hover_tile_position; //g_map_window->pixel_to_tile(pixel_position);
+    const auto tile_position_opt = m_map_window.get_hover_tile_position();
     if (!tile_position_opt.has_value()) {
         return;
     }
@@ -150,6 +139,8 @@ void Map_editor::primary_brush()
     {
         update_group_terrain(m_tiles, *m_map, position);
     };
+
+    log_map_editor->info("brush size = {} p.x = {} p.y = {}", m_brush_size, tile_position.x, tile_position.y);
 
     m_map->hex_circle(tile_position, 0, m_brush_size - 1, set_terrain_op);
     m_map->hex_circle(tile_position, 0, m_brush_size + 1, update_op);
@@ -182,14 +173,15 @@ void Map_editor::render()
 {
     const auto& terrain_shapes = m_tile_renderer.get_terrain_shapes();
 
+    std::optional<Tile_coordinate> hover_tile_position = m_map_window.get_hover_tile_position();
     if (
-        !m_hover_tile_position.has_value() ||
+        !hover_tile_position.has_value() ||
         m_left_brush >= terrain_shapes.size()
     ) {
         return;
     }
 
-    const auto&             location = m_hover_tile_position.value();
+    const auto&             location = hover_tile_position.value();
     const Pixel_coordinate& shape    = terrain_shapes[m_left_brush];
     const std::string       text     = fmt::format("{}, {}", location.x, location.y);
     m_map_window.blit (shape, location, 0x88888888u);
@@ -203,7 +195,7 @@ auto Map_editor::get_map() -> Map*
 
 auto Map_editor::get_hover_tile_position() const -> std::optional<Tile_coordinate>
 {
-    return m_hover_tile_position;
+    return m_map_window.get_hover_tile_position();
 }
 
 } // namespace hextiles

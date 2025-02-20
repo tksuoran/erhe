@@ -303,11 +303,18 @@ auto Imgui_host::on_key_event(const erhe::window::Input_event& input_event) -> b
     return false;
 }
 
+auto Imgui_host::on_text_event(const erhe::window::Input_event& input_event) -> bool
+{
+    ImGuiIO& io = m_imgui_context->IO;
+    io.AddInputCharactersUTF8(input_event.u.text_event.utf8_text);
+    return false;
+}
+
 auto Imgui_host::on_char_event(const erhe::window::Input_event& input_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddInputCharacter(input_event.u.char_event.codepoint);
-    return false;
+    return true;
 }
 
 #pragma endregion Events

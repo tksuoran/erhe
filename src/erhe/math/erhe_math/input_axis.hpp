@@ -1,11 +1,5 @@
 #pragma once
 
-#include <array>
-#include <chrono>
-#include <optional>
-#include <string>
-#include <string_view>
-
 namespace erhe::math {
 
 enum class Input_axis_control : unsigned int {
@@ -14,69 +8,48 @@ enum class Input_axis_control : unsigned int {
     stop = 2,
 };
 
-class Input_axis_segment
-{
-public:
-    double velocity   {0.0};
-    double translation{0.0};
-};
-
 class Input_axis
 {
 public:
-    explicit Input_axis(std::string_view name);
+    Input_axis();
+    Input_axis(const bool linear, const bool multiply);
 
-    [[nodiscard]] auto get_name              () const -> std::string_view;
-    [[nodiscard]] auto get_power_base        () const -> float;
-    [[nodiscard]] auto get_more              () const -> bool;
-    [[nodiscard]] auto get_less              () const -> bool;
-    [[nodiscard]] auto get_value             () const -> float;
-    [[nodiscard]] auto get_velocity          () const -> float;
-    [[nodiscard]] auto get_tick_distance     () const -> float;
-    [[nodiscard]] auto get_base_velocity     () const -> float;
-    [[nodiscard]] auto get_segment_timestamp (std::size_t i) const -> std::chrono::steady_clock::time_point;
-    [[nodiscard]] auto get_segment_velocity  (std::size_t i) const -> float;
-    [[nodiscard]] auto get_segment_distance  (std::size_t i) const -> float;
-    [[nodiscard]] auto get_segment_state_time(std::size_t i) const -> float;
-    [[nodiscard]] auto evaluate_velocity_at_state_time(float state_time) const -> float;
-    [[nodiscard]] auto is_power_base_disabled() const -> bool;
-
-    void disable_power_base();
-    void set_power_base(float base);
-    void on_frame_begin();
-    void on_frame_end  ();
-    void tick          (std::chrono::steady_clock::time_point timestamp);
-    void update        (std::chrono::steady_clock::time_point timestamp);
-    void adjust        (std::chrono::steady_clock::time_point timestamp, float delta);
-    void adjust        (std::chrono::steady_clock::time_point timestamp, double delta);
-    void set_more      (std::chrono::steady_clock::time_point timestamp, bool value);
-    void set_less      (std::chrono::steady_clock::time_point timestamp, bool value);
-    void set           (std::chrono::steady_clock::time_point timestamp, Input_axis_control item, bool value);
-    void reset         ();
+    [[nodiscard]] auto damp         () const -> float;
+    [[nodiscard]] auto max_value    () const -> float;
+    [[nodiscard]] auto max_delta    () const -> float;
+    [[nodiscard]] auto more         () const -> bool;
+    [[nodiscard]] auto less         () const -> bool;
+    [[nodiscard]] auto stop         () const -> bool;
+    [[nodiscard]] auto current_value() const -> float;
+    void set_damp              (float value);
+    void set_max_value         (float value);
+    void set_max_delta         (float value);
+    void update                ();
+    void adjust                (float delta);
+    void adjust                (double delta);
+    void set_more              (bool value);
+    void set_less              (bool value);
+    void set_stop              (bool value);
+    void set                   (Input_axis_control item, bool value);
+    void reset                 ();
+    void set_damp_mode         (bool linear, bool multiply);
+    void set_damp_and_max_delta(float damp, float max_delta);
 
 private:
-    static auto sign       (double a) -> double;
-    static auto checked_pow(double base, double exponent) -> double;
-    static auto checked_log(double a) -> double;
+    void dampen();
 
-    void set_direction(double value);
-    bool   m_more         {false};
-    bool   m_less         {false};
-    double m_base         {4.0};
-    double m_log_base     {4.0};
-    double m_direction    {0.0};
-    double m_state_time   {0.0};
-    double m_base_velocity{0.0}; // used for velocity calculation when decelerating and when state time is zero when acceleratng
-    double m_velocity     {0.0}; // velocity at end of last segment
-    double m_tick_distance{0.0}; // distance travelled during last tick
-    std::array<std::chrono::steady_clock::time_point, 2> m_segment_timestamp;
-    double                                               m_segment_base_velocity = 0.0;
-    double                                               m_segment_direction     = 0.0;
-    std::array<double, 2>                                m_segment_velocity      = {0.0, 0.0};
-    std::array<double, 2>                                m_segment_distance      = {0.0, 0.0};
-    std::array<double, 2>                                m_segment_state_time    = {0.0, 0.0};
-    std::optional<std::chrono::steady_clock::time_point> m_last_timestamp;
-    std::string m_name;
+    bool  m_more           {false};
+    bool  m_less           {false};
+    bool  m_stop           {false};
+    bool  m_active         {false};
+    bool  m_dampen_linear  {false};
+    bool  m_dampen_multiply{true};
+    float m_damp           { 0.950f};
+    float m_max_delta      { 0.004f};
+    float m_max_value      { 1.000f};
+    float m_min_value      {-1.000f};
+    float m_current_delta  { 0.000f};
+    float m_current_value  { 0.000f};
 };
 
 } // namespace erhe::math

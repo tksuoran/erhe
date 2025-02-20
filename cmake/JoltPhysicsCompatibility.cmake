@@ -1,6 +1,7 @@
 # Jolt Physics has CMakeLists.txt in Build subdirectory
 
 add_compile_definitions(SPDLOG_FMT_EXTERNAL)
+set(CROSS_PLATFORM_DETERMINISTIC ON)
 if (MSVC)
     message("Applying Jolt compatible compiler settings for MSVC")
     set(CLANG_LIB_PATH "\"$(VSInstallDir)\\VC\\Tools\\Llvm\\x64\\lib\\clang\\${CMAKE_CXX_COMPILER_VERSION}\\lib\\windows\"")

@@ -14,7 +14,7 @@ class Sphere_builder
 public:
     using scalar = float;
 
-    constexpr static scalar pi      = 3.141592653589793238462643383279502884197169399375105820974944592308;
+    constexpr static scalar pi      = 3.141592653589793238462643383279502884197169399375105820974944592308f;
     constexpr static scalar half_pi = 0.5 * pi;
 
     class Vertex_data
