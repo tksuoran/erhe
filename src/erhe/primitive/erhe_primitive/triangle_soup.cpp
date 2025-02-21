@@ -10,7 +10,6 @@
 #include <geogram/mesh/mesh_geometry.h>
 
 #include <numeric>
-#include <unordered_map>
 #include <set>
 
 namespace erhe::primitive {
@@ -71,9 +70,9 @@ class Mesh_from_triangle_soup
 {
 public:
     Mesh_from_triangle_soup(
-        GEO::Mesh&                         mesh,
-        const Triangle_soup&               triangle_soup,
-        erhe::primitive::Element_mappings& element_mappings
+        GEO::Mesh&           mesh,
+        const Triangle_soup& triangle_soup,
+        Element_mappings&    element_mappings
     )
         : m_mesh            {mesh}
         , m_attributes      {mesh}
@@ -452,24 +451,24 @@ private:
         }
     }
 
-    GEO::Mesh&                         m_mesh;
-    Mesh_attributes                    m_attributes;
-    const Triangle_soup&               m_triangle_soup;
-    erhe::primitive::Element_mappings& m_element_mappings;
-    std::size_t                        m_min_index            {0};
-    std::size_t                        m_max_index            {0};
-    std::vector<uint32_t>              m_used_indices         {};
-    std::vector<GEO::vec3>             m_vertex_positions     {};
-    std::vector<std::size_t>           m_sorted_vertex_indices{};
-    std::vector<GEO::index_t>          m_vertex_from_index    {};
-    GEO::index_t                       m_corner_start         {};
-    GEO::index_t                       m_corner_end           {};
-    std::vector<GEO::index_t>          m_index_from_corner    {};
+    GEO::Mesh&                m_mesh;
+    Mesh_attributes           m_attributes;
+    const Triangle_soup&      m_triangle_soup;
+    Element_mappings&         m_element_mappings;
+    std::size_t               m_min_index            {0};
+    std::size_t               m_max_index            {0};
+    std::vector<uint32_t>     m_used_indices         {};
+    std::vector<GEO::vec3>    m_vertex_positions     {};
+    std::vector<std::size_t>  m_sorted_vertex_indices{};
+    std::vector<GEO::index_t> m_vertex_from_index    {};
+    GEO::index_t              m_corner_start         {};
+    GEO::index_t              m_corner_end           {};
+    std::vector<GEO::index_t> m_index_from_corner    {};
 
     GEO::Attribute<GEO::Numeric::int32> m_corner_indices;
 };
 
-void mesh_from_triangle_soup(const Triangle_soup& triangle_soup, GEO::Mesh& mesh, erhe::primitive::Element_mappings& element_mappings)
+void mesh_from_triangle_soup(const Triangle_soup& triangle_soup, GEO::Mesh& mesh, Element_mappings& element_mappings)
 {
     ERHE_VERIFY(element_mappings.mesh_corner_to_vertex_buffer_index.empty());
     ERHE_VERIFY(element_mappings.triangle_to_mesh_facet.empty());

@@ -3,6 +3,8 @@ add_library(${_target})
 add_library(erhe::imgui ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_imgui/file_dialog.cpp
+    erhe_imgui/file_dialog.hpp
     erhe_imgui/imgui_helpers.cpp
     erhe_imgui/imgui_helpers.hpp
     erhe_imgui/imgui_log.cpp

@@ -1,6 +1,6 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_bit/bit_helpers.hpp"
-#include "erhe_raytrace/ibuffer.hpp"
+#include "erhe_buffer/ibuffer.hpp"
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/iscene.hpp"

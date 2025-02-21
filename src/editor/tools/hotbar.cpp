@@ -333,7 +333,7 @@ void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
 
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
     erhe::primitive::Buffer_mesh buffer_mesh{};
-    const bool buffer_mesh_ok = erhe::primitive::make_buffer_mesh(
+    const bool buffer_mesh_ok = erhe::primitive::build_buffer_mesh(
         buffer_mesh,
         disc_geo_mesh_shared,
         erhe::primitive::Build_info{

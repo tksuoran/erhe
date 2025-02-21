@@ -80,6 +80,17 @@ public:
     }
 
     template <typename T>
+    auto for_each_child(const std::function<bool(T&)>& callback) -> bool
+    {
+        for (const std::shared_ptr<Hierarchy>& child : m_children) {
+            if (!child->for_each<T>(callback)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    template <typename T>
     auto for_each_const(const std::function<bool(const T&)>& callback) const -> bool
     {
         const T* item = dynamic_cast<const T*>(this);
@@ -89,6 +100,17 @@ public:
             }
         }
 
+        for (const std::shared_ptr<Hierarchy>& child : m_children) {
+            if (!child->for_each_const<T>(callback)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    template <typename T>
+    auto for_each_child_const(const std::function<bool(const T&)>& callback) const -> bool
+    {
         for (const std::shared_ptr<Hierarchy>& child : m_children) {
             if (!child->for_each_const<T>(callback)) {
                 return false;

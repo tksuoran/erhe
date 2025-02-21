@@ -6,10 +6,10 @@
 
 #include <fmt/chrono.h>
 
+#include "erhe_buffer/ibuffer.hpp"
 #include "erhe_raytrace/bvh/bvh_geometry.hpp"
 #include "erhe_raytrace/bvh/bvh_instance.hpp"
 #include "erhe_raytrace/bvh/glm_conversions.hpp"
-#include "erhe_raytrace/ibuffer.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_raytrace/ray.hpp"
 
@@ -150,8 +150,8 @@ void Bvh_geometry::commit()
             return;
         }
 
-        IBuffer* index_buffer  = index_buffer_info->buffer;
-        IBuffer* vertex_buffer = vertex_buffer_info->buffer;
+        erhe::buffer::Cpu_buffer* index_buffer  = index_buffer_info->buffer;
+        erhe::buffer::Cpu_buffer* vertex_buffer = vertex_buffer_info->buffer;
         if (
             (index_buffer == nullptr) ||
             (vertex_buffer == nullptr)
@@ -281,13 +281,13 @@ void Bvh_geometry::set_vertex_attribute_count(const unsigned int count)
 }
 
 void Bvh_geometry::set_buffer(
-    const Buffer_type  type,
-    const unsigned int slot,
-    const Format       format,
-    IBuffer* const     buffer,
-    const std::size_t  byte_offset,
-    const std::size_t  byte_stride,
-    const std::size_t  item_count
+    const Buffer_type               type,
+    const unsigned int              slot,
+    const Format                    format,
+    erhe::buffer::Cpu_buffer* const buffer,
+    const std::size_t               byte_offset,
+    const std::size_t               byte_stride,
+    const std::size_t               item_count
 )
 {
     m_buffer_infos.push_back(

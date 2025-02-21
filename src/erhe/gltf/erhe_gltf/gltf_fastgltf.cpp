@@ -4,6 +4,7 @@
 #include "gltf_log.hpp"
 #include "image_transfer.hpp"
 
+#include "erhe_buffer/ibuffer.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -15,7 +16,9 @@
 #include "erhe_graphics/vertex_format.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_log/log_geogram.hpp"
+#include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/animation.hpp"
@@ -52,8 +55,6 @@
 #include <string_view>
 
 namespace erhe::gltf {
-
-namespace {
 
 constexpr glm::mat4 mat4_yup_from_zup{
     1.0f, 0.0f, 0.0f, 0.0f,
@@ -280,12 +281,7 @@ void to_erhe_attribute(const fastgltf::Accessor& accessor, erhe::graphics::Glsl_
     }
 }
 
-} // anonymous namespace
-
-//using namespace glm;
 using namespace erhe::geometry;
-
-namespace {
 
 [[nodiscard]] auto to_erhe(const fastgltf::LightType gltf_light_type) -> erhe::scene::Light_type
 {
@@ -408,6 +404,207 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
     return Usage_type::custom;
 }
 
+[[nodiscard]] auto vertex_attribute_usage_from_erhe(erhe::graphics::Vertex_attribute::Usage usage) -> std::string
+{
+    switch (usage.type) {
+        case erhe::graphics::Vertex_attribute::Usage_type::position:      return "POSITION";
+        case erhe::graphics::Vertex_attribute::Usage_type::normal:        return "NORMAL";
+        case erhe::graphics::Vertex_attribute::Usage_type::tangent:       return "TANGENT";
+        case erhe::graphics::Vertex_attribute::Usage_type::bitangent:     return "BITANGENT";
+        case erhe::graphics::Vertex_attribute::Usage_type::color:         return fmt::format("COLOR_{}",    usage.index);
+        case erhe::graphics::Vertex_attribute::Usage_type::tex_coord:     return fmt::format("TEXCOORD_{}", usage.index);
+        case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: return fmt::format("JOINTS_{}",   usage.index);
+        case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: return fmt::format("WEIGHTS_{}",  usage.index);
+        default: return {};
+    }
+}
+
+[[nodiscard]] auto get_accessor_type(const erhe::dataformat::Format format) -> fastgltf::AccessorType
+{
+    const std::size_t component_count = erhe::dataformat::get_component_count(format);
+    switch (component_count) {
+        case 1: return fastgltf::AccessorType::Scalar;
+        case 2: return fastgltf::AccessorType::Vec2;
+        case 3: return fastgltf::AccessorType::Vec3;
+        case 4: return fastgltf::AccessorType::Vec4;
+        default: return fastgltf::AccessorType::Invalid;
+    }
+}
+
+[[nodiscard]] auto get_component_type(const erhe::dataformat::Format format) -> fastgltf::ComponentType
+{
+    switch (format) {
+        case erhe::dataformat::Format::format_undefined               : return fastgltf::ComponentType::Invalid;
+        case erhe::dataformat::Format::format_8_scalar_unorm          : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_scalar_snorm          : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_scalar_uscaled        : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_scalar_sscaled        : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_scalar_uint           : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_scalar_sint           : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_vec2_unorm            : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_vec2_snorm            : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_vec2_uscaled          : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_vec2_sscaled          : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_vec2_uint             : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_vec2_sint             : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_vec3_unorm            : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_vec3_snorm            : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_vec3_uscaled          : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_vec3_sscaled          : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_vec3_uint             : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_vec3_sint             : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_vec4_unorm            : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_vec4_snorm            : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_vec4_uscaled          : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_vec4_sscaled          : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_8_vec4_uint             : return fastgltf::ComponentType::UnsignedByte;
+        case erhe::dataformat::Format::format_8_vec4_sint             : return fastgltf::ComponentType::Byte;
+        case erhe::dataformat::Format::format_16_scalar_unorm         : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_scalar_snorm         : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_scalar_uscaled       : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_scalar_sscaled       : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_scalar_uint          : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_scalar_sint          : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_vec2_unorm           : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_vec2_snorm           : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_vec2_uscaled         : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_vec2_sscaled         : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_vec2_uint            : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_vec2_sint            : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_vec3_unorm           : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_vec3_snorm           : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_vec3_uscaled         : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_vec3_sscaled         : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_vec3_uint            : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_vec3_sint            : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_vec4_unorm           : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_vec4_snorm           : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_vec4_uscaled         : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_vec4_sscaled         : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_16_vec4_uint            : return fastgltf::ComponentType::UnsignedShort;
+        case erhe::dataformat::Format::format_16_vec4_sint            : return fastgltf::ComponentType::Short;
+        case erhe::dataformat::Format::format_32_scalar_unorm         : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_scalar_snorm         : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_scalar_uscaled       : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_scalar_sscaled       : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_scalar_uint          : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_scalar_sint          : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_scalar_float         : return fastgltf::ComponentType::Float;
+        case erhe::dataformat::Format::format_32_vec2_unorm           : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_vec2_snorm           : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_vec2_uscaled         : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_vec2_sscaled         : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_vec2_uint            : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_vec2_sint            : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_vec2_float           : return fastgltf::ComponentType::Float;
+        case erhe::dataformat::Format::format_32_vec3_unorm           : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_vec3_snorm           : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_vec3_uscaled         : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_vec3_sscaled         : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_vec3_uint            : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_vec3_sint            : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_vec3_float           : return fastgltf::ComponentType::Float;
+        case erhe::dataformat::Format::format_32_vec4_unorm           : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_vec4_snorm           : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_vec4_uscaled         : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_vec4_sscaled         : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_vec4_uint            : return fastgltf::ComponentType::UnsignedInt;
+        case erhe::dataformat::Format::format_32_vec4_sint            : return fastgltf::ComponentType::Int;
+        case erhe::dataformat::Format::format_32_vec4_float           : return fastgltf::ComponentType::Float;
+        case erhe::dataformat::Format::format_packed1010102_vec4_unorm: return fastgltf::ComponentType::Invalid;
+        case erhe::dataformat::Format::format_packed1010102_vec4_snorm: return fastgltf::ComponentType::Invalid;
+        case erhe::dataformat::Format::format_packed1010102_vec4_uint : return fastgltf::ComponentType::Invalid;
+        case erhe::dataformat::Format::format_packed1010102_vec4_sint : return fastgltf::ComponentType::Invalid;
+        default: return fastgltf::ComponentType::Invalid;
+    }
+}
+
+[[nodiscard]] auto get_normalized(const erhe::dataformat::Format format) -> bool
+{
+    switch (format) {
+        case erhe::dataformat::Format::format_undefined               : return false;
+        case erhe::dataformat::Format::format_8_scalar_unorm          : return true;
+        case erhe::dataformat::Format::format_8_scalar_snorm          : return true;
+        case erhe::dataformat::Format::format_8_scalar_uscaled        : return false;
+        case erhe::dataformat::Format::format_8_scalar_sscaled        : return false;
+        case erhe::dataformat::Format::format_8_scalar_uint           : return false;
+        case erhe::dataformat::Format::format_8_scalar_sint           : return false;
+        case erhe::dataformat::Format::format_8_vec2_unorm            : return true;
+        case erhe::dataformat::Format::format_8_vec2_snorm            : return true;
+        case erhe::dataformat::Format::format_8_vec2_uscaled          : return false;
+        case erhe::dataformat::Format::format_8_vec2_sscaled          : return false;
+        case erhe::dataformat::Format::format_8_vec2_uint             : return false;
+        case erhe::dataformat::Format::format_8_vec2_sint             : return false;
+        case erhe::dataformat::Format::format_8_vec3_unorm            : return true;
+        case erhe::dataformat::Format::format_8_vec3_snorm            : return true;
+        case erhe::dataformat::Format::format_8_vec3_uscaled          : return false;
+        case erhe::dataformat::Format::format_8_vec3_sscaled          : return false;
+        case erhe::dataformat::Format::format_8_vec3_uint             : return false;
+        case erhe::dataformat::Format::format_8_vec3_sint             : return false;
+        case erhe::dataformat::Format::format_8_vec4_unorm            : return true;
+        case erhe::dataformat::Format::format_8_vec4_snorm            : return true;
+        case erhe::dataformat::Format::format_8_vec4_uscaled          : return false;
+        case erhe::dataformat::Format::format_8_vec4_sscaled          : return false;
+        case erhe::dataformat::Format::format_8_vec4_uint             : return false;
+        case erhe::dataformat::Format::format_8_vec4_sint             : return false;
+        case erhe::dataformat::Format::format_16_scalar_unorm         : return true;
+        case erhe::dataformat::Format::format_16_scalar_snorm         : return true;
+        case erhe::dataformat::Format::format_16_scalar_uscaled       : return false;
+        case erhe::dataformat::Format::format_16_scalar_sscaled       : return false;
+        case erhe::dataformat::Format::format_16_scalar_uint          : return false;
+        case erhe::dataformat::Format::format_16_scalar_sint          : return false;
+        case erhe::dataformat::Format::format_16_vec2_unorm           : return true;
+        case erhe::dataformat::Format::format_16_vec2_snorm           : return true;
+        case erhe::dataformat::Format::format_16_vec2_uscaled         : return false;
+        case erhe::dataformat::Format::format_16_vec2_sscaled         : return false;
+        case erhe::dataformat::Format::format_16_vec2_uint            : return false;
+        case erhe::dataformat::Format::format_16_vec2_sint            : return false;
+        case erhe::dataformat::Format::format_16_vec3_unorm           : return true;
+        case erhe::dataformat::Format::format_16_vec3_snorm           : return true;
+        case erhe::dataformat::Format::format_16_vec3_uscaled         : return false;
+        case erhe::dataformat::Format::format_16_vec3_sscaled         : return false;
+        case erhe::dataformat::Format::format_16_vec3_uint            : return false;
+        case erhe::dataformat::Format::format_16_vec3_sint            : return false;
+        case erhe::dataformat::Format::format_16_vec4_unorm           : return true;
+        case erhe::dataformat::Format::format_16_vec4_snorm           : return true;
+        case erhe::dataformat::Format::format_16_vec4_uscaled         : return false;
+        case erhe::dataformat::Format::format_16_vec4_sscaled         : return false;
+        case erhe::dataformat::Format::format_16_vec4_uint            : return false;
+        case erhe::dataformat::Format::format_16_vec4_sint            : return false;
+        case erhe::dataformat::Format::format_32_scalar_unorm         : return true;
+        case erhe::dataformat::Format::format_32_scalar_snorm         : return true;
+        case erhe::dataformat::Format::format_32_scalar_uscaled       : return false;
+        case erhe::dataformat::Format::format_32_scalar_sscaled       : return false;
+        case erhe::dataformat::Format::format_32_scalar_uint          : return false;
+        case erhe::dataformat::Format::format_32_scalar_sint          : return false;
+        case erhe::dataformat::Format::format_32_scalar_float         : return false;
+        case erhe::dataformat::Format::format_32_vec2_unorm           : return true;
+        case erhe::dataformat::Format::format_32_vec2_snorm           : return true;
+        case erhe::dataformat::Format::format_32_vec2_uscaled         : return false;
+        case erhe::dataformat::Format::format_32_vec2_sscaled         : return false;
+        case erhe::dataformat::Format::format_32_vec2_uint            : return false;
+        case erhe::dataformat::Format::format_32_vec2_sint            : return false;
+        case erhe::dataformat::Format::format_32_vec2_float           : return false;
+        case erhe::dataformat::Format::format_32_vec3_unorm           : return true;
+        case erhe::dataformat::Format::format_32_vec3_snorm           : return true;
+        case erhe::dataformat::Format::format_32_vec3_uscaled         : return false;
+        case erhe::dataformat::Format::format_32_vec3_sscaled         : return false;
+        case erhe::dataformat::Format::format_32_vec3_uint            : return false;
+        case erhe::dataformat::Format::format_32_vec3_sint            : return false;
+        case erhe::dataformat::Format::format_32_vec3_float           : return false;
+        case erhe::dataformat::Format::format_32_vec4_unorm           : return true;
+        case erhe::dataformat::Format::format_32_vec4_snorm           : return true;
+        case erhe::dataformat::Format::format_32_vec4_uscaled         : return false;
+        case erhe::dataformat::Format::format_32_vec4_sscaled         : return false;
+        case erhe::dataformat::Format::format_32_vec4_uint            : return false;
+        case erhe::dataformat::Format::format_32_vec4_sint            : return false;
+        case erhe::dataformat::Format::format_32_vec4_float           : return false;
+        case erhe::dataformat::Format::format_packed1010102_vec4_unorm: return true;
+        case erhe::dataformat::Format::format_packed1010102_vec4_snorm: return true;
+        case erhe::dataformat::Format::format_packed1010102_vec4_uint : return false;
+        case erhe::dataformat::Format::format_packed1010102_vec4_sint : return false;
+        default: return false;
+    }
 }
 
 using Item_flags = erhe::Item_flags;
@@ -1088,7 +1285,7 @@ private:
 
                     erhe_node->node_data.transforms.parent_from_node.set_trs(
                         glm::vec3{t[0], t[1], t[2]},
-                        glm::quat{r[3], r[0], r[1], r[2]},
+                        glm::quat{r[3], r[0], r[1], r[2]}, // glm has [w x y z], gltf has [x y z w]
                         glm::vec3{s[0], s[1], s[2]}
                     );
                 },
@@ -1587,6 +1784,559 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
     }
 
     return result;
+}
+
+class Gltf_exporter
+{
+public:
+    Gltf_exporter(const erhe::scene::Node& root_node, bool binary)
+        : m_erhe_root_node{root_node}
+        , m_binary        {binary}
+    {
+    }
+
+    [[nodiscard]] auto export_gltf() -> std::string;
+
+private:
+    [[nodiscard]] static auto from_erhe(const erhe::scene::Trs_transform& erhe_trs_transform) -> fastgltf::TRS
+    {
+        // glm quat has [w x y z], gltf has [x y z w]
+
+        const glm::vec3 t = erhe_trs_transform.get_translation();
+        const glm::quat r = erhe_trs_transform.get_rotation();
+        const glm::vec3 s = erhe_trs_transform.get_scale();
+
+        return fastgltf::TRS{
+            .translation = fastgltf::math::fvec3{t.x, t.y, t.z},
+            .rotation    = fastgltf::math::fquat{r[0], r[1], r[2], r[3]},
+            //.rotation    = fastgltf::math::fquat{r[1], r[2], r[3], r[0]},
+            .scale       = fastgltf::math::fvec3{s.x, s.y, s.z}
+        };
+    }
+
+    struct Export_entry
+    {
+        std::size_t                      index_buffer;
+        std::size_t                      index_buffer_view;
+        std::size_t                      index_buffer_accessor;
+        std::size_t                      vertex_buffer;
+        std::size_t                      vertex_buffer_view;
+        std::vector<fastgltf::Attribute> attributes;
+    };
+    void add_index_data_source(
+        Export_entry&              entry,
+        std::size_t                vertex_count, 
+        std::size_t                index_count, 
+        std::span<const std::byte> index_data_source
+    )
+    {
+        const std::size_t index_data_size = index_count * sizeof(uint32_t);
+
+        entry.index_buffer = m_gltf_asset.buffers.size();
+        fastgltf::Buffer gltf_index_buffer{
+            .byteLength = index_data_size,
+            .data = fastgltf::sources::Vector{
+                .bytes    = std::vector<std::byte>{index_data_source.begin(), index_data_source.end()},
+                .mimeType = fastgltf::MimeType::GltfBuffer
+            }
+        };
+
+        m_gltf_asset.buffers.emplace_back(std::move(gltf_index_buffer));
+
+        entry.index_buffer_view = m_gltf_asset.bufferViews.size();
+        fastgltf::BufferView buffer_view{};
+        buffer_view.bufferIndex = entry.index_buffer;
+        buffer_view.byteOffset  = 0;
+        buffer_view.byteLength  = index_data_size;
+        buffer_view.target      = fastgltf::BufferTarget::ElementArrayBuffer;
+        m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+
+        FASTGLTF_STD_PMR_NS::vector<std::int64_t> max_value(1);
+        FASTGLTF_STD_PMR_NS::vector<std::int64_t> min_value(1);
+        max_value.at(0) = static_cast<std::int64_t>(vertex_count - 1);
+        min_value.at(0) = static_cast<std::int64_t>(0);
+        const fastgltf::Accessor indices_accessor{
+            .byteOffset      = 0,
+            .count           = index_count,
+            .type            = fastgltf::AccessorType::Scalar,
+            .componentType   = fastgltf::ComponentType::UnsignedInt,
+            .normalized      = false,
+            .max             = max_value,
+            .min             = min_value,
+            .bufferViewIndex = entry.index_buffer_view,
+            .sparse          = {},
+            .name            = "indices"
+        };
+        entry.index_buffer_accessor = m_gltf_asset.accessors.size();
+        m_gltf_asset.accessors.emplace_back(std::move(indices_accessor));
+    }
+    void add_index_data_source(Export_entry& entry, size_t vertex_count, const std::vector<uint32_t>& index_data_source)
+    {
+        const std::byte* const index_data      = reinterpret_cast<const std::byte*>(index_data_source.data());
+        const std::size_t      index_count     = index_data_source.size();
+        const std::size_t      index_data_size = index_count * sizeof(uint32_t);
+        add_index_data_source(entry, index_count, vertex_count, std::span<const std::byte>(index_data, index_data_size));
+    }
+    void add_vertex_data_source(
+        Export_entry&                        entry,
+        std::size_t                          vertex_count,
+        const erhe::graphics::Vertex_format& vertex_format,
+        std::span<const std::byte>           vertex_data_source
+    )
+    {
+        entry.vertex_buffer = m_gltf_asset.buffers.size();
+        fastgltf::Buffer gltf_vertex_buffer{
+            .byteLength = vertex_data_source.size_bytes(),
+            .data = fastgltf::sources::Vector{
+                .bytes    = std::vector<std::byte>{vertex_data_source.begin(), vertex_data_source.end()},
+                .mimeType = fastgltf::MimeType::GltfBuffer
+            }
+        };
+        m_gltf_asset.buffers.emplace_back(std::move(gltf_vertex_buffer));
+
+        entry.vertex_buffer_view = m_gltf_asset.bufferViews.size();
+
+        fastgltf::BufferView buffer_view{};
+        buffer_view.bufferIndex = entry.vertex_buffer;
+        buffer_view.byteOffset  = 0;
+        buffer_view.byteLength  = vertex_data_source.size_bytes();
+        buffer_view.byteStride  = vertex_format.stride(),
+        buffer_view.target      = fastgltf::BufferTarget::ArrayBuffer;
+        m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+
+        const std::vector<erhe::graphics::Vertex_attribute>& erhe_attributes = vertex_format.get_attributes();
+        const std::size_t vertex_stride = vertex_format.stride();
+        for (const erhe::graphics::Vertex_attribute& erhe_attribute : erhe_attributes) {
+            const std::string attribute_name = vertex_attribute_usage_from_erhe(erhe_attribute.usage);
+            if (attribute_name.empty()) {
+                continue; // TODO export erhe-specific non-standard attributes?
+            }
+
+            // Scan for attribute min and max
+            const std::size_t dimension = get_component_count(erhe_attribute.data_type);
+            FASTGLTF_STD_PMR_NS::vector<double> max_value(dimension);
+            FASTGLTF_STD_PMR_NS::vector<double> min_value(dimension);
+            std::fill(max_value.begin(), max_value.end(), std::numeric_limits<float>::lowest());
+            std::fill(min_value.begin(), min_value.end(), std::numeric_limits<float>::max());
+
+            const std::byte* attribute_base_ = vertex_data_source.data() + erhe_attribute.offset;
+            const std::uint8_t* attribute_base = reinterpret_cast<const std::uint8_t*>(attribute_base_);
+            for (size_t i = 0; i < vertex_count; ++i) {
+                float v[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                const std::uint8_t* src = attribute_base + vertex_stride * i;
+                std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&v[0]);
+                erhe::dataformat::convert(
+                    src, erhe_attribute.data_type, 
+                    dst, erhe::dataformat::Format::format_32_vec4_float, 
+                    1.0f
+                );
+                for (std::size_t c = 0; c < dimension; ++c) {
+                    min_value[c] = std::min(static_cast<float>(min_value[c]), v[c]);
+                    max_value[c] = std::max(static_cast<float>(max_value[c]), v[c]);
+                }
+            }
+            fastgltf::Accessor accessor{
+                .byteOffset      = erhe_attribute.offset,
+                .count           = vertex_count,
+                .type            = get_accessor_type (erhe_attribute.data_type),
+                .componentType   = get_component_type(erhe_attribute.data_type),
+                .normalized      = get_normalized    (erhe_attribute.data_type),
+                .max             = max_value,
+                .min             = min_value,
+                .bufferViewIndex = entry.vertex_buffer_view,
+                .sparse          = {},
+                .name            = FASTGLTF_STD_PMR_NS::string{attribute_name}
+            };
+            const size_t accessor_index = m_gltf_asset.accessors.size();
+            m_gltf_asset.accessors.emplace_back(std::move(accessor));
+            FASTGLTF_STD_PMR_NS::string gltf_attribute_name{attribute_name};
+            entry.attributes.emplace_back(gltf_attribute_name, accessor_index);
+        }
+    }
+    void add_vertex_data_source(
+        Export_entry&                        entry,
+        std::size_t                          vertex_count,
+        const erhe::graphics::Vertex_format& vertex_format,
+        const std::vector<uint8_t>&          vertex_data_source
+    )
+    {
+        const std::byte*  vertex_data      = reinterpret_cast<const std::byte*>(vertex_data_source.data());
+        const std::size_t vertex_data_size = vertex_data_source.size();
+        add_vertex_data_source(entry, vertex_count, vertex_format, std::span<const std::byte>(vertex_data, vertex_data_size));
+    }
+
+    std::unordered_map<erhe::primitive::Triangle_soup*, Export_entry> m_erhe_triangle_soup_entries;
+    [[nodiscard]] auto process_triangle_soup(erhe::primitive::Triangle_soup* triangle_soup) -> Export_entry
+    {
+        ERHE_VERIFY(triangle_soup != nullptr);
+
+        const auto fi = m_erhe_triangle_soup_entries.find(triangle_soup);
+        if (fi != m_erhe_triangle_soup_entries.end()) {
+            return fi->second;
+        }
+
+        Export_entry entry{};
+        add_index_data_source(entry, triangle_soup->get_vertex_count(), triangle_soup->index_data);
+        add_vertex_data_source(entry, triangle_soup->get_vertex_count(), triangle_soup->vertex_format, triangle_soup->vertex_data);
+
+        m_erhe_triangle_soup_entries.insert({triangle_soup, entry});
+        return entry;
+    }
+
+    std::unordered_map<erhe::geometry::Geometry*, Export_entry> m_erhe_geometry_entries;
+    [[nodiscard]] auto process_geometry(erhe::geometry::Geometry* geometry) -> Export_entry
+    {
+        ERHE_VERIFY(geometry != nullptr);
+
+        const auto fi = m_erhe_geometry_entries.find(geometry);
+        if (fi != m_erhe_geometry_entries.end()) {
+            return fi->second;
+        }
+
+        const GEO::Mesh& geo_mesh = geometry->get_mesh();
+
+        // TODO
+        const erhe::graphics::Vertex_format vertex_format{
+            0,
+            {
+                erhe::graphics::Vertex_attribute::position_float3(),
+                erhe::graphics::Vertex_attribute::normal0_float3(),
+                erhe::graphics::Vertex_attribute::texcoord0_float2()
+            }
+        };
+
+        const Mesh_info   mesh_info     = get_mesh_info(geo_mesh);
+        const std::size_t vertex_stride = vertex_format.stride();
+        const std::size_t index_stride  = 4;
+        const std::size_t index_count   = mesh_info.index_count_fill_triangles;
+        const std::size_t vertex_count  = mesh_info.vertex_count_corners;
+
+        erhe::primitive::Buffer_mesh buffer_mesh;
+        erhe::buffer::Cpu_buffer vertex_buffer{"", vertex_count * vertex_stride};
+        erhe::buffer::Cpu_buffer index_buffer {"", index_count * index_stride};
+
+        erhe::primitive::Cpu_buffer_sink buffer_sink{vertex_buffer, index_buffer};
+        const erhe::primitive::Build_info build_info{
+            .primitive_types = {
+                .fill_triangles = true,
+            },
+            .buffer_info = {
+                .normal_style  = erhe::primitive::Normal_style::corner_normals,
+                .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
+                .vertex_format = vertex_format,
+                .buffer_sink   = buffer_sink
+            }
+        };
+
+        erhe::primitive::Element_mappings dummy_mappings;
+        const bool build_ok = erhe::primitive::build_buffer_mesh(
+            buffer_mesh,
+            geo_mesh, 
+            build_info, 
+            dummy_mappings, 
+            erhe::primitive::Normal_style::corner_normals
+        );
+        ERHE_VERIFY(build_ok); // TODO
+
+        Export_entry entry;
+        add_index_data_source(entry, vertex_count, index_count, index_buffer.span());
+        add_vertex_data_source(entry, vertex_count, vertex_format, vertex_buffer.span());
+
+        m_erhe_geometry_entries.insert({geometry, entry});
+        return entry;
+    }
+
+    std::unordered_map<const erhe::primitive::Material*, std::size_t> m_exported_materials;
+    [[nodiscard]] auto process_material(const erhe::primitive::Material* material) -> std::size_t
+    {
+        ERHE_VERIFY(material != nullptr);
+
+        const auto fi = m_exported_materials.find(material);
+        if (fi != m_exported_materials.end()) {
+            return fi->second;
+        }
+
+        const size_t gltf_material_index = m_gltf_asset.materials.size();
+        {
+            fastgltf::Material gltf_material{
+                .pbrData = {
+                    .baseColorFactor = {
+                        material->base_color.r,
+                        material->base_color.g,
+                        material->base_color.b,
+                        material->base_color.a
+                    },
+                    .metallicFactor  = material->metallic,
+                    .roughnessFactor = material->roughness.x,
+                },
+                .emissiveFactor = {
+                    material->emissive.r,
+                    material->emissive.g,
+                    material->emissive.b
+                },
+                .name = FASTGLTF_STD_PMR_NS::string{material->get_name()}
+            };
+            m_gltf_asset.materials.push_back(std::move(gltf_material));
+        }
+        m_exported_materials.insert({material, gltf_material_index});
+        return gltf_material_index;
+    }
+
+    std::unordered_map<const erhe::scene::Mesh*, std::size_t> m_erhe_mesh_to_gltf_mesh_index;
+    [[nodiscard]] auto process_mesh(const erhe::scene::Mesh* erhe_mesh) -> std::size_t
+    {
+        ERHE_VERIFY(erhe_mesh != nullptr);
+
+        // Check if mesh has already been exported
+        const auto fi = m_erhe_mesh_to_gltf_mesh_index.find(erhe_mesh);
+        if (fi != m_erhe_mesh_to_gltf_mesh_index.end()) {
+            return fi->second;
+        }
+
+        fastgltf::Mesh gltf_mesh{};
+        for (const erhe::primitive::Primitive& erhe_primitive : erhe_mesh->get_primitives()) {
+            fastgltf::Primitive gltf_primitive;
+            const erhe::primitive::Primitive_render_shape* primitive_render_shape = erhe_primitive.render_shape.get();
+            if (primitive_render_shape == nullptr) {
+                continue;
+            }
+            const std::shared_ptr<erhe::primitive::Triangle_soup>& triangle_soup = primitive_render_shape->get_triangle_soup();
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive_render_shape->get_geometry_const();
+            Export_entry export_entry = triangle_soup
+                ? process_triangle_soup(triangle_soup.get())
+                : process_geometry(geometry.get());
+            for (const fastgltf::Attribute& attribute : export_entry.attributes) {
+                gltf_primitive.attributes.emplace_back(attribute.name, attribute.accessorIndex);
+            }
+            gltf_primitive.indicesAccessor = export_entry.index_buffer_accessor;
+            if (erhe_primitive.material) {
+                gltf_primitive.materialIndex = process_material(erhe_primitive.material.get());
+            }
+            gltf_mesh.primitives.emplace_back(std::move(gltf_primitive));
+        }
+        std::size_t gltf_mesh_index = m_gltf_asset.meshes.size();
+        m_gltf_asset.meshes.emplace_back(std::move(gltf_mesh));
+        m_erhe_mesh_to_gltf_mesh_index.insert({erhe_mesh, gltf_mesh_index});
+        return gltf_mesh_index;
+    }
+
+    std::unordered_map<const erhe::scene::Camera*, std::size_t> m_erhe_camera_to_gltf_camera_index;
+    [[nodiscard]] auto process_camera(erhe::scene::Camera* erhe_camera) -> std::size_t
+    {
+        ERHE_VERIFY(erhe_camera != nullptr);
+        erhe::scene::Projection* erhe_projection = erhe_camera->projection();
+        ERHE_VERIFY(erhe_projection != nullptr);
+
+        auto fi = m_erhe_camera_to_gltf_camera_index.find(erhe_camera);
+        if (fi != m_erhe_camera_to_gltf_camera_index.end()) {
+            return fi->second;
+        }
+
+        fastgltf::Camera gltf_camera{};
+        switch (erhe_projection->projection_type) {
+            case erhe::scene::Projection::Type::perspective_horizontal:
+            case erhe::scene::Projection::Type::perspective_vertical:
+            case erhe::scene::Projection::Type::perspective:
+            case erhe::scene::Projection::Type::perspective_xr: {
+                gltf_camera.camera = fastgltf::Camera::Perspective{
+                    .aspectRatio = (erhe_projection->fov_right - erhe_projection->fov_left) / (erhe_projection->fov_up - erhe_projection->fov_down),
+                    .yfov = erhe_projection->fov_up - erhe_projection->fov_down,
+                    .zfar = std::max(erhe_projection->z_far, erhe_projection->z_near),
+                    .znear = std::min(erhe_projection->z_far, erhe_projection->z_near)
+                };
+                break;
+            }
+            case erhe::scene::Projection::Type::orthogonal_horizontal:
+            case erhe::scene::Projection::Type::orthogonal_vertical:
+            case erhe::scene::Projection::Type::orthogonal:
+            case erhe::scene::Projection::Type::orthogonal_rectangle: {
+                gltf_camera.camera = fastgltf::Camera::Orthographic{
+                    .xmag = erhe_projection->ortho_width,
+                    .ymag = erhe_projection->ortho_height,
+                    .zfar = std::max(erhe_projection->z_far, erhe_projection->z_near),
+                    .znear = std::min(erhe_projection->z_far, erhe_projection->z_near)
+                };
+                break;
+            }
+            case erhe::scene::Projection::Type::generic_frustum: {
+                ERHE_FATAL("Not implemented");
+            }
+        }
+        gltf_camera.name = erhe_camera->get_name();
+        std::size_t gltf_camera_index = m_gltf_asset.cameras.size();
+        m_gltf_asset.cameras.emplace_back(std::move(gltf_camera));
+        m_erhe_camera_to_gltf_camera_index.insert({erhe_camera, gltf_camera_index});
+        return gltf_camera_index;
+    }
+
+    auto process_node(const erhe::scene::Node& erhe_node) -> std::size_t
+    {
+        fastgltf::Node gltf_node{};
+
+        gltf_node.name = erhe_node.get_name();
+        gltf_node.transform = from_erhe(erhe_node.parent_from_node_transform());
+
+        const std::shared_ptr<erhe::scene::Mesh> erhe_mesh = get_mesh(&erhe_node);
+        if (erhe_mesh) {
+            gltf_node.meshIndex = process_mesh(erhe_mesh.get());
+        }
+
+        const std::shared_ptr<erhe::scene::Camera> erhe_camera = get_camera(&erhe_node);
+        if (erhe_camera) {
+            gltf_node.cameraIndex = process_camera(erhe_camera.get());
+        }
+
+        erhe_node.for_each_child_const<erhe::scene::Node>(
+            [this, &gltf_node](const erhe::scene::Node& erhe_child_node) -> bool
+            {
+                std::size_t gltf_child_node_index = process_node(erhe_child_node);
+                gltf_node.children.push_back(gltf_child_node_index);
+                return true;
+            }
+        );
+
+        size_t gltf_node_index = m_gltf_asset.nodes.size();
+        m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
+        return gltf_node_index;
+    }
+
+    static auto get_index_stride(fastgltf::ComponentType componentType) -> std::size_t
+    {
+        switch (componentType) {
+            case fastgltf::ComponentType::Invalid      : ERHE_FATAL("Bad index component type"); return 0;
+            case fastgltf::ComponentType::Byte         : ERHE_FATAL("Bad index component type"); return 0;
+            case fastgltf::ComponentType::UnsignedByte : return 1;
+            case fastgltf::ComponentType::Short        : ERHE_FATAL("Bad index component type"); return 0;
+            case fastgltf::ComponentType::UnsignedShort: return 2;
+            case fastgltf::ComponentType::Int          : ERHE_FATAL("Bad index component type"); return 0;
+            case fastgltf::ComponentType::UnsignedInt  : return 4;
+            case fastgltf::ComponentType::Float        : ERHE_FATAL("Bad index component type"); return 0;
+            case fastgltf::ComponentType::Double       : ERHE_FATAL("Bad index component type"); return 0;
+            default:                                     ERHE_FATAL("Bad index component type"); return 0;
+        }
+    }
+
+    void validate_buffers()
+    {
+        for (fastgltf::BufferView& buffer_view : m_gltf_asset.bufferViews) {
+            fastgltf::Buffer& buffer = m_gltf_asset.buffers.at(buffer_view.bufferIndex);
+            std::size_t start = buffer_view.byteOffset;
+            std::size_t end = start + buffer_view.byteLength;
+            ERHE_VERIFY(start < buffer.byteLength);
+            ERHE_VERIFY(end <= buffer.byteLength);
+        }
+        for (fastgltf::Accessor& accessor : m_gltf_asset.accessors) {
+            ERHE_VERIFY(accessor.bufferViewIndex.has_value());
+            const fastgltf::BufferView& buffer_view = m_gltf_asset.bufferViews.at(accessor.bufferViewIndex.value());
+            const fastgltf::Buffer& buffer = m_gltf_asset.buffers.at(buffer_view.bufferIndex);
+            std::size_t stride = (buffer_view.target == fastgltf::BufferTarget::ArrayBuffer) 
+                ? buffer_view.byteStride.value() 
+                : get_index_stride(accessor.componentType);
+            std::size_t start = buffer_view.byteOffset + accessor.byteOffset;
+            std::size_t end = start + (accessor.count - 1) * stride; // TODO add bytes used by last vertex
+            ERHE_VERIFY(start < buffer.byteLength);
+            ERHE_VERIFY(end <= buffer.byteLength);
+        }
+    }
+
+    void combine_buffers()
+    {
+        validate_buffers();
+
+        fastgltf::sources::Vector combined_buffer;
+        std::vector<std::size_t> buffer_offsets;
+        buffer_offsets.reserve(m_gltf_asset.buffers.size());
+        for (fastgltf::Buffer& buffer : m_gltf_asset.buffers) {
+            const fastgltf::sources::Vector& byte_view = std::get<fastgltf::sources::Vector>(buffer.data);
+            std::span<const std::byte> source_span{byte_view.bytes.data(), byte_view.bytes.size()};
+
+            // Padding
+            std::size_t combined_buffer_size = combined_buffer.bytes.size();
+            while ((combined_buffer_size & 3) != 0) {
+                combined_buffer.bytes.push_back(std::byte{0});
+                ++combined_buffer_size;
+            }
+            buffer_offsets.push_back(combined_buffer_size);
+
+            combined_buffer.bytes.insert(
+                combined_buffer.bytes.end(),
+                source_span.begin(),
+                source_span.end()
+            );
+        }
+
+        for (fastgltf::BufferView& buffer_view : m_gltf_asset.bufferViews) {
+            std::size_t original_buffer = buffer_view.bufferIndex;
+            buffer_view.bufferIndex = 0;
+            buffer_view.byteOffset += buffer_offsets[original_buffer];
+        }
+
+        m_gltf_asset.buffers.clear();
+        m_gltf_asset.buffers.emplace_back(combined_buffer.bytes.size(), std::move(combined_buffer));
+
+        validate_buffers();
+    }
+
+private:
+    const erhe::scene::Node& m_erhe_root_node;
+    fastgltf::Asset          m_gltf_asset;
+    bool                     m_binary{true};
+};
+
+auto Gltf_exporter::export_gltf() -> std::string
+{
+    m_gltf_asset.assetInfo = fastgltf::AssetInfo{
+        .gltfVersion = "2.0",
+        .copyright   = "",
+        .generator   = "erhe"
+    };
+    m_gltf_asset.defaultScene = std::size_t{0};
+
+    fastgltf::Scene scene{};
+    m_erhe_root_node.for_each_child_const<erhe::scene::Node>(
+        [this, &scene](const erhe::scene::Node& erhe_node) -> bool
+        {
+            size_t node_index = process_node(erhe_node);
+            scene.nodeIndices.push_back(node_index);
+            return true;
+        }
+    );
+    m_gltf_asset.scenes.push_back(std::move(scene));
+
+    combine_buffers();
+
+    fastgltf::Exporter exporter{};
+
+    //static_cast<void>(m_binary);
+    if (m_binary) 
+    {
+        auto expected_result = exporter.writeGltfBinary(m_gltf_asset, fastgltf::ExportOptions::ValidateAsset);
+        auto* result = expected_result.get_if();
+        if (result == nullptr) {
+            return {};
+        }
+        return std::string(
+            reinterpret_cast<const char*>(result->output.data()),
+            result->output.size()
+        );
+    } 
+    else
+    {
+        auto expected_result = exporter.writeGltfJson(m_gltf_asset, 
+            fastgltf::ExportOptions::ValidateAsset |
+            fastgltf::ExportOptions::PrettyPrintJson);
+        auto* result = expected_result.get_if();
+        if (result == nullptr) {
+            return {};
+        }
+        return result->output;
+    }
+}
+
+[[nodiscard]] auto export_gltf(const erhe::scene::Node& root_node, bool binary) -> std::string
+{
+    Gltf_exporter exporter{root_node, binary};
+    return exporter.export_gltf();
 }
 
 } // namespace erhe::gltf

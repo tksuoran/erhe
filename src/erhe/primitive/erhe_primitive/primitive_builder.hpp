@@ -163,7 +163,7 @@ private:
     const Normal_style m_normal_style;
 };
 
-auto make_buffer_mesh(
+auto build_buffer_mesh(
     Buffer_mesh&       buffer_mesh,
     const GEO::Mesh&   source_mesh,
     const Build_info&  build_info,

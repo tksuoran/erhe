@@ -10,11 +10,13 @@
 
 namespace GEO { class Mesh; }
 
+namespace erhe::buffer {
+    class Cpu_buffer;
+}
 namespace erhe::geometry {
     class Geometry;
 }
 namespace erhe::raytrace {
-    class IBuffer;
     class IGeometry;
 }
 
@@ -45,8 +47,8 @@ public:
 
 private:
     Buffer_mesh                                m_rt_mesh;
-    std::shared_ptr<erhe::raytrace::IBuffer>   m_rt_vertex_buffer{};
-    std::shared_ptr<erhe::raytrace::IBuffer>   m_rt_index_buffer {};
+    std::shared_ptr<erhe::buffer::Cpu_buffer>  m_rt_vertex_buffer{};
+    std::shared_ptr<erhe::buffer::Cpu_buffer>  m_rt_index_buffer {};
     std::shared_ptr<erhe::raytrace::IGeometry> m_rt_geometry     {};
 };
 
@@ -67,13 +69,11 @@ public:
     [[nodiscard]] auto has_raytrace_triangles      () const -> bool;
     [[nodiscard]] auto get_geometry                () -> const std::shared_ptr<erhe::geometry::Geometry>&;
     [[nodiscard]] auto get_geometry_const          () const -> const std::shared_ptr<erhe::geometry::Geometry>&;
-    //[[nodiscard]] auto get_mesh                    () -> const std::shared_ptr<GEO::Mesh>&;
-    //[[nodiscard]] auto get_mesh_const              () const -> const std::shared_ptr<GEO::Mesh>&;
     [[nodiscard]] auto get_raytrace                () -> Primitive_raytrace&;
     [[nodiscard]] auto get_raytrace                () const -> const Primitive_raytrace&;
     [[nodiscard]] auto get_triangle_soup           () const -> const std::shared_ptr<Triangle_soup>&;
-    [[nodiscard]] auto get_mesh_facet_from_triangle(unsigned int triangle) const -> GEO::index_t;
     [[nodiscard]] auto get_element_mappings        () const -> const erhe::primitive::Element_mappings&;
+    [[nodiscard]] auto get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t;
 
 protected:
     // Keep this before members - at least m_renderable_mesh - which initialization
@@ -142,7 +142,6 @@ public:
     [[nodiscard]] auto get_name                () const -> std::string_view;
     [[nodiscard]] auto get_bounding_box        () const -> erhe::math::Bounding_box;
     [[nodiscard]] auto get_shape_for_raytrace  () const -> std::shared_ptr<Primitive_shape>;
-    [[nodiscard]] auto separate_collision_data () const -> bool;
     
     std::shared_ptr<Primitive_render_shape> render_shape;
     std::shared_ptr<Primitive_shape>        collision_shape;

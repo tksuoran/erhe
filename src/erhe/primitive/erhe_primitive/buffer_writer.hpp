@@ -9,9 +9,10 @@
 #include <span>
 #include <vector>
 
+class Mesh_info;
+
 namespace erhe::geometry {
     class Geometry;
-    class Mesh_info;
 }
 
 namespace erhe::primitive {

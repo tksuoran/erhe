@@ -42,6 +42,7 @@ target_link_libraries(${_target}
         geogram
         glm::glm-header-only
         etl::etl
+        erhe::buffer
         erhe::geometry
         erhe::gl
         erhe::graphics # TODO Get rid of this dependency?

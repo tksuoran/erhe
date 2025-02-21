@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/vertex_attribute.hpp"
 
+#include <functional>
 #include <vector>
 
 namespace erhe::graphics {

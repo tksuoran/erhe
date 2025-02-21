@@ -32,8 +32,8 @@ public:
     };
     struct TexCoords
     {
-        uint8_t base_color;
-        uint8_t metallic_roughness;
+        uint8_t base_color        {0};
+        uint8_t metallic_roughness{0};
     };
 
     Material();
@@ -64,7 +64,7 @@ public:
 
     Textures                textures;
     Samplers                samplers;
-    TexCoords               tex_coords;
+    TexCoords               tex_coords{};
 
     std::optional<uint32_t> preview_slot;
 };

@@ -302,8 +302,7 @@ void Scene_builder::make_platonic_solid_brushes(Editor_settings& editor_settings
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_compute_facet_centroids |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
-        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates | 
-        erhe::geometry::Geometry::process_flag_debug_trace;
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
 
     auto dodecahedron = std::make_shared<erhe::geometry::Geometry>("dodecahedron");
     make_dodecahedron(dodecahedron->get_mesh(), scale);
@@ -944,7 +943,7 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
     make_cube(cube_geo_mesh, 0.1f);
 
     erhe::primitive::Buffer_mesh buffer_mesh{};
-    const bool buffer_mesh_ok = make_buffer_mesh(
+    const bool buffer_mesh_ok = erhe::primitive::build_buffer_mesh(
         buffer_mesh,
         cube_geo_mesh,
         build_info(mesh_memory),
@@ -953,10 +952,7 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
     );
     ERHE_VERIFY(buffer_mesh_ok); // TODO
 
-    const erhe::primitive::Primitive primitive{
-        std::move(buffer_mesh),
-        material
-    };
+    const erhe::primitive::Primitive primitive{std::move(buffer_mesh), material};
     for (int i = 0; i < x_count; ++i) {
         const float x_rel = static_cast<float>(i) - static_cast<float>(x_count) * 0.5f;
         for (int j = 0; j < y_count; ++j) {

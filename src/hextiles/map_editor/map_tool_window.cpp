@@ -50,14 +50,14 @@ void Map_tool_window::imgui()
         m_map_generator.show_window();
     }
     if (ImGui::Button("Load Map")) {
-        const auto path_opt = erhe::file::select_file();
+        const auto path_opt = erhe::file::select_file_for_read();
         if (path_opt.has_value()) {
             File_read_stream file{path_opt.value()};
             m_map_editor.get_map()->read(file);
         }
     }
     if (ImGui::Button("Save Map")) {
-        const auto path_opt = erhe::file::select_file();
+        const auto path_opt = erhe::file::select_file_for_write();
         if (path_opt.has_value()) {
             File_write_stream file{path_opt.value()};
             m_map_editor.get_map()->write(file);

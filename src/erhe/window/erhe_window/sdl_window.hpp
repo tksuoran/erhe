@@ -2,6 +2,7 @@
 
 #include "erhe_window/window_event_handler.hpp"
 
+#include <array>
 #include <atomic>
 #include <functional>
 #include <mutex>
@@ -97,27 +98,32 @@ public:
 private:
     void get_extensions();
 
-    void*                    m_sdl_window                    {nullptr};
-    void*                    m_sdl_gl_context                {nullptr}; // SDL_GLContext 
-    Mouse_cursor             m_current_mouse_cursor          {Mouse_cursor_Arrow};
-    bool                     m_is_mouse_relative_hold_enabled{false};
-    bool                     m_is_window_visible             {false};
-    bool                     m_use_raw_mouse                 {false};
+    struct Joystick_info
+    {
+        std::vector<float>     axis_values;
+        std::vector<bool>      button_values;
+    };
+
+    void*                      m_sdl_window                    {nullptr};
+    void*                      m_sdl_gl_context                {nullptr}; // SDL_GLContext 
+    Mouse_cursor               m_current_mouse_cursor          {Mouse_cursor_Arrow};
+    bool                       m_is_mouse_relative_hold_enabled{false};
+    bool                       m_is_window_visible             {false};
+    bool                       m_use_raw_mouse                 {false};
     //GLFWcursor*              m_mouse_cursor        [Mouse_cursor_COUNT];
-    Window_configuration     m_configuration;
-    float                    m_last_mouse_x            {0.0f};
-    float                    m_last_mouse_y            {0.0f};
-    float                    m_mouse_relative_hold_xpos{0.0f};
-    float                    m_mouse_relative_hold_ypos{0.0f};
-    float                    m_mouse_virtual_xpos      {0.0f};
-    float                    m_mouse_virtual_ypos      {0.0f};
-    unsigned int             m_key_modifiers{0};
-    std::atomic<bool>        m_joystick_scan_done{false};
-    std::vector<float>       m_controller_axis_values;
-    std::vector<bool>        m_controller_button_values;
-    int                      m_input_event_queue_write{0};
-    std::vector<Input_event> m_input_events[2];
-    std::thread              m_joystick_scan_task;
+    Window_configuration       m_configuration;
+    float                      m_last_mouse_x            {0.0f};
+    float                      m_last_mouse_y            {0.0f};
+    float                      m_mouse_relative_hold_xpos{0.0f};
+    float                      m_mouse_relative_hold_ypos{0.0f};
+    float                      m_mouse_virtual_xpos      {0.0f};
+    float                      m_mouse_virtual_ypos      {0.0f};
+    unsigned int               m_key_modifiers{0};
+    std::atomic<bool>          m_joystick_scan_done{false};
+    std::vector<Joystick_info> m_joystick_info;
+    int                        m_input_event_queue_write{0};
+    std::vector<Input_event>   m_input_events[2];
+    std::thread                m_joystick_scan_task;
     std::function<void(Context_window& context_window)> m_input_event_synthesizer_callback;
 
     void* m_NV_delay_before_swap{nullptr};

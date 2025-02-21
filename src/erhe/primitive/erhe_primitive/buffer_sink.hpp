@@ -10,8 +10,8 @@ namespace erhe::graphics {
     class Buffer_transfer_queue;
 }
 
-namespace erhe::raytrace {
-    class IBuffer;
+namespace erhe::buffer {
+    class Cpu_buffer;
 }
 
 namespace erhe::primitive {
@@ -57,10 +57,10 @@ private:
     erhe::graphics::Buffer&                m_index_buffer;
 };
 
-class Raytrace_buffer_sink : public Buffer_sink
+class Cpu_buffer_sink : public Buffer_sink
 {
 public:
-    Raytrace_buffer_sink(erhe::raytrace::IBuffer& vertex_buffer, erhe::raytrace::IBuffer& index_buffer);
+    Cpu_buffer_sink(erhe::buffer::Cpu_buffer& vertex_buffer, erhe::buffer::Cpu_buffer& index_buffer);
 
     auto allocate_vertex_buffer(std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_range override;
     auto allocate_index_buffer(std::size_t index_count, std::size_t index_element_size) -> Buffer_range override;
@@ -71,8 +71,8 @@ public:
     void buffer_ready       (Index_buffer_writer&  writer) const                    override;
 
 private:
-    erhe::raytrace::IBuffer& m_vertex_buffer;
-    erhe::raytrace::IBuffer& m_index_buffer;
+    erhe::buffer::Cpu_buffer& m_vertex_buffer;
+    erhe::buffer::Cpu_buffer& m_index_buffer;
 };
 
 } // namespace erhe::primitive

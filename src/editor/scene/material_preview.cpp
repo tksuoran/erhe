@@ -196,7 +196,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
         std::max(1, m_stack_count)
     );
     erhe::primitive::Buffer_mesh buffer_mesh{};
-    const bool buffer_mesh_ok = erhe::primitive::make_buffer_mesh(
+    const bool buffer_mesh_ok = erhe::primitive::build_buffer_mesh(
         buffer_mesh,
         sphere_mesh,
         erhe::primitive::Build_info{

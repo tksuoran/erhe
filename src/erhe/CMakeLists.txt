@@ -14,6 +14,7 @@ if (${ERHE_USE_PRECOMPILED_HEADERS})
 endif()
 
 add_subdirectory(bit)
+add_subdirectory(buffer)
 add_subdirectory(commands)
 add_subdirectory(concurrency)
 add_subdirectory(configuration)

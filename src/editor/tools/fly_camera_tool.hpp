@@ -128,24 +128,6 @@ private:
     bool                           m_active;
 };
 
-class Fly_camera_variable_float_command : public erhe::commands::Command
-{
-public:
-    Fly_camera_variable_float_command(
-        erhe::commands::Commands& commands,
-        Editor_context&           context,
-        Variable                  variable,
-        float                     scale
-    );
-
-    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
-
-private:
-    Editor_context& m_context;
-    Variable        m_variable;
-    float           m_scale;
-};
-
 class Fly_camera_active_axis_float_command : public erhe::commands::Command
 {
 public:
@@ -256,22 +238,12 @@ private:
     Fly_camera_move_command               m_move_forward_inactive_command;
     Fly_camera_move_command               m_move_backward_active_command;
     Fly_camera_move_command               m_move_backward_inactive_command;
-#if defined(ERHE_WINDOW_LIBRARY_GLFW)
-    Fly_camera_variable_float_command     m_translate_x_command;
-    Fly_camera_variable_float_command     m_translate_y_command;
-    Fly_camera_variable_float_command     m_translate_z_command;
-    Fly_camera_variable_float_command     m_rotate_x_command;
-    Fly_camera_variable_float_command     m_rotate_y_command;
-    Fly_camera_variable_float_command     m_rotate_z_command;
-#endif
-#if defined(ERHE_WINDOW_LIBRARY_SDL)
     Fly_camera_active_axis_float_command  m_active_translate_x_command;
     Fly_camera_active_axis_float_command  m_active_translate_y_command;
     Fly_camera_active_axis_float_command  m_active_translate_z_command;
     Fly_camera_active_axis_float_command  m_active_rotate_x_command;
     Fly_camera_active_axis_float_command  m_active_rotate_y_command;
     Fly_camera_active_axis_float_command  m_active_rotate_z_command;
-#endif
     Fly_camera_serialization_command      m_serialize_transform_command;
     Fly_camera_serialization_command      m_deserialize_transform_command;
     std::shared_ptr<Frame_controller>     m_camera_controller;

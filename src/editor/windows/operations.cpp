@@ -1,6 +1,8 @@
 #include "windows/operations.hpp"
 
 #include "editor_context.hpp"
+#include "editor_message_bus.hpp"
+#include "scene/scene_root.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
@@ -11,16 +13,17 @@
 #include "tools/selection_tool.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_file/file.hpp"
+#include "erhe_gltf/gltf.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/file_dialog.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_profile/profile.hpp"
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 #include <taskflow/taskflow.hpp>  // Taskflow is header-only
 
@@ -30,7 +33,8 @@ Operations::Operations(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
+    Editor_context&              editor_context,
+    Editor_message_bus&          editor_message_bus
 )
     : Imgui_window            {imgui_renderer, imgui_windows, "Operations", "operations"}
     , m_context               {editor_context}
@@ -58,6 +62,7 @@ Operations::Operations(
     , m_truncate_command      {commands, "Geometry.Conway.Truncate",           [this]() -> bool { truncate      (); return true; } }
     , m_gyro_command          {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
     , m_chamfer_command       {commands, "Geometry.Conway.Chamfer",            [this]() -> bool { chamfer       (); return true; } }
+    , m_export_gltf_command   {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf   (); return true; } }
 {
     commands.register_command(&m_merge_command         );
     commands.register_command(&m_triangulate_command   );
@@ -109,6 +114,23 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_truncate_command, "Geometry.Conway Operations.Truncate");
     commands.bind_command_to_menu(&m_gyro_command    , "Geometry.Conway Operations.Gyro");
     commands.bind_command_to_menu(&m_chamfer_command , "Geometry.Conway Operations.Chamfer");
+
+    editor_message_bus.add_receiver(
+        [&](Editor_message& message) {
+            on_message(message);
+        }
+    );
+}
+
+void Operations::on_message(Editor_message& message)
+{
+    using namespace erhe::bit;
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+        m_hover_scene_view = message.scene_view;
+        if (message.scene_view != nullptr) {
+            m_last_hover_scene_view = message.scene_view;
+        }
+    }
 }
 
 auto Operations::mesh_context() -> Mesh_operation_parameters
@@ -266,6 +288,10 @@ void Operations::imgui()
     //        );
     //    }
     //}
+
+    if (make_button("Export glTF", erhe::imgui::Item_mode::normal, button_size)) {
+        export_gltf();
+    }
 
     if (make_button("Merge", multi_select_meshes, button_size)) {
         merge();
@@ -504,6 +530,33 @@ void Operations::chamfer()
 {
     tf::Executor& executor = m_context.operation_stack->get_executor();
     executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Chamfer_operation>(mesh_context()));});
+}
+
+void Operations::export_gltf()
+{
+    if (m_last_hover_scene_view == nullptr) {
+        return;
+    }
+    std::shared_ptr<Scene_root> scene_root = m_last_hover_scene_view->get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    const erhe::scene::Scene& scene = scene_root->get_scene();
+    std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+    if (!root_node) {
+        return;
+    }
+
+    //std::optional<std::filesystem::path> path = erhe::file::select_file_for_write();
+    std::optional<std::filesystem::path> path = std::filesystem::path{"erhe.glb"};
+
+    if (path.has_value()) {
+        const bool binary = true;
+        std::string gltf = erhe::gltf::export_gltf(*root_node.get(), binary);
+        log_operations->info("{}", gltf);
+        erhe::file::write_file(path.value(), gltf);
+    }
 }
 
 } // namespace editor

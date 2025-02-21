@@ -57,7 +57,6 @@ public:
         }
 
         post_processing();
-        destination.debug_trace();
     }
 };
 

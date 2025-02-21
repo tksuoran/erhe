@@ -273,7 +273,8 @@ endif ()
 if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
     CPMAddPackage(
         NAME              fastgltf
-        VERSION           0.8.0
+        GIT_TAG           main
+        #VERSION           0.8.0
         GITHUB_REPOSITORY spnda/fastgltf
     )
     message(STATUS "Erhe configured to use fastgltf for glTF.")

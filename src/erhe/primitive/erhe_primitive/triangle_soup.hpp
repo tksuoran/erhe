@@ -7,13 +7,13 @@
 #include <cstdint>
 #include <vector>
 
-namespace erhe::primitive {
-    class Element_mappings;
-}
 namespace GEO {
     class Mesh;
 }
+
 namespace erhe::primitive {
+
+class Element_mappings;
 
 class Triangle_soup
 {
@@ -27,6 +27,6 @@ public:
     std::vector<uint32_t>         index_data;
 };
 
-void mesh_from_triangle_soup(const Triangle_soup& triangle_soup, GEO::Mesh& mesh, erhe::primitive::Element_mappings& element_mappings);
+void mesh_from_triangle_soup(const Triangle_soup& triangle_soup, GEO::Mesh& mesh, Element_mappings& element_mappings);
 
 } // namespace erhe::primitive

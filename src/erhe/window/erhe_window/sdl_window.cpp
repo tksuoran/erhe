@@ -261,7 +261,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
     const bool primary = (configuration.share == nullptr);
 
-    // Scanning joysticks appears to be slow, so do it in worker thread
+    // Scanning joysticks can be slow, so do it in worker thread
     if (primary) {
         m_joystick_scan_task = std::thread{
             [this]() {
@@ -283,22 +283,19 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
                         Uint16      vendor       = SDL_GetJoystickVendor(joystick);
                         Uint16      product      = SDL_GetJoystickProduct(joystick);
                         int         axis_count   = SDL_GetNumJoystickAxes(joystick);
-                        int         hat_count    = SDL_GetNumJoystickHats(joystick);
-                        int         ball_count   = SDL_GetNumJoystickBalls(joystick);
                         int         button_count = SDL_GetNumJoystickButtons(joystick);
-                        int         power_level{0};
-                        SDL_GetJoystickPowerInfo(joystick, &power_level);
+
+                        if (m_joystick_info.size() <= id) {
+                            m_joystick_info.resize(id + 8);
+                        }
                         log_window->info(
-                            "Joystick id = {} name = {} vendor = {:04x} product = {:04x} axis_count = {} button_count = {} ball_count = {} hat_count = {} power level = {}",
+                            "Joystick id = {} name = {} vendor = {:04x} product = {:04x} axis_count = {} button_count = {}",
                             id,
                             (name != nullptr) ? name : "",
                             vendor,
                             product,
                             axis_count,
-                            button_count,
-                            hat_count,
-                            ball_count,
-                            power_level
+                            button_count
                         );
                     }
                 }
@@ -811,9 +808,9 @@ void Context_window::handle_mouse_move(int64_t timestamp, float x, float y, floa
     }
 }
 
-void Context_window::handle_controller_axis_event(int64_t timestamp, int device, int axis, int value)
+void Context_window::handle_controller_axis_event(int64_t timestamp, int device, int axis, int value_)
 {
-    float normalized_value = value / 32767.0f;
+    float normalized_value = static_cast<float>(value_) / 32767.0f;
     if (normalized_value < -1.0f) {
         normalized_value = -1.0f;
     }

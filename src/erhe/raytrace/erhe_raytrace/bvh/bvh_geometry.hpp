@@ -16,6 +16,10 @@
 #include <string>
 #include <vector>
 
+namespace erhe::buffer {
+    class Cpu_buffer;
+}
+
 namespace erhe::raytrace {
 
 class Bvh_instance;
@@ -36,13 +40,13 @@ public:
     void set_mask                  (const uint32_t mask) override;
     void set_vertex_attribute_count(const unsigned int count) override;
     void set_buffer(
-        Buffer_type  type,
-        unsigned int slot,
-        Format       format,
-        IBuffer*     buffer,
-        std::size_t  byte_offset,
-        std::size_t  byte_stride,
-        std::size_t  item_count
+        Buffer_type               type,
+        unsigned int              slot,
+        Format                    format,
+        erhe::buffer::Cpu_buffer* buffer,
+        std::size_t               byte_offset,
+        std::size_t               byte_stride,
+        std::size_t               item_count
     ) override;
     void set_user_data(const void* ptr) override;
     auto get_mask     () const -> uint32_t         override;
@@ -57,13 +61,13 @@ private:
     class Buffer_info
     {
     public:
-        Buffer_type  type       {Buffer_type::BUFFER_TYPE_INDEX};
-        unsigned int slot       {0};
-        Format       format     {Format::FORMAT_UNDEFINED};
-        IBuffer*     buffer     {nullptr};
-        std::size_t  byte_offset{0};
-        std::size_t  byte_stride{0};
-        std::size_t  item_count {0};
+        Buffer_type               type       {Buffer_type::BUFFER_TYPE_INDEX};
+        unsigned int              slot       {0};
+        Format                    format     {Format::FORMAT_UNDEFINED};
+        erhe::buffer::Cpu_buffer* buffer     {nullptr};
+        std::size_t               byte_offset{0};
+        std::size_t               byte_stride{0};
+        std::size_t               item_count {0};
     };
 
     glm::mat4    m_transform  {1.0f};

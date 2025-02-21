@@ -5,7 +5,7 @@
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_math/math_util.hpp"
-#include "erhe_raytrace/ibuffer.hpp"
+#include "erhe_buffer/ibuffer.hpp"
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -55,29 +55,29 @@ Primitive_raytrace::Primitive_raytrace(GEO::Mesh& mesh, Element_mappings* elemen
     const std::size_t vertex_stride = vertex_format.stride();
     const std::size_t index_stride = 4;
     const Mesh_info mesh_info = get_mesh_info(mesh);
-    m_rt_vertex_buffer = erhe::raytrace::IBuffer::create_shared("raytrace_vertex", mesh_info.vertex_count_corners * vertex_stride);
-    m_rt_index_buffer  = erhe::raytrace::IBuffer::create_shared("raytrace_index",  mesh_info.index_count_fill_triangles * index_stride);
-    erhe::primitive::Raytrace_buffer_sink buffer_sink{*m_rt_vertex_buffer.get(), *m_rt_index_buffer.get()};
-    erhe::primitive::Build_info build_info{
+    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_vertex", mesh_info.vertex_count_corners * vertex_stride);
+    m_rt_index_buffer  = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_index",  mesh_info.index_count_fill_triangles * index_stride);
+    Cpu_buffer_sink buffer_sink{*m_rt_vertex_buffer.get(), *m_rt_index_buffer.get()};
+    Build_info build_info{
         .primitive_types = {
             .fill_triangles = true,
         },
         .buffer_info = {
-            .normal_style  = erhe::primitive::Normal_style::corner_normals,
+            .normal_style  = Normal_style::corner_normals,
             .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
             .vertex_format = vertex_format,
             .buffer_sink   = buffer_sink
         }
     };
 
-    erhe::primitive::Element_mappings dummy_mappings;
+    Element_mappings dummy_mappings;
 
-    make_buffer_mesh(
+    build_buffer_mesh(
         m_rt_mesh,
         mesh, 
         build_info, 
         (element_mappings != nullptr) ? *element_mappings : dummy_mappings, 
-        erhe::primitive::Normal_style::none
+        Normal_style::none
     );
     
     make_raytrace_geometry();
@@ -100,7 +100,7 @@ auto Primitive_raytrace::has_raytrace_triangles() const -> bool
         m_rt_geometry &&
         m_rt_index_buffer &&
         m_rt_vertex_buffer &&
-        m_rt_mesh.index_range(erhe::primitive::Primitive_mode::polygon_fill).index_count > 0;
+        m_rt_mesh.index_range(Primitive_mode::polygon_fill).index_count > 0;
 }
 
 void Primitive_raytrace::make_raytrace_geometry()
@@ -143,7 +143,7 @@ void Primitive_raytrace::make_raytrace_geometry()
     }
 }
 
-Primitive_raytrace::Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_soup)
+Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -152,23 +152,23 @@ Primitive_raytrace::Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_
     const std::size_t index_stride = 4;
     const std::size_t vertex_count = triangle_soup.get_vertex_count();
     const std::size_t index_count = triangle_soup.get_index_count();
-    m_rt_vertex_buffer = erhe::raytrace::IBuffer::create_shared(
+    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>(
         "triangle_soup_raytrace_vertex",
         vertex_count * vertex_stride
     );
-    m_rt_index_buffer = erhe::raytrace::IBuffer::create_shared(
+    m_rt_index_buffer = std::make_shared<erhe::buffer::Cpu_buffer>(
         "triangle_soup_raytrace_index",
         index_count * index_stride
     );
-    erhe::primitive::Raytrace_buffer_sink buffer_sink{*m_rt_vertex_buffer.get(), *m_rt_index_buffer.get()};
-    const erhe::primitive::Buffer_info buffer_info{
-        .normal_style  = erhe::primitive::Normal_style::corner_normals,
+    Cpu_buffer_sink buffer_sink{*m_rt_vertex_buffer.get(), *m_rt_index_buffer.get()};
+    const Buffer_info buffer_info{
+        .normal_style  = Normal_style::corner_normals,
         .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
         .vertex_format = vertex_format,
         .buffer_sink   = buffer_sink
     };
 
-    std::optional<erhe::primitive::Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(triangle_soup, buffer_info);
+    std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(triangle_soup, buffer_info);
     if (!buffer_mesh_opt.has_value()) {
         return; // TODO
     }
@@ -332,24 +332,24 @@ Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<erhe::geome
     : Primitive_shape{geometry}
 {
     // TODO if (geometry->has_corner_normals()) {
-        m_normal_style = erhe::primitive::Normal_style::corner_normals;
+        m_normal_style = Normal_style::corner_normals;
     //} else if (geometry->has_point_normals()) {
-    //    m_normal_style = erhe::primitive::Normal_style::point_normals;
+    //    m_normal_style = Normal_style::point_normals;
     //} else if (geometry->has_polygon_normals()) {
-    //    m_normal_style = erhe::primitive::Normal_style::polygon_normals;
+    //    m_normal_style = Normal_style::polygon_normals;
     //} else {
-    //    m_normal_style = erhe::primitive::Normal_style::none;
+    //    m_normal_style = Normal_style::none;
     //}
 }
 
 Primitive_render_shape::Primitive_render_shape(Buffer_mesh&& renderable_mesh)
-    : m_normal_style   {erhe::primitive::Normal_style::corner_normals}
+    : m_normal_style   {Normal_style::corner_normals}
     , m_renderable_mesh{renderable_mesh}
 {
 }
 
 Primitive_render_shape::Primitive_render_shape(const Buffer_mesh& renderable_mesh)
-    : m_normal_style   {erhe::primitive::Normal_style::corner_normals}
+    : m_normal_style   {Normal_style::corner_normals}
     , m_renderable_mesh{renderable_mesh}
 {
 }
@@ -362,7 +362,7 @@ Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_so
 
 auto Primitive_render_shape::has_buffer_mesh_triangles() const -> bool
 {
-    return m_renderable_mesh.index_range(erhe::primitive::Primitive_mode::polygon_fill).index_count > 0;
+    return m_renderable_mesh.index_range(Primitive_mode::polygon_fill).index_count > 0;
 }
 
 auto Primitive_render_shape::make_buffer_mesh(const Build_info& build_info, Normal_style normal_style) -> bool
@@ -371,7 +371,7 @@ auto Primitive_render_shape::make_buffer_mesh(const Build_info& build_info, Norm
         // TODO temp hack
         m_element_mappings.triangle_to_mesh_facet.clear();
         m_element_mappings.mesh_corner_to_vertex_buffer_index.clear();
-        return erhe::primitive::make_buffer_mesh(
+        return build_buffer_mesh(
             m_renderable_mesh,
             m_geometry->get_mesh(),
             build_info,
@@ -396,10 +396,7 @@ auto Primitive_render_shape::make_buffer_mesh(const Buffer_info& buffer_info) ->
 }
 #pragma endregion Primitive_render_shape
 
-auto build_buffer_mesh_from_triangle_soup(
-    const Triangle_soup& triangle_soup,
-    const Buffer_info&   buffer_info
-) -> std::optional<Buffer_mesh>
+auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>
 {
     // TODO Use index_type from buffer_info
     const std::size_t  sink_vertex_stride   = buffer_info.vertex_format.stride();
@@ -477,7 +474,7 @@ auto Primitive_shape::get_mesh_facet_from_triangle(const uint32_t triangle) cons
     return m_element_mappings.triangle_to_mesh_facet[triangle];
 }
 
-auto Primitive_shape::get_element_mappings() const -> const erhe::primitive::Element_mappings&
+auto Primitive_shape::get_element_mappings() const -> const Element_mappings&
 {
     return m_element_mappings;
 }
@@ -600,7 +597,7 @@ auto Primitive::make_renderable_mesh(const Build_info& build_info, Normal_style 
     return render_shape->make_buffer_mesh(build_info, normal_style);
 }
 
-auto Primitive::make_renderable_mesh(const erhe::primitive::Buffer_info& buffer_info) -> bool
+auto Primitive::make_renderable_mesh(const Buffer_info& buffer_info) -> bool
 {
     if (!render_shape) {
         return false;

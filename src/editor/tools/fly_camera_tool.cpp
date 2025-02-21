@@ -238,6 +238,26 @@ auto Fly_camera_track_command::try_call() -> bool
 }
 #pragma endregion Fly_camera_turn_command
 
+#pragma region Fly_camera_active_axis_float_command
+Fly_camera_active_axis_float_command::Fly_camera_active_axis_float_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           context,
+    Variable                  variable,
+    float                     scale
+)
+    : Command   {commands, "Fly_camera_active_axis_float_command"}
+    , m_context {context}
+    , m_variable{variable}
+    , m_scale   {scale}
+{
+}
+
+auto Fly_camera_active_axis_float_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    return m_context.fly_camera_tool->set_active_control_value(input.timestamp_ns, m_variable, input.variant.float_value * m_scale);
+}
+#pragma endregion Fly_camera_variable_float_command
+
 #pragma region Fly_camera_zoom_command
 Fly_camera_zoom_command::Fly_camera_zoom_command(erhe::commands::Commands& commands, Editor_context& context)
     : Command  {commands, "Fly_camera.zoom_camera"}
@@ -371,46 +391,6 @@ auto Fly_camera_move_command::try_call_with_input(erhe::commands::Input_argument
     return m_context.fly_camera_tool->try_move(input.timestamp_ns, m_variable, m_control, m_active);
 }
 #pragma endregion Fly_camera_move_command
-
-#pragma region Fly_camera_variable_float_command
-Fly_camera_variable_float_command::Fly_camera_variable_float_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context,
-    Variable                  variable,
-    float                     scale
-)
-    : Command   {commands, "Fly_camera_variable_float_command"}
-    , m_context {context}
-    , m_variable{variable}
-    , m_scale   {scale}
-{
-}
-
-auto Fly_camera_variable_float_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
-{
-    return m_context.fly_camera_tool->adjust(input.timestamp_ns, m_variable, input.variant.float_value * m_scale);
-}
-#pragma endregion Fly_camera_variable_float_command
-
-#pragma region Fly_camera_active_axis_float_command
-Fly_camera_active_axis_float_command::Fly_camera_active_axis_float_command(
-    erhe::commands::Commands& commands,
-    Editor_context&           context,
-    Variable                  variable,
-    float                     scale
-)
-    : Command   {commands, "Fly_camera_active_axis_float_command"}
-    , m_context {context}
-    , m_variable{variable}
-    , m_scale   {scale}
-{
-}
-
-auto Fly_camera_active_axis_float_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
-{
-    return m_context.fly_camera_tool->set_active_control_value(input.timestamp_ns, m_variable, input.variant.float_value * m_scale);
-}
-#pragma endregion Fly_camera_variable_float_command
 
 Fly_camera_serialization_command::Fly_camera_serialization_command(erhe::commands::Commands& commands, Editor_context& context, bool store)
     : Command  {commands, "Fly_camera_serialization_command"}
@@ -643,22 +623,12 @@ Fly_camera_tool::Fly_camera_tool(
     , m_move_forward_inactive_command {commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::less, false}
     , m_move_backward_active_command  {commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::more, true }
     , m_move_backward_inactive_command{commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::more, false}
-#if defined(ERHE_WINDOW_LIBRARY_GLFW)
-    , m_translate_x_command           {commands, editor_context, Variable::translate_x,  128.0f}
-    , m_translate_y_command           {commands, editor_context, Variable::translate_y, -128.0f}
-    , m_translate_z_command           {commands, editor_context, Variable::translate_z,  128.0f}
-    , m_rotate_x_command              {commands, editor_context, Variable::rotate_x,     0.6f}
-    , m_rotate_y_command              {commands, editor_context, Variable::rotate_y,    -0.6f}
-    , m_rotate_z_command              {commands, editor_context, Variable::rotate_z,     0.6f}
-#endif
-#if defined(ERHE_WINDOW_LIBRARY_SDL)
-    , m_active_translate_x_command    {commands, editor_context, Variable::translate_x,  1.0 / 16.0f}
-    , m_active_translate_y_command    {commands, editor_context, Variable::translate_y, -1.0 / 16.0f}
-    , m_active_translate_z_command    {commands, editor_context, Variable::translate_z,  1.0 / 16.0f}
+    , m_active_translate_x_command    {commands, editor_context, Variable::translate_x,  1.0 / 32.0f}
+    , m_active_translate_y_command    {commands, editor_context, Variable::translate_y, -1.0 / 32.0f}
+    , m_active_translate_z_command    {commands, editor_context, Variable::translate_z,  1.0 / 32.0f}
     , m_active_rotate_x_command       {commands, editor_context, Variable::rotate_x,     1.0 / 128.0f}
     , m_active_rotate_y_command       {commands, editor_context, Variable::rotate_y,    -1.0 / 128.0f}
     , m_active_rotate_z_command       {commands, editor_context, Variable::rotate_z,     1.0 / 128.0f}
-#endif
     , m_serialize_transform_command   {commands, editor_context, true}
     , m_deserialize_transform_command {commands, editor_context, false}
 
@@ -726,22 +696,12 @@ Fly_camera_tool::Fly_camera_tool(
     commands.register_command(&m_move_forward_inactive_command);
     commands.register_command(&m_move_backward_active_command);
     commands.register_command(&m_move_backward_inactive_command);
-#if defined(ERHE_WINDOW_LIBRARY_GLFW)
-    commands.register_command(&m_translate_x_command);
-    commands.register_command(&m_translate_y_command);
-    commands.register_command(&m_translate_z_command);
-    commands.register_command(&m_rotate_x_command);
-    commands.register_command(&m_rotate_y_command);
-    commands.register_command(&m_rotate_z_command);
-#endif
-#if defined(ERHE_WINDOW_LIBRARY_SDL)
     commands.register_command(&m_active_translate_x_command);
     commands.register_command(&m_active_translate_y_command);
     commands.register_command(&m_active_translate_z_command);
     commands.register_command(&m_active_rotate_x_command);
     commands.register_command(&m_active_rotate_y_command);
     commands.register_command(&m_active_rotate_z_command);
-#endif
     commands.register_command(&m_serialize_transform_command);
     commands.register_command(&m_deserialize_transform_command);
 

@@ -16,10 +16,6 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <geogram/mesh/mesh_geometry.h>
-
-// #include <glm/glm.hpp>
-
 namespace erhe::primitive {
 
 using erhe::graphics::Vertex_attribute;
@@ -305,8 +301,7 @@ void Build_context::build_tangent_frame()
             }
 
             case Normal_style::polygon_normals: {
-                v_normal =
-                    facet_normal .has_value() ? facet_normal .value() : get_facet_normal();
+                v_normal = facet_normal.has_value() ? facet_normal.value() : get_facet_normal();
                 break;
             }
 
@@ -682,7 +677,7 @@ void Build_context_root::allocate_index_range(const gl::Primitive_type primitive
     );
 }
 
-auto make_buffer_mesh(
+auto build_buffer_mesh(
     Buffer_mesh&       buffer_mesh,
     const GEO::Mesh&   source_mesh,
     const Build_info&  build_info,

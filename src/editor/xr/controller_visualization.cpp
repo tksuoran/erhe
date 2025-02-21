@@ -32,7 +32,7 @@ Controller_visualization::Controller_visualization(erhe::scene::Node* view_root,
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue{};
     erhe::primitive::Element_mappings dummy{};
     erhe::primitive::Buffer_mesh buffer_mesh{};
-    const bool buffer_mesh_ok = erhe::primitive::make_buffer_mesh(
+    const bool buffer_mesh_ok = erhe::primitive::build_buffer_mesh(
         buffer_mesh,
         controller_geo_mesh,
         erhe::primitive::Build_info{

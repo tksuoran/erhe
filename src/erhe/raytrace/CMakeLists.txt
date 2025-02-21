@@ -46,7 +46,6 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "none")
 endif ()
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe_raytrace/ibuffer.hpp
     erhe_raytrace/igeometry.hpp
     erhe_raytrace/iinstance.hpp
     erhe_raytrace/iscene.hpp
@@ -61,6 +60,7 @@ if (${ERHE_USE_PRECOMPILED_HEADERS})
 endif ()
 target_link_libraries(${_target}
     PUBLIC
+        erhe::buffer
         erhe::hash
         erhe::geometry
         erhe::profile
