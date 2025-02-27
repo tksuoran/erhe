@@ -1,13 +1,7 @@
 #include "content_library.hpp"
-//#include "editor_context.hpp"
-//#include "scene/material_library.hpp"
-//#include "tools/selection_tool.hpp"
 
-//#include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
-
-//#include <fmt/format.h>
 
 namespace editor {
 

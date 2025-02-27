@@ -7,10 +7,6 @@
 #include <cstdint>
 #include <vector>
 
-namespace erhe::graphics {
-    class Vertex_attribute_mappings;
-}
-
 namespace erhe::primitive {
 
 class Primitive_types
@@ -25,14 +21,13 @@ public:
 class Build_info
 {
 public:
-    Primitive_types                            primitive_types;
-    Buffer_info                                buffer_info;
-    GEO::vec4f                                 constant_color           {1.0f, 1.0f, 1.0f, 1.0f};
-    bool                                       keep_geometry            {false};
-    Normal_style                               normal_style             {Normal_style::corner_normals};
-    erhe::graphics::Vertex_attribute_mappings* vertex_attribute_mappings{nullptr};
-    bool                                       vertex_id_vec3           {false};
-    bool                                       autocolor                {false};
+    Primitive_types primitive_types;
+    Buffer_info     buffer_info;
+    GEO::vec4f      constant_color{1.0f, 1.0f, 1.0f, 1.0f};
+    bool            keep_geometry {false};
+    Normal_style    normal_style  {Normal_style::corner_normals};
+    bool            vertex_id_vec3{false};
+    bool            autocolor     {false};
 };
 
 class Element_mappings

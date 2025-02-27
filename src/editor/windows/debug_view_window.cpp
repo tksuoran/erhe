@@ -142,7 +142,8 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         erhe::scene_renderer::Forward_renderer::Render_parameters{
             .index_type         = m_mesh_memory.buffer_info.index_type,
             .index_buffer       = nullptr,
-            .vertex_buffer      = nullptr,
+            .vertex_buffer0     = nullptr,
+            .vertex_buffer1     = nullptr,
             .light_projections  = &light_projections,
             .lights             = layers.light()->lights,
             .materials          = {},

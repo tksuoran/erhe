@@ -31,12 +31,12 @@
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
-#include "erhe_window/window_log.hpp"
+#include "erhe_ui/ui_log.hpp"
 #include "erhe_verify/verify.hpp"
-#include "erhe_window/window.hpp"
+#include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
-#include "erhe_ui/ui_log.hpp"
+#include "erhe_window/window_log.hpp"
 
 namespace example {
 
@@ -169,8 +169,7 @@ public:
             }
         }
         gl::enable(gl::Enable_cap::framebuffer_srgb);
-        gl::clear_color(0.01f, 0.01f, 0.01f, 0.5f);
-        gl::clear_stencil(0);
+        gl::clear_color(0.1f, 0.1f, 0.1f, 1.0f);
         gl::clear_depth_f(*m_graphics_instance.depth_clear_value_pointer());
         gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 
@@ -229,8 +228,9 @@ public:
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.gl_index_buffer,
-                .vertex_buffer          = &m_mesh_memory.gl_vertex_buffer,
+                .index_buffer           = &m_mesh_memory.index_buffer,
+                .vertex_buffer0         = &m_mesh_memory.position_vertex_buffer,
+                .vertex_buffer1         = &m_mesh_memory.non_position_vertex_buffer,
                 .ambient_light          = glm::vec3{0.1f, 0.1f, 0.1f},
                 .camera                 = m_camera.get(),
                 .light_projections      = &light_projections,
@@ -349,8 +349,8 @@ private:
     std::chrono::steady_clock::time_point   m_current_time;
     double                                  m_time_accumulator{0.0};
     double                                  m_time            {0.0};
-    uint64_t                                m_frame_number{0};
-    bool                                    m_mouse_pressed{false};
+    uint64_t                                m_frame_number    {0};
+    bool                                    m_mouse_pressed   {false};
 };
 
 void run_example()
@@ -372,9 +372,10 @@ void run_example()
     erhe::window::initialize_logging();
     erhe::ui::initialize_logging();
 
+    erhe::window::initialize_frame_capture();
+
     erhe::window::Context_window window{
         erhe::window::Window_configuration{
-            .framebuffer_transparency = true,
             .use_depth         = true,
             .gl_major          = 4,
             .gl_minor          = 6,
@@ -390,9 +391,9 @@ void run_example()
     erhe::scene::Scene                      scene            {scene_message_bus, "example scene", nullptr};
     erhe::graphics::Instance                graphics_instance{window};
     erhe::gltf::Image_transfer              image_transfer   {graphics_instance};
-    erhe::scene_renderer::Program_interface program_interface{graphics_instance};
+    Mesh_memory                             mesh_memory      {graphics_instance};
+    erhe::scene_renderer::Program_interface program_interface{graphics_instance, mesh_memory.vertex_format};
     erhe::scene_renderer::Forward_renderer  forward_renderer {graphics_instance, program_interface};
-    Mesh_memory                             mesh_memory      {graphics_instance, program_interface};
     Programs                                programs         {graphics_instance, program_interface};
 
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(
@@ -407,10 +408,9 @@ void run_example()
 
     // Convert triangle soup vertex and index data to GL buffers
     erhe::primitive::Buffer_info buffer_info{
-        .usage         = gl::Buffer_usage::static_draw,
         .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
         .vertex_format = mesh_memory.vertex_format,
-        .buffer_sink   = mesh_memory.gl_buffer_sink
+        .buffer_sink   = mesh_memory.graphics_buffer_sink
     };
 
     for (const auto& node : gltf_data.nodes) {

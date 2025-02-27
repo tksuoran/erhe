@@ -4,7 +4,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -17,27 +17,27 @@
 
 namespace erhe::graphics {
 
-auto glsl_token(Glsl_type attribute_type) -> const char*
+auto glsl_token(const gl::Attribute_type attribute_type) -> const char*
 {
     switch (attribute_type) {
         //using enum gl::Attribute_type;
-        case Glsl_type::float_:            return "float    ";
-        case Glsl_type::float_vec2:        return "vec2     ";
-        case Glsl_type::float_vec3:        return "vec3     ";
-        case Glsl_type::float_vec4:        return "vec4     ";
-        case Glsl_type::bool_:             return "bool     ";
-        case Glsl_type::int_:              return "int      ";
-        case Glsl_type::int_vec2:          return "ivec2    ";
-        case Glsl_type::int_vec3:          return "ivec3    ";
-        case Glsl_type::int_vec4:          return "ivec4    ";
-        case Glsl_type::unsigned_int:      return "uint     ";
-        case Glsl_type::unsigned_int_vec2: return "uvec2    ";
-        case Glsl_type::unsigned_int_vec3: return "uvec3    ";
-        case Glsl_type::unsigned_int_vec4: return "uvec4    ";
-        case Glsl_type::unsigned_int64_arb:return "uint64_t ";
-        case Glsl_type::float_mat_2x2:     return "mat2     ";
-        case Glsl_type::float_mat_3x3:     return "mat3     ";
-        case Glsl_type::float_mat_4x4:     return "mat4     ";
+        case gl::Attribute_type::float_:            return "float    ";
+        case gl::Attribute_type::float_vec2:        return "vec2     ";
+        case gl::Attribute_type::float_vec3:        return "vec3     ";
+        case gl::Attribute_type::float_vec4:        return "vec4     ";
+        case gl::Attribute_type::bool_:             return "bool     ";
+        case gl::Attribute_type::int_:              return "int      ";
+        case gl::Attribute_type::int_vec2:          return "ivec2    ";
+        case gl::Attribute_type::int_vec3:          return "ivec3    ";
+        case gl::Attribute_type::int_vec4:          return "ivec4    ";
+        case gl::Attribute_type::unsigned_int:      return "uint     ";
+        case gl::Attribute_type::unsigned_int_vec2: return "uvec2    ";
+        case gl::Attribute_type::unsigned_int_vec3: return "uvec3    ";
+        case gl::Attribute_type::unsigned_int_vec4: return "uvec4    ";
+        case gl::Attribute_type::unsigned_int64_arb:return "uint64_t ";
+        case gl::Attribute_type::float_mat2:        return "mat2     ";
+        case gl::Attribute_type::float_mat3:        return "mat3     ";
+        case gl::Attribute_type::float_mat4:        return "mat4     ";
         default: {
             ERHE_FATAL("TODO");
         }
@@ -49,12 +49,13 @@ auto Shader_stages_create_info::attributes_source() const -> std::string
     std::stringstream sb;
 
     // Apply attrib location bindings
-    if ((vertex_attribute_mappings != nullptr) && (vertex_attribute_mappings->mappings.size() > 0)) {
+    if (vertex_format != nullptr) {
+        Vertex_input_state_data vertex_input = Vertex_input_state_data::make(*vertex_format);
         sb << "// Attributes\n";
-        for (const auto& mapping : vertex_attribute_mappings->mappings) {
-            sb << "in layout(location = " << mapping.layout_location << ") ";
-            sb << glsl_token(mapping.shader_type) << " ";
-            sb << mapping.name,
+        for (const auto& attribute : vertex_input.attributes) {
+            sb << "in layout(location = " << attribute.layout_location << ") ";
+            sb << glsl_token(attribute.gl_attribute_type) << " ";
+            sb << attribute.name,
             sb << ";\n";
         }
         sb << "\n";

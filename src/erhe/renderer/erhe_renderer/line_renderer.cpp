@@ -13,8 +13,7 @@
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
-#include "erhe_graphics/vertex_format.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_math/viewport.hpp"
@@ -31,35 +30,22 @@ Line_renderer_program_interface::Line_renderer_program_interface(erhe::graphics:
             .location = 0
         }
     }
-    , attribute_mappings{
-        graphics_instance,
+    , line_vertex_format{
         {
-            erhe::graphics::Vertex_attribute_mapping::a_position0_float_vec4(),
-            erhe::graphics::Vertex_attribute_mapping::a_color_float_vec4(),
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 2,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
-                .name            = "a_line_start_end",
-                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::custom }
+            0,
+            {
+                {erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::position, 0},
+                {erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color, 0}
             }
         }
     }
-    , line_vertex_format{
-        0, // TODO
-        {
-            erhe::graphics::Vertex_attribute::position0_float4(),
-            erhe::graphics::Vertex_attribute::color_float4()
-        }
-    }
     , triangle_vertex_format{
-        0, // TODO
         {
-            erhe::graphics::Vertex_attribute::position0_float4(), // gl_Position
-            erhe::graphics::Vertex_attribute::color_float4(),     // color
-            erhe::graphics::Vertex_attribute{                     // clipped line start (xy) and end (zw)
-                .usage       = { erhe::graphics::Vertex_attribute::Usage_type::custom },
-                .shader_type = erhe::graphics::Glsl_type::float_vec4,
-                .data_type   = erhe::dataformat::Format::format_32_vec4_float
+            0, // TODO
+            {
+                {erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::position},
+                {erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color},
+                {erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::custom} // clipped line start (xy) and end (zw)
             }
         }
     }
@@ -75,7 +61,8 @@ Line_renderer_program_interface::Line_renderer_program_interface(erhe::graphics:
     );
     line_vertex_buffer_block->set_readonly(true);
     line_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_instance, "line_vertex");
-    line_vertex_format.add_to(
+    add_vertex_stream(
+        line_vertex_format.streams.front(),
         *line_vertex_struct.get(),
         *line_vertex_buffer_block.get()
     );
@@ -90,7 +77,8 @@ Line_renderer_program_interface::Line_renderer_program_interface(erhe::graphics:
         erhe::graphics::Shader_resource::Type::shader_storage_block
     );
     triangle_vertex_buffer_block->set_writeonly(true);
-    triangle_vertex_format.add_to(
+    add_vertex_stream(
+        triangle_vertex_format.streams.front(),
         *triangle_vertex_struct.get(),
         *triangle_vertex_buffer_block.get()
     );
@@ -133,10 +121,10 @@ Line_renderer_program_interface::Line_renderer_program_interface(erhe::graphics:
         const std::filesystem::path vert_path = shader_path / std::filesystem::path("line_after_compute.vert");
         const std::filesystem::path frag_path = shader_path / std::filesystem::path("line_after_compute.frag");
         erhe::graphics::Shader_stages_create_info create_info{
-            .name                      = "line_after_compute",
-            .interface_blocks          = { view_block.get() },
-            .vertex_attribute_mappings = &attribute_mappings,
-            .fragment_outputs          = &fragment_outputs,
+            .name             = "line_after_compute",
+            .interface_blocks = { view_block.get() },
+            .fragment_outputs = &fragment_outputs,
+            .vertex_format    = &triangle_vertex_format,
             .shaders = {
                 { gl::Shader_type::vertex_shader,   vert_path },
                 { gl::Shader_type::fragment_shader, frag_path }
@@ -161,14 +149,14 @@ Line_renderer::Line_renderer(erhe::graphics::Instance& graphics_instance)
         graphics_instance,
         gl::Buffer_target::shader_storage_buffer, // for compute bind range
         m_program_interface.line_vertex_buffer_block->binding_point(),
-        m_program_interface.line_vertex_format.stride() * 2 * s_max_line_count,
+        m_program_interface.line_vertex_format.streams.front().stride * 2 * s_max_line_count,
         "Line_renderer line vertex ring buffer"
     }
     , m_triangle_vertex_buffer{
         graphics_instance,
         gl::Buffer_target::shader_storage_buffer, // for compute bind range
         m_program_interface.triangle_vertex_buffer_block->binding_point(),
-        m_program_interface.triangle_vertex_format.stride() * 6 * s_max_line_count,
+        m_program_interface.triangle_vertex_format.streams.front().stride * 6 * s_max_line_count,
         "Line_renderer triangle vertex ring buffer"
     }
     , m_view_buffer{
@@ -179,10 +167,7 @@ Line_renderer::Line_renderer(erhe::graphics::Instance& graphics_instance)
         "Line_renderer view ring buffer"
     }
     , m_vertex_input{
-        erhe::graphics::Vertex_input_state_data::make(
-            m_program_interface.attribute_mappings,
-            { &m_program_interface.triangle_vertex_format }
-        )
+        erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)
     }
 {
 }
@@ -229,7 +214,7 @@ auto Line_renderer::get_line_offset() const -> std::size_t
     ERHE_VERIFY(m_is_opened);
     ERHE_VERIFY(!m_is_closed);
     ERHE_VERIFY(m_vertex_buffer_range.has_value());
-    const std::size_t bytes_per_line = 2 * m_program_interface.line_vertex_format.stride();
+    const std::size_t bytes_per_line = 2 * m_program_interface.line_vertex_format.streams.front().stride;
     return m_vertex_write_offset / bytes_per_line;
 }
 
@@ -311,8 +296,8 @@ void Line_renderer::render(const erhe::math::Viewport viewport, const erhe::scen
 
     Buffer_range& vertex_buffer_range = m_vertex_buffer_range.value();
 
-    std::size_t line_vertex_stride     = m_program_interface.line_vertex_format.stride();
-    std::size_t triangle_vertex_stride = m_program_interface.triangle_vertex_format.stride();
+    std::size_t line_vertex_stride     = m_program_interface.line_vertex_format.streams.front().stride;
+    std::size_t triangle_vertex_stride = m_program_interface.triangle_vertex_format.streams.front().stride;
     std::size_t line_vertex_count      = vertex_buffer_range.get_written_byte_count() / line_vertex_stride;
     std::size_t line_count             = line_vertex_count / 2;
 

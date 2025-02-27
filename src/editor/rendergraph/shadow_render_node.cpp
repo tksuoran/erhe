@@ -129,9 +129,8 @@ void Shadow_render_node::execute_rendergraph_node()
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
             .vertex_input_state    = &m_context.mesh_memory->vertex_input,
             .index_type            = m_context.mesh_memory->buffer_info.index_type,
-            .index_buffer          = &m_context.mesh_memory->gl_index_buffer,
-            .vertex_buffer         = &m_context.mesh_memory->gl_vertex_buffer,
-
+            .index_buffer          = &m_context.mesh_memory->index_buffer,
+            .vertex_buffer         = &m_context.mesh_memory->position_vertex_buffer,
             .view_camera           = camera.get(),
             .view_camera_viewport  = {},
             .light_camera_viewport = m_viewport,

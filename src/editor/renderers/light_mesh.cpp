@@ -1,9 +1,9 @@
 #include "renderers/light_mesh.hpp"
 
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
 #include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_primitive/buffer_info.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -26,7 +26,7 @@ Light_mesh::Light_mesh()
 #if 0
     erhe::graphics::Buffer_transfer_queue queue;
 
-    Gl_buffer_sink buffer_sink{queue, {}, {}};
+    Graphics_buffer_sink buffer_sink{queue, {}, {}};
 
     erhe::primitive::Build_info build_info;
     auto& format_info = build_info.format;

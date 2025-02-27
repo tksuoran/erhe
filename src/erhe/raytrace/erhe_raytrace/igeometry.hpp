@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_dataformat/dataformat.hpp"
 #include <cstdint>
 #include <memory>
 #include <string_view>
@@ -32,102 +33,6 @@ enum class Buffer_type : int {
     BUFFER_TYPE_FLAGS                = 32
 };
 
-// TODO use erhe::dataformat
-enum class Format : int {
-    FORMAT_UNDEFINED = 0,
-
-    // 8-bit unsigned integer
-    FORMAT_UCHAR = 0x1001,
-    FORMAT_UCHAR2,
-    FORMAT_UCHAR3,
-    FORMAT_UCHAR4,
-
-    // 8-bit signed integer
-    FORMAT_CHAR = 0x2001,
-    FORMAT_CHAR2,
-    FORMAT_CHAR3,
-    FORMAT_CHAR4,
-
-    // 16-bit unsigned integer
-    FORMAT_USHORT = 0x3001,
-    FORMAT_USHORT2,
-    FORMAT_USHORT3,
-    FORMAT_USHORT4,
-
-    // 16-bit signed integer
-    FORMAT_SHORT = 0x4001,
-    FORMAT_SHORT2,
-    FORMAT_SHORT3,
-    FORMAT_SHORT4,
-
-    // 32-bit unsigned integer
-    FORMAT_UINT = 0x5001,
-    FORMAT_UINT2,
-    FORMAT_UINT3,
-    FORMAT_UINT4,
-
-    // 32-bit signed integer
-    FORMAT_INT = 0x6001,
-    FORMAT_INT2,
-    FORMAT_INT3,
-    FORMAT_INT4,
-
-    // 64-bit unsigned integer
-    FORMAT_ULLONG = 0x7001,
-    FORMAT_ULLONG2,
-    FORMAT_ULLONG3,
-    FORMAT_ULLONG4,
-
-    // 64-bit signed integer
-    FORMAT_LLONG = 0x8001,
-    FORMAT_LLONG2,
-    FORMAT_LLONG3,
-    FORMAT_LLONG4,
-
-    // 32-bit float
-    FORMAT_FLOAT = 0x9001,
-    FORMAT_FLOAT2,
-    FORMAT_FLOAT3,
-    FORMAT_FLOAT4,
-    FORMAT_FLOAT5,
-    FORMAT_FLOAT6,
-    FORMAT_FLOAT7,
-    FORMAT_FLOAT8,
-    FORMAT_FLOAT9,
-    FORMAT_FLOAT10,
-    FORMAT_FLOAT11,
-    FORMAT_FLOAT12,
-    FORMAT_FLOAT13,
-    FORMAT_FLOAT14,
-    FORMAT_FLOAT15,
-    FORMAT_FLOAT16,
-
-    // 32-bit float matrix (row-major order)
-    FORMAT_FLOAT2X2_ROW_MAJOR = 0x9122,
-    FORMAT_FLOAT2X3_ROW_MAJOR = 0x9123,
-    FORMAT_FLOAT2X4_ROW_MAJOR = 0x9124,
-    FORMAT_FLOAT3X2_ROW_MAJOR = 0x9132,
-    FORMAT_FLOAT3X3_ROW_MAJOR = 0x9133,
-    FORMAT_FLOAT3X4_ROW_MAJOR = 0x9134,
-    FORMAT_FLOAT4X2_ROW_MAJOR = 0x9142,
-    FORMAT_FLOAT4X3_ROW_MAJOR = 0x9143,
-    FORMAT_FLOAT4X4_ROW_MAJOR = 0x9144,
-
-    // 32-bit float matrix (column-major order)
-    FORMAT_FLOAT2X2_COLUMN_MAJOR = 0x9222,
-    FORMAT_FLOAT2X3_COLUMN_MAJOR = 0x9223,
-    FORMAT_FLOAT2X4_COLUMN_MAJOR = 0x9224,
-    FORMAT_FLOAT3X2_COLUMN_MAJOR = 0x9232,
-    FORMAT_FLOAT3X3_COLUMN_MAJOR = 0x9233,
-    FORMAT_FLOAT3X4_COLUMN_MAJOR = 0x9234,
-    FORMAT_FLOAT4X2_COLUMN_MAJOR = 0x9242,
-    FORMAT_FLOAT4X3_COLUMN_MAJOR = 0x9243,
-    FORMAT_FLOAT4X4_COLUMN_MAJOR = 0x9244,
-
-    // special 12-byte format for grids
-    FORMAT_GRID = 0xA001
-};
-
 enum class Geometry_type : int {
     GEOMETRY_TYPE_TRIANGLE    = 0, // triangle mesh
     GEOMETRY_TYPE_QUAD        = 1, // quad (triangle pair) mesh
@@ -149,7 +54,7 @@ public:
     virtual void set_buffer(
         Buffer_type               type,
         unsigned int              slot,
-        Format                    format,
+        erhe::dataformat::Format  format,
         erhe::buffer::Cpu_buffer* buffer,
         std::size_t               byte_offset,
         std::size_t               byte_stride,

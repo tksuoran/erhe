@@ -19,6 +19,23 @@ enum class Primitive_mode : unsigned int {
     count             = 6
 };
 
+enum class Primitive_type : unsigned int {
+    none                     = 0,
+    line_loop                = 1,
+    line_strip               = 2,
+    line_strip_adjacency     = 3,
+    lines                    = 4,
+    lines_adjacency          = 5,
+    patches                  = 6,
+    points                   = 7,
+    quads                    = 8,
+    triangle_fan             = 9,
+    triangle_strip           = 10,
+    triangle_strip_adjacency = 11,
+    triangles                = 12,
+    triangles_adjacency      = 13
+};
+
 static constexpr const char* c_mode_strings[] = {
     "Not Set",
     "Polygon Fill",

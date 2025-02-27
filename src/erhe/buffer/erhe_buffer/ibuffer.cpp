@@ -1,4 +1,4 @@
-#include "ibuffer.hpp"
+#include "erhe_buffer/ibuffer.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::buffer {

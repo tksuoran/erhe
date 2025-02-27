@@ -14,8 +14,6 @@
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/pipeline.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -32,8 +30,6 @@ using std::make_shared;
 using std::make_unique;
 
 namespace {
-
-#define ERHE_IMGUI_VERTEX_BINDING_ALL_ATTRIBUTES 0
 
 #define ERHE_IMGUI_VERTEX_ATTRIBUTE_POSITION 0
 #define ERHE_IMGUI_VERTEX_ATTRIBUTE_TEXCOORD 1
@@ -83,13 +79,13 @@ void main()
     gl_ClipDistance[1] = a_position.y - clip_rect[1];
     gl_ClipDistance[2] = clip_rect[2] - a_position.x;
     gl_ClipDistance[3] = clip_rect[3] - a_position.y;
-    v_texcoord         = a_texcoord;
+    v_texcoord         = a_texcoord_0;
 #if defined(ERHE_BINDLESS_TEXTURE)
     v_texture          = draw.draw_parameters[gl_DrawID].texture;
 #else
     v_texture_id       = draw.draw_parameters[gl_DrawID].texture_indices.x;
 #endif
-    v_color            = vec4(srgb_to_linear(a_color.rgb), a_color.a);
+    v_color            = vec4(srgb_to_linear(a_color_0.rgb), a_color_0.a);
 }
 )NUL";
 
@@ -185,49 +181,13 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Instance& graph
             .location = 0
         }
     }
-    , attribute_mappings{
-        graphics_instance,
-        {
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = ERHE_IMGUI_VERTEX_ATTRIBUTE_POSITION,
-                .binding         = ERHE_IMGUI_VERTEX_BINDING_ALL_ATTRIBUTES,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec2,
-                .name            = "a_position",
-                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::position }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = ERHE_IMGUI_VERTEX_ATTRIBUTE_TEXCOORD,
-                .binding         = ERHE_IMGUI_VERTEX_BINDING_ALL_ATTRIBUTES,
-                .shader_type     =  erhe::graphics::Glsl_type::float_vec2,
-                .name            = "a_texcoord",
-                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::tex_coord }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = ERHE_IMGUI_VERTEX_ATTRIBUTE_COLOR,
-                .binding         = ERHE_IMGUI_VERTEX_BINDING_ALL_ATTRIBUTES,
-                .shader_type     =  erhe::graphics::Glsl_type::float_vec4,
-                .name            = "a_color",
-                .src_usage       = { erhe::graphics::Vertex_attribute::Usage_type::color },
-            }
-        }
-    }
     , vertex_format{
-        ERHE_IMGUI_VERTEX_BINDING_ALL_ATTRIBUTES,
         {
-            erhe::graphics::Vertex_attribute{
-                .usage       = { erhe::graphics::Vertex_attribute::Usage_type::position },
-                .shader_type = erhe::graphics::Glsl_type::float_vec2,
-                .data_type   = erhe::dataformat::Format::format_32_vec2_float
-            },
-            erhe::graphics::Vertex_attribute{
-                .usage       = { erhe::graphics::Vertex_attribute::Usage_type::tex_coord },
-                .shader_type = erhe::graphics::Glsl_type::float_vec2,
-                .data_type   = erhe::dataformat::Format::format_32_vec2_float
-            },
-            erhe::graphics::Vertex_attribute{
-                .usage       = { erhe::graphics::Vertex_attribute::Usage_type::color },
-                .shader_type = erhe::graphics::Glsl_type::float_vec4,
-                .data_type   = erhe::dataformat::Format::format_8_vec4_unorm
+            0,
+            {
+                { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::position },
+                { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord },
+                { erhe::dataformat::Format::format_8_vec4_unorm,  erhe::dataformat::Vertex_attribute_usage::color }
             }
         }
     }
@@ -281,14 +241,14 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
         erhe::graphics::Shader_stages_prototype{
             graphics_instance,
             erhe::graphics::Shader_stages_create_info{
-                .name                      = "ImGui Renderer",
-                .defines                   = get_shader_defines(graphics_instance),
-                .extensions                = get_shader_extensions(graphics_instance),
-                .struct_types              = { &m_imgui_program_interface.draw_parameter_struct },
-                .interface_blocks          = { &m_imgui_program_interface.draw_parameter_block },
-                .vertex_attribute_mappings = &m_imgui_program_interface.attribute_mappings,
-                .fragment_outputs          = &m_imgui_program_interface.fragment_outputs,
-                .default_uniform_block     = graphics_instance.info.use_bindless_texture ? nullptr : &m_imgui_program_interface.default_uniform_block,
+                .name                  = "ImGui Renderer",
+                .defines               = get_shader_defines(graphics_instance),
+                .extensions            = get_shader_extensions(graphics_instance),
+                .struct_types          = { &m_imgui_program_interface.draw_parameter_struct },
+                .interface_blocks      = { &m_imgui_program_interface.draw_parameter_block },
+                .fragment_outputs      = &m_imgui_program_interface.fragment_outputs,
+                .vertex_format         = &m_imgui_program_interface.vertex_format,
+                .default_uniform_block = graphics_instance.info.use_bindless_texture ? nullptr : &m_imgui_program_interface.default_uniform_block,
                 .shaders = {
                     { gl::Shader_type::vertex_shader,   c_vertex_shader_source   },
                     { gl::Shader_type::fragment_shader, c_fragment_shader_source }
@@ -300,7 +260,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
     , m_vertex_buffer{
         graphics_instance,
         gl::Buffer_target::array_buffer,
-        s_max_vertex_count * m_imgui_program_interface.vertex_format.stride(),
+        s_max_vertex_count * m_imgui_program_interface.vertex_format.streams.front().stride,
         "ImGui Vertex Buffer"
     }
     , m_index_buffer{
@@ -322,14 +282,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
         s_max_draw_count * sizeof(gl::Draw_elements_indirect_command),
         "ImGui Draw Indirect Buffer"
     }
-    , m_vertex_input{
-        erhe::graphics::Vertex_input_state_data::make(
-            m_imgui_program_interface.attribute_mappings,
-            {
-                &m_imgui_program_interface.vertex_format
-            }
-        )
-    }
+    , m_vertex_input{erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
     , m_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "ImGui Renderer",
@@ -1010,11 +963,7 @@ void Imgui_renderer::render_draw_data()
         // and most other state
         m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
         m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer.get_buffer());
-        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(
-            &m_vertex_buffer.get_buffer(),
-            vertex_buffer_binding_offset,
-            ERHE_IMGUI_VERTEX_BINDING_ALL_ATTRIBUTES
-        );
+        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, &m_vertex_buffer.get_buffer(), vertex_buffer_binding_offset);
 
         // TODO viewport states is not currently in pipeline
         gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));

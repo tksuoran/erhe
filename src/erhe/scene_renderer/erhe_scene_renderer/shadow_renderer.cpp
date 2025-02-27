@@ -139,7 +139,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // TODO Multiple vertex buffer bindings
     m_graphics_instance.opengl_state_tracker.execute(pipeline);
     m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(parameters.vertex_buffer, parameters.vertex_buffer_offset, 0);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
 
     gl::viewport(
         parameters.light_camera_viewport.x,

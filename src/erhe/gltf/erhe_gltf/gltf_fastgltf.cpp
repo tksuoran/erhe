@@ -5,6 +5,7 @@
 #include "image_transfer.hpp"
 
 #include "erhe_buffer/ibuffer.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -12,8 +13,6 @@
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_graphics/vertex_attribute.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_log/log_geogram.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
@@ -79,76 +78,74 @@ constexpr glm::mat4 mat4_yup_from_zup{
     }
 }
 
-[[nodiscard]] auto c_str(erhe::graphics::Vertex_attribute::Usage_type value) -> const char*
+[[nodiscard]] auto c_str(erhe::dataformat::Vertex_attribute_usage usage_type) -> const char*
 {
-    switch (value)
-    {
-        case erhe::graphics::Vertex_attribute::Usage_type::none         : return "none";
-        case erhe::graphics::Vertex_attribute::Usage_type::automatic    : return "automatic";
-        case erhe::graphics::Vertex_attribute::Usage_type::position     : return "position";
-        case erhe::graphics::Vertex_attribute::Usage_type::tangent      : return "tangent";
-        case erhe::graphics::Vertex_attribute::Usage_type::bitangent    : return "bitangent";
-        case erhe::graphics::Vertex_attribute::Usage_type::normal       : return "normal";
-        case erhe::graphics::Vertex_attribute::Usage_type::color        : return "color";
-        case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: return "joint_indices";
-        case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: return "joint_weights";
-        case erhe::graphics::Vertex_attribute::Usage_type::tex_coord    : return "tex_coord";
-        case erhe::graphics::Vertex_attribute::Usage_type::id           : return "id";
-        case erhe::graphics::Vertex_attribute::Usage_type::material     : return "material";
-        case erhe::graphics::Vertex_attribute::Usage_type::aniso_control: return "aniso_control";
-        case erhe::graphics::Vertex_attribute::Usage_type::custom       : return "custom";
-        default: return "?";
+    using namespace erhe::dataformat;
+    switch (usage_type) {
+        case Vertex_attribute_usage::position     : return "position";
+        case Vertex_attribute_usage::tangent      : return "tangent";
+        case Vertex_attribute_usage::bitangent    : return "bitangent";
+        case Vertex_attribute_usage::normal       : return "normal";
+        case Vertex_attribute_usage::color        : return "color";
+        case Vertex_attribute_usage::joint_indices: return "joint_indices";
+        case Vertex_attribute_usage::joint_weights: return "joint_weights";
+        case Vertex_attribute_usage::tex_coord    : return "tex_coord";
+        default: {
+            ERHE_FATAL("bad vertex usage");
+            return "?";
+        }
     }
 }
 
-void to_erhe_attribute(const fastgltf::Accessor& accessor, erhe::graphics::Glsl_type& type, erhe::dataformat::Format& format)
+auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::Format
 {
+    using namespace erhe::dataformat;
     switch (accessor.type) {
         case fastgltf::AccessorType::Scalar: {
             switch (accessor.componentType) {
-                case fastgltf::ComponentType::Byte         : type = erhe::graphics::Glsl_type::int_;         format = erhe::dataformat::Format::format_8_scalar_sint; return;
-                case fastgltf::ComponentType::UnsignedByte : type = erhe::graphics::Glsl_type::unsigned_int; format = erhe::dataformat::Format::format_8_scalar_uint; return;
-                case fastgltf::ComponentType::Short        : type = erhe::graphics::Glsl_type::int_;         format = erhe::dataformat::Format::format_16_scalar_sint; return;
-                case fastgltf::ComponentType::UnsignedShort: type = erhe::graphics::Glsl_type::unsigned_int; format = erhe::dataformat::Format::format_16_scalar_uint; return;
-                case fastgltf::ComponentType::Int          : type = erhe::graphics::Glsl_type::int_;         format = erhe::dataformat::Format::format_32_scalar_sint; return;
-                case fastgltf::ComponentType::UnsignedInt  : type = erhe::graphics::Glsl_type::unsigned_int; format = erhe::dataformat::Format::format_32_scalar_uint; return;
-                case fastgltf::ComponentType::Float        : type = erhe::graphics::Glsl_type::float_;       format = erhe::dataformat::Format::format_32_scalar_float; return;
+                case fastgltf::ComponentType::Byte         : return Format::format_8_scalar_sint;
+                case fastgltf::ComponentType::UnsignedByte : return Format::format_8_scalar_uint;
+                case fastgltf::ComponentType::Short        : return Format::format_16_scalar_sint;
+                case fastgltf::ComponentType::UnsignedShort: return Format::format_16_scalar_uint;
+                case fastgltf::ComponentType::Int          : return Format::format_32_scalar_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return Format::format_32_scalar_uint;
+                case fastgltf::ComponentType::Float        : return Format::format_32_scalar_float;
                 default: break;
             }
         }
         case fastgltf::AccessorType::Vec2: {
             switch (accessor.componentType) {
-                case fastgltf::ComponentType::Byte         : type = erhe::graphics::Glsl_type::int_vec2;          format = erhe::dataformat::Format::format_8_vec2_sint; return;
-                case fastgltf::ComponentType::UnsignedByte : type = erhe::graphics::Glsl_type::unsigned_int_vec2; format = erhe::dataformat::Format::format_8_vec2_uint; return;
-                case fastgltf::ComponentType::Short        : type = erhe::graphics::Glsl_type::int_vec2;          format = erhe::dataformat::Format::format_16_vec2_sint; return;
-                case fastgltf::ComponentType::UnsignedShort: type = erhe::graphics::Glsl_type::unsigned_int_vec2; format = erhe::dataformat::Format::format_16_vec2_uint; return;
-                case fastgltf::ComponentType::Int          : type = erhe::graphics::Glsl_type::int_vec2;          format = erhe::dataformat::Format::format_32_vec2_sint; return;
-                case fastgltf::ComponentType::UnsignedInt  : type = erhe::graphics::Glsl_type::unsigned_int_vec2; format = erhe::dataformat::Format::format_32_vec2_uint; return;
-                case fastgltf::ComponentType::Float        : type = erhe::graphics::Glsl_type::float_vec2;        format = erhe::dataformat::Format::format_32_vec2_float; return;
+                case fastgltf::ComponentType::Byte         : return Format::format_8_vec2_sint;
+                case fastgltf::ComponentType::UnsignedByte : return Format::format_8_vec2_uint;
+                case fastgltf::ComponentType::Short        : return Format::format_16_vec2_sint;
+                case fastgltf::ComponentType::UnsignedShort: return Format::format_16_vec2_uint;
+                case fastgltf::ComponentType::Int          : return Format::format_32_vec2_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return Format::format_32_vec2_uint;
+                case fastgltf::ComponentType::Float        : return Format::format_32_vec2_float;
                 default: break;
             }
         }
         case fastgltf::AccessorType::Vec3:{
             switch (accessor.componentType) {
-                case fastgltf::ComponentType::Byte         : type = erhe::graphics::Glsl_type::int_vec3;          format = erhe::dataformat::Format::format_8_vec3_sint; return;
-                case fastgltf::ComponentType::UnsignedByte : type = erhe::graphics::Glsl_type::unsigned_int_vec3; format = erhe::dataformat::Format::format_8_vec3_uint; return;
-                case fastgltf::ComponentType::Short        : type = erhe::graphics::Glsl_type::int_vec3;          format = erhe::dataformat::Format::format_16_vec3_sint; return;
-                case fastgltf::ComponentType::UnsignedShort: type = erhe::graphics::Glsl_type::unsigned_int_vec3; format = erhe::dataformat::Format::format_16_vec3_uint; return;
-                case fastgltf::ComponentType::Int          : type = erhe::graphics::Glsl_type::int_vec3;          format = erhe::dataformat::Format::format_32_vec3_sint; return;
-                case fastgltf::ComponentType::UnsignedInt  : type = erhe::graphics::Glsl_type::unsigned_int_vec3; format = erhe::dataformat::Format::format_32_vec3_uint; return;
-                case fastgltf::ComponentType::Float        : type = erhe::graphics::Glsl_type::float_vec3;        format = erhe::dataformat::Format::format_32_vec3_float; return;
+                case fastgltf::ComponentType::Byte         : return Format::format_8_vec3_sint;
+                case fastgltf::ComponentType::UnsignedByte : return Format::format_8_vec3_uint;
+                case fastgltf::ComponentType::Short        : return Format::format_16_vec3_sint;
+                case fastgltf::ComponentType::UnsignedShort: return Format::format_16_vec3_uint;
+                case fastgltf::ComponentType::Int          : return Format::format_32_vec3_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return Format::format_32_vec3_uint;
+                case fastgltf::ComponentType::Float        : return Format::format_32_vec3_float;
                 default: break;
             }
         }
         case fastgltf::AccessorType::Vec4: {
             switch (accessor.componentType) {
-                case fastgltf::ComponentType::Byte         : type = erhe::graphics::Glsl_type::int_vec4;          format = erhe::dataformat::Format::format_8_vec4_sint; return;
-                case fastgltf::ComponentType::UnsignedByte : type = erhe::graphics::Glsl_type::unsigned_int_vec4; format = erhe::dataformat::Format::format_8_vec4_uint; return;
-                case fastgltf::ComponentType::Short        : type = erhe::graphics::Glsl_type::int_vec4;          format = erhe::dataformat::Format::format_16_vec4_sint; return;
-                case fastgltf::ComponentType::UnsignedShort: type = erhe::graphics::Glsl_type::unsigned_int_vec4; format = erhe::dataformat::Format::format_16_vec4_uint; return;
-                case fastgltf::ComponentType::Int          : type = erhe::graphics::Glsl_type::int_vec4;          format = erhe::dataformat::Format::format_32_vec4_sint; return;
-                case fastgltf::ComponentType::UnsignedInt  : type = erhe::graphics::Glsl_type::unsigned_int_vec4; format = erhe::dataformat::Format::format_32_vec4_uint; return;
-                case fastgltf::ComponentType::Float        : type = erhe::graphics::Glsl_type::float_vec4;        format = erhe::dataformat::Format::format_32_vec4_float; return;
+                case fastgltf::ComponentType::Byte         : return Format::format_8_vec4_sint;
+                case fastgltf::ComponentType::UnsignedByte : return Format::format_8_vec4_uint;
+                case fastgltf::ComponentType::Short        : return Format::format_16_vec4_sint;
+                case fastgltf::ComponentType::UnsignedShort: return Format::format_16_vec4_uint;
+                case fastgltf::ComponentType::Int          : return Format::format_32_vec4_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return Format::format_32_vec4_uint;
+                case fastgltf::ComponentType::Float        : return Format::format_32_vec4_float;
                 default: break;
             }
         }
@@ -336,26 +333,6 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
-    using Usage_type = erhe::graphics::Vertex_attribute::Usage_type;
-
-#if 0
-    static constexpr std::string_view POSITION {"POSITION"};
-    static constexpr std::string_view NORMAL   {"NORMAL"};
-    static constexpr std::string_view TANGENT  {"TANGENT"};
-    static constexpr std::string_view TEXCOORD_{"TEXCOORD_"};
-    static constexpr std::string_view COLOR_   {"COLOR_"};
-    static constexpr std::string_view JOINTS_  {"JOINTS_"};
-    static constexpr std::string_view WEIGHTS_ {"WEIGHTS_"};
-    
-    if (gltf_attribute_name == POSITION) return 0;
-    if (gltf_attribute_name == NORMAL  ) return 0;
-    if (gltf_attribute_name == TANGENT ) return 0;
-    if (is_indexed_attribute(gltf_attribute_name, TEXCOORD_)) return get_attribute_index(gltf_attribute_name, TEXCOORD_);
-    if (is_indexed_attribute(gltf_attribute_name, COLOR_   )) return get_attribute_index(gltf_attribute_name, COLOR_   );
-    if (is_indexed_attribute(gltf_attribute_name, JOINTS_  )) return get_attribute_index(gltf_attribute_name, JOINTS_  );
-    if (is_indexed_attribute(gltf_attribute_name, WEIGHTS_ )) return get_attribute_index(gltf_attribute_name, WEIGHTS_ );
-#endif
-
     std::size_t last_underscore_pos = gltf_attribute_name.find_last_of("_");
     if (last_underscore_pos == std::string_view::npos) {
         return 0;
@@ -380,11 +357,11 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
     //// return 0;
 }
 
-[[nodiscard]] auto to_erhe(std::string_view gltf_attribute_name) -> erhe::graphics::Vertex_attribute::Usage_type
+[[nodiscard]] auto to_erhe(std::string_view gltf_attribute_name) -> erhe::dataformat::Vertex_attribute_usage
 {
     ERHE_PROFILE_FUNCTION();
 
-    using Usage_type = erhe::graphics::Vertex_attribute::Usage_type;
+    using Vertex_attribute_usage = erhe::dataformat::Vertex_attribute_usage;
 
     static constexpr std::string_view POSITION {"POSITION"};
     static constexpr std::string_view NORMAL   {"NORMAL"};
@@ -394,27 +371,27 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
     static constexpr std::string_view JOINTS_  {"JOINTS_"};
     static constexpr std::string_view WEIGHTS_ {"WEIGHTS_"};
     
-    if (gltf_attribute_name == POSITION) return Usage_type::position;
-    if (gltf_attribute_name == NORMAL  ) return Usage_type::normal;
-    if (gltf_attribute_name == TANGENT ) return Usage_type::tangent;
-    if (is_indexed_attribute(gltf_attribute_name, TEXCOORD_)) return Usage_type::tex_coord;
-    if (is_indexed_attribute(gltf_attribute_name, COLOR_)) return Usage_type::color;
-    if (is_indexed_attribute(gltf_attribute_name, JOINTS_)) return Usage_type::joint_indices;
-    if (is_indexed_attribute(gltf_attribute_name, WEIGHTS_)) return Usage_type::joint_weights;
-    return Usage_type::custom;
+    if (gltf_attribute_name == POSITION) return Vertex_attribute_usage::position;
+    if (gltf_attribute_name == NORMAL  ) return Vertex_attribute_usage::normal;
+    if (gltf_attribute_name == TANGENT ) return Vertex_attribute_usage::tangent;
+    if (is_indexed_attribute(gltf_attribute_name, TEXCOORD_)) return Vertex_attribute_usage::tex_coord;
+    if (is_indexed_attribute(gltf_attribute_name, COLOR_   )) return Vertex_attribute_usage::color;
+    if (is_indexed_attribute(gltf_attribute_name, JOINTS_  )) return Vertex_attribute_usage::joint_indices;
+    if (is_indexed_attribute(gltf_attribute_name, WEIGHTS_ )) return Vertex_attribute_usage::joint_weights;
+    return Vertex_attribute_usage::custom;
 }
 
-[[nodiscard]] auto vertex_attribute_usage_from_erhe(erhe::graphics::Vertex_attribute::Usage usage) -> std::string
+[[nodiscard]] auto vertex_attribute_usage_from_erhe(const erhe::dataformat::Vertex_attribute& attribute) -> std::string
 {
-    switch (usage.type) {
-        case erhe::graphics::Vertex_attribute::Usage_type::position:      return "POSITION";
-        case erhe::graphics::Vertex_attribute::Usage_type::normal:        return "NORMAL";
-        case erhe::graphics::Vertex_attribute::Usage_type::tangent:       return "TANGENT";
-        case erhe::graphics::Vertex_attribute::Usage_type::bitangent:     return "BITANGENT";
-        case erhe::graphics::Vertex_attribute::Usage_type::color:         return fmt::format("COLOR_{}",    usage.index);
-        case erhe::graphics::Vertex_attribute::Usage_type::tex_coord:     return fmt::format("TEXCOORD_{}", usage.index);
-        case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: return fmt::format("JOINTS_{}",   usage.index);
-        case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: return fmt::format("WEIGHTS_{}",  usage.index);
+    switch (attribute.usage_type) {
+        case erhe::dataformat::Vertex_attribute_usage::position:      return "POSITION";
+        case erhe::dataformat::Vertex_attribute_usage::normal:        return "NORMAL";
+        case erhe::dataformat::Vertex_attribute_usage::tangent:       return "TANGENT";
+        case erhe::dataformat::Vertex_attribute_usage::bitangent:     return "BITANGENT";
+        case erhe::dataformat::Vertex_attribute_usage::color:         return fmt::format("COLOR_{}",    attribute.usage_index);
+        case erhe::dataformat::Vertex_attribute_usage::tex_coord:     return fmt::format("TEXCOORD_{}", attribute.usage_index);
+        case erhe::dataformat::Vertex_attribute_usage::joint_indices: return fmt::format("JOINTS_{}",   attribute.usage_index);
+        case erhe::dataformat::Vertex_attribute_usage::joint_weights: return fmt::format("WEIGHTS_{}",  attribute.usage_index);
         default: return {};
     }
 }
@@ -609,7 +586,7 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
 
 using Item_flags = erhe::Item_flags;
 
-[[nodiscard]] auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
+[[nodiscard]] auto to_gl(const erhe::graphics::Image_format format) -> gl::Internal_format
 {
     switch (format) {
         //using enum erhe::graphics::Image_format;
@@ -1407,40 +1384,39 @@ private:
 
         // Gather attributes
         std::size_t vertex_count = std::numeric_limits<std::size_t>::max();
+        triangle_soup.vertex_format.streams.emplace_back(0);
         for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-            const fastgltf::Attribute& attribute = primitive.attributes[i];
-            erhe::graphics::Vertex_attribute::Usage_type attribute_usage_type = to_erhe(attribute.name);
-            std::size_t attribute_usage_index = get_attribute_index(attribute.name);
-            const fastgltf::Accessor& accessor = m_asset->accessors[attribute.accessorIndex];
+            const fastgltf::Attribute&                     gltf_attribute        = primitive.attributes[i];
+            const erhe::dataformat::Vertex_attribute_usage attribute_usage_type  = to_erhe(gltf_attribute.name);
+            const std::size_t                              attribute_usage_index = get_attribute_index(gltf_attribute.name);
+            const fastgltf::Accessor&                      accessor              = m_asset->accessors[gltf_attribute.accessorIndex];
+            const erhe::dataformat::Format                 format                = to_erhe_attribute(accessor);
             vertex_count = std::min(accessor.count, vertex_count);
-            erhe::graphics::Glsl_type type{erhe::graphics::Glsl_type::invalid};
-            erhe::dataformat::Format format{erhe::dataformat::Format::format_undefined};
-            to_erhe_attribute(accessor, type, format);
-            triangle_soup.vertex_format.add_attribute(
-                erhe::graphics::Vertex_attribute{
-                    .name        = std::string{attribute.name},
-                    .usage       = { attribute_usage_type, attribute_usage_index },
-                    .shader_type = type,
-                    .data_type   = format
-                }
+            triangle_soup.vertex_format.streams.front().emplace_back(
+                format,
+                attribute_usage_type,
+                attribute_usage_index
             );
         }
-        std::size_t vertex_stride = triangle_soup.vertex_format.stride();
+        std::size_t vertex_stride = triangle_soup.vertex_format.streams.front().stride;
+        ERHE_VERIFY(triangle_soup.vertex_format.streams.size() == 1);
         triangle_soup.vertex_data.resize(vertex_count * vertex_stride);
-        const std::vector<erhe::graphics::Vertex_attribute>& erhe_attributes = triangle_soup.vertex_format.get_attributes();
+        const std::vector<erhe::dataformat::Attribute_stream> erhe_attributes = triangle_soup.vertex_format.get_attributes();
 
         // Gather vertex data
         for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
-            const fastgltf::Attribute& attribute = primitive.attributes[i];
-            erhe::graphics::Vertex_attribute::Usage_type attribute_usage = to_erhe(attribute.name);
-            std::size_t attribute_index = get_attribute_index(attribute.name);
-            const fastgltf::Accessor& accessor = m_asset->accessors[attribute.accessorIndex];
-            const erhe::graphics::Vertex_attribute& erhe_attribute = erhe_attributes[i];
+            const fastgltf::Attribute&                     gltf_attribute  = primitive.attributes[i];
+            const erhe::dataformat::Vertex_attribute_usage attribute_usage = to_erhe(gltf_attribute.name);
+            const std::size_t                              attribute_index = get_attribute_index(gltf_attribute.name);
+            const fastgltf::Accessor&                      accessor        = m_asset->accessors[gltf_attribute.accessorIndex];
+            const erhe::dataformat::Attribute_stream&      erhe_attribute  = erhe_attributes[i];
+            ERHE_VERIFY(erhe_attribute.attribute != nullptr);
+            ERHE_VERIFY(erhe_attribute.stream != nullptr);
             copyComponentsFromAccessor(
                 m_asset.get(),
                 accessor,
-                triangle_soup.vertex_data.data() + erhe_attribute.offset,
-                triangle_soup.vertex_format.stride()
+                triangle_soup.vertex_data.data() + erhe_attribute.attribute->offset,
+                erhe_attribute.stream->stride
             );
 
             log_gltf->trace(
@@ -1448,8 +1424,8 @@ private:
                 "component type = {}, accessor type = {}, normalized = {}, count = {}, "
                 "accessor offset = {}",
                 i,
-                attribute.name.c_str(),
-                c_str(attribute_usage), // semantics
+                gltf_attribute.name.c_str(),
+                erhe::dataformat::c_str(attribute_usage), // semantics
                 attribute_index,
                 c_str(accessor.componentType),
                 fastgltf::getAccessorTypeName(accessor.type),
@@ -1878,10 +1854,10 @@ private:
         add_index_data_source(entry, index_count, vertex_count, std::span<const std::byte>(index_data, index_data_size));
     }
     void add_vertex_data_source(
-        Export_entry&                        entry,
-        std::size_t                          vertex_count,
-        const erhe::graphics::Vertex_format& vertex_format,
-        std::span<const std::byte>           vertex_data_source
+        Export_entry&                          entry,
+        std::size_t                            vertex_count,
+        const erhe::dataformat::Vertex_format& vertex_format,
+        std::span<const std::byte>             vertex_data_source
     )
     {
         entry.vertex_buffer = m_gltf_asset.buffers.size();
@@ -1900,33 +1876,35 @@ private:
         buffer_view.bufferIndex = entry.vertex_buffer;
         buffer_view.byteOffset  = 0;
         buffer_view.byteLength  = vertex_data_source.size_bytes();
-        buffer_view.byteStride  = vertex_format.stride(),
+        buffer_view.byteStride  = vertex_format.streams.front().stride,
         buffer_view.target      = fastgltf::BufferTarget::ArrayBuffer;
         m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
 
-        const std::vector<erhe::graphics::Vertex_attribute>& erhe_attributes = vertex_format.get_attributes();
-        const std::size_t vertex_stride = vertex_format.stride();
-        for (const erhe::graphics::Vertex_attribute& erhe_attribute : erhe_attributes) {
-            const std::string attribute_name = vertex_attribute_usage_from_erhe(erhe_attribute.usage);
+        const std::vector<erhe::dataformat::Attribute_stream>& erhe_attributes = vertex_format.get_attributes();
+        //const std::size_t vertex_stride = vertex_format.stride();
+        for (const erhe::dataformat::Attribute_stream& erhe_attribute : erhe_attributes) {
+            ERHE_VERIFY(erhe_attribute.attribute != nullptr);
+            ERHE_VERIFY(erhe_attribute.stream != nullptr);
+            const std::string attribute_name = vertex_attribute_usage_from_erhe(*erhe_attribute.attribute);
             if (attribute_name.empty()) {
                 continue; // TODO export erhe-specific non-standard attributes?
             }
 
             // Scan for attribute min and max
-            const std::size_t dimension = get_component_count(erhe_attribute.data_type);
+            const std::size_t dimension = get_component_count(erhe_attribute.attribute->format);
             FASTGLTF_STD_PMR_NS::vector<double> max_value(dimension);
             FASTGLTF_STD_PMR_NS::vector<double> min_value(dimension);
             std::fill(max_value.begin(), max_value.end(), std::numeric_limits<float>::lowest());
             std::fill(min_value.begin(), min_value.end(), std::numeric_limits<float>::max());
 
-            const std::byte* attribute_base_ = vertex_data_source.data() + erhe_attribute.offset;
+            const std::byte* attribute_base_ = vertex_data_source.data() + erhe_attribute.attribute->offset;
             const std::uint8_t* attribute_base = reinterpret_cast<const std::uint8_t*>(attribute_base_);
             for (size_t i = 0; i < vertex_count; ++i) {
                 float v[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                const std::uint8_t* src = attribute_base + vertex_stride * i;
+                const std::uint8_t* src = attribute_base + erhe_attribute.stream->stride * i;
                 std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(&v[0]);
                 erhe::dataformat::convert(
-                    src, erhe_attribute.data_type, 
+                    src, erhe_attribute.attribute->format,
                     dst, erhe::dataformat::Format::format_32_vec4_float, 
                     1.0f
                 );
@@ -1936,11 +1914,11 @@ private:
                 }
             }
             fastgltf::Accessor accessor{
-                .byteOffset      = erhe_attribute.offset,
+                .byteOffset      = erhe_attribute.attribute->offset,
                 .count           = vertex_count,
-                .type            = get_accessor_type (erhe_attribute.data_type),
-                .componentType   = get_component_type(erhe_attribute.data_type),
-                .normalized      = get_normalized    (erhe_attribute.data_type),
+                .type            = get_accessor_type (erhe_attribute.attribute->format),
+                .componentType   = get_component_type(erhe_attribute.attribute->format),
+                .normalized      = get_normalized    (erhe_attribute.attribute->format),
                 .max             = max_value,
                 .min             = min_value,
                 .bufferViewIndex = entry.vertex_buffer_view,
@@ -1954,10 +1932,10 @@ private:
         }
     }
     void add_vertex_data_source(
-        Export_entry&                        entry,
-        std::size_t                          vertex_count,
-        const erhe::graphics::Vertex_format& vertex_format,
-        const std::vector<uint8_t>&          vertex_data_source
+        Export_entry&                          entry,
+        std::size_t                            vertex_count,
+        const erhe::dataformat::Vertex_format& vertex_format,
+        const std::vector<uint8_t>&            vertex_data_source
     )
     {
         const std::byte*  vertex_data      = reinterpret_cast<const std::byte*>(vertex_data_source.data());
@@ -1996,17 +1974,19 @@ private:
         const GEO::Mesh& geo_mesh = geometry->get_mesh();
 
         // TODO
-        const erhe::graphics::Vertex_format vertex_format{
-            0,
+        const erhe::dataformat::Vertex_format vertex_format{
             {
-                erhe::graphics::Vertex_attribute::position_float3(),
-                erhe::graphics::Vertex_attribute::normal0_float3(),
-                erhe::graphics::Vertex_attribute::texcoord0_float2()
+                0,
+                {
+                    { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position,  0},
+                    { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    0},
+                    { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0}
+                }
             }
         };
 
         const Mesh_info   mesh_info     = get_mesh_info(geo_mesh);
-        const std::size_t vertex_stride = vertex_format.stride();
+        const std::size_t vertex_stride = vertex_format.streams.front().stride;
         const std::size_t index_stride  = 4;
         const std::size_t index_count   = mesh_info.index_count_fill_triangles;
         const std::size_t vertex_count  = mesh_info.vertex_count_corners;
@@ -2015,7 +1995,7 @@ private:
         erhe::buffer::Cpu_buffer vertex_buffer{"", vertex_count * vertex_stride};
         erhe::buffer::Cpu_buffer index_buffer {"", index_count * index_stride};
 
-        erhe::primitive::Cpu_buffer_sink buffer_sink{vertex_buffer, index_buffer};
+        erhe::primitive::Cpu_buffer_sink buffer_sink{{&vertex_buffer}, index_buffer};
         const erhe::primitive::Build_info build_info{
             .primitive_types = {
                 .fill_triangles = true,

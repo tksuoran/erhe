@@ -24,6 +24,6 @@ void main()
     v_TBN            = mat3(tangent, bitangent, normal);
     gl_Position      = clip_from_world * position;
     v_material_index = primitive.primitives[gl_DrawID].material_index;
-    v_texcoord       = a_texcoord;
-    v_color          = a_color;
+    v_texcoord       = a_texcoord_0;
+    v_color          = a_color_0;
 }

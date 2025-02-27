@@ -120,8 +120,9 @@ void Renderpass::render(const Render_context& context) const
         log_composer->debug("render_fullscreen");
         context.editor_context.forward_renderer->render_fullscreen(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .index_buffer           = &context.editor_context.mesh_memory->gl_index_buffer,
-                .vertex_buffer          = &context.editor_context.mesh_memory->gl_vertex_buffer,
+                .index_buffer           = &context.editor_context.mesh_memory->index_buffer,
+                .vertex_buffer0         = &context.editor_context.mesh_memory->position_vertex_buffer,
+                .vertex_buffer1         = &context.editor_context.mesh_memory->non_position_vertex_buffer,
                 .camera                 = context.camera,
                 .light_projections      = nullptr,
                 .lights                 = {},
@@ -170,8 +171,9 @@ void Renderpass::render(const Render_context& context) const
         context.editor_context.forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .index_type             = context.editor_context.mesh_memory->buffer_info.index_type,
-                .index_buffer           = &context.editor_context.mesh_memory->gl_index_buffer,
-                .vertex_buffer          = &context.editor_context.mesh_memory->gl_vertex_buffer,
+                .index_buffer           = &context.editor_context.mesh_memory->index_buffer,
+                .vertex_buffer0         = &context.editor_context.mesh_memory->position_vertex_buffer,
+                .vertex_buffer1         = &context.editor_context.mesh_memory->non_position_vertex_buffer,
                 .ambient_light          = layers.light()->ambient_light,
                 .camera                 = context.camera,
                 .light_projections      = context.scene_view.get_light_projections(),

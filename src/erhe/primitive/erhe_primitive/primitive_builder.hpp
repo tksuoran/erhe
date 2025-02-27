@@ -1,23 +1,14 @@
 #pragma once
 
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_graphics/vertex_format.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_primitive/buffer_writer.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/build_info.hpp"
-#include "erhe_primitive/index_range.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/vertex_attribute_info.hpp"
 
-#include <glm/glm.hpp>
-
 #include <cstddef>
-#include <optional>
-
-namespace erhe::graphics {
-    class Buffer;
-    class Buffer_transfer_queue;
-}
 
 namespace erhe::primitive {
 
@@ -56,21 +47,20 @@ public:
     void get_mesh_info            ();
     void get_vertex_attributes    ();
     void calculate_bounding_volume();
-    void allocate_vertex_buffer   ();
+    void allocate_vertex_buffers  ();
     void allocate_index_buffer    ();
-    void allocate_index_range     (const gl::Primitive_type primitive_type, const std::size_t index_count, Index_range& out_range);
+    void allocate_index_range     (const Primitive_type primitive_type, const std::size_t index_count, Index_range& out_range);
 
-    Buffer_mesh&                         buffer_mesh;
-    const GEO::Mesh&                     mesh;
-    const Build_info&                    build_info;
-    Element_mappings&                    element_mappings;
-    std::size_t                          next_index_range_start{0};
-    Vertex_attributes                    vertex_attributes;
-    Mesh_info                            mesh_info;
-    const erhe::graphics::Vertex_format& vertex_format;
-    std::size_t                          vertex_stride     {0};
-    std::size_t                          total_vertex_count{0};
-    std::size_t                          total_index_count {0};
+    Buffer_mesh&                           buffer_mesh;
+    const GEO::Mesh&                       mesh;
+    const Build_info&                      build_info;
+    Element_mappings&                      element_mappings;
+    std::size_t                            next_index_range_start{0};
+    Vertex_attributes                      vertex_attributes;
+    Mesh_info                              mesh_info;
+    const erhe::dataformat::Vertex_format& vertex_format;
+    std::size_t                            total_vertex_count{0};
+    std::size_t                            total_index_count {0};
 };
 
 class Build_context
@@ -122,17 +112,17 @@ private:
     GEO::vec4f v_tangent  {};
     GEO::vec3f v_bitangent{};
 
-    GEO::index_t         mesh_facet {0};
-    GEO::index_t         mesh_vertex{0};
-    GEO::index_t         mesh_corner{0};
-    uint32_t             vertex_buffer_index{0}; // primitive vertex index    .
-    uint32_t             first_index        {0}; // primitive first index      . These make triangle primitive
-    uint32_t             previous_index     {0}; // primitive previous index  .
-    uint32_t             primitive_index    {0}; // triangle (TODO quad) index
-    Normal_style         normal_style       {Normal_style::none};
-    Vertex_buffer_writer vertex_writer;
-    Index_buffer_writer  index_writer;
-    Mesh_attributes      mesh_attributes;
+    GEO::index_t        mesh_facet {0};
+    GEO::index_t        mesh_vertex{0};
+    GEO::index_t        mesh_corner{0};
+    uint32_t            vertex_buffer_index{0}; // primitive vertex index    .
+    uint32_t            first_index        {0}; // primitive first index      . These make triangle primitive
+    uint32_t            previous_index     {0}; // primitive previous index  .
+    uint32_t            primitive_index    {0}; // triangle (TODO quad) index
+    Normal_style        normal_style       {Normal_style::none};
+    Index_buffer_writer index_writer;
+    Mesh_attributes     mesh_attributes;
+    std::vector<std::unique_ptr<Vertex_buffer_writer>> vertex_writers;
     // Use root.element_mappings.corner_to_vertex_id
     // std::vector<size_t>  corner_indices;
 
@@ -140,6 +130,26 @@ private:
     bool used_fallback_tangent      {false};
     bool used_fallback_bitangent    {false};
     bool used_fallback_texcoord     {false};
+
+    [[nodiscard]] auto get_attribute_writer(erhe::dataformat::Vertex_attribute_usage usage, std::size_t index = 0) -> Vertex_buffer_writer*;
+
+    class Vertex_writers
+    {
+    public:
+        Vertex_buffer_writer* position;
+        Vertex_buffer_writer* normal;
+        Vertex_buffer_writer* tangent;
+        Vertex_buffer_writer* bitangent;
+        Vertex_buffer_writer* color_0;
+        Vertex_buffer_writer* texcoord_0;
+        Vertex_buffer_writer* joint_indices_0;
+        Vertex_buffer_writer* joint_weights_0;
+        Vertex_buffer_writer* id;
+        Vertex_buffer_writer* aniso_control;
+        Vertex_buffer_writer* valency_edge_count;
+
+    };
+    Vertex_writers attribute_writers;
 };
 
 class Primitive_builder final

@@ -164,7 +164,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
         m_graphics_instance.opengl_state_tracker.execute(pipeline, use_override_shader_stages);
         m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
-        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(parameters.vertex_buffer, 0, 0);
+        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer0, 0);
+        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(1, parameters.vertex_buffer1, 0);
 
         for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");

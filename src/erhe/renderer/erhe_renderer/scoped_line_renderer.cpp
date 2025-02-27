@@ -4,7 +4,6 @@
 #include "erhe_renderer/renderer_log.hpp"
 
 #include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
@@ -22,7 +21,7 @@ Scoped_line_renderer::Scoped_line_renderer(
     : m_line_renderer     {&line_renderer}
     , m_bucket            {&bucket}
     , m_indirect          {indirect}
-    , m_line_vertex_stride{m_line_renderer->get_program_interface().line_vertex_format.stride()}
+    , m_line_vertex_stride{m_line_renderer->get_program_interface().line_vertex_format.streams.front().stride}
 {
     if (m_indirect) {
         m_indirect_buffer.reserve(1000 * m_line_vertex_stride);
@@ -35,7 +34,7 @@ Scoped_line_renderer::Scoped_line_renderer(Scoped_line_renderer&& old)
     , m_bucket                      {std::exchange(old.m_bucket,        nullptr)}
     , m_indirect                    {std::exchange(old.m_indirect,      0)}
     , m_first_line                  {std::exchange(old.m_first_line,    0)}
-    , m_line_vertex_stride          {m_line_renderer->get_program_interface().line_vertex_format.stride()}
+    , m_line_vertex_stride          {m_line_renderer->get_program_interface().line_vertex_format.streams.front().stride}
     , m_last_allocate_gpu_float_data{nullptr}
     , m_last_allocate_word_offset   {0}
     , m_last_allocate_word_count    {0}

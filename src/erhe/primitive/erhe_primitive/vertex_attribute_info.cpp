@@ -1,24 +1,22 @@
 #include "erhe_primitive/vertex_attribute_info.hpp"
-#include "erhe_gl/gl_helpers.hpp"
-#include "erhe_graphics/vertex_format.hpp"
-
-#include <cstddef>
 
 namespace erhe::primitive {
 
 Vertex_attribute_info::Vertex_attribute_info() = default;
 
 Vertex_attribute_info::Vertex_attribute_info(
-    const erhe::graphics::Vertex_format&               vertex_format,
-    const erhe::graphics::Vertex_attribute::Usage_type semantic,
-    const unsigned int                                 semantic_index
+    const erhe::dataformat::Vertex_format&         vertex_format,
+    const erhe::dataformat::Vertex_attribute_usage usage,
+    const unsigned int                             usage_index
 )
 {
-    attribute = vertex_format.find_attribute_maybe(semantic, semantic_index);
-    if (attribute != nullptr) {
-        data_type = attribute->data_type;
-        offset    = attribute->offset;
-        size      = attribute->size();
+    erhe::dataformat::Attribute_stream info = vertex_format.find_attribute(usage, usage_index);
+    if (info.attribute != nullptr) {
+        attribute = info.attribute;
+        format    = info.attribute->format;
+        binding   = info.stream->binding;
+        offset    = info.attribute->offset;
+        size      = erhe::dataformat::get_format_size(info.attribute->format);
     }
 }
 

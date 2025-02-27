@@ -497,13 +497,16 @@ inline void write_low(const std::span<std::uint8_t> destination, const erhe::dat
 
 } // namespace
 
-Vertex_buffer_writer::Vertex_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink)
+Vertex_buffer_writer::Vertex_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink, std::size_t stream, std::size_t stride)
     : build_context{build_context}
     , buffer_sink  {buffer_sink}
+    , stream       {stream}
+    , stride       {stride}
 {
-    const auto& vertex_buffer_range = build_context.root.buffer_mesh.vertex_buffer_range;
+    const auto& vertex_buffer_range = build_context.root.buffer_mesh.vertex_buffer_ranges[stream];
     vertex_data.resize(vertex_buffer_range.count * vertex_buffer_range.element_size);
     vertex_data_span = vertex_data;
+    ERHE_VERIFY(vertex_buffer_range.element_size == stride);
 }
 
 Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
@@ -513,7 +516,7 @@ Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
 
 auto Vertex_buffer_writer::start_offset() -> std::size_t
 {
-    return build_context.root.buffer_mesh.vertex_buffer_range.byte_offset;
+    return build_context.root.buffer_mesh.vertex_buffer_ranges[stream].byte_offset;
 }
 
 Index_buffer_writer::Index_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink)
@@ -576,7 +579,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const G
 {
     write_low2(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value.data()
     );
 }
@@ -585,7 +588,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const G
 {
     write_low3(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value.data()
     );
 }
@@ -594,7 +597,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const G
 {
     write_low4(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value.data()
     );
 }
@@ -603,7 +606,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const G
 {
     write_low2(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value.data()
     );
 }
@@ -612,7 +615,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const G
 {
     write_low3(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value.data()
     );
 }
@@ -621,7 +624,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const G
 {
     write_low4(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value.data()
     );
 }
@@ -630,7 +633,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const G
 {
     write_low2(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value.data()
     );
 }
@@ -639,7 +642,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const G
 {
     write_low3(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value.data()
     );
 }
@@ -648,7 +651,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const G
 {
     write_low4(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value.data()
     );
 }
@@ -657,7 +660,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 {
     write_low2(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         &value.x
     );
 }
@@ -666,7 +669,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 {
     write_low3(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         &value.x
     );
 }
@@ -675,7 +678,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 {
     write_low4(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         &value.x
     );
 }
@@ -684,7 +687,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const u
 {
     write_low(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value
     );
 }
@@ -693,7 +696,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 {
     write_low(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value
     );
 }
@@ -702,7 +705,7 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 {
     write_low(
         vertex_data_span.subspan(vertex_write_offset + attribute.offset, attribute.size),
-        attribute.data_type,
+        attribute.format,
         value
     );
 }
@@ -710,6 +713,11 @@ void Vertex_buffer_writer::write(const Vertex_attribute_info& attribute, const g
 void Vertex_buffer_writer::move(const std::size_t relative_offset)
 {
     vertex_write_offset += relative_offset;
+}
+
+void Vertex_buffer_writer::next_vertex()
+{
+    move(stride);
 }
 
 void Index_buffer_writer::write_corner(const uint32_t v0)

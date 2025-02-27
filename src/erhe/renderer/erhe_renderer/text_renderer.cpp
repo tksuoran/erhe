@@ -1,6 +1,7 @@
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
 #include "erhe_gl/enum_bit_mask_operators.hpp"
@@ -12,8 +13,6 @@
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
@@ -37,10 +36,10 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
     const std::filesystem::path vs_path = shader_path / std::filesystem::path("text.vert");
     const std::filesystem::path fs_path = shader_path / std::filesystem::path("text.frag");
     erhe::graphics::Shader_stages_create_info create_info{
-        .name                      = "text",
-        .interface_blocks          = { &m_projection_block },
-        .vertex_attribute_mappings = &m_attribute_mappings,
-        .fragment_outputs          = &m_fragment_outputs,
+        .name             = "text",
+        .interface_blocks = { &m_projection_block },
+        .fragment_outputs = &m_fragment_outputs,
+        .vertex_format    = &m_vertex_format,
         .shaders = {
             { gl::Shader_type::vertex_shader,   vs_path },
             { gl::Shader_type::fragment_shader, fs_path }
@@ -81,20 +80,14 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
             .location = 0
         }
     }
-    , m_attribute_mappings{
-        graphics_instance,
-        { // initializer list
-            erhe::graphics::Vertex_attribute_mapping::a_position_float_vec3(),
-            erhe::graphics::Vertex_attribute_mapping::a_color_float_vec4(),
-            erhe::graphics::Vertex_attribute_mapping::a_texcoord_float_vec2()
-        }
-    }
     , m_vertex_format{
-        0, // TODO
         {
-            erhe::graphics::Vertex_attribute::position_float3(),
-            erhe::graphics::Vertex_attribute::color_ubyte4(),
-            erhe::graphics::Vertex_attribute::texcoord0_float2()
+            0,
+            {
+                { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position  },
+                { erhe::dataformat::Format::format_8_vec4_unorm,  erhe::dataformat::Vertex_attribute_usage::color     },
+                { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord }
+            }
         }
     }
     , m_index_buffer{
@@ -111,7 +104,7 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
         }
     }    
     , m_shader_stages{build_shader_stages()} 
-    , m_vertex_buffer{graphics_instance, gl::Buffer_target::array_buffer, m_vertex_format.stride() * s_vertex_count, "Text renderer vertex ring buffer"}
+    , m_vertex_buffer{graphics_instance, gl::Buffer_target::array_buffer, m_vertex_format.streams.front().stride * s_vertex_count, "Text renderer vertex ring buffer"}
     , m_projection_buffer{
         graphics_instance,
         gl::Buffer_target::uniform_buffer,
@@ -120,7 +113,7 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
         "Text renderer projection ring buffer"
     }
     , m_vertex_input{
-        erhe::graphics::Vertex_input_state_data::make(m_attribute_mappings, { &m_vertex_format })
+        erhe::graphics::Vertex_input_state_data::make(m_vertex_format)
     }
     , m_pipeline{
         erhe::graphics::Pipeline_data{
@@ -185,8 +178,13 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
         return;
     }
 
-    const std::size_t         quad_count        = m_font->get_glyph_count(text);
-    const std::size_t         vertex_byte_count = quad_count * 4 * m_vertex_format.stride();
+    const std::size_t quad_count = m_font->get_glyph_count(text);
+    if (quad_count == 0) {
+        return;
+    }
+
+    const std::size_t vertex_stride     = m_vertex_format.streams.front().stride;
+    const std::size_t vertex_byte_count = quad_count * 4 * vertex_stride;
 
     if (!m_vertex_buffer_range.has_value()) {
         m_vertex_buffer_range = m_vertex_buffer.open(Ring_buffer_usage::CPU_write, 0);
@@ -248,7 +246,7 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     Buffer_range& vertex_buffer_range = m_vertex_buffer_range.value();
     vertex_buffer_range.close(m_vertex_write_offset);
 
-    const auto handle = m_graphics_instance.get_handle(*m_font->texture(), m_nearest_sampler);
+    const uint64_t handle = m_graphics_instance.get_handle(*m_font->texture(), m_nearest_sampler);
 
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 
@@ -289,7 +287,7 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
     m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(&m_vertex_buffer.get_buffer(), vertex_offset, 0);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, &m_vertex_buffer.get_buffer(), vertex_offset);
 
     projection_buffer_range.bind();
 

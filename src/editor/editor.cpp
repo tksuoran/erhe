@@ -405,6 +405,29 @@ public:
                 []() -> bool { return true; }
             );
 
+            m_vertex_format = erhe::dataformat::Vertex_format{
+                {
+                    0,
+                    {
+                        { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position,      0},
+                        { erhe::dataformat::Format::format_32_vec4_uint,  erhe::dataformat::Vertex_attribute_usage::joint_indices, 0},
+                        { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::joint_weights, 0}
+                    }
+                },
+                {
+                    1,
+                    {
+                        { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    0},
+                        { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    1}, // editor wireframe bias requires smooth normal attribute
+                        { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::tangent,   0},
+                        { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0},
+                        { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color,     0},
+                        { erhe::dataformat::Format::format_8_vec2_unorm,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_aniso_control},
+                        { erhe::dataformat::Format::format_16_vec2_uint,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_valency_edge_count}
+                    }
+                }
+            };
+
             m_clipboard            = std::make_unique<Clipboard     >(commands, m_editor_context);
             m_editor_scenes        = std::make_unique<Editor_scenes >(m_editor_context);
             m_editor_windows       = std::make_unique<Editor_windows>(m_editor_context, commands);
@@ -412,7 +435,7 @@ public:
             m_selection            = std::make_unique<Selection     >(commands, m_editor_context, editor_message_bus);
             m_scene_commands       = std::make_unique<Scene_commands>(commands, m_editor_context);
             m_debug_draw           = std::make_unique<Debug_draw    >(m_editor_context);
-            m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(*m_graphics_instance.get());
+            m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(*m_graphics_instance.get(), m_vertex_format);
             m_programs             = std::make_unique<Programs>(*m_graphics_instance.get());
 
             auto programs_load_task = taskflow.emplace([this](){
@@ -459,7 +482,7 @@ public:
 
             auto mesh_memory_task = taskflow.emplace([this](){
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
-                m_mesh_memory = std::make_unique<Mesh_memory>(*m_graphics_instance.get(), *m_program_interface.get());
+                m_mesh_memory = std::make_unique<Mesh_memory>(*m_graphics_instance.get(), m_vertex_format);
             })  .name("Mesh_memory");
 
             auto imgui_windows_task = taskflow.emplace([this](){
@@ -1014,6 +1037,7 @@ public:
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
     std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;
 #endif
+    erhe::dataformat::Vertex_format                          m_vertex_format;
 
     std::unique_ptr<Programs                              >  m_programs;
     std::unique_ptr<erhe::scene_renderer::Forward_renderer>  m_forward_renderer;

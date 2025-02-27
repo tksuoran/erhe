@@ -1,9 +1,7 @@
 in vec2      v_texcoord;
 in vec4      v_position;
-in vec4      v_color;
-in mat3      v_TBN;
+in vec3      v_normal;
 in flat uint v_material_index;
-in float     v_tangent_scale;
 
 const float m_pi   = 3.1415926535897932384626434;
 const float m_i_pi = 0.3183098861837906715377675;
@@ -181,19 +179,15 @@ void main()
     );
 
     vec3  V       = normalize(view_position_in_world - v_position.xyz);
-    vec3  T       = normalize(v_TBN[0]);
-    vec3  B       = normalize(v_TBN[1]);
-    vec3  N       = normalize(v_TBN[2]);
+    vec3  N       = normalize(v_normal);
 
-    mat3  TBN     = mat3(T, B, N);
-    mat3  TBN_t   = transpose(TBN);
     float N_dot_V = clamped_dot(N, V);
 
     Material material = material.materials[v_material_index];
 
     uvec2 base_color_texture         = material.base_color_texture;
     uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
-    vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(base_color_texture, v_texcoord).rgb;
+    vec3  base_color                 = material.base_color.rgb * sample_texture(base_color_texture, v_texcoord).rgb;
     uint  directional_light_count    = light_block.directional_light_count;
     uint  spot_light_count           = light_block.spot_light_count;
     uint  point_light_count          = light_block.point_light_count;

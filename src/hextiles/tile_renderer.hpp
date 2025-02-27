@@ -6,8 +6,7 @@
 #include "tile_shape.hpp"
 #include "unit_type.hpp"
 
-#include "erhe_renderer/buffer_writer.hpp"
-
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/pipeline.hpp"
@@ -19,8 +18,7 @@
 #include "erhe_graphics/state/input_assembly_state.hpp"
 #include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_graphics/vertex_format.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
+#include "erhe_renderer/buffer_writer.hpp"
 #include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_math/viewport.hpp"
 
@@ -128,8 +126,7 @@ private:
     erhe::graphics::Shader_resource           m_default_uniform_block; // containing sampler uniforms for non-bindless textures
     erhe::graphics::Shader_resource*          m_texture_sampler;       // non-bindless
     erhe::graphics::Fragment_outputs          m_fragment_outputs;
-    erhe::graphics::Vertex_attribute_mappings m_attribute_mappings;
-    erhe::graphics::Vertex_format             m_vertex_format;
+    erhe::dataformat::Vertex_format           m_vertex_format;
     erhe::graphics::Buffer                    m_index_buffer;
     erhe::graphics::Sampler                   m_nearest_sampler;
     erhe::graphics::Shader_resource           m_projection_block;

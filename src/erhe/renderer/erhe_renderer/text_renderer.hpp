@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_renderer/gpu_ring_buffer.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
@@ -9,8 +10,6 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_graphics/vertex_format.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_ui/font.hpp"
 #include "erhe_ui/rectangle.hpp"
 #include "erhe_math/viewport.hpp"
@@ -75,26 +74,25 @@ private:
     static constexpr std::size_t index_count             {uint16_max * per_quad_index_count};
     static constexpr std::size_t index_stride            {2};
 
-    erhe::graphics::Instance&                      m_graphics_instance;
-    erhe::graphics::Shader_resource                m_default_uniform_block; // containing sampler uniforms for non bindless textures
-    erhe::graphics::Shader_resource                m_projection_block;
-    erhe::graphics::Shader_resource*               m_clip_from_window_resource;
-    erhe::graphics::Shader_resource*               m_texture_resource;
-    std::size_t                                    m_u_clip_from_window_size  {0};
-    std::size_t                                    m_u_clip_from_window_offset{0};
-    std::size_t                                    m_u_texture_size           {0};
-    std::size_t                                    m_u_texture_offset         {0};
-    erhe::graphics::Fragment_outputs               m_fragment_outputs;
-    erhe::graphics::Vertex_attribute_mappings      m_attribute_mappings;
-    erhe::graphics::Vertex_format                  m_vertex_format;
-    erhe::graphics::Buffer                         m_index_buffer;
-    erhe::graphics::Sampler                        m_nearest_sampler;
-    erhe::graphics::Shader_stages                  m_shader_stages;
-    std::unique_ptr<erhe::ui::Font>                m_font;
-    erhe::renderer::GPU_ring_buffer                m_vertex_buffer;
-    erhe::renderer::GPU_ring_buffer                m_projection_buffer;
-    erhe::graphics::Vertex_input_state             m_vertex_input;
-    erhe::graphics::Pipeline                       m_pipeline;
+    erhe::graphics::Instance&          m_graphics_instance;
+    erhe::graphics::Shader_resource    m_default_uniform_block; // containing sampler uniforms for non bindless textures
+    erhe::graphics::Shader_resource    m_projection_block;
+    erhe::graphics::Shader_resource*   m_clip_from_window_resource;
+    erhe::graphics::Shader_resource*   m_texture_resource;
+    std::size_t                        m_u_clip_from_window_size  {0};
+    std::size_t                        m_u_clip_from_window_offset{0};
+    std::size_t                        m_u_texture_size           {0};
+    std::size_t                        m_u_texture_offset         {0};
+    erhe::graphics::Fragment_outputs   m_fragment_outputs;
+    erhe::dataformat::Vertex_format    m_vertex_format;
+    erhe::graphics::Buffer             m_index_buffer;
+    erhe::graphics::Sampler            m_nearest_sampler;
+    erhe::graphics::Shader_stages      m_shader_stages;
+    std::unique_ptr<erhe::ui::Font>    m_font;
+    erhe::renderer::GPU_ring_buffer    m_vertex_buffer;
+    erhe::renderer::GPU_ring_buffer    m_projection_buffer;
+    erhe::graphics::Vertex_input_state m_vertex_input;
+    erhe::graphics::Pipeline           m_pipeline;
 
     std::optional<Buffer_range> m_vertex_buffer_range;
     std::size_t                 m_vertex_write_offset{};

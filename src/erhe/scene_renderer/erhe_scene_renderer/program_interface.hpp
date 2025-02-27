@@ -1,8 +1,8 @@
 #pragma once
 
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
@@ -18,7 +18,10 @@ namespace erhe::scene_renderer {
 class Program_interface
 {
 public:
-    explicit Program_interface(erhe::graphics::Instance& graphics_instance);
+    Program_interface(
+        erhe::graphics::Instance&        graphics_instance,
+        erhe::dataformat::Vertex_format& vertex_format
+    );
 
     Program_interface(const Program_interface&) = delete;
     void operator=   (const Program_interface&) = delete;
@@ -39,16 +42,13 @@ public:
 
     [[nodiscard]] auto make_program(erhe::graphics::Shader_stages_prototype&& prototype) -> erhe::graphics::Shader_stages;
 
-    void apply_default_attribute_values() const;
-
-    erhe::graphics::Fragment_outputs          fragment_outputs;
-    erhe::graphics::Vertex_attribute_mappings attribute_mappings;
-
-    Camera_interface    camera_interface;
-    Joint_interface     joint_interface;
-    Light_interface     light_interface;
-    Material_interface  material_interface;
-    Primitive_interface primitive_interface;
+    erhe::graphics::Fragment_outputs fragment_outputs;
+    erhe::dataformat::Vertex_format& vertex_format;
+    Camera_interface                 camera_interface;
+    Joint_interface                  joint_interface;
+    Light_interface                  light_interface;
+    Material_interface               material_interface;
+    Primitive_interface              primitive_interface;
 };
 
 } // namespace erhe::scene_renderer

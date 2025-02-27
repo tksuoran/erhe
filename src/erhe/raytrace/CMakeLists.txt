@@ -61,6 +61,7 @@ endif ()
 target_link_libraries(${_target}
     PUBLIC
         erhe::buffer
+        erhe::dataformat
         erhe::hash
         erhe::geometry
         erhe::profile

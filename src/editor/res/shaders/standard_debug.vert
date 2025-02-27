@@ -1,3 +1,5 @@
+#define a_valency_edge_count a_custom_2
+
 layout(location =  0) out vec4       v_position;
 layout(location =  1) out vec2       v_texcoord;
 layout(location =  2) out vec4       v_color;
@@ -21,20 +23,20 @@ void main() {
         v_bone_color = vec4(0.3, 0.0, 0.3, 1.0);
     } else {
         world_from_node =
-            a_weights.x * joint.joints[int(a_joints.x) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +
-            a_weights.y * joint.joints[int(a_joints.y) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +
-            a_weights.z * joint.joints[int(a_joints.z) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +
-            a_weights.w * joint.joints[int(a_joints.w) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind;
+            a_joint_weights_0.x * joint.joints[int(a_joint_indices_0.x) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +
+            a_joint_weights_0.y * joint.joints[int(a_joint_indices_0.y) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +
+            a_joint_weights_0.z * joint.joints[int(a_joint_indices_0.z) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +
+            a_joint_weights_0.w * joint.joints[int(a_joint_indices_0.w) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind;
         world_from_node_cofactor =
-            a_weights.x * joint.joints[int(a_joints.x) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor +
-            a_weights.y * joint.joints[int(a_joints.y) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor +
-            a_weights.z * joint.joints[int(a_joints.z) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor +
-            a_weights.w * joint.joints[int(a_joints.w) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor;
+            a_joint_weights_0.x * joint.joints[int(a_joint_indices_0.x) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor +
+            a_joint_weights_0.y * joint.joints[int(a_joint_indices_0.y) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor +
+            a_joint_weights_0.z * joint.joints[int(a_joint_indices_0.z) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor +
+            a_joint_weights_0.w * joint.joints[int(a_joint_indices_0.w) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor;
         v_bone_color =
-            a_weights.x * joint.debug_joint_colors[(int(a_joints.x) + primitive.primitives[gl_DrawID].base_joint_index) % joint.debug_joint_color_count] +
-            a_weights.y * joint.debug_joint_colors[(int(a_joints.y) + primitive.primitives[gl_DrawID].base_joint_index) % joint.debug_joint_color_count] +
-            a_weights.z * joint.debug_joint_colors[(int(a_joints.z) + primitive.primitives[gl_DrawID].base_joint_index) % joint.debug_joint_color_count] +
-            a_weights.w * joint.debug_joint_colors[(int(a_joints.w) + primitive.primitives[gl_DrawID].base_joint_index) % joint.debug_joint_color_count];
+            a_joint_weights_0.x * joint.debug_joint_colors[(int(a_joint_indices_0.x) + primitive.primitives[gl_DrawID].base_joint_index) % joint.debug_joint_color_count] +
+            a_joint_weights_0.y * joint.debug_joint_colors[(int(a_joint_indices_0.y) + primitive.primitives[gl_DrawID].base_joint_index) % joint.debug_joint_color_count] +
+            a_joint_weights_0.z * joint.debug_joint_colors[(int(a_joint_indices_0.z) + primitive.primitives[gl_DrawID].base_joint_index) % joint.debug_joint_color_count] +
+            a_joint_weights_0.w * joint.debug_joint_colors[(int(a_joint_indices_0.w) + primitive.primitives[gl_DrawID].base_joint_index) % joint.debug_joint_color_count];
     }
 
     mat4 clip_from_world = camera.cameras[0].clip_from_world;
@@ -52,9 +54,9 @@ void main() {
     v_N              = normal;
     gl_Position      = clip_from_world * position;
     v_material_index = primitive.primitives[gl_DrawID].material_index;
-    v_texcoord       = a_texcoord;
-    v_color          = a_color;
-    v_aniso_control  = a_aniso_control;
+    v_texcoord       = a_texcoord_0;
+    v_color          = a_color_0;
+    v_aniso_control  = a_custom_1; //aniso_control;
     v_line_width     = primitive.primitives[gl_DrawID].size;
     v_valency_edge_count = a_valency_edge_count;
 }

@@ -10,5 +10,5 @@ void main()
     gl_Position   = clip_from_world * position;
     vs_position   = a_position.xyz;
     vs_line_width = a_position.w;
-    vs_color      = a_color;
+    vs_color      = a_color_0;
 }

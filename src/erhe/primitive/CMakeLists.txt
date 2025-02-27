@@ -43,9 +43,8 @@ target_link_libraries(${_target}
         glm::glm-header-only
         etl::etl
         erhe::buffer
+        erhe::dataformat
         erhe::geometry
-        erhe::gl
-        erhe::graphics # TODO Get rid of this dependency?
         erhe::item
         erhe::math
         erhe::raytrace

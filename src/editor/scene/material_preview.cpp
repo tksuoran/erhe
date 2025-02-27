@@ -8,6 +8,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/content_library.hpp"
 
+#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_geometry/geometry.hpp"

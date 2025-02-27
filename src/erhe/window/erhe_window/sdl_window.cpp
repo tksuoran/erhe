@@ -945,10 +945,10 @@ void Context_window::swap_buffers() const
 
 auto Context_window::get_device_pointer() const -> void*
 {
-    ERHE_FATAL("TODO");
 #if defined(_WIN32)
     return wglGetCurrentContext();
 #else
+    ERHE_FATAL("TODO");
     return nullptr; // TODO
 #endif
 }

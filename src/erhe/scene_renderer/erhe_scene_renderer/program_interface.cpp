@@ -16,7 +16,10 @@ namespace erhe::scene_renderer {
 
 using erhe::graphics::Vertex_attribute;
 
-Program_interface::Program_interface(erhe::graphics::Instance& graphics_instance)
+Program_interface::Program_interface(
+    erhe::graphics::Instance&        graphics_instance,
+    erhe::dataformat::Vertex_format& vertex_format
+)
     : fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -24,99 +27,7 @@ Program_interface::Program_interface(erhe::graphics::Instance& graphics_instance
             .location = 0
         }
     }
-    , attribute_mappings{
-        graphics_instance,
-        {
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 0,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
-                .name            = "a_position_texcoord",
-                .src_usage       = {
-                    .type = 
-                        Vertex_attribute::Usage_type::position |
-                        Vertex_attribute::Usage_type::tex_coord
-                }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 0,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
-                .name            = "a_position",
-                .src_usage       = { Vertex_attribute::Usage_type::position }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 1,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
-                .name            = "a_normal",
-                .src_usage       = { Vertex_attribute::Usage_type::normal }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 3,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
-                .name            = "a_normal_smooth",
-                .src_usage       = { Vertex_attribute::Usage_type::normal, 1 }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 2,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec3,
-                .name            = "a_normal_flat",
-                .src_usage       = { Vertex_attribute::Usage_type::normal, 2 }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 4,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
-                .name            = "a_tangent",
-                .src_usage       = { Vertex_attribute::Usage_type::tangent }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 5,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
-                .name            = "a_bitangent",
-                .src_usage       = { Vertex_attribute::Usage_type::bitangent }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 6,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
-                .name            = "a_color",
-                .src_usage       = { Vertex_attribute::Usage_type::color }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 7,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec2,
-                .name            = "a_aniso_control",
-                .src_usage       = { Vertex_attribute::Usage_type::aniso_control }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 8,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec2,
-                .name            = "a_texcoord",
-                .src_usage       = { Vertex_attribute::Usage_type::tex_coord }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 9,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
-                .name            = "a_id",
-                .src_usage       = { Vertex_attribute::Usage_type::id }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 10,
-                .shader_type     = erhe::graphics::Glsl_type::unsigned_int_vec4,
-                .name            = "a_joints",
-                .src_usage       = { Vertex_attribute::Usage_type::joint_indices }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 11,
-                .shader_type     = erhe::graphics::Glsl_type::float_vec4,
-                .name            = "a_weights",
-                .src_usage       = { Vertex_attribute::Usage_type::joint_weights }
-            },
-            erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 12,
-                .shader_type     = erhe::graphics::Glsl_type::unsigned_int_vec2,
-                .name            = "a_valency_edge_count",
-                .src_usage       = { Vertex_attribute::Usage_type::valency_edge_count}
-            }
-        }
-    }
+    , vertex_format      {vertex_format}
     , camera_interface   {graphics_instance}
     , joint_interface    {graphics_instance}
     , light_interface    {graphics_instance}
@@ -151,8 +62,8 @@ auto Program_interface::make_prototype(
     const std::filesystem::path gs_path = shader_path / std::filesystem::path(create_info.name + ".geom");
     const std::filesystem::path vs_path = shader_path / std::filesystem::path(create_info.name + ".vert");
 
-    create_info.vertex_attribute_mappings = &attribute_mappings,
-    create_info.fragment_outputs          = &fragment_outputs,
+    create_info.fragment_outputs = &fragment_outputs,
+    create_info.vertex_format    = &vertex_format;
     create_info.struct_types.push_back(&material_interface.material_struct);
     create_info.struct_types.push_back(&light_interface.light_struct);
     create_info.struct_types.push_back(&camera_interface.camera_struct);
@@ -215,25 +126,6 @@ auto Program_interface::make_program(erhe::graphics::Shader_stages_prototype&& p
     }
 
     return erhe::graphics::Shader_stages{std::move(prototype)};
-}
-
-void Program_interface::apply_default_attribute_values() const
-{
-    // TODO This is experimental and not used. Mesh_memory should have all the used attributes.
-    for (const erhe::graphics::Vertex_attribute_mapping& mapping : attribute_mappings.mappings) {
-        GLuint i = static_cast<GLuint>(mapping.layout_location);
-        Vertex_attribute::Usage_type usage_type = (mapping.dst_usage_type == Vertex_attribute::Usage_type::automatic)
-            ? mapping.src_usage.type 
-            : mapping.dst_usage_type;
-        
-        switch (usage_type) {
-            case erhe::graphics::Vertex_attribute::Usage_type::normal:    gl::vertex_attrib_4f(i, 0.0f, 1.0f, 0.0f, 0.0f); break;
-            case erhe::graphics::Vertex_attribute::Usage_type::tangent:   gl::vertex_attrib_4f(i, 1.0f, 0.0f, 0.0f, 1.0f); break;
-            case erhe::graphics::Vertex_attribute::Usage_type::bitangent: gl::vertex_attrib_4f(i, 0.0f, 0.0f, 1.0f, 0.0f); break;
-            case erhe::graphics::Vertex_attribute::Usage_type::color:     gl::vertex_attrib_4f(i, 1.0f, 1.0f, 1.0f, 1.0f); break;
-            default: break;
-        }
-    }
 }
 
 } // namespace erhe::scene_renderer

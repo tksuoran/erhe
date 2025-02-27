@@ -7,6 +7,7 @@
 #endif
 
 #include "erhe_raytrace/igeometry.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 
 #include <glm/glm.hpp>
 
@@ -42,7 +43,7 @@ public:
     void set_buffer(
         Buffer_type               type,
         unsigned int              slot,
-        Format                    format,
+        erhe::dataformat::Format  format,
         erhe::buffer::Cpu_buffer* buffer,
         std::size_t               byte_offset,
         std::size_t               byte_stride,
@@ -63,7 +64,7 @@ private:
     public:
         Buffer_type               type       {Buffer_type::BUFFER_TYPE_INDEX};
         unsigned int              slot       {0};
-        Format                    format     {Format::FORMAT_UNDEFINED};
+        erhe::dataformat::Format  format     {erhe::dataformat::Format::format_undefined};
         erhe::buffer::Cpu_buffer* buffer     {nullptr};
         std::size_t               byte_offset{0};
         std::size_t               byte_stride{0};

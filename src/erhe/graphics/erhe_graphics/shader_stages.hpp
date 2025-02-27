@@ -7,12 +7,16 @@
 #include <map>
 #include <string>
 
+namespace erhe::dataformat {
+    class Vertex_format;
+}
+
 namespace erhe::graphics {
 
 class Fragment_outputs;
 class Shader_resource;
-class Vertex_attribute_mappings;
 class Gl_shader;
+class Vertex_input_state;
 
 class Shader_stage_extension
 {
@@ -59,19 +63,19 @@ public:
     auto get_description() const -> std::string;
 
     std::string                                      name;
-    std::vector<std::string>                         pragmas                  {};
-    std::vector<std::pair<std::string, std::string>> defines                  {};
-    std::vector<Shader_stage_extension>              extensions               {};
-    std::vector<const Shader_resource*>              struct_types             {};
-    std::vector<const Shader_resource*>              interface_blocks         {};
-    const Vertex_attribute_mappings*                 vertex_attribute_mappings{nullptr};
-    const Fragment_outputs*                          fragment_outputs         {nullptr};
-    const Shader_resource*                           default_uniform_block    {nullptr}; // contains sampler uniforms
-    std::vector<Shader_stage>                        shaders                  {};
-    bool                                             dump_reflection          {false};
-    bool                                             dump_interface           {false};
-    bool                                             dump_final_source        {false};
-    bool                                             build                    {false};
+    std::vector<std::string>                         pragmas              {};
+    std::vector<std::pair<std::string, std::string>> defines              {};
+    std::vector<Shader_stage_extension>              extensions           {};
+    std::vector<const Shader_resource*>              struct_types         {};
+    std::vector<const Shader_resource*>              interface_blocks     {};
+    const Fragment_outputs*                          fragment_outputs     {nullptr};
+    const erhe::dataformat::Vertex_format*           vertex_format        {nullptr};
+    const Shader_resource*                           default_uniform_block{nullptr}; // contains sampler uniforms
+    std::vector<Shader_stage>                        shaders              {};
+    bool                                             dump_reflection      {false};
+    bool                                             dump_interface       {false};
+    bool                                             dump_final_source    {false};
+    bool                                             build                {false};
 };
 
 class Shader_stages_prototype final

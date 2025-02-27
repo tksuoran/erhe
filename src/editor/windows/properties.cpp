@@ -373,10 +373,16 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
     ImGui::Text("Corner Points: %zu",   buffer_mesh->corner_point_indices.get_point_count());
     ImGui::Text("Centroid Points: %zu", buffer_mesh->polygon_centroid_indices.get_point_count());
 
-    ImGui::Text("Vertices: %zu",     buffer_mesh->vertex_buffer_range.count);
-    ImGui::Text("Indices: %zu",      buffer_mesh->index_buffer_range.count);
-    ImGui::Text("Vertex Bytes: %zu", buffer_mesh->vertex_buffer_range.get_byte_size());
-    ImGui::Text("Index Bytes: %zu",  buffer_mesh->vertex_buffer_range.get_byte_size());
+    ImGui::Text("Indices: %zu",         buffer_mesh->index_buffer_range.count);
+
+    for (size_t i = 0, end = buffer_mesh->vertex_buffer_ranges.size(); i < end; ++i) {
+        std::string stream_label = fmt::format("Vertex stream {}", i);
+        if (!ImGui::TreeNodeEx(stream_label.c_str(), ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Vertices: %zu",     buffer_mesh->vertex_buffer_ranges.at(i).count);
+            ImGui::Text("Vertex Bytes: %zu", buffer_mesh->vertex_buffer_ranges.at(i).get_byte_size());
+            ImGui::Text("Index Bytes: %zu",  buffer_mesh->vertex_buffer_ranges.at(i).get_byte_size());
+        }
+    }
 
     if (buffer_mesh->bounding_box.is_valid()) {
         const glm::vec3 size = buffer_mesh->bounding_box.max - buffer_mesh->bounding_box.min;

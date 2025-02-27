@@ -25,10 +25,12 @@ target_link_libraries(
     ${_target}
     PRIVATE
     erhe::bit
+    erhe::dataformat
     erhe::file
     erhe::gl
     erhe::gltf
     erhe::graphics
+    erhe::graphics_buffer_sink
     erhe::log
     erhe::math
     erhe::primitive

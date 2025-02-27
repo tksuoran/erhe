@@ -1,26 +1,18 @@
 #pragma once
 
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_renderer/line_renderer_bucket.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/pipeline.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_graphics/state/input_assembly_state.hpp"
-#include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <etl/vector.h>
 
-#include <glm/glm.hpp>
-
-
 #include <cstdint>
-#include <list>
 #include <memory>
 
 namespace erhe::graphics {
@@ -41,9 +33,8 @@ public:
 
     bool                                             reverse_depth{false};
     erhe::graphics::Fragment_outputs                 fragment_outputs;
-    erhe::graphics::Vertex_attribute_mappings        attribute_mappings;
-    erhe::graphics::Vertex_format                    line_vertex_format;
-    erhe::graphics::Vertex_format                    triangle_vertex_format;
+    erhe::dataformat::Vertex_format                  line_vertex_format;
+    erhe::dataformat::Vertex_format                  triangle_vertex_format;
     std::unique_ptr<erhe::graphics::Shader_resource> line_vertex_struct;
     std::unique_ptr<erhe::graphics::Shader_resource> line_vertex_buffer_block;
     std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_struct;

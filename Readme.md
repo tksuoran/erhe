@@ -25,7 +25,7 @@ erhe is evolution of RenderStack <https://github.com/tksuoran/RenderStack>
 
 All dependencies of erhe are either included directly in `src/` for
 small libraries, or git pulled from their repositories using CMake
-`fetchcontent` during CMake configure step.
+CPM during CMake configure step.
 
 ### Windows Requirements
 
@@ -42,20 +42,17 @@ small libraries, or git pulled from their repositories using CMake
 ### Linux Requirements
 
 -   Recent enough CMake
-    -   Ubuntu 22.04 and 20.04 have been tested to good
-    -   Ubuntu 18.04 has too old version of CMake
+    -   Ubuntu 24.04 and 22.04 have been tested
     -   https://apt.kitware.com/ may help to get recent CMake
 -   New enough C++ compiler
-    -   clang-10 or newer is ok
-    -   GCC-9 or newer are ok
-    -   GCC-8 or older is not currently support
+    -   clang and GCC which is not older than couple of years should be ok
 -   python 3
 -   packages such `libwayland-dev libxkbcommon-dev xorg-dev`
 
 For IDE:
 
 -  Visual Studio Code with CMake and C++ extensions is supported
--  CLion is supported
+-  CLion has been tested at some point in the past
 
 ### Build steps for Visual Studio (Windows)
 
@@ -67,9 +64,9 @@ For IDE:
 
 ### Build steps for CLion (Windows and Linux)
 
-erhe has initial CLion support.
+erhe has initial CLion support. Caustion: These instructions have not been tested for a while.
 
-Currently, CLion does not fully support CMake presets. Enable `Debug` profile only.
+At the time of writing, CLion did not fully support CMake presets. Enable `Debug` profile only.
 If you want to make a release build, edit settings for that profile, instead of trying
 to use the other CMake preset profiles.
 
@@ -103,7 +100,7 @@ erhe with CMake:
 | :---                            | :---                       | :---                            |
 | ERHE_AUDIO_LIBRARY              | Audio library              | miniaudio, none                 |
 | ERHE_FONT_RASTERIZATION_LIBRARY | Font rasterization library | freetype, none                  |
-| ERHE_GLTF_LIBRARY               | GLTF library               | fastgltf, none                  |
+| ERHE_GLTF_LIBRARY               | glTF library               | fastgltf, none                  |
 | ERHE_GUI_LIBRARY                | GUI library                | imgui, none                     |
 | ERHE_PHYSICS_LIBRARY            | Physics library            | jolt, none                      |
 | ERHE_PROFILE_LIBRARY            | Profile library            | nvtx, superluminal, tracy, none |
@@ -128,8 +125,8 @@ The main raytrace backend is currently `bvh`. Even the `bvh` backend is incomple
 causing performance issues when creating larger scenes. The `embree` raytrace backend
 has been rotting for a while, it would require some work to get it back to working.
 
-erhe (editor) can be configured to use raytrace for mouse picking models from 3D viewports.
-By default, and when raytrace backend is set to `none`, mouse picking uses GPU rendering
+By default erhe (editor) uses raytrace for mouse picking models from 3D viewports.
+Alternatively, when raytrace backend is set to `none`, mouse picking uses GPU rendering
 based, where GPU renders ID buffer (unique color per object and triangle) and the image
 is read back to the CPU.
 
@@ -156,7 +153,8 @@ Disabling SVG library removes erhe editor scene node icons.
 
 ### ERHE_GLTF_LIBRARY
 
-Disabling GLTF library removes capability to parse GLTF files in erhe editor.
+Disabling glTF library removes capability to parse glTF files in erhe editor.
+erhe uses fastgltf for importing and exporting glTF files.
 
 ### ERHE_AUDIO_LIBRARY
 
@@ -182,7 +180,7 @@ Disabling font layout library removes native text rendering in erhe. ImGui conte
 Editor is a sandbox like experimentation executable with a random set of functionality
 
 -   Scene is (mostly) procedurally generated
--   A primitive GLTF parser can load GLTF file content
+-   A primitive glTF parser can load glTF file content
 -   A primitive obj parser can load OBJ file content
 -   ImGui is used extensively for user interface
 -   Content can be viewed with OpenXR compatible headset (if enabled from `erhe.ini`)
@@ -191,18 +189,21 @@ Editor is a sandbox like experimentation executable with a random set of functio
 -   Scene model geometries can be manipulated with operations such as Catmull-Clark
 -   Scene models can be created using a brush tool (must have selected brush *and* material)
 
+[![erhe summer 2024](https://img.youtube.com/vi/8hnKr348qt8/0.jpg)](https://www.youtube.com/watch?v=8hnKr348qt8)
+
 # erhe libraries
 
 Major libraries
+
 ## erhe::geometry
 
 `erhe::geometry` provides classes manipulating geometric, polygon based 3D objects.
 
-Geometry is collection of `Point`s, `Polygon`s, `Corner`s and their attributes.
+[Geogram](https://github.com/BrunoLevy/geogram) library is used as backend for geometry
+data structures. Geogram `Mesh` uses facets, facet corners, vertices and edges, and
+attributes can be associated to each of them. Geogram classes are designed for manipulating
+3D objects, not for rendering them.
 
-Arbitrary attributes can be associated with each `Point`, `Polygon` and `Corner`.
-
-These classes are designed for manipulating 3D objects, not for rendering them.
 See `erhe::scene` and `erhe::scene_renderer` how to render geometry objects.
 
 Some features:
@@ -210,10 +211,15 @@ Some features:
 -  Catmull-Clark subdivision operation
 -  Sqrt3 subdivision operation
 -  Conway operators:
-    -   Dual
     -   Ambo
-    -   Truncate
+    -   Chamfer (experimental)
+    -   Dual
     -   Gyro
+    -   Join
+    -   Kis
+    -   Meta
+    -   Truncate
+-  CSG / boolean operations using Geogram are experimental, they need more work to be more usable.
 
 ## erhe::gl
 
@@ -253,8 +259,7 @@ to renderable (or raytraceable) vertex and index buffers.
 
 `erhe::renderer` provides classes to assist rendering generic 3D content.
 
--  `Buffer_writer` keeps track of range of graphics `Buffer` that is being written to.
--  `Multi_buffer` keeps dedicated versions of a graphics buffer for each frame in flight.
+-  `GPU_ring_buffer` provides recycled memory that is filled by the CPU for each use.
 -  `Line_renderer` can be used to draw debug lines
 -  `Text_renderer` can be used to draw 2D text (labels) into 3D viewport
 
@@ -294,8 +299,8 @@ It uses and extends functionality from `erhe::renderer`.
 
 ## erhe::window namespace
 
-`erhe::toolkit` provides windowing system abstraction, currently
-using GLFW3.
+`erhe::window` provides windowing system abstraction, currently
+using SDL or GLFW.
 
 ## erhe::verify
 

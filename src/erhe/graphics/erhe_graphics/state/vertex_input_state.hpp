@@ -1,12 +1,11 @@
 #pragma once
 
 #include "erhe_graphics/gl_objects.hpp"
-#include "erhe_graphics/vertex_attribute.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <cstddef>
-#include <memory>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -18,23 +17,21 @@ typedef int GLint;
 namespace erhe::graphics {
 
 class Buffer;
-class Vertex_attribute_mapping;
-class Vertex_attribute_mappings;
-class Vertex_format;
 
 static constexpr int MAX_ATTRIBUTE_COUNT { 16 }; // TODO(tksuoran@gmail.com): Get rid of this kind of constant?
 
-class Vertex_input_attribute // VkVertexInputAttributeDescription
+class Gl_vertex_input_attribute // VkVertexInputAttributeDescription
 {
 public:
     GLuint                 layout_location{0};
     GLuint                 binding;
     GLsizei                stride;
     GLint                  dimension;
-    gl::Attribute_type     shader_type;
-    gl::Vertex_attrib_type data_type;
+    gl::Attribute_type     gl_attribute_type;
+    gl::Vertex_attrib_type gl_vertex_atrib_type;
     bool                   normalized;
     GLuint                 offset;
+    std::string            name;
 };
 
 class Vertex_input_binding // VkVertexInputBindingDescription
@@ -45,16 +42,21 @@ public:
     GLuint  divisor;
 };
 
+[[nodiscard]] auto get_vertex_divisor(erhe::dataformat::Vertex_step step) -> GLuint;
+
+[[nodiscard]] auto get_gl_attribute_type(erhe::dataformat::Format format) -> gl::Attribute_type;
+
+[[nodiscard]] auto get_gl_vertex_attrib_type(erhe::dataformat::Format format) -> gl::Vertex_attrib_type;
+
+[[nodiscard]] auto get_gl_normalized(erhe::dataformat::Format format) -> bool;
+
 class Vertex_input_state_data
 {
 public:
-    std::vector<Vertex_input_attribute> attributes;
-    std::vector<Vertex_input_binding>   bindings;
+    std::vector<Gl_vertex_input_attribute> attributes;
+    std::vector<Vertex_input_binding>      bindings;
 
-    static auto make(
-        const Vertex_attribute_mappings&            mappings,
-        std::initializer_list<const Vertex_format*> vertex_formats
-    ) -> Vertex_input_state_data;
+    static auto make(const erhe::dataformat::Vertex_format& vertex_format) -> Vertex_input_state_data;
 };
 
 class Vertex_input_state
@@ -91,7 +93,7 @@ public:
     void execute(const Vertex_input_state* state);
 
     void set_index_buffer (erhe::graphics::Buffer* buffer) const;
-    void set_vertex_buffer(erhe::graphics::Buffer* buffer, std::size_t offset, uint32_t binding);
+    void set_vertex_buffer(uint32_t binding, const erhe::graphics::Buffer* buffer, std::size_t offset);
 
 private:
     std::vector<Vertex_input_binding> m_bindings;

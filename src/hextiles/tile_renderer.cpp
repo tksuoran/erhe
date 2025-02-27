@@ -4,6 +4,7 @@
 #include "hextiles.hpp"
 #include "hextiles_log.hpp"
 
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/gl_context_provider.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_gl/command_info.hpp"
@@ -17,8 +18,6 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_math/viewport.hpp"
@@ -45,11 +44,11 @@ constexpr size_t index_stride            {4};
 auto Tile_renderer::make_prototype(erhe::graphics::Instance& graphics_instance) const -> erhe::graphics::Shader_stages_prototype
 {
     erhe::graphics::Shader_stages_create_info create_info{
-        .name                      = "tile",
-        .interface_blocks          = { &m_projection_block },
-        .vertex_attribute_mappings = &m_attribute_mappings,
-        .fragment_outputs          = &m_fragment_outputs,
-        .default_uniform_block     = m_graphics_instance.info.use_bindless_texture
+        .name                  = "tile",
+        .interface_blocks      = { &m_projection_block },
+        .fragment_outputs      = &m_fragment_outputs,
+        .vertex_format         = &m_vertex_format,
+        .default_uniform_block = m_graphics_instance.info.use_bindless_texture
             ? nullptr
             : &m_default_uniform_block,
         .shaders = {
@@ -111,20 +110,14 @@ Tile_renderer::Tile_renderer(
             .location = 0
         }
     }
-    , m_attribute_mappings{
-        graphics_instance,
-        {
-            erhe::graphics::Vertex_attribute_mapping::a_position_float_vec2(),
-            erhe::graphics::Vertex_attribute_mapping::a_color_float_vec4(),
-            erhe::graphics::Vertex_attribute_mapping::a_texcoord_float_vec2(),
-        }
-    }
     , m_vertex_format{
-        0,
         {
-            erhe::graphics::Vertex_attribute::position_float2 (),
-            erhe::graphics::Vertex_attribute::color_ubyte4    (),
-            erhe::graphics::Vertex_attribute::texcoord0_float2()
+            0,
+            {
+                { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::position    },
+                { erhe::dataformat::Format::format_8_vec4_unorm,  erhe::dataformat::Vertex_attribute_usage::color       },
+                { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0}
+            }
         }
     }
     , m_index_buffer{
@@ -157,7 +150,7 @@ Tile_renderer::Tile_renderer(
     , m_vertex_buffer{
         graphics_instance,
         gl::Buffer_target::array_buffer,
-        m_vertex_format.stride() * max_quad_count * per_quad_vertex_count,
+        m_vertex_format.streams.front().stride * max_quad_count * per_quad_vertex_count,
         "Tile_renderer vertex ring buffer"
     }
     , m_projection_buffer{
@@ -167,12 +160,7 @@ Tile_renderer::Tile_renderer(
         20 * m_projection_block.size_bytes(), // TODO proper size estimate
         "Tile_renderer projection ring buffer"
     }
-    , m_vertex_input{
-        erhe::graphics::Vertex_input_state_data::make(
-            m_attribute_mappings,
-            { &m_vertex_format }
-        )
-    }
+    , m_vertex_input{erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
     , m_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "Map renderer",
@@ -186,12 +174,7 @@ Tile_renderer::Tile_renderer(
     }
 {
     // Prefill index buffer
-    erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{
-        m_index_buffer,
-        0,
-        index_count,
-        gl::Map_buffer_access_mask::map_write_bit
-    };
+    erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{m_index_buffer, 0, index_count, gl::Map_buffer_access_mask::map_write_bit};
 
     const auto& gpu_index_data = index_buffer_map.span();
     size_t      offset      {0};
@@ -747,7 +730,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
     m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(&m_vertex_buffer.get_buffer(), vertex_buffer_range.get_byte_start_offset_in_buffer(), 0);
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, &m_vertex_buffer.get_buffer(), vertex_buffer_range.get_byte_start_offset_in_buffer());
 
     projection_buffer_range.bind();
 

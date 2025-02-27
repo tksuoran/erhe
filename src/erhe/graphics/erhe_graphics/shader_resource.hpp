@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 
 #include <deque>
@@ -9,10 +10,13 @@
 #include <string_view>
 #include <vector>
 
+namespace erhe::dataformat {
+    class Vertex_attribute;
+}
+
 namespace erhe::graphics {
 
 class Instance;
-class Vertex_attribute;
 
 // Shader resource represents data or data structure that can
 // be made available to shader program.
@@ -209,7 +213,7 @@ public:
         const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
-    auto add(const Vertex_attribute& attribute) -> Shader_resource*;
+    auto add_attribute(const erhe::dataformat::Vertex_attribute& attribute) -> Shader_resource*;
 
 private:
     void align_offset_to(const unsigned int alignment);
@@ -252,5 +256,7 @@ private:
 
     // Only used for uniforms in program
 };
+
+void add_vertex_stream(const erhe::dataformat::Vertex_stream& vertex_stream, erhe::graphics::Shader_resource& vertex_struct, erhe::graphics::Shader_resource& vertices_block);
 
 } // namespace erhe::graphics

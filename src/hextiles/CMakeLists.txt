@@ -4,6 +4,7 @@ add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe.ini
+    logging.ini
     hextiles.cpp
     hextiles.hpp
     coordinate.cpp

@@ -1,12 +1,11 @@
 #include <fmt/core.h>
 #include <fmt/ostream.h>
 
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <memory>
@@ -64,22 +63,341 @@ void Vertex_input_state::on_thread_exit()
     }
 }
 
-auto Vertex_input_state_data::make(
-    const Vertex_attribute_mappings&            mappings,
-    std::initializer_list<const Vertex_format*> vertex_formats
-) -> Vertex_input_state_data
+auto get_vertex_divisor(erhe::dataformat::Vertex_step step) -> GLuint
+{
+    switch (step) {
+        case erhe::dataformat::Vertex_step::Step_per_vertex:   return 0;
+        case erhe::dataformat::Vertex_step::Step_per_instance: return 1;
+        default:
+            ERHE_FATAL("Invalid Vertex_step value");
+            return 0;
+    }
+}
+
+auto get_gl_attribute_type(const erhe::dataformat::Format format) -> gl::Attribute_type
+{
+    using namespace erhe::dataformat;
+    switch (format) {
+        case Format::format_8_scalar_unorm:           return gl::Attribute_type::float_;
+        case Format::format_8_scalar_snorm:           return gl::Attribute_type::float_;
+        case Format::format_8_scalar_uscaled:         return gl::Attribute_type::float_;
+        case Format::format_8_scalar_sscaled:         return gl::Attribute_type::float_;
+        case Format::format_8_scalar_uint:            return gl::Attribute_type::unsigned_int;
+        case Format::format_8_scalar_sint:            return gl::Attribute_type::int_;
+        case Format::format_8_vec2_unorm:             return gl::Attribute_type::float_vec2;
+        case Format::format_8_vec2_snorm:             return gl::Attribute_type::float_vec2;
+        case Format::format_8_vec2_uscaled:           return gl::Attribute_type::float_vec2;
+        case Format::format_8_vec2_sscaled:           return gl::Attribute_type::float_vec2;
+        case Format::format_8_vec2_uint:              return gl::Attribute_type::unsigned_int_vec2;
+        case Format::format_8_vec2_sint:              return gl::Attribute_type::int_vec2;
+        case Format::format_8_vec3_unorm:             return gl::Attribute_type::float_vec3;
+        case Format::format_8_vec3_snorm:             return gl::Attribute_type::float_vec3;
+        case Format::format_8_vec3_uscaled:           return gl::Attribute_type::float_vec3;
+        case Format::format_8_vec3_sscaled:           return gl::Attribute_type::float_vec3;
+        case Format::format_8_vec3_uint:              return gl::Attribute_type::unsigned_int_vec3;
+        case Format::format_8_vec3_sint:              return gl::Attribute_type::int_vec3;
+        case Format::format_8_vec4_unorm:             return gl::Attribute_type::float_vec4;
+        case Format::format_8_vec4_snorm:             return gl::Attribute_type::float_vec4;
+        case Format::format_8_vec4_uscaled:           return gl::Attribute_type::float_vec4;
+        case Format::format_8_vec4_sscaled:           return gl::Attribute_type::float_vec4;
+        case Format::format_8_vec4_uint:              return gl::Attribute_type::unsigned_int_vec4;
+        case Format::format_8_vec4_sint:              return gl::Attribute_type::int_vec4;
+        case Format::format_16_scalar_unorm:          return gl::Attribute_type::float_;
+        case Format::format_16_scalar_snorm:          return gl::Attribute_type::float_;
+        case Format::format_16_scalar_uscaled:        return gl::Attribute_type::float_;
+        case Format::format_16_scalar_sscaled:        return gl::Attribute_type::float_;
+        case Format::format_16_scalar_uint:           return gl::Attribute_type::unsigned_int;
+        case Format::format_16_scalar_sint:           return gl::Attribute_type::int_;
+        case Format::format_16_vec2_unorm:            return gl::Attribute_type::float_vec2;
+        case Format::format_16_vec2_snorm:            return gl::Attribute_type::float_vec2;
+        case Format::format_16_vec2_uscaled:          return gl::Attribute_type::float_vec2;
+        case Format::format_16_vec2_sscaled:          return gl::Attribute_type::float_vec2;
+        case Format::format_16_vec2_uint:             return gl::Attribute_type::unsigned_int_vec2;
+        case Format::format_16_vec2_sint:             return gl::Attribute_type::int_vec2;
+        case Format::format_16_vec3_unorm:            return gl::Attribute_type::float_vec3;
+        case Format::format_16_vec3_snorm:            return gl::Attribute_type::float_vec3;
+        case Format::format_16_vec3_uscaled:          return gl::Attribute_type::float_vec3;
+        case Format::format_16_vec3_sscaled:          return gl::Attribute_type::float_vec3;
+        case Format::format_16_vec3_uint:             return gl::Attribute_type::unsigned_int_vec3;
+        case Format::format_16_vec3_sint:             return gl::Attribute_type::int_vec3;
+        case Format::format_16_vec4_unorm:            return gl::Attribute_type::float_vec4;
+        case Format::format_16_vec4_snorm:            return gl::Attribute_type::float_vec4;
+        case Format::format_16_vec4_uscaled:          return gl::Attribute_type::float_vec4;
+        case Format::format_16_vec4_sscaled:          return gl::Attribute_type::float_vec4;
+        case Format::format_16_vec4_uint:             return gl::Attribute_type::unsigned_int_vec4;
+        case Format::format_16_vec4_sint:             return gl::Attribute_type::int_vec4;
+        case Format::format_32_scalar_unorm:          return gl::Attribute_type::float_;
+        case Format::format_32_scalar_snorm:          return gl::Attribute_type::float_;
+        case Format::format_32_scalar_uscaled:        return gl::Attribute_type::float_;
+        case Format::format_32_scalar_sscaled:        return gl::Attribute_type::float_;
+        case Format::format_32_scalar_uint:           return gl::Attribute_type::unsigned_int;
+        case Format::format_32_scalar_sint:           return gl::Attribute_type::int_;
+        case Format::format_32_scalar_float:          return gl::Attribute_type::float_;
+        case Format::format_32_vec2_unorm:            return gl::Attribute_type::float_vec2;
+        case Format::format_32_vec2_snorm:            return gl::Attribute_type::float_vec2;
+        case Format::format_32_vec2_uscaled:          return gl::Attribute_type::float_vec2;
+        case Format::format_32_vec2_sscaled:          return gl::Attribute_type::float_vec2;
+        case Format::format_32_vec2_uint:             return gl::Attribute_type::unsigned_int_vec2;
+        case Format::format_32_vec2_sint:             return gl::Attribute_type::int_vec2;
+        case Format::format_32_vec2_float:            return gl::Attribute_type::float_vec2;
+        case Format::format_32_vec3_unorm:            return gl::Attribute_type::float_vec3;
+        case Format::format_32_vec3_snorm:            return gl::Attribute_type::float_vec3;
+        case Format::format_32_vec3_uscaled:          return gl::Attribute_type::float_vec3;
+        case Format::format_32_vec3_sscaled:          return gl::Attribute_type::float_vec3;
+        case Format::format_32_vec3_uint:             return gl::Attribute_type::unsigned_int_vec3;
+        case Format::format_32_vec3_sint:             return gl::Attribute_type::int_vec3;
+        case Format::format_32_vec3_float:            return gl::Attribute_type::float_vec3;
+        case Format::format_32_vec4_unorm:            return gl::Attribute_type::float_vec4;
+        case Format::format_32_vec4_snorm:            return gl::Attribute_type::float_vec4;
+        case Format::format_32_vec4_uscaled:          return gl::Attribute_type::float_vec4;
+        case Format::format_32_vec4_sscaled:          return gl::Attribute_type::float_vec4;
+        case Format::format_32_vec4_uint:             return gl::Attribute_type::unsigned_int_vec4;
+        case Format::format_32_vec4_sint:             return gl::Attribute_type::int_vec4;
+        case Format::format_32_vec4_float:            return gl::Attribute_type::float_vec4;
+        case Format::format_packed1010102_vec4_unorm: return gl::Attribute_type::float_vec4;
+        case Format::format_packed1010102_vec4_snorm: return gl::Attribute_type::float_vec4;
+        case Format::format_packed1010102_vec4_uint:  return gl::Attribute_type::unsigned_int_vec4;
+        case Format::format_packed1010102_vec4_sint:  return gl::Attribute_type::int_vec4;
+
+        default: {
+            ERHE_FATAL("Bad format");
+            return static_cast<gl::Attribute_type>(0);
+        }
+    }
+}
+
+auto get_gl_vertex_attrib_type(const erhe::dataformat::Format format) -> gl::Vertex_attrib_type
+{
+    using namespace erhe::dataformat;
+    switch (format) {
+        case Format::format_8_scalar_unorm:           return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_scalar_snorm:           return gl::Vertex_attrib_type::byte;
+        case Format::format_8_scalar_uscaled:         return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_scalar_sscaled:         return gl::Vertex_attrib_type::byte;
+        case Format::format_8_scalar_uint:            return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_scalar_sint:            return gl::Vertex_attrib_type::byte;
+        case Format::format_8_vec2_unorm:             return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_vec2_snorm:             return gl::Vertex_attrib_type::byte;
+        case Format::format_8_vec2_uscaled:           return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_vec2_sscaled:           return gl::Vertex_attrib_type::byte;
+        case Format::format_8_vec2_uint:              return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_vec2_sint:              return gl::Vertex_attrib_type::byte;
+        case Format::format_8_vec3_unorm:             return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_vec3_snorm:             return gl::Vertex_attrib_type::byte;
+        case Format::format_8_vec3_uscaled:           return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_vec3_sscaled:           return gl::Vertex_attrib_type::byte;
+        case Format::format_8_vec3_uint:              return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_vec3_sint:              return gl::Vertex_attrib_type::byte;
+        case Format::format_8_vec4_unorm:             return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_vec4_snorm:             return gl::Vertex_attrib_type::byte;
+        case Format::format_8_vec4_uscaled:           return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_vec4_sscaled:           return gl::Vertex_attrib_type::byte;
+        case Format::format_8_vec4_uint:              return gl::Vertex_attrib_type::unsigned_byte;
+        case Format::format_8_vec4_sint:              return gl::Vertex_attrib_type::byte;
+        case Format::format_16_scalar_unorm:          return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_scalar_snorm:          return gl::Vertex_attrib_type::short_;
+        case Format::format_16_scalar_uscaled:        return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_scalar_sscaled:        return gl::Vertex_attrib_type::short_;
+        case Format::format_16_scalar_uint:           return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_scalar_sint:           return gl::Vertex_attrib_type::short_;
+        case Format::format_16_vec2_unorm:            return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_vec2_snorm:            return gl::Vertex_attrib_type::short_;
+        case Format::format_16_vec2_uscaled:          return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_vec2_sscaled:          return gl::Vertex_attrib_type::short_;
+        case Format::format_16_vec2_uint:             return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_vec2_sint:             return gl::Vertex_attrib_type::short_;
+        case Format::format_16_vec3_unorm:            return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_vec3_snorm:            return gl::Vertex_attrib_type::short_;
+        case Format::format_16_vec3_uscaled:          return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_vec3_sscaled:          return gl::Vertex_attrib_type::short_;
+        case Format::format_16_vec3_uint:             return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_vec3_sint:             return gl::Vertex_attrib_type::short_;
+        case Format::format_16_vec4_unorm:            return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_vec4_snorm:            return gl::Vertex_attrib_type::short_;
+        case Format::format_16_vec4_uscaled:          return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_vec4_sscaled:          return gl::Vertex_attrib_type::short_;
+        case Format::format_16_vec4_uint:             return gl::Vertex_attrib_type::unsigned_short;
+        case Format::format_16_vec4_sint:             return gl::Vertex_attrib_type::short_;
+        case Format::format_32_scalar_unorm:          return gl::Vertex_attrib_type::unsigned_int;
+        case Format::format_32_scalar_snorm:          return gl::Vertex_attrib_type::int_;
+        case Format::format_32_scalar_uscaled:        return gl::Vertex_attrib_type::unsigned_int;
+        case Format::format_32_scalar_sscaled:        return gl::Vertex_attrib_type::int_;
+        case Format::format_32_scalar_uint:           return gl::Vertex_attrib_type::unsigned_int;
+        case Format::format_32_scalar_sint:           return gl::Vertex_attrib_type::int_;
+        case Format::format_32_scalar_float:          return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec2_unorm:            return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec2_snorm:            return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec2_uscaled:          return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec2_sscaled:          return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec2_uint:             return gl::Vertex_attrib_type::unsigned_int;
+        case Format::format_32_vec2_sint:             return gl::Vertex_attrib_type::int_;
+        case Format::format_32_vec2_float:            return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec3_unorm:            return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec3_snorm:            return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec3_uscaled:          return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec3_sscaled:          return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec3_uint:             return gl::Vertex_attrib_type::unsigned_int;
+        case Format::format_32_vec3_sint:             return gl::Vertex_attrib_type::int_;
+        case Format::format_32_vec3_float:            return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec4_unorm:            return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec4_snorm:            return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec4_uscaled:          return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec4_sscaled:          return gl::Vertex_attrib_type::float_;
+        case Format::format_32_vec4_uint:             return gl::Vertex_attrib_type::unsigned_int;
+        case Format::format_32_vec4_sint:             return gl::Vertex_attrib_type::int_;
+        case Format::format_32_vec4_float:            return gl::Vertex_attrib_type::float_;
+        case Format::format_packed1010102_vec4_unorm: return gl::Vertex_attrib_type::unsigned_int_2_10_10_10_rev;
+        case Format::format_packed1010102_vec4_snorm: return gl::Vertex_attrib_type::unsigned_int_2_10_10_10_rev;
+        case Format::format_packed1010102_vec4_uint:  return gl::Vertex_attrib_type::unsigned_int_2_10_10_10_rev;
+        case Format::format_packed1010102_vec4_sint:  return gl::Vertex_attrib_type::int_2_10_10_10_rev;
+
+        default: {
+            ERHE_FATAL("Bad format");
+            return static_cast<gl::Vertex_attrib_type>(0);
+        }
+    }
+}
+
+auto get_gl_normalized(erhe::dataformat::Format format) -> bool
+{
+    using namespace erhe::dataformat;
+    switch (format) {
+        case Format::format_8_scalar_unorm:           return true;
+        case Format::format_8_scalar_snorm:           return true;
+        case Format::format_8_scalar_uscaled:         return false;
+        case Format::format_8_scalar_sscaled:         return false;
+        case Format::format_8_scalar_uint:            return false;
+        case Format::format_8_scalar_sint:            return false;
+        case Format::format_8_vec2_unorm:             return true;
+        case Format::format_8_vec2_snorm:             return true;
+        case Format::format_8_vec2_uscaled:           return false;
+        case Format::format_8_vec2_sscaled:           return false;
+        case Format::format_8_vec2_uint:              return false;
+        case Format::format_8_vec2_sint:              return false;
+        case Format::format_8_vec3_unorm:             return true;
+        case Format::format_8_vec3_snorm:             return true;
+        case Format::format_8_vec3_uscaled:           return false;
+        case Format::format_8_vec3_sscaled:           return false;
+        case Format::format_8_vec3_uint:              return false;
+        case Format::format_8_vec3_sint:              return false;
+        case Format::format_8_vec4_unorm:             return true;
+        case Format::format_8_vec4_snorm:             return true;
+        case Format::format_8_vec4_uscaled:           return false;
+        case Format::format_8_vec4_sscaled:           return false;
+        case Format::format_8_vec4_uint:              return false;
+        case Format::format_8_vec4_sint:              return false;
+        case Format::format_16_scalar_unorm:          return true;
+        case Format::format_16_scalar_snorm:          return true;
+        case Format::format_16_scalar_uscaled:        return false;
+        case Format::format_16_scalar_sscaled:        return false;
+        case Format::format_16_scalar_uint:           return false;
+        case Format::format_16_scalar_sint:           return false;
+        case Format::format_16_vec2_unorm:            return true;
+        case Format::format_16_vec2_snorm:            return true;
+        case Format::format_16_vec2_uscaled:          return false;
+        case Format::format_16_vec2_sscaled:          return false;
+        case Format::format_16_vec2_uint:             return false;
+        case Format::format_16_vec2_sint:             return false;
+        case Format::format_16_vec3_unorm:            return true;
+        case Format::format_16_vec3_snorm:            return true;
+        case Format::format_16_vec3_uscaled:          return false;
+        case Format::format_16_vec3_sscaled:          return false;
+        case Format::format_16_vec3_uint:             return false;
+        case Format::format_16_vec3_sint:             return false;
+        case Format::format_16_vec4_unorm:            return true;
+        case Format::format_16_vec4_snorm:            return true;
+        case Format::format_16_vec4_uscaled:          return false;
+        case Format::format_16_vec4_sscaled:          return false;
+        case Format::format_16_vec4_uint:             return false;
+        case Format::format_16_vec4_sint:             return false;
+        case Format::format_32_scalar_unorm:          return true;
+        case Format::format_32_scalar_snorm:          return true;
+        case Format::format_32_scalar_uscaled:        return false;
+        case Format::format_32_scalar_sscaled:        return false;
+        case Format::format_32_scalar_uint:           return false;
+        case Format::format_32_scalar_sint:           return false;
+        case Format::format_32_scalar_float:          return false;
+        case Format::format_32_vec2_unorm:            return true;
+        case Format::format_32_vec2_snorm:            return true;
+        case Format::format_32_vec2_uscaled:          return false;
+        case Format::format_32_vec2_sscaled:          return false;
+        case Format::format_32_vec2_uint:             return false;
+        case Format::format_32_vec2_sint:             return false;
+        case Format::format_32_vec2_float:            return false;
+        case Format::format_32_vec3_unorm:            return true;
+        case Format::format_32_vec3_snorm:            return true;
+        case Format::format_32_vec3_uscaled:          return false;
+        case Format::format_32_vec3_sscaled:          return false;
+        case Format::format_32_vec3_uint:             return false;
+        case Format::format_32_vec3_sint:             return false;
+        case Format::format_32_vec3_float:            return false;
+        case Format::format_32_vec4_unorm:            return true;
+        case Format::format_32_vec4_snorm:            return true;
+        case Format::format_32_vec4_uscaled:          return false;
+        case Format::format_32_vec4_sscaled:          return false;
+        case Format::format_32_vec4_uint:             return false;
+        case Format::format_32_vec4_sint:             return false;
+        case Format::format_32_vec4_float:            return false;
+        case Format::format_packed1010102_vec4_unorm: return true;
+        case Format::format_packed1010102_vec4_snorm: return true;
+        case Format::format_packed1010102_vec4_uint:  return false;
+        case Format::format_packed1010102_vec4_sint:  return false;
+
+        default: {
+            ERHE_FATAL("Bad format");
+            return false;
+        }
+    }
+}
+
+auto get_attribute_name(const erhe::dataformat::Vertex_attribute& attribute) -> std::string
+{
+    using namespace erhe::dataformat;
+    switch (attribute.usage_type) {
+        case Vertex_attribute_usage::position: return "a_position";
+        case Vertex_attribute_usage::normal: {
+            return attribute.usage_index == 0 ? "a_normal" : fmt::format("a_normal_{}",  attribute.usage_index);
+        }
+        case Vertex_attribute_usage::tangent:       return "a_tangent";
+        case Vertex_attribute_usage::bitangent:     return "a_bitangent";
+        case Vertex_attribute_usage::color:         return fmt::format("a_color_{}",         attribute.usage_index);
+        case Vertex_attribute_usage::tex_coord:     return fmt::format("a_texcoord_{}",      attribute.usage_index);
+        case Vertex_attribute_usage::joint_indices: return fmt::format("a_joint_indices_{}", attribute.usage_index);
+        case Vertex_attribute_usage::joint_weights: return fmt::format("a_joint_weights_{}", attribute.usage_index);
+        case Vertex_attribute_usage::custom: {
+            return attribute.usage_index == 0 ? "a_custom" : fmt::format("a_custom_{}",  attribute.usage_index);
+        }
+        default: {
+            return {};
+        }
+    }
+}
+
+auto Vertex_input_state_data::make(const erhe::dataformat::Vertex_format& vertex_format) -> Vertex_input_state_data
 {
     Vertex_input_state_data result;
-    ERHE_VERIFY(vertex_formats.size() == 1); // TODO
-    for (const Vertex_format* vertex_format : vertex_formats) {
-        mappings.collect_attributes(result.attributes, *vertex_format);
+    GLuint layout_location = 0;
+    for (const erhe::dataformat::Vertex_stream& stream : vertex_format.streams) {
         result.bindings.push_back(
             Vertex_input_binding{
-                .binding = static_cast<GLuint>(vertex_format->get_binding()),
-                .stride  = static_cast<GLsizei>(vertex_format->stride()),
-                .divisor = 0 // TODO
+                .binding = static_cast<GLuint >(stream.binding),
+                .stride  = static_cast<GLsizei>(stream.stride),
+                .divisor = get_vertex_divisor(stream.step)
             }
         );
+        for (const erhe::dataformat::Vertex_attribute& attribute : stream.attributes) {
+            Gl_vertex_input_attribute input_attribute;
+            input_attribute.layout_location      = layout_location++;
+            input_attribute.binding              = static_cast<GLuint >(stream.binding);
+            input_attribute.stride               = static_cast<GLsizei>(stream.stride);
+            input_attribute.dimension            = static_cast<GLint  >(erhe::dataformat::get_component_count(attribute.format));
+            input_attribute.gl_attribute_type    = get_gl_attribute_type(attribute.format);
+            input_attribute.gl_vertex_atrib_type = get_gl_vertex_attrib_type(attribute.format);
+            input_attribute.normalized           = get_gl_normalized(attribute.format);
+            input_attribute.offset               = static_cast<GLuint>(attribute.offset);
+            input_attribute.name                 = get_attribute_name(attribute);
+            result.attributes.push_back(input_attribute);
+        }
     }
     return result;
 }
@@ -167,7 +485,7 @@ void Vertex_input_state::update()
     //// );
 
     for (const auto& attribute : m_data.attributes) {
-        switch (attribute.shader_type) {
+        switch (attribute.gl_attribute_type) {
             //using enum gl::Attribute_type;
             case gl::Attribute_type::bool_:
             case gl::Attribute_type::bool_vec2:
@@ -185,7 +503,7 @@ void Vertex_input_state::update()
                     gl_name(),
                     attribute.layout_location,
                     attribute.dimension,
-                    static_cast<gl::Vertex_attrib_i_type>(attribute.data_type),
+                    static_cast<gl::Vertex_attrib_i_type>(attribute.gl_vertex_atrib_type),
                     intptr_t{attribute.offset}
                 );
                 break;
@@ -208,7 +526,7 @@ void Vertex_input_state::update()
                     gl_name(),
                     attribute.layout_location,
                     attribute.dimension,
-                    attribute.data_type,
+                    attribute.gl_vertex_atrib_type,
                     attribute.normalized ? GL_TRUE : GL_FALSE,
                     intptr_t{attribute.offset}
                 );
@@ -233,7 +551,7 @@ void Vertex_input_state::update()
                     gl_name(),
                     attribute.layout_location,
                     attribute.dimension,
-                    static_cast<gl::Vertex_attrib_l_type>(attribute.data_type),
+                    static_cast<gl::Vertex_attrib_l_type>(attribute.gl_vertex_atrib_type),
                     0
                 );
                 break;
@@ -296,19 +614,13 @@ void Vertex_input_state_tracker::set_index_buffer(erhe::graphics::Buffer* buffer
     gl::vertex_array_element_buffer(m_last, buffer->gl_name());
 }
 
-void Vertex_input_state_tracker::set_vertex_buffer(erhe::graphics::Buffer* buffer, std::size_t offset, uint32_t binding_index)
+void Vertex_input_state_tracker::set_vertex_buffer(const uint32_t binding_index, const erhe::graphics::Buffer* const buffer, const std::size_t offset)
 {
     ERHE_VERIFY(m_last != 0); // Must have VAO bound
     ERHE_VERIFY(buffer != nullptr);
     for (const Vertex_input_binding& binding : m_bindings) {
         if (binding.binding == binding_index) {
-            gl::vertex_array_vertex_buffer(
-                m_last,
-                binding_index,
-                buffer->gl_name(),
-                offset,
-                binding.stride
-            );
+            gl::vertex_array_vertex_buffer(m_last, binding_index, buffer->gl_name(), offset, binding.stride);
             break;
         }
     }

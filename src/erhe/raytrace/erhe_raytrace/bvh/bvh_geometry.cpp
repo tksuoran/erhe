@@ -135,27 +135,21 @@ void Bvh_geometry::commit()
                 continue;
             }
         }
-        if (
-            (index_buffer_info == nullptr) ||
-            (vertex_buffer_info == nullptr)
-        ) {
+        if ((index_buffer_info == nullptr) || (vertex_buffer_info == nullptr)) {
             return;
         }
 
-        if (vertex_buffer_info->format != erhe::raytrace::Format::FORMAT_FLOAT3) {
+        if (vertex_buffer_info->format != erhe::dataformat::Format::format_32_vec3_float) {
             return;
         }
 
-        if (index_buffer_info->format != erhe::raytrace::Format::FORMAT_UINT3) {
+        if (index_buffer_info->format != erhe::dataformat::Format::format_32_vec3_uint) {
             return;
         }
 
         erhe::buffer::Cpu_buffer* index_buffer  = index_buffer_info->buffer;
         erhe::buffer::Cpu_buffer* vertex_buffer = vertex_buffer_info->buffer;
-        if (
-            (index_buffer == nullptr) ||
-            (vertex_buffer == nullptr)
-        ) {
+        if ((index_buffer == nullptr) || (vertex_buffer == nullptr)) {
             return;
         }
 
@@ -207,8 +201,7 @@ void Bvh_geometry::commit()
         Executor_resources& executor_resources = Executor_resources::get_instance();
 
         const bool load_ok = load_bvh(m_bvh, hash_code);
-        if (!load_ok)
-        {
+        if (!load_ok) {
             typename bvh::v2::DefaultBuilder<Node>::Config config;
             config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High; // TODO Low
 
@@ -283,7 +276,7 @@ void Bvh_geometry::set_vertex_attribute_count(const unsigned int count)
 void Bvh_geometry::set_buffer(
     const Buffer_type               type,
     const unsigned int              slot,
-    const Format                    format,
+    const erhe::dataformat::Format  format,
     erhe::buffer::Cpu_buffer* const buffer,
     const std::size_t               byte_offset,
     const std::size_t               byte_stride,

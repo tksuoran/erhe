@@ -15,15 +15,15 @@ void main()
         world_from_node_cofactor = primitive.primitives[gl_DrawID].world_from_node_cofactor;
     } else {
         world_from_node =
-            a_weights.x * joint.joints[int(a_joints.x) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +
-            a_weights.y * joint.joints[int(a_joints.y) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +
-            a_weights.z * joint.joints[int(a_joints.z) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +
-            a_weights.w * joint.joints[int(a_joints.w) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind;
+            a_joint_weights_0.x * joint.joints[int(a_joint_indices_0.x)].world_from_bind +
+            a_joint_weights_0.y * joint.joints[int(a_joint_indices_0.y)].world_from_bind +
+            a_joint_weights_0.z * joint.joints[int(a_joint_indices_0.z)].world_from_bind +
+            a_joint_weights_0.w * joint.joints[int(a_joint_indices_0.w)].world_from_bind;
         world_from_node_cofactor =
-            a_weights.x * joint.joints[int(a_joints.x) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor +
-            a_weights.y * joint.joints[int(a_joints.y) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor +
-            a_weights.z * joint.joints[int(a_joints.z) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor +
-            a_weights.w * joint.joints[int(a_joints.w) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind_cofactor;
+            a_joint_weights_0.x * joint.joints[int(a_joint_indices_0.x)].world_from_bind_cofactor +
+            a_joint_weights_0.y * joint.joints[int(a_joint_indices_0.y)].world_from_bind_cofactor +
+            a_joint_weights_0.z * joint.joints[int(a_joint_indices_0.z)].world_from_bind_cofactor +
+            a_joint_weights_0.w * joint.joints[int(a_joint_indices_0.w)].world_from_bind_cofactor;
     }
 
     mat4 clip_from_world = camera.cameras[0].clip_from_world;
@@ -36,7 +36,7 @@ void main()
     v_position       = position;
     gl_Position      = clip_from_world * position;
     v_material_index = primitive.primitives[gl_DrawID].material_index;
-    v_texcoord       = a_texcoord;
-    v_color          = a_color;
-    v_aniso_control  = a_aniso_control;
+    v_texcoord       = a_texcoord_0;
+    v_color          = a_color_0;
+    v_aniso_control  = a_custom_1; //aniso_control;
 }

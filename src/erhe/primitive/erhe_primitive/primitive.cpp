@@ -51,13 +51,19 @@ Primitive_raytrace::Primitive_raytrace(GEO::Mesh& mesh, Element_mappings* elemen
 {
     ERHE_PROFILE_FUNCTION();
 
-    const erhe::graphics::Vertex_format vertex_format{0, {erhe::graphics::Vertex_attribute::position_float3()}};
-    const std::size_t vertex_stride = vertex_format.stride();
+    const erhe::dataformat::Vertex_format vertex_format{
+        {
+            0,
+            {{erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position}}
+        }
+    };
+    const erhe::dataformat::Vertex_stream& vertex_stream = vertex_format.streams.front();
+    const std::size_t vertex_stride = vertex_stream.stride;
     const std::size_t index_stride = 4;
     const Mesh_info mesh_info = get_mesh_info(mesh);
     m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_vertex", mesh_info.vertex_count_corners * vertex_stride);
     m_rt_index_buffer  = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_index",  mesh_info.index_count_fill_triangles * index_stride);
-    Cpu_buffer_sink buffer_sink{*m_rt_vertex_buffer.get(), *m_rt_index_buffer.get()};
+    Cpu_buffer_sink buffer_sink{{m_rt_vertex_buffer.get()}, *m_rt_index_buffer.get()};
     Build_info build_info{
         .primitive_types = {
             .fill_triangles = true,
@@ -107,14 +113,15 @@ void Primitive_raytrace::make_raytrace_geometry()
 {
     m_rt_geometry = erhe::raytrace::IGeometry::create_unique("rt_geometry", erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE);
 
-    const auto& vertex_buffer_range   = m_rt_mesh.vertex_buffer_range;
+    ERHE_VERIFY(m_rt_mesh.vertex_buffer_ranges.size() == 1);
+    const auto& vertex_buffer_range   = m_rt_mesh.vertex_buffer_ranges.front();
     const auto& index_buffer_range    = m_rt_mesh.index_buffer_range;
     const auto& triangle_fill_indices = m_rt_mesh.triangle_fill_indices;
 
     m_rt_geometry->set_buffer(
         erhe::raytrace::Buffer_type::BUFFER_TYPE_VERTEX,
         0, // slot
-        erhe::raytrace::Format::FORMAT_FLOAT3,
+        erhe::dataformat::Format::format_32_vec3_float,
         m_rt_vertex_buffer.get(),
         vertex_buffer_range.byte_offset,
         vertex_buffer_range.element_size,
@@ -129,7 +136,7 @@ void Primitive_raytrace::make_raytrace_geometry()
     m_rt_geometry->set_buffer(
         erhe::raytrace::Buffer_type::BUFFER_TYPE_INDEX,
         0, // slot
-        erhe::raytrace::Format::FORMAT_UINT3,
+        erhe::dataformat::Format::format_32_vec3_uint,
         m_rt_index_buffer.get(),
         index_buffer_range.byte_offset + triangle_fill_indices.first_index * index_buffer_range.element_size,
         triangle_size,
@@ -147,20 +154,20 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const erhe::graphics::Vertex_format vertex_format{0, {erhe::graphics::Vertex_attribute::position_float3()}};
-    const std::size_t vertex_stride = vertex_format.stride();
+    const erhe::dataformat::Vertex_format vertex_format{
+        {
+            0,
+            {{erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position}}
+        }
+    };
+    const erhe::dataformat::Vertex_stream& vertex_stream = vertex_format.streams.front();
+    const std::size_t vertex_stride = vertex_stream.stride;
     const std::size_t index_stride = 4;
     const std::size_t vertex_count = triangle_soup.get_vertex_count();
     const std::size_t index_count = triangle_soup.get_index_count();
-    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>(
-        "triangle_soup_raytrace_vertex",
-        vertex_count * vertex_stride
-    );
-    m_rt_index_buffer = std::make_shared<erhe::buffer::Cpu_buffer>(
-        "triangle_soup_raytrace_index",
-        index_count * index_stride
-    );
-    Cpu_buffer_sink buffer_sink{*m_rt_vertex_buffer.get(), *m_rt_index_buffer.get()};
+    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("triangle_soup_raytrace_vertex", vertex_count * vertex_stride);
+    m_rt_index_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("triangle_soup_raytrace_index", index_count * index_stride);
+    Cpu_buffer_sink buffer_sink{{m_rt_vertex_buffer.get()}, *m_rt_index_buffer.get()};
     const Buffer_info buffer_info{
         .normal_style  = Normal_style::corner_normals,
         .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
@@ -179,14 +186,16 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
     );
     m_rt_geometry->set_user_data(nullptr); // TODO
 
-    const auto& vertex_buffer_range   = m_rt_mesh.vertex_buffer_range;
+    ERHE_VERIFY(m_rt_mesh.vertex_buffer_ranges.size() == 1);
+
+    const auto& vertex_buffer_range   = m_rt_mesh.vertex_buffer_ranges.front();
     const auto& index_buffer_range    = m_rt_mesh.index_buffer_range;
     const auto& triangle_fill_indices = m_rt_mesh.triangle_fill_indices;
 
     m_rt_geometry->set_buffer(
         erhe::raytrace::Buffer_type::BUFFER_TYPE_VERTEX,
         0, // slot
-        erhe::raytrace::Format::FORMAT_FLOAT3,
+        erhe::dataformat::Format::format_32_vec3_float,
         m_rt_vertex_buffer.get(),
         vertex_buffer_range.byte_offset,
         vertex_buffer_range.element_size,
@@ -200,7 +209,7 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
     m_rt_geometry->set_buffer(
         erhe::raytrace::Buffer_type::BUFFER_TYPE_INDEX,
         0, // slot
-        erhe::raytrace::Format::FORMAT_UINT3,
+        erhe::dataformat::Format::format_32_vec3_uint,
         m_rt_index_buffer.get(),
         index_buffer_range.byte_offset + triangle_fill_indices.first_index * index_buffer_range.element_size,
         triangle_size,
@@ -399,25 +408,30 @@ auto Primitive_render_shape::make_buffer_mesh(const Buffer_info& buffer_info) ->
 auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>
 {
     // TODO Use index_type from buffer_info
-    const std::size_t  sink_vertex_stride   = buffer_info.vertex_format.stride();
-    const std::size_t  source_vertex_stride = triangle_soup.vertex_format.stride();
+    //const std::size_t  sink_vertex_stride   = buffer_info.vertex_format.stride();
+    const std::size_t  source_vertex_stride = triangle_soup.vertex_format.streams.front().stride;
     const std::size_t  vertex_count         = triangle_soup.vertex_data.size() / source_vertex_stride;
     const std::size_t  index_count          = triangle_soup.index_data.size();
     const Buffer_range index_range          = buffer_info.buffer_sink.allocate_index_buffer(index_count, 4);
     if (index_range.count == 0) {
         return std::optional<Buffer_mesh>{};
     }
-    const Buffer_range vertex_range = buffer_info.buffer_sink.allocate_vertex_buffer(vertex_count, sink_vertex_stride);
-    if (vertex_range.count == 0) {
-        return std::optional<Buffer_mesh>{};
-    }
 
     Buffer_mesh buffer_mesh;
-    buffer_mesh.triangle_fill_indices.primitive_type = gl::Primitive_type::triangles;
+    buffer_mesh.triangle_fill_indices.primitive_type = Primitive_type::triangles;
     buffer_mesh.triangle_fill_indices.first_index = 0;
     buffer_mesh.triangle_fill_indices.index_count = index_count;
     buffer_mesh.index_buffer_range  = index_range;
-    buffer_mesh.vertex_buffer_range = vertex_range;
+
+    for (std::size_t i = 0, end = buffer_info.vertex_format.streams.size(); i < end; ++i) {
+        const erhe::dataformat::Vertex_stream& stream = buffer_info.vertex_format.streams.at(i);
+        Buffer_range vertex_range = buffer_info.buffer_sink.allocate_vertex_buffer(i, vertex_count, stream.stride);
+        if (vertex_range.count == 0) {
+            // TODO free allocations so far
+            return std::optional<Buffer_mesh>{};
+        }
+        buffer_mesh.vertex_buffer_ranges.emplace_back(std::move(vertex_range));
+    }
 
     // Copy indices to buffer
     std::vector<uint8_t> sink_index_data(index_count * index_range.element_size);
@@ -425,43 +439,46 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     buffer_info.buffer_sink.enqueue_index_data(index_range.byte_offset, std::move(sink_index_data));
 
     // Copy and convert vertices to buffer
-    std::vector<uint8_t> sink_vertex_data(vertex_count * vertex_range.element_size);
-    const std::vector<erhe::graphics::Vertex_attribute>& attributes = buffer_info.vertex_format.get_attributes();
-    uint8_t* sink_vertex_data_base = sink_vertex_data.data();
-    const uint8_t* src_vertex_data_base = triangle_soup.vertex_data.data();
-    for (std::size_t attribute_index = 0, end = attributes.size(); attribute_index < end; ++attribute_index) {
-        const erhe::graphics::Vertex_attribute& sink_attribute = attributes[attribute_index];
-        const erhe::graphics::Vertex_attribute* src_attribute = triangle_soup.vertex_format.find_attribute_maybe(
-            sink_attribute.usage.type,
-            static_cast<unsigned int>(sink_attribute.usage.index)
-        );
-        uint8_t* sink_attribute_base = sink_vertex_data_base + sink_attribute.offset;
-        if (src_attribute != nullptr) {
-            const uint8_t* src_attribute_base = src_vertex_data_base + src_attribute->offset;
-            for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
-                uint8_t* sink = sink_attribute_base + vertex_index * sink_vertex_stride;
-                const uint8_t* src = src_attribute_base + vertex_index * source_vertex_stride;
-                erhe::dataformat::convert(src, src_attribute->data_type, sink, sink_attribute.data_type, 1.0f);
-            }
-        } else {
-            const uint8_t* src = reinterpret_cast<const uint8_t*>(&sink_attribute.default_value[0]);
-            for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
-                uint8_t* sink = sink_attribute_base + vertex_index * sink_vertex_stride;
-                erhe::dataformat::convert(src, erhe::dataformat::Format::format_32_vec4_float, sink, sink_attribute.data_type, 1.0f);
+    for (size_t stream_index = 0, stream_end = buffer_info.vertex_format.streams.size(); stream_index < stream_end; ++stream_index) {
+        const erhe::dataformat::Vertex_stream& sink_stream = buffer_info.vertex_format.streams[stream_index];
+        std::vector<uint8_t> sink_vertex_data(vertex_count * sink_stream.stride);
+        const std::vector<erhe::dataformat::Vertex_attribute>& attributes = sink_stream.attributes;
+        uint8_t* sink_vertex_data_base = sink_vertex_data.data();
+        const uint8_t* src_vertex_data_base = triangle_soup.vertex_data.data();
+        for (std::size_t attribute_index = 0, attribute_index_end = attributes.size(); attribute_index < attribute_index_end; ++attribute_index) {
+            const erhe::dataformat::Vertex_attribute& sink_attribute = attributes[attribute_index];
+            const erhe::dataformat::Attribute_stream src = triangle_soup.vertex_format.find_attribute(
+                sink_attribute.usage_type,
+                static_cast<unsigned int>(sink_attribute.usage_index)
+            );
+            uint8_t* sink_attribute_base = sink_vertex_data_base + sink_attribute.offset;
+            if (src.attribute != nullptr) {
+                const uint8_t* src_attribute_base = src_vertex_data_base + src.attribute->offset;
+                for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
+                    uint8_t* sink = sink_attribute_base + vertex_index * sink_stream.stride;
+                    const uint8_t* src_data = src_attribute_base + vertex_index * source_vertex_stride;
+                    erhe::dataformat::convert(src_data, src.attribute->format, sink, sink_attribute.format, 1.0f);
+                }
+            } else {
+                const float src_data[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
+                    uint8_t* sink = sink_attribute_base + vertex_index * sink_stream.stride;
+                    erhe::dataformat::convert(src_data, erhe::dataformat::Format::format_32_vec4_float, sink, sink_attribute.format, 1.0f);
+                }
             }
         }
+        buffer_info.buffer_sink.enqueue_vertex_data(stream_index, buffer_mesh.vertex_buffer_ranges[stream_index].byte_offset, std::move(sink_vertex_data));
     }
 
-    buffer_info.buffer_sink.enqueue_vertex_data(vertex_range.byte_offset, std::move(sink_vertex_data));
-
-    const erhe::graphics::Vertex_attribute* position_attribute = buffer_info.vertex_format.find_attribute_maybe(erhe::graphics::Vertex_attribute::Usage_type::position);
+    const erhe::dataformat::Attribute_stream position = triangle_soup.vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::position);
     erhe::math::Point_vector_bounding_volume_source positions{vertex_count};
-    if (position_attribute != nullptr) {
+    if (position.attribute != nullptr) {
         for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
-            const uint8_t* src = src_vertex_data_base + position_attribute->offset + vertex_index * source_vertex_stride;
-            float position[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-            erhe::dataformat::convert(src, position_attribute->data_type, &position[0], erhe::dataformat::Format::format_32_vec4_float, 1.0f);
-            positions.add(position[0], position[1], position[2]);
+            const uint8_t* src_vertex_data_base = triangle_soup.vertex_data.data();
+            const uint8_t* src = src_vertex_data_base + position.attribute->offset + vertex_index * position.stream->stride;
+            float pos[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            erhe::dataformat::convert(src, position.attribute->format, &pos[0], erhe::dataformat::Format::format_32_vec4_float, 1.0f);
+            positions.add(pos[0], pos[1], pos[2]);
         }
     }
     erhe::math::calculate_bounding_volume(positions, buffer_mesh.bounding_box, buffer_mesh.bounding_sphere);

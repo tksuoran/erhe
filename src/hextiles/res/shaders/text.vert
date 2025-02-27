@@ -13,7 +13,7 @@ void main()
     v_texture   = projection.texture;
 #endif
 
-    v_texcoord  = a_texcoord;
-    v_color     = a_color;
+    v_texcoord  = a_texcoord_0;
+    v_color     = a_color_0;
 }
 

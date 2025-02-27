@@ -107,6 +107,7 @@ public:
     void chamfer();
 
     void export_gltf();
+    void export_callback(const char* const* filelist, int filter);
 
 private:
     [[nodiscard]] auto count_selected_meshes() const -> size_t;

@@ -413,17 +413,17 @@ void pipeline_imgui(erhe::graphics::Pipeline& pipeline)
             if (ImGui::TreeNodeEx("Vertex input", ImGuiTreeNodeFlags_Framed)) {
                 const erhe::graphics::Vertex_input_state_data& vertex_input_data = pipeline.data.vertex_input->get_data();
                 int attribute_index = 0;
-                for (const erhe::graphics::Vertex_input_attribute& attribute : vertex_input_data.attributes) {
+                for (const erhe::graphics::Gl_vertex_input_attribute& attribute : vertex_input_data.attributes) {
                     std::string attribute_label = fmt::format("Attribute {}", attribute_index++);
                     ImGui::PushID(attribute_index);
                     if (ImGui::TreeNodeEx(attribute_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
-                        ImGui::Text("Location: %u", attribute.layout_location);
-                        ImGui::Text("Stride: %d", attribute.stride);
-                        ImGui::Text("Dimension: %d", attribute.dimension);
-                        ImGui::Text("Shader type: %s", gl::c_str(attribute.shader_type));
-                        ImGui::Text("Data type: %s", gl::c_str(attribute.data_type));
-                        ImGui::Text("Normalized: %s", attribute.normalized ? "yes" : "no");
-                        ImGui::Text("Offset: %u", attribute.offset);
+                        ImGui::Text("Location: %u",           attribute.layout_location);
+                        ImGui::Text("Stride: %d",             attribute.stride);
+                        ImGui::Text("Dimension: %d",          attribute.dimension);
+                        ImGui::Text("Attribute type: %s",     gl::c_str(attribute.gl_attribute_type));
+                        ImGui::Text("Vertex Attrib type: %s", gl::c_str(attribute.gl_vertex_atrib_type));
+                        ImGui::Text("Normalized: %s",         attribute.normalized ? "yes" : "no");
+                        ImGui::Text("Offset: %u",             attribute.offset);
                         ImGui::TreePop();
                     }
                     ImGui::PopID();

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe_renderer/buffer_writer.hpp"
-//#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/instance.hpp"
 
 namespace erhe::graphics {

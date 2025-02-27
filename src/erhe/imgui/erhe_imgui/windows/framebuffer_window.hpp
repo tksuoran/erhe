@@ -1,11 +1,11 @@
 #pragma once
 
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/pipeline.hpp"
-#include "erhe_graphics/vertex_format.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <memory>
@@ -51,8 +51,7 @@ protected:
     float                                        m_content_rect_y     {0.0f};
     float                                        m_content_rect_width {0.0f};
     float                                        m_content_rect_height{0.0f};
-    erhe::graphics::Vertex_attribute_mappings    m_empty_attribute_mappings;
-    erhe::graphics::Vertex_format                m_empty_vertex_format;
+    erhe::dataformat::Vertex_format              m_empty_vertex_format;
     erhe::graphics::Vertex_input_state           m_vertex_input;
     std::shared_ptr<erhe::graphics::Texture>     m_texture;
     std::unique_ptr<erhe::graphics::Framebuffer> m_framebuffer;

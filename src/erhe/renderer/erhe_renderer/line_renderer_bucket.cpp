@@ -116,7 +116,7 @@ void Line_renderer_bucket::render(
 {
     if (draw_hidden && m_config.draw_hidden) {
         graphics_instance.opengl_state_tracker.execute(m_pipeline_hidden);
-        graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(vertex_buffer, vertex_buffer_offset, 0);
+        graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_offset);
         for (const Line_draw_entry& draw : m_draws) {
             gl::draw_arrays(
                 m_pipeline_hidden.data.input_assembly.primitive_topology,
@@ -128,7 +128,7 @@ void Line_renderer_bucket::render(
 
     if (draw_visible && m_config.draw_visible) {
         graphics_instance.opengl_state_tracker.execute(m_pipeline_visible);
-        graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(vertex_buffer, vertex_buffer_offset, 0);
+        graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_offset);
         for (const Line_draw_entry& draw : m_draws) {
             gl::draw_arrays(
                 m_pipeline_visible.data.input_assembly.primitive_topology,

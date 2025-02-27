@@ -22,11 +22,10 @@ Framebuffer_window::Framebuffer_window(
     const std::string_view    title,
     const char*               ini_label
 )
-    : Imgui_window              {imgui_renderer, imgui_windows, title, ini_label}
-    , m_graphics_instance       {graphics_instance}
-    , m_debug_label             {ini_label}
-    , m_empty_attribute_mappings{graphics_instance, {}}
-    , m_vertex_input            {erhe::graphics::Vertex_input_state_data{}}
+    : Imgui_window       {imgui_renderer, imgui_windows, title, ini_label}
+    , m_graphics_instance{graphics_instance}
+    , m_debug_label      {ini_label}
+    , m_vertex_input     {erhe::graphics::Vertex_input_state_data{}}
 {
 }
 

@@ -1,6 +1,6 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/instance.hpp"
-#include "erhe_graphics/vertex_attribute.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include "fmt/format.h"
@@ -1011,15 +1011,15 @@ auto Shader_resource::get_writeonly() const -> bool
     return m_writeonly;
 }
 
-auto Shader_resource::add(const Vertex_attribute& attribute) -> Shader_resource*
+auto Shader_resource::add_attribute(const erhe::dataformat::Vertex_attribute& attribute) -> Shader_resource*
 {
     const std::string name = fmt::format(
         "{}_{}",
-        Vertex_attribute::c_str(attribute.usage.type),
-        attribute.usage.index
+        erhe::dataformat::c_str(attribute.usage_type),
+        attribute.usage_index
     );
 
-    switch (attribute.data_type) {
+    switch (attribute.format) {
         case erhe::dataformat::Format::format_32_scalar_sint:  return add_int(name);
         //case erhe::dataformat::Format::format_32_vec2_sint:  return add_ivec2(name);
         //case erhe::dataformat::Format::format_32_vec3_sint:  return add_ivec3(name);
@@ -1047,15 +1047,19 @@ void Shader_resource::align_offset_to(const unsigned int alignment)
     }
 }
 
-void Shader_resource::indent(
-    std::stringstream& ss,
-    const int indent_level
-) const
+void Shader_resource::indent(std::stringstream& ss, const int indent_level) const
 {
     for (int i = 0; i < indent_level; ++i) {
         ss << "    ";
     }
 }
 
+void add_vertex_stream(const erhe::dataformat::Vertex_stream& vertex_stream, erhe::graphics::Shader_resource& vertex_struct, erhe::graphics::Shader_resource& vertices_block)
+{
+    for (const auto& attribute : vertex_stream.attributes) {
+        vertex_struct.add_attribute(attribute);
+    }
+    vertices_block.add_struct("vertices", &vertex_struct, erhe::graphics::Shader_resource::unsized_array);
+}
 
 } // namespace erhe::graphics

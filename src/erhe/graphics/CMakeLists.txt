@@ -61,14 +61,6 @@ erhe_target_sources_grouped(
     erhe_graphics/state/viewport_state.hpp
     erhe_graphics/texture.cpp
     erhe_graphics/texture.hpp
-    erhe_graphics/vertex_attribute_mapping.cpp
-    erhe_graphics/vertex_attribute_mapping.hpp
-    erhe_graphics/vertex_attribute_mappings.cpp
-    erhe_graphics/vertex_attribute_mappings.hpp
-    erhe_graphics/vertex_attribute.cpp
-    erhe_graphics/vertex_attribute.hpp
-    erhe_graphics/vertex_format.cpp
-    erhe_graphics/vertex_format.hpp
 )
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})

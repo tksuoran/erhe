@@ -327,12 +327,14 @@ target_link_libraries(
     erhe::commands
     erhe::configuration
     erhe::defer
+    erhe::dataformat
     erhe::file
     erhe::geometry
     erhe::geometry_renderer
     erhe::gl
     erhe::gltf
     erhe::graphics
+    erhe::graphics_buffer_sink
     erhe::imgui
     erhe::log
     erhe::math

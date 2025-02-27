@@ -1,38 +1,27 @@
 #pragma once
 
-#include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/debug.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/vertex_attribute_mappings.hpp"
-#include "erhe_graphics/vertex_format.hpp"
 #include "erhe_graphics/sampler.hpp"
-#include "erhe_graphics/state/color_blend_state.hpp"
-#include "erhe_graphics/state/depth_stencil_state.hpp"
-#include "erhe_graphics/state/input_assembly_state.hpp"
-#include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_renderer/gpu_ring_buffer.hpp"
 
 #include <imgui/imgui.h>
 
-#include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <set>
-#include <string_view>
 #include <vector>
 
 namespace erhe::graphics {
     class Instance;
     class Sampler;
     class Texture;
-    class Vertex_attribute_mappings;
     class Vertex_input_state;
 }
 namespace erhe::window {
@@ -83,10 +72,9 @@ public:
     Imgui_draw_parameter_struct_offsets draw_parameter_struct_offsets{};
     Imgui_draw_parameter_block_offsets  block_offsets                {};
 
-    erhe::graphics::Fragment_outputs          fragment_outputs;
-    erhe::graphics::Vertex_attribute_mappings attribute_mappings;
-    erhe::graphics::Vertex_format             vertex_format;
-    erhe::graphics::Shader_resource           default_uniform_block; // containing sampler uniforms for non bindless textures
+    erhe::graphics::Fragment_outputs fragment_outputs;
+    erhe::dataformat::Vertex_format  vertex_format;
+    erhe::graphics::Shader_resource  default_uniform_block; // containing sampler uniforms for non bindless textures
 };
 
 class Imgui_renderer final

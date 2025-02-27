@@ -6,6 +6,8 @@
 
 #include <geogram/basic/geometry.h>
 
+#include <glm/glm.hpp>
+
 #include <span>
 #include <vector>
 
@@ -27,8 +29,13 @@ class Buffer_mesh;
 class Vertex_buffer_writer
 {
 public:
-    Vertex_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink);
+    Vertex_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink, std::size_t stream, std::size_t stride);
+    Vertex_buffer_writer(const Vertex_buffer_writer&) = delete;
+    Vertex_buffer_writer& operator=(const Vertex_buffer_writer&) = delete;
+    Vertex_buffer_writer(Vertex_buffer_writer&&) = delete;
+    Vertex_buffer_writer& operator=(Vertex_buffer_writer&&) = delete;
     virtual ~Vertex_buffer_writer() noexcept;
+
 
     void write(const Vertex_attribute_info& attribute, const GEO::vec3  value);
     void write(const Vertex_attribute_info& attribute, const GEO::vec2f value);
@@ -48,11 +55,14 @@ public:
     void write(const Vertex_attribute_info& attribute, const glm::uvec2 value);
     void write(const Vertex_attribute_info& attribute, const glm::uvec4 value);
     void move (const std::size_t relative_offset);
+    void next_vertex();
 
     [[nodiscard]] auto start_offset() -> std::size_t;
 
     Build_context&            build_context;
     Buffer_sink&              buffer_sink;
+    std::size_t               stream;
+    std::size_t               stride;
     Buffer_range              buffer_range;
     std::vector<std::uint8_t> vertex_data;
     std::span<std::uint8_t>   vertex_data_span;
