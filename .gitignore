@@ -2,6 +2,7 @@
 .vs
 .vscode/compile_commands.json
 src/editor/user.ini
+src/editor/erhe_init_graph.dot
 src/editor/cache/bvh/*
 !src/editor/cache/bvh/keep
 build
