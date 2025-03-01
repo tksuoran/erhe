@@ -119,7 +119,6 @@ public:
     void end_frame                ();
     void request_renderdoc_capture();
 
-    // Implements Update_once_per_frame
     void update_fixed_step();
 
     // Implements Scene_view

@@ -3,16 +3,15 @@
 namespace editor {
 
 Headset_view::Headset_view(
-        erhe::commands::Commands&       commands,
-        erhe::graphics::Instance&       graphics_instance,
-        erhe::imgui::Imgui_renderer&    imgui_renderer,
-        erhe::imgui::Imgui_windows&     imgui_windows,
-        erhe::rendergraph::Rendergraph& rendergraph,
-        erhe::window::Context_window&   context_window,
-        Editor_context&                 editor_context,
-        Editor_rendering&               editor_rendering,
-        Editor_settings&                editor_settings,
-        Time&                           time
+    erhe::commands::Commands&       commands,
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    erhe::imgui::Imgui_windows&     imgui_windows,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    erhe::window::Context_window&   context_window,
+    Editor_context&                 editor_context,
+    Editor_rendering&               editor_rendering,
+    Editor_settings&                editor_settings
 )
     : Scene_view{editor_context, Viewport_config{}}
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset"}
@@ -23,10 +22,13 @@ Headset_view::Headset_view(
     static_cast<void>(context_window);
     static_cast<void>(editor_rendering);
     static_cast<void>(editor_settings);
-    static_cast<void>(time);
 }
 
 void Headset_view::render(const Render_context&)
+{
+}
+
+void Headset_view::update_fixed_step()
 {
 }
 

@@ -72,14 +72,14 @@ public:
         erhe::window::Context_window&   context_window,
         Editor_context&                 editor_context,
         Editor_rendering&               editor_rendering,
-        Editor_settings&                editor_settings,
-        Time&                           time
+        Editor_settings&                editor_settings
     );
 
     // Public API
-    void render_headset();
-    void begin_frame   ();
-    void end_frame     ();
+    void update_fixed_step();
+    void render_headset   ();
+    void begin_frame      ();
+    void end_frame        ();
 
     // Implements Imgui_window
     void imgui() override {}

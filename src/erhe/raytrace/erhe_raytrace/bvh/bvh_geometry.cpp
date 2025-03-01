@@ -219,12 +219,12 @@ void Bvh_geometry::commit()
                 timer.end();
 
                 const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(timer.duration().value()).count();
-                log_geometry->trace("BVH build {} in {} ms", debug_label(), time);
+                log_geometry->info("BVH build {} in {} ms", debug_label(), time);
             }
 
             const bool save_ok = save_bvh(m_bvh, hash_code);
             if (!save_ok) {
-                log_geometry->warn("BVH save failed, hash = {}", hash_code);
+                log_geometry->error("BVH save failed, hash = {}", hash_code);
             }
         }
 

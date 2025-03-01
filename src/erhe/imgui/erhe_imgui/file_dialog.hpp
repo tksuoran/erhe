@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <vector>
 
 namespace erhe::imgui {
 

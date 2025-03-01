@@ -738,22 +738,12 @@ Fly_camera_tool::Fly_camera_tool(
     m_rotate_scale_x = config.invert_x ? -1.0f / 512.0f : 1.0f / 512.f;
     m_rotate_scale_y = config.invert_y ? -1.0f / 512.0f : 1.0f / 512.f;
 
-#if defined(ERHE_WINDOW_LIBRARY_GLFW)
-    commands.bind_command_to_controller_axis(&m_translate_x_command, 0);
-    commands.bind_command_to_controller_axis(&m_translate_y_command, 2);
-    commands.bind_command_to_controller_axis(&m_translate_z_command, 1);
-    commands.bind_command_to_controller_axis(&m_rotate_x_command, 3);
-    commands.bind_command_to_controller_axis(&m_rotate_y_command, 5);
-    commands.bind_command_to_controller_axis(&m_rotate_z_command, 4);
-#endif
-#if defined(ERHE_WINDOW_LIBRARY_SDL)
     commands.bind_command_to_controller_axis(&m_active_translate_x_command, 0);
     commands.bind_command_to_controller_axis(&m_active_translate_y_command, 2);
     commands.bind_command_to_controller_axis(&m_active_translate_z_command, 1);
     commands.bind_command_to_controller_axis(&m_active_rotate_x_command, 3);
     commands.bind_command_to_controller_axis(&m_active_rotate_y_command, 5);
     commands.bind_command_to_controller_axis(&m_active_rotate_z_command, 4);
-#endif
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
