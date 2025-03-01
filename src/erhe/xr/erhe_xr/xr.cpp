@@ -103,11 +103,7 @@ auto check(XrResult result, const spdlog::level::level_enum log_level) -> bool
         return false;
     }
     if (result != XR_SUCCESS) {
-        log_xr->log(
-            log_level,
-            "OpenXR returned error {}",
-            c_str(result)
-        );
+        log_xr->log(log_level, "OpenXR returned error {}", c_str(result));
         return false;
     }
     return true;

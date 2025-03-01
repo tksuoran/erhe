@@ -103,10 +103,7 @@ void Xr_action_boolean::get(const XrSession session)
     };
     const XrResult result = xrGetActionStateBoolean(session, &action_state_get_info, &state);
     if (result != XR_SUCCESS) {
-        log_xr->error(
-            "xrGetActionStateBoolean() returned error {}",
-            c_str(result)
-        );
+        log_xr->error("xrGetActionStateBoolean() returned error {}", c_str(result));
     }
 }
 #endif

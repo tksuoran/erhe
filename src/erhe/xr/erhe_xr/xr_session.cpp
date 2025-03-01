@@ -124,27 +124,34 @@ auto Xr_session::create_session() -> bool
     ERHE_VERIFY(xr_instance != XR_NULL_HANDLE);
 
     XrGraphicsRequirementsOpenGLKHR xr_graphics_requirements_opengl{
-        .type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR,
-        .next = nullptr
+        .type                   = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR,
+        .next                   = nullptr,
+        .minApiVersionSupported = 0,
+        .maxApiVersionSupported = 0
     };
 
-    ERHE_XR_CHECK(
-        m_instance.xrGetOpenGLGraphicsRequirementsKHR(
-            xr_instance,
-            m_instance.get_xr_system_id(),
-            &xr_graphics_requirements_opengl
-        )
-    );
+    ERHE_XR_CHECK(m_instance.xrGetOpenGLGraphicsRequirementsKHR(xr_instance, m_instance.get_xr_system_id(), &xr_graphics_requirements_opengl));
+    const uint16_t min_major = (xr_graphics_requirements_opengl.minApiVersionSupported >> 48) & uint64_t{0x0000ffffu};
+    const uint16_t min_minor = (xr_graphics_requirements_opengl.minApiVersionSupported >> 32) & uint64_t{0x0000ffffu};
+    const uint16_t max_major = (xr_graphics_requirements_opengl.maxApiVersionSupported >> 48) & uint64_t{0x0000ffffu};
+    const uint16_t max_minor = (xr_graphics_requirements_opengl.maxApiVersionSupported >> 32) & uint64_t{0x0000ffffu};
+
+    log_xr->info("OpenGL minApiVersionSupported = {}.{}", min_major, min_minor);
+    log_xr->info("OpenGL maxApiVersionSupported = {}.{}", max_major, max_minor);
 
 #ifdef _WIN32
-    XrGraphicsBindingOpenGLWin32KHR graphics_binding_opengl_win32{
+    HWND  hwnd  = m_context_window.get_hwnd();
+    HDC   hdc   = GetDC(hwnd);
+    HGLRC hglrc = m_context_window.get_hglrc();
+
+    const XrGraphicsBindingOpenGLWin32KHR graphics_binding_opengl_win32{
         .type  = XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR,
         .next  = nullptr,
-        .hDC   = GetDC(static_cast<HWND>(m_context_window.get_window_handle())),
-        .hGLRC = static_cast<HGLRC>(m_context_window.get_device_pointer())
+        .hDC   = hdc,
+        .hGLRC = hglrc
     };
 
-    XrSessionCreateInfo session_create_info{
+    const XrSessionCreateInfo session_create_info{
         .type        = XR_TYPE_SESSION_CREATE_INFO,
         .next        = reinterpret_cast<const XrBaseInStructure*>(&graphics_binding_opengl_win32),
         .createFlags = 0,
@@ -187,8 +194,14 @@ Xr_session::~Xr_session() noexcept
         return;
     }
 
-    log_xr->info("xrEndSession()");
-    check(xrEndSession(m_xr_session));
+    xrRequestExitSession(m_xr_session);
+    while (m_session_running) {
+        const bool ok = m_instance.poll_xr_events(*this); // This will eventually call end_session() -> xrEndSession()
+        if (!ok) {
+            log_xr->warn("OpenXR error polling events after xrRequestExitSession()");
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
     check_gl_context_in_current_in_this_thread();
     check(xrDestroySession(m_xr_session));

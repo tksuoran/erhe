@@ -10,10 +10,6 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/skin.hpp"
 
-#if defined(ERHE_SVG_LIBRARY_LUNASVG)
-#   include <lunasvg.h>
-#endif
-
 namespace editor {
 
 void Icons::queue_load_icons(Icon_loader& loader)

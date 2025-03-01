@@ -53,6 +53,7 @@
 #   include "xr/hand_tracker.hpp"
 //#   include "xr/theremin.hpp"
 #   include "erhe_xr/xr_log.hpp"
+#   include "erhe_xr/xr_instance.hpp"
 #endif
 
 #include "erhe_commands/commands.hpp"
@@ -397,6 +398,37 @@ public:
             // Graphics context state init after window - in main thread
             m_graphics_instance = std::make_unique<erhe::graphics::Instance>(*m_context_window.get());
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+            // Apparently it is necessary to create OpenXR session in the main thread / original OpenGL
+            // context, instead of using shared context / worker thread
+            if (m_editor_context.OpenXR) {
+                ERHE_PROFILE_SCOPE("make xr::Headset");
+                erhe::xr::Xr_configuration configuration{
+                    .debug             = false,
+                    .quad_view         = false,
+                    .depth             = false,
+                    .visibility_mask   = false,
+                    .hand_tracking     = false,
+                    .composition_alpha = false,
+                    .mirror_mode       = false
+                };
+                const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "headset");
+                ini.get("quad_view",         configuration.quad_view);
+                ini.get("debug",             configuration.debug);
+                ini.get("depth",             configuration.depth);
+                ini.get("visibility_mask",   configuration.visibility_mask);
+                ini.get("hand_tracking",     configuration.hand_tracking);
+                ini.get("composition_alpha", configuration.composition_alpha);
+                ini.get("mirror_mode",       configuration.mirror_mode);
+                m_headset = std::make_unique<erhe::xr::Headset>(*m_context_window.get(), configuration);
+                if (!m_headset->is_valid()) {
+                    log_headset->info("Headset initialization failed. Disabling OpenXR.");
+                    m_editor_context.OpenXR = false;
+                    m_headset.reset();
+                }
+            }
+#endif
+
             // It seems to be faster to create the worker thread here instead of between
             // executor run and wait.
             m_graphics_instance->context_provider.provide_worker_contexts(
@@ -438,54 +470,64 @@ public:
             m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(*m_graphics_instance.get(), m_vertex_format);
             m_programs             = std::make_unique<Programs>(*m_graphics_instance.get());
 
-            auto programs_load_task = taskflow.emplace([this](){
+            auto programs_load_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_programs->load_programs(*m_executor.get(), *m_graphics_instance.get(), *m_program_interface.get());
             })  .name("Programs (load)");
 
-            auto imgui_renderer_task = taskflow.emplace([this](){
+            auto imgui_renderer_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_imgui_renderer = std::make_unique<erhe::imgui::Imgui_renderer>(*m_graphics_instance.get(), m_editor_settings->imgui);
             })  .name("Imgui_renderer");
 
-            auto line_renderer_task = taskflow.emplace([this](){
+            auto line_renderer_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_line_renderer = std::make_unique<erhe::renderer::Line_renderer>(*m_graphics_instance.get());
             })  .name("Line_renderer");
 
-            auto rendergraph_task = taskflow.emplace([this](){
+            auto rendergraph_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_rendergraph = std::make_unique<erhe::rendergraph::Rendergraph>(*m_graphics_instance.get());
             })  .name("Rendergraph");
 
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-            auto debug_renderer_task = taskflow.emplace([this](){
+            auto debug_renderer_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_line_renderer.get());
             }).name("Debug_renderer").succeed(line_renderer_task);
 #endif
 
-            auto text_renderer_task = taskflow.emplace([this](){
+            auto text_renderer_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(*m_graphics_instance.get());
             }).name("Text_renderer");
 
-            auto forward_renderer_task = taskflow.emplace([this](){
+            auto forward_renderer_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(*m_graphics_instance.get(), *m_program_interface.get());
             })  .name("Forward_renderer");
 
-            auto shadow_renderer_task = taskflow.emplace([this](){
+            auto shadow_renderer_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_shadow_renderer = std::make_unique<erhe::scene_renderer::Shadow_renderer >(*m_graphics_instance.get(), *m_program_interface.get());
             })  .name("Shadow_renderer");
 
-            auto mesh_memory_task = taskflow.emplace([this](){
+            auto mesh_memory_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_mesh_memory = std::make_unique<Mesh_memory>(*m_graphics_instance.get(), m_vertex_format);
             })  .name("Mesh_memory");
 
-            auto imgui_windows_task = taskflow.emplace([this](){
+            auto imgui_windows_task = taskflow.emplace([this]()
+            {
                 m_imgui_windows = std::make_unique<erhe::imgui::Imgui_windows>(
                     *m_imgui_renderer.get(),
                     conditionally_enable_window_imgui_host(m_context_window.get()),
@@ -495,7 +537,8 @@ public:
             })  .name("Imgui_windows")
                 .succeed(imgui_renderer_task, rendergraph_task);
 
-            auto icon_set_task = taskflow.emplace([this, &icons, &icon_loader](){
+            auto icon_set_task = taskflow.emplace([this, &icons, &icon_loader]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_icon_set = std::make_unique<Icon_set>(
                     m_editor_context,
@@ -507,18 +550,22 @@ public:
             })  .name("Icon_set")
                 .succeed(icon_rasterization_task);
 
-            auto post_processing_task = taskflow.emplace([this](){
+            auto post_processing_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_post_processing = std::make_unique<Post_processing>(*m_graphics_instance.get(), m_editor_context);
             })  .name("Post_processing");
 
-            auto id_renderer_task = taskflow.emplace([this](){
+            auto id_renderer_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_id_renderer = std::make_unique<Id_renderer>(*m_graphics_instance.get(), *m_program_interface.get(), *m_mesh_memory.get(), *m_programs.get());
-            })  .name("Id_renderer")
+            }
+            )  .name("Id_renderer")
                 .succeed(mesh_memory_task);
 
-            auto editor_rendering_task = taskflow.emplace([this](){
+            auto editor_rendering_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_editor_rendering = std::make_unique<Editor_rendering>(
                     *m_commands.get(),
@@ -531,7 +578,8 @@ public:
             })  .name("Editor_rendering")
                 .succeed(mesh_memory_task);
 
-            auto some_windows_task = taskflow.emplace([this](){
+            auto some_windows_task = taskflow.emplace([this]()
+            {
                 m_operation_stack        = std::make_unique<Operation_stack                 >(*m_executor.get(),       *m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_editor_context);
                 m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_composer_window        = std::make_unique<Composer_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
@@ -557,7 +605,8 @@ public:
             })  .name("Some windows")
                 .succeed(imgui_renderer_task, imgui_windows_task);
 
-            auto tools_task = taskflow.emplace([this](){
+            auto tools_task = taskflow.emplace([this]()
+            {
                 m_tools = std::make_unique<Tools>(
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
@@ -579,7 +628,8 @@ public:
             })  .name("Tools")
                 .succeed(imgui_renderer_task, imgui_windows_task, mesh_memory_task, editor_rendering_task);
         
-            auto default_scene_task = taskflow.emplace([this](){
+            auto default_scene_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 auto content_library = std::make_shared<Content_library>();
                 add_default_materials(*content_library.get());
@@ -600,9 +650,9 @@ public:
             })  .name("Default scene")
                 .succeed(imgui_renderer_task, imgui_windows_task);
 
-            auto scene_builder_task = taskflow.emplace([this](){
+            auto scene_builder_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
-
                 m_scene_builder = std::make_unique<Scene_builder>(
                     m_default_scene,                //std::shared_ptr<Scene_root>     scene
                     *m_executor.get(),              //tf::Executor&                   executor
@@ -621,7 +671,8 @@ public:
             })  .name("Scene_builder")
                 .succeed(default_scene_task, imgui_renderer_task, imgui_windows_task, rendergraph_task, editor_rendering_task, mesh_memory_task, post_processing_task, tools_task);
 
-            auto headset_task = taskflow.emplace([this](){
+            auto headset_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_headset_view = std::make_unique<Headset_view>(
                     *m_commands.get(),
@@ -630,6 +681,9 @@ public:
                     *m_imgui_windows.get(),
                     *m_rendergraph.get(),
                     *m_context_window.get(),
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+                    m_headset.get(),
+#endif
                     m_editor_context,
                     *m_editor_rendering.get(),
                     *m_editor_settings.get()
@@ -642,7 +696,8 @@ public:
             })  .name("Headset (init)")
                 .succeed(imgui_renderer_task, imgui_windows_task, rendergraph_task, editor_rendering_task);
 
-            auto headset_attach_task = taskflow.emplace([this](){
+            auto headset_attach_task = taskflow.emplace([this]()
+            {
 #if defined(ERHE_XR_LIBRARY_OPENXR)
                 if (m_editor_context.OpenXR) {
                     m_headset_view->attach_to_scene(m_default_scene, *m_mesh_memory.get());
@@ -651,7 +706,8 @@ public:
             })  .name("Headset (attach)")
                 .succeed(default_scene_task, headset_task, mesh_memory_task, scene_builder_task);
 
-            auto transform_tools_task = taskflow.emplace([this](){
+            auto transform_tools_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_move_tool   = std::make_unique<Move_tool  >(m_editor_context, *m_icon_set.get(), *m_tools.get());
                 m_rotate_tool = std::make_unique<Rotate_tool>(m_editor_context, *m_icon_set.get(), *m_tools.get());
@@ -670,7 +726,8 @@ public:
             })  .name("Transform tools")
                 .succeed(imgui_renderer_task, imgui_windows_task, headset_task, mesh_memory_task, icon_set_task, tools_task);
 
-            auto group_1 = taskflow.emplace([this](){
+            auto group_1 = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_hud = std::make_unique<Hud>(
                     *m_commands.get(),
@@ -739,7 +796,8 @@ public:
                     headset_task
                 );
 
-            auto material_preview_task = taskflow.emplace([this](){
+            auto material_preview_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_material_preview = std::make_unique<Material_preview>(
                     *m_graphics_instance.get(),
@@ -751,7 +809,8 @@ public:
             })  .name("Material_preview")
                 .succeed(mesh_memory_task);
 
-            auto brush_tool_task = taskflow.emplace([this](){
+            auto brush_tool_task = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_brush_tool = std::make_unique<Brush_tool>(
                     *m_commands.get(),
@@ -764,7 +823,8 @@ public:
             })  .name("Brush_tool")
                 .succeed(headset_task, icon_set_task, tools_task);
 
-            auto group_2 = taskflow.emplace([this](){
+            auto group_2 = taskflow.emplace([this]()
+            {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_create = std::make_unique<Create>(
                     *m_imgui_renderer.get(),
@@ -1078,12 +1138,13 @@ public:
     std::unique_ptr<erhe::imgui::Performance_window >        m_performance_window;
     std::unique_ptr<erhe::imgui::Pipelines          >        m_pipelines;
 
-    std::unique_ptr<Tools          >                         m_tools;
-    std::unique_ptr<Scene_builder  >                         m_scene_builder;
-    std::unique_ptr<Fly_camera_tool>                         m_fly_camera_tool;
-    std::unique_ptr<Headset_view   >                         m_headset_view;
+    std::unique_ptr<Tools            >                       m_tools;
+    std::unique_ptr<Scene_builder    >                       m_scene_builder;
+    std::unique_ptr<Fly_camera_tool  >                       m_fly_camera_tool;
+    std::unique_ptr<Headset_view     >                       m_headset_view;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    std::unique_ptr<Hand_tracker>                            m_hand_tracker;
+    std::unique_ptr<erhe::xr::Headset>                       m_headset;
+    std::unique_ptr<Hand_tracker     >                       m_hand_tracker;
 #endif
     std::unique_ptr<Move_tool           >                    m_move_tool;
     std::unique_ptr<Rotate_tool         >                    m_rotate_tool;

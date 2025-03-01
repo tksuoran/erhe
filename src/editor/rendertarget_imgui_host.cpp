@@ -102,39 +102,53 @@ auto Rendertarget_imgui_host::on_xr_boolean_event(const erhe::window::Input_even
     if (!m_has_cursor) {
         return false; // TODO Is this needed? Should not be.
     }
-    auto& headset_view = *m_context.headset_view;
-    const auto* headset = headset_view.get_headset();
+    Headset_view* headset_view = m_context.headset_view;
+    ERHE_VERIFY(headset_view != nullptr);
+    erhe::xr::Headset* headset = headset_view->get_headset();
     ERHE_VERIFY(headset != nullptr);
 
     ImGuiIO& io = m_imgui_context->IO;
 
-    auto* trigger_click = headset->get_actions_right().trigger_click;
-    auto* a_click       = headset->get_actions_right().a_click;
-    if ((trigger_click != nullptr) && (xr_boolean_event.action == trigger_click)) {
-        io.AddMouseButtonEvent(ImGuiMouseButton_Left, xr_boolean_event.value);
-        return true;
+    const erhe::xr::Xr_actions* actions_right = headset->get_actions_right();
+    const erhe::xr::Xr_actions* actions_left  = headset->get_actions_left();
+    if ((actions_right== nullptr) && (actions_left == nullptr)) {
+        return false;
     }
-    if ((a_click != nullptr) && (xr_boolean_event.action == a_click)) {
-        io.AddMouseButtonEvent(ImGuiMouseButton_Left, xr_boolean_event.value);
-        return true;
+
+    if (actions_right != nullptr) {
+        erhe::xr::Xr_action_boolean* trigger_click = actions_right->trigger_click;
+        erhe::xr::Xr_action_boolean* a_click       = actions_right->a_click;
+        if ((trigger_click != nullptr) && (xr_boolean_event.action == trigger_click)) {
+            io.AddMouseButtonEvent(ImGuiMouseButton_Left, xr_boolean_event.value);
+            return true;
+        }
+        if ((a_click != nullptr) && (xr_boolean_event.action == a_click)) {
+            io.AddMouseButtonEvent(ImGuiMouseButton_Left, xr_boolean_event.value);
+            return true;
+        }
     }
-    auto* menu_click = headset->get_actions_left().menu_click;
-    if ((menu_click != nullptr) && (xr_boolean_event.action == menu_click)) {
-        io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
-        return true;
+
+    if (actions_left != nullptr) {
+        erhe::xr::Xr_action_boolean* menu_click = actions_left->menu_click;
+        if ((menu_click != nullptr) && (xr_boolean_event.action == menu_click)) {
+            io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
+            return true;
+        }
     }
 
     // The thumbrest is not present for the second edition of the Oculus Touch (Rift S and Quest)
-    auto* r_thumbrest_touch = headset->get_actions_right().thumbrest_touch;
-    if ((r_thumbrest_touch != nullptr) && (xr_boolean_event.action == r_thumbrest_touch)) {
-        io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
-        return true;
-    }
+    if (actions_right != nullptr) {
+        erhe::xr::Xr_action_boolean* r_thumbrest_touch = actions_right->thumbrest_touch;
+        if ((r_thumbrest_touch != nullptr) && (xr_boolean_event.action == r_thumbrest_touch)) {
+            io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
+            return true;
+        }
 
-    auto* r_thumbstick_click = headset->get_actions_right().thumbstick_click;
-    if ((r_thumbstick_click != nullptr) && (xr_boolean_event.action == r_thumbstick_click)) {
-        io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
-        return true;
+        erhe::xr::Xr_action_boolean* r_thumbstick_click = actions_right->thumbstick_click;
+        if ((r_thumbstick_click != nullptr) && (xr_boolean_event.action == r_thumbstick_click)) {
+            io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
+            return true;
+        }
     }
     return false;
 }
@@ -151,18 +165,26 @@ auto Rendertarget_imgui_host::on_xr_vector2f_event(const erhe::window::Input_eve
         return false; // TODO Is this needed? Should not be.
     }
 
-    auto& headset_view = *m_context.headset_view;
-    const auto* headset = headset_view.get_headset();
+    Headset_view* headset_view = m_context.headset_view;
+    ERHE_VERIFY(headset_view != nullptr);
+    erhe::xr::Headset* headset = headset_view->get_headset();
     ERHE_VERIFY(headset != nullptr);
 
-    auto* r_thumbstick = headset->get_actions_right().thumbstick;
+    erhe::xr::Xr_actions* actions_right = headset->get_actions_right();
+    if (actions_right == nullptr) {
+        return false;
+    }
+
+    erhe::xr::Xr_action_vector2f* r_thumbstick = actions_right->thumbstick;
     if (r_thumbstick == nullptr) {
         return false;
     }
+
     const erhe::window::Xr_vector2f_event& xr_vector2f_event = input_event.u.xr_vector2f_event;
     if (xr_vector2f_event.action != r_thumbstick) {
         return false;
     }
+
     if (xr_vector2f_event.x != 0.0f || xr_vector2f_event.y != 0.0f) {
         erhe::window::Input_event mouse_wheel_event{
             .type = erhe::window::Input_event_type::mouse_wheel_event,
@@ -294,13 +316,14 @@ void Rendertarget_imgui_host::begin_imgui_frame()
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_context.OpenXR) {
-        const auto* headset = headset_view.get_headset();
+        erhe::xr::Headset* headset = headset_view.get_headset();
         ERHE_VERIFY(headset != nullptr);
-
-        const auto* node = m_rendertarget_mesh->get_node();
+        const erhe::scene::Node* node = m_rendertarget_mesh->get_node();
         ERHE_VERIFY(node != nullptr);
-        auto* left_aim_pose  = headset->get_actions_left().aim_pose;
-        auto* right_aim_pose = headset->get_actions_right().aim_pose;
+        erhe::xr::Xr_actions* actions_left  = headset->get_actions_left();
+        erhe::xr::Xr_actions* actions_right = headset->get_actions_right();
+        erhe::xr::Xr_action_pose* left_aim_pose  = (actions_left  != nullptr) ? actions_left ->aim_pose : nullptr;
+        erhe::xr::Xr_action_pose* right_aim_pose = (actions_right != nullptr) ? actions_right->aim_pose : nullptr;
         const bool use_right = (right_aim_pose != nullptr) && (right_aim_pose->location.locationFlags != 0);
 
         auto* pose = use_right ? right_aim_pose : left_aim_pose;

@@ -7,24 +7,6 @@ const float m_pi   = 3.1415926535897932384626434;
 const float m_i_pi = 0.3183098861837906715377675;
 const uint  max_u32 = 4294967295u;
 
-float srgb_to_linear(float x)
-{
-    if (x <= 0.04045) {
-        return x / 12.92;
-    } else {
-        return pow((x + 0.055) / 1.055, 2.4);
-    }
-}
-
-vec3 srgb_to_linear(vec3 V)
-{
-    return vec3(
-        srgb_to_linear(V.r),
-        srgb_to_linear(V.g),
-        srgb_to_linear(V.b)
-    );
-}
-
 vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
 {
     if (texture_handle.x == max_u32) {
@@ -65,11 +47,7 @@ vec2 get_texture_size(uvec2 texture_handle)
 #endif
 }
 
-float sample_light_visibility(
-    vec4  position,
-    uint  light_index,
-    float N_dot_L
-)
+float sample_light_visibility(vec4 position, uint light_index, float N_dot_L)
 {
 #if defined(ERHE_SHADOW_MAP_NOPE)
 
@@ -180,7 +158,6 @@ void main()
 
     vec3  V       = normalize(view_position_in_world - v_position.xyz);
     vec3  N       = normalize(v_normal);
-
     float N_dot_V = clamped_dot(N, V);
 
     Material material = material.materials[v_material_index];
@@ -207,14 +184,7 @@ void main()
         float N_dot_L        = clamped_dot(N, L);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
-            color += intensity * brdf(
-                base_color,
-                material.roughness.x,
-                material.metallic,
-                L,
-                V,
-                N
-            );
+            color += intensity * brdf(base_color, material.roughness.x, material.metallic, L, V, N);
         }
     }
 
@@ -229,14 +199,7 @@ void main()
             float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
             float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
-            color += intensity * brdf(
-                base_color,
-                material.roughness.x,
-                material.metallic,
-                L,
-                V,
-                N
-            );
+            color += intensity * brdf(base_color, material.roughness.x, material.metallic, L, V, N);
         }
     }
 
@@ -250,14 +213,7 @@ void main()
             float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
             float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
-            color += intensity * brdf(
-                base_color,
-                material.roughness.x,
-                material.metallic,
-                L,
-                V,
-                N
-            );
+            color += intensity * brdf(base_color, material.roughness.x, material.metallic, L, V, N);
         }
     }
 

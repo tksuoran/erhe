@@ -82,35 +82,29 @@ Headset_view::Headset_view(
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
     erhe::window::Context_window&   context_window,
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    erhe::xr::Headset*              headset,
+#endif
     Editor_context&                 editor_context,
     Editor_rendering&               editor_rendering,
     Editor_settings&                editor_settings
 )
     : Scene_view               {editor_context, Viewport_config::default_config()}
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset"}
-    , m_translate_x     {}
-    , m_translate_y     {}
-    , m_translate_z     {}
-    , m_offset_x_command{commands, m_translate_x, 'x'}
-    , m_offset_y_command{commands, m_translate_y, 'y'}
-    , m_offset_z_command{commands, m_translate_z, 'z'}
-    , m_editor_context  {editor_context}
-    , m_context_window  {context_window}
+    , m_translate_x            {}
+    , m_translate_y            {}
+    , m_translate_z            {}
+    , m_offset_x_command       {commands, m_translate_x, 'x'}
+    , m_offset_y_command       {commands, m_translate_y, 'y'}
+    , m_offset_z_command       {commands, m_translate_z, 'z'}
+    , m_editor_context         {editor_context}
+    , m_context_window         {context_window}
+    , m_headset                {headset}
 {
     ERHE_PROFILE_FUNCTION();
-
-    if (!editor_context.OpenXR) {
+    if (headset == nullptr) {
         return;
     }
-
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "headset");
-    ini.get("quad_view",         config.quad_view);
-    ini.get("debug",             config.debug);
-    ini.get("depth",             config.depth);
-    ini.get("visibility_mask",   config.visibility_mask);
-    ini.get("hand_tracking",     config.hand_tracking);
-    ini.get("composition_alpha", config.composition_alpha);
-
     editor_rendering.add(this);
 
     commands.register_command(&m_offset_x_command);
@@ -125,28 +119,6 @@ Headset_view::Headset_view(
     m_translate_x.set_max_delta(0.004f);
     m_translate_y.set_max_delta(0.004f);
     m_translate_z.set_max_delta(0.004f);
-
-    const erhe::xr::Xr_configuration configuration{
-        .debug             = config.debug,
-        .quad_view         = config.quad_view,
-        .depth             = config.depth,
-        .visibility_mask   = config.visibility_mask,
-        .hand_tracking     = config.hand_tracking,
-        .composition_alpha = config.composition_alpha,
-        .mirror_mode       = editor_context.OpenXR_mirror
-    };
-
-    {
-        ERHE_PROFILE_SCOPE("make xr::Headset");
-
-        m_headset = std::make_unique<erhe::xr::Headset>(context_window, configuration );
-        if (!m_headset->is_valid()) {
-            log_headset->info("Headset initialization failed. Disabling OpenXR.");
-            m_context.OpenXR = false;
-            m_headset.reset();
-            return;
-        }
-    }
 
     m_rendergraph_node = std::make_shared<Headset_view_node>(rendergraph, *this);
 
@@ -215,7 +187,7 @@ void Headset_view::render(const Render_context& render_context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_context.OpenXR) {
+    if (!m_context.OpenXR || (m_headset == nullptr)) {
         return;
     }
 
@@ -235,23 +207,17 @@ void Headset_view::render(const Render_context& render_context)
         line_renderer.add_lines({{finger_input.finger_point, finger_input.point}});
     }
 
-    erhe::xr::Xr_action_pose* left_aim_pose = m_headset->get_actions_right().aim_pose;
-    erhe::xr::Xr_action_pose* right_aim_pose = m_headset->get_actions_right().aim_pose;
-    const bool can_use_left  = (left_aim_pose  != nullptr) && left_aim_pose->location.locationFlags != 0;
-    const bool can_use_right = (right_aim_pose != nullptr) && right_aim_pose->location.locationFlags != 0;
-    const auto* pose = can_use_right 
-        ? m_headset->get_actions_right().aim_pose 
-        : can_use_left 
-            ? m_headset->get_actions_left().aim_pose
-            : nullptr;
+    erhe::xr::Xr_actions*     left_actions   = m_headset->get_actions_left();
+    erhe::xr::Xr_actions*     right_actions  = m_headset->get_actions_right();
+    erhe::xr::Xr_action_pose* left_aim_pose  = (left_actions  != nullptr) ? left_actions ->aim_pose : nullptr;
+    erhe::xr::Xr_action_pose* right_aim_pose = (right_actions != nullptr) ? right_actions->aim_pose : nullptr;
+    const bool can_use_left  = (left_aim_pose  != nullptr) && (left_aim_pose ->location.locationFlags != 0);
+    const bool can_use_right = (right_aim_pose != nullptr) && (right_aim_pose->location.locationFlags != 0);
+    erhe::xr::Xr_action_pose* pose = can_use_right ? right_aim_pose : can_use_left ? left_aim_pose : nullptr;
 
     if (pose != nullptr) {
-        const auto* trigger_value_action = (pose == right_aim_pose) 
-            ? m_headset->get_actions_right().trigger_value 
-            : m_headset->get_actions_left().trigger_value;
-        const auto* click_action = (pose == right_aim_pose) 
-            ? m_headset->get_actions_right().a_click
-            : m_headset->get_actions_left().x_click;
+        erhe::xr::Xr_action_float*   trigger_value_action = (pose == right_aim_pose) ? right_actions->trigger_value : left_actions->trigger_value;
+        erhe::xr::Xr_action_boolean* click_action         = (pose == right_aim_pose) ? right_actions->a_click       : left_actions->x_click;
         const float trigger_value = (trigger_value_action != nullptr) ? trigger_value_action->state.currentState : 0.0f;
         const bool click = (click_action != nullptr) && (click_action->state.currentState == XR_TRUE);
 
@@ -268,7 +234,7 @@ void Headset_view::render(const Render_context& render_context)
 
         const auto orientation = glm::mat4_cast(pose->orientation);
 
-        const auto direction = use_hover
+        const glm::vec3 direction = use_hover
             ? get_control_ray_direction_in_world().value() 
             : glm::vec3{orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 
@@ -333,9 +299,11 @@ void Headset_view::update_pointer_context_from_controller()
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto* left_aim_pose  = m_headset->get_actions_left().aim_pose;
-    auto* right_aim_pose = m_headset->get_actions_right().aim_pose;
-    auto* pose =
+    erhe::xr::Xr_actions*     left_actions   = m_headset->get_actions_left();
+    erhe::xr::Xr_actions*     right_actions  = m_headset->get_actions_right();
+    erhe::xr::Xr_action_pose* left_aim_pose  = (left_actions  != nullptr) ? left_actions ->aim_pose : nullptr;
+    erhe::xr::Xr_action_pose* right_aim_pose = (right_actions != nullptr) ? right_actions->aim_pose : nullptr;
+    erhe::xr::Xr_action_pose* pose =
         (
             (right_aim_pose != nullptr) &&
             (right_aim_pose->location.locationFlags != 0)
@@ -361,7 +329,7 @@ void Headset_view::render_headset()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (m_headset == nullptr) {
+    if (!m_context.OpenXR || (m_headset == nullptr)) {
         return;
     }
 
@@ -616,6 +584,10 @@ void Headset_view::setup_root_camera()
 
 void Headset_view::update_camera_node()
 {
+    if (!m_context.OpenXR || (m_headset == nullptr)) {
+        return;
+    }
+
     glm::vec3 position{};
     glm::quat orientation{};
     if (!m_headset->get_headset_pose(position, orientation)) {
@@ -647,7 +619,7 @@ auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>
 
 auto Headset_view::is_active() const -> bool
 {
-    return m_headset && m_headset->is_active();
+    return (m_headset != nullptr) ? m_headset->is_active() : false;
 }
 
 auto Headset_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
@@ -677,14 +649,14 @@ auto Headset_view::finger_to_viewport_distance_threshold() const -> float
 
 auto Headset_view::get_headset() const -> erhe::xr::Headset*
 {
-    return m_headset.get();
+    return m_headset;
 }
 
 auto Headset_view::update_events() -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_headset) {
+    if (!m_context.OpenXR || (m_headset == nullptr)) {
         return false;
     }
 
@@ -697,12 +669,19 @@ auto Headset_view::update_events() -> bool
     update_camera_node();
 
     update_pointer_context_from_controller();
-    auto& instance = m_headset->get_xr_instance();
-    const XrSession xr_session = m_headset->get_xr_session().get_xr_session();
+    erhe::xr::Xr_instance* instance = m_headset->get_xr_instance();
+    if (instance == nullptr) {
+        return false;
+    }
+    erhe::xr::Xr_session* session = m_headset->get_xr_session();
+    if (session == nullptr) {
+        return false;
+    }
+    const XrSession xr_session = session->get_xr_session();
 
     // Inject XR input events
     std::vector<erhe::window::Input_event>& input_events = m_context.context_window->get_input_events();
-    for (auto& action : instance.get_boolean_actions()) {
+    for (erhe::xr::Xr_action_boolean& action : instance->get_boolean_actions()) {
         action.get(xr_session);
         if (action.state.changedSinceLastSync == XR_TRUE) {
             input_events.push_back(
@@ -718,7 +697,7 @@ auto Headset_view::update_events() -> bool
             );
         }
     }
-    for (auto& action : instance.get_float_actions()) {
+    for (erhe::xr::Xr_action_float& action : instance->get_float_actions()) {
         action.get(xr_session);
         if (action.state.changedSinceLastSync == XR_TRUE) {
             input_events.push_back(
@@ -734,7 +713,7 @@ auto Headset_view::update_events() -> bool
             );
         }
     }
-    for (auto& action : instance.get_vector2f_actions()) {
+    for (erhe::xr::Xr_action_vector2f& action : instance->get_vector2f_actions()) {
         action.get(xr_session);
         if (action.state.changedSinceLastSync == XR_TRUE) {
             input_events.push_back(
@@ -754,8 +733,10 @@ auto Headset_view::update_events() -> bool
 
     if (m_controller_visualization) {
         // TODO both controllers
-        auto* left_aim_pose  = m_headset->get_actions_left().aim_pose;
-        auto* right_aim_pose = m_headset->get_actions_right().aim_pose;
+        erhe::xr::Xr_actions*     left_actions   = m_headset->get_actions_left();
+        erhe::xr::Xr_actions*     right_actions  = m_headset->get_actions_right();
+        erhe::xr::Xr_action_pose* left_aim_pose  = (left_actions  != nullptr) ? left_actions ->aim_pose : nullptr;
+        erhe::xr::Xr_action_pose* right_aim_pose = (right_actions != nullptr) ? right_actions->aim_pose : nullptr;
         auto* pose = ((right_aim_pose != nullptr) && (right_aim_pose->location.locationFlags != 0)) ? right_aim_pose : left_aim_pose;
         if (pose != nullptr) {
             erhe::xr::Xr_action_pose pose_with_offset = *pose;
@@ -777,21 +758,24 @@ void Headset_view::request_renderdoc_capture()
 
 void Headset_view::end_frame()
 {
-    if (!m_headset) {
+    if (!m_context.OpenXR || (m_headset == nullptr)) {
         return;
     }
 
     m_finger_inputs.clear();
 
     // TODO These should be done when session state changes so that polling no longer happens
-    auto& instance = m_headset->get_xr_instance();
-    for (auto& action : instance.get_boolean_actions()) {
+    erhe::xr::Xr_instance* instance = m_headset->get_xr_instance();
+    if (instance == nullptr) {
+        return;
+    }
+    for (erhe::xr::Xr_action_boolean& action : instance->get_boolean_actions()) {
         action.state.changedSinceLastSync = XR_FALSE;
     }
-    for (auto& action : instance.get_float_actions()) {
+    for (erhe::xr::Xr_action_float& action : instance->get_float_actions()) {
         action.state.changedSinceLastSync = XR_FALSE;
     }
-    for (auto& action : instance.get_vector2f_actions()) {
+    for (erhe::xr::Xr_action_vector2f& action : instance->get_vector2f_actions()) {
         action.state.changedSinceLastSync = XR_FALSE;
     }
 }

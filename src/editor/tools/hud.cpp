@@ -136,14 +136,14 @@ Hud::Hud(
     commands.bind_command_to_key(&m_toggle_visibility_command, erhe::window::Key_e, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    const auto* headset = headset_view.get_headset();
-    if (headset != nullptr) {
-        auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.menu_click, erhe::commands::Button_trigger::Button_pressed);
-        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.b_click,    erhe::commands::Button_trigger::Button_pressed);
-        commands.bind_command_to_xr_float_action  (&m_drag_float_enable_command, xr_right.squeeze_value);
+    erhe::xr::Headset*    headset  = headset_view.get_headset();
+    erhe::xr::Xr_actions* xr_right = (headset != nullptr) ? headset->get_actions_right() : nullptr;
+    if (xr_right != nullptr) {
+        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right->menu_click, erhe::commands::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right->b_click,    erhe::commands::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_float_action  (&m_drag_float_enable_command, xr_right->squeeze_value);
         commands.bind_command_to_update           (&m_drag_float_redirect_update_command);
-        commands.bind_command_to_xr_boolean_action(&m_drag_bool_enable_command, xr_right.squeeze_click, erhe::commands::Button_trigger::Any);
+        commands.bind_command_to_xr_boolean_action(&m_drag_bool_enable_command, xr_right->squeeze_click, erhe::commands::Button_trigger::Any);
         commands.bind_command_to_update           (&m_drag_bool_redirect_update_command);
     }
     m_drag_command.set_host(this);

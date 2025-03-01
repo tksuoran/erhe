@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe_graphics/sampler.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <glm/glm.hpp>
 
@@ -9,12 +8,8 @@
 #   include <lunasvg.h>
 #endif
 
-#include <taskflow/taskflow.hpp>
-
 #include <cstdint>
-#include <filesystem>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 namespace erhe::graphics {
@@ -65,7 +60,6 @@ public:
 
 private:
     Icon_settings&                               m_icon_settings;
-    ERHE_PROFILE_MUTEX(std::mutex,               m_mutex);
     std::vector<std::unique_ptr<Icon_load_data>> m_icons_to_load;
     bool                                         m_rasterization_queue_executed{false};
     int                                          m_row     {0};

@@ -970,6 +970,25 @@ auto Context_window::get_window_handle() const -> void*
 #endif
 }
 
+#if defined(_WIN32)
+auto Context_window::get_hwnd() const -> HWND
+{
+    auto* window = static_cast<SDL_Window*>(m_sdl_window);
+    if (window != nullptr) {
+        SDL_PropertiesID properties = SDL_GetWindowProperties(window);
+        void* untyped_hwnd = SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+        HWND hwnd = static_cast<HWND>(untyped_hwnd);
+        return hwnd;
+    } else {
+        return nullptr;
+    }
+}
+auto Context_window::get_hglrc() const -> HGLRC
+{
+    return wglGetCurrentContext();
+}
+#endif
+
 auto Context_window::get_scale_factor() const -> float
 {
     return 1.0f; // TODO

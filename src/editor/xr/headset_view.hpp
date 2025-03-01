@@ -86,18 +86,6 @@ class Headset_view
     , public erhe::imgui::Imgui_window
 {
 public:
-    class Config
-    {
-    public:
-        bool quad_view        {false};
-        bool debug            {false};
-        bool depth            {false};
-        bool visibility_mask  {false};
-        bool hand_tracking    {false};
-        bool composition_alpha{false};
-    };
-    Config config;
-
     Headset_view(
         erhe::commands::Commands&       commands,
         erhe::graphics::Instance&       graphics_instance,
@@ -105,6 +93,9 @@ public:
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        erhe::xr::Headset*              headset,
+#endif
         Editor_context&                 editor_context,
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings
@@ -147,20 +138,22 @@ private:
     void update_camera_node();
     void update_pointer_context_from_controller();
 
-    erhe::math::Input_axis             m_translate_x;
-    erhe::math::Input_axis             m_translate_y;
-    erhe::math::Input_axis             m_translate_z;
-    glm::vec3                          m_camera_offset{0.0f, 0.0f, 0.0f};
-    Headset_camera_offset_move_command m_offset_x_command;
-    Headset_camera_offset_move_command m_offset_y_command;
-    Headset_camera_offset_move_command m_offset_z_command;
+    erhe::math::Input_axis                               m_translate_x;
+    erhe::math::Input_axis                               m_translate_y;
+    erhe::math::Input_axis                               m_translate_z;
+    glm::vec3                                            m_camera_offset{0.0f, 0.0f, 0.0f};
+    Headset_camera_offset_move_command                   m_offset_x_command;
+    Headset_camera_offset_move_command                   m_offset_y_command;
+    Headset_camera_offset_move_command                   m_offset_z_command;
 
     Editor_context&                                      m_editor_context;
     erhe::window::Context_window&                        m_context_window;
     std::shared_ptr<Headset_view_node>                   m_rendergraph_node;
     std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;
     std::shared_ptr<Scene_root>                          m_scene_root;
-    std::unique_ptr<erhe::xr::Headset>                   m_headset;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    erhe::xr::Headset*                                   m_headset;
+#endif
     std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node
     std::shared_ptr<erhe::scene::Node>                   m_headset_node; // transform set by headset
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;

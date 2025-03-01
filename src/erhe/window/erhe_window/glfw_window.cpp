@@ -1100,6 +1100,17 @@ auto Context_window::get_device_pointer() const -> void*
 #endif
 }
 
+#if defined(_WIN32)
+auto Context_window::get_hwnd() const -> HWND
+{
+    return glfwGetWin32Window(m_glfw_window);
+}
+auto Context_window::get_hglrc() const -> HGLRC
+{
+    return glfwGetWGLContext(m_glfw_window);
+}
+#endif
+
 auto Context_window::get_window_handle() const -> void*
 {
 #if defined(_WIN32)

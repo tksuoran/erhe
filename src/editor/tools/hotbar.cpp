@@ -213,16 +213,16 @@ Hotbar::Hotbar(
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     commands.register_command(&m_trackpad_command);
-    const auto* headset = headset_view.get_headset();
-    if (headset != nullptr) {
-        auto& xr_right = headset->get_actions_right();
-        m_trackpad_click_command.bind(xr_right.trackpad);
-        commands.bind_command_to_xr_boolean_action(&m_trackpad_click_command, xr_right.trackpad_click, erhe::commands::Button_trigger::Button_pressed);
+    erhe::xr::Headset*    headset  = headset_view.get_headset();
+    erhe::xr::Xr_actions* xr_right = (headset != nullptr) ? headset->get_actions_right() : nullptr;
+    if (xr_right != nullptr) {
+        m_trackpad_click_command.bind(xr_right->trackpad);
+        commands.bind_command_to_xr_boolean_action(&m_trackpad_click_command, xr_right->trackpad_click, erhe::commands::Button_trigger::Button_pressed);
         m_trackpad_click_command.set_host(this);
         m_trackpad_command.set_host(this);
 
         commands.register_command(&m_thumbstick_command);
-        commands.bind_command_to_xr_vector2f_action(&m_thumbstick_command, xr_right.thumbstick);
+        commands.bind_command_to_xr_vector2f_action(&m_thumbstick_command, xr_right->thumbstick);
         m_thumbstick_command.set_host(this);
     }
 #else

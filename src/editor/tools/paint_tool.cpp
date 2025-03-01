@@ -115,11 +115,11 @@ Paint_tool::Paint_tool(
     commands.register_command(&m_drag_enable_command);
     commands.bind_command_to_mouse_drag(&m_paint_vertex_command, erhe::window::Mouse_button_left, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    const auto* headset = headset_view.get_headset();
-    if (headset != nullptr) {
-        auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.a_click,       erhe::commands::Button_trigger::Any);
-        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click, erhe::commands::Button_trigger::Any);
+    erhe::xr::Headset*    headset  = headset_view.get_headset();
+    erhe::xr::Xr_actions* xr_right = (headset != nullptr) ? headset->get_actions_right() : nullptr;
+    if (xr_right != nullptr) {
+        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right->a_click,       erhe::commands::Button_trigger::Any);
+        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right->trigger_click, erhe::commands::Button_trigger::Any);
         commands.bind_command_to_update           (&m_drag_redirect_update_command);
     }
 #else

@@ -117,11 +117,11 @@ Material_paint_tool::Material_paint_tool(
     commands.bind_command_to_mouse_button(&m_paint_command, erhe::window::Mouse_button_left, false);
     commands.bind_command_to_mouse_button(&m_pick_command,  erhe::window::Mouse_button_right, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    const auto* headset = headset_view.get_headset();
-    if (headset != nullptr) {
-        auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right.trigger_click, erhe::commands::Button_trigger::Button_pressed);
-        commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right.a_click,       erhe::commands::Button_trigger::Button_pressed);
+    erhe::xr::Headset*    headset  = headset_view.get_headset();
+    erhe::xr::Xr_actions* xr_right = (headset != nullptr) ? headset->get_actions_right() : nullptr;
+    if (xr_right != nullptr) {
+        commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right->trigger_click, erhe::commands::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right->a_click,       erhe::commands::Button_trigger::Button_pressed);
     }
 #else
     static_cast<void>(headset_view);
@@ -135,7 +135,7 @@ Material_paint_tool::Material_paint_tool(
 
 auto Material_paint_tool::on_paint_ready() -> bool
 {
-    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_context.scene_views->hover_scene_view();
     if (!viewport_scene_view) {
         return false;
     }
@@ -145,7 +145,7 @@ auto Material_paint_tool::on_paint_ready() -> bool
 
 auto Material_paint_tool::on_pick_ready() -> bool
 {
-    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
+    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_context.scene_views->hover_scene_view();
     if (viewport_scene_view == nullptr) {
         return false;
     }

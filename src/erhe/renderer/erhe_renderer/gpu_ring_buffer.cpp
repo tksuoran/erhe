@@ -148,6 +148,7 @@ void Buffer_range::flush(std::size_t byte_write_position_in_span)
 
 auto Buffer_range::bind() -> bool
 {
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(is_closed());
     ERHE_VERIFY(!m_is_submitted);
 
@@ -159,6 +160,7 @@ auto Buffer_range::bind() -> bool
 
 void Buffer_range::submit()
 {
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(is_closed());
     ERHE_VERIFY(!m_is_submitted);
     m_is_submitted = true;
@@ -180,6 +182,7 @@ void Buffer_range::submit()
 
 void Buffer_range::cancel()
 {
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(is_closed());
     m_is_cancelled = true;
     if (m_byte_write_position_in_span == 0) {
@@ -367,16 +370,17 @@ void GPU_ring_buffer::get_size_available_for_write(
 
 auto GPU_ring_buffer::open(Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
 {
+    ERHE_PROFILE_FUNCTION();
+
     sanity_check();
 
     std::size_t alignment_byte_count_without_wrap{0};
     std::size_t available_byte_count_without_wrap{0};
     std::size_t available_byte_count_with_wrap   {0};
+    bool update_called{false};
     bool wrap{false};
 
     for (;;) {
-        update_entries();
-
         sanity_check();
 
         get_size_available_for_write(alignment_byte_count_without_wrap, available_byte_count_without_wrap, available_byte_count_with_wrap);
@@ -387,6 +391,12 @@ auto GPU_ring_buffer::open(Ring_buffer_usage usage, std::size_t byte_count) -> B
 
         wrap = (byte_count > available_byte_count_without_wrap);
         if (wrap && (byte_count > available_byte_count_with_wrap)) {
+            update_entries();
+            if (!update_called) { // Instant retry after first call to update_entries();
+                update_called = true;
+                continue;
+            }
+
             std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
             bool show_warning = true;
             if (m_last_warning_time.has_value()) {
@@ -427,6 +437,8 @@ auto GPU_ring_buffer::open(Ring_buffer_usage usage, std::size_t byte_count) -> B
 
 void GPU_ring_buffer::flush(std::size_t byte_offset, std::size_t byte_count)
 {
+    ERHE_PROFILE_FUNCTION();
+
     sanity_check();
 
     if (!m_instance.info.use_persistent_buffers) {
@@ -436,6 +448,8 @@ void GPU_ring_buffer::flush(std::size_t byte_offset, std::size_t byte_count)
 
 void GPU_ring_buffer::close(std::size_t byte_offset, std::size_t byte_write_count)
 {
+    ERHE_PROFILE_FUNCTION();
+
     sanity_check();
 
     m_write_position += byte_write_count;
@@ -450,6 +464,8 @@ void GPU_ring_buffer::close(std::size_t byte_offset, std::size_t byte_write_coun
 
 GPU_ring_buffer::~GPU_ring_buffer()
 {
+    ERHE_PROFILE_FUNCTION();
+
     sanity_check();
 
     while (!m_sync_entries.empty()) {
@@ -463,6 +479,8 @@ GPU_ring_buffer::~GPU_ring_buffer()
 
 void GPU_ring_buffer::update_entries()
 {
+    ERHE_PROFILE_FUNCTION();
+
     sanity_check();
 
     // Keep track of how how GPU has completed reads
@@ -504,6 +522,8 @@ void GPU_ring_buffer::update_entries()
 
 void GPU_ring_buffer::wrap_write()
 {
+    ERHE_PROFILE_FUNCTION();
+
     sanity_check();
 
     // Insert dummy entry to cover remaining unused buffer space, so that update_entries()
@@ -532,6 +552,8 @@ void GPU_ring_buffer::wrap_write()
 
 void GPU_ring_buffer::push(Sync_entry&& entry)
 {
+    ERHE_PROFILE_FUNCTION();
+
     sanity_check();
 
     m_sync_entries.push_back(entry);

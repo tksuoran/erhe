@@ -127,17 +127,17 @@ Brush_tool::Brush_tool(
     commands.register_command(&m_insert_command);
     commands.register_command(&m_pick_using_float_input_command);
     commands.bind_command_to_update      (&m_preview_command);
-    commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right, true);
+    commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right,  true);
     commands.bind_command_to_mouse_button(&m_pick_command,   erhe::window::Mouse_button_middle, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    const auto* headset = headset_view.get_headset();
-    if (headset != nullptr) {
-        auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right.trigger_click, erhe::commands::Button_trigger::Button_pressed);
-        commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right.a_click,       erhe::commands::Button_trigger::Button_pressed);
-        commands.bind_command_to_xr_float_action  (&m_pick_using_float_input_command, xr_right.squeeze_value);
-        //commands.bind_command_to_xr_boolean_action(&m_pick_command,   xr_right.b_click,       erhe::commands::Button_trigger::Button_pressed);
+    erhe::xr::Headset*    headset  = headset_view.get_headset();
+    erhe::xr::Xr_actions* xr_right = (headset != nullptr) ? headset->get_actions_right() : nullptr;
+    if (xr_right != nullptr) {
+        commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right->trigger_click, erhe::commands::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right->a_click,       erhe::commands::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_float_action  (&m_pick_using_float_input_command, xr_right->squeeze_value);
+        //commands.bind_command_to_xr_boolean_action(&m_pick_command,   xr_right->b_click,       erhe::commands::Button_trigger::Button_pressed);
     }
 #else
     static_cast<void>(headset_view);

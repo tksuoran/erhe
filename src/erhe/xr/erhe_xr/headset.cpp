@@ -20,24 +20,24 @@ Headset::Headset(erhe::window::Context_window& context_window, const Xr_configur
 
 Headset::~Headset() noexcept = default;
 
-auto Headset::get_actions_left() -> Xr_actions&
+auto Headset::get_actions_left() -> Xr_actions*
 {
-    return m_xr_instance->actions_left;
+    return m_xr_instance ? &m_xr_instance->actions_left : nullptr;
 }
 
-auto Headset::get_actions_left() const -> const Xr_actions&
+auto Headset::get_actions_left() const -> const Xr_actions*
 {
-    return m_xr_instance->actions_left;
+    return m_xr_instance ? &m_xr_instance->actions_left : nullptr;
 }
 
-auto Headset::get_actions_right() -> Xr_actions&
+auto Headset::get_actions_right() -> Xr_actions*
 {
-    return m_xr_instance->actions_right;
+    return m_xr_instance ? &m_xr_instance->actions_right : nullptr;
 }
 
-auto Headset::get_actions_right() const -> const Xr_actions&
+auto Headset::get_actions_right() const -> const Xr_actions*
 {
-    return m_xr_instance->actions_right;
+    return m_xr_instance ? &m_xr_instance->actions_right : nullptr;
 }
 
 auto Headset::get_hand_tracking_joint(const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint
@@ -78,14 +78,14 @@ auto Headset::get_headset_pose(glm::vec3& position, glm::quat& orientation) cons
     return true;
 }
 
-auto Headset::get_xr_instance() -> Xr_instance&
+auto Headset::get_xr_instance() -> Xr_instance*
 {
-    return *m_xr_instance.get();
+    return m_xr_instance.get();
 }
 
-auto Headset::get_xr_session() -> Xr_session&
+auto Headset::get_xr_session() -> Xr_session*
 {
-    return *m_xr_session.get();
+    return m_xr_session.get();
 }
 
 auto Headset::is_valid() const -> bool

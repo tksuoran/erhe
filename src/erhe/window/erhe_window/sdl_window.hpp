@@ -2,13 +2,28 @@
 
 #include "erhe_window/window_event_handler.hpp"
 
-#include <array>
 #include <atomic>
 #include <functional>
-#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
+
+#if defined(ERHE_OS_WINDOWS)
+#   ifndef _CRT_SECURE_NO_WARNINGS
+#       define _CRT_SECURE_NO_WARNINGS
+#   endif
+#   ifndef WIN32_LEAN_AND_MEAN
+#       define WIN32_LEAN_AND_MEAN
+#   endif
+#   define VC_EXTRALEAN
+#   ifndef STRICT
+#       define STRICT
+#   endif
+#   ifndef NOMINMAX
+#       define NOMINMAX
+#   endif
+#   include <windows.h>
+#endif
 
 namespace erhe::window {
 
@@ -94,6 +109,11 @@ public:
     [[nodiscard]] auto get_device_pointer() const -> void*; // This would be an ID3D11Device, HGLRC/GLXContext, ID3D12Device, etc
     [[nodiscard]] auto get_window_handle () const -> void*; // This would be an HWND, GLXDrawable, etc
     [[nodiscard]] auto get_scale_factor  () const -> float;
+
+#if defined(ERHE_OS_WINDOWS)
+    [[nodiscard]] auto get_hwnd() const -> HWND;
+    [[nodiscard]] auto get_hglrc() const -> HGLRC;
+#endif
 
 private:
     void get_extensions();

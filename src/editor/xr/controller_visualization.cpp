@@ -25,7 +25,7 @@ Controller_visualization::Controller_visualization(erhe::scene::Node* view_root,
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
 
-    GEO::Mesh controller_geo_mesh;
+    GEO::Mesh controller_geo_mesh{3, true};
     erhe::geometry::shapes::make_torus(controller_geo_mesh, 0.05f, 0.0025f, 40, 14);
     transform_mesh(controller_geo_mesh, to_geo_mat4f(erhe::math::mat4_swap_yz));
 

@@ -9,8 +9,6 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_profile/profile.hpp"
 
-#include "taskflow/taskflow.hpp"
-
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
 #   include <lunasvg.h>
 #endif

@@ -112,12 +112,12 @@ Physics_tool::Physics_tool(
     commands.register_command(&m_drag_command);
     commands.bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_right, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    const auto* headset = headset_view.get_headset();
-    if (headset != nullptr) {
-        auto& xr_right = headset->get_actions_right();
+    erhe::xr::Headset*    headset  = headset_view.get_headset();
+    erhe::xr::Xr_actions* xr_right = (headset != nullptr) ? headset->get_actions_right() : nullptr;
+    if (xr_right != nullptr) {
         //commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click);
         //commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.a_click);
-        commands.bind_command_to_xr_float_action(&m_drag_enable_command, xr_right.trigger_value);
+        commands.bind_command_to_xr_float_action(&m_drag_enable_command, xr_right->trigger_value);
         commands.bind_command_to_update         (&m_drag_redirect_update_command);
         m_drag_enable_command.set_host(this);
     }

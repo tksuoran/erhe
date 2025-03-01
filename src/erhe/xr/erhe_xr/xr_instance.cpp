@@ -138,8 +138,7 @@ auto Xr_instance::create_instance() -> bool
         required_extensions.push_back(XR_EXT_HAND_TRACKING_EXTENSION_NAME);
     }
 
-    const XrInstanceCreateInfo create_info
-    {
+    const XrInstanceCreateInfo create_info {
         .type                   = XR_TYPE_INSTANCE_CREATE_INFO,
         .next                   = nullptr,
         .createFlags            = 0,
@@ -148,7 +147,7 @@ auto Xr_instance::create_instance() -> bool
             .applicationVersion = 1,
             .engineName         = { 'e', 'r', 'h', 'e', '\0' },
             .engineVersion      = 1,
-            .apiVersion         = XR_API_VERSION_1_0
+            .apiVersion         = XR_API_VERSION_1_1 // XR_API_VERSION_1_0
         },
         .enabledApiLayerCount   = 0,
         .enabledApiLayerNames   = nullptr,
@@ -184,9 +183,25 @@ auto Xr_instance::create_instance() -> bool
         .userData          = this
     };
 
-    xrCreateDebugUtilsMessengerEXT     = get_proc_addr<PFN_xrCreateDebugUtilsMessengerEXT    >("xrCreateDebugUtilsMessengerEXT");
-    xrGetVisibilityMaskKHR             = get_proc_addr<PFN_xrGetVisibilityMaskKHR            >("xrGetVisibilityMaskKHR");
+    if (m_configuration.debug) {
+        xrCreateDebugUtilsMessengerEXT = get_proc_addr<PFN_xrCreateDebugUtilsMessengerEXT>("xrCreateDebugUtilsMessengerEXT");
+    }
+
+    if (m_configuration.visibility_mask) {
+        xrGetVisibilityMaskKHR = get_proc_addr<PFN_xrGetVisibilityMaskKHR>("xrGetVisibilityMaskKHR");
+    }
     xrGetOpenGLGraphicsRequirementsKHR = get_proc_addr<PFN_xrGetOpenGLGraphicsRequirementsKHR>("xrGetOpenGLGraphicsRequirementsKHR");
+
+    XrInstanceProperties instance_properties {
+        .type = XR_TYPE_INSTANCE_PROPERTIES,
+        .next = nullptr,
+    };
+    xrGetInstanceProperties(m_xr_instance, &instance_properties);
+    const uint16_t major = (instance_properties.runtimeVersion >> 48) & uint64_t{0x0000ffffu};
+    const uint16_t minor = (instance_properties.runtimeVersion >> 32) & uint64_t{0x0000ffffu};
+    const uint16_t patch = (instance_properties.runtimeVersion >>  0) & uint64_t{0xffffffffu};
+    log_xr->info("OpenXR runtime version: {}.{}.{}", major, minor, patch);
+    log_xr->info("OpenXR runtime: {}", instance_properties.runtimeName);
 
     return true;
 }
@@ -284,9 +299,7 @@ auto Xr_instance::enumerate_extensions() -> bool
     log_xr->trace("{}", __func__);
 
     uint32_t instance_extension_count{0};
-    ERHE_XR_CHECK(
-        xrEnumerateInstanceExtensionProperties(nullptr, 0, &instance_extension_count, nullptr)
-    );
+    ERHE_XR_CHECK(xrEnumerateInstanceExtensionProperties(nullptr, 0, &instance_extension_count, nullptr));
     if (instance_extension_count == 0) {
         return true; // Consider no extensions to be okay. TODO consider this be an error.
     }
@@ -318,7 +331,23 @@ auto Xr_instance::get_system_info() -> bool
     m_xr_system_info.next       = nullptr;
     m_xr_system_info.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
 
-    ERHE_XR_CHECK(xrGetSystem(m_xr_instance, &m_xr_system_info, &m_xr_system_id));
+    bool waiting_for_headset_notified = false;
+    for (;;) {
+        const XrResult get_system_result = xrGetSystem(m_xr_instance, &m_xr_system_info, &m_xr_system_id);
+        if (get_system_result == XR_ERROR_FORM_FACTOR_UNAVAILABLE) {
+            // Sleep and retry
+            if (!waiting_for_headset_notified) {
+                log_xr->info("OpenXR: Waiting for HMD to become available");
+                waiting_for_headset_notified = true;
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            continue;
+        }
+        if (get_system_result == XR_SUCCESS) {
+            log_xr->info("OpenXR: HMD is now ready");
+            break;
+        }
+    }
 
     XrSystemProperties system_properties{
         .type = XR_TYPE_SYSTEM_PROPERTIES,
@@ -335,18 +364,21 @@ auto Xr_instance::get_system_info() -> bool
     }
 
     ERHE_XR_CHECK(xrGetSystemProperties(m_xr_instance, m_xr_system_id, &system_properties));
+    log_xr->info("OpenXR System: {}",                  system_properties.systemName);
+    log_xr->info("OpenXR SystemId: {:x}",              system_properties.systemId);
+    log_xr->info("OpenXR VendorId: {:x}",              system_properties.vendorId);
+    log_xr->info("OpenXR Max Swapchain Image {} x {}", system_properties.graphicsProperties.maxSwapchainImageWidth, system_properties.graphicsProperties.maxSwapchainImageHeight);
+    log_xr->info("OpenXR Max Layer Count {}",          system_properties.graphicsProperties.maxLayerCount);
+    log_xr->info("OpenXR Orientation Tracking: {}",    (system_properties.trackingProperties.orientationTracking == XR_TRUE) ? "yes" : "no");
+    log_xr->info("OpenXR Position Tracking: {}",       (system_properties.trackingProperties.positionTracking == XR_TRUE) ? "yes" : "no");
+    log_xr->info("OpenXR Hand Tracking {}",            m_configuration.hand_tracking && (system_hand_tracking_properties.supportsHandTracking == XR_TRUE) ? "yes" : "no");
 
     if (m_configuration.hand_tracking) {
-        if(system_hand_tracking_properties.supportsHandTracking) {
-            log_xr->info("Hand tracking is supported");
+        if (system_hand_tracking_properties.supportsHandTracking) {
             xrCreateHandTrackerEXT  = reinterpret_cast<PFN_xrCreateHandTrackerEXT >(get_proc_addr("xrCreateHandTrackerEXT" ));
             xrDestroyHandTrackerEXT = reinterpret_cast<PFN_xrDestroyHandTrackerEXT>(get_proc_addr("xrDestroyHandTrackerEXT"));
             xrLocateHandJointsEXT   = reinterpret_cast<PFN_xrLocateHandJointsEXT  >(get_proc_addr("xrLocateHandJointsEXT"  ));
-        } else {
-            log_xr->info("Hand tracking is not supported");
         }
-    } else {
-        log_xr->info("Hand tracking is not enabled");
     }
 
     return true;
@@ -379,32 +411,14 @@ auto Xr_instance::enumerate_blend_modes() -> bool
 
     uint32_t environment_blend_mode_count{0};
 
-    ERHE_XR_CHECK(
-        xrEnumerateEnvironmentBlendModes(
-            m_xr_instance,
-            m_xr_system_id,
-            m_xr_view_configuration_type,
-            0,
-            &environment_blend_mode_count,
-            nullptr
-        )
-    );
+    ERHE_XR_CHECK(xrEnumerateEnvironmentBlendModes(m_xr_instance, m_xr_system_id, m_xr_view_configuration_type, 0, &environment_blend_mode_count, nullptr));
     if (environment_blend_mode_count == 0) {
         log_xr->error("xrEnumerateEnvironmentBlendModes() returned 0 environment blend modes");
         return false;
     }
 
     m_xr_environment_blend_modes.resize(environment_blend_mode_count);
-    ERHE_XR_CHECK(
-        xrEnumerateEnvironmentBlendModes(
-            m_xr_instance,
-            m_xr_system_id,
-            m_xr_view_configuration_type,
-            environment_blend_mode_count,
-            &environment_blend_mode_count,
-            m_xr_environment_blend_modes.data()
-        )
-    );
+    ERHE_XR_CHECK(xrEnumerateEnvironmentBlendModes(m_xr_instance, m_xr_system_id, m_xr_view_configuration_type, environment_blend_mode_count, &environment_blend_mode_count, m_xr_environment_blend_modes.data()));
 
     int best_score = 0;
     m_xr_environment_blend_mode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
@@ -426,25 +440,15 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 
     log_xr->trace("{}", __func__);
 
-    uint32_t view_configuration_type_count;
-    ERHE_XR_CHECK(
-        xrEnumerateViewConfigurations(m_xr_instance, m_xr_system_id, 0, &view_configuration_type_count, nullptr)
-    );
+    uint32_t view_configuration_type_count = 0;
+    ERHE_XR_CHECK(xrEnumerateViewConfigurations(m_xr_instance, m_xr_system_id, 0, &view_configuration_type_count, nullptr));
     if (view_configuration_type_count == 0) {
         return false; // Consider no views to be an error.
     }
 
     std::vector<XrViewConfigurationType> view_configuration_types{view_configuration_type_count};
 
-    ERHE_XR_CHECK(
-        xrEnumerateViewConfigurations(
-            m_xr_instance,
-            m_xr_system_id,
-            view_configuration_type_count,
-            &view_configuration_type_count,
-            view_configuration_types.data()
-        )
-    );
+    ERHE_XR_CHECK(xrEnumerateViewConfigurations(m_xr_instance, m_xr_system_id, view_configuration_type_count, &view_configuration_type_count, view_configuration_types.data()));
 
     log_xr->info("View configuration types:");
     int best_score{0};
@@ -455,18 +459,11 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     for (const auto view_configuration_type : view_configuration_types) {
         uint32_t dummy{0};
         XrViewConfigurationView views[4] = {};
-        for (auto& view : views) {
+        for (XrViewConfigurationView& view : views) {
             view.type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
             view.next = 0;
         }
-        auto result = xrEnumerateViewConfigurationViews(
-            m_xr_instance,
-            m_xr_system_id,
-            view_configuration_type,
-            4,
-            &dummy,
-            &views[0]
-        );
+        const XrResult result = xrEnumerateViewConfigurationViews(m_xr_instance, m_xr_system_id, view_configuration_type, 4, &dummy, &views[0]);
         if (result != XR_SUCCESS) {
             log_xr->info("    {} is not ok", c_str(view_configuration_type));
             continue;
@@ -498,17 +495,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     log_xr->info("Selected view configuration type: {}", c_str(m_xr_view_configuration_type));
 
     uint32_t view_count{0};
-
-    ERHE_XR_CHECK(
-        xrEnumerateViewConfigurationViews(
-            m_xr_instance,
-            m_xr_system_id,
-            m_xr_view_configuration_type,
-            0,
-            &view_count,
-            nullptr
-        )
-    );
+    ERHE_XR_CHECK(xrEnumerateViewConfigurationViews(m_xr_instance, m_xr_system_id, m_xr_view_configuration_type, 0, &view_count, nullptr));
     if (view_count == 0) {
         log_xr->error("xrEnumerateViewConfigurationViews() returned 0 views");
         return false;
@@ -529,14 +516,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     );
 
     ERHE_XR_CHECK(
-        xrEnumerateViewConfigurationViews(
-            m_xr_instance,
-            m_xr_system_id,
-            m_xr_view_configuration_type,
-            view_count,
-            &view_count,
-            m_xr_view_configuration_views.data()
-        )
+        xrEnumerateViewConfigurationViews(m_xr_instance, m_xr_system_id, m_xr_view_configuration_type, view_count, &view_count, m_xr_view_configuration_views.data())
     );
 
     log_xr->info("View configuration views:");
@@ -677,11 +657,7 @@ auto Xr_instance::initialize_actions() -> bool
             .localizedActionSetName = { 'e', 'r', 'h', 'e', '\0' },
             .priority               = 0,
         };
-        const XrResult result = xrCreateActionSet(
-            m_xr_instance,
-            &create_info,
-            &m_action_set
-        );
+        const XrResult result = xrCreateActionSet(m_xr_instance, &create_info, &m_action_set);
         log_xr->info(
             "xrCreateActionSet(.actionSetName = '{}', .localizedActionSetName = '{}', .priority = {}) result = {}, actionSet = {}",
             create_info.actionSetName,
@@ -787,13 +763,7 @@ auto Xr_instance::get_path_string(XrPath path) -> std::string
     std::vector<char> buffer;
     buffer.resize(length);
     uint32_t required_capacity = 0;
-    const XrResult result = xrPathToString(
-        m_xr_instance,
-        path,
-        length,
-        &required_capacity,
-        buffer.data()
-    );
+    const XrResult result = xrPathToString(m_xr_instance, path, length, &required_capacity, buffer.data());
     if (result == XR_SUCCESS) {
         return std::string{buffer.data(), length - 1};
     } else {
@@ -999,16 +969,8 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
         .interactionProfile = XR_NULL_PATH
     };
 
-    const XrResult left_result = xrGetCurrentInteractionProfile(
-        session.get_xr_session(),
-        paths.user_hand_left,
-        &left
-    );
-    const XrResult right_result = xrGetCurrentInteractionProfile(
-        session.get_xr_session(),
-        paths.user_hand_right,
-        &right
-    );
+    const XrResult left_result = xrGetCurrentInteractionProfile(session.get_xr_session(), paths.user_hand_left, &left);
+    const XrResult right_result = xrGetCurrentInteractionProfile(session.get_xr_session(), paths.user_hand_right, &right);
     const std::string left_profile_name  = (left_result  == XR_SUCCESS) ? get_path_string(left .interactionProfile) : "failure";
     const std::string right_profile_name = (right_result == XR_SUCCESS) ? get_path_string(right.interactionProfile) : "failure";
     log_xr->info("Current interaction profile for left hand:  {}", left_profile_name);
