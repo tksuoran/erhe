@@ -27,6 +27,8 @@ erhe_target_sources_grouped(
     graphics/icon_rasterization.hpp
     graphics/icon_set.cpp
     graphics/icon_set.hpp
+    graphics/thumbnails.cpp
+    graphics/thumbnails.hpp
     input_state.cpp
     input_state.hpp
     logging.ini
