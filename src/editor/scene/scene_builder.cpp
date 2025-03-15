@@ -917,30 +917,27 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
     }
 }
 
-void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
+void Scene_builder::add_cubes(glm::ivec3 shape, float scale)
 {
     ERHE_PROFILE_FUNCTION();
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
-
-#if !defined(NDEBUG)
-    m_scene_root->get_scene().sanity_check();
-#endif
 
     auto& material_library = m_scene_root->content_library()->materials;
     auto material = material_library->make<erhe::primitive::Material>(
         "cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f
     );
 
-    constexpr float scale   = 0.5f;
-    constexpr int   x_count = 20;
-    constexpr int   y_count = 20;
-    constexpr int   z_count = 20;
+    const int x_count = shape.x;
+    const int y_count = shape.y;
+    const int z_count = shape.z;
 
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
 
     GEO::Mesh cube_geo_mesh;
     make_cube(cube_geo_mesh, 0.1f);
+
+    Mesh_memory& mesh_memory = *m_context.mesh_memory;
 
     erhe::primitive::Buffer_mesh buffer_mesh{};
     const bool buffer_mesh_ok = erhe::primitive::build_buffer_mesh(
@@ -953,6 +950,8 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
     ERHE_VERIFY(buffer_mesh_ok); // TODO
 
     const erhe::primitive::Primitive primitive{std::move(buffer_mesh), material};
+    std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Node>("Cubes");
+    root->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     for (int i = 0; i < x_count; ++i) {
         const float x_rel = static_cast<float>(i) - static_cast<float>(x_count) * 0.5f;
         for (int j = 0; j < y_count; ++j) {
@@ -960,20 +959,18 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
             for (int k = 0; k < z_count; ++k) {
                 const float z_rel = static_cast<float>(k) - static_cast<float>(z_count) * 0.5f;
                 const vec3 pos{scale * x_rel, 1.0f + scale * y_rel, scale * z_rel};
-                auto node = std::make_shared<erhe::scene::Node>();
+                auto node = std::make_shared<erhe::scene::Node>("Cube");
                 auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
                 mesh->layer_id = m_scene_root->layers().content()->id;
                 mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast | Item_flags::opaque);
                 node->attach(mesh);
                 node->set_world_from_node(erhe::math::create_translation<float>(pos));
-                node->set_parent(m_scene_root->get_scene().get_root_node());
+                node->set_parent(root);
+                node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
             }
         }
     }
-
-#if !defined(NDEBUG)
-    m_scene_root->get_scene().sanity_check();
-#endif
+    root->set_parent(m_scene_root->get_scene().get_root_node());
 }
 
 auto Scene_builder::make_directional_light(

@@ -1439,6 +1439,9 @@ private:
     {
         ERHE_PROFILE_FUNCTION();
 
+        if (!primitive.indicesAccessor.has_value()) {
+            return; // TODO
+        }
         primitive_entry.index_accessor = primitive.indicesAccessor.value();
         primitive_entry.attribute_accessors.clear();
         for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {

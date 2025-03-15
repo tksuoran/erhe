@@ -180,7 +180,10 @@ void import_gltf(
             std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
             for (erhe::primitive::Primitive& primitive : primitives) {
                 // Ensure geometry exists
-                ERHE_VERIFY(primitive.make_geometry());
+                const bool geometry_ok = primitive.make_geometry();
+                if (!geometry_ok) {
+                    continue;
+                }
 
                 // Ensure raytrace exists
                 ERHE_VERIFY(primitive.make_raytrace());

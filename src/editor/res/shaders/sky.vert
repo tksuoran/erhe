@@ -1,4 +1,4 @@
-out vec4 v_position;
+highp out vec4 v_position;
 
 void main()
 {
