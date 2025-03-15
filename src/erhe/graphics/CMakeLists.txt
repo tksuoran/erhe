@@ -21,6 +21,8 @@ erhe_target_sources_grouped(
     erhe_graphics/gl_objects.hpp
     erhe_graphics/glsl_file_loader.cpp
     erhe_graphics/glsl_file_loader.hpp
+    erhe_graphics/glsl_format_source.cpp
+    erhe_graphics/glsl_format_source.hpp
     erhe_graphics/gpu_timer.cpp
     erhe_graphics/gpu_timer.hpp
     erhe_graphics/graphics_log.cpp
@@ -62,6 +64,20 @@ erhe_target_sources_grouped(
     erhe_graphics/texture.cpp
     erhe_graphics/texture.hpp
 )
+
+if (ERHE_SPIRV)
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/glsl_to_spirv.cpp
+        erhe_graphics/glsl_to_spirv.hpp
+    )
+    target_link_libraries(${_target}
+        PUBLIC
+            glslang
+            glslang::glslang-default-resource-limits
+    )
+endif()
+
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
@@ -77,8 +93,6 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm-header-only
         mango
-        #### wuffs
-        #### glslang
     PRIVATE
         erhe::bit
         erhe::defer

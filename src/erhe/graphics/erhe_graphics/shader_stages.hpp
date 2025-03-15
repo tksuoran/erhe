@@ -3,6 +3,15 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/gl_objects.hpp"
 
+#if defined(ERHE_SPIRV)
+#include "glslang/Public/ShaderLang.h"
+namespace glslang {
+    class TShader;
+    class TProgram;
+}
+#include <unordered_map>
+#endif
+
 #include <filesystem>
 #include <map>
 #include <string>
@@ -101,6 +110,11 @@ public:
 private:
     void post_link();
 
+#if defined(ERHE_SPIRV)
+    auto compile_glslang     (const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
+    auto link_glslang_program() -> bool;
+#endif
+
     [[nodiscard]] auto compile     (const Shader_stage& shader) -> Gl_shader;
     [[nodiscard]] auto post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool;
 
@@ -121,6 +135,12 @@ private:
     std::map<std::string, Shader_resource, std::less<>> m_resources;
     std::map<unsigned int, std::string>                 m_final_sources;
     std::vector<std::filesystem::path>                  m_paths;
+
+#if defined(ERHE_SPIRV)
+    std::vector<std::shared_ptr<glslang::TShader>>               m_glslang_shaders;
+    std::unordered_map<::EShLanguage, std::vector<unsigned int>> m_spirv_shaders;
+    std::shared_ptr<glslang::TProgram>                           m_glslang_program;
+#endif
 };
 
 class Shader_stages

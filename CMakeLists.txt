@@ -52,6 +52,7 @@ set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either 
 set_option(ERHE_TERMINAL_LIBRARY           "Terminal use with erhe. Either cpp-terminal, or none"                       "none"     "cpp-terminal;none")
 set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "OFF"      "ON;OFF")
 set_option(ERHE_USE_ASAN                   "Enable AddressSanitizer"                                                    "OFF"      "ON;OFF")
+set_option(ERHE_SPRIV                      "Enable SPIRV"                                                               "OFF"      "ON;OFF")
 
 # TODO fix ERHE_USE_PRECOMPILED_HEADERS
 
@@ -109,19 +110,19 @@ CPMAddPackage(
     #VERSION            1.9.2
     #GITHUB_REPOSITORY  BrunoLevy/geogram
     OPTIONS
-        "VORPALINE_PLATFORM ${VORPALINE_PLATFORM}"
-        "GEOGRAM_SUB_BUILD ON"
-        "GEOGRAM_WITH_GRAPHICS OFF"
+                  "VORPALINE_PLATFORM ${VORPALINE_PLATFORM}"
+                   "GEOGRAM_SUB_BUILD ON"
+               "GEOGRAM_WITH_GRAPHICS OFF"
         "GEOGRAM_WITH_LEGACY_NUMERICS OFF"
-        "GEOGRAM_WITH_HLBFGS ON"
-        "GEOGRAM_WITH_TETGEN ON"
-        "GEOGRAM_WITH_TRIANGLE ON"
-        "GEOGRAM_WITH_LUA OFF"
-        "GEOGRAM_LIB_ONLY ON"
-        "GEOGRAM_WITH_FPG ON"
-        "GEOGRAM_USE_SYSTEM_GLFW3 OFF"
-        "GEOGRAM_WITH_GARGANTUA OFF"
-        "GEOGRAM_WITH_TBB OFF"
+                 "GEOGRAM_WITH_HLBFGS ON"
+                 "GEOGRAM_WITH_TETGEN ON"
+               "GEOGRAM_WITH_TRIANGLE ON"
+                    "GEOGRAM_WITH_LUA OFF"
+                    "GEOGRAM_LIB_ONLY ON"
+                    "GEOGRAM_WITH_FPG ON"
+            "GEOGRAM_USE_SYSTEM_GLFW3 OFF"
+              "GEOGRAM_WITH_GARGANTUA OFF"
+                    "GEOGRAM_WITH_TBB OFF"
 )
 
 CPMAddPackage(
@@ -166,6 +167,29 @@ CPMAddPackage(
 # Enable GLM_GTX_component_wise
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
+if (ERHE_SPIRV)
+    CPMAddPackage(
+        NAME              glslang
+        VERSION           15.0.0
+        GIT_TAG           15.0.0
+        GITHUB_REPOSITORY KhronosGroup/glslang
+        OPTIONS
+                      "GLSLANG_TESTS OFF"
+             "GLSLANG_ENABLE_INSTALL OFF"
+                       "ENABLE_SPIRV ON"
+                 "ENABLE_SPVREMAPPER OFF"
+            "ENABLE_GLSLANG_BINARIES OFF"
+                  "ENABLE_GLSLANG_JS OFF"
+                        "ENABLE_HLSL OFF"
+                        "ENABLE_RTTI ON"
+                  "ENABLE_EXCEPTIONS ON"
+                         "ENABLE_OPT OFF"
+                         "ENABLE_PCH ${ERHE_USE_PRECOMPILED_HEADERS}"
+    )
+    add_definitions(-DERHE_SPIRV)
+endif ()
+
+
 CPMAddPackage(
     NAME              MathGeoLib
     GIT_TAG           origin/winver
@@ -188,13 +212,13 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
         GIT_TAG           release-3.2.4
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
-            "SDL_STATIC ON"
+                    "SDL_STATIC ON"
             "SDL_STATIC_DEFAULT ON"
-            "SDL3_MAINPROJECT OFF"
-            "SDL_OPENGLES OFF"
-            "SDL_OPENVR OFF"
-            "SDL_AUDIO OFF"
-            "SDL_RENDER OFF"
+              "SDL3_MAINPROJECT OFF"
+                  "SDL_OPENGLES OFF"
+                    "SDL_OPENVR OFF"
+                     "SDL_AUDIO OFF"
+                    "SDL_RENDER OFF"
     )
     message(STATUS "Erhe configured to use SDL for OpenGL context window.")
     add_definitions(-DERHE_WINDOW_LIBRARY_SDL)
@@ -205,12 +229,12 @@ elseif (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
         GIT_TAG           3.4
         GITHUB_REPOSITORY glfw/glfw
         OPTIONS
-            "BUILD_SHARED_LIBS OFF"
+              "BUILD_SHARED_LIBS OFF"
             "GLFW_BUILD_EXAMPLES OFF"
-            "GLFW_BUILD_TESTS OFF"
-            "GLFW_BUILD_DOCS OFF"
-            "GLFW_INSTALL OFF"
-            "GLFW_VULKAN_STATIC OFF"
+               "GLFW_BUILD_TESTS OFF"
+                "GLFW_BUILD_DOCS OFF"
+                   "GLFW_INSTALL OFF"
+             "GLFW_VULKAN_STATIC OFF"
     )
     message(STATUS "Erhe configured to use glfw for OpenGL context window.")
     add_definitions(-DERHE_WINDOW_LIBRARY_GLFW)
@@ -230,7 +254,7 @@ CPMAddPackage(
     VERSION           3.7.0
     GITHUB_REPOSITORY taskflow/taskflow
     OPTIONS
-        "TF_BUILD_TESTS OFF"
+           "TF_BUILD_TESTS OFF"
         "TF_BUILD_EXAMPLES OFF"
 )
 
