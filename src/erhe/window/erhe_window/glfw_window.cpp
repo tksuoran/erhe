@@ -380,7 +380,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     const bool primary = (configuration.share == nullptr);
 
     // Scanning joysticks appears to be slow, so do it in worker thread
-    if (primary) {
+    if (primary && configuration.enable_joystick) {
         m_joystick_scan_task = std::thread{
             [this]() {
                 ERHE_PROFILE_SCOPE("Scan joysticks");

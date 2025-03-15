@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_window/window_event_handler.hpp"
+#include "erhe_window/window_configuration.hpp"
 
 #include <atomic>
 #include <functional>
@@ -44,26 +45,6 @@ constexpr Mouse_cursor Mouse_cursor_Hand       =  7;   // (Unused by Dear ImGui 
 constexpr Mouse_cursor Mouse_cursor_NotAllowed =  8;   // When hovering something with disallowed interaction. Usually a crossed circle.
 constexpr Mouse_cursor Mouse_cursor_Crosshair  =  9;   // Crosshair cursor
 constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
-
-class Window_configuration
-{
-public:
-    bool            show                    {true};
-    bool            fullscreen              {false};
-    bool            use_finish              {false};
-    bool            framebuffer_transparency{false};
-    bool            use_depth               {false};
-    bool            use_stencil             {false};
-    int             gl_major                {4};
-    int             gl_minor                {6};
-    int             width                   {1920};
-    int             height                  {1080};
-    int             msaa_sample_count       {0};
-    int             swap_interval           {1};
-    std::string     title                   {};
-    Context_window* share                   {nullptr};
-    int             initial_clear           {3};
-};
 
 class Context_window
 {
