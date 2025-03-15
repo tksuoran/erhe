@@ -235,7 +235,10 @@ void Line_renderer::open()
     ERHE_VERIFY(!m_is_opened || m_is_closed);
     ERHE_VERIFY(!m_vertex_buffer_range.has_value());
 
-    m_vertex_buffer_range = m_line_vertex_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, 0);
+    const std::size_t total_capacity_byte_count = m_line_vertex_buffer.get_buffer().capacity_byte_count();
+    const std::size_t reserved_usage_byte_count =total_capacity_byte_count / 4;
+    // TODO Using 0 here would give no guarantee we get any useful amount
+    m_vertex_buffer_range = m_line_vertex_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, reserved_usage_byte_count);
     m_vertex_write_offset = 0;
 
     for (Line_renderer_bucket& bucket : m_buckets) {

@@ -187,7 +187,9 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
     const std::size_t vertex_byte_count = quad_count * 4 * vertex_stride;
 
     if (!m_vertex_buffer_range.has_value()) {
-        m_vertex_buffer_range = m_vertex_buffer.open(Ring_buffer_usage::CPU_write, 0);
+        const std::size_t total_capacity_byte_count = m_vertex_buffer.get_buffer().capacity_byte_count();
+        const std::size_t reserved_byte_count = total_capacity_byte_count / 4;
+        m_vertex_buffer_range = m_vertex_buffer.open(Ring_buffer_usage::CPU_write, reserved_byte_count);
         m_vertex_write_offset = 0;
     }
     Buffer_range&             vertex_buffer_range = m_vertex_buffer_range.value();
@@ -197,6 +199,8 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
     const std::size_t         word_count          = byte_count / sizeof(float);
     const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start + m_vertex_write_offset), word_count};
     const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start + m_vertex_write_offset), word_count};
+
+    // TODO MUSTFIX handle case when byte_count < vertex_byte_count
 
     erhe::ui::Rectangle bounding_box;
     const vec3          snapped_position{
