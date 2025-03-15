@@ -535,6 +535,7 @@ auto Font::print(
 
     std::size_t chars_printed{0};
     std::size_t word_offset{0};
+    std::size_t glyph_space_remaining = uint_data.size() / (6 * 4);
     for (unsigned int i = 0; i < glyph_count; ++i) {
         const auto  glyph_id  = glyph_info[i].codepoint;
         const float x_offset  = static_cast<float>(glyph_pos[i].x_offset ) / 64.0f;
@@ -547,6 +548,11 @@ auto Font::print(
             auto uc = static_cast<unsigned char>(c);
             const ft_char& font_char = m_chars_256[uc];
             if (font_char.width != 0) {
+
+                if (glyph_space_remaining-- == 0) {
+                    return chars_printed;
+                }
+
                 const float b  = static_cast<float>(font_char.g_bottom - font_char.b_bottom);
                 const float t  = static_cast<float>(font_char.g_top    - font_char.b_top);
                 const float w  = static_cast<float>(font_char.width);
@@ -564,18 +570,21 @@ auto Font::print(
                 uint_data [word_offset++] = text_color;
                 float_data[word_offset++] = font_char.u[0];
                 float_data[word_offset++] = font_char.v[0];
+
                 float_data[word_offset++] = x1;
                 float_data[word_offset++] = y0;
                 float_data[word_offset++] = text_position.z;
                 uint_data [word_offset++] = text_color;
                 float_data[word_offset++] = font_char.u[1];
                 float_data[word_offset++] = font_char.v[1];
+
                 float_data[word_offset++] = x1;
                 float_data[word_offset++] = y1;
                 float_data[word_offset++] = text_position.z;
                 uint_data [word_offset++] = text_color;
                 float_data[word_offset++] = font_char.u[2];
                 float_data[word_offset++] = font_char.v[2];
+
                 float_data[word_offset++] = x0;
                 float_data[word_offset++] = y1;
                 float_data[word_offset++] = text_position.z;

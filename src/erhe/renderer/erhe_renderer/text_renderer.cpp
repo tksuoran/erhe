@@ -178,17 +178,17 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
         return;
     }
 
-    const std::size_t quad_count = m_font->get_glyph_count(text);
-    if (quad_count == 0) {
+    const std::size_t quad_count_requested = m_font->get_glyph_count(text);
+    if (quad_count_requested == 0) {
         return;
     }
 
     const std::size_t vertex_stride     = m_vertex_format.streams.front().stride;
-    const std::size_t vertex_byte_count = quad_count * 4 * vertex_stride;
+    const std::size_t vertex_byte_count = quad_count_requested * 4 * vertex_stride;
 
     if (!m_vertex_buffer_range.has_value()) {
         const std::size_t total_capacity_byte_count = m_vertex_buffer.get_buffer().capacity_byte_count();
-        const std::size_t reserved_byte_count = total_capacity_byte_count / 4;
+        const std::size_t reserved_byte_count = total_capacity_byte_count / 8;
         m_vertex_buffer_range = m_vertex_buffer.open(Ring_buffer_usage::CPU_write, reserved_byte_count);
         m_vertex_write_offset = 0;
     }
@@ -200,15 +200,13 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
     const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start + m_vertex_write_offset), word_count};
     const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start + m_vertex_write_offset), word_count};
 
-    // TODO MUSTFIX handle case when byte_count < vertex_byte_count
-
     erhe::ui::Rectangle bounding_box;
     const vec3          snapped_position{
         std::floor(text_position.x + 0.5f),
         std::floor(text_position.y + 0.5f),
         text_position.z
     };
-    const std::size_t quad_count2 = m_font->print(
+    const std::size_t quad_count_printed = m_font->print(
         gpu_float_data,
         gpu_uint_data,
         text,
@@ -216,9 +214,9 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
         text_color,
         bounding_box
     );
-    ERHE_VERIFY(quad_count2 == quad_count);
-    m_vertex_write_offset += vertex_byte_count; // quad_count * 4 * m_vertex_format.stride();
-    m_index_count += quad_count * 5;
+    ERHE_VERIFY(quad_count_printed <= quad_count_requested);
+    m_vertex_write_offset += quad_count_printed * 4 * vertex_stride;
+    m_index_count += quad_count_printed * 5;
 }
 
 auto Text_renderer::font_size() -> float
