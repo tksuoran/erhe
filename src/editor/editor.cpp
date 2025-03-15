@@ -351,6 +351,7 @@ public:
         window_section.get("width",            configuration.width);
         window_section.get("height",           configuration.height);
         window_section.get("swap_interval",    configuration.swap_interval);
+        window_section.get("enable_joystick",  configuration.enable_joystick);
 
         return std::make_unique<erhe::window::Context_window>(configuration);
     }

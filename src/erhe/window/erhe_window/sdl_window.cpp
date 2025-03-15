@@ -250,7 +250,10 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     ERHE_PROFILE_FUNCTION();
 
     if (s_window_count == 0) {
-        const SDL_InitFlags init_flags = SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS;
+        SDL_InitFlags init_flags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
+        if (configuration.enable_joystick) {
+            init_flags |= SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD;
+        }
 
         bool sdl_init_ok = SDL_Init(init_flags);
         if (!sdl_init_ok) {
@@ -262,7 +265,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     const bool primary = (configuration.share == nullptr);
 
     // Scanning joysticks can be slow, so do it in worker thread
-    if (primary) {
+    if (primary && configuration.enable_joystick) {
         m_joystick_scan_task = std::thread{
             [this]() {
                 ERHE_PROFILE_SCOPE("Scan joysticks");

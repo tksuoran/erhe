@@ -50,6 +50,7 @@ public:
     bool            framebuffer_transparency{false};
     bool            use_depth               {false};
     bool            use_stencil             {false};
+    bool            enable_joystick         {true};
     int             gl_major                {4};
     int             gl_minor                {6};
     int             width                   {1920};
