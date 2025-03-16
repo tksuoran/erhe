@@ -201,6 +201,7 @@ void Rendergraph_window::imgui()
                         static_cast<int>(zoom * m_image_size),
                         glm::vec2{0.0f, 1.0f},
                         glm::vec2{1.0f, 0.0f},
+                        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
                         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
                         false
                     );

@@ -778,6 +778,7 @@ auto Tile_renderer::terrain_image(const terrain_tile_t terrain_tile, const int s
         Tile_shape::height * scale,
         uv0,
         uv1,
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
         false
     );
@@ -801,6 +802,7 @@ auto Tile_renderer::unit_image(const unit_tile_t unit_tile, const int scale) -> 
         Tile_shape::height * scale,
         uv0,
         uv1,
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
         false
     );
@@ -817,6 +819,7 @@ void Tile_renderer::show_texture()
         m_tileset_texture->height(),
         uv0,
         uv1,
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
         false
     );

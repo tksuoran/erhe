@@ -372,6 +372,7 @@ auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> boo
         Tile_shape::height * scale,
         uv0,
         uv1,
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
         false
     );

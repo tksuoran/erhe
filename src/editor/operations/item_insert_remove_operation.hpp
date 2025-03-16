@@ -37,6 +37,7 @@ public:
         std::shared_ptr<erhe::Hierarchy> item;
         std::shared_ptr<erhe::Hierarchy> parent;
         Mode                             mode;
+        std::size_t                      index_in_parent = 0;
     };
 
     explicit Item_insert_remove_operation(const Parameters& parameters);
@@ -53,6 +54,7 @@ private:
     std::shared_ptr<erhe::Hierarchy>                           m_after_parent {};
     std::vector<std::shared_ptr<Item_parent_change_operation>> m_parent_changes;
     std::size_t                                                m_index_in_parent{};
+    std::size_t                                                m_index_in_parent_insert{};
 
     erhe::Item_host*                              m_scene_host{nullptr};
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection_before;

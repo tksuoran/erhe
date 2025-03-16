@@ -51,8 +51,9 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
     : m_mode{parameters.mode}
 {
     auto& selection = *parameters.context.selection;
-    m_item             = parameters.item,
-    m_selection_before = selection.get_selection();
+    m_item                   = parameters.item,
+    m_selection_before       = selection.get_selection();
+    m_index_in_parent_insert = parameters.index_in_parent;
 
     if (parameters.mode == Mode::insert) {
         m_selection_after = selection.get_selection();
@@ -103,7 +104,7 @@ void Item_insert_remove_operation::execute(Editor_context& context)
             );
         }
     } else {
-        m_index_in_parent = 0;
+        m_index_in_parent = m_index_in_parent_insert;
     }
 
     for (auto& child_parent_change : m_parent_changes) {

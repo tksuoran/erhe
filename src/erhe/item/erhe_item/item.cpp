@@ -95,7 +95,7 @@ Item_base::Item_base(const std::string_view name)
 
 Item_base::Item_base(const Item_base& other)
     : enable_shared_from_this{other}
-    , m_flag_bits  {other.m_flag_bits}
+    , m_flag_bits  {other.m_flag_bits & ~Item_flags::selected}
     , m_name       {fmt::format("{} Copy", other.m_name)}
     , m_source_path{other.m_source_path}
 {
@@ -104,7 +104,7 @@ Item_base::Item_base(const Item_base& other)
 
 auto Item_base::operator=(const Item_base& other) -> Item_base&
 {
-    m_flag_bits   = other.m_flag_bits;
+    m_flag_bits   = other.m_flag_bits & ~Item_flags::selected;
     m_name        = fmt::format("{} Copy", other.m_name);
     m_source_path = other.m_source_path;
     m_label       = fmt::format("{}##{}", m_name, get_id());

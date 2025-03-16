@@ -73,7 +73,7 @@ public:
 
     [[nodiscard]] auto get_size() const -> int;
 
-    void icon(glm::vec2 uv0, glm::vec4 tint_color = glm::vec4{1.0f}) const;
+    void icon(glm::vec2 uv0, glm::vec4 background_color = glm::vec4{0.0f}, glm::vec4 tint_color = glm::vec4{1.0f}) const;
     auto icon_button(
         uint32_t  id,
         glm::vec2 uv0,

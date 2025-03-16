@@ -174,7 +174,13 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
         : m_context.icon_set->get_large_rasterization();
 
     std::optional<glm::vec2> icon;
-    glm::vec4                color{0.8f, 0.8f, 0.8f, 1.0f}; // TODO  item->get_wireframe_color(); ?
+    glm::vec4 tint_color{0.8f, 0.8f, 0.8f, 1.0f}; // TODO  item->get_wireframe_color(); ?
+    glm::vec4 background_color{0.0f, 0.0f, 0.0f, 0.0f};
+    if (item->is_selected()) {
+        ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
+        ImVec4 selected_color = style.Colors[ImGuiCol_Header];
+        background_color = selected_color;
+    }
 
     const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
     if (content_node) {
@@ -182,7 +188,7 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
             item_icon(content_node->item, scale);
         } else {
             // Content libray node without item is considered folder
-            icon_rasterization.icon(icons.folder, color);
+            icon_rasterization.icon(icons.folder, background_color, tint_color);
         }
         return;
     }
@@ -197,7 +203,7 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
                 const auto& type_icon = icon_opt.value();
                 icon  = type_icon.icon;
                 if (type_icon.color.has_value()) {
-                    color = type_icon.color.value();
+                    tint_color = type_icon.color.value();
                 }
                 break;
             }
@@ -209,11 +215,11 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     }
     const auto& material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
     if (material) {
-        color = material->base_color;
+        tint_color = material->base_color;
     }
     const auto& light = std::dynamic_pointer_cast<erhe::scene::Light>(item);
     if (light) {
-        color = glm::vec4{light->color, 1.0f};
+        tint_color = glm::vec4{light->color, 1.0f};
         switch (light->type) {
             //using enum erhe::scene::Light_type;
             case erhe::scene::Light_type::spot:        icon = icons.spot_light; break;
@@ -224,7 +230,7 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     }
 
     if (icon.has_value()) {
-        icon_rasterization.icon(icon.value(), color);
+        icon_rasterization.icon(icon.value(), background_color, tint_color);
     }
 }
 

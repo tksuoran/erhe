@@ -96,10 +96,11 @@ public:
         const std::shared_ptr<erhe::graphics::Texture>& texture,
         int                                             width,
         int                                             height,
-        glm::vec2                                       uv0        = {0.0f, 1.0f},
-        glm::vec2                                       uv1        = {1.0f, 0.0f},
-        glm::vec4                                       tint_color = {1.0f, 1.0f, 1.0f, 1.0f},
-        bool                                            linear     = true
+        glm::vec2                                       uv0              = {0.0f, 1.0f},
+        glm::vec2                                       uv1              = {1.0f, 0.0f},
+        glm::vec4                                       background_color = {0.0f, 0.0f, 0.0f, 0.0f},
+        glm::vec4                                       tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
+        bool                                            linear           = true
     ) -> bool;
 
     auto image_button(

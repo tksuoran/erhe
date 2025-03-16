@@ -14,6 +14,7 @@
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/clipboard.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -691,14 +692,23 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             }
             ImGui::EndMenu();
         }
-#if 0 // TODO
+
         ImGui::Separator();
-        ImGui::MenuItem("Cut");
-        ImGui::MenuItem("Copy");
-        ImGui::MenuItem("Paste");
-        ImGui::MenuItem("Duplicate");
-        ImGui::MenuItem("Delete");
-#endif
+        if (ImGui::MenuItem("Cut")) {
+            m_context.selection->cut_selection();
+        }
+        if (ImGui::MenuItem("Copy")) {
+            m_context.selection->copy_selection();
+        }
+        if (ImGui::MenuItem("Paste")) {
+            m_context.clipboard->try_paste();
+        }
+        if (ImGui::MenuItem("Duplicate")) {
+            m_context.selection->duplicate_selection();
+        }
+        if (ImGui::MenuItem("Delete")) {
+            m_context.selection->delete_selection();
+        }
 
         ImGui::EndPopup();
         if (close) {
@@ -742,38 +752,41 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
         force_expand = true;
     }
 
-    bool is_last_selected = false;
-    if (!item->is_selected()) {
-        std::shared_ptr<erhe::Item_base> item_for_last_selected = (content_library_node && content_library_node->item) ? content_library_node->item : item;
-        std::shared_ptr<erhe::Item_base> last_selected_item = m_context.selection->get_last_selected(item_for_last_selected->get_type() );
-        if (item_for_last_selected == last_selected_item) {
-            is_last_selected = true;
-            ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
-            ImVec4 not_selected_color  = style.Colors[ImGuiCol_WindowBg];
-            ImVec4 selected_color      = style.Colors[ImGuiCol_Header];
-            ImVec4 last_selected_color{
-                0.5f * (not_selected_color.x + selected_color.x),
-                0.5f * (not_selected_color.y + selected_color.y),
-                0.5f * (not_selected_color.z + selected_color.z),
-                0.5f * (not_selected_color.w + selected_color.w)
-            };
-            ImGui::PushStyleColor(ImGuiCol_Header, last_selected_color);
-        }
-    }
+    ////bool is_last_selected = false;
+    ////if (!item->is_selected()) {
+    ////    std::shared_ptr<erhe::Item_base> item_for_last_selected = (content_library_node && content_library_node->item) ? content_library_node->item : item;
+    ////    std::shared_ptr<erhe::Item_base> last_selected_item = m_context.selection->get_last_selected(item_for_last_selected->get_type() );
+    ////    if (item_for_last_selected == last_selected_item) {
+    ////        is_last_selected = true;
+    ////         ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
+    ////         ImVec4 not_selected_color  = style.Colors[ImGuiCol_WindowBg];
+    ////         ImVec4 selected_color      = style.Colors[ImGuiCol_Header];
+    ////         ImVec4 last_selected_color{
+    ////             0.5f * (not_selected_color.x + selected_color.x),
+    ////             0.5f * (not_selected_color.y + selected_color.y),
+    ////             0.5f * (not_selected_color.z + selected_color.z),
+    ////             0.5f * (not_selected_color.w + selected_color.w)
+    ////         };
+    ////         ImGui::PushStyleColor(ImGuiCol_Header, last_selected_color);
+    ////    }
+    ////}
 
     const ImGuiTreeNodeFlags flags =
         ImGuiTreeNodeFlags_SpanAvailWidth |
+        ImGuiTreeNodeFlags_SpanAllColumns |
+        ImGuiTreeNodeFlags_LabelSpanAllColumns |
         (force_expand ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None) |
         (is_leaf
             ? (ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf)
             : ImGuiTreeNodeFlags_OpenOnArrow
         ) |
-        (update && (item->is_selected() || is_last_selected) ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
+        (update && (item->is_selected()) ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
+        ////(update && (item->is_selected() || is_last_selected) ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
 
     const bool item_node_open = ImGui::TreeNodeEx(item->get_label().c_str(), flags);
-    if (is_last_selected) {
-        ImGui::PopStyleColor();
-    }
+    //// if (is_last_selected) {
+    ////     ImGui::PopStyleColor();
+    //// }
 
     const bool consumed = m_item_callback ? m_item_callback(item) : false;
 
@@ -905,6 +918,13 @@ void Item_tree::imgui_tree(float ui_scale)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
+
+    ///ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
+    ///ImVec4 not_selected_color     = style.Colors[ImGuiCol_WindowBg];
+    ///ImVec4 selected_color         = style.Colors[ImGuiCol_Selected];
+    ///ImVec4 selected_hovered_color = style.Colors[ImGuiCol_SelectedHovered];
+    ///ImVec4 selected_active_color  = style.Colors[ImGuiCol_SelectedActive];
+    ///ImGui::PushStyleColor(ImGuiCol_Header, last_selected_color);
 
     m_ui_scale = ui_scale;
 

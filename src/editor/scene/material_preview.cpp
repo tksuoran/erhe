@@ -379,6 +379,7 @@ void Material_preview::show_preview()
         m_height,
         glm::vec2{0.0f, 1.0f},
         glm::vec2{1.0f, 0.0f},
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
         false
     );

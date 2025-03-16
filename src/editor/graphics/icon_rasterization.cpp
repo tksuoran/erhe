@@ -211,7 +211,7 @@ auto imvec_from_glm(glm::vec4 v) -> ImVec4
 }
 #endif
 
-void Icon_rasterization::icon(const glm::vec2 uv0, const glm::vec4 tint_color) const
+void Icon_rasterization::icon(const glm::vec2 uv0, const glm::vec4 background_color, const glm::vec4 tint_color) const
 {
 #if !defined(ERHE_GUI_LIBRARY_IMGUI)
     static_cast<void>(uv0);
@@ -225,6 +225,7 @@ void Icon_rasterization::icon(const glm::vec2 uv0, const glm::vec4 tint_color) c
         m_icon_height,
         uv0,
         uv1(uv0),
+        background_color,
         imvec_from_glm(tint_color),
         false
     );

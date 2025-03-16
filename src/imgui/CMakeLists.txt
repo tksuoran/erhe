@@ -8,6 +8,8 @@ erhe_target_sources_grouped(
     imgui/imgui_tables.cpp
     imgui/imgui_widgets.cpp
     imgui/imgui.cpp
+    imgui/imgui.h
+    imgui/imgui_internal.h
     imgui/misc/cpp/imgui_stdlib.cpp
     imgui/misc/cpp/imgui_stdlib.h
 )

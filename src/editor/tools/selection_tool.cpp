@@ -283,6 +283,7 @@ Selection::Selection(erhe::commands::Commands& commands, Editor_context& editor_
     commands.bind_command_to_menu(&m_cut_command,       "Edit.Cut");
     commands.bind_command_to_menu(&m_copy_command,      "Edit.Copy");
     commands.bind_command_to_menu(&m_duplicate_command, "Edit.Duplicate");
+    commands.bind_command_to_menu(&m_duplicate_command, "Edit.Paster");
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
@@ -426,10 +427,11 @@ auto Selection::duplicate_selection() -> bool
             compound_parameters.operations.push_back(
                 std::make_shared<Item_insert_remove_operation>(
                     Item_insert_remove_operation::Parameters{
-                        .context = m_context,
-                        .item    = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone()),
-                        .parent  = hierarchy->get_parent().lock(),
-                        .mode    = Item_insert_remove_operation::Mode::insert
+                        .context         = m_context,
+                        .item            = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone()),
+                        .parent          = hierarchy->get_parent().lock(),
+                        .mode            = Item_insert_remove_operation::Mode::insert,
+                        .index_in_parent = hierarchy->get_index_in_parent() + 1
                     }
                 )
             );
@@ -444,6 +446,9 @@ auto Selection::duplicate_selection() -> bool
             //    );
             //}
         //}
+    }
+    if (compound_parameters.operations.empty()) {
+        return false;
     }
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(std::move(compound_parameters))

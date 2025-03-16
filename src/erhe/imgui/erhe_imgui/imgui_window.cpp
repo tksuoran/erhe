@@ -36,7 +36,7 @@ Imgui_window::~Imgui_window() noexcept
 
 void Imgui_window::draw_image(const std::shared_ptr<erhe::graphics::Texture>& texture, const int width, const int height, const bool linear)
 {
-    m_imgui_renderer.image(texture, width, height, glm::vec2{0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}, glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, linear);
+    m_imgui_renderer.image(texture, width, height, glm::vec2{0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}, glm::vec4{0.0f, 0.0f, 0.0f, 0.0f}, glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, linear);
 }
 
 auto Imgui_window::get_imgui_host() const -> Imgui_host*
