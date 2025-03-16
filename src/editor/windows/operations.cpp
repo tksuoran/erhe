@@ -188,13 +188,14 @@ void Operations::imgui()
         m_make_mesh_config.material = material;
 
         ImGui::SliderInt  ("Count", &m_make_mesh_config.instance_count, 1, 32);
-        ImGui::SliderFloat("Gap",   &m_make_mesh_config.instance_gap,   0.0f, 1.0f, "%.2f");
         ImGui::SliderFloat("Scale", &m_make_mesh_config.object_scale,   0.2f, 2.0f, "%.2f");
+        ImGui::SliderFloat("Gap",   &m_make_mesh_config.instance_gap,   0.0f, 1.0f, "%.2f");
         const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
         if (erhe::imgui::make_button("Cubes", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_cubes(
                 glm::ivec3{m_make_mesh_config.instance_count, m_make_mesh_config.instance_count, m_make_mesh_config.instance_count},
-                m_make_mesh_config.object_scale
+                m_make_mesh_config.object_scale,
+                m_make_mesh_config.instance_gap
             );
         }
         if (erhe::imgui::make_button("Platonic Solids", erhe::imgui::Item_mode::normal, button_size)) {

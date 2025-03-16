@@ -28,8 +28,8 @@ Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
     offsets.extra3                  = joint_block.add_uint ("extra3")->offset_in_parent(),
     offsets.debug_joint_colors      = joint_block.add_vec4 ("debug_joint_colors", 32)->offset_in_parent();
     offsets.joint = {
-        .world_from_bind  = joint_struct.add_mat4("world_from_bind"         )->offset_in_parent(),
-        .normal_transform = joint_struct.add_mat4("world_from_bind_cofactor")->offset_in_parent() // TODO rename normal_transform
+        .world_from_bind  = joint_struct.add_mat4("world_from_bind"       )->offset_in_parent(),
+        .normal_transform = joint_struct.add_mat4("world_from_bind_normal")->offset_in_parent()
     };
 
     offsets.joint_struct = joint_block.add_struct("joints", &joint_struct, erhe::graphics::Shader_resource::unsized_array)->offset_in_parent();

@@ -708,11 +708,11 @@ void Build_context_root::allocate_index_range(const Primitive_type primitive_typ
 }
 
 auto build_buffer_mesh(
-    Buffer_mesh&       buffer_mesh,
-    const GEO::Mesh&   source_mesh,
-    const Build_info&  build_info,
-    Element_mappings&  element_mappings,
-    Normal_style       normal_style
+    Buffer_mesh&      buffer_mesh,
+    const GEO::Mesh&  source_mesh,
+    const Build_info& build_info,
+    Element_mappings& element_mappings,
+    Normal_style      normal_style
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION();

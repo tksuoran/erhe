@@ -3,7 +3,7 @@ void main()
     mat4 world_from_node;
 
     if (primitive.primitives[gl_DrawID].skinning_factor < 0.5) {
-        world_from_node          = primitive.primitives[gl_DrawID].world_from_node;
+        world_from_node = primitive.primitives[gl_DrawID].world_from_node;
     } else {
         world_from_node =
             a_joint_weights_0.x * joint.joints[int(a_joint_indices_0.x) + primitive.primitives[gl_DrawID].base_joint_index].world_from_bind +

@@ -20,6 +20,11 @@ template <typename T, typename U>
             : std::ceil(num - U{0.5}));
 }
 
+[[nodiscard]] inline auto remap(float x, float from_low, float from_high, float to_low, float to_high)
+{
+    return (x - from_low) / (from_high - from_low) * (to_high - to_low) + to_low;
+}
+
 [[nodiscard]] inline auto next_power_of_two(uint32_t x) -> uint32_t
 {
     x--;

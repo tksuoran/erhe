@@ -31,7 +31,7 @@ class Primitive_raytrace
 {
 public:
     Primitive_raytrace();
-    explicit Primitive_raytrace(GEO::Mesh& mesh, Element_mappings* element_mappings = nullptr);
+    explicit Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* element_mappings = nullptr);
     explicit Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_soup);
     Primitive_raytrace(const Primitive_raytrace& other);
     Primitive_raytrace& operator=(const Primitive_raytrace& other);
@@ -66,6 +66,7 @@ public:
 
     auto make_geometry() -> bool;
     auto make_raytrace() -> bool;
+    auto make_raytrace(const GEO::Mesh& mesh) -> bool;
     [[nodiscard]] auto has_raytrace_triangles      () const -> bool;
     [[nodiscard]] auto get_geometry                () -> const std::shared_ptr<erhe::geometry::Geometry>&;
     [[nodiscard]] auto get_geometry_const          () const -> const std::shared_ptr<erhe::geometry::Geometry>&;

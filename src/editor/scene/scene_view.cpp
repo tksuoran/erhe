@@ -351,17 +351,19 @@ void Scene_view::update_hover_with_raytrace()
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit geometry: {}", Hover_entry::slot_names[slot], entry.geometry->get_name());
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit triangle: {}", Hover_entry::slot_names[slot], hit.triangle_id);
                 const GEO::index_t facet = shape->get_mesh_facet_from_triangle(hit.triangle_id);
-                ERHE_VERIFY(facet < geo_mesh.facets.nb());
-                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit facet: {}", Hover_entry::slot_names[slot], facet);
-                entry.facet = facet;
-                const GEO::vec3f facet_normal           = mesh_facet_normalf(geo_mesh, facet);
-                const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
-                const glm::mat4  world_from_node        = node->world_from_node();
-                const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
-                const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
-                const glm::vec3  unit_normal_in_world   = glm::normalize(normal_in_world);
-                entry.normal = unit_normal_in_world;
-                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit normal: {} ***", Hover_entry::slot_names[slot], unit_normal_in_world);
+                if (facet != GEO::NO_INDEX) {
+                    ERHE_VERIFY(facet < geo_mesh.facets.nb());
+                    SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit facet: {}", Hover_entry::slot_names[slot], facet);
+                    entry.facet = facet;
+                    const GEO::vec3f facet_normal           = mesh_facet_normalf(geo_mesh, facet);
+                    const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
+                    const glm::mat4  world_from_node        = node->world_from_node();
+                    const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
+                    const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
+                    const glm::vec3  unit_normal_in_world   = glm::normalize(normal_in_world);
+                    entry.normal = unit_normal_in_world;
+                    SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit normal: {} ***", Hover_entry::slot_names[slot], unit_normal_in_world);
+                }
             }
         } else {
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: no hit", Hover_entry::slot_names[slot]);

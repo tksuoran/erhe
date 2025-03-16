@@ -21,13 +21,13 @@ Primitive_interface::Primitive_interface(erhe::graphics::Instance& graphics_inst
     : primitive_block {graphics_instance, "primitive", 3, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , primitive_struct{graphics_instance, "Primitive"}
     , offsets{
-        .world_from_node  = primitive_struct.add_mat4 ("world_from_node"         )->offset_in_parent(),
-        .normal_transform = primitive_struct.add_mat4 ("world_from_node_cofactor")->offset_in_parent(), // TODO rename normal_transform
-        .color            = primitive_struct.add_vec4 ("color"                   )->offset_in_parent(),
-        .material_index   = primitive_struct.add_uint ("material_index"          )->offset_in_parent(),
-        .size             = primitive_struct.add_float("size"                    )->offset_in_parent(),
-        .skinning_factor  = primitive_struct.add_float("skinning_factor"         )->offset_in_parent(),
-        .base_joint_index = primitive_struct.add_uint ("base_joint_index"        )->offset_in_parent()
+        .world_from_node  = primitive_struct.add_mat4 ("world_from_node"       )->offset_in_parent(),
+        .normal_transform = primitive_struct.add_mat4 ("world_from_node_normal")->offset_in_parent(),
+        .color            = primitive_struct.add_vec4 ("color"                 )->offset_in_parent(),
+        .material_index   = primitive_struct.add_uint ("material_index"        )->offset_in_parent(),
+        .size             = primitive_struct.add_float("size"                  )->offset_in_parent(),
+        .skinning_factor  = primitive_struct.add_float("skinning_factor"       )->offset_in_parent(),
+        .base_joint_index = primitive_struct.add_uint ("base_joint_index"      )->offset_in_parent()
     }
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");

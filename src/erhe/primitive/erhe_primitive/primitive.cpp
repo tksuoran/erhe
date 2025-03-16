@@ -47,7 +47,7 @@ auto c_str(const Normal_style normal_style) -> const char*
 #pragma region Primitive_raytrace
 Primitive_raytrace::Primitive_raytrace() = default;
 
-Primitive_raytrace::Primitive_raytrace(GEO::Mesh& mesh, Element_mappings* element_mappings)
+Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* element_mappings)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -306,6 +306,12 @@ auto Primitive_shape::has_raytrace_triangles() const -> bool
     return m_raytrace.has_raytrace_triangles();
 }
 
+auto Primitive_shape::make_raytrace(const GEO::Mesh& mesh) -> bool
+{
+    m_raytrace = Primitive_raytrace{mesh, nullptr};
+    return m_raytrace.has_raytrace_triangles();
+}
+
 auto Primitive_shape::make_raytrace() -> bool
 {
     // Ensure geometry and element mappings exists
@@ -315,14 +321,11 @@ auto Primitive_shape::make_raytrace() -> bool
         }
     }
 
-    bool has_element_mappings =
-        !m_element_mappings.triangle_to_mesh_facet.empty() &&
-        !m_element_mappings.mesh_corner_to_vertex_buffer_index.empty();
+    //bool has_element_mappings =
+    //    !m_element_mappings.triangle_to_mesh_facet.empty() &&
+    //    !m_element_mappings.mesh_corner_to_vertex_buffer_index.empty();
 
-    m_raytrace = Primitive_raytrace{
-        m_geometry->get_mesh(),
-        has_element_mappings ? nullptr : &m_element_mappings
-    };
+    return make_raytrace(m_geometry->get_mesh());
 
     // TODO Is it possible to make raytrace only / directly from triangle soup?
     //      We would lack element mappings, is that still useful?
@@ -332,7 +335,6 @@ auto Primitive_shape::make_raytrace() -> bool
     // } else if (m_triangle_soup) {
     //     m_raytrace = Primitive_raytrace{*m_triangle_soup.get()};
     // }
-    return m_raytrace.has_raytrace_triangles();
 }
 #pragma endregion Primitive_shape
 
@@ -487,6 +489,9 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
 
 auto Primitive_shape::get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t
 {
+    if (m_element_mappings.triangle_to_mesh_facet.empty()) {
+        return GEO::NO_INDEX;
+    }
     ERHE_VERIFY(triangle < m_element_mappings.triangle_to_mesh_facet.size());
     return m_element_mappings.triangle_to_mesh_facet[triangle];
 }

@@ -104,7 +104,7 @@ public:
     void add_platonic_solids(const Make_mesh_config& config);
     void add_curved_shapes  (const Make_mesh_config& config);
     void add_torus_chain    (const Make_mesh_config& config, bool connected);
-    void add_cubes          (glm::ivec3 shape, float scale);
+    void add_cubes          (glm::ivec3 shape, float scale, float gap);
 
 private:
     auto make_directional_light(

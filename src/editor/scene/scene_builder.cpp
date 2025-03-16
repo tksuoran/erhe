@@ -917,7 +917,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
     }
 }
 
-void Scene_builder::add_cubes(glm::ivec3 shape, float scale)
+void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -931,11 +931,14 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale)
     const int x_count = shape.x;
     const int y_count = shape.y;
     const int z_count = shape.z;
+    float x_half_extent = static_cast<float>(x_count) * scale + static_cast<float>(x_count - 1) * gap;
+    float y_half_extent = static_cast<float>(y_count) * scale + static_cast<float>(y_count - 1) * gap;
+    float z_half_extent = static_cast<float>(z_count) * scale + static_cast<float>(z_count - 1) * gap;
 
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
 
     GEO::Mesh cube_geo_mesh;
-    make_cube(cube_geo_mesh, 0.1f);
+    make_cube(cube_geo_mesh, scale);
 
     Mesh_memory& mesh_memory = *m_context.mesh_memory;
 
@@ -949,23 +952,25 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale)
     );
     ERHE_VERIFY(buffer_mesh_ok); // TODO
 
-    const erhe::primitive::Primitive primitive{std::move(buffer_mesh), material};
+    erhe::primitive::Primitive primitive{std::move(buffer_mesh), material};
+    ERHE_VERIFY(primitive.render_shape->make_raytrace(cube_geo_mesh));
+    const vec3 root_pos{0.0, 1.0f + y_half_extent, 0.0f};
     std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Node>("Cubes");
     root->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
-    for (int i = 0; i < x_count; ++i) {
-        const float x_rel = static_cast<float>(i) - static_cast<float>(x_count) * 0.5f;
-        for (int j = 0; j < y_count; ++j) {
-            const float y_rel = static_cast<float>(j);
-            for (int k = 0; k < z_count; ++k) {
-                const float z_rel = static_cast<float>(k) - static_cast<float>(z_count) * 0.5f;
-                const vec3 pos{scale * x_rel, 1.0f + scale * y_rel, scale * z_rel};
+    root->set_world_from_node(erhe::math::create_translation<float>(root_pos));
+    for (int x = 0; x < x_count; ++x) {
+        const float px = erhe::math::remap(static_cast<float>(x), 0.0f, static_cast<float>(x_count - 1), -x_half_extent, x_half_extent);
+        for (int y = 0; y < y_count; ++y) {
+            const float py = erhe::math::remap(static_cast<float>(y), 0.0f, static_cast<float>(y_count - 1), -y_half_extent, y_half_extent);
+            for (int z = 0; z < z_count; ++z) {
+                const float pz = erhe::math::remap(static_cast<float>(z), 0.0f, static_cast<float>(z_count - 1), -z_half_extent, z_half_extent);
                 auto node = std::make_shared<erhe::scene::Node>("Cube");
                 auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
                 mesh->layer_id = m_scene_root->layers().content()->id;
                 mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast | Item_flags::opaque);
                 node->attach(mesh);
-                node->set_world_from_node(erhe::math::create_translation<float>(pos));
                 node->set_parent(root);
+                node->set_parent_from_node(erhe::math::create_translation<float>(px, py, pz));
                 node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
             }
         }
