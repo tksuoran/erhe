@@ -102,6 +102,7 @@ public:
     ) -> std::shared_ptr<erhe::scene::Camera>;
 
     void add_platonic_solids(const Make_mesh_config& config);
+    void add_johnson_solids (const Make_mesh_config& config);
     void add_curved_shapes  (const Make_mesh_config& config);
     void add_torus_chain    (const Make_mesh_config& config, bool connected);
     void add_cubes          (glm::ivec3 shape, float scale, float gap);
@@ -174,6 +175,7 @@ private:
     public:
         Config();
         float camera_exposure            {1.0f};
+        float shadow_range               {22.0f};
         float directional_light_intensity{20.0f};
         float directional_light_radius   {6.0f};
         float directional_light_height   {10.0f};
@@ -194,6 +196,7 @@ private:
     std::unique_ptr<Brush>              m_floor_brush;
     std::unique_ptr<Brush>              m_table_brush;
     std::vector<std::shared_ptr<Brush>> m_platonic_solids;
+    std::vector<std::shared_ptr<Brush>> m_johnson_solids;
     std::shared_ptr<Brush>              m_sphere_brush;
     std::shared_ptr<Brush>              m_torus_brush;
     std::shared_ptr<Brush>              m_cylinder_brush[2];

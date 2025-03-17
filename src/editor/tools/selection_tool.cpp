@@ -409,7 +409,11 @@ auto Selection::copy_selection() -> bool
         return false;
     }
 
-    m_context.clipboard->set_contents(m_selection);
+    std::vector<std::shared_ptr<erhe::Item_base>> selection_clone;
+    for (const auto& item : m_selection) {
+        selection_clone.push_back(item->clone());
+    }
+    m_context.clipboard->set_contents(selection_clone);
     return true;
 }
 

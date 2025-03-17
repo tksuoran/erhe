@@ -16,6 +16,8 @@ namespace erhe::scene {
 
 namespace editor {
 
+class Property_editor;
+
 class Rotation_inspector
 {
 public:
@@ -78,11 +80,22 @@ public:
     void set_euler_order   (Euler_angle_order euler_angle_order);
     void set_axis_angle    (glm::vec3 axis, float angle);
 
+    void set_active(bool active);
+
     void update_euler_angles_from_matrix               ();
     void update_axis_angle_from_quaternion             ();
     void update_matrix_and_quaternion_from_euler_angles();
+    void update_from_axis_angle                        ();
+    void update_from_quaternion                        ();
 
-    void imgui(erhe::imgui::Value_edit_state& value_edit_state, glm::quat rotation, bool matches_gizmo);
+    void imgui(
+        erhe::imgui::Value_edit_state& quaternion_state,
+        erhe::imgui::Value_edit_state& euler_state,
+        erhe::imgui::Value_edit_state& axis_angle_state,
+        glm::quat                      rotation,
+        bool                           matches_gizmo,
+        Property_editor&               property_editor
+    );
 
     [[nodiscard]] auto get_matrix     () -> glm::mat4;
     [[nodiscard]] auto get_quaternion () -> glm::quat;
@@ -93,7 +106,7 @@ public:
 private:
     [[nodiscard]] auto get_label_color    (std::size_t i, bool text, bool matches_gizmo) const -> uint32_t;
     [[nodiscard]] auto get_euler_axis     (std::size_t i) const -> std::size_t;
-    [[nodiscard]] auto gimbal_lock_warning() const -> bool;
+    [[nodiscard]] auto gimbal_lock_warning() const -> float;
 
     float             m_euler_angles     [3];
     Representation    m_representation   {Representation::e_euler_angles};

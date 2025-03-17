@@ -120,6 +120,8 @@ void Imgui_window::set_min_size(const float min_width, const float min_height)
 
 auto Imgui_window::begin() -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     on_begin();
     bool keep_visible{true};
     ImGui::SetNextWindowSizeConstraints(
@@ -135,6 +137,8 @@ auto Imgui_window::begin() -> bool
 
 void Imgui_window::end()
 {
+    ERHE_PROFILE_FUNCTION();
+
     on_end();
     const bool new_is_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
     SPDLOG_LOGGER_TRACE(log_frame, "{}.end() is_hovered {} -> {}", m_title, m_is_hovered, new_is_hovered);

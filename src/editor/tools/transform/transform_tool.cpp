@@ -256,16 +256,21 @@ void Transform_tool::imgui()
     transform_properties();
 
     if (m_active_tool != nullptr) {
+        m_last_active_tool = m_active_tool;
+    }
+    if (m_last_active_tool != nullptr) {
         ImGui::Separator();
 
-        m_active_tool->imgui();
+        m_last_active_tool->imgui(m_property_editor);
 
         ImGui::Separator();
 
         ImGui::Text("Hover handle: %s", c_str(m_hover_handle));
         ImGui::Text("Active handle: %s", c_str(m_active_handle));
 
-        ImGui::Checkbox("Cast Rays", &shared.settings.cast_rays);
+        m_property_editor.reset();
+        m_property_editor.add_entry("Cast Rays", [this](){ ImGui::Checkbox("##", &shared.settings.cast_rays); });
+        m_property_editor.show_entries();
     }
 
     ImGui::Separator();
@@ -731,120 +736,153 @@ void Transform_tool::record_transform_operation()
     );
 }
 
-void Transform_tool::transform_properties()
+Edit_state::Edit_state()
 {
-    if (shared.entries.empty()) {
-        return;
-    }
+}
 
-    const bool  multiselect       = shared.entries.size() > 1;
-    const auto& first_node        = shared.entries.front().node;
-    mat4        world_from_parent = first_node->world_from_parent();
-    bool        use_world_mode    = !shared.settings.local || multiselect;
+Edit_state::Edit_state(
+    Transform_tool_shared& shared,
+    Transform_tool&        transform_tool,
+    Rotation_inspector&    rotation_inspector,
+    Property_editor&       property_editor
+)
+{
+    static_cast<void>(property_editor);
+    m_multiselect       = shared.entries.size() > 1;
+    m_first_node        = shared.entries.front().node;
+    m_world_from_parent = m_first_node->world_from_parent();
+    m_use_world_mode    = !shared.settings.local || m_multiselect;
 
-    Trs_transform& transform =
-        use_world_mode
-            ? shared.world_from_anchor
-            : shared.entries.front().node->parent_from_node_transform();
+    m_transform =
+        m_use_world_mode
+            ? &shared.world_from_anchor
+            : &shared.entries.front().node->parent_from_node_transform();
 
-    Trs_transform& rotation_transform =
-        (use_world_mode || multiselect)
-            ? shared.world_from_anchor
-            : shared.entries.front().node->parent_from_node_transform();
+    m_rotation_transform =
+        (m_use_world_mode || m_multiselect)
+            ? &shared.world_from_anchor
+            : &shared.entries.front().node->parent_from_node_transform();
 
-    vec3 scale       = transform.get_scale      ();
-    quat rotation    = rotation_transform.get_rotation();
-    vec3 translation = transform.get_translation();
-    vec3 skew        = transform.get_skew       ();
+    m_scale       = m_transform->get_scale      ();
+    m_rotation    = m_rotation_transform->get_rotation();
+    m_translation = m_transform->get_translation();
+    m_skew        = m_transform->get_skew       ();
+
+    const std::shared_ptr<erhe::scene::Node> first_parent = m_first_node->get_parent_node();
+    const bool euler_matches_gizmo = !m_multiselect &&
+        (
+            !m_use_world_mode ||
+            !first_parent ||
+            first_parent == m_first_node->get_scene()->get_root_node()
+        );
 
     using namespace erhe::imgui;
-    Value_edit_state translate_edit_state;
-    if (ImGui::TreeNodeEx("Translation", ImGuiTreeNodeFlags_DefaultOpen)) {
-        translate_edit_state.combine(make_scalar_button(&translation.x, 0.0f, 0.0f, 0xff8888ffu, 0xff222266u, "X", "##T.X"));
-        translate_edit_state.combine(make_scalar_button(&translation.y, 0.0f, 0.0f, 0xff88ff88u, 0xff226622u, "Y", "##T.Y"));
-        translate_edit_state.combine(make_scalar_button(&translation.z, 0.0f, 0.0f, 0xffff8888u, 0xff662222u, "Z", "##T.Z"));
-        ImGui::TreePop();
-    }
-    if (translate_edit_state.value_changed) {
-        adjust_translation(translation - shared.world_from_anchor_initial_state.get_translation());
+
+    Property_editor& p = property_editor;
+    p.reset();
+    p.push_group("Translation", ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ m_translate_state.combine(make_scalar_button(&m_translation.x, 0.0f, 0.0f, "##T.X")); });
+    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ m_translate_state.combine(make_scalar_button(&m_translation.y, 0.0f, 0.0f, "##T.Y")); });
+    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ m_translate_state.combine(make_scalar_button(&m_translation.z, 0.0f, 0.0f, "##T.Z")); });
+    p.pop_group();
+
+    p.push_group("Rotation", ImGuiTreeNodeFlags_DefaultOpen);
+    rotation_inspector.imgui(m_rotate_quaternion_state, m_rotate_euler_state, m_rotate_axis_angle_state, m_rotation, euler_matches_gizmo, p);
+    p.pop_group();
+
+    p.push_group("Scale", ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ m_scale_state.combine(make_scalar_button(&m_scale.x, 0.01f, FLT_MAX, "##S.X")); });
+    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ m_scale_state.combine(make_scalar_button(&m_scale.y, 0.01f, FLT_MAX, "##S.Y")); });
+    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ m_scale_state.combine(make_scalar_button(&m_scale.z, 0.01f, FLT_MAX, "##S.Z")); });
+    p.pop_group();
+
+    p.push_group("Skew", ImGuiTreeNodeFlags_None);
+    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ m_skew_state.combine(make_scalar_button(&m_skew.x, 0.0f, 0.0f, "##K.X")); });
+    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ m_skew_state.combine(make_scalar_button(&m_skew.y, 0.0f, 0.0f, "##K.Y")); });
+    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ m_skew_state.combine(make_scalar_button(&m_skew.z, 0.0f, 0.0f, "##K.Z")); });
+    p.pop_group();
+
+    p.show_entries();
+
+    if (m_translate_state.value_changed) {
+        transform_tool.adjust_translation(m_translation - shared.world_from_anchor_initial_state.get_translation());
     }
 
-    Value_edit_state rotate_edit_state;
-    const auto first_parent = first_node->get_parent_node();
-    const bool euler_matches_gizmo = !multiselect &&
-        (
-            !use_world_mode ||
-            !first_parent ||
-            first_parent == first_node->get_scene()->get_root_node()
-        );
-    if (ImGui::TreeNodeEx("Rotation", ImGuiTreeNodeFlags_DefaultOpen)) {
-        m_rotation.imgui(rotate_edit_state, rotation, euler_matches_gizmo);
-        ImGui::TreePop();
+    if (m_rotate_quaternion_state.value_changed) {
+        rotation_inspector.update_from_quaternion();
     }
-    if (rotate_edit_state.value_changed) {
-        if (use_world_mode || multiselect) {
-            touch();
+    if (m_rotate_euler_state.value_changed) {
+        rotation_inspector.update_matrix_and_quaternion_from_euler_angles();
+    }
+    if (m_rotate_axis_angle_state.value_changed) {
+        rotation_inspector.update_from_axis_angle();
+    }
+    erhe::imgui::Value_edit_state rotate_state;
+    rotate_state.combine(m_rotate_quaternion_state);
+    rotate_state.combine(m_rotate_euler_state);
+    rotate_state.combine(m_rotate_axis_angle_state);
+
+    rotation_inspector.set_active(rotate_state.active);
+
+    if (rotate_state.value_changed) {
+        if (m_use_world_mode || m_multiselect) {
+            transform_tool.touch();
             for (auto& entry : shared.entries) {
                 auto& node = entry.node;
                 if (!node) {
                     return;
                 }
                 Trs_transform world_from_node = entry.world_from_node_before;
-                world_from_node.set_rotation(m_rotation.get_quaternion());
+                world_from_node.set_rotation(rotation_inspector.get_quaternion());
                 node->set_world_from_node(world_from_node);
             }
-            shared.world_from_anchor.set_rotation(m_rotation.get_quaternion());
+            shared.world_from_anchor.set_rotation(rotation_inspector.get_quaternion());
         } else {
-            touch();
+            transform_tool.touch();
             for (auto& entry : shared.entries) {
                 auto& node = entry.node;
                 if (!node) {
                     return;
                 }
                 Trs_transform parent_from_node = entry.parent_from_node_before;
-                parent_from_node.set_rotation(m_rotation.get_quaternion());
+                parent_from_node.set_rotation(rotation_inspector.get_quaternion());
                 node->set_parent_from_node(parent_from_node);
                 shared.world_from_anchor.set(node->world_from_node());
             }
         }
-        update_transforms();
+        transform_tool.update_transforms();
     }
 
-    Value_edit_state scale_edit_state;
-    if (ImGui::TreeNodeEx("Scale", ImGuiTreeNodeFlags_DefaultOpen)) {
-        scale_edit_state.combine(make_scalar_button(&scale.x, 0.01f, FLT_MAX, 0xff8888ffu, 0xff222266u, "X", "##S.X"));
-        scale_edit_state.combine(make_scalar_button(&scale.y, 0.01f, FLT_MAX, 0xff88ff88u, 0xff226622u, "Y", "##S.Y"));
-        scale_edit_state.combine(make_scalar_button(&scale.z, 0.01f, FLT_MAX, 0xffff8888u, 0xff662222u, "Z", "##S.Z"));
-        ImGui::TreePop();
-    }
-    if (scale_edit_state.value_changed) {
+    if (m_scale_state.value_changed) {
         Trs_transform n = shared.world_from_anchor_initial_state;
-        n.set_scale(scale);
-        adjust(n.get_matrix());
+        n.set_scale(m_scale);
+        transform_tool.adjust(n.get_matrix());
     }
 
-    Value_edit_state skew_edit_state;
-    if (ImGui::TreeNodeEx("Skew"/*ImGuiTreeNodeFlags_DefaultOpen*/)) {
-        skew_edit_state.combine(make_scalar_button(&skew.x, 0.0f, 0.0f, 0xff8888ffu, 0xff222266u, "X", "##K.X"));
-        skew_edit_state.combine(make_scalar_button(&skew.y, 0.0f, 0.0f, 0xff88ff88u, 0xff226622u, "Y", "##K.Y"));
-        skew_edit_state.combine(make_scalar_button(&skew.z, 0.0f, 0.0f, 0xffff8888u, 0xff662222u, "Z", "##K.Z"));
-        ImGui::TreePop();
-    }
-    if (skew_edit_state.value_changed) {
+    if (m_skew_state.value_changed) {
         Trs_transform n = shared.world_from_anchor_initial_state;
-        n.set_skew(skew);
-        adjust(n.get_matrix());
+        n.set_skew(m_skew);
+        transform_tool.adjust(n.get_matrix());
     }
 
     Value_edit_state edit_state;
-    edit_state.combine(translate_edit_state);
-    edit_state.combine(rotate_edit_state);
-    edit_state.combine(scale_edit_state);
-    edit_state.combine(skew_edit_state);
+    edit_state.combine(m_translate_state);
+    edit_state.combine(rotate_state);
+    edit_state.combine(m_scale_state);
+    edit_state.combine(m_skew_state);
 
     if (edit_state.edit_ended && shared.touched) {
-        record_transform_operation();
+        transform_tool.record_transform_operation();
     }
+}
+
+void Transform_tool::transform_properties()
+{
+    if (shared.entries.empty()) {
+        return;
+    }
+
+    m_edit_state = Edit_state(shared, *this, m_rotation, m_property_editor);
 }
 
 } // namespace editor

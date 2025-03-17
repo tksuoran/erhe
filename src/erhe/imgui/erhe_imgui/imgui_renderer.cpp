@@ -533,6 +533,10 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     io.ConfigNavCaptureKeyboard = false;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 
+    // ConfigErrorRecovery appears to be expensive, so it is disabled for now.
+    // TODO Re-enable if this ever turns out to be less expensive.
+    io.ConfigErrorRecovery = false;
+
     auto& style = imgui_context->Style;
     style.WindowMenuButtonPosition = ImGuiDir_None;
 
@@ -648,6 +652,7 @@ auto Imgui_renderer::image(
     const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
     const uint64_t handle = m_graphics_instance.get_handle(*texture.get(), sampler);
     SPDLOG_LOGGER_TRACE(log_imgui, "sampler = {}, handle = {:16x}", sampler->gl_name(), handle);
+
     ImGui::ImageWithBg(handle, ImVec2{static_cast<float>(width), static_cast<float>(height)}, uv0, uv1, background_color, tint_color);
     use(texture, handle);
     return ImGui::IsItemClicked();

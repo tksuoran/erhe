@@ -19,15 +19,16 @@ public:
     Transform clip_from_world;
 };
 
-class Camera : public erhe::Item<Item_base, Node_attachment, Camera>
+class Camera : public erhe::Item<Item_base, Node_attachment, Camera, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
     Camera();
     explicit Camera(const Camera&);
-    Camera& operator=(const Camera&);
+    Camera& operator=(const Camera&) = delete;
     ~Camera() noexcept override;
 
     explicit Camera(const std::string_view name);
+    Camera(const Camera&, erhe::for_clone);
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Camera"};
@@ -36,6 +37,7 @@ public:
     auto get_type_name() const -> std::string_view override;
 
     // Implements Node_attachment
+    auto clone_attachment       () const -> std::shared_ptr<Node_attachment> override;
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
     // Public API

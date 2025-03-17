@@ -52,8 +52,6 @@
 
 namespace editor {
 
-const float indent = 15.0f;
-
 Properties::Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
     : Imgui_window{imgui_renderer, imgui_windows, "Properties", "properties"}
     , m_context   {editor_context}
@@ -61,15 +59,19 @@ Properties::Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui:
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Properties::animation_properties(erhe::scene::Animation& animation) const
+
+void Properties::animation_properties(erhe::scene::Animation& animation)
 {
+    ERHE_PROFILE_FUNCTION();
+
     static float time       = 0.0f;
     static float start_time = 0.0f;
     static float end_time   = 5.0f;
+    bool time_changed = false;
 
-    const bool time_changed = ImGui::SliderFloat("Time##animation-time", &time, start_time, end_time);
-    ImGui::Text("Samplers: %d", static_cast<int>(animation.samplers.size()));
-    ImGui::Text("Channels: %d", static_cast<int>(animation.channels.size()));
+    add_entry("Time", [&](){ time_changed = ImGui::SliderFloat("Time##animation-time", &time, start_time, end_time); });
+    add_entry("Samplers", [&animation](){ ImGui::Text("%d", static_cast<int>(animation.samplers.size())); });
+    add_entry("Channels", [&animation](){ ImGui::Text("%d", static_cast<int>(animation.channels.size())); });
     //ImGui::BulletText("Samplers");
     //{
     //    for (auto& sampler : animation.samplers) {
@@ -93,7 +95,7 @@ void Properties::animation_properties(erhe::scene::Animation& animation) const
     //}
     //ImGui::Unindent(10.0f);
 
-    animation_curve(animation);
+    add_entry("Curve", [&animation](){ animation_curve(animation); });
 
     if (!time_changed) {
         return;
@@ -118,101 +120,97 @@ void Properties::animation_properties(erhe::scene::Animation& animation) const
     scene->update_node_transforms();
 }
 
-void Properties::camera_properties(erhe::scene::Camera& camera) const
+void Properties::camera_properties(erhe::scene::Camera& camera)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
-
     auto* const projection = camera.projection();
-    if (
-        (projection != nullptr) &&
-        ImGui::TreeNodeEx(
-            "Projection",
-            ImGuiTreeNodeFlags_DefaultOpen
-        )
-    ) {
-        ImGui::Indent(indent);
-        ImGui::SetNextItemWidth(200);
-        erhe::imgui::make_combo(
-            "Type",
-            projection->projection_type,
-            erhe::scene::Projection::c_type_strings,
-            IM_ARRAYSIZE(erhe::scene::Projection::c_type_strings)
-        );
+    if (projection != nullptr) {
+        push_group("Projection", ImGuiTreeNodeFlags_None, m_indent);
+        //ImGui::TreeNodeEx("Projection", ImGuiTreeNodeFlags_DefaultOpen)
+
+        //ImGui::Indent(indent);
+        add_entry("Type", [=]() {
+            erhe::imgui::make_combo(
+                "##",
+                projection->projection_type,
+                erhe::scene::Projection::c_type_strings,
+                IM_ARRAYSIZE(erhe::scene::Projection::c_type_strings)
+            );
+        });
         switch (projection->projection_type) {
             //using enum erhe::scene::Projection::Type;
             case erhe::scene::Projection::Type::perspective: {
-                ImGui::SliderFloat("Fov X",  &projection->fov_x,  0.0f, glm::pi<float>());
-                ImGui::SliderFloat("Fov Y",  &projection->fov_y,  0.0f, glm::pi<float>());
-                ImGui::SliderFloat("Z Near", &projection->z_near, 0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Far",  &projection->z_far,  0.0f, 1000.0f, "%.3f", logarithmic);
+                add_entry("Fov X",  [=](){ImGui::SliderFloat("##", &projection->fov_x,  0.0f, glm::pi<float>());});
+                add_entry("Fov Y",  [=](){ImGui::SliderFloat("##", &projection->fov_y,  0.0f, glm::pi<float>());});
+                add_entry("Z Near", [=](){ImGui::SliderFloat("##", &projection->z_near, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);});
+                add_entry("Z Far",  [=](){ImGui::SliderFloat("##", &projection->z_far,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);});
                 break;
             }
 
-            case erhe::scene::Projection::Type::perspective_xr:{
-                ImGui::SliderFloat("Fov Left",  &projection->fov_left,  -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);
-                ImGui::SliderFloat("Fov Right", &projection->fov_right, -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);
-                ImGui::SliderFloat("Fov Up",    &projection->fov_up,    -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);
-                ImGui::SliderFloat("Fov Down",  &projection->fov_down,  -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);
-                ImGui::SliderFloat("Z Near",    &projection->z_near,    0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Far",     &projection->z_far,     0.0f, 1000.0f, "%.3f", logarithmic);
+            case erhe::scene::Projection::Type::perspective_xr: {
+                add_entry("Fov Left",  [=](){ ImGui::SliderFloat("##", &projection->fov_left,  -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);});
+                add_entry("Fov Right", [=](){ ImGui::SliderFloat("##", &projection->fov_right, -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);});
+                add_entry("Fov Up",    [=](){ ImGui::SliderFloat("##", &projection->fov_up,    -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);});
+                add_entry("Fov Down",  [=](){ ImGui::SliderFloat("##", &projection->fov_down,  -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);});
+                add_entry("Z Near",    [=](){ ImGui::SliderFloat("##", &projection->z_near,    0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);});
+                add_entry("Z Far",     [=](){ ImGui::SliderFloat("##", &projection->z_far,     0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);});
                 break;
             }
 
             case erhe::scene::Projection::Type::perspective_horizontal: {
-                ImGui::SliderFloat("Fov X",  &projection->fov_x,  0.0f, glm::pi<float>());
-                ImGui::SliderFloat("Z Near", &projection->z_near, 0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Far",  &projection->z_far,  0.0f, 1000.0f, "%.3f", logarithmic);
+                add_entry("Fov X",  [=](){ ImGui::SliderFloat("##", &projection->fov_x,  0.0f, glm::pi<float>()); });
+                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::perspective_vertical: {
-                ImGui::SliderFloat("Fov Y",  &projection->fov_y,  0.0f, glm::pi<float>());
-                ImGui::SliderFloat("Z Near", &projection->z_near, 0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Far",  &projection->z_far,  0.0f, 1000.0f, "%.3f", logarithmic);
+                add_entry("Fov Y",  [=](){ ImGui::SliderFloat("##", &projection->fov_y,  0.0f, glm::pi<float>()); });
+                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::orthogonal_horizontal: {
-                ImGui::SliderFloat("Width",  &projection->ortho_width, 0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Near", &projection->z_near,      0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Far",  &projection->z_far,       0.0f, 1000.0f, "%.3f", logarithmic);
+                add_entry("Width",  [=](){ ImGui::SliderFloat("##", &projection->ortho_width, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,      0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,       0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::orthogonal_vertical: {
-                ImGui::SliderFloat("Height", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Near", &projection->z_near,       0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Far",  &projection->z_far,        0.0f, 1000.0f, "%.3f", logarithmic);
+                add_entry("Height", [=](){ ImGui::SliderFloat("##", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,       0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,        0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::orthogonal: {
-                ImGui::SliderFloat("Width",  &projection->ortho_width,  0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Height", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Near", &projection->z_near,       0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Far",  &projection->z_far,        0.0f, 1000.0f, "%.3f", logarithmic);
+                add_entry("Width",  [=](){ ImGui::SliderFloat("##", &projection->ortho_width,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Height", [=](){ ImGui::SliderFloat("##", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,       0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,        0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::orthogonal_rectangle: {
-                ImGui::SliderFloat("Left",   &projection->ortho_left,   0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Width",  &projection->ortho_width,  0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Bottom", &projection->ortho_bottom, 0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Height", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Near", &projection->z_near,       0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Far",  &projection->z_far,        0.0f, 1000.0f, "%.3f", logarithmic);
+                add_entry("Left",   [=](){ ImGui::SliderFloat("##", &projection->ortho_left,   0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Width",  [=](){ ImGui::SliderFloat("##", &projection->ortho_width,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Bottom", [=](){ ImGui::SliderFloat("##", &projection->ortho_bottom, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Height", [=](){ ImGui::SliderFloat("##", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,       0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,        0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::generic_frustum: {
-                ImGui::SliderFloat("Left",   &projection->frustum_left,   0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Right",  &projection->frustum_right,  0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Bottom", &projection->frustum_bottom, 0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Top",    &projection->frustum_top,    0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Near", &projection->z_near,         0.0f, 1000.0f, "%.3f", logarithmic);
-                ImGui::SliderFloat("Z Far",  &projection->z_far,          0.0f, 1000.0f, "%.3f", logarithmic);
+                add_entry("Left",   [=](){ ImGui::SliderFloat("##", &projection->frustum_left,   0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Right",  [=](){ ImGui::SliderFloat("##", &projection->frustum_right,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Bottom", [=](){ ImGui::SliderFloat("##", &projection->frustum_bottom, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Top",    [=](){ ImGui::SliderFloat("##", &projection->frustum_top,    0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,         0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,          0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
@@ -221,84 +219,78 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
                 break;
             }
         }
-        ImGui::Unindent(indent);
-        ImGui::TreePop();
+
+        pop_group();
     }
 
-    float exposure = camera.get_exposure();
-    const auto avail = ImGui::GetContentRegionAvail().x;
-    const auto label_size = std::max(
-        ImGui::CalcTextSize("Exposure").x,
-        ImGui::CalcTextSize("Shadow Range").x
-    );
-    const auto width = avail - label_size;
-    {
-        ImGui::SetNextItemWidth(width);
-        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 800000.0f, "%.3f", logarithmic)) {
+    add_entry("Exposure", [&camera]() {
+        float exposure = camera.get_exposure();
+        if (ImGui::SliderFloat("##", &exposure, 0.0f, 800000.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
             camera.set_exposure(exposure);
         }
-    }
-    float shadow_range = camera.get_shadow_range();
-    {
-        ImGui::SetNextItemWidth(width);
-        if (ImGui::SliderFloat("Shadow Range", &shadow_range, 1.00f, 1000.0f, "%.3f", logarithmic)) {
+    });
+
+    add_entry("Shadow Range", [&camera]() {
+        float shadow_range = camera.get_shadow_range();
+        if (ImGui::SliderFloat("##", &shadow_range, 1.00f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
             camera.set_shadow_range(shadow_range);
         }
-    }
+    });
 }
 
-void Properties::light_properties(erhe::scene::Light& light) const
+void Properties::light_properties(erhe::scene::Light& light)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
+    add_entry("Light Type", [&light]() {
+        erhe::imgui::make_combo(
+            "##",
+            light.type,
+            erhe::scene::Light::c_type_strings,
+            IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
+        );
+    });
 
-    erhe::imgui::make_combo(
-        "Type",
-        light.type,
-        erhe::scene::Light::c_type_strings,
-        IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
-    );
     if (light.type == erhe::scene::Light::Type::spot) {
-        ImGui::SliderFloat("Inner Spot", &light.inner_spot_angle, 0.0f, glm::pi<float>());
-        ImGui::SliderFloat("Outer Spot", &light.outer_spot_angle, 0.0f, glm::pi<float>());
+        add_entry("Inner Spot", [&](){ ImGui::SliderFloat("##", &light.inner_spot_angle, 0.0f, glm::pi<float>()); });
+        add_entry("Outer Spot", [&](){ ImGui::SliderFloat("##", &light.outer_spot_angle, 0.0f, glm::pi<float>()); });
     }
-    ImGui::SliderFloat("Range",     &light.range,     1.00f, 20000.0f, "%.3f", logarithmic);
-    ImGui::SliderFloat("Intensity", &light.intensity, 0.01f, 20000.0f, "%.3f", logarithmic);
-    ImGui::ColorEdit3 ("Color",     &light.color.x,   ImGuiColorEditFlags_Float);
+    add_entry("Range",     [&](){ ImGui::SliderFloat("##", &light.range,     1.00f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+    add_entry("Intensity", [&](){ ImGui::SliderFloat("##", &light.intensity, 0.01f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+    add_entry("Color",     [&](){ ImGui::ColorEdit3 ("##", &light.color.x,   ImGuiColorEditFlags_Float); });
 
-    const auto* node = light.get_node();
-    if (node != nullptr) {
-        auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
-        if (scene_root != nullptr) {
-            const auto& layers = scene_root->layers();
-            ImGui::ColorEdit3(
-                "Ambient",
-                &layers.light()->ambient_light.x,
-                ImGuiColorEditFlags_Float
-            );
-        }
-    }
+    // TODO Move to scene
+    //// const auto* node = light.get_node();
+    //// if (node != nullptr) {
+    ////     auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
+    ////     if (scene_root != nullptr) {
+    ////         const auto& layers = scene_root->layers();
+    ////         ImGui::ColorEdit3(
+    ////             "Ambient",
+    ////             &layers.light()->ambient_light.x,
+    ////             ImGuiColorEditFlags_Float
+    ////         );
+    ////     }
+    //// }
 }
 
-void Properties::skin_properties(erhe::scene::Skin& skin) const
+void Properties::skin_properties(erhe::scene::Skin& skin)
 {
     ERHE_PROFILE_FUNCTION();
 
     auto& skin_data = skin.skin_data;
-    ImGui::Text("Skeleton : %s", skin_data.skeleton ? skin_data.skeleton->get_name().c_str() : "(no skeleton)");
-    ImGui::Text("Joint Count : %d", static_cast<int>(skin_data.joints.size()));
-    if (!ImGui::TreeNodeEx("Skin")) {
-        return;
-    }
+    add_entry("Skeleton",    [&](){ ImGui::TextUnformatted(skin_data.skeleton ? skin_data.skeleton->get_name().c_str() : "(no skeleton)"); });
+    add_entry("Joint Count", [&](){ ImGui::Text("%d", static_cast<int>(skin_data.joints.size())); });
+
+    push_group("Skin", ImGuiTreeNodeFlags_None, m_indent);
     for (auto& joint : skin_data.joints) {
         if (!joint) {
             ImGui::TextUnformatted("(missing joint)");
         } else {
-            ImGui::TextUnformatted(joint->get_name().c_str());
+            add_entry("", [&](){ ImGui::TextUnformatted(joint->get_name().c_str()); });
         }
     }
-    ImGui::TreePop();
+    pop_group();
 }
 
 auto layer_name(const erhe::scene::Layer_id layer_id) -> const char*
@@ -314,108 +306,114 @@ auto layer_name(const erhe::scene::Layer_id layer_id) -> const char*
     }
 }
 
-void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Texture>& texture) const
+void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Texture>& texture)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!texture) {
         return;
     }
 
-    if (!ImGui::TreeNodeEx("Texture", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
+    push_group("Texture", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
 
-    ImGui::Indent(indent);
+    add_entry("Name",   [&](){ ImGui::TextUnformatted(texture->get_name().c_str()); });
+    add_entry("Width",  [&](){ ImGui::Text("%d", texture->width()); });
+    add_entry("Height", [&](){ ImGui::Text("%d", texture->height()); });
+    add_entry("Format", [&](){ ImGui::TextUnformatted(gl::c_str(texture->internal_format())); });
 
-    ImGui::TextUnformatted(texture->get_name().c_str());
-    ImGui::Text("Width: %d", texture->width());
-    ImGui::Text("Height: %d", texture->height());
-    ImGui::Text("Format: %s", gl::c_str(texture->internal_format()));
+    add_entry("Preview", [&](){
+        // TODO Draw to available size respecting aspect ratio
+        m_context.imgui_renderer->image(texture, texture->width(), texture->height());
+    });
 
-    m_context.imgui_renderer->image(texture, texture->width(), texture->height());
-
-    ImGui::Unindent(indent);
-    ImGui::TreePop();
+    pop_group();
 }
 
-void Properties::geometry_properties(erhe::geometry::Geometry& geometry) const
+void Properties::geometry_properties(erhe::geometry::Geometry& geometry)
 {
-    if (!ImGui::TreeNodeEx("Geometry", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
+    ERHE_PROFILE_FUNCTION();
 
-    ImGui::Indent(indent);
-    GEO::Mesh& geo_mesh = geometry.get_mesh();
-    int vertex_count = static_cast<int>(geo_mesh.vertices.nb());
-    int facet_count  = static_cast<int>(geo_mesh.facets.nb());
-    int edge_count   = static_cast<int>(geo_mesh.edges.nb());
-    int corner_count = static_cast<int>(geo_mesh.facet_corners.nb());
-    ImGui::InputInt("Vertices", &vertex_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
-    ImGui::InputInt("Facets",   &facet_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
-    ImGui::InputInt("Edges",    &edge_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
-    ImGui::InputInt("Corners",  &corner_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
-    ImGui::Unindent(indent);
-    ImGui::TreePop();
+    push_group("Geometry", ImGuiTreeNodeFlags_None, m_indent);
+
+    const GEO::Mesh& geo_mesh = geometry.get_mesh();
+    add_entry("Vertices", [&geo_mesh](){
+        int vertex_count = static_cast<int>(geo_mesh.vertices.nb());
+        ImGui::InputInt("##", &vertex_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
+    });
+    add_entry("Facets", [&geo_mesh](){
+        int facet_count = static_cast<int>(geo_mesh.facets.nb());
+        ImGui::InputInt("##", &facet_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
+    });
+    add_entry("Edges", [&geo_mesh](){
+        int edge_count = static_cast<int>(geo_mesh.edges.nb());
+        ImGui::InputInt("##", &edge_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
+    });
+    add_entry("Corners", [&geo_mesh](){
+        int corner_count = static_cast<int>(geo_mesh.facet_corners.nb());
+        ImGui::InputInt("##", &corner_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
+    });
+
+    pop_group();
 }
 
-void Properties::buffer_mesh_properties(const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh) const
+void Properties::buffer_mesh_properties(const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh)
 {
-    if (!buffer_mesh) {
+    ERHE_PROFILE_FUNCTION();
+
+    if (buffer_mesh == nullptr) {
         return;
     }
 
-    if (!ImGui::TreeNodeEx(label)) {
-        return;
-    }
-    ImGui::Indent(indent);
+    push_group(label, ImGuiTreeNodeFlags_None, m_indent);
 
-    ImGui::Text("Fill Triangles: %zu",  buffer_mesh->triangle_fill_indices.get_triangle_count());
-    ImGui::Text("Edge Lines: %zu",      buffer_mesh->edge_line_indices.get_line_count());
-    ImGui::Text("Corner Points: %zu",   buffer_mesh->corner_point_indices.get_point_count());
-    ImGui::Text("Centroid Points: %zu", buffer_mesh->polygon_centroid_indices.get_point_count());
-
-    ImGui::Text("Indices: %zu",         buffer_mesh->index_buffer_range.count);
+    add_entry("Fill Triangles",  [=](){ ImGui::Text("%zu", buffer_mesh->triangle_fill_indices.get_triangle_count()); });
+    add_entry("Edge Lines",      [=](){ ImGui::Text("%zu", buffer_mesh->edge_line_indices.get_line_count()); });
+    add_entry("Corner Points",   [=](){ ImGui::Text("%zu", buffer_mesh->corner_point_indices.get_point_count()); });
+    add_entry("Centroid Points", [=](){ ImGui::Text("%zu", buffer_mesh->polygon_centroid_indices.get_point_count()); });
+    add_entry("Indices",         [=](){ ImGui::Text("%zu", buffer_mesh->index_buffer_range.count); });
 
     for (size_t i = 0, end = buffer_mesh->vertex_buffer_ranges.size(); i < end; ++i) {
         std::string stream_label = fmt::format("Vertex stream {}", i);
-        if (!ImGui::TreeNodeEx(stream_label.c_str(), ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Text("Vertices: %zu",     buffer_mesh->vertex_buffer_ranges.at(i).count);
-            ImGui::Text("Vertex Bytes: %zu", buffer_mesh->vertex_buffer_ranges.at(i).get_byte_size());
-            ImGui::Text("Index Bytes: %zu",  buffer_mesh->vertex_buffer_ranges.at(i).get_byte_size());
-        }
+        push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        add_entry("Vertices",     [=](){ ImGui::Text("%zu", buffer_mesh->vertex_buffer_ranges.at(i).count); });
+        add_entry("Vertex Bytes", [=](){ ImGui::Text("%zu", buffer_mesh->vertex_buffer_ranges.at(i).get_byte_size()); });
+        add_entry("Index Bytes",  [=](){ ImGui::Text("%zu", buffer_mesh->vertex_buffer_ranges.at(i).get_byte_size()); });
+        pop_group();
     }
 
     if (buffer_mesh->bounding_box.is_valid()) {
         const glm::vec3 size = buffer_mesh->bounding_box.max - buffer_mesh->bounding_box.min;
         float volume = buffer_mesh->bounding_box.volume();
-        ImGui::Text("Bounding box size: %f, %f, %f", size.x, size.y, size.z);
-        ImGui::Text("Bounding box volume: %f", volume);
+        add_entry("Bounding box size",   [=](){ ImGui::Text("%f, %f, %f", size.x, size.y, size.z); });
+        add_entry("Bounding box volume", [=](){ ImGui::Text("%f", volume); });
     }
     if (buffer_mesh->bounding_sphere.radius > 0.0f) {
-        ImGui::Text("Bounding sphere radius: %f", buffer_mesh->bounding_sphere.radius);
-        ImGui::Text("Bounding box volume: %f", buffer_mesh->bounding_sphere.volume());
+        add_entry("Bounding sphere radius", [=](){ ImGui::Text("%f", buffer_mesh->bounding_sphere.radius); });
+        add_entry("Bounding box volume",    [=](){ ImGui::Text("%f", buffer_mesh->bounding_sphere.volume()); });
     }
 
-    ImGui::Unindent(indent);
-    ImGui::TreePop();
+    pop_group();
 }
 
-void Properties::primitive_raytrace_properties(erhe::primitive::Primitive_raytrace* primitive_raytrace) const
+void Properties::primitive_raytrace_properties(erhe::primitive::Primitive_raytrace* primitive_raytrace)
 {
+    if (primitive_raytrace == nullptr) {
+        return;
+    }
     const erhe::primitive::Buffer_mesh& buffer_mesh = primitive_raytrace->get_raytrace_mesh();
     buffer_mesh_properties("Raytrace Buffer Mesh", &buffer_mesh);
 }
 
-void Properties::shape_properties(const char* label, erhe::primitive::Primitive_shape* shape) const
+void Properties::shape_properties(const char* label, erhe::primitive::Primitive_shape* shape)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (shape == nullptr) {
         return;
     }
 
-    if (!ImGui::TreeNodeEx(label)) {
-        return;
-    }
+    push_group(label, ImGuiTreeNodeFlags_None, m_indent);
 
-    ImGui::Indent(indent);
     const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
     if (geometry) {
         geometry_properties(*geometry.get());
@@ -423,22 +421,21 @@ void Properties::shape_properties(const char* label, erhe::primitive::Primitive_
 
     primitive_raytrace_properties(&shape->get_raytrace());
 
-    ImGui::Unindent(indent);
-    ImGui::TreePop();
+    pop_group();
 }
 
-void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
+void Properties::mesh_properties(erhe::scene::Mesh& mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
     const auto* node = mesh.get_node();
     auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
     if (scene_root == nullptr) {
-        ImGui::Text("Mesh host not set");
+        // Mesh host not set
         return;
     }
 
-    ImGui::Text("Layer ID: %u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id));
+    add_entry("Layer ID", [&](){ ImGui::Text("%u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id)); });
 
     if (mesh.skin) {
         skin_properties(*mesh.skin.get());
@@ -446,64 +443,67 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 
     auto& material_library = scene_root->content_library()->materials;
 
+    push_group("Primitives", ImGuiTreeNodeFlags_None, m_indent);
     int primitive_index = 0;
     for (auto& primitive : mesh.get_mutable_primitives()) { // may edit material
         std::string label = fmt::format("Primitive {}", primitive_index++);
-        if (ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Indent(indent);
-            ImGui::PushID(primitive_index);
-
-            material_library->combo(m_context, "Material", primitive.material, false);
-            if (primitive.material) {
-                ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
-            }
-            if (primitive.render_shape) {
-                shape_properties("Render shape", primitive.render_shape.get());
-                const erhe::primitive::Buffer_mesh& renderable_mesh = primitive.render_shape->get_renderable_mesh();
-                buffer_mesh_properties("Renderable Buffer Mesh", &renderable_mesh);
-            }
-            if (primitive.collision_shape) {
-                shape_properties("Collision shape", primitive.collision_shape.get());
-            }
-            ImGui::PopID();
-            ImGui::Unindent(indent);
-            ImGui::TreePop();
+        push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        add_entry("Material", [&](){ material_library->combo(m_context, "##", primitive.material, false); });
+        if (primitive.material) {
+            add_entry("Material Buffer Index", [&](){ ImGui::Text("%u", primitive.material->material_buffer_index); });
         }
-    }
-
-    if (ImGui::TreeNodeEx("Mesh Raytrace")) {
-        ImGui::Indent(indent);
-        const auto* mesh_rt_scene = mesh.get_rt_scene();
-        ImGui::Text("RT Scene: %s", (mesh_rt_scene != nullptr) ? mesh_rt_scene->debug_label().data() : "(nullptr)");
-        const auto& rt_primitives = mesh.get_rt_primitives();
-        if (ImGui::TreeNodeEx("Raytrace Primitives", ImGuiTreeNodeFlags_DefaultOpen )) {
-            for (const auto& rt_primitive : rt_primitives) {
-                ImGui::Text("Mesh: %s", (rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)");
-                ImGui::Text("Primitive Index: %zu", rt_primitive->primitive_index);
-                const auto* rt_instance = rt_primitive->rt_instance.get();
-                ImGui::Text("RT Instance: %s", (rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)");
-                const auto* rt_scene = rt_primitive->rt_scene.get();
-                ImGui::Text("RT Scene: %s", (rt_scene!= nullptr) ? rt_scene->debug_label().data() : "(nullptr)");
-            }
-            ImGui::TreePop();
+        if (primitive.render_shape) {
+            shape_properties("Render shape", primitive.render_shape.get());
+            const erhe::primitive::Buffer_mesh& renderable_mesh = primitive.render_shape->get_renderable_mesh();
+            buffer_mesh_properties("Renderable Buffer Mesh", &renderable_mesh);
         }
-        ImGui::Unindent(indent);
-        ImGui::TreePop();
+        if (primitive.collision_shape) {
+            shape_properties("Collision shape", primitive.collision_shape.get());
+        }
+        pop_group();
     }
+    pop_group();
+
+    push_group("Mesh Raytrace", ImGuiTreeNodeFlags_None, m_indent);
+    const auto* mesh_rt_scene = mesh.get_rt_scene();
+    if (mesh_rt_scene != nullptr) {
+        add_entry("RT Scene", [=](){ ImGui::TextUnformatted(mesh_rt_scene->debug_label().data()); });
+    }
+    const auto& rt_primitives = mesh.get_rt_primitives();
+    if (!rt_primitives.empty()) {
+        push_group("Raytrace Primitives", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        for (const auto& rt_primitive : rt_primitives) {
+            std::string label = fmt::format("Raytrace Primitive {}", primitive_index++);
+            const auto* rt_instance = rt_primitive->rt_instance.get();
+            const auto* rt_scene    = rt_primitive->rt_scene.get();
+            push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+            add_entry("Mesh",            [&](){ ImGui::TextUnformatted((rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)"); });
+            add_entry("Primitive Index", [&](){ ImGui::Text("%zu", rt_primitive->primitive_index); });
+            add_entry("RT Instance",     [=](){ ImGui::TextUnformatted((rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)"); });
+            add_entry("RT Scene",        [=](){ ImGui::TextUnformatted((rt_scene != nullptr) ? rt_scene->debug_label().data() : "(nullptr)"); });
+            pop_group();
+        }
+        pop_group();
+    }
+    pop_group();
 }
 
-void Properties::rendertarget_properties(Rendertarget_mesh& rendertarget) const
+void Properties::rendertarget_properties(Rendertarget_mesh& rendertarget)
 {
-    ImGui::Text("Width: %f", rendertarget.width());
-    ImGui::Text("Height: %f", rendertarget.height());
-    ImGui::Text("Pixels per Meter: %f", static_cast<float>(rendertarget.pixels_per_meter()));
+    ERHE_PROFILE_FUNCTION();
+
+    add_entry("Width",            [&](){ ImGui::Text("%f", rendertarget.width()); });
+    add_entry("Height",           [&](){ ImGui::Text("%f", rendertarget.height()); });
+    add_entry("Pixels per Meter", [&](){ ImGui::Text("%f", static_cast<float>(rendertarget.pixels_per_meter())); });
 }
 
-void Properties::brush_placement_properties(Brush_placement& brush_placement) const
+void Properties::brush_placement_properties(Brush_placement& brush_placement)
 {
-    ImGui::Text("Brush: %s", brush_placement.get_brush()->get_name().c_str());
-    ImGui::Text("Facet: %u", brush_placement.get_facet());
-    ImGui::Text("Corner: %u", brush_placement.get_corner());
+    ERHE_PROFILE_FUNCTION();
+
+    add_entry("Brush",  [&](){ ImGui::TextUnformatted(brush_placement.get_brush()->get_name().c_str()); });
+    add_entry("Facet",  [&](){ ImGui::Text("%u", brush_placement.get_facet()); });
+    add_entry("Corner", [&](){ ImGui::Text("%u", brush_placement.get_corner()); });
 }
 
 #endif
@@ -522,28 +522,21 @@ void Properties::on_end()
 #endif
 }
 
-namespace {
-
-[[nodiscard]] auto test_bits(uint64_t mask, uint64_t test_bits) -> bool
+void Properties::node_physics_properties(Node_physics& node_physics)
 {
-    return (mask & test_bits) == test_bits;
-}
+    ERHE_PROFILE_FUNCTION();
 
-}
-
-void Properties::node_physics_properties(Node_physics& node_physics) const
-{
     erhe::physics::IRigid_body* rigid_body = node_physics.get_rigid_body();
     if (rigid_body == nullptr) {
         return;
     }
 
-    const auto transform = rigid_body->get_world_transform();
-    const glm::vec3 pos = glm::vec3{transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    const glm::mat4 transform = rigid_body->get_world_transform();
+    const glm::vec3 pos       = glm::vec3{transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
 
-    ImGui::Text("Rigid Body: %s",             rigid_body->get_debug_label());
-    ImGui::Text("Position: %.2f, %.2f, %.2f", pos.x, pos.y, pos.z);
-    ImGui::Text("Is Active: %s",              rigid_body->is_active() ? "Yes" : "No");
+    add_entry("Rigid Body", [=](){ ImGui::TextUnformatted(rigid_body->get_debug_label()); });
+    add_entry("Position",   [=](){ ImGui::Text("%.2f, %.2f, %.2f", pos.x, pos.y, pos.z); });
+    add_entry("Is Active",  [=](){ ImGui::TextUnformatted(rigid_body->is_active() ? "Yes" : "No"); });
 
     //bool allow_sleeping = rigid_body->get_allow_sleeping();
     //ImGui::Text("Allow Sleeping: %s", allow_sleeping ? "Yes" : "No");
@@ -554,92 +547,96 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
     //    rigid_body->set_allow_sleeping(true);
     //}
 
-    const auto collision_shape = rigid_body->get_collision_shape();
+    const std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = rigid_body->get_collision_shape();
     if (collision_shape) {
-        const auto com = collision_shape->get_center_of_mass();
-        ImGui::TextUnformatted(collision_shape->describe().c_str());
-        ImGui::Text("Local center of mass: %.2f, %.2f, %.2f", com.x, com.y, com.z);
+        const glm::vec3 com = collision_shape->get_center_of_mass();
+        add_entry("Collision Shape",      [=](){ ImGui::TextUnformatted(collision_shape->describe().c_str()); });
+        add_entry("Local Center of Mass", [=](){ ImGui::Text("%.2f, %.2f, %.2f", com.x, com.y, com.z); });
     }
 
-    float           mass    = rigid_body->get_mass();
-    const glm::mat4 inertia = rigid_body->get_local_inertia();
-    if (ImGui::SliderFloat("Mass", &mass, 0.01f, 1000.0f)) {
-        rigid_body->set_mass_properties(mass, inertia);
-    }
-    float friction = rigid_body->get_friction();
-    if (ImGui::SliderFloat("Friction", &friction, 0.0f, 1.0f)) {
-        rigid_body->set_friction(friction);
-    }
-    float restitution = rigid_body->get_restitution();
-    if (ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f)) {
-        rigid_body->set_restitution(restitution);
-    }
+    add_entry("Mass", [rigid_body]() {
+        float           mass    = rigid_body->get_mass();
+        const glm::mat4 inertia = rigid_body->get_local_inertia();
+        if (ImGui::SliderFloat("##", &mass, 0.01f, 1000.0f)) {
+            rigid_body->set_mass_properties(mass, inertia);
+        }
+    });
+    add_entry("Friction", [rigid_body]() {
+        float friction = rigid_body->get_friction();
+        if (ImGui::SliderFloat("##", &friction, 0.0f, 1.0f)) {
+            rigid_body->set_friction(friction);
+        }
+    });
+    add_entry("Restitution", [rigid_body]() {
+        float restitution = rigid_body->get_restitution();
+        if (ImGui::SliderFloat("##", &restitution, 0.0f, 1.0f)) {
+            rigid_body->set_restitution(restitution);
+        }
+    });
 
     // Static bodies don't have access to these properties, at least in Jolt
     if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_static) {
-        float angular_damping = rigid_body->get_angular_damping();
-        float linear_damping = rigid_body->get_linear_damping();
-        if (
-            ImGui::SliderFloat("Angular Dampening", &angular_damping, 0.0f, 1.0f) ||
-            ImGui::SliderFloat("Linear Dampening", &linear_damping, 0.0f, 1.0f)
-        ) {
-            rigid_body->set_damping(linear_damping, angular_damping);
-        }
+        add_entry("Angular Dampening", [rigid_body](){
+            float angular_damping = rigid_body->get_angular_damping();
+            float linear_damping  = rigid_body->get_linear_damping();
+            if (ImGui::SliderFloat("##", &angular_damping, 0.0f, 1.0f)) {
+                rigid_body->set_damping(linear_damping, angular_damping);
+            }
+        });
+        add_entry("Linear Dampening", [rigid_body](){
+            float angular_damping = rigid_body->get_angular_damping();
+            float linear_damping  = rigid_body->get_linear_damping();
+            if (ImGui::SliderFloat("##", &linear_damping, 0.0f, 1.0f)) {
+                rigid_body->set_damping(linear_damping, angular_damping);
+            }
+        });
 
-        {
+        add_entry("Local Inertia", [rigid_body](){
             const glm::mat4 local_inertia = rigid_body->get_local_inertia();
             float floats[4] = { local_inertia[0][0], local_inertia[1][1], local_inertia[2][2] };
-            ImGui::InputFloat3("Local Inertia", floats);
+            ImGui::InputFloat3("##", floats);
             // TODO floats back to rigid body?
-        }
+        });
     }
 
-    const auto motion_mode = rigid_body->get_motion_mode();
-    int i_motion_mode = static_cast<int>(motion_mode);
-    if (
-        ImGui::Combo(
-            "Motion Mode",
-            &i_motion_mode,
-            erhe::physics::c_motion_mode_strings,
-            IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings)
-        )
-    ) {
-        rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(i_motion_mode));
-    }
+    add_entry("Motion Mode", [rigid_body](){
+        const auto motion_mode = rigid_body->get_motion_mode();
+        int i_motion_mode = static_cast<int>(motion_mode);
+        if (ImGui::Combo("##", &i_motion_mode, erhe::physics::c_motion_mode_strings, IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings))) {
+            rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(i_motion_mode));
+        }
+    });
 }
 
 void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 {
-    if (!ImGui::TreeNodeEx("Flags")) {
+    ERHE_PROFILE_FUNCTION();
 
-        return;
-    }
-
-    ImGui::Indent(indent);
+    push_group("Flags", ImGuiTreeNodeFlags_None, m_indent);
 
     using namespace erhe::bit;
     using Item_flags = erhe::Item_flags;
 
     const uint64_t flags = item->get_flag_bits();
     for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
-        const uint64_t bit_mask = uint64_t{1} << bit_position;
-        bool           value    = test_all_rhs_bits_set(flags, bit_mask);
-        if (ImGui::Checkbox(Item_flags::c_bit_labels[bit_position], &value)) {
-            if (bit_mask == Item_flags::selected) {
-                if (value) {
-                    m_context.selection->add_to_selection(item);
+        add_entry(Item_flags::c_bit_labels[bit_position], [item, bit_position, flags, this]() {
+            const uint64_t bit_mask = uint64_t{1} << bit_position;
+            bool           value    = test_all_rhs_bits_set(flags, bit_mask);
+            if (ImGui::Checkbox("##", &value)) {
+                if (bit_mask == Item_flags::selected) {
+                    if (value) {
+                        m_context.selection->add_to_selection(item);
+                    } else {
+                        m_context.selection->remove_from_selection(item);
+                    }
                 } else {
-                    m_context.selection->remove_from_selection(item);
+                    item->set_flag_bits(bit_mask, value);
                 }
-            } else {
-                item->set_flag_bits(bit_mask, value);
             }
-        }
+        });
     }
 
-    ImGui::Unindent(indent);
-
-    ImGui::TreePop();
+    pop_group();
 }
 
 [[nodiscard]] auto show_item_details(const erhe::Item_base* const item)
@@ -652,6 +649,8 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 
 void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in)
 {
+    ERHE_PROFILE_FUNCTION();
+
     const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node   >(item_in);
     const auto& item                 = (content_library_node && content_library_node->item) ? content_library_node->item : item_in;
 
@@ -664,33 +663,27 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& brush_placement      = std::dynamic_pointer_cast<Brush_placement        >(item);
     const auto& texture              = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
 
-    const bool default_open = !node_physics && !content_library_node && !node;
+    ////const bool default_open = !node_physics && !content_library_node && !node;
 
     if (!item) {
         return;
     }
 
-    if (
-        !ImGui::TreeNodeEx(
-            item->get_type_name().data(),
-            ImGuiTreeNodeFlags_Framed |
-            (default_open ? ImGuiTreeNodeFlags_DefaultOpen : 0)
-        )
-    ) {
-        return;
-    }
-
-    ImGui::PushID(item->get_label().c_str());
-
+    std::string group_label = fmt::format("{} {}", item->get_type_name().data(), item->get_name());
+    push_group(group_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, m_indent);
     if (show_item_details(item.get())) {
-        std::string name = item->get_name();
-        if (ImGui::InputText("Name", &name, ImGuiInputTextFlags_EnterReturnsTrue)) {
-            if (name != item->get_name()) {
-                item->set_name(name);
+        std::string label_name = fmt::format("{} Name", item->get_type_name());
+        add_entry(label_name, [item]() {
+            std::string name = item->get_name();
+            const bool enter_pressed = ImGui::InputText("##", &name, ImGuiInputTextFlags_EnterReturnsTrue);
+            if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO
+                if (name != item->get_name()) {
+                    item->set_name(name);
+                }
             }
-        }
+        });
 
-        ImGui::Text("Id: %u", static_cast<unsigned int>(item->get_id()));
+        add_entry("Id", [item]() { ImGui::Text("%u", static_cast<unsigned int>(item->get_id())); });
 
         item_flags(item);
 
@@ -737,58 +730,80 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
         texture_properties(texture);
     }
 
-    ImGui::TreePop();
-    ImGui::PopID();
+    if (node) {
+        push_group("Attachments", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        for (auto& attachment : node->get_attachments()) {
+            item_properties(attachment);
+        }
+        pop_group();
+    }
+
+    pop_group();
 }
 
 void Properties::material_properties()
 {
+    ERHE_PROFILE_FUNCTION();
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const auto selected_material = m_context.selection->get<erhe::primitive::Material>();
-    if (selected_material) {
-        if (ImGui::TreeNodeEx("Material", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-            std::string name = selected_material->get_name();
-            if (ImGui::InputText("Name", &name)) {
-                selected_material->set_name(name);
+    const std::shared_ptr<erhe::primitive::Material> selected_material = m_context.selection->get<erhe::primitive::Material>();
+    if (!selected_material) {
+        return;
+    }
+    push_group("Material", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, m_indent);
+
+    add_entry("Name", [=]() {
+        std::string name = selected_material->get_name();
+        if (ImGui::InputText("##", &name)) {
+            selected_material->set_name(name);
+        }
+    });
+
+    const auto  available_size = ImGui::GetContentRegionAvail();
+    const float area_size_0    = std::min(available_size.x, available_size.y);
+    const int   area_size      = std::max(1, static_cast<int>(area_size_0));
+    m_context.material_preview->set_area_size(area_size);
+    m_context.material_preview->update_rendertarget(*m_context.graphics_instance);
+    m_context.material_preview->render_preview(selected_material);
+    m_context.material_preview->show_preview();
+    auto* node = m_context.brdf_slice->get_node();
+    if (node != nullptr) {
+        push_group("BRDF Slice", ImGuiTreeNodeFlags_None);
+        node->set_material(selected_material);
+        add_entry("BRDF", [this, area_size]() {
+            m_context.brdf_slice->show_brdf_slice(area_size);
+        });
+        pop_group();
+    }
+    add_entry("Metallic",    [=](){ ImGui::SliderFloat("##", &selected_material->metallic,     0.0f,  1.0f); });
+    add_entry("Reflectance", [=](){ ImGui::SliderFloat("##", &selected_material->reflectance,  0.35f, 1.0f); });
+    add_entry("Roughness X", [=](){ ImGui::SliderFloat("##", &selected_material->roughness.x,  0.1f,  0.8f); });
+    add_entry("Roughness Y", [=](){ ImGui::SliderFloat("##", &selected_material->roughness.y,  0.1f,  0.8f); });
+    add_entry("Base Color",  [=](){ ImGui::ColorEdit4 ("##", &selected_material->base_color.x, ImGuiColorEditFlags_Float); });
+    add_entry("Emissive",    [=](){ ImGui::ColorEdit4 ("##", &selected_material->emissive.x,   ImGuiColorEditFlags_Float); });
+    add_entry("Opacity",     [=](){ ImGui::SliderFloat("##", &selected_material->opacity,      0.0f,  1.0f); });
+
+    Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material.get());
+    if (scene_root != nullptr) {
+        const std::shared_ptr<Content_library>& content_library = scene_root->content_library();
+        if (content_library) {
+            const std::shared_ptr<Content_library_node>& textures = content_library->textures;
+            if (textures) {
+                add_entry("Base Color Texture",         [=](){ textures->combo(m_context, "##", selected_material->textures.base_color,         true); });
+                add_entry("Metallic Roughness Texture", [=](){ textures->combo(m_context, "##", selected_material->textures.metallic_roughness, true); });
             }
-            const auto  available_size = ImGui::GetContentRegionAvail();
-            const float area_size_0    = std::min(available_size.x, available_size.y);
-            const int   area_size      = std::max(1, static_cast<int>(area_size_0));
-            m_context.material_preview->set_area_size(area_size);
-            m_context.material_preview->update_rendertarget(*m_context.graphics_instance);
-            m_context.material_preview->render_preview(selected_material);
-            m_context.material_preview->show_preview();
-            if (ImGui::TreeNodeEx("BRDF Slice", ImGuiTreeNodeFlags_None)) {
-                auto* node = m_context.brdf_slice->get_node();
-                if (node != nullptr) {
-                    node->set_material(selected_material);
-                    m_context.brdf_slice->show_brdf_slice(area_size);
-                }
-                ImGui::TreePop();
-            }
-            ImGui::SliderFloat("Metallic",    &selected_material->metallic,     0.0f,  1.0f);
-            ImGui::SliderFloat("Reflectance", &selected_material->reflectance,  0.35f, 1.0f);
-            ImGui::SliderFloat("Roughness X", &selected_material->roughness.x,  0.1f,  0.8f);
-            ImGui::SliderFloat("Roughness Y", &selected_material->roughness.y,  0.1f,  0.8f);
-            ImGui::ColorEdit4 ("Base Color",  &selected_material->base_color.x, ImGuiColorEditFlags_Float);
-            ImGui::ColorEdit4 ("Emissive",    &selected_material->emissive.x,   ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("Opacity",     &selected_material->opacity,      0.0f,  1.0f);
-            Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material.get());
-            if (scene_root != nullptr) {
-                const auto& content_library = scene_root->content_library();
-                content_library->textures->combo(m_context, "Base Color Texture",         selected_material->textures.base_color,         true);
-                content_library->textures->combo(m_context, "Metallic Roughness Texture", selected_material->textures.metallic_roughness, true);
-            }
-            ImGui::TreePop();
         }
     }
+
+    pop_group();
 #endif
 }
 
 void Properties::imgui()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
+
+    m_entries.clear();
 
     const auto& selection = m_context.selection->get_selection();
     int id = 0;
@@ -797,19 +812,6 @@ void Properties::imgui()
         ERHE_DEFER( ImGui::PopID(); );
         ERHE_VERIFY(item);
         item_properties(item);
-
-        const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-        if (!node) {
-            continue;
-        }
-
-        for (auto& attachment : node->get_attachments()) {
-            ImGui::PushID(id++);
-            ImGui::Indent(indent);
-            item_properties(attachment);
-            ImGui::Unindent(indent);
-            ImGui::PopID();
-        }
     }
 
     const auto selected_animation = m_context.selection->get<erhe::scene::Animation>();
@@ -823,7 +825,8 @@ void Properties::imgui()
     }
 
     material_properties();
-#endif
+
+    show_entries();
 }
 
 } // namespace editor

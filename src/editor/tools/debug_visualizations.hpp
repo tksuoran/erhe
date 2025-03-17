@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderable.hpp"
+#include "windows/property_editor.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_math/math_util.hpp"
@@ -28,12 +29,14 @@ class Scene_view;
 enum class Visualization_mode {
     None     = 0,
     Selected = 1,
-    All      = 2
+    Hovered  = 2,
+    All      = 3
 };
 
 static constexpr const char* c_visualization_mode_strings[] = {
     "None",
     "Selected",
+    "Hovered",
     "All"
 };
 
@@ -112,6 +115,10 @@ private:
     Visualization_mode m_edge_labels            {Visualization_mode::None};
     Visualization_mode m_corner_labels          {Visualization_mode::None};
     Visualization_mode m_raytrace_visualization {Visualization_mode::None};
+
+    Property_editor m_property_editor;
+
+    bool m_vertex_positions{false};
 
     float     m_gap                              {0.003f};
     bool      m_tool_hide                        {false};

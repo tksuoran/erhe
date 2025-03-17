@@ -63,7 +63,7 @@ Node::Node(const Node& src, for_clone)
     , node_data{src.node_data, erhe::for_clone{}}
 {
     for (const auto& src_attachment : src.get_attachments()) {
-        auto attachment_clone_item = src_attachment->clone();
+        auto attachment_clone_item = src_attachment->clone_attachment();
         auto attachment_clone = std::dynamic_pointer_cast<Node_attachment>(attachment_clone_item);
         if (attachment_clone) {
             attach(attachment_clone);

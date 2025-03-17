@@ -176,11 +176,11 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     std::optional<glm::vec2> icon;
     glm::vec4 tint_color{0.8f, 0.8f, 0.8f, 1.0f}; // TODO  item->get_wireframe_color(); ?
     glm::vec4 background_color{0.0f, 0.0f, 0.0f, 0.0f};
-    if (item->is_selected()) {
-        ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
-        ImVec4 selected_color = style.Colors[ImGuiCol_Header];
-        background_color = selected_color;
-    }
+    ////if (item->is_selected()) {
+    ////    ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
+    ////    ImVec4 selected_color = style.Colors[ImGuiCol_Header];
+    ////    background_color = selected_color;
+    ////}
 
     const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
     if (content_node) {

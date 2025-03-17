@@ -11,8 +11,10 @@
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_builder.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/property_editor.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
@@ -179,17 +181,26 @@ void Operations::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    if (ImGui::TreeNodeEx("Scenes", ImGuiTreeNodeFlags_DefaultOpen)) {
+    Property_editor p;
 
-        std::shared_ptr<erhe::primitive::Material> material = m_context.selection->get_last_selected<erhe::primitive::Material>();
-        if (material) {
-            ImGui::Text("Material: %s", material->get_name().c_str());
-        }
-        m_make_mesh_config.material = material;
+    bool scenes_open{false};
+    p.push_group("Scenes", ImGuiTreeNodeFlags_DefaultOpen, 0.0f, &scenes_open);
 
-        ImGui::SliderInt  ("Count", &m_make_mesh_config.instance_count, 1, 32);
-        ImGui::SliderFloat("Scale", &m_make_mesh_config.object_scale,   0.2f, 2.0f, "%.2f");
-        ImGui::SliderFloat("Gap",   &m_make_mesh_config.instance_gap,   0.0f, 1.0f, "%.2f");
+    std::shared_ptr<erhe::primitive::Material> material = m_context.selection->get_last_selected<erhe::primitive::Material>();
+    if (material) {
+        p.add_entry("Material", [material](){ ImGui::TextUnformatted(material->get_name().c_str()); });
+    }
+    m_make_mesh_config.material = material;
+   
+    p.add_entry("Count", [this](){ ImGui::SliderInt  ("##", &m_make_mesh_config.instance_count, 1, 32); });
+    p.add_entry("Scale", [this](){ ImGui::SliderFloat("##", &m_make_mesh_config.object_scale,   0.2f, 2.0f, "%.2f"); });
+    p.add_entry("Gap",   [this](){ ImGui::SliderFloat("##", &m_make_mesh_config.instance_gap,   0.0f, 1.0f, "%.2f"); });
+    p.pop_group();
+    p.show_entries("operations");
+
+    if (scenes_open) {
+        ImGui::Indent(20.0f);
+        ERHE_DEFER( ImGui::Unindent(20.0f); );
         const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
         if (erhe::imgui::make_button("Cubes", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_cubes(
@@ -201,6 +212,9 @@ void Operations::imgui()
         if (erhe::imgui::make_button("Platonic Solids", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_platonic_solids(m_make_mesh_config);
         }
+        if (erhe::imgui::make_button("Johnson Solids", erhe::imgui::Item_mode::normal, button_size)) {
+            m_context.scene_builder->add_johnson_solids(m_make_mesh_config);
+        }
         if (erhe::imgui::make_button("Curved Shapes", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_curved_shapes(m_make_mesh_config);
         }
@@ -210,7 +224,6 @@ void Operations::imgui()
         if (erhe::imgui::make_button("Toruses", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_torus_chain(m_make_mesh_config, false);
         }
-        ImGui::TreePop();
     }
 
     ImGui::Separator();
@@ -237,32 +250,21 @@ void Operations::imgui()
     //// }
 
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
-    const auto undo_mode = operation_stack.can_undo()
-        ? erhe::imgui::Item_mode::normal
-        : erhe::imgui::Item_mode::disabled;
+    const auto undo_mode = operation_stack.can_undo() ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     if (erhe::imgui::make_button("Undo", undo_mode, button_size)) {
         operation_stack.undo();
     }
 
-    const auto redo_mode = operation_stack.can_redo()
-        ? erhe::imgui::Item_mode::normal
-        : erhe::imgui::Item_mode::disabled;
+    const auto redo_mode = operation_stack.can_redo() ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     if (erhe::imgui::make_button("Redo", redo_mode, button_size)) {
         operation_stack.redo();
     }
 
     const auto selected_mesh_count = count_selected_meshes();
     const auto selected_node_count = selection.count<erhe::scene::Node>();
-    const auto multi_select_meshes = (selected_mesh_count >= 2)
-        ? erhe::imgui::Item_mode::normal
-        : erhe::imgui::Item_mode::disabled;
-    const auto multi_select_nodes  = (selected_node_count >= 2)
-        ? erhe::imgui::Item_mode::normal
-        : erhe::imgui::Item_mode::disabled;
-
-    const auto delete_mode = (selected_mesh_count + selected_node_count) > 0
-        ? erhe::imgui::Item_mode::normal
-        : erhe::imgui::Item_mode::disabled;
+    const auto multi_select_meshes = (selected_mesh_count >= 2) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    const auto multi_select_nodes  = (selected_node_count >= 2) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    const auto delete_mode         = (selected_mesh_count + selected_node_count) > 0 ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     if (erhe::imgui::make_button("Delete", delete_mode, button_size)) {
         m_context.selection->delete_selection();
     }
@@ -282,9 +284,7 @@ void Operations::imgui()
         }
     }
 
-    const auto has_selection_mode = (selected_mesh_count >= 1)
-        ? erhe::imgui::Item_mode::normal
-        : erhe::imgui::Item_mode::disabled;
+    const auto has_selection_mode = (selected_mesh_count >= 1) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
 
     //if (make_button("Unparent", has_selection_mode, button_size)) {
     //    const auto& node0 = selection.get<erhe::scene::Node>();

@@ -91,7 +91,7 @@ auto sdl_key_to_erhe(const SDL_Keycode sdl_key) -> Keycode
         //case SDLK_WORLD_1            : return Key_world_1;
         //case SDLK_WORLD_2            : return Key_world_2;
         case SDLK_ESCAPE             : return Key_escape;
-        //case SDLK_ENTER              : return Key_enter;
+        case SDLK_RETURN             : return Key_enter;
         case SDLK_TAB                : return Key_tab;
         case SDLK_BACKSPACE          : return Key_backspace;
         case SDLK_INSERT             : return Key_insert;

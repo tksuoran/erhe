@@ -6,8 +6,11 @@
 #include "tools/transform/rotation_inspector.hpp"
 #include "tools/tool.hpp"
 
+#include "windows/property_editor.hpp"
+
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_scene/node.hpp"
 
@@ -28,6 +31,7 @@ namespace erhe::physics {
 namespace erhe::scene {
     class Mesh;
     class Node;
+    class Trs_transform;
 }
 
 namespace tf {
@@ -102,6 +106,37 @@ static constexpr std::array<std::string_view, 3> c_reference_mode_strings = {
     "World"
 };
 
+class Edit_state
+{
+public:
+    Edit_state();
+    Edit_state(
+        Transform_tool_shared& shared,
+        Transform_tool&        transform_tool,
+        Rotation_inspector&    rotation_inspector,
+        Property_editor&       property_editor
+    );
+
+    bool                               m_multiselect;
+    std::shared_ptr<erhe::scene::Node> m_first_node;
+    glm::mat4                          m_world_from_parent;
+    bool                               m_use_world_mode;
+    erhe::scene::Trs_transform*        m_transform{nullptr};
+    erhe::scene::Trs_transform*        m_rotation_transform{nullptr};
+
+    glm::vec3                          m_scale;
+    glm::quat                          m_rotation;
+    glm::vec3                          m_translation;
+    glm::vec3                          m_skew;
+
+    erhe::imgui::Value_edit_state      m_translate_state;
+    erhe::imgui::Value_edit_state      m_rotate_quaternion_state;
+    erhe::imgui::Value_edit_state      m_rotate_euler_state;
+    erhe::imgui::Value_edit_state      m_rotate_axis_angle_state;
+    erhe::imgui::Value_edit_state      m_scale_state;
+    erhe::imgui::Value_edit_state      m_skew_state;
+};
+
 class Transform_tool
     : public erhe::imgui::Imgui_window
     , public Tool
@@ -173,9 +208,15 @@ private:
     Handle                              m_hover_handle {Handle::e_handle_none};
     Handle                              m_active_handle{Handle::e_handle_none};
     std::shared_ptr<erhe::scene::Node>  m_tool_node;
-    Subtool*                            m_hover_tool   {nullptr};
-    Subtool*                            m_active_tool  {nullptr};
+    Subtool*                            m_hover_tool      {nullptr};
+    Subtool*                            m_active_tool     {nullptr};
+    Subtool*                            m_last_active_tool{nullptr};
     Rotation_inspector                  m_rotation;
+
+    Property_editor                     m_property_editor;
+
+    Edit_state m_edit_state;
+
 };
 
 } // namespace editor

@@ -2885,11 +2885,15 @@ ImGuiTextFilter::ImGuiTextFilter(const char* default_filter) //-V1077
 
 bool ImGuiTextFilter::Draw(const char* label, float width)
 {
-    if (width != 0.0f)
+    ImGui::TextUnformatted(label);
+    ImGui::SameLine();
+    if (width != 0.0f) {
         ImGui::SetNextItemWidth(width);
-    bool value_changed = ImGui::InputText(label, InputBuf, IM_ARRAYSIZE(InputBuf));
-    if (value_changed)
+    }
+    bool value_changed = ImGui::InputText("##filter", InputBuf, IM_ARRAYSIZE(InputBuf));
+    if (value_changed) {
         Build();
+    }
     return value_changed;
 }
 

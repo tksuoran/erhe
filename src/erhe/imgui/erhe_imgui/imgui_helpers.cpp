@@ -95,7 +95,9 @@ auto make_scalar_button(
     ImGui::PushStyleColor  (ImGuiCol_Button,        background_color);
     ImGui::PushStyleColor  (ImGuiCol_ButtonHovered, background_color);
     ImGui::PushStyleColor  (ImGuiCol_ButtonActive,  background_color);
-    ImGui::SetNextItemWidth(12.0f);
+    if (label != nullptr) {
+        ImGui::SetNextItemWidth(12.0f);
+    }
     ImGui::PushItemFlag    (ImGuiItemFlags_NoNav, true);
     ImGui::Button          (label);
     ImGui::PopItemFlag     ();
@@ -103,6 +105,30 @@ auto make_scalar_button(
     ImGui::PopStyleColor   (4);
     ImGui::SetNextItemWidth(100.0f);
 
+    constexpr float value_speed = 0.02f;
+    const auto value_changed = ImGui::DragFloat(
+        imgui_label,
+        value,
+        value_speed,
+        value_min,
+        value_max,
+        "%.3f",
+        ImGuiSliderFlags_NoRoundToFormat
+    );
+    return Value_edit_state{
+        .value_changed = value_changed,
+        .edit_ended    = ImGui::IsItemDeactivatedAfterEdit(),
+        .active        = ImGui::IsItemActive()
+    };
+};
+
+auto make_scalar_button(
+    float* const      value,
+    const float       value_min,
+    const float       value_max,
+    const char* const imgui_label
+) -> Value_edit_state
+{
     constexpr float value_speed = 0.02f;
     const auto value_changed = ImGui::DragFloat(
         imgui_label,
@@ -142,6 +168,35 @@ auto make_angle_button(
     ImGui::PopStyleColor   (4);
     ImGui::SetNextItemWidth(100.0f);
 
+    float degrees_value = glm::degrees<float>(radians_value);
+    constexpr float value_speed = 1.0f;
+
+    const bool value_changed = ImGui::DragFloat(
+        imgui_label,
+        &degrees_value,
+        value_speed,
+        glm::degrees<float>(value_min),
+        glm::degrees<float>(value_max),
+        "%.f\xc2\xb0",
+        ImGuiSliderFlags_NoRoundToFormat
+    );
+    if (value_changed) {
+        radians_value = glm::radians<float>(degrees_value);
+    }
+    return Value_edit_state{
+        .value_changed = value_changed,
+        .edit_ended    = ImGui::IsItemDeactivatedAfterEdit(),
+        .active        = ImGui::IsItemActive()
+    };
+};
+
+auto make_angle_button(
+    float&            radians_value,
+    float             value_min,
+    float             value_max,
+    const char* const imgui_label
+) -> Value_edit_state
+{
     float degrees_value = glm::degrees<float>(radians_value);
     constexpr float value_speed = 1.0f;
 

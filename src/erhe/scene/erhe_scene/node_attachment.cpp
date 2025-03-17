@@ -30,14 +30,15 @@ Node_attachment& Node_attachment::operator=(const Node_attachment&)
     ERHE_FATAL("This probably won't work correctly.");
 }
 
-Node_attachment::Node_attachment(const Node_attachment&, for_clone)
-    : m_node{nullptr} // clone is created as not attached
+Node_attachment::Node_attachment(const Node_attachment& src, for_clone)
+    : Item  {src}
+    , m_node{nullptr} // clone is created as not attached
 {
 }
 
 auto Node_attachment::clone_attachment() const -> std::shared_ptr<Node_attachment>
 {
-    return std::make_shared<Node_attachment>(static_cast<const Node_attachment&>(*this));
+    return std::make_shared<Node_attachment>(static_cast<const Node_attachment&>(*this), erhe::for_clone{});
 }
 
 Node_attachment::Node_attachment(const std::string_view name)

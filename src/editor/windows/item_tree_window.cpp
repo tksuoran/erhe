@@ -17,15 +17,14 @@
 #include "tools/clipboard.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
+#include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_profile/profile.hpp"
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#   include <imgui/imgui_internal.h>
-#endif
+#include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 namespace editor {
 
@@ -51,6 +50,11 @@ void Item_tree::set_item_filter(const erhe::Item_filter& filter)
 void Item_tree::set_item_callback(std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun)
 {
     m_item_callback = fun;
+}
+
+void Item_tree::set_hover_callback(std::function<void()> fun)
+{
+    m_hover_callback = fun;
 }
 
 void Item_tree::clear_selection()
@@ -229,8 +233,7 @@ void Item_tree::reposition(
             std::make_shared<Item_parent_change_operation>(
                 anchor_hierarchy->get_parent().lock(),
                 hierarchy,
-                (placement == Placement::Before_anchor) ? anchor_hierarchy : std::shared_ptr<erhe::Hierarchy>{}
-                ,
+                (placement == Placement::Before_anchor) ? anchor_hierarchy : std::shared_ptr<erhe::Hierarchy>{},
                 (placement == Placement::After_anchor ) ? anchor_hierarchy : std::shared_ptr<erhe::Hierarchy>{}
             )
         );
@@ -340,7 +343,6 @@ void Item_tree::attach_selection_to(const std::shared_ptr<erhe::Item_base>& targ
     }
 }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Item_tree::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& item)
 {
     ERHE_PROFILE_FUNCTION();
@@ -354,10 +356,10 @@ void Item_tree::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& ite
         const auto& selection = m_context.selection->get_selection();
         if (is_in(item, selection)) {
             for (const auto& selection_item : selection) {
-                item_icon_and_text(selection_item, false, false);
+                item_icon_and_text(selection_item, 0);
             }
         } else {
-            item_icon_and_text(item, false, false);
+            item_icon_and_text(item, 0);
         }
         ImGui::EndDragDropSource();
     }
@@ -571,12 +573,7 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
                 set_item_selection_terminator(item);
             }
         } else if (shift_down) {
-            SPDLOG_LOGGER_TRACE(
-                log_tree,
-                "click with shift down on {} {} - range select",
-                item->get_type_name(),
-                item->get_name()
-            );
+            SPDLOG_LOGGER_TRACE(log_tree, "click with shift down on {} {} - range select", item->get_type_name(), item->get_name());
             set_item_selection_terminator(item);
         } else {
             range_selection.reset();
@@ -598,12 +595,7 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
     if (focused) {
         if (item != m_last_focus_item.lock()) {
             if (shift_down) {
-                SPDLOG_LOGGER_TRACE(
-                    log_tree,
-                    "key with shift down on {} {} - range select",
-                    item->get_type_name(),
-                    item->get_name()
-                );
+                SPDLOG_LOGGER_TRACE(log_tree, "key with shift down on {} {} - range select", item->get_type_name(), item->get_name());
                 set_item_selection_terminator(item);
             }
             // else
@@ -694,20 +686,91 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         }
 
         ImGui::Separator();
+        const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+        const bool selected_or_hierarchy = item->is_selected() || hierarchy;
+        if (!selected_or_hierarchy) {
+            ImGui::BeginDisabled();
+        }
         if (ImGui::MenuItem("Cut")) {
-            m_context.selection->cut_selection();
+            if (item->is_selected()) {
+                m_context.selection->cut_selection();
+            } else {
+                ERHE_VERIFY(hierarchy);
+                m_context.clipboard->set_contents(item);
+                auto op = std::make_shared<Item_insert_remove_operation>(
+                    Item_insert_remove_operation::Parameters{
+                        .context = m_context,
+                        .item    = hierarchy,
+                        .parent  = hierarchy->get_parent().lock(),
+                        .mode    = Item_insert_remove_operation::Mode::remove,
+                    }
+                );
+                m_context.operation_stack->queue(op);
+            }
         }
         if (ImGui::MenuItem("Copy")) {
-            m_context.selection->copy_selection();
+            if (item->is_selected()) {
+                m_context.selection->copy_selection();
+            } else {
+                m_context.clipboard->set_contents(item->clone());
+            }
+        }
+
+        if (!selected_or_hierarchy) {
+            ImGui::EndDisabled();
+        }
+
+        const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
+        const bool clipboard_is_empty = clipboard_contents.empty();
+        if (clipboard_is_empty || !hierarchy) {
+            ImGui::BeginDisabled();
         }
         if (ImGui::MenuItem("Paste")) {
-            m_context.clipboard->try_paste();
+            m_context.clipboard->try_paste(hierarchy, hierarchy->get_child_count());
         }
+        if (clipboard_is_empty || !hierarchy) {
+            ImGui::EndDisabled();
+        }
+
+        if (!selected_or_hierarchy) {
+            ImGui::BeginDisabled();
+        }
+
         if (ImGui::MenuItem("Duplicate")) {
-            m_context.selection->duplicate_selection();
+            if (item->is_selected()) {
+                m_context.selection->duplicate_selection();
+            } else {
+                ERHE_VERIFY(hierarchy);
+                auto op = std::make_shared<Item_insert_remove_operation>(
+                    Item_insert_remove_operation::Parameters{
+                        .context         = m_context,
+                        .item            = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone()),
+                        .parent          = hierarchy->get_parent().lock(),
+                        .mode            = Item_insert_remove_operation::Mode::insert,
+                        .index_in_parent = hierarchy->get_index_in_parent() + 1
+                    }
+                );
+                m_context.operation_stack->queue(op);
+             }
         }
         if (ImGui::MenuItem("Delete")) {
-            m_context.selection->delete_selection();
+            if (item->is_selected()) {
+                m_context.selection->delete_selection();
+            } else {
+                ERHE_VERIFY(hierarchy);
+                auto op = std::make_shared<Item_insert_remove_operation>(
+                    Item_insert_remove_operation::Parameters{
+                        .context = m_context,
+                        .item    = hierarchy,
+                        .parent  = hierarchy->get_parent().lock(),
+                        .mode    = Item_insert_remove_operation::Mode::remove,
+                    }
+                );
+                m_context.operation_stack->queue(op);
+            }
+        }
+        if (!selected_or_hierarchy) {
+            ImGui::EndDisabled();
         }
 
         ImGui::EndPopup();
@@ -724,9 +787,117 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
     ImGui::PopStyleVar(1);
 }
 
-auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item, const bool update, bool force_expand) -> Tree_node_state
+void Item_tree::root_popup_menu()
+{
+    const auto& node       = std::dynamic_pointer_cast<erhe::scene::Node>(m_root);
+    Scene_root* scene_root = static_cast<Scene_root*>(m_root->get_item_host());
+    if (!node || (scene_root == nullptr)) {
+        return;
+    }
+
+    static bool opened = false;
+    if (
+        ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
+        !m_popup_item
+    ) {
+        m_popup_item = m_root;
+        m_popup_id_string = fmt::format("{}##Node{}-popup-menu", m_root->get_name(), m_root->get_id());
+        m_popup_id = ImGui::GetID(m_popup_id_string.c_str());
+        ImGui::OpenPopupEx(
+            m_popup_id,
+            ImGuiPopupFlags_MouseButtonRight
+        );
+        opened = true;
+    }
+
+    if ((m_popup_item != m_root) || m_popup_id_string.empty()) {
+        if (opened) {
+            opened = false;
+        }
+        return;
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
+    const bool begin_popup_context_item = ImGui::BeginPopupEx(
+        m_popup_id,
+        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
+    );
+    if (begin_popup_context_item) {
+        auto parent_node = node->get_parent_node();
+
+        bool close{false};
+        if (ImGui::BeginMenu("Create")) {
+            if (ImGui::MenuItem("Empty Node")) {
+                m_operations.push_back(
+                    [this, scene_root, parent_node]() {
+                        m_context.scene_commands->create_new_empty_node(parent_node.get());
+                    }
+                );
+                close = true;
+            }
+            if (ImGui::MenuItem("Camera")) {
+                m_operations.push_back(
+                    [this, scene_root, parent_node]() {
+                        m_context.scene_commands->create_new_camera(parent_node.get());
+                    }
+                );
+                close = true;
+            }
+            if (ImGui::MenuItem("Light")) {
+                m_operations.push_back(
+                    [this, scene_root, parent_node]() {
+                        m_context.scene_commands->create_new_light(parent_node.get());
+                    }
+                );
+                close = true;
+            }
+            ImGui::EndMenu();
+        }
+
+        ImGui::Separator();
+        const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(m_root);
+        
+        const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
+        const bool clipboard_is_empty = clipboard_contents.empty();
+        if (clipboard_is_empty) {
+            ImGui::BeginDisabled();
+        }
+        if (ImGui::MenuItem("Paste")) {
+            m_context.clipboard->try_paste(hierarchy, hierarchy->get_child_count());
+        }
+        if (clipboard_is_empty) {
+            ImGui::EndDisabled();
+        }
+
+        ImGui::EndPopup();
+        if (close) {
+            m_popup_item.reset();
+            m_popup_id_string.clear();
+            m_popup_id = 0;
+        }
+    } else {
+        m_popup_item.reset();
+        m_popup_id_string.clear();
+        m_popup_id = 0;
+    }
+    ImGui::PopStyleVar(1);
+}
+
+auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item, const unsigned int visual_flags) -> Tree_node_state
 {
     ERHE_PROFILE_FUNCTION();
+
+    using namespace erhe::bit;
+    bool update       = test_all_rhs_bits_set(visual_flags, item_visual_flag_update);
+    bool force_expand = test_all_rhs_bits_set(visual_flags, item_visual_flag_force_expand);
+    bool table_row    = test_all_rhs_bits_set(visual_flags, item_visual_flag_table_row);
+
+    if (table_row) {
+        ImGui::PushID(m_row++);
+        ImGui::TableNextRow(ImGuiTableRowFlags_None);
+        ImGui::TableSetColumnIndex(0);
+    }
+    ERHE_DEFER( if (table_row) ImGui::PopID(); );
 
     m_context.icon_set->item_icon(item, m_ui_scale);
 
@@ -736,6 +907,8 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
             m_context.icon_set->item_icon(node_attachment, m_ui_scale);
         }
     }
+    ImGui::TableSetColumnIndex(1);
+    ImGui::SetNextItemWidth(-FLT_MIN); 
 
     const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
     const auto& hierarchy            = std::dynamic_pointer_cast<erhe::Hierarchy     >(item);
@@ -774,7 +947,6 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     const ImGuiTreeNodeFlags flags =
         ImGuiTreeNodeFlags_SpanAvailWidth |
         ImGuiTreeNodeFlags_SpanAllColumns |
-        ImGuiTreeNodeFlags_LabelSpanAllColumns |
         (force_expand ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None) |
         (is_leaf
             ? (ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf)
@@ -888,7 +1060,11 @@ void Item_tree::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
 
     m_context.selection->range_selection().entry(item);
 
-    const auto tree_node_state = item_icon_and_text(item, true, show == Show_mode::Show_expanded);
+    unsigned int flags = item_visual_flag_update | item_visual_flag_table_row;
+    if (show == Show_mode::Show_expanded) {
+        flags |= item_visual_flag_force_expand;
+    }
+    const auto tree_node_state = item_icon_and_text(item, flags);
     if (tree_node_state.is_open) {
         if (m_context.editor_settings->node_tree_expand_attachments) {
             const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
@@ -912,11 +1088,9 @@ void Item_tree::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
         }
     }
 }
-#endif
 
 void Item_tree::imgui_tree(float ui_scale)
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
     ///ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
@@ -927,8 +1101,25 @@ void Item_tree::imgui_tree(float ui_scale)
     ///ImGui::PushStyleColor(ImGuiCol_Header, last_selected_color);
 
     m_ui_scale = ui_scale;
+    m_row = 0;
 
-    m_text_filter.Draw("?");
+    const std::size_t root_id = m_root->get_id();
+    const int table_id = static_cast<int>(root_id);
+    ImGui::PushID(table_id);
+    ERHE_DEFER( ImGui::PopID(); );
+
+    m_text_filter.Draw("Filter:", -FLT_MIN);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
+    ERHE_DEFER( ImGui::PopStyleVar(1); );
+
+    bool table_visible = ImGui::BeginTable("##", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_NoClip);
+    if (!table_visible) {
+        return;
+    }
+
+    ImGui::TableSetupColumn("icons", /*ImGuiTableColumnFlags_IndentDisable |*/ ImGuiTableColumnFlags_NoClip | ImGuiTableColumnFlags_WidthFixed,   50.0f);
+    ImGui::TableSetupColumn("entry", ImGuiTableColumnFlags_IndentEnable  | ImGuiTableColumnFlags_WidthStretch,  1.0f);
 
 #if 0 //// TODO
     ImGui::Checkbox("Expand Attachments", &m_context.editor_settings->node_tree_expand_attachments);
@@ -1007,8 +1198,16 @@ void Item_tree::imgui_tree(float ui_scale)
         m_toggled_open = false;
     }
 
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
+        if (m_hover_callback) {
+            m_hover_callback();
+        }
+        root_popup_menu();
+    }
+
+    ImGui::EndTable();
+
     //// m_context.editor_scenes->sanity_check();
-#endif
 }
 
 ////////////////////////////
@@ -1028,21 +1227,19 @@ Item_tree_window::Item_tree_window(
 
 void Item_tree_window::on_begin()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2{0.0f, 0.0f});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2{3.0f, 3.0f});
-#endif
 }
 
 void Item_tree_window::on_end()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PopStyleVar(2);
-#endif
 }
 
 void Item_tree_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION();
+
     imgui_tree(get_scale_value());
 }
 

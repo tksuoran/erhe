@@ -18,7 +18,7 @@ Subtool::Subtool(Editor_context& editor_context)
 
 Subtool::~Subtool() noexcept = default;
 
-void Subtool::imgui()
+void Subtool::imgui(Property_editor&)
 {
 }
 

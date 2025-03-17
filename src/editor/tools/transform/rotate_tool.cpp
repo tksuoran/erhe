@@ -1,4 +1,5 @@
 #include "tools/transform/rotate_tool.hpp"
+#include "windows/property_editor.hpp"
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
@@ -40,26 +41,37 @@ void Rotate_tool::handle_priority_update(const int old_priority, const int new_p
     shared.settings.show_rotate = new_priority > old_priority;
 }
 
-void Rotate_tool::imgui()
+void Rotate_tool::imgui(Property_editor& property_editor)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    auto& shared = get_shared();
-
-    ImGui::Checkbox("Rotate Snap Enable", &shared.settings.rotate_snap_enable);
-    const float rotate_snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
-    const char* rotate_snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
-    erhe::imgui::make_combo(
-        "Rotate Snap",
-        m_rotate_snap_index,
-        rotate_snap_items,
-        IM_ARRAYSIZE(rotate_snap_items)
-    );
-    if (
-        (m_rotate_snap_index >= 0) &&
-        (m_rotate_snap_index < IM_ARRAYSIZE(rotate_snap_values))
-    ) {
-        shared.settings.rotate_snap = rotate_snap_values[m_rotate_snap_index];
-    }
+    Property_editor& p = property_editor;
+    p.reset();
+    //auto& shared = get_shared();
+    p.push_group("Rotate Tool", ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry("Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.rotate_snap_enable); });
+    p.add_entry("Snap Value", [this]() {
+        const float snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
+        const char* snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
+        if (ImGui::BeginCombo("##", snap_items[m_rotate_snap_index])) {
+            ImGui::TextUnformatted("Rotation Snap Value:");
+            for (int i = 0, end = IM_ARRAYSIZE(snap_items); i < end; ++i) {
+                bool selected = (i == m_rotate_snap_index);
+                bool clicked = ImGui::Selectable(snap_items[i], &selected, ImGuiSelectableFlags_None);
+                if (clicked) {
+                    m_rotate_snap_index = i;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (
+            (m_rotate_snap_index >= 0) &&
+            (m_rotate_snap_index < IM_ARRAYSIZE(snap_values))
+        ) {
+            get_shared().settings.rotate_snap = snap_values[m_rotate_snap_index];
+        }
+    });
+    p.pop_group();
+    p.show_entries();
 #endif
 }
 

@@ -8,12 +8,24 @@ namespace erhe::scene {
 
 Camera::Camera()                         = default;
 Camera::Camera(const Camera&)            = default;
-Camera& Camera::operator=(const Camera&) = default;
 Camera::~Camera() noexcept               = default;
 
 Camera::Camera(const std::string_view name)
-    : erhe::Item<Item_base, Node_attachment, Camera>{name}
+    : Item{name}
 {
+}
+
+Camera::Camera(const Camera& src, erhe::for_clone)
+    : Item{src, erhe::for_clone{}}
+    , m_projection  {src.m_projection  }
+    , m_exposure    {src.m_exposure    }
+    , m_shadow_range{src.m_shadow_range}
+{
+}
+
+auto Camera::clone_attachment() const -> std::shared_ptr<Node_attachment>
+{
+    return std::make_shared<Camera>(*this, for_clone{});
 }
 
 auto Camera::get_static_type() -> uint64_t

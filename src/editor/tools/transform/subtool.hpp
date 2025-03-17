@@ -11,6 +11,7 @@ namespace editor {
 enum class Handle : unsigned int;
 
 class Hover_entry;
+class Property_editor;
 class Scene_view;
 class Tools;
 class Transform_tool_shared;
@@ -24,7 +25,7 @@ public:
     [[nodiscard]] virtual auto begin (unsigned int axis_mask, Scene_view* scene_view) -> bool = 0;
     [[nodiscard]] virtual auto update(Scene_view* scene_view) -> bool = 0;
 
-    virtual void imgui();
+    virtual void imgui(Property_editor& property_editor);
 
     void end();
 

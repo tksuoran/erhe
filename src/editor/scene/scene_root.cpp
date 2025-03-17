@@ -9,6 +9,7 @@
 #include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
+#include "tools/clipboard.hpp"
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_primitive/material.hpp"
@@ -329,6 +330,16 @@ auto Scene_root::make_browser_window(
     m_node_tree_window->set_item_callback(
         [this](const std::shared_ptr<erhe::Item_base>& item) {
             return ImGui::IsDragDropActive() && m_node_tree_window->drag_and_drop_target(item);
+        }
+    );
+    m_node_tree_window->set_hover_callback(
+        [this, &context]() {
+            context.editor_message_bus->send_message(
+                Editor_message{
+                    .update_flags = Message_flag_bit::c_flag_bit_hover_scene_item_tree,
+                    .scene_root   = this
+                }
+            );
         }
     );
     return m_node_tree_window;

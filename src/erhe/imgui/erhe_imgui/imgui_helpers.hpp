@@ -54,6 +54,13 @@ auto make_scalar_button(
     const char* imgui_label
 ) -> Value_edit_state;
 
+auto make_scalar_button(
+    float*      value,
+    float       value_min,
+    float       value_max,
+    const char* imgui_label
+) -> Value_edit_state;
+
 auto make_angle_button(
     float&      radians_value,
     float       value_min,
@@ -61,6 +68,13 @@ auto make_angle_button(
     uint32_t    text_color,
     uint32_t    background_color,
     const char* label,
+    const char* imgui_label
+) -> Value_edit_state;
+
+auto make_angle_button(
+    float&      radians_value,
+    float       value_min,
+    float       value_max,
     const char* imgui_label
 ) -> Value_edit_state;
 

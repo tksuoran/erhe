@@ -37,6 +37,7 @@ public:
     auto get_type_name() const -> std::string_view            override;
 
     // Implements / overrides Node_attachment
+    auto clone_attachment       () const -> std::shared_ptr<Node_attachment>                     override;
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
     // Public API

@@ -461,7 +461,7 @@ public:
                 }
             };
 
-            m_clipboard            = std::make_unique<Clipboard     >(commands, m_editor_context);
+            m_clipboard            = std::make_unique<Clipboard     >(commands, m_editor_context, editor_message_bus);
             m_editor_scenes        = std::make_unique<Editor_scenes >(m_editor_context);
             m_editor_windows       = std::make_unique<Editor_windows>(m_editor_context, commands);
             m_viewport_scene_views = std::make_unique<Scene_views   >(commands, m_editor_context, editor_message_bus);

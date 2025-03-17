@@ -16,6 +16,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
+#include "windows/property_editor.hpp"
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_commands/command.hpp"

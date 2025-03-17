@@ -67,6 +67,11 @@ auto Node_physics::get_physics_world() const -> erhe::physics::IWorld*
     return m_physics_world;
 }
 
+auto Node_physics::clone_attachment() const -> std::shared_ptr<Node_attachment>
+{
+    return std::make_shared<Node_physics>(*this, erhe::for_clone{});
+}
+
 void Node_physics::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     ERHE_VERIFY(old_item_host != new_item_host);

@@ -83,13 +83,18 @@ Mesh::Mesh(const std::string_view name, const erhe::primitive::Primitive& primit
 }
 
 Mesh::Mesh(const Mesh& src, erhe::for_clone)
-    : Item      {src}
+    : Item      {src, for_clone{}}
     , layer_id  {src.layer_id}
     , skin      {src.skin}
     , point_size{src.point_size}
     , line_width{src.line_width}
 {
     set_primitives(src.get_primitives());
+}
+
+auto Mesh::clone_attachment() const -> std::shared_ptr<Node_attachment>
+{
+    return std::make_shared<Mesh>(*this, for_clone{});
 }
 
 Mesh::~Mesh() noexcept

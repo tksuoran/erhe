@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_item/item.hpp"
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -46,6 +47,7 @@ public:
     void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
     // Implements Node_attachment
+    auto clone_attachment            () const -> std::shared_ptr<Node_attachment>                     override;
     void handle_item_host_update     (erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
     void handle_node_transform_update()                                                               override;
 

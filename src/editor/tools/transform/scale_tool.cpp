@@ -1,4 +1,5 @@
 #include "tools/transform/scale_tool.hpp"
+#include "windows/property_editor.hpp"
 
 #include "editor_context.hpp"
 #include "graphics/icon_set.hpp"
@@ -25,10 +26,6 @@ void Scale_tool::handle_priority_update(const int old_priority, const int new_pr
 {
     auto& shared = get_shared();
     shared.settings.show_scale = new_priority > old_priority;
-}
-
-void Scale_tool::imgui()
-{
 }
 
 auto Scale_tool::begin(const unsigned int axis_mask, Scene_view* scene_view) -> bool

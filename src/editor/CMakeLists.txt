@@ -287,6 +287,8 @@ erhe_target_sources_grouped(
     windows/post_processing_window.hpp
     windows/properties.cpp
     windows/properties.hpp
+    windows/property_editor.cpp
+    windows/property_editor.hpp
     windows/rendergraph_window.cpp
     windows/rendergraph_window.hpp
     windows/selection_window.cpp

@@ -1,4 +1,5 @@
 #include "tools/transform/move_tool.hpp"
+#include "windows/property_editor.hpp"
 
 #include "editor_context.hpp"
 #include "graphics/icon_set.hpp"
@@ -9,9 +10,7 @@
 
 #include "erhe_imgui/imgui_helpers.hpp"
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 #include <bit>
 
@@ -37,27 +36,36 @@ void Move_tool::handle_priority_update(const int old_priority, const int new_pri
     shared.settings.show_translate = new_priority > old_priority;
 }
 
-void Move_tool::imgui()
+void Move_tool::imgui(Property_editor& property_editor)
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    auto& shared = get_shared();
+    Property_editor& p = property_editor;
+    p.reset();
+    p.push_group("Move tool", ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry("Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.translate_snap_enable); });
+    p.add_entry("Snap Value", [this]() {
+        const float snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
+        const char* snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
+        if (ImGui::BeginCombo("##", snap_items[m_translate_snap_index])) {
+            ImGui::TextUnformatted("Translate Snap Value:");
+            for (int i = 0, end = IM_ARRAYSIZE(snap_items); i < end; ++i) {
+                bool selected = (i == m_translate_snap_index);
+                bool clicked = ImGui::Selectable(snap_items[i], &selected, ImGuiSelectableFlags_None);
+                if (clicked) {
+                    m_translate_snap_index = i;
+                }
+            }
+            ImGui::EndCombo();
+        }
 
-    ImGui::Checkbox("Translate Snap Enable", &shared.settings.translate_snap_enable);
-    const float translate_snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
-    const char* translate_snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
-    erhe::imgui::make_combo(
-        "Translate Snap",
-        m_translate_snap_index,
-        translate_snap_items,
-        IM_ARRAYSIZE(translate_snap_items)
-    );
-    if (
-        (m_translate_snap_index >= 0) &&
-        (m_translate_snap_index < IM_ARRAYSIZE(translate_snap_values))
-    ) {
-        shared.settings.translate_snap = translate_snap_values[m_translate_snap_index];
-    }
-#endif
+        if (
+            (m_translate_snap_index >= 0) &&
+            (m_translate_snap_index < IM_ARRAYSIZE(snap_values))
+        ) {
+            get_shared().settings.translate_snap = snap_values[m_translate_snap_index];
+        }
+    });
+    p.pop_group();
+    p.show_entries();
 }
 
 auto Move_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool

@@ -37,9 +37,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
 #   include "erhe_renderer/debug_renderer.hpp"
@@ -67,7 +65,7 @@ constexpr vec3 axis_x         { 1.0f,  0.0f, 0.0f};
 constexpr vec3 axis_y         { 0.0f,  1.0f, 0.0f};
 constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 
-[[nodiscard]] auto should_visualize(const Visualization_mode mode, const bool is_selected)
+[[nodiscard]] auto should_visualize(const Visualization_mode mode, const bool is_selected, const bool is_hovered)
 {
     if (mode == Visualization_mode::All) {
         return true;
@@ -75,17 +73,20 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
     if (is_selected && (mode == Visualization_mode::Selected)) {
         return true;
     }
+    if (is_hovered && (mode == Visualization_mode::Hovered)) {
+        return true;
+    }
     return false;
 }
 
 [[nodiscard]] auto should_visualize(const Visualization_mode mode, const std::shared_ptr<erhe::Item_base>& item)
 {
-    return should_visualize(mode, item->is_selected());
+    return should_visualize(mode, item->is_selected(), false);
 }
 
 [[nodiscard]] auto should_visualize(const Visualization_mode mode, const erhe::Item_base* const item)
 {
-    return should_visualize(mode, item->is_selected());
+    return should_visualize(mode, item->is_selected(), false);
 }
 
 }
@@ -179,13 +180,7 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
                 buffer_mesh.bounding_box.max
             );
         }
-        if (
-            m_selection_box ||
-            (
-                box_smaller &&
-                !m_selection_sphere
-            )
-        ) {
+        if (m_selection_box || (box_smaller && !m_selection_sphere)) {
             line_renderer.set_thickness(m_selection_major_width);
             line_renderer.add_cube(
                 node->world_from_node(),
@@ -201,13 +196,7 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
                 buffer_mesh.bounding_sphere.radius
             );
         }
-        if (
-            m_selection_sphere ||
-            (
-                !box_smaller &&
-                !m_selection_box
-            )
-        ) {
+        if (m_selection_sphere || (!box_smaller && !m_selection_box)) {
             if (used_camera) {
                 line_renderer.add_sphere(
                     node->world_from_node_transform(),
@@ -952,6 +941,12 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
 
     erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
 
+    erhe::scene::Mesh* hovered_scene_mesh{nullptr};
+    if (m_hover_scene_view != nullptr) {
+        const Hover_entry& content_hover = m_hover_scene_view->get_hover(Hover_entry::content_slot);
+        hovered_scene_mesh = content_hover.scene_mesh;
+    }
+
     for (erhe::primitive::Primitive& primitive : scene_mesh->get_mutable_primitives()) {
         if (!primitive.render_shape) {
             continue;
@@ -961,11 +956,12 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
             continue;
         }
 
+        const bool             is_mesh_hovered  = scene_mesh == hovered_scene_mesh;
         const bool             is_mesh_selected = scene_mesh->is_selected();
         const GEO::Mesh&       geo_mesh         = geometry->get_mesh();
         const Mesh_attributes& attributes       = geometry->get_attributes();
 
-        if (should_visualize(m_vertex_labels, is_mesh_selected)) {
+        if (should_visualize(m_vertex_labels, is_mesh_selected, is_mesh_hovered)) {
             int label_count = 0;
             for (GEO::index_t vertex : geo_mesh.vertices) {
                 const glm::vec3 p0 = to_glm_vec3(get_pointf(geo_mesh.vertices, vertex));
@@ -988,7 +984,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                     { { p0, p } }
                 );
 
-                const std::string label_text = fmt::format("{}: {}", vertex, p0);
+                const std::string label_text = m_vertex_positions ? fmt::format("{}: {}", vertex, p0) : fmt::format("{}", vertex);
                 const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_vertex_label_text_color);
                 label(context, clip_from_world, world_from_node, p, text_color, label_text);
                 if (++label_count >= m_max_labels) {
@@ -1003,7 +999,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
         //    polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
         //}
 
-        if (should_visualize(m_edge_labels, is_mesh_selected)) {
+        if (should_visualize(m_edge_labels, is_mesh_selected, is_mesh_hovered)) {
             int label_count = 0;
             const float t = m_edge_label_line_length;
             for (GEO::index_t edge : geo_mesh.edges) {
@@ -1048,7 +1044,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
             }
         }
 
-        if (should_visualize(m_facet_labels, is_mesh_selected)) {
+        if (should_visualize(m_facet_labels, is_mesh_selected, is_mesh_hovered)) {
             int label_count = 0;
             for (GEO::index_t facet : geo_mesh.facets) {
                 if (!attributes.facet_centroid.has(facet)) {
@@ -1073,7 +1069,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                     label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
                 }
 
-                if (should_visualize(m_corner_labels, is_mesh_selected)) {
+                if (should_visualize(m_corner_labels, is_mesh_selected, is_mesh_hovered)) {
                     for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
                         const GEO::index_t vertex      = geo_mesh.facet_corners.vertex(corner);
                         const GEO::vec3f   corner_p    = get_pointf(geo_mesh.vertices, vertex);
@@ -1225,7 +1221,7 @@ void Debug_visualizations::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    Property_editor& p = m_property_editor;
     if (m_hover_scene_view == nullptr) {
         ImGui::Text("- No Scene_view - ");
     } else {
@@ -1242,64 +1238,73 @@ void Debug_visualizations::imgui()
         }
     }
 
-    make_combo("Node Axises", m_node_axis_visualization);
-    make_combo("Physics",     m_physics_visualization);
-    make_combo("Raytrace",    m_raytrace_visualization);
+    p.reset();
+    p.add_entry("Node Axises", [this](){ make_combo("##", m_node_axis_visualization); });
+    p.add_entry("Physics",     [this](){ make_combo("##", m_physics_visualization  ); });
+    p.add_entry("Raytrace",    [this](){ make_combo("##", m_raytrace_visualization ); });
 
-    ImGui::Checkbox   ("Selection Box",         &m_selection_box);
-    ImGui::Checkbox   ("Selection Sphere",      &m_selection_sphere);
-    ImGui::ColorEdit4 ("Selection Major Color", &m_selection_major_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Selection Minor Color", &m_selection_minor_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Group Major Color",     &m_group_selection_major_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Group Minor Color",     &m_group_selection_minor_color.x, ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Selection Major Width", &m_selection_major_width, 0.1f, 100.0f);
-    ImGui::SliderFloat("Selection Minor Width", &m_selection_minor_width, 0.1f, 100.0f);
-    ImGui::SliderInt  ("Sphere Step Count",     &m_sphere_step_count, 1, 200);
-    ImGui::SliderFloat("Gap",                   &m_gap, 0.0001f, 0.1f);
-    ImGui::Checkbox   ("Tool Hide",             &m_tool_hide);
-    //ImGui::Checkbox   ("Raytrace",              &m_raytrace_visualization);
-
-    make_combo("Lights",  m_lights);
-    make_combo("Cameras", m_cameras);
-    make_combo("Skins",   m_skins);
-
-    ImGui::Checkbox   ("Selection",             &m_selection);
-    ImGui::Checkbox   ("Bounding points",       &m_selection_bounding_points_visible);
+    p.push_group("Selection",  ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry("Selection",       [this](){ ImGui::Checkbox   ("##", &m_selection); });
+    p.add_entry("Bounding points", [this](){ ImGui::Checkbox   ("##", &m_selection_bounding_points_visible); });
     if (m_selection_bounding_points_visible) {
         erhe::math::Bounding_box    selection_bounding_box;
         erhe::math::Bounding_sphere selection_bounding_sphere;
         erhe::math::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
-        const float    box_volume    = selection_bounding_box.volume();
-        const float    sphere_volume = selection_bounding_sphere.volume();
-        ImGui::Text("Box Volume: %f", box_volume);
-        ImGui::Text("Sphere radius: %f", selection_bounding_sphere.radius);
-        ImGui::Text("Sphere Volume: %f", sphere_volume);
+        const float box_volume    = selection_bounding_box.volume();
+        const float sphere_volume = selection_bounding_sphere.volume();
+        p.add_entry("Box Volume",    [this, box_volume               ](){ ImGui::Text("%f", box_volume); });
+        p.add_entry("Sphere radius", [this, selection_bounding_sphere](){ ImGui::Text("%f", selection_bounding_sphere.radius); });
+        p.add_entry("Sphere Volume", [this, sphere_volume            ](){ ImGui::Text("%f", sphere_volume); });
     }
-    ImGui::SliderInt("Max Labels",     &m_max_labels, 0, 2000);
-    
-    make_combo("Show Vertices", m_vertex_labels);
-    make_combo("Show Facets",   m_facet_labels);
-    make_combo("Show Edges",    m_edge_labels);
-    make_combo("Show Corners",  m_corner_labels);
+    p.add_entry("Selection Box",         [this](){ ImGui::Checkbox   ("##", &m_selection_box); });
+    p.add_entry("Selection Sphere",      [this](){ ImGui::Checkbox   ("##", &m_selection_sphere); });
+    p.add_entry("Selection Major Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_major_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Selection Minor Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_minor_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Group Major Color",     [this](){ ImGui::ColorEdit4 ("##", &m_group_selection_major_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Group Minor Color",     [this](){ ImGui::ColorEdit4 ("##", &m_group_selection_minor_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Selection Major Width", [this](){ ImGui::SliderFloat("##", &m_selection_major_width, 0.1f, 100.0f); });
+    p.add_entry("Selection Minor Width", [this](){ ImGui::SliderFloat("##", &m_selection_minor_width, 0.1f, 100.0f); });
+    p.pop_group();
 
-    ImGui::ColorEdit4 ("Vertex Label Text Color",   &m_vertex_label_text_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Vertex Label Line Color",   &m_vertex_label_line_color.x, ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Vertex Label Line Width",   &m_vertex_label_line_width,   0.0f, 4.0f);
-    ImGui::SliderFloat("Vertex Label Line Length",  &m_vertex_label_line_length,  0.0f, 1.0f);
-    ImGui::ColorEdit4 ("Edge Label Text Color",     &m_edge_label_text_color.x,   ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Edge Label Text Offset",    &m_edge_label_text_offset,    0.0f, 1.0f);
-    ImGui::ColorEdit4 ("Edge Label Line Color",     &m_edge_label_line_color.x,   ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Edge Label Line Width",     &m_edge_label_line_width,     0.0f, 4.0f);
-    ImGui::SliderFloat("Edge Label Line Length",    &m_edge_label_line_length,    0.0f, 1.0f);
-    ImGui::ColorEdit4 ("Facet Label Text Color",    &m_facet_label_text_color.x,  ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Facet Label Line Color",    &m_facet_label_line_color.x,  ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Facet Label Line Width",    &m_facet_label_line_width,    0.0f, 4.0f);
-    ImGui::SliderFloat("Facet Label Line Length",   &m_facet_label_line_length,   0.0f, 1.0f);
-    ImGui::ColorEdit4 ("Corner Label Text Color",   &m_corner_label_text_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Corner Label Line Color",   &m_corner_label_line_color.x, ImGuiColorEditFlags_Float);
-    ImGui::SliderFloat("Corner Label Line Width",   &m_corner_label_line_width,   0.0f, 4.0f);
-    ImGui::SliderFloat("Corner Label Line Length",  &m_corner_label_line_length,  0.0f, 1.0f);
-#endif
+    p.add_entry("Sphere Step Count",     [this](){ ImGui::SliderInt  ("##", &m_sphere_step_count, 1, 200); });
+    p.add_entry("Gap",                   [this](){ ImGui::SliderFloat("##", &m_gap, 0.0001f, 0.1f); });
+    p.add_entry("Tool Hide",             [this](){ ImGui::Checkbox   ("##", &m_tool_hide); });
+    //ImGui::Checkbox   ("Raytrace",              &m_raytrace_visualization);
+
+    p.add_entry("Lights",  [this](){ make_combo("##", m_lights); });
+    p.add_entry("Cameras", [this](){ make_combo("##", m_cameras); });
+    p.add_entry("Skins",   [this](){ make_combo("##", m_skins); });
+
+    p.push_group("Annotiations", ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry("Max Labels", [this](){ ImGui::SliderInt("##", &m_max_labels, 0, 2000); });
+    
+    p.add_entry("Show Vertices",    [this](){ make_combo("##", m_vertex_labels); });
+    p.add_entry("Vertex Positions", [this](){ ImGui::Checkbox("##", &m_vertex_positions); });
+    p.add_entry("Show Facets",      [this](){ make_combo("##", m_facet_labels ); });
+    p.add_entry("Show Edges",       [this](){ make_combo("##", m_edge_labels  ); });
+    p.add_entry("Show Corners",     [this](){ make_combo("##", m_corner_labels); });
+
+    p.push_group("Style", ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
+    p.add_entry("Vertex Label Text Color",  [this](){ ImGui::ColorEdit4 ("##", &m_vertex_label_text_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Vertex Label Line Color",  [this](){ ImGui::ColorEdit4 ("##", &m_vertex_label_line_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Vertex Label Line Width",  [this](){ ImGui::SliderFloat("##", &m_vertex_label_line_width,   0.0f, 4.0f); });
+    p.add_entry("Vertex Label Line Length", [this](){ ImGui::SliderFloat("##", &m_vertex_label_line_length,  0.0f, 1.0f); });
+    p.add_entry("Edge Label Text Color",    [this](){ ImGui::ColorEdit4 ("##", &m_edge_label_text_color.x,   ImGuiColorEditFlags_Float); });
+    p.add_entry("Edge Label Text Offset",   [this](){ ImGui::SliderFloat("##", &m_edge_label_text_offset,    0.0f, 1.0f); });
+    p.add_entry("Edge Label Line Color",    [this](){ ImGui::ColorEdit4 ("##", &m_edge_label_line_color.x,   ImGuiColorEditFlags_Float); });
+    p.add_entry("Edge Label Line Width",    [this](){ ImGui::SliderFloat("##", &m_edge_label_line_width,     0.0f, 4.0f); });
+    p.add_entry("Edge Label Line Length",   [this](){ ImGui::SliderFloat("##", &m_edge_label_line_length,    0.0f, 1.0f); });
+    p.add_entry("Facet Label Text Color",   [this](){ ImGui::ColorEdit4 ("##", &m_facet_label_text_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry("Facet Label Line Color",   [this](){ ImGui::ColorEdit4 ("##", &m_facet_label_line_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry("Facet Label Line Width",   [this](){ ImGui::SliderFloat("##", &m_facet_label_line_width,    0.0f, 4.0f); });
+    p.add_entry("Facet Label Line Length",  [this](){ ImGui::SliderFloat("##", &m_facet_label_line_length,   0.0f, 1.0f); });
+    p.add_entry("Corner Label Text Color",  [this](){ ImGui::ColorEdit4 ("##", &m_corner_label_text_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Corner Label Line Color",  [this](){ ImGui::ColorEdit4 ("##", &m_corner_label_line_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Corner Label Line Width",  [this](){ ImGui::SliderFloat("##", &m_corner_label_line_width,   0.0f, 4.0f); });
+    p.add_entry("Corner Label Line Length", [this](){ ImGui::SliderFloat("##", &m_corner_label_line_length,  0.0f, 1.0f); });
+    p.pop_group();
+    p.pop_group();
+    p.show_entries();
 }
 
 } // namespace editor

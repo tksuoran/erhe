@@ -56,8 +56,9 @@ class Item_tree
 public:
     Item_tree(Editor_context& context, const std::shared_ptr<erhe::Hierarchy>& root);
 
-    void set_item_filter  (const erhe::Item_filter& filter);
-    void set_item_callback(std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
+    void set_item_filter   (const erhe::Item_filter& filter);
+    void set_item_callback (std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
+    void set_hover_callback(std::function<void()> fun);
 
     auto drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& node) -> bool;
 
@@ -73,8 +74,15 @@ private:
     void select_all                   ();
     void move_selection               (const std::shared_ptr<erhe::Item_base>& target, erhe::Item_base* payload_item, Placement placement);
     void attach_selection_to          (const std::shared_ptr<erhe::Item_base>& target_node, erhe::Item_base* payload_item);
+    void root_popup_menu              ();
     void item_popup_menu              (const std::shared_ptr<erhe::Item_base>& item);
-    auto item_icon_and_text           (const std::shared_ptr<erhe::Item_base>& item, bool update, bool force_expand) -> Tree_node_state;
+
+    static constexpr unsigned int item_visual_flag_none         = 0;
+    static constexpr unsigned int item_visual_flag_update       = 1 << 0;
+    static constexpr unsigned int item_visual_flag_force_expand = 1 << 1;
+    static constexpr unsigned int item_visual_flag_table_row    = 1 << 2;
+
+    auto item_icon_and_text           (const std::shared_ptr<erhe::Item_base>& item, unsigned int visual_flags) -> Tree_node_state;
     void item_update_selection        (const std::shared_ptr<erhe::Item_base>& item);
     void imgui_item_node              (const std::shared_ptr<erhe::Item_base>& item);
 
@@ -107,6 +115,7 @@ private:
     ImGuiTextFilter                                              m_text_filter;
     std::shared_ptr<erhe::Hierarchy>                             m_root;
     std::function<bool(const std::shared_ptr<erhe::Item_base>&)> m_item_callback;
+    std::function<void()>                                        m_hover_callback;
 
     std::shared_ptr<Operation>         m_operation;
     std::vector<std::function<void()>> m_operations;
@@ -118,6 +127,7 @@ private:
     unsigned int                       m_popup_id{0};
     bool                               m_shift_down_range_selection_started{false};
     float                              m_ui_scale{1.0f};
+    int                                m_row{0};
 };
 
 class Item_tree_window : public erhe::imgui::Imgui_window, public Item_tree

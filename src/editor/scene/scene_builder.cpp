@@ -85,6 +85,7 @@ Scene_builder::Config::Config()
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
     ini.get("camera_exposure",             camera_exposure);
+    ini.get("shadow_range",                shadow_range);
     ini.get("directional_light_intensity", directional_light_intensity);
     ini.get("directional_light_radius",    directional_light_radius);
     ini.get("directional_light_height",    directional_light_height);
@@ -147,6 +148,7 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
     camera->projection()->z_far           = 80.0f;
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     camera->set_exposure(m_config.camera_exposure);
+    camera->set_shadow_range(m_config.shadow_range);
     node->attach(camera);
     node->set_parent(m_scene_root->get_scene().get_root_node());
 
@@ -555,6 +557,13 @@ void Scene_builder::make_json_brushes(Editor_settings& editor_settings, Mesh_mem
 
     Content_library_node& brushes = get_brushes();
 
+    static constexpr uint64_t process_flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_facet_centroids |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+
     auto& folder = *(brushes.make_folder("Johnson Solids").get());
     for (const auto& key_name : library.names) {
         auto op = [this, &editor_settings, &mesh_memory, &library, &key_name, &folder]() {
@@ -563,15 +572,9 @@ void Scene_builder::make_json_brushes(Editor_settings& editor_settings, Mesh_mem
             if (!ok || (geometry->get_mesh().facets.nb() == 0)) {
                 return;
             }
-            const uint64_t flags =
-                erhe::geometry::Geometry::process_flag_connect |
-                erhe::geometry::Geometry::process_flag_build_edges |
-                erhe::geometry::Geometry::process_flag_compute_facet_centroids |
-                erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
-                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-            geometry->process(flags);
+            geometry->process(process_flags);
 
-            make_brush(
+            auto brush = make_brush(
                 folder,
                 Brush_data{
                     .context         = m_context,
@@ -583,6 +586,7 @@ void Scene_builder::make_json_brushes(Editor_settings& editor_settings, Mesh_mem
                     .density         = m_config.mass_scale
                 }
             );
+            m_johnson_solids.push_back(brush);
         };
         if (tf != nullptr) {
             tf->emplace(op);
@@ -716,6 +720,11 @@ void Scene_builder::add_room()
 void Scene_builder::add_platonic_solids(const Make_mesh_config& config)
 {
     make_mesh_nodes(config, m_platonic_solids);
+}
+
+void Scene_builder::add_johnson_solids(const Make_mesh_config& config)
+{
+    make_mesh_nodes(config, m_johnson_solids);
 }
 
 void Scene_builder::add_curved_shapes(const Make_mesh_config& config)

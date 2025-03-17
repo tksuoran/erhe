@@ -29,6 +29,7 @@
 #include "erhe_geometry/shapes/disc.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_bit/bit_helpers.hpp"
@@ -672,6 +673,7 @@ void Hotbar::update_slot_from_tool(Tool* tool)
 
 void Hotbar::imgui()
 {
+    ERHE_PROFILE_FUNCTION();
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushID("Hotbar::imgui");
     //const ImVec2 button_size{64.0f, 64.0f};
