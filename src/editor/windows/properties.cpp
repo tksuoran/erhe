@@ -803,7 +803,7 @@ void Properties::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_entries.clear();
+    reset();
 
     const auto& selection = m_context.selection->get_selection();
     int id = 0;
