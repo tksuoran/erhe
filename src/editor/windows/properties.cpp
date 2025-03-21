@@ -789,8 +789,8 @@ void Properties::material_properties()
         if (content_library) {
             const std::shared_ptr<Content_library_node>& textures = content_library->textures;
             if (textures) {
-                add_entry("Base Color Texture",         [=](){ textures->combo(m_context, "##", selected_material->textures.base_color,         true); });
-                add_entry("Metallic Roughness Texture", [=](){ textures->combo(m_context, "##", selected_material->textures.metallic_roughness, true); });
+                add_entry("Base Color Texture",         [this, &textures, &selected_material](){ textures->combo(m_context, "##", selected_material->textures.base_color,         true); });
+                add_entry("Metallic Roughness Texture", [this, &textures, &selected_material](){ textures->combo(m_context, "##", selected_material->textures.metallic_roughness, true); });
             }
         }
     }

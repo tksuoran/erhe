@@ -55,7 +55,7 @@ public:
     [[nodiscard]] auto get_source  () const -> Pin*;
     [[nodiscard]] auto get_sink    () const -> Pin*;
     [[nodiscard]] auto get_payload () const -> payload_t;
-    [[nodiscard]] void set_payload (payload_t value);
+                  void set_payload (payload_t value);
     [[nodiscard]] auto is_connected() const -> bool;
     void disconnect();
 
@@ -122,8 +122,8 @@ public:
     [[nodiscard]] auto get_handle    () const -> ax::NodeEditor::PinId     { return ax::NodeEditor::PinId{this}; }
     [[nodiscard]] auto get_key       () const -> std::size_t               { return m_key; }
     [[nodiscard]] auto get_name      () const -> const std::string_view    { return m_name; }
-    [[nodiscard]] void add_link      (Link* link)                          { m_links.push_back(link); }
-    [[nodiscard]] void remove_link   (Link* link)                          { auto i = std::find_if(m_links.begin(), m_links.end(), [link](Link* entry) { return entry == link; }); m_links.erase(i);}
+                  void add_link      (Link* link)                          { m_links.push_back(link); }
+                  void remove_link   (Link* link)                          { auto i = std::find_if(m_links.begin(), m_links.end(), [link](Link* entry) { return entry == link; }); m_links.erase(i);}
     [[nodiscard]] auto get_links     () const -> const std::vector<Link*>& { return m_links; }
     [[nodiscard]] auto get_links     ()       -> std::vector<Link*>&       { return m_links; }
     [[nodiscard]] auto get_owner_node() const -> Node*                     { return m_owner_node; }
@@ -137,7 +137,7 @@ public:
         }
         return m_payload;
     }
-    [[nodiscard]] void set_payload   (payload_t value)                     { 
+    void set_payload   (payload_t value)                     { 
         m_payload = value;
         if (m_is_source) {
             return;
