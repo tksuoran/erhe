@@ -38,10 +38,12 @@ Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
 Camera_buffer::Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface)
     : GPU_ring_buffer{
         graphics_instance,
-        gl::Buffer_target::uniform_buffer,
-        camera_interface.camera_block.binding_point(),
-        64 * camera_interface.max_camera_count * camera_interface.camera_struct.size_bytes(),
-        "camera"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::uniform_buffer,
+            .binding_point = camera_interface.camera_block.binding_point(),
+            .size          = 64 * camera_interface.max_camera_count * camera_interface.camera_struct.size_bytes(),
+            .debug_label   = "Camera_buffer"
+        }
     }
     , m_camera_interface{camera_interface}
 {

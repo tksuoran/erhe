@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_rendergraph/resource_routing.hpp"
+#include "erhe_item/unique_id.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -22,18 +23,46 @@ namespace erhe::rendergraph {
 class Rendergraph;
 class Rendergraph_node;
 
-class Rendergraph_producer_connector
+class Rendergraph_id
 {
 public:
+    Unique_id<Rendergraph_id> id{};
+};
+
+class Rendergraph_producer_connector : public Rendergraph_id
+{
+public:
+    Rendergraph_producer_connector(
+        Routing     resource_routing,
+        std::string label,
+        int         key
+    )
+        : resource_routing{resource_routing}
+        , label           {label}
+        , key             {key}
+    {
+    }
+
     Routing                        resource_routing{Routing::None};
     std::string                    label           {};
     int                            key             {0};
     std::vector<Rendergraph_node*> consumer_nodes  {};
 };
 
-class Rendergraph_consumer_connector
+class Rendergraph_consumer_connector : public Rendergraph_id
 {
 public:
+    Rendergraph_consumer_connector(
+        Routing     resource_routing,
+        std::string label,
+        int         key
+    )
+        : resource_routing{resource_routing}
+        , label           {label}
+        , key             {key}
+    {
+    }
+
     Routing                        resource_routing{Routing::None};
     std::string                    label           {};
     int                            key             {0};
@@ -48,7 +77,7 @@ constexpr int rendergraph_max_depth = 10;
 /// Rendergraph nodes have inputs and outputs (often both, but at least either input(s) or output(s).
 /// Rendergraph nodes have named input and output slots.
 /// Rendergraph nodes must have their inputs and outputs connected to other rendergraph nodes.
-class Rendergraph_node
+class Rendergraph_node : public Rendergraph_id
 {
 public:
     Rendergraph_node(Rendergraph& rendergraph, const std::string_view name);
@@ -80,6 +109,7 @@ public:
     auto connect_output   (int key, Rendergraph_node* consumer_node) -> bool;
     auto disconnect_input (int key, Rendergraph_node* producer_node) -> bool;
     auto disconnect_output(int key, Rendergraph_node* consumer_node) -> bool;
+    auto get_id           () const -> std::size_t;
 
     virtual void execute_rendergraph_node() = 0;
 

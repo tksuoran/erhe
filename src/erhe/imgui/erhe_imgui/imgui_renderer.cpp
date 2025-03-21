@@ -259,28 +259,36 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
     }
     , m_vertex_buffer{
         graphics_instance,
-        gl::Buffer_target::array_buffer,
-        s_max_vertex_count * m_imgui_program_interface.vertex_format.streams.front().stride,
-        "ImGui Vertex Buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target      = gl::Buffer_target::array_buffer,
+            .size        = s_max_vertex_count * m_imgui_program_interface.vertex_format.streams.front().stride,
+            .debug_label = "ImGui Vertex Buffer"
+        }
     }
     , m_index_buffer{
         graphics_instance,
-        gl::Buffer_target::element_array_buffer,
-        s_max_index_count * sizeof(uint16_t),
-        "ImGui Index Buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target      = gl::Buffer_target::element_array_buffer,
+            .size        = s_max_index_count * sizeof(uint16_t),
+            .debug_label = "ImGui Index Buffer"
+        }
     }
     , m_draw_parameter_buffer{
         graphics_instance,
-        gl::Buffer_target::shader_storage_buffer,
-        m_imgui_program_interface.draw_parameter_block.binding_point(),
-        m_imgui_program_interface.block_offsets.draw_parameter_struct_array + s_max_draw_count * m_imgui_program_interface.draw_parameter_struct.size_bytes(),
-        "ImGui Draw Parameter Buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::shader_storage_buffer,
+            .binding_point = m_imgui_program_interface.draw_parameter_block.binding_point(),
+            .size          = m_imgui_program_interface.block_offsets.draw_parameter_struct_array + s_max_draw_count * m_imgui_program_interface.draw_parameter_struct.size_bytes(),
+            .debug_label   = "ImGui Draw Parameter Buffer"
+        }
     }
     , m_draw_indirect_buffer{
         graphics_instance,
-        gl::Buffer_target::draw_indirect_buffer,
-        s_max_draw_count * sizeof(gl::Draw_elements_indirect_command),
-        "ImGui Draw Indirect Buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target      = gl::Buffer_target::draw_indirect_buffer,
+            .size        = s_max_draw_count * sizeof(gl::Draw_elements_indirect_command),
+            .debug_label = "ImGui Draw Indirect Buffer"
+        }
     }
     , m_vertex_input{erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
     , m_pipeline{

@@ -23,9 +23,11 @@ auto Draw_indirect_buffer::get_max_draw_count() -> int
 Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance)
     : GPU_ring_buffer{
         graphics_instance,
-        gl::Buffer_target::draw_indirect_buffer,
-        sizeof(gl::Draw_elements_indirect_command) * get_max_draw_count(),
-        "draw indirect"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target      = gl::Buffer_target::draw_indirect_buffer,
+            .size        = sizeof(gl::Draw_elements_indirect_command) * get_max_draw_count(),
+            .debug_label = "draw indirect"
+        }
     }
 {
 }

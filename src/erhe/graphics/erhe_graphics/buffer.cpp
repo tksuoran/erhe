@@ -11,6 +11,10 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#if defined(ERHE_PROFILE_LIBRARY_TRACY)
+#   include <tracy/TracyC.h>
+#endif
+
 #include <fmt/format.h>
 
 #include <sstream>
@@ -42,13 +46,7 @@ void Buffer::capability_check(const gl::Buffer_storage_mask storage_mask)
 
 void Buffer::capability_check(const gl::Map_buffer_access_mask access_mask)
 {
-    if (
-        erhe::bit::test_any_rhs_bits_set(
-            access_mask,
-            gl::Map_buffer_access_mask::map_coherent_bit  |
-            gl::Map_buffer_access_mask::map_persistent_bit
-        )
-    ) {
+    if (erhe::bit::test_any_rhs_bits_set(access_mask,gl::Map_buffer_access_mask::map_coherent_bit | gl::Map_buffer_access_mask::map_persistent_bit)) {
         const bool in_core       = m_instance.info.gl_version >= 440;
         const bool has_extension = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
         ERHE_VERIFY(in_core || has_extension);
@@ -65,128 +63,51 @@ void Buffer::allocate_storage()
     capability_check(m_access_mask);
 
     gl::named_buffer_storage(gl_name(), static_cast<GLintptr>(m_capacity_byte_count), nullptr, m_storage_mask);
+    {
+#if TRACY_ENABLE
+        TracyCZoneCtx zone{};
+        if (m_debug_label != nullptr) {
+            const uint32_t color = 0x804020ffu;
+            uint64_t srcloc = ___tracy_alloc_srcloc_name(1, "", 0, "", 0, m_debug_label, strlen(m_debug_label), color);
+            zone = ___tracy_emit_zone_begin_alloc(srcloc, 1);
+        }
+#endif
+        ERHE_PROFILE_MEM_ALLOC_NS(this, m_capacity_byte_count, s_pool_name);
+#if TRACY_ENABLE
+        if (m_debug_label != nullptr) {
+            ___tracy_emit_zone_end(zone);
+        }
+#endif
+    }
+
+    m_allocated = true;
     if (erhe::bit::test_all_rhs_bits_set(m_storage_mask, gl::Buffer_storage_mask::map_persistent_bit)) {
         map_bytes(0, m_capacity_byte_count, m_access_mask);
     }
-
-    //// if (!g_instance->info.use_persistent_buffers) {
-    ////     m_cpu_copy.resize(m_capacity_byte_count);
-    //// }
 
     ERHE_VERIFY(gl_name() != 0);
     ERHE_VERIFY(m_capacity_byte_count > 0);
 }
 
-Buffer::Buffer(
-    Instance&                     instance,
-    const gl::Buffer_target       target,
-    const std::size_t             capacity_byte_count,
-    const gl::Buffer_storage_mask storage_mask
-) noexcept
+Buffer::Buffer(Instance& instance, const Buffer_create_info& create_info) noexcept
     : m_instance           {instance}
-    , m_target             {target}
-    , m_capacity_byte_count{capacity_byte_count}
-    , m_storage_mask       {storage_mask}
-{
-    log_buffer->trace(
-        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}) name = {}",
-        gl::c_str(target),
-        capacity_byte_count,
-        gl::to_string(storage_mask),
-        gl_name()
-    );
-
-    allocate_storage();
-}
-
-Buffer::Buffer(Instance& instance, const std::size_t capacity_byte_count, const gl::Buffer_storage_mask storage_mask) noexcept
-    : m_instance           {instance}
-    , m_target             {0}
-    , m_capacity_byte_count{capacity_byte_count}
-    , m_storage_mask       {storage_mask}
-{
-    log_buffer->trace(
-        "Buffer::Buffer(capacity_byte_count = {}, storage_mask = {}) name = {}",
-        capacity_byte_count,
-        gl::to_string(storage_mask),
-        gl_name()
-    );
-
-    allocate_storage();
-}
-
-Buffer::Buffer(
-    Instance& instance,
-    const std::size_t                capacity_byte_count,
-    const gl::Buffer_storage_mask    storage_mask,
-    const gl::Map_buffer_access_mask access_mask
-) noexcept
-    : m_instance           {instance}
-    , m_capacity_byte_count{capacity_byte_count}
-    , m_storage_mask       {storage_mask}
-    , m_access_mask        {access_mask}
-{
-    log_buffer->trace(
-        "Buffer::Buffer(capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {}",
-        capacity_byte_count,
-        gl::to_string(storage_mask),
-        gl::to_string(access_mask),
-        gl_name()
-    );
-
-    allocate_storage();
-}
-
-Buffer::Buffer(
-    Instance&                        instance,
-    const gl::Buffer_target          target,
-    const std::size_t                capacity_byte_count,
-    const gl::Buffer_storage_mask    storage_mask,
-    const gl::Map_buffer_access_mask access_mask
-) noexcept
-    : m_instance           {instance}
-    , m_target             {target}
-    , m_capacity_byte_count{capacity_byte_count}
-    , m_storage_mask       {storage_mask}
-    , m_access_mask        {access_mask}
+    , m_target             {create_info.target}
+    , m_capacity_byte_count{create_info.capacity_byte_count}
+    , m_storage_mask       {create_info.storage_mask}
+    , m_access_mask        {create_info.access_mask}
+    , m_debug_label        {create_info.debug_label}
 {
     log_buffer->trace(
         "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {}",
-        gl::c_str(target),
-        capacity_byte_count,
-        gl::to_string(storage_mask),
-        gl::to_string(access_mask),
-        gl_name()
-    );
-
-    allocate_storage();
-}
-
-Buffer::Buffer(
-    Instance&                        instance,
-    const gl::Buffer_target          target,
-    const std::size_t                capacity_byte_count,
-    const gl::Buffer_storage_mask    storage_mask,
-    const gl::Map_buffer_access_mask access_mask,
-    const std::string_view           debug_label
-) noexcept
-    : m_instance           {instance}
-    , m_target             {target}
-    , m_capacity_byte_count{capacity_byte_count}
-    , m_storage_mask       {storage_mask}
-    , m_access_mask        {access_mask}
-{
-    log_buffer->trace(
-        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}, map_buffer_access_mask = {}) name = {} {}",
         gl::c_str(m_target),
         m_capacity_byte_count,
         gl::to_string(m_storage_mask),
         gl::to_string(m_access_mask),
-        gl_name(),
-        debug_label
+        gl_name()
     );
-
-    set_debug_label(debug_label);
+    if (m_debug_label != nullptr) {
+        gl::object_label(gl::Object_identifier::buffer, gl_name(), -1, m_debug_label);
+    }
     allocate_storage();
 }
 
@@ -197,12 +118,15 @@ Buffer::Buffer(Instance& instance)
 
 Buffer::~Buffer() noexcept
 {
+    if (m_allocated) {
+        ERHE_PROFILE_MEM_FREE_NS(this, s_pool_name);
+    }
 }
 
 Buffer::Buffer(Buffer&& other) noexcept
     : m_instance              {other.m_instance}
     , m_handle                {std::move(other.m_handle)}
-    , m_debug_label           {std::move(other.m_debug_label)}
+    , m_debug_label           {other.m_debug_label}
     , m_target                {other.m_target}
     , m_capacity_byte_count   {other.m_capacity_byte_count}
     , m_next_free_byte        {other.m_next_free_byte}
@@ -211,15 +135,15 @@ Buffer::Buffer(Buffer&& other) noexcept
     , m_map                   {other.m_map}
     , m_map_byte_offset       {other.m_map_byte_offset}
     , m_map_buffer_access_mask{other.m_map_buffer_access_mask}
+    , m_allocated             {std::exchange(other.m_allocated, false)}
 {
-    //// m_cpu_copy               = std::move(other.m_cpu_copy);
 }
 
 auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
 {
     ERHE_VERIFY(&m_instance == &other.m_instance);
     m_handle                 = std::move(other.m_handle);
-    m_debug_label            = std::move(other.m_debug_label);
+    m_debug_label            = other.m_debug_label;
     m_target                 = other.m_target;
     m_capacity_byte_count    = other.m_capacity_byte_count;
     m_next_free_byte         = other.m_next_free_byte;
@@ -228,7 +152,7 @@ auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
     m_map                    = other.m_map;
     m_map_byte_offset        = other.m_map_byte_offset;
     m_map_buffer_access_mask = other.m_map_buffer_access_mask;
-    //// m_cpu_copy               = std::move(other.m_cpu_copy);
+    m_allocated              = std::exchange(other.m_allocated, false);
     return *this;
 }
 
@@ -242,18 +166,7 @@ auto Buffer::target() const noexcept -> gl::Buffer_target
     return m_target;
 }
 
-void Buffer::set_debug_label(const std::string_view label) noexcept
-{
-    m_debug_label = fmt::format("(B:{}) {}", gl_name(), label);
-    gl::object_label(
-        gl::Object_identifier::buffer,
-        gl_name(),
-        static_cast<GLsizei>(m_debug_label.length()),
-        m_debug_label.c_str()
-    );
-}
-
-auto Buffer::debug_label() const noexcept -> const std::string&
+auto Buffer::debug_label() const noexcept -> const char*
 {
     return m_debug_label;
 }
@@ -286,9 +199,6 @@ auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) 
 
     if (!m_instance.info.use_persistent_buffers) {
         ERHE_VERIFY(m_map.empty());
-        //// ERHE_VERIFY(m_capacity_byte_count == m_cpu_copy.size());
-        //auto* const map_pointer = static_cast<std::byte*>(m_cpu_copy.data());
-        //m_map = std::span<std::byte>(map_pointer, m_capacity_byte_count);
         if (byte_count == 0) {
             byte_count = m_capacity_byte_count - byte_offset;
         } else {

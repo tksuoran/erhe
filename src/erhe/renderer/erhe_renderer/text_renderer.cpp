@@ -92,9 +92,11 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
     }
     , m_index_buffer{
         graphics_instance,
-        gl::Buffer_target::element_array_buffer,
-        index_stride * index_count,
-        gl::Buffer_storage_mask::map_write_bit
+        erhe::graphics::Buffer_create_info{
+            .target              = gl::Buffer_target::element_array_buffer,
+            .capacity_byte_count = index_stride * index_count,
+            .storage_mask        = gl::Buffer_storage_mask::map_write_bit
+        }
     }
     , m_nearest_sampler{
         erhe::graphics::Sampler_create_info{
@@ -104,13 +106,22 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
         }
     }    
     , m_shader_stages{build_shader_stages()} 
-    , m_vertex_buffer{graphics_instance, gl::Buffer_target::array_buffer, m_vertex_format.streams.front().stride * s_vertex_count, "Text renderer vertex ring buffer"}
+    , m_vertex_buffer{
+        graphics_instance,
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target      = gl::Buffer_target::array_buffer,
+            .size        = m_vertex_format.streams.front().stride * s_vertex_count,
+            .debug_label = "Text renderer vertex ring buffer"
+        }
+    }
     , m_projection_buffer{
         graphics_instance,
-        gl::Buffer_target::uniform_buffer,
-        m_projection_block.binding_point(),
-        1024,
-        "Text renderer projection ring buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::uniform_buffer,
+            .binding_point = m_projection_block.binding_point(),
+            .size          = 1024,
+            .debug_label   = "Text renderer projection ring buffer"
+        }
     }
     , m_vertex_input{
         erhe::graphics::Vertex_input_state_data::make(m_vertex_format)
@@ -141,12 +152,7 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_initialize_component};
 
     // Prefill index buffer
-    erhe::graphics::Scoped_buffer_mapping<uint16_t> index_buffer_map{
-        m_index_buffer,
-        0,
-        index_count,
-        gl::Map_buffer_access_mask::map_write_bit
-    };
+    erhe::graphics::Scoped_buffer_mapping<uint16_t> index_buffer_map{m_index_buffer, 0, index_count, gl::Map_buffer_access_mask::map_write_bit};
     const auto& gpu_index_data = index_buffer_map.span();
     std::size_t offset      {0};
     uint16_t    vertex_index{0};

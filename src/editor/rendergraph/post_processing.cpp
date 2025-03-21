@@ -43,13 +43,13 @@ Post_processing_node::Post_processing_node(
     , post_processing{post_processing}
     , parameter_buffer{
         graphics_instance,
-        gl::Buffer_target::uniform_buffer,
-        graphics_instance.align_buffer_offset(
-            gl::Buffer_target::uniform_buffer, post_processing.get_parameter_block().size_bytes()
-        ) * 20, // max 20 levels
-        gl::Buffer_storage_mask::map_write_bit,
-        gl::Map_buffer_access_mask::map_write_bit,
-        fmt::format("{}", name)
+        erhe::graphics::Buffer_create_info{
+            .target              = gl::Buffer_target::uniform_buffer,
+            .capacity_byte_count = graphics_instance.align_buffer_offset(gl::Buffer_target::uniform_buffer, post_processing.get_parameter_block().size_bytes()) * 20, // max 20 levels
+            .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
+            .access_mask         = gl::Map_buffer_access_mask::map_write_bit,
+            .debug_label         = "post processing"
+        }
     }
 {
     register_input(erhe::rendergraph::Routing::Resource_provided_by_consumer, "viewport", erhe::rendergraph::Rendergraph_node_key::viewport);

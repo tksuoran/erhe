@@ -275,6 +275,8 @@ erhe_target_sources_grouped(
     windows/imgui_window_scene_view_node.hpp
     windows/item_tree_window.cpp
     windows/item_tree_window.hpp
+    windows/graph_window.cpp
+    windows/graph_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
     windows/network_window.cpp

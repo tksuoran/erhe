@@ -21,10 +21,21 @@ erhe_target_sources_grouped(
     erhe_imgui/scoped_imgui_context.hpp
     erhe_imgui/window_imgui_host.cpp
     erhe_imgui/window_imgui_host.hpp
-    erhe_imgui/ImNodes.cpp
-    erhe_imgui/ImNodes.h
-    erhe_imgui/ImNodesEz.cpp
-    erhe_imgui/ImNodesEz.h
+
+    erhe_imgui/crude_json.cpp
+    erhe_imgui/crude_json.h
+    erhe_imgui/imgui_bezier_math.h
+    erhe_imgui/imgui_bezier_math.inl
+    erhe_imgui/imgui_canvas.cpp
+    erhe_imgui/imgui_canvas.h
+    erhe_imgui/imgui_extra_math.h
+    erhe_imgui/imgui_extra_math.inl
+    erhe_imgui/imgui_node_editor.cpp
+    erhe_imgui/imgui_node_editor.h
+    erhe_imgui/imgui_node_editor_api.cpp
+    erhe_imgui/imgui_node_editor_internal.h
+    erhe_imgui/imgui_node_editor_internal.inl
+
     erhe_imgui/windows/framebuffer_window.cpp
     erhe_imgui/windows/framebuffer_window.hpp
     erhe_imgui/windows/log_window.cpp

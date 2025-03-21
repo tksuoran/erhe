@@ -217,60 +217,64 @@ void Rendergraph::automatic_layout(const float image_size)
         return;
     }
 
-    // First, count how many nodes are at each depth (== column)
-    std::vector<int> node_count_per_depth(1);
-    int max_depth{0};
+    sort();
+
+    // First, count how many nodes are at each column (== depth)
+    std::vector<int> column_node_count(1);
+    int max_column_node_count{0};
+    int last_column{0};
     for (const auto& node : m_nodes) {
-        const int depth = node->get_depth();
-        max_depth = std::max(depth, max_depth);
-        if (node_count_per_depth.size() < static_cast<std::size_t>(depth) + 1) {
-            node_count_per_depth.resize(depth + 1);
+        const int column = node->get_depth();
+        last_column = std::max(column, last_column);
+        if (column_node_count.size() < static_cast<std::size_t>(column) + 1) {
+            column_node_count.resize(column + 1);
         }
-        ++node_count_per_depth[depth];
+        ++column_node_count[column];
+        max_column_node_count = std::max(max_column_node_count, column_node_count[column]);
     }
 
     // Figure out
-    //  - total height for each depth (== column)
+    //  - total height for each column (== depth)
     //  - maximum column height
-    std::vector<float> total_height_per_depth;
-    float max_total_height{0.0f};
-    total_height_per_depth.resize(node_count_per_depth.size());
+    std::vector<float> column_height;
+    float max_column_height{0.0f};
+    column_height.resize(column_node_count.size());
     for (const auto& node : m_nodes) {
-        const int   depth          = node->get_depth();
+        const int   column         = node->get_depth();
         const auto  node_size_opt  = node->get_size();
         const auto  node_size      = node_size_opt.has_value() ? node_size_opt.value() : glm::vec2{400.0f, 100.0f};
         const float aspect         = node_size.x / node_size.y;
         const auto  effective_size = glm::vec2{aspect * image_size, image_size};
 
-        if (total_height_per_depth[depth] != 0.0f) {
-            total_height_per_depth[depth] += y_gap;
+        if (column_height[column] != 0.0f) {
+            column_height[column] += y_gap;
         }
-        total_height_per_depth[depth] += effective_size.y;
-        max_total_height = std::max(total_height_per_depth[depth], max_total_height);
+        column_height[column] += effective_size.y;
+        max_column_height = std::max(column_height[column], max_column_height);
     }
 
+    // Assign initial positions, not consider link crossings
     float x_offset = 0.0f;
-    for (int depth = 0; depth <= max_depth; ++depth) {
-        int   row_count    = node_count_per_depth[depth];
+    for (int column = 0; column <= last_column; ++column) {
+        int   row_count    = column_node_count[column];
         float column_width = 0.0f;
         float y_offset     = 0.0f;
-        for (
-            auto i = m_nodes.begin(), end = m_nodes.end();
-            i != end;
-            ++i
-        ) {
-            const auto& node           = *i;
+
+        std::vector<Rendergraph_node*> column_nodes;
+        for (Rendergraph_node* node : m_nodes) {
+            const int node_depth = node->get_depth();
+            if (node_depth != column) {
+                continue;
+            }
+
             const auto  node_size_opt  = node->get_size();
             const auto  node_size      = node_size_opt.has_value() ? node_size_opt.value() : glm::vec2{400.0f, 100.0f};
             const float aspect         = node_size.x / node_size.y;
             const auto  effective_size = glm::vec2{aspect * image_size, image_size};
-            const int   node_depth     = node->get_depth();
-            if (node_depth != depth) {
-                continue;
-            }
+
             column_width = std::max(column_width, effective_size.x);
             if (row_count == 1) {
-                node->set_position(glm::vec2{x_offset, max_total_height * 0.5f - effective_size.y});
+                node->set_position(glm::vec2{x_offset, max_column_height * 0.5f - effective_size.y});
             } else {
                 node->set_position(glm::vec2{x_offset, y_offset});
             }
@@ -278,6 +282,39 @@ void Rendergraph::automatic_layout(const float image_size)
         }
         x_offset += column_width + x_gap;
     }
+
+#if 0
+    auto average_source_position = [](Rendergraph_node* node) -> std::optional<glm::vec2>
+    {
+        std::vector<Rendergraph_consumer_connector>& inputs = node->get_inputs();
+        glm::vec2 cumulative_position{0.0f, 0.0f};
+        size_t source_count = 0;
+        for (const Rendergraph_consumer_connector& connector : inputs) {
+            for (Rendergraph_node* source_node : connector.producer_nodes) {
+                if (source_node != nullptr) {
+                    glm::vec2 source_pos = source_node->get_position();
+                    cumulative_position += source_pos;
+                    source_count++;
+                }
+            }
+        }
+        if (source_count == 0) {
+            return {};
+        }
+        return cumulative_position / static_cast<float>(source_count):
+    };
+
+    std::sort(
+        column_nodes.begin(), column_nodes.end(), [&](Rendergraph_node* lhs, Rendergraph_node* rhs) {
+            const std::optional<glm::vec2> lhs_pos = average_source_position(lhs);
+            const std::optional<glm::vec2> rhs_pos = average_source_position(rhs);
+            if (lhs_pos.has_value() && rhs_pos.has_value()) {
+                return lhs_pos.value().y < rhs_pos.value().y;
+            }
+            return lhs_pos.has_value();
+        }
+    );
+#endif
 }
 
 auto Rendergraph::connect(const int key, Rendergraph_node* source, Rendergraph_node* sink) -> bool

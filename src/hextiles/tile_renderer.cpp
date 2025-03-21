@@ -122,9 +122,12 @@ Tile_renderer::Tile_renderer(
     }
     , m_index_buffer{
         graphics_instance,
-        gl::Buffer_target::element_array_buffer,
-        index_stride * index_count,
-        gl::Buffer_storage_mask::map_write_bit
+        erhe::graphics::Buffer_create_info{
+            .target              = gl::Buffer_target::element_array_buffer,
+            .capacity_byte_count = index_stride * index_count,
+            .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
+            .debug_label         = "Tile_renderer index buffer"
+        }
     }
     , m_nearest_sampler{
         erhe::graphics::Sampler_create_info{
@@ -149,16 +152,20 @@ Tile_renderer::Tile_renderer(
     , m_shader_stages            {make_program(make_prototype(graphics_instance))}
     , m_vertex_buffer{
         graphics_instance,
-        gl::Buffer_target::array_buffer,
-        m_vertex_format.streams.front().stride * max_quad_count * per_quad_vertex_count,
-        "Tile_renderer vertex ring buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target      = gl::Buffer_target::array_buffer,
+            .size        = m_vertex_format.streams.front().stride * max_quad_count * per_quad_vertex_count,
+            .debug_label = "Tile_renderer vertex ring buffer"
+        }
     }
     , m_projection_buffer{
         graphics_instance,
-        gl::Buffer_target::uniform_buffer,
-        m_projection_block.binding_point(),
-        20 * m_projection_block.size_bytes(), // TODO proper size estimate
-        "Tile_renderer projection ring buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::uniform_buffer,
+            .binding_point = m_projection_block.binding_point(),
+            .size          = 20 * m_projection_block.size_bytes(), // TODO proper size estimate
+            .debug_label   = "Tile_renderer projection ring buffer"
+        }
     }
     , m_vertex_input{erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
     , m_pipeline{

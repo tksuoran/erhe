@@ -38,10 +38,12 @@ Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
 Joint_buffer::Joint_buffer(erhe::graphics::Instance& graphics_instance, Joint_interface& joint_interface)
     : GPU_ring_buffer{
         graphics_instance,
-        gl::Buffer_target::shader_storage_buffer,
-        joint_interface.joint_block.binding_point(),
-        8 * joint_interface.offsets.joint_struct + joint_interface.joint_struct.size_bytes() * joint_interface.max_joint_count,
-        "Joint_buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::shader_storage_buffer,
+            .binding_point = joint_interface.joint_block.binding_point(),
+            .size          = 8 * joint_interface.offsets.joint_struct + joint_interface.joint_struct.size_bytes() * joint_interface.max_joint_count,
+            .debug_label   = "Joint_buffer"
+        }
     }
     , m_graphics_instance{graphics_instance}
     , m_joint_interface  {joint_interface}

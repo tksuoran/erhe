@@ -147,24 +147,30 @@ Line_renderer::Line_renderer(erhe::graphics::Instance& graphics_instance)
     , m_program_interface{graphics_instance}
     , m_line_vertex_buffer{
         graphics_instance,
-        gl::Buffer_target::shader_storage_buffer, // for compute bind range
-        m_program_interface.line_vertex_buffer_block->binding_point(),
-        m_program_interface.line_vertex_format.streams.front().stride * 2 * s_max_line_count,
-        "Line_renderer line vertex ring buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::shader_storage_buffer, // for compute bind range
+            .binding_point = m_program_interface.line_vertex_buffer_block->binding_point(),
+            .size          = m_program_interface.line_vertex_format.streams.front().stride * 2 * s_max_line_count,
+            .debug_label   = "Line_renderer line vertex ring buffer"
+        }
     }
     , m_triangle_vertex_buffer{
         graphics_instance,
-        gl::Buffer_target::shader_storage_buffer, // for compute bind range
-        m_program_interface.triangle_vertex_buffer_block->binding_point(),
-        m_program_interface.triangle_vertex_format.streams.front().stride * 6 * s_max_line_count,
-        "Line_renderer triangle vertex ring buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::shader_storage_buffer, // for compute bind range
+            .binding_point = m_program_interface.triangle_vertex_buffer_block->binding_point(),
+            .size          = m_program_interface.triangle_vertex_format.streams.front().stride * 6 * s_max_line_count,
+            .debug_label   = "Line_renderer triangle vertex ring buffer"
+        }
     }
     , m_view_buffer{
         graphics_instance,
-        gl::Buffer_target::uniform_buffer,
-        m_program_interface.view_block->binding_point(),
-        s_view_stride * s_max_view_count,
-        "Line_renderer view ring buffer"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::uniform_buffer,
+            .binding_point = m_program_interface.view_block->binding_point(),
+            .size          = s_view_stride * s_max_view_count,
+            .debug_label   = "Line_renderer view ring buffer"
+        }
     }
     , m_vertex_input{
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)

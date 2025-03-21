@@ -23,6 +23,7 @@ public:
     [[nodiscard]] virtual auto debug_label        () const -> std::string_view = 0;
 };
 
+
 class Cpu_buffer : public erhe::buffer::IBuffer
 {
 public:
@@ -45,9 +46,9 @@ private:
     std::size_t                    m_capacity_byte_count{0};
     std::size_t                    m_next_free_byte     {0};
 
-    std::vector<std::byte>         m_buffer;
-    std::span<std::byte>           m_span;
-    std::string                    m_debug_label;
+    std::vector<std::byte, Profile_allocator<std::byte>> m_buffer;
+    std::span<std::byte>                                 m_span;
+    std::string                                          m_debug_label;
 };
 
 } // namespace erhe::buffer

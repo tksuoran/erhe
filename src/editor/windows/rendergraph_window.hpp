@@ -2,11 +2,16 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <memory>
+
 namespace erhe::imgui {
     class Imgui_windows;
 }
-namespace ImNodes::Ez {
-    struct Context;
+//namespace ImNodes::Ez {
+//    class Context;
+//}
+namespace ax::NodeEditor {
+    class EditorContext;
 }
 
 namespace editor {
@@ -24,10 +29,10 @@ public:
     auto flags() -> ImGuiWindowFlags override;
 
 private:
-    Editor_context&       m_context;
-    float                 m_image_size{100.0f};
-    float                 m_curve_strength{10.0f};
-    ImNodes::Ez::Context* m_imnodes_context{nullptr};
+    Editor_context& m_context;
+    float           m_image_size{100.0f};
+    float           m_curve_strength{10.0f};
+    std::unique_ptr<ax::NodeEditor::EditorContext> m_node_editor;
 };
 
 } // namespace editor

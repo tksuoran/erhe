@@ -40,10 +40,12 @@ Primitive_interface::Primitive_interface(erhe::graphics::Instance& graphics_inst
 Primitive_buffer::Primitive_buffer(erhe::graphics::Instance& graphics_instance, Primitive_interface& primitive_interface)
     : GPU_ring_buffer{
         graphics_instance,
-        gl::Buffer_target::shader_storage_buffer,
-        primitive_interface.primitive_block.binding_point(),
-        primitive_interface.primitive_struct.size_bytes() * primitive_interface.max_primitive_count,
-        "primitive"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::shader_storage_buffer,
+            .binding_point = primitive_interface.primitive_block.binding_point(),
+            .size          = primitive_interface.primitive_struct.size_bytes() * primitive_interface.max_primitive_count,
+            .debug_label   = "primitive"
+        }
     }
     , m_primitive_interface{primitive_interface}
 {

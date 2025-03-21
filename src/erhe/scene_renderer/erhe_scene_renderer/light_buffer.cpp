@@ -56,17 +56,21 @@ Light_buffer::Light_buffer(erhe::graphics::Instance& graphics_instance, Light_in
     : m_light_interface{light_interface}
     , m_light_buffer{
         graphics_instance,
-        gl::Buffer_target::uniform_buffer,
-        light_interface.light_block.binding_point(),
-        25 * (light_interface.offsets.light_struct + light_interface.max_light_count * light_interface.light_struct.size_bytes()),
-        "light"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::uniform_buffer,
+            .binding_point = light_interface.light_block.binding_point(),
+            .size          = 25 * (light_interface.offsets.light_struct + light_interface.max_light_count * light_interface.light_struct.size_bytes()),
+            .debug_label   = "light"
+        }
     }
     , m_control_buffer{
         graphics_instance,
-        gl::Buffer_target::uniform_buffer,
-        light_interface.light_control_block.binding_point(),
-        32 * (m_light_interface.light_control_block.size_bytes()),
-        "light_control"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::uniform_buffer,
+            .binding_point = light_interface.light_control_block.binding_point(),
+            .size          = 32 * (m_light_interface.light_control_block.size_bytes()),
+            .debug_label   = "light_control"
+        }
     }
 {
 }

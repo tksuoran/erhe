@@ -230,61 +230,32 @@ auto Buffer_range::is_closed() const -> bool
 //
 
 GPU_ring_buffer::GPU_ring_buffer(
-    erhe::graphics::Instance& graphics_instance,
-    gl::Buffer_target         target,
-    unsigned int              binding_point,
-    std::size_t               size,
-    std::string_view          name
+    erhe::graphics::Instance&          graphics_instance,
+    const GPU_ring_buffer_create_info& create_info
 )
-    : m_instance{graphics_instance}
-    , m_binding_point{binding_point}
+    : m_instance     {graphics_instance}
+    , m_binding_point{create_info.binding_point}
     , m_buffer{
         m_instance,
-        target,
-        size,
-        storage_mask(m_instance),
-        access_mask(m_instance),
-        name
+        erhe::graphics::Buffer_create_info{
+            .target              = create_info.target,
+            .capacity_byte_count = create_info.size,
+            .storage_mask        = storage_mask(m_instance),
+            .access_mask         = access_mask(m_instance),
+            .debug_label         = create_info.debug_label
+        }
     }
-    , m_read_offset{m_buffer.capacity_byte_count()}
+    , m_read_offset    {m_buffer.capacity_byte_count()}
     , m_read_wrap_count{0}
 {
-    ERHE_VERIFY(gl_helpers::is_indexed(target));
+    ERHE_VERIFY(gl_helpers::is_indexed(create_info.target) || create_info.binding_point == std::numeric_limits<unsigned int>::max());
 
     log_gpu_ring_buffer->info(
         "allocating GPU ring buffer {} bytes for {} - {} binding {}",
-        size,
+        create_info.size,
         m_buffer.debug_label(),
         gl::c_str(m_buffer.target()),
         m_binding_point
-    );
-}
-
-GPU_ring_buffer::GPU_ring_buffer(
-    erhe::graphics::Instance& graphics_instance,
-    gl::Buffer_target         target,
-    std::size_t               size,
-    std::string_view          name
-)
-    : m_instance{graphics_instance}
-    , m_binding_point{0}
-    , m_buffer{
-        m_instance,
-        target,
-        size,
-        storage_mask(m_instance),
-        access_mask(m_instance),
-        name
-    }
-    , m_read_offset{m_buffer.capacity_byte_count()}
-    , m_read_wrap_count{0}
-{
-    ERHE_VERIFY(!gl_helpers::is_indexed(target));
-    log_gpu_ring_buffer->info(
-        "allocating GPU ring buffer {} bytes for {} - {}",
-        size,
-        m_buffer.debug_label(),
-        gl::c_str(m_buffer.target())
     );
 }
 

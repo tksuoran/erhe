@@ -44,10 +44,12 @@ Material_interface::Material_interface(erhe::graphics::Instance& graphics_instan
 Material_buffer::Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface)
     : GPU_ring_buffer{
         graphics_instance,
-        gl::Buffer_target::shader_storage_buffer,
-        material_interface.material_block.binding_point(),
-        8 * material_interface.material_struct.size_bytes() * material_interface.max_material_count,
-        "material"
+        erhe::renderer::GPU_ring_buffer_create_info{
+            .target        = gl::Buffer_target::shader_storage_buffer,
+            .binding_point = material_interface.material_block.binding_point(),
+            .size          = 8 * material_interface.material_struct.size_bytes() * material_interface.max_material_count,
+            .debug_label   = "material"
+        }
     }
     , m_graphics_instance {graphics_instance}
     , m_material_interface{material_interface}

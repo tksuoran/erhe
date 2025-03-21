@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <deque>
+#include <limits>
 #include <optional>
 
 namespace erhe::renderer {
@@ -67,22 +68,19 @@ private:
     bool                 m_is_cancelled{false};
 };
 
+class GPU_ring_buffer_create_info
+{
+public:
+    gl::Buffer_target target       {0};
+    unsigned int      binding_point{std::numeric_limits<unsigned int>::max()};
+    std::size_t       size         {0};
+    const char*       debug_label  {nullptr};
+};
+
 class GPU_ring_buffer
 {
 public:
-    GPU_ring_buffer(
-        erhe::graphics::Instance& graphics_instance,
-        gl::Buffer_target         target,
-        unsigned int              binding_point,
-        std::size_t               size,
-        std::string_view          name
-    );
-    GPU_ring_buffer(
-        erhe::graphics::Instance& graphics_instance,
-        gl::Buffer_target         target,
-        std::size_t               size,
-        std::string_view          name
-    );
+    GPU_ring_buffer(erhe::graphics::Instance& graphics_instance, const GPU_ring_buffer_create_info& create_info);
     ~GPU_ring_buffer();
 
     void sanity_check();

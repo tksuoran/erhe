@@ -42,6 +42,7 @@ std::shared_ptr<spdlog::logger> log_tree_frame;
 std::shared_ptr<spdlog::logger> log_trs_tool;
 std::shared_ptr<spdlog::logger> log_trs_tool_frame;
 std::shared_ptr<spdlog::logger> log_xr;
+std::shared_ptr<spdlog::logger> log_graph_editor;
 
 void initialize_logging()
 {
@@ -85,6 +86,7 @@ void initialize_logging()
     log_xr                         = make_logger      ("editor.xr"                        );
     log_tree                       = make_logger      ("editor.tree"                      );
     log_tree_frame                 = make_frame_logger("editor.tree_frame"                );
+    log_graph_editor               = make_frame_logger("editor.graph_editor"              );
 }
 
 }

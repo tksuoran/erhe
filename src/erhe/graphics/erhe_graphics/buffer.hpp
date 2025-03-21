@@ -16,6 +16,16 @@ namespace erhe::graphics {
 
 class Instance;
 
+class Buffer_create_info
+{
+public:
+    gl::Buffer_target          target             {0};
+    std::size_t                capacity_byte_count{0};
+    gl::Buffer_storage_mask    storage_mask       {0};
+    gl::Map_buffer_access_mask access_mask        {0};
+    const char*                debug_label        {nullptr};
+};
+
 class Buffer final
 {
 public:
@@ -23,42 +33,7 @@ public:
 
     ~Buffer() noexcept;
 
-    Buffer(
-        Instance&               instance,
-        gl::Buffer_target       target,
-        std::size_t             capacity_bytes_count,
-        gl::Buffer_storage_mask storage_mask
-    ) noexcept;
-
-    Buffer(
-        Instance&               instance,
-        std::size_t             capacity_bytes_count,
-        gl::Buffer_storage_mask storage_mask
-    ) noexcept;
-
-    Buffer(
-        Instance&                  instance,
-        std::size_t                capacity_byte_count,
-        gl::Buffer_storage_mask    storage_mask,
-        gl::Map_buffer_access_mask map_buffer_access_mask
-    ) noexcept;
-
-    Buffer(
-        Instance&                  instance,
-        gl::Buffer_target          target,
-        std::size_t                capacity_byte_count,
-        gl::Buffer_storage_mask    storage_mask,
-        gl::Map_buffer_access_mask map_buffer_access_mask
-    ) noexcept;
-
-    Buffer(
-        Instance&                  instance,
-        gl::Buffer_target          target,
-        std::size_t                capacity_byte_count,
-        gl::Buffer_storage_mask    storage_mask,
-        gl::Map_buffer_access_mask map_buffer_access_mask,
-        std::string_view           debug_label
-    ) noexcept;
+    Buffer(Instance& instance, const Buffer_create_info& create_info) noexcept;
 
     Buffer        (const Buffer&) = delete;
     void operator=(const Buffer&) = delete;
@@ -66,7 +41,7 @@ public:
     auto operator=(Buffer&& other) noexcept -> Buffer&;
 
     [[nodiscard]] auto map                () const          -> std::span<std::byte>;
-    [[nodiscard]] auto debug_label        () const noexcept -> const std::string&;
+    [[nodiscard]] auto debug_label        () const noexcept -> const char*;
     [[nodiscard]] auto capacity_byte_count() const noexcept -> std::size_t;
     [[nodiscard]] auto allocate_bytes     (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::optional<std::size_t>;
     [[nodiscard]] auto free_capacity_bytes() const noexcept -> std::size_t;
@@ -75,7 +50,6 @@ public:
     void unmap                () noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_and_unmap_bytes(std::size_t byte_count) noexcept;
-    void set_debug_label      (const std::string_view label) noexcept;
     void dump                 () const noexcept;
 
     auto begin_write(std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>;
@@ -116,19 +90,21 @@ private:
 
     Instance&                      m_instance;
     Gl_buffer                      m_handle;
-    std::string                    m_debug_label;
     gl::Buffer_target              m_target             {gl::Buffer_target::array_buffer};
     std::size_t                    m_capacity_byte_count{0};
     std::size_t                    m_next_free_byte     {0};
     gl::Buffer_storage_mask        m_storage_mask       {0};
     gl::Map_buffer_access_mask     m_access_mask        {0};
+    const char*                    m_debug_label        {nullptr};
     ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
+
+    static constexpr const char* s_pool_name = "glBuffer";
 
     // Last MapBuffer
     std::span<std::byte>       m_map;
     std::size_t                m_map_byte_offset       {0};
     gl::Map_buffer_access_mask m_map_buffer_access_mask{0};
-    //std::vector<uint8_t>       m_cpu_copy;
+    bool                       m_allocated             {false};
 };
 
 class Buffer_hash

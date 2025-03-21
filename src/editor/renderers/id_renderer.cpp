@@ -50,16 +50,18 @@ constexpr gl::Map_buffer_access_mask access_mask{
 
 }
 
-Id_renderer::Id_frame_resources::Id_frame_resources(erhe::graphics::Instance& graphics_instance, const std::size_t slot)
+Id_renderer::Id_frame_resources::Id_frame_resources(erhe::graphics::Instance& graphics_instance, const std::size_t /*slot*/)
     : pixel_pack_buffer{
         graphics_instance,
-        gl::Buffer_target::pixel_pack_buffer,
-        s_id_buffer_size,
-        storage_mask,
-        access_mask
+        erhe::graphics::Buffer_create_info{
+            .target              = gl::Buffer_target::pixel_pack_buffer,
+            .capacity_byte_count = s_id_buffer_size,
+            .storage_mask        = storage_mask,
+            .access_mask         = access_mask,
+            .debug_label         = "ID"
+        }
     }
 {
-    pixel_pack_buffer.set_debug_label(fmt::format("ID Pixel Pack {}", slot));
 }
 
 Id_renderer::Id_frame_resources::Id_frame_resources(Id_frame_resources&& other) noexcept = default;

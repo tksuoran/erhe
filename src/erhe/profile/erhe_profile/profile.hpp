@@ -41,6 +41,14 @@
 #   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) tracy::Lockable<Type> mutex_variable
 #   define ERHE_PROFILE_MUTEX(Type, mutex_variable) TracyLockable(Type, mutex_variable)
 #   define ERHE_PROFILE_LOCKABLE_BASE(Type) LockableBase(Type)
+#   define ERHE_PROFILE_MEM_ALLOC(ptr, size) TracyAlloc(ptr, size)
+#   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size) TracyAllocS(ptr, size, 40)
+#   define ERHE_PROFILE_MEM_ALLOC_N(ptr, size, name) TracyAllocN(ptr, size, name)
+#   define ERHE_PROFILE_MEM_ALLOC_NS(ptr, size, name) TracyAllocNS(ptr, size, 40, name)
+#   define ERHE_PROFILE_MEM_FREE(ptr) TracyFree(ptr)
+#   define ERHE_PROFILE_MEM_FREE_S(ptr) TracyFreeS(ptr, 40)
+#   define ERHE_PROFILE_MEM_FREE_N(ptr, name) TracyFreeN(ptr, name)
+#   define ERHE_PROFILE_MEM_FREE_NS(ptr, name) TracyFreeNS(ptr, 40, name)
 #
 #elif defined(ERHE_PROFILE_LIBRARY_SUPERLUMINAL) && defined(_WIN32)
 #   include <PerformanceAPI.h>
@@ -94,4 +102,46 @@
 #   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) Type mutex_variable
 #   define ERHE_PROFILE_MUTEX(Type, mutex_variable) Type mutex_variable
 #   define ERHE_PROFILE_LOCKABLE_BASE(Type) Type
+#   define ERHE_PROFILE_MEM_ALLOC(ptr, size)
+#   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size)
+#   define ERHE_PROFILE_MEM_ALLOC_N(ptr, size, name)
+#   define ERHE_PROFILE_MEM_ALLOC_NS(ptr, size, name)
+#   define ERHE_PROFILE_MEM_FREE(ptr)
+#   define ERHE_PROFILE_MEM_FREE_S(ptr)
+#   define ERHE_PROFILE_MEM_FREE_N(ptr, name)
+#   define ERHE_PROFILE_MEM_FREE_NS(ptr, name)
 #endif
+
+template <class T>
+class Profile_allocator
+{
+public:
+    using value_type = T;
+
+    Profile_allocator() = default;
+
+    template <class U>
+    constexpr Profile_allocator(const Profile_allocator<U>&) noexcept
+    {
+    }
+
+    [[nodiscard]] auto allocate(const std::size_t n) -> T*
+    {
+        if (n > std::numeric_limits<std::size_t>::max() / sizeof(T)) {
+            throw std::bad_array_new_length();
+        }
+
+        if (auto p = static_cast<T*>(std::malloc(n * sizeof(T)))) {
+            ERHE_PROFILE_MEM_ALLOC_S(p, n);
+            return p;
+        }
+
+        throw std::bad_alloc();
+    }
+
+    void deallocate(T* p, const std::size_t) noexcept
+    {
+        ERHE_PROFILE_MEM_FREE_S(p);
+        std::free(p);
+    }
+};

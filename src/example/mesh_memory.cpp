@@ -40,9 +40,33 @@ Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance)
             }
         }
     }
-    , position_vertex_buffer    {graphics_instance, gl::Buffer_target::array_buffer,         get_vertex_buffer_size(0), storage_mask}
-    , non_position_vertex_buffer{graphics_instance, gl::Buffer_target::array_buffer,         get_vertex_buffer_size(1), storage_mask}
-    , index_buffer              {graphics_instance, gl::Buffer_target::element_array_buffer, get_index_buffer_size(),   storage_mask}
+    , position_vertex_buffer{
+        graphics_instance,
+        erhe::graphics::Buffer_create_info{
+            .target              = gl::Buffer_target::array_buffer,
+            .capacity_byte_count = get_vertex_buffer_size(0),
+            .storage_mask        = storage_mask,
+            .debug_label         = "Mesh_memory position vertex buffer"
+        }
+    }
+    , non_position_vertex_buffer{
+        graphics_instance,
+        erhe::graphics::Buffer_create_info{
+            .target              = gl::Buffer_target::array_buffer,
+            .capacity_byte_count = get_vertex_buffer_size(1),
+            .storage_mask        = storage_mask,
+            .debug_label         = "Mesh_memory non-position vertex buffer"
+        }
+    }
+    , index_buffer{
+        graphics_instance,
+        erhe::graphics::Buffer_create_info{
+            .target              = gl::Buffer_target::element_array_buffer,
+            .capacity_byte_count = get_index_buffer_size(),
+            .storage_mask        = storage_mask,
+            .debug_label         = "Mesh_memory index buffer"
+        }
+    }
     , graphics_buffer_sink{
         gl_buffer_transfer_queue,
         {&position_vertex_buffer,&non_position_vertex_buffer},
@@ -55,9 +79,6 @@ Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance)
     }
     , vertex_input{erhe::graphics::Vertex_input_state_data::make(vertex_format)}
 {
-    position_vertex_buffer    .set_debug_label("Mesh Memory Vertex position");
-    non_position_vertex_buffer.set_debug_label("Mesh Memory Vertex non-position");
-    index_buffer              .set_debug_label("Mesh Memory Index");
 }
 
 } // namespace example
