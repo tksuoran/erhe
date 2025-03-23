@@ -182,9 +182,9 @@ Scene_root::Scene_root(
             *imgui_windows,
             *editor_context,
             "Content Library",
-            "Content_library",
-            m_content_library->root
+            "Content_library"
         );
+        m_content_library_tree_window->set_root(m_content_library->root);
         m_content_library_tree_window->set_item_filter(
             erhe::Item_filter{
                 .require_all_bits_set           = 0,
@@ -309,9 +309,9 @@ auto Scene_root::make_browser_window(
         imgui_windows,
         context,
         m_scene->get_name(),
-        fmt::format("scene_node_tree_{}", ini_label),
-        m_scene->get_root_node()
+        fmt::format("scene_node_tree_{}", ini_label)
     );
+    m_node_tree_window->set_root(m_scene->get_root_node());
     m_node_tree_window->set_item_filter(
         editor_settings.node_tree_show_all
             ? erhe::Item_filter{

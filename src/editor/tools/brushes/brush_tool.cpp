@@ -643,7 +643,8 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
     if (!m_brush_item_tree) {
         std::shared_ptr<Content_library> content_library = get_content_library();
         if (content_library) {
-            m_brush_item_tree = std::make_unique<Item_tree>(m_context, content_library->brushes);
+            m_brush_item_tree = std::make_unique<Item_tree>(m_context);
+            m_brush_item_tree->set_root(content_library->brushes);
             m_brush_item_tree->set_item_filter(
                 erhe::Item_filter{
                     .require_all_bits_set           = 0,

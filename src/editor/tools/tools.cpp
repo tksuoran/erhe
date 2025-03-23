@@ -237,9 +237,9 @@ Tools::Tools(
             imgui_windows,
             editor_context,
             "Tools Library",
-            "tools_content_library",
-            tools_content_library->root
+            "tools_content_library"
         );
+        m_content_library_tree_window->set_root(tools_content_library->root);
         m_content_library_tree_window->set_item_filter(
             erhe::Item_filter{
                 .require_all_bits_set           = 0,

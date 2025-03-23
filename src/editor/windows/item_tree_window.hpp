@@ -54,8 +54,9 @@ public:
 class Item_tree
 {
 public:
-    Item_tree(Editor_context& context, const std::shared_ptr<erhe::Hierarchy>& root);
+    Item_tree(Editor_context& context);
 
+    void set_root          (const std::shared_ptr<erhe::Hierarchy>& root);
     void set_item_filter   (const erhe::Item_filter& filter);
     void set_item_callback (std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
     void set_hover_callback(std::function<void()> fun);
@@ -134,12 +135,11 @@ class Item_tree_window : public erhe::imgui::Imgui_window, public Item_tree
 {
 public:
     Item_tree_window(
-        erhe::imgui::Imgui_renderer&            imgui_renderer,
-        erhe::imgui::Imgui_windows&             imgui_windows,
-        Editor_context&                         context,
-        const std::string_view                  window_title,
-        const std::string_view                  ini_label,
-        const std::shared_ptr<erhe::Hierarchy>& root
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              context,
+        const std::string_view       window_title,
+        const std::string_view       ini_label
     );
 
     // Implements Imgui_window

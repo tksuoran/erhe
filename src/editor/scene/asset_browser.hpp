@@ -103,13 +103,12 @@ class Asset_browser_window : public Item_tree_window
 {
 public:
     Asset_browser_window(
-        Asset_browser&                          asset_browser,
-        erhe::imgui::Imgui_renderer&            imgui_renderer,
-        erhe::imgui::Imgui_windows&             imgui_windows,
-        Editor_context&                         context,
-        const std::string_view                  window_title,
-        const std::string_view                  ini_label,
-        const std::shared_ptr<erhe::Hierarchy>& root
+        Asset_browser&               asset_browser,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              context,
+        const std::string_view       window_title,
+        const std::string_view       ini_label
     );
 
     void imgui() override;

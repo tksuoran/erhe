@@ -182,15 +182,14 @@ auto Asset_browser::make_node(const std::filesystem::path& path, Asset_node* con
 }
 
 Asset_browser_window::Asset_browser_window(
-    Asset_browser&                          asset_browser,
-    erhe::imgui::Imgui_renderer&            imgui_renderer,
-    erhe::imgui::Imgui_windows&             imgui_windows,
-    Editor_context&                         context,
-    const std::string_view                  window_title,
-    const std::string_view                  ini_label,
-    const std::shared_ptr<erhe::Hierarchy>& root
+    Asset_browser&               asset_browser,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              context,
+    const std::string_view       window_title,
+    const std::string_view       ini_label
 )
-    : Item_tree_window{imgui_renderer, imgui_windows, context, window_title, ini_label, root}
+    : Item_tree_window{imgui_renderer, imgui_windows, context, window_title, ini_label}
     , m_asset_browser{asset_browser}
 {
 }
@@ -215,9 +214,9 @@ Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
         imgui_windows, 
         editor_context,
         "Asset Browser",
-        "asset_browser",
-        m_root
+        "asset_browser"
     );
+    m_node_tree_window->set_root(m_root);
     m_node_tree_window->set_item_filter(
         erhe::Item_filter{
             .require_all_bits_set           = 0,

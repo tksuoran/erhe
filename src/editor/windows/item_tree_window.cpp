@@ -30,7 +30,7 @@ namespace editor {
 
 using Light_type = erhe::scene::Light_type;
 
-Item_tree::Item_tree(Editor_context& context, const std::shared_ptr<erhe::Hierarchy>& root)
+Item_tree::Item_tree(Editor_context& context)
     : m_context{context}
     , m_filter{
         .require_all_bits_set           = erhe::Item_flags::show_in_ui,
@@ -38,8 +38,12 @@ Item_tree::Item_tree(Editor_context& context, const std::shared_ptr<erhe::Hierar
         .require_all_bits_clear         = 0, //erhe::Item_flags::tool | erhe::Item_flags::brush,
         .require_at_least_one_bit_clear = 0
     }
-    , m_root{root}
 {
+}
+
+void Item_tree::set_root(const std::shared_ptr<erhe::Hierarchy>& root)
+{
+    m_root = root;
 }
 
 void Item_tree::set_item_filter(const erhe::Item_filter& filter)
@@ -789,6 +793,10 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 
 void Item_tree::root_popup_menu()
 {
+    if (!m_root) {
+        return;
+    }
+
     const auto& node       = std::dynamic_pointer_cast<erhe::scene::Node>(m_root);
     Scene_root* scene_root = static_cast<Scene_root*>(m_root->get_item_host());
     if (!node || (scene_root == nullptr)) {
@@ -1092,6 +1100,9 @@ void Item_tree::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
 void Item_tree::imgui_tree(float ui_scale)
 {
     ERHE_PROFILE_FUNCTION();
+    if (!m_root) {
+        return;
+    }
 
     ///ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
     ///ImVec4 not_selected_color     = style.Colors[ImGuiCol_WindowBg];
@@ -1213,15 +1224,14 @@ void Item_tree::imgui_tree(float ui_scale)
 ////////////////////////////
 
 Item_tree_window::Item_tree_window(
-    erhe::imgui::Imgui_renderer&            imgui_renderer,
-    erhe::imgui::Imgui_windows&             imgui_windows,
-    Editor_context&                         context,
-    const std::string_view                  window_title,
-    const std::string_view                  ini_label,
-    const std::shared_ptr<erhe::Hierarchy>& root
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              context,
+    const std::string_view       window_title,
+    const std::string_view       ini_label
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, window_title, ini_label}
-    , Item_tree{context, root}
+    , Item_tree{context}
 {
 }
 
