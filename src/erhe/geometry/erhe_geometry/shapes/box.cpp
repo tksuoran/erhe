@@ -189,7 +189,7 @@ public:
         return corner_id;
     }
 
-    Box_builder(GEO::Mesh& mesh, const GEO::vec3 size, const GEO::vec3i div, const float p)
+    Box_builder(GEO::Mesh& mesh, const GEO::vec3f size, const GEO::vec3i div, const float p)
         : mesh      {mesh}
         , size      {size}
         , div       {div}
@@ -305,7 +305,7 @@ public:
 
 void make_box(GEO::Mesh& mesh, const GEO::vec3f size, const GEO::vec3i div, const float p)
 {
-    Box_builder builder{mesh, GEO::vec3{size / 2.0f}, div, p};
+    Box_builder builder{mesh, GEO::vec3f{size / 2.0f}, div, p};
     builder.build();
 }
 
