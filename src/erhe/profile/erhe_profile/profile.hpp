@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstddef>
+#include <limits>
+#include <new>
+
 #ifdef _MSC_VER
 #pragma warning(disable : 4714)
 #endif
