@@ -17,6 +17,6 @@ cmake ^
     -DERHE_RAYTRACE_LIBRARY=bvh ^
     -DERHE_SVG_LIBRARY=lunasvg ^
     -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
-    -DERHE_WINDOW_LIBRARY=glfw ^
+    -DERHE_WINDOW_LIBRARY=sdl ^
     -DERHE_XR_LIBRARY=openxr ^
     -DERHE_USE_ASAN:BOOL=ON
