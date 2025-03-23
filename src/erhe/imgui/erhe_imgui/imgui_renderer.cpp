@@ -497,10 +497,12 @@ static void ImGui_Impl_erhe_PlatformSetImeData(ImGuiContext* context, ImGuiViewp
 {
     static_cast<void>(context);
     void* backend_user_data = ImGui::GetCurrentContext() ? ImGui::GetIO().BackendPlatformUserData : nullptr;
-    Imgui_renderer* imgui_renderer = static_cast<Imgui_renderer*>(backend_user_data);
-    if (imgui_renderer != nullptr) {
-        imgui_renderer->set_ime_data(viewport, data);
+    Imgui_host* imgui_host = static_cast<Imgui_host*>(backend_user_data);
+    if (imgui_host == nullptr) {
+        return;
     }
+    Imgui_renderer& imgui_renderer = imgui_host->get_imgui_renderer();
+    imgui_renderer.set_ime_data(viewport, data);
 }
 
 void Imgui_renderer::set_ime_data(ImGuiViewport* viewport, ImGuiPlatformImeData* data)
