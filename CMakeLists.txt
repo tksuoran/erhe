@@ -297,7 +297,8 @@ endif ()
 if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
     CPMAddPackage(
         NAME              fastgltf
-        GIT_TAG           main
+        GIT_TAG           ad3931d
+        #GIT_TAG           main
         #VERSION           0.8.0
         GITHUB_REPOSITORY spnda/fastgltf
     )
