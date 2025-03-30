@@ -6,6 +6,8 @@
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
+#include "tools/selection_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -142,6 +144,10 @@ void Graph::evaluate()
 
 void Graph::sort()
 {
+    if (m_is_sorted) {
+        return;
+    }
+
     std::vector<Node*> unsorted_nodes = m_nodes;
     std::vector<Node*> sorted_nodes;
 
@@ -196,16 +202,37 @@ void Graph::sort()
     }
 
     std::swap(m_nodes, sorted_nodes);
+    m_is_sorted = true;
 }
 
-Graph_window::Graph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
+Graph_window::Graph_window(
+    erhe::commands::Commands&    commands,
+	erhe::imgui::Imgui_renderer& imgui_renderer,
+	erhe::imgui::Imgui_windows&  imgui_windows,
+	Editor_context&              editor_context,
+	Editor_message_bus&          editor_message_bus
+)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Graph", "graph"}
     , m_context                {editor_context}
 {
+    static_cast<void>(commands); // TODO Keeping in case we need to add commands here
+
+    editor_message_bus.add_receiver(
+        [&](Editor_message& message) {
+            on_message(message);
+        }
+    );
 }
 
 Graph_window::~Graph_window() noexcept
 {
+}
+
+void Graph_window::on_message(Editor_message&)
+{
+    //// using namespace erhe::bit;
+    //// if (test_any_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
+    //// }
 }
 
 auto Graph_window::flags() -> ImGuiWindowFlags

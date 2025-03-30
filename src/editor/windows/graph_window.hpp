@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
 
@@ -11,6 +12,10 @@
 #include <string_view>
 #include <vector>
 
+namespace erhe::commands {
+    class Commands;
+}
+
 namespace erhe::imgui {
     class Imgui_windows;
 }
@@ -21,6 +26,8 @@ namespace ax::NodeEditor {
 namespace editor {
 
 class Editor_context;
+class Editor_message;
+class Editor_message_bus;
 
 class Node;
 class Pin;
@@ -171,14 +178,21 @@ public:
     [[nodiscard]] auto get_nodes()       -> std::vector<Node*>&                 { return m_nodes; }
     [[nodiscard]] auto get_links()       -> std::vector<std::unique_ptr<Link>>& { return m_links; }
 
-    std::vector<Node*> m_nodes;
+    std::vector<Node*>                 m_nodes;
     std::vector<std::unique_ptr<Link>> m_links;
+    bool                               m_is_sorted{false};
 };
 
 class Graph_window : public erhe::imgui::Imgui_window
 {
 public:
-    Graph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context);
+    Graph_window(
+        erhe::commands::Commands&    commands,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context,
+        Editor_message_bus&          editor_message_bus
+    );
     ~Graph_window() noexcept override;
 
     // Implements Imgui_window
@@ -193,6 +207,8 @@ public:
     [[nodiscard]] auto make_div         () -> Node*;
 
 private:
+    void on_message(Editor_message& message);
+
     Editor_context&                                m_context;
     Graph                                          m_graph;
     std::unique_ptr<ax::NodeEditor::EditorContext> m_node_editor;
