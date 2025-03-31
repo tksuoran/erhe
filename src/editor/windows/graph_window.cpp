@@ -23,8 +23,8 @@ auto Link::get_id     () const -> int   { return m_id; }
 auto Link::get_handle () const -> ax::NodeEditor::LinkId{ return ax::NodeEditor::LinkId{static_cast<std::size_t>(m_id)}; }
 auto Link::get_source () const -> Pin*  { return m_source; }
 auto Link::get_sink   () const -> Pin*  { return m_sink; }
-auto Link::get_payload() const -> payload_t { return m_source->get_payload(); }
-void Link::set_payload(payload_t value) { m_source->set_payload(value); }
+auto Link::get_payload() const -> Payload { return m_source->get_payload(); }
+void Link::set_payload(Payload value) { m_source->set_payload(value); }
 
 auto Link::is_connected() const -> bool { return (m_source != nullptr) && (m_sink != nullptr); }
 
@@ -36,50 +36,244 @@ void Link::disconnect()
     m_sink = nullptr;
 }
 
-void Node::evaluate() {
-    if (m_evaluate) {
-        m_evaluate(*this);
+auto Pin::get_payload() -> Payload                         { 
+    if (is_sink()) { // && pull
+        Payload sum{};
+        for (Link* link : m_links) {
+            sum += link->get_source()->get_payload();
+        }
+        m_payload = sum;
+    }
+    return m_payload;
+}
+
+void Pin::set_payload(Payload value)                     { 
+    m_payload = value;
+    if (m_is_source) {
+        return;
+    }
+    for (Link* link : m_links) {
+        link->get_sink()->set_payload(value);
     }
 }
 
-void Node::imgui() {
-    if (m_imgui) {
-        m_imgui(*this);
-    } else {
-        ImGui::TextUnformatted(m_name.c_str());
-    }
+auto operator+(const Payload& lhs, const Payload& rhs) -> Payload
+{
+    ERHE_VERIFY(lhs.format == rhs.format); // TODO implicit cast?
+    return Payload{
+        .format    = lhs.format,
+        .int_value = {
+            lhs.int_value[0] + rhs.int_value[0],
+            lhs.int_value[1] + rhs.int_value[1],
+            lhs.int_value[2] + rhs.int_value[2],
+            lhs.int_value[3] + rhs.int_value[3]
+        },
+        .float_value = { 
+            lhs.float_value[0] + rhs.float_value[0],
+            lhs.float_value[1] + rhs.float_value[1],
+            lhs.float_value[2] + rhs.float_value[2],
+            lhs.float_value[3] + rhs.float_value[3]
+        }
+    };
 }
 
-void Node::make_input_pin(std::size_t key, std::string_view name)
+auto operator-(const Payload& lhs, const Payload& rhs) -> Payload
+{
+    ERHE_VERIFY(lhs.format == rhs.format); // TODO implicit cast?
+    return Payload{
+        .format    = lhs.format,
+        .int_value = {
+            lhs.int_value[0] - rhs.int_value[0],
+            lhs.int_value[1] - rhs.int_value[1],
+            lhs.int_value[2] - rhs.int_value[2],
+            lhs.int_value[3] - rhs.int_value[3]
+        },
+        .float_value = { 
+            lhs.float_value[0] - rhs.float_value[0],
+            lhs.float_value[1] - rhs.float_value[1],
+            lhs.float_value[2] - rhs.float_value[2],
+            lhs.float_value[3] - rhs.float_value[3]
+        }
+    };
+}
+
+auto operator*(const Payload& lhs, const Payload& rhs) -> Payload
+{
+    ERHE_VERIFY(lhs.format == rhs.format); // TODO implicit cast?
+    return Payload{
+        .format    = lhs.format,
+        .int_value = {
+            lhs.int_value[0] * rhs.int_value[0],
+            lhs.int_value[1] * rhs.int_value[1],
+            lhs.int_value[2] * rhs.int_value[2],
+            lhs.int_value[3] * rhs.int_value[3]
+        },
+        .float_value = { 
+            lhs.float_value[0] * rhs.float_value[0],
+            lhs.float_value[1] * rhs.float_value[1],
+            lhs.float_value[2] * rhs.float_value[2],
+            lhs.float_value[3] * rhs.float_value[3]
+        }
+    };
+}
+
+auto operator/(const Payload& lhs, const Payload& rhs) -> Payload
+{
+    ERHE_VERIFY(lhs.format == rhs.format); // TODO implicit cast?
+    return Payload{
+        .format    = lhs.format,
+        .int_value = {
+            lhs.int_value[0] / rhs.int_value[0],
+            lhs.int_value[1] / rhs.int_value[1],
+            lhs.int_value[2] / rhs.int_value[2],
+            lhs.int_value[3] / rhs.int_value[3]
+        },
+        .float_value = { 
+            lhs.float_value[0] / rhs.float_value[0],
+            lhs.float_value[1] / rhs.float_value[1],
+            lhs.float_value[2] / rhs.float_value[2],
+            lhs.float_value[3] / rhs.float_value[3]
+        }
+    };
+}
+
+auto Payload::operator+=(const Payload& rhs) -> Payload&
+{
+    int_value  [0] += rhs.int_value  [0];
+    int_value  [1] += rhs.int_value  [1];
+    int_value  [2] += rhs.int_value  [2];
+    int_value  [3] += rhs.int_value  [3];
+    float_value[0] += rhs.float_value[0];
+    float_value[1] += rhs.float_value[1];
+    float_value[2] += rhs.float_value[2];
+    float_value[3] += rhs.float_value[3];
+    return *this;
+}
+
+auto Payload::operator-=(const Payload& rhs) -> Payload&
+{
+    int_value  [0] -= rhs.int_value  [0];
+    int_value  [1] -= rhs.int_value  [1];
+    int_value  [2] -= rhs.int_value  [2];
+    int_value  [3] -= rhs.int_value  [3];
+    float_value[0] -= rhs.float_value[0];
+    float_value[1] -= rhs.float_value[1];
+    float_value[2] -= rhs.float_value[2];
+    float_value[3] -= rhs.float_value[3];
+    return *this;
+}
+
+auto Payload::operator*=(const Payload& rhs) -> Payload&
+{
+    int_value  [0] *= rhs.int_value  [0];
+    int_value  [1] *= rhs.int_value  [1];
+    int_value  [2] *= rhs.int_value  [2];
+    int_value  [3] *= rhs.int_value  [3];
+    float_value[0] *= rhs.float_value[0];
+    float_value[1] *= rhs.float_value[1];
+    float_value[2] *= rhs.float_value[2];
+    float_value[3] *= rhs.float_value[3];
+    return *this;
+}
+
+auto Payload::operator/=(const Payload& rhs) -> Payload&
+{
+    int_value  [0] /= rhs.int_value  [0];
+    int_value  [1] /= rhs.int_value  [1];
+    int_value  [2] /= rhs.int_value  [2];
+    int_value  [3] /= rhs.int_value  [3];
+    float_value[0] /= rhs.float_value[0];
+    float_value[1] /= rhs.float_value[1];
+    float_value[2] /= rhs.float_value[2];
+    float_value[3] /= rhs.float_value[3];
+    return *this;
+}
+
+
+//////////
+
+
+auto Shader_graph_node::get_static_type() -> uint64_t
+{
+    return erhe::Item_type::shader_graph_node;
+}
+
+auto Shader_graph_node::get_type() const -> uint64_t
+{
+    return get_static_type();
+}
+
+auto Shader_graph_node::get_type_name() const -> std::string_view
+{
+    return static_type_name;
+}
+
+Shader_graph_node::Shader_graph_node(const Shader_graph_node&) = default;
+Shader_graph_node& Shader_graph_node::operator=(const Shader_graph_node&) = default;
+
+Shader_graph_node::Shader_graph_node()
+    : Item           {}
+    , m_graph_node_id{make_graph_id()}
+{
+}
+
+Shader_graph_node::Shader_graph_node(const std::string_view name)
+    : Item           {name}
+    , m_graph_node_id{make_graph_id()}
+{
+}
+
+Shader_graph_node::~Shader_graph_node() noexcept
+{
+}
+
+void Shader_graph_node::evaluate()
+{
+}
+
+auto Shader_graph_node::shared_shader_graph_node_from_this() -> std::shared_ptr<Shader_graph_node>
+{
+    return std::static_pointer_cast<Shader_graph_node>(shared_from_this());
+}
+
+
+//////////
+
+
+void Shader_graph_node::imgui() {
+    ImGui::TextUnformatted(m_name.c_str());
+}
+
+void Shader_graph_node::make_input_pin(std::size_t key, std::string_view name)
 {
     m_input_pins.emplace_back(std::move(Pin{this, true, key, name}));
 }
 
-void Node::make_output_pin(std::size_t key, std::string_view name)
+void Shader_graph_node::make_output_pin(std::size_t key, std::string_view name)
 {
     m_output_pins.emplace_back(std::move(Pin{this, false, key, name}));
 }
 
-void Graph::register_node(Node* node)
+void Graph::register_node(Shader_graph_node* node)
 {
 #if !defined(NDEBUG)
-    const auto i = std::find_if(m_nodes.begin(), m_nodes.end(), [node](Node* entry) { return entry == node; });
+    const auto i = std::find_if(m_nodes.begin(), m_nodes.end(), [node](Shader_graph_node* entry) { return entry == node; });
     if (i != m_nodes.end()) {
-        log_graph_editor->error("Node {} {} is already registered to Graph", node->get_name(), node->get_id());
+        log_graph_editor->error("Shader_graph_node {} {} is already registered to Graph", node->get_name(), node->get_id());
         return;
     }
 #endif
     m_nodes.push_back(node);
-    log_graph_editor->trace("Registered Node {} {}", node->get_name(), node->get_id());
+    log_graph_editor->trace("Registered Shader_graph_node {} {}", node->get_name(), node->get_id());
 }
 
-void Graph::unregister_node(Node* node)
+void Graph::unregister_node(Shader_graph_node* node)
 {
     if (node == nullptr) {
         return;
     }
 
-    const auto i = std::find_if(m_nodes.begin(), m_nodes.end(), [node](Node* entry) { return entry == node; });
+    const auto i = std::find_if(m_nodes.begin(), m_nodes.end(), [node](Shader_graph_node* entry) { return entry == node; });
     if (i == m_nodes.end()) {
         log_graph_editor->error("Graph::unregister_node(): Node {} {} is not registered", node->get_name(), node->get_id());
         return;
@@ -100,7 +294,7 @@ void Graph::unregister_node(Node* node)
 
     m_nodes.erase(i);
 
-    log_graph_editor->trace("Unregistered Node {} {}", node->get_name(), node->get_id());
+    log_graph_editor->trace("Unregistered Shader_graph_node {} {}", node->get_name(), node->get_id());
 }
 
 auto Graph::connect(Pin* source_pin, Pin* sink_pin) -> Link*
@@ -137,9 +331,14 @@ void Graph::disconnect(Link* link)
 void Graph::evaluate()
 {
     sort();
-    for (Node* node : m_nodes) {
+    for (Shader_graph_node* node : m_nodes) {
         node->evaluate();
     }
+}
+
+auto Graph::get_host_name() const -> const char*
+{
+    return "Graph";
 }
 
 void Graph::sort()
@@ -148,8 +347,8 @@ void Graph::sort()
         return;
     }
 
-    std::vector<Node*> unsorted_nodes = m_nodes;
-    std::vector<Node*> sorted_nodes;
+    std::vector<Shader_graph_node*> unsorted_nodes = m_nodes;
+    std::vector<Shader_graph_node*> sorted_nodes;
 
     while (!unsorted_nodes.empty()) {
         bool found_node{false};
@@ -162,7 +361,7 @@ void Graph::sort()
                         const auto i = std::find_if(
                             sorted_nodes.begin(),
                             sorted_nodes.end(),
-                            [&link](Node* entry) {
+                            [&link](Shader_graph_node* entry) {
                                 return entry == link->get_source()->get_owner_node();
                             }
                         );
@@ -186,7 +385,7 @@ void Graph::sort()
             // Remove from unsorted nodes
             const auto i = std::remove(unsorted_nodes.begin(), unsorted_nodes.end(), node);
             if (i == unsorted_nodes.end()) {
-                log_graph_editor->error("Sort: Node {} {} is not in graph nodes", node->get_name(), node->get_id());
+                log_graph_editor->error("Sort: Shader_graph_node {} {} is not in graph nodes", node->get_name(), node->get_id());
             } else {
                 unsorted_nodes.erase(i, unsorted_nodes.end());
             }
@@ -240,165 +439,52 @@ auto Graph_window::flags() -> ImGuiWindowFlags
     return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 }
 
-static constexpr std::size_t pin_key_scalar = 1;
-static constexpr std::size_t pin_key_vector = 2;
-static constexpr std::size_t pin_key_matrix = 3;
-static constexpr std::size_t pin_key_tensor = 4;
+static constexpr std::size_t pin_key_todo = 1;
 
-auto Graph_window::make_unary_source() -> Node*
+auto Graph_window::make_constant() -> Shader_graph_node*
 {
-    m_nodes.push_back(
-        std::make_unique<Node>(
-            "Constant",
-            [](Node& node){
-                for (Pin& pin : node.get_output_pins()) {
-                    payload_t value = pin.get_payload();
-                    for (Link* link : pin.get_links()) {
-                        link->get_sink()->set_payload(value);
-                    }
-                }
-            },
-            [](Node& node){
-                for (Pin& pin : node.get_output_pins()) {
-                    payload_t value = pin.get_payload();
-                    ImGui::SetNextItemWidth(80.0f);
-                    ImGui::InputInt("##", &value);
-                    if (ImGui::IsItemEdited()) {
-                        pin.set_payload(value);
-                    }
-                }
-            }
-        )
-    );
-
-    Node* node = m_nodes.back().get();
-    node->make_output_pin(pin_key_scalar, "out");
+    m_nodes.push_back(std::make_shared<Constant>());
+    Shader_graph_node* node = m_nodes.back().get();
+    constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
+    node->enable_flag_bits(flags);
     return node;
 }
 
-auto Graph_window::make_unary_sink() -> Node*
+auto Graph_window::make_add() -> Shader_graph_node*
 {
-    m_nodes.push_back(
-        std::make_unique<Node>(
-            "Result",
-            [](Node&){},
-            [](Node& node){
-                ImGui::SetNextItemWidth(80.0f);
-                ImGui::Text("%d", node.get_input_pins()[0].get_payload());
-            }
-        )
-    );
-    Node* node = m_nodes.back().get();
-    node->make_input_pin(pin_key_scalar, "in");
+    m_nodes.push_back(std::make_shared<Add>());
+    Shader_graph_node* node = m_nodes.back().get();
+    constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
+    node->enable_flag_bits(flags);
     return node;
 }
 
-auto Graph_window::make_add() -> Node*
+auto Graph_window::make_sub() -> Shader_graph_node*
 {
-    m_nodes.push_back(
-        std::make_unique<Node>(
-            "Add",
-            [](Node& node){
-                const payload_t lhs    = node.get_input_pins()[0].get_payload();
-                const payload_t rhs    = node.get_input_pins()[1].get_payload();
-                const payload_t result = lhs + rhs;
-                node.get_output_pins()[0].set_payload(result);
-            },
-            [](Node& node){
-                const payload_t lhs = node.get_input_pins()[0].get_payload();
-                const payload_t rhs = node.get_input_pins()[1].get_payload();
-                const payload_t out = node.get_output_pins()[0].get_payload();
-                ImGui::Text("%d + %d = %d", lhs, rhs, out);
-            }
-        )
-    );
-    Node* node = m_nodes.back().get();
-    node->make_input_pin(pin_key_scalar, "lhs in");
-    node->make_input_pin(pin_key_scalar, "rhs in");
-    node->make_output_pin(pin_key_scalar, "out");
+    m_nodes.push_back(std::make_shared<Sub>());
+    Shader_graph_node* node = m_nodes.back().get();
+    constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
+    node->enable_flag_bits(flags);
     return node;
 }
 
-auto Graph_window::make_sub() -> Node*
+auto Graph_window::make_mul() -> Shader_graph_node*
 {
-    m_nodes.push_back(
-        std::make_unique<Node>(
-            "Sub",
-            [](Node& node){
-                const payload_t lhs    = node.get_input_pins()[0].get_payload();
-                const payload_t rhs    = node.get_input_pins()[1].get_payload();
-                const payload_t result = lhs - rhs;
-                node.get_output_pins()[0].set_payload(result);
-            },
-            [](Node& node){
-                const payload_t lhs = node.get_input_pins()[0].get_payload();
-                const payload_t rhs = node.get_input_pins()[1].get_payload();
-                const payload_t out = node.get_output_pins()[0].get_payload();
-                ImGui::Text("%d - %d = %d", lhs, rhs, out);
-            }
-        )
-    );
-    Node* node = m_nodes.back().get();
-    node->make_input_pin(pin_key_scalar, "lhs in");
-    node->make_input_pin(pin_key_scalar, "rhs in");
-    node->make_output_pin(pin_key_scalar, "out");
+    m_nodes.push_back(std::make_shared<Mul>());
+    Shader_graph_node* node = m_nodes.back().get();
+    constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
+    node->enable_flag_bits(flags);
     return node;
 }
 
-
-
-auto Graph_window::make_mul() -> Node*
+auto Graph_window::make_div() -> Shader_graph_node*
 {
-    m_nodes.push_back(
-        std::make_unique<Node>(
-            "Mul",
-            [](Node& node){
-                const payload_t lhs    = node.get_input_pins()[0].get_payload();
-                const payload_t rhs    = node.get_input_pins()[1].get_payload();
-                const payload_t result = lhs * rhs;
-                node.get_output_pins()[0].set_payload(result);
-            },
-            [](Node& node){
-                const payload_t lhs = node.get_input_pins()[0].get_payload();
-                const payload_t rhs = node.get_input_pins()[1].get_payload();
-                const payload_t out = node.get_output_pins()[0].get_payload();
-                ImGui::Text("%d * %d = %d", lhs, rhs, out);
-            }
-        )
-    );
-    Node* node = m_nodes.back().get();
-    node->make_input_pin(pin_key_scalar, "lhs in");
-    node->make_input_pin(pin_key_scalar, "rhs in");
-    node->make_output_pin(pin_key_scalar, "out");
+    m_nodes.push_back(std::make_shared<Div>());
+    Shader_graph_node* node = m_nodes.back().get();
+    constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
+    node->enable_flag_bits(flags);
     return node;
 }
-
-auto Graph_window::make_div() -> Node*
-{
-    m_nodes.push_back(
-        std::make_unique<Node>(
-            "Div",
-            [](Node& node){
-                const payload_t lhs    = node.get_input_pins()[0].get_payload();
-                const payload_t rhs    = node.get_input_pins()[1].get_payload();
-                const payload_t result = (rhs != 0) ? lhs / rhs : lhs;
-                node.get_output_pins()[0].set_payload(result);
-            },
-            [](Node& node){
-                const payload_t lhs = node.get_input_pins()[0].get_payload();
-                const payload_t rhs = node.get_input_pins()[1].get_payload();
-                const payload_t out = node.get_output_pins()[0].get_payload();
-                ImGui::Text("%d / %d = %d", lhs, rhs, out);
-            }
-        )
-    );
-    Node* node = m_nodes.back().get();
-    node->make_input_pin(pin_key_scalar, "lhs in");
-    node->make_input_pin(pin_key_scalar, "rhs in");
-    node->make_output_pin(pin_key_scalar, "out");
-    return node;
-}
-
 
 void Graph_window::imgui()
 {
@@ -407,19 +493,18 @@ void Graph_window::imgui()
         m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
     }  
 
-    if (ImGui::Button("+")) { m_graph.register_node(make_add()); } ImGui::SameLine();
-    if (ImGui::Button("-")) { m_graph.register_node(make_sub()); } ImGui::SameLine();
-    if (ImGui::Button("*")) { m_graph.register_node(make_mul()); } ImGui::SameLine();
-    if (ImGui::Button("/")) { m_graph.register_node(make_div()); } ImGui::SameLine();
-    if (ImGui::Button("P")) { m_graph.register_node(make_unary_source()); } ImGui::SameLine();
-    if (ImGui::Button("C")) { m_graph.register_node(make_unary_sink()); }
+                       if (ImGui::Button("+")) { m_graph.register_node(make_add()); }
+    ImGui::SameLine(); if (ImGui::Button("-")) { m_graph.register_node(make_sub()); }
+    ImGui::SameLine(); if (ImGui::Button("*")) { m_graph.register_node(make_mul()); }
+    ImGui::SameLine(); if (ImGui::Button("/")) { m_graph.register_node(make_div()); }
+    ImGui::SameLine(); if (ImGui::Button("1")) { m_graph.register_node(make_constant()); }
 
     m_graph.evaluate();
 
     m_node_editor->Begin("Graph", ImVec2{0.0f, 0.0f});
 
-    for (Node* node : m_graph.get_nodes()) {
-        log_graph_editor->info("Node {} {}", node->get_name(), node->get_id());
+    for (Shader_graph_node* node : m_graph.get_nodes()) {
+        log_graph_editor->info("Shader_graph_node {} {}", node->get_name(), node->get_id());
 
         ImGui::PushID(static_cast<int>(node->get_id()));
         ERHE_DEFER( ImGui::PopID(); );
@@ -476,6 +561,15 @@ void Graph_window::imgui()
         ImGui::EndTable(); // Outputs
 
         m_node_editor->EndNode();
+        const bool item_selection   = node->is_selected();
+        const bool editor_selection = m_node_editor->IsNodeSelected(node->get_id());
+        if (item_selection != editor_selection) {
+            if (editor_selection) {
+                m_context.selection->add_to_selection(node->shared_from_this());
+            } else {
+                m_context.selection->remove_from_selection(node->shared_from_this());
+            }
+        }
     }
 
     // Links
@@ -495,12 +589,12 @@ void Graph_window::imgui()
         if (m_node_editor->QueryNewLink(&lhs_pin_handle, &rhs_pin_handle)) {
             bool acceptable = false;
             if (rhs_pin_handle && lhs_pin_handle) {
-                Pin*  lhs_pin     = lhs_pin_handle.AsPointer<Pin>();
-                Pin*  rhs_pin     = rhs_pin_handle.AsPointer<Pin>();
-                Pin*  source_pin  = lhs_pin->is_source() ? lhs_pin : rhs_pin->is_source() ? rhs_pin : nullptr;
-                Pin*  sink_pin    = lhs_pin->is_sink  () ? lhs_pin : rhs_pin->is_sink  () ? rhs_pin : nullptr;
-                Node* source_node = source_pin != nullptr ? source_pin->get_owner_node() : nullptr;
-                Node* sink_node   = sink_pin   != nullptr ? sink_pin  ->get_owner_node() : nullptr;
+                Pin*               lhs_pin     = lhs_pin_handle.AsPointer<Pin>();
+                Pin*               rhs_pin     = rhs_pin_handle.AsPointer<Pin>();
+                Pin*               source_pin  = lhs_pin->is_source() ? lhs_pin : rhs_pin->is_source() ? rhs_pin : nullptr;
+                Pin*               sink_pin    = lhs_pin->is_sink  () ? lhs_pin : rhs_pin->is_sink  () ? rhs_pin : nullptr;
+                Shader_graph_node* source_node = source_pin != nullptr ? source_pin->get_owner_node() : nullptr;
+                Shader_graph_node* sink_node   = sink_pin   != nullptr ? sink_pin  ->get_owner_node() : nullptr;
                 if ((source_pin != nullptr) && (sink_pin != nullptr) && (source_pin != sink_pin) && (source_node != sink_node)) {
                     acceptable = true;
                     if (m_node_editor->AcceptNewItem()) { // mouse released?
@@ -522,7 +616,7 @@ void Graph_window::imgui()
         ax::NodeEditor::NodeId node_handle = 0;
         while (m_node_editor->QueryDeletedNode(&node_handle)){
             if (m_node_editor->AcceptDeletedItem()) {
-                auto i = std::find_if(m_nodes.begin(), m_nodes.end(), [node_handle](const std::unique_ptr<Node>& entry){
+                auto i = std::find_if(m_nodes.begin(), m_nodes.end(), [node_handle](const std::shared_ptr<Shader_graph_node>& entry){
                     ax::NodeEditor::NodeId entry_node_id = entry->get_id();
                     return entry_node_id == node_handle;
                 });
@@ -551,6 +645,130 @@ void Graph_window::imgui()
 
 
     m_node_editor->End();
+}
+
+Constant::Constant()
+    : Shader_graph_node{"Constant"}
+{
+    make_output_pin(pin_key_todo, "out");
+}
+
+void Constant::evaluate()
+{
+    for (Pin& pin : get_output_pins()) {
+        Payload value = pin.get_payload();
+        for (Link* link : pin.get_links()) {
+            link->get_sink()->set_payload(value);
+        }
+    }
+}
+
+void Constant::imgui()
+{
+    for (Pin& pin : get_output_pins()) {
+        Payload value = pin.get_payload();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::InputInt("##", &value.int_value[0]);
+        if (ImGui::IsItemEdited()) {
+            pin.set_payload(value);
+        }
+    }
+}
+
+Add::Add()
+    : Shader_graph_node{"Add"}
+{
+    make_input_pin(pin_key_todo, "A");
+    make_input_pin(pin_key_todo, "B");
+    make_output_pin(pin_key_todo, "out");
+}
+
+void Add::evaluate()
+{
+    const Payload lhs    = get_input_pins()[0].get_payload();
+    const Payload rhs    = get_input_pins()[1].get_payload();
+    const Payload result = lhs + rhs;
+    get_output_pins()[0].set_payload(result);
+}
+
+void Add::imgui()
+{
+    const Payload lhs = get_input_pins()[0].get_payload();
+    const Payload rhs = get_input_pins()[1].get_payload();
+    const Payload out = get_output_pins()[0].get_payload();
+    ImGui::Text("%d + %d = %d", lhs.int_value[0], rhs.int_value[0], out.int_value[0]); // TODO Handle format
+}
+
+Sub::Sub()
+    : Shader_graph_node{"Sub"}
+{
+    make_input_pin(pin_key_todo, "A");
+    make_input_pin(pin_key_todo, "B");
+    make_output_pin(pin_key_todo, "out");
+}
+
+void Sub::evaluate()
+{
+    const Payload lhs    = get_input_pins()[0].get_payload();
+    const Payload rhs    = get_input_pins()[1].get_payload();
+    const Payload result = lhs - rhs;
+    get_output_pins()[0].set_payload(result);
+}
+
+void Sub::imgui()
+{
+    const Payload lhs = get_input_pins()[0].get_payload();
+    const Payload rhs = get_input_pins()[1].get_payload();
+    const Payload out = get_output_pins()[0].get_payload();
+    ImGui::Text("%d - %d = %d", lhs.int_value[0], rhs.int_value[0], out.int_value[0]); // TODO Handle format
+}
+
+Mul::Mul()
+    : Shader_graph_node{"Mul"}
+{
+    make_input_pin(pin_key_todo, "A");
+    make_input_pin(pin_key_todo, "B");
+    make_output_pin(pin_key_todo, "out");
+}
+
+void Mul::evaluate()
+{
+    const Payload lhs    = get_input_pins()[0].get_payload();
+    const Payload rhs    = get_input_pins()[1].get_payload();
+    const Payload result = lhs * rhs;
+    get_output_pins()[0].set_payload(result);
+}
+
+void Mul::imgui()
+{
+    const Payload lhs = get_input_pins()[0].get_payload();
+    const Payload rhs = get_input_pins()[1].get_payload();
+    const Payload out = get_output_pins()[0].get_payload();
+    ImGui::Text("%d * %d = %d", lhs.int_value[0], rhs.int_value[0], out.int_value[0]); // TODO Handle format
+}
+
+Div::Div()
+    : Shader_graph_node{"Div"}
+{
+    make_input_pin(pin_key_todo, "A");
+    make_input_pin(pin_key_todo, "B");
+    make_output_pin(pin_key_todo, "out");
+}
+
+void Div::evaluate()
+{
+    const Payload lhs    = get_input_pins()[0].get_payload();
+    const Payload rhs    = get_input_pins()[1].get_payload();
+    const Payload result = lhs / rhs;
+    get_output_pins()[0].set_payload(result);
+}
+
+void Div::imgui()
+{
+    const Payload lhs = get_input_pins()[0].get_payload();
+    const Payload rhs = get_input_pins()[1].get_payload();
+    const Payload out = get_output_pins()[0].get_payload();
+    ImGui::Text("%d / %d = %d", lhs.int_value[0], rhs.int_value[0], out.int_value[0]); // TODO Handle format
 }
 
 } // namespace editor

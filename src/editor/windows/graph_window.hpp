@@ -1,8 +1,11 @@
 #pragma once
 
 #include "erhe_commands/command.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
+#include "erhe_item/hierarchy.hpp"
+#include "erhe_item/item_host.hpp"
 
 #include <array>
 #include <atomic>
@@ -29,14 +32,30 @@ class Editor_context;
 class Editor_message;
 class Editor_message_bus;
 
-class Node;
+class Shader_graph_node;
 class Pin;
 class Link;
 class Graph;
 
-using payload_t = int;
+class Payload
+{
+public:
+    auto operator+=(const Payload& rhs) -> Payload&;
+    auto operator-=(const Payload& rhs) -> Payload&;
+    auto operator*=(const Payload& rhs) -> Payload&;
+    auto operator/=(const Payload& rhs) -> Payload&;
 
-[[nodiscard]] inline auto make_id() -> int
+    erhe::dataformat::Format format;
+    std::array<int, 4>       int_value;
+    std::array<float, 4>     float_value;
+};
+
+auto operator+(const Payload& lhs, const Payload& rhs) -> Payload;
+auto operator-(const Payload& lhs, const Payload& rhs) -> Payload;
+auto operator*(const Payload& lhs, const Payload& rhs) -> Payload;
+auto operator/(const Payload& lhs, const Payload& rhs) -> Payload;
+
+[[nodiscard]] inline auto make_graph_id() -> int
 {
     static std::atomic<int> counter{1};
     return counter++;
@@ -45,13 +64,13 @@ using payload_t = int;
 class Link
 {
 public:
-    Link() : m_id{make_id()} {}
+    Link() : m_id{make_graph_id()} {}
     Link(const Link& other) = delete;
     Link(Link&& old) = default;
     Link& operator=(const Link& other) = delete;
     Link& operator=(Link&& old) = default;
     Link(Pin* source, Pin* sink)
-        : m_id    {make_id()}
+        : m_id    {make_graph_id()}
         , m_source{source}
         , m_sink  {sink}
     {
@@ -61,8 +80,8 @@ public:
     [[nodiscard]] auto get_handle  () const -> ax::NodeEditor::LinkId;
     [[nodiscard]] auto get_source  () const -> Pin*;
     [[nodiscard]] auto get_sink    () const -> Pin*;
-    [[nodiscard]] auto get_payload () const -> payload_t;
-                  void set_payload (payload_t value);
+    [[nodiscard]] auto get_payload () const -> Payload;
+                  void set_payload (Payload value);
     [[nodiscard]] auto is_connected() const -> bool;
     void disconnect();
 
@@ -72,49 +91,50 @@ private:
     Pin* m_sink   {nullptr};
 };
 
-class Node
+class Shader_graph_node : public erhe::Item<erhe::Item_base, erhe::Item_base, Shader_graph_node, erhe::Item_kind::clone_using_copy_constructor>
 {
 public:
-    Node(
-        std::string_view           name,
-        std::function<void(Node&)> evaluate = {},
-        std::function<void(Node&)> imgui = {}
-    )
-        : m_id      {make_id()}
-        , m_name    {name}
-        , m_evaluate{evaluate}
-        , m_imgui   {imgui}
-    {
-    }
+    Shader_graph_node();
+    Shader_graph_node(std::string_view name);
+    explicit Shader_graph_node(const Shader_graph_node&);
+    Shader_graph_node& operator=(const Shader_graph_node&);
 
-    [[nodiscard]] auto get_id         () const -> int                     { return m_id; }
+    ~Shader_graph_node() noexcept override;
+
+    [[nodiscard]] auto shared_shader_graph_node_from_this() -> std::shared_ptr<Shader_graph_node>;
+
+    // Implements Item_base
+    static constexpr std::string_view static_type_name{"Shader_graph_node"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
+
+    [[nodiscard]] auto get_graph_id   () const -> int                     { return m_graph_node_id; }
     [[nodiscard]] auto get_name       () const -> const std::string_view  { return m_name; }
     [[nodiscard]] auto get_input_pins () const -> const std::vector<Pin>& { return m_input_pins; }
     [[nodiscard]] auto get_input_pins ()       -> std::vector<Pin>&       { return m_input_pins; }
     [[nodiscard]] auto get_output_pins() const -> const std::vector<Pin>& { return m_output_pins; }
     [[nodiscard]] auto get_output_pins()       -> std::vector<Pin>&       { return m_output_pins; }
 
-    void evaluate();
-    void imgui();
+    virtual void evaluate();
+    virtual void imgui();
 
     void make_input_pin (std::size_t key, std::string_view name);
     void make_output_pin(std::size_t key, std::string_view name);
 
 private:
-    int                        m_id;
-    std::string                m_name;
-    std::function<void(Node&)> m_evaluate;
-    std::function<void(Node&)> m_imgui;
-    std::vector<Pin>           m_input_pins;
-    std::vector<Pin>           m_output_pins;
+    int              m_graph_node_id;
+    std::string      m_name;
+    std::vector<Pin> m_input_pins;
+    std::vector<Pin> m_output_pins;
 };
 
 class Pin
 {
 private:
-    friend class Node;
-    Pin(Node* owner_node, bool is_source, std::size_t key, std::string_view name)
-        : m_id        {make_id()}
+    friend class Shader_graph_node;
+    Pin(Shader_graph_node* owner_node, bool is_source, std::size_t key, std::string_view name)
+        : m_id        {make_graph_id()}
         , m_key       {key}
         , m_owner_node{owner_node}
         , m_is_source {is_source}
@@ -133,52 +153,80 @@ public:
                   void remove_link   (Link* link)                          { auto i = std::find_if(m_links.begin(), m_links.end(), [link](Link* entry) { return entry == link; }); m_links.erase(i);}
     [[nodiscard]] auto get_links     () const -> const std::vector<Link*>& { return m_links; }
     [[nodiscard]] auto get_links     ()       -> std::vector<Link*>&       { return m_links; }
-    [[nodiscard]] auto get_owner_node() const -> Node*                     { return m_owner_node; }
-    [[nodiscard]] auto get_payload   () -> payload_t                       { 
-        if (is_sink()) { // && pull
-            payload_t sum{};
-            for (Link* link : m_links) {
-                sum += link->get_source()->get_payload();
-            }
-            m_payload = sum;
-        }
-        return m_payload;
-    }
-    void set_payload   (payload_t value)                     { 
-        m_payload = value;
-        if (m_is_source) {
-            return;
-        }
-        for (Link* link : m_links) {
-            link->get_sink()->set_payload(value);
-        }
-    }
+    [[nodiscard]] auto get_owner_node() const -> Shader_graph_node*        { return m_owner_node; }
+    [[nodiscard]] auto get_payload   () -> Payload;
+    void               set_payload   (Payload value);
 
 private:
     int                m_id;
     std::size_t        m_key;
-    Node*              m_owner_node{nullptr};
+    Shader_graph_node* m_owner_node{nullptr};
     bool               m_is_source{true};
     std::string        m_name;
     std::vector<Link*> m_links;
-    payload_t          m_payload {};
+    Payload            m_payload {};
 };
 
-class Graph
+class Constant : public Shader_graph_node
 {
 public:
-    void register_node  (Node* node);
-    void unregister_node(Node* node);
+    Constant();
+
+    void evaluate() override;
+    void imgui   () override;
+};
+
+class Add : public Shader_graph_node
+{
+public:
+    Add();
+    void evaluate() override;
+    void imgui() override;
+};
+
+class Sub : public Shader_graph_node
+{
+public:
+    Sub();
+    void evaluate() override;
+    void imgui() override;
+};
+
+class Mul : public Shader_graph_node
+{
+public:
+    Mul();
+    void evaluate() override;
+    void imgui() override;
+};
+
+class Div : public Shader_graph_node
+{
+public:
+    Div();
+    void evaluate() override;
+    void imgui() override;
+};
+
+
+class Graph : public erhe::Item_host
+{
+public:
+    // Implements Item_host
+    auto get_host_name() const -> const char* override;
+
+    void register_node  (Shader_graph_node* node);
+    void unregister_node(Shader_graph_node* node);
     auto connect        (Pin* source_pin, Pin* sink_pin) -> Link*;
     void disconnect     (Link* link);
     void sort           ();
     void evaluate       ();
 
-    [[nodiscard]] auto get_nodes() const -> const std::vector<Node*>&           { return m_nodes; }
-    [[nodiscard]] auto get_nodes()       -> std::vector<Node*>&                 { return m_nodes; }
-    [[nodiscard]] auto get_links()       -> std::vector<std::unique_ptr<Link>>& { return m_links; }
+    [[nodiscard]] auto get_nodes() const -> const std::vector<Shader_graph_node*>& { return m_nodes; }
+    [[nodiscard]] auto get_nodes()       -> std::vector<Shader_graph_node*>&       { return m_nodes; }
+    [[nodiscard]] auto get_links()       -> std::vector<std::unique_ptr<Link>>&    { return m_links; }
 
-    std::vector<Node*>                 m_nodes;
+    std::vector<Shader_graph_node*>    m_nodes;
     std::vector<std::unique_ptr<Link>> m_links;
     bool                               m_is_sorted{false};
 };
@@ -199,21 +247,20 @@ public:
     void imgui() override;
     auto flags() -> ImGuiWindowFlags override;
 
-    [[nodiscard]] auto make_unary_source() -> Node*;
-    [[nodiscard]] auto make_unary_sink  () -> Node*;
-    [[nodiscard]] auto make_add         () -> Node*;
-    [[nodiscard]] auto make_sub         () -> Node*;
-    [[nodiscard]] auto make_mul         () -> Node*;
-    [[nodiscard]] auto make_div         () -> Node*;
-
 private:
+    auto make_constant() -> Shader_graph_node*;
+    auto make_add     () -> Shader_graph_node*;
+    auto make_sub     () -> Shader_graph_node*;
+    auto make_mul     () -> Shader_graph_node*;
+    auto make_div     () -> Shader_graph_node*;
+
     void on_message(Editor_message& message);
 
     Editor_context&                                m_context;
     Graph                                          m_graph;
     std::unique_ptr<ax::NodeEditor::EditorContext> m_node_editor;
 
-    std::vector<std::unique_ptr<Node>> m_nodes;
+    std::vector<std::shared_ptr<Shader_graph_node>> m_nodes;
 };
 
 } // namespace editor
