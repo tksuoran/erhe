@@ -7,6 +7,8 @@
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item_host.hpp"
 
+#include "tinyexpr/tinyexpr.h"
+
 #include <array>
 #include <atomic>
 #include <functional>
@@ -261,6 +263,36 @@ private:
     std::unique_ptr<ax::NodeEditor::EditorContext> m_node_editor;
 
     std::vector<std::shared_ptr<Shader_graph_node>> m_nodes;
+};
+
+class Sheet_window : public erhe::imgui::Imgui_window
+{
+public:
+    Sheet_window(
+        erhe::commands::Commands&    commands,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context,
+        Editor_message_bus&          editor_message_bus
+    );
+
+    // Implements Imgui_window
+    void imgui() override;
+
+private:
+    void on_message(Editor_message& message);
+
+    auto at(int row, int col) -> std::string&;
+
+    Editor_context& m_context;
+
+    //std::array<Payload, 64> m_data;
+    bool                        m_show_expression{false};
+    std::array<std::string, 64> m_data;
+    std::array<char[3], 64>     m_te_labels;
+    std::array<double, 64>      m_te_values;
+    std::array<te_variable, 64> m_te_variables;
+    std::array<te_expr*, 64>    m_te_expressions;
 };
 
 } // namespace editor

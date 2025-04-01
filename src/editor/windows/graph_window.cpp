@@ -16,6 +16,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace editor {
 
@@ -769,6 +770,140 @@ void Div::imgui()
     const Payload rhs = get_input_pins()[1].get_payload();
     const Payload out = get_output_pins()[0].get_payload();
     ImGui::Text("%d / %d = %d", lhs.int_value[0], rhs.int_value[0], out.int_value[0]); // TODO Handle format
+}
+
+Sheet_window::Sheet_window(
+    erhe::commands::Commands&    commands,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context,
+    Editor_message_bus&          editor_message_bus
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Sheet", "sheet"}
+    , m_context                {editor_context}
+{
+    static_cast<void>(commands); // TODO Keeping in case we need to add commands here
+
+    // Initialize tinyexpr variables
+    const char col_char[8] = {'A','B','C','D','E','F','G','H'};
+    const char row_char[8] = {'1','2','3','4','5','6','7','8'};
+    for (int row = 0; row < 8; ++row) {
+        for (int col = 0; col < 8; ++col) {
+            char* label = m_te_labels.at(row * 8 + col);
+            label[0] = col_char[col];
+            label[1] = row_char[row];
+            label[2] = '\0';
+            double& te_value = m_te_values.at(row * 8 + col);
+            te_variable& te_variable = m_te_variables.at(row * 8 + col);
+            te_variable.name = label;
+            te_variable.address = &te_value;
+            te_variable.type = TE_VARIABLE;
+            te_variable.context = nullptr;
+            te_expr*& te_expression = m_te_expressions.at(row * 8 + col);
+            te_expression = nullptr;
+        }
+    }
+
+    editor_message_bus.add_receiver(
+        [&](Editor_message& message) {
+            on_message(message);
+        }
+    );
+}
+
+void Sheet_window::on_message(Editor_message&)
+{
+    //// using namespace erhe::bit;
+    //// if (test_any_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
+    //// }
+}
+
+auto Sheet_window::at(int row, int col) -> std::string&
+{
+    return m_data.at(row * 8 + col);
+}
+
+void Sheet_window::imgui()
+{
+    bool dirty = false;
+
+    if (ImGui::Button("Compute")) {
+        dirty = true;
+    }
+
+    ImGui::SameLine();
+
+    if (m_show_expression) {
+        if (ImGui::Button("Show Values")) {
+            m_show_expression = false;
+        }
+    } else if (ImGui::Button("Show Expressions")) {
+        m_show_expression = true;
+    }
+
+    ImGui::BeginTable("sheet", 9, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable);
+    ImGui::TableSetupColumn("##rows", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+    ImGui::TableSetupColumn("A", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+    ImGui::TableSetupColumn("B", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+    ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+    ImGui::TableSetupColumn("D", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+    ImGui::TableSetupColumn("E", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+    ImGui::TableSetupColumn("F", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+    ImGui::TableSetupColumn("G", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+    ImGui::TableSetupColumn("H", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+    ImGui::TableSetupScrollFreeze(1, 1);
+    ImGui::TableHeadersRow();
+    for (int row = 0; row < 8; ++row) {
+        ImGui::PushID(row);
+        ERHE_DEFER( ImGui::PopID(); );
+        ImGui::TableNextRow(ImGuiTableRowFlags_None);
+        ImGui::TableNextColumn();
+        ImGui::Text("%d", row + 1);
+        for (int col = 0; col < 8; ++col) {
+            ImGui::PushID(col);
+            ERHE_DEFER( ImGui::PopID(); );
+            ImGui::TableNextColumn();
+            std::string& cell_string = at(row, col);
+            double& te_value = m_te_values.at(row * 8 + col);
+            //te_variable& te_variable = m_te_variables.at(row * 8 + col);
+            te_expr*& te_expression = m_te_expressions.at(row * 8 + col);
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (m_show_expression) {
+                ImGui::InputText("##", &cell_string);
+                if (ImGui::IsItemEdited()) {
+                    dirty = true;
+                    if (te_expression != nullptr) {
+                        te_free(te_expression);
+                    }
+                    int error = 0;
+                    te_expression = te_compile(cell_string.c_str(), m_te_variables.data(), static_cast<int>(m_te_variables.size()), &error);
+                }
+            } else {
+                if (te_expression != nullptr) {
+                    std::string value_string = fmt::format("{}", te_value);
+                    ImGui::InputText("##", &value_string, ImGuiInputTextFlags_ReadOnly);
+                } else {
+                    std::string value_string{};
+                    ImGui::InputText("##", &value_string, ImGuiInputTextFlags_ReadOnly);
+                }
+            }
+        }
+    }
+    ImGui::EndTable();
+
+    if (dirty) {
+        for (int row = 0; row < 8; ++row) {
+            for (int col = 0; col < 8; ++col) {
+                double& te_value = m_te_values.at(row * 8 + col);
+                //te_variable& te_variable = m_te_variables.at(row * 8 + col);
+                te_expr*& te_expression = m_te_expressions.at(row * 8 + col);
+                if (te_expression != nullptr) {
+                    te_value = te_eval(te_expression);
+                }
+            }
+        }
+        dirty = false;
+    }
 }
 
 } // namespace editor

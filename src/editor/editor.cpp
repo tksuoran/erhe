@@ -590,6 +590,7 @@ public:
                 m_clipboard_window       = std::make_unique<Clipboard_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_commands_window        = std::make_unique<Commands_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_graph_window           = std::make_unique<Graph_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context, *m_editor_message_bus.get());
+                m_sheet_window           = std::make_unique<Sheet_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context, *m_editor_message_bus.get());
                 m_layers_window          = std::make_unique<Layers_window                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_network_window         = std::make_unique<Network_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_operations             = std::make_unique<Operations                      >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_editor_context, *m_editor_message_bus.get());
@@ -1126,6 +1127,7 @@ public:
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;
     std::unique_ptr<Commands_window                 >        m_commands_window;
     std::unique_ptr<Graph_window                    >        m_graph_window;
+    std::unique_ptr<Sheet_window                    >        m_sheet_window;
     std::unique_ptr<Layers_window                   >        m_layers_window;
     std::unique_ptr<Network_window                  >        m_network_window;
     std::unique_ptr<Operations                      >        m_operations;
