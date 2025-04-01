@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdlib>
 #include <limits>
 #include <new>
 
