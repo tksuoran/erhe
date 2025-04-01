@@ -6,6 +6,7 @@ cmake ^
  -A x64 ^
  -B build ^
  -S . ^
+ --graphviz=erhe_cmake_dependencies.dot ^
  -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
  -Wno-dev ^
  -DERHE_USE_PRECOMPILED_HEADERS=OFF ^

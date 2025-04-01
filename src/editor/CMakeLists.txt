@@ -362,6 +362,7 @@ target_link_libraries(
     RectangleBinPack
     rapidjson
     Taskflow
+    tinyexpr
 )
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     target_link_libraries(${_target} PRIVATE imgui)

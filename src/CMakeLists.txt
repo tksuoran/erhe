@@ -22,6 +22,7 @@ add_subdirectory(mINI)
 add_subdirectory(rapidjson)
 add_subdirectory(RectangleBinPack)
 #add_subdirectory(taskflow)
+add_subdirectory(tinyexpr)
 
 add_subdirectory(mango)
 
