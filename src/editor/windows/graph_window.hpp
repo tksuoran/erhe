@@ -286,6 +286,8 @@ private:
 
     Editor_context& m_context;
 
+    ImGuiTextFilter             m_name_filter;
+
     //std::array<Payload, 64> m_data;
     bool                        m_show_expression{false};
     std::array<std::string, 64> m_data;

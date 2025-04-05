@@ -407,6 +407,17 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
     m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.vr_font_size);
     m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.vr_font_size);
 
+    // TODO Something nicer
+#define ICON_MIN_MDI 0xF68C
+#define ICON_MAX_16_MDI 0xF68C
+#define ICON_MAX_MDI 0xF1D17
+    ImFontGlyphRangesBuilder builder;
+    static const ImWchar ranges[] = { ICON_MIN_MDI, ICON_MAX_MDI, 0 };
+    builder.AddRanges(ranges);
+    ImVector<ImWchar> range;
+    builder.BuildRanges(&range);
+    m_icon_font = m_font_atlas.AddFontFromFileTTF(settings.icon_font.c_str(), settings.icon_font_size, nullptr, range.Data);
+
     // Create textures
     m_font_texture = std::make_shared<erhe::graphics::Texture>(
         make_font_texture_create_info(m_graphics_instance, m_font_atlas)
@@ -453,6 +464,11 @@ auto Imgui_renderer::vr_primary_font() const -> ImFont*
 auto Imgui_renderer::vr_mono_font() const -> ImFont*
 {
     return m_vr_mono_font;
+}
+
+auto Imgui_renderer::icon_font() const -> ImFont*
+{
+    return m_icon_font;
 }
 
 void Imgui_renderer::at_end_of_frame(std::function<void()>&& func)

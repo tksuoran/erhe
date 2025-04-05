@@ -33,10 +33,12 @@ namespace erhe::imgui {
 class Imgui_settings
 {
 public:
-    std::string primary_font{"res/fonts/SourceSansPro-Regular.otf"};
-    std::string mono_font   {"res/fonts/SourceCodePro-Semibold.otf"};
-    float       font_size   {17.0f};
-    float       vr_font_size{22.0f};
+    std::string primary_font  {"res/fonts/SourceSansPro-Regular.otf"};
+    std::string mono_font     {"res/fonts/SourceCodePro-Semibold.otf"};
+    std::string icon_font     {"res/fonts/materialdesignicons-webfont.ttf"};
+    float       font_size     {24.0f};
+    float       vr_font_size  {24.0f};
+    float       icon_font_size{24.0f};
 };
 
 class Imgui_host;
@@ -125,6 +127,7 @@ public:
     auto mono_font      () const -> ImFont*;
     auto vr_primary_font() const -> ImFont*;
     auto vr_mono_font   () const -> ImFont*;
+    auto icon_font      () const -> ImFont*;
 
     void make_current         (const Imgui_host* imgui_host);
     void register_imgui_host  (Imgui_host* viewport);
@@ -139,9 +142,9 @@ public:
 private:
     void apply_font_config_changes(const Imgui_settings& settings);
 
-    static constexpr std::size_t s_max_draw_count     =   8'000;
-    static constexpr std::size_t s_max_index_count    = 500'000;
-    static constexpr std::size_t s_max_vertex_count   = 500'000;
+    static constexpr std::size_t s_max_draw_count     =    64'000;
+    static constexpr std::size_t s_max_index_count    = 2'400'000;
+    static constexpr std::size_t s_max_vertex_count   = 2'400'000;
 
     erhe::graphics::Instance&                m_graphics_instance;
     Imgui_program_interface                  m_imgui_program_interface;
@@ -158,6 +161,7 @@ private:
     ImFont*                                  m_mono_font      {nullptr};
     ImFont*                                  m_vr_primary_font{nullptr};
     ImFont*                                  m_vr_mono_font   {nullptr};
+    ImFont*                                  m_icon_font      {nullptr};
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
     std::shared_ptr<erhe::graphics::Texture> m_font_texture;
     erhe::graphics::Sampler                  m_nearest_sampler;

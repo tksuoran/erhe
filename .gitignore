@@ -4,6 +4,9 @@
 src/editor/user.ini
 src/editor/erhe_init_graph.dot
 src/editor/cache/bvh/*
+src/editor/windows/IconsMaterialDesignIcons.h
+src/editor/res/fonts/materialdesignicons-webfont.ttf
+src/editor/res/fonts/materialdesignicons.css
 !src/editor/cache/bvh/keep
 build
 cmake-build-debug

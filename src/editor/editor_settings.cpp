@@ -156,10 +156,11 @@ void Editor_settings::read()
     graphics_section.get("preset", graphics.current_graphics_preset.name);
 
     const auto& imgui_section = settings_ini.get_section("imgui");
-    imgui_section.get("primary_font", imgui.primary_font);
-    imgui_section.get("mono_font",    imgui.mono_font);
-    imgui_section.get("font_size",    imgui.font_size);
-    imgui_section.get("vr_font_size", imgui.vr_font_size);
+    imgui_section.get("primary_font",   imgui.primary_font);
+    imgui_section.get("mono_font",      imgui.mono_font);
+    imgui_section.get("font_size",      imgui.font_size);
+    imgui_section.get("vr_font_size",   imgui.vr_font_size);
+    imgui_section.get("icon_font_size", imgui.icon_font_size);
 
     const auto& icons_section = settings_ini.get_section("icons");
     icons_section.get("small_icon_size",  icon_settings.small_icon_size);

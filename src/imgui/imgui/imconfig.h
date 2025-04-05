@@ -183,3 +183,5 @@ namespace ImGui
 
     ImGuiIO& GetIO(ImGuiContext* context);
 }
+
+#define IMGUI_USE_WCHAR32
