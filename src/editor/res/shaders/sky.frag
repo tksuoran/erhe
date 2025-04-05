@@ -33,7 +33,7 @@ void main()
 
     highp vec3  pos       = v_position.xyz / v_position.w;
     highp vec3  V0        = normalize(view_position_in_world - pos);
-    highp vec3  V         = clamp(V, vec3(-1.0), vec3(1.0));
+    highp vec3  V         = clamp(V0, vec3(-1.0), vec3(1.0));
     const float pi        = 3.1415926535897932384626433832795;
     highp float epsilon   = 0.000001;
     highp float elevation = acos(V.y) / pi; // 0..pi
