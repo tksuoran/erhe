@@ -118,7 +118,7 @@ void Renderpass::render(const Render_context& context) const
 
     if (this->mesh_layers.empty()) {
         log_composer->debug("render_fullscreen");
-        context.editor_context.forward_renderer->render_fullscreen(
+        context.editor_context.forward_renderer->draw_primitives(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .index_buffer           = &context.editor_context.mesh_memory->index_buffer,
                 .vertex_buffer0         = &context.editor_context.mesh_memory->position_vertex_buffer,
@@ -129,6 +129,7 @@ void Renderpass::render(const Render_context& context) const
                 .skins                  = {},
                 .materials              = {},
                 .mesh_spans             = {},
+                .non_mesh_vertex_count  = this->non_mesh_vertex_count,
                 .passes                 = this->passes,
                 .primitive_mode         = this->primitive_mode,
                 .primitive_settings     = 

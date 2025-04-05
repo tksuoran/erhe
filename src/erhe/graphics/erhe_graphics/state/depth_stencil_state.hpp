@@ -44,11 +44,14 @@ public:
     static Depth_stencil_state depth_test_always_stencil_test_disabled;
 
     static auto depth_test_enabled_stencil_test_disabled                 (bool reverse_depth) -> const Depth_stencil_state&;
+    static auto depth_test_enabled_less_or_equal_stencil_test_disabled   (bool reverse_depth) -> const Depth_stencil_state&;
     static auto depth_test_enabled_greater_or_equal_stencil_test_disabled(bool reverse_depth) -> const Depth_stencil_state&;
 
 private:
     static Depth_stencil_state s_depth_test_enabled_stencil_test_disabled_forward_depth;
     static Depth_stencil_state s_depth_test_enabled_stencil_test_disabled_reverse_depth;
+    static Depth_stencil_state s_depth_test_enabled_less_or_equal_stencil_test_disabled_forward_depth;
+    static Depth_stencil_state s_depth_test_enabled_less_or_equal_stencil_test_disabled_reverse_depth;
     static Depth_stencil_state s_depth_test_enabled_greater_or_equal_stencil_test_disabled_forward_depth;
     static Depth_stencil_state s_depth_test_enabled_greater_or_equal_stencil_test_disabled_reverse_depth;
 };

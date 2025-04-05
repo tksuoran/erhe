@@ -75,6 +75,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance)
     , circular_brushed_metal  {"circular_brushed_metal-not_loaded"}
     , textured                {"textured-not_loaded"}
     , sky                     {"sky-not_loaded"}
+    , grid                    {"grid-not_loaded"}
     , fat_triangle            {"fat_triangle-not_loaded"}
     , wide_lines_draw_color   {"wide_lines_draw_color-not_loaded"}
     , wide_lines_vertex_color {"wide_lines_vertex_color-not_loaded"}
@@ -137,6 +138,7 @@ void Programs::load_programs(
     add_shader(brush                   , CI{ .name = "brush"                   , .default_uniform_block = &default_uniform_block } );
     add_shader(textured                , CI{ .name = "textured"                , .default_uniform_block = &default_uniform_block } );
     add_shader(sky                     , CI{ .name = "sky"                     , .default_uniform_block = &default_uniform_block } );
+    add_shader(grid                    , CI{ .name = "grid"                    , .default_uniform_block = &default_uniform_block } );
     add_shader(fat_triangle            , CI{ .name = "fat_triangle"            , .defines = {
         { "ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"},
         { "ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "0"},

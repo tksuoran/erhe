@@ -19,6 +19,8 @@ erhe_target_sources_grouped(
     res/shaders/depth.frag
     res/shaders/standard.vert
     res/shaders/standard.frag
+    res/shaders/grid.vert
+    res/shaders/grid.frag
     erhe.ini
 )
 target_link_libraries(

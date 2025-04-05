@@ -164,15 +164,29 @@ Editor_rendering::Editor_rendering(
     };
 
     auto sky = make_renderpass("Sky");
-    sky->mesh_layers    = {};
-    sky->passes         = { &m_pipeline_renderpasses.sky };
-    sky->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
+    sky->mesh_layers           = {};
+    sky->non_mesh_vertex_count = 3; // Fullscreen quad
+    sky->passes                = { &m_pipeline_renderpasses.sky };
+    sky->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
     sky->filter = erhe::Item_filter{
         .require_all_bits_set         = 0,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0
     };
     sky->allow_shader_stages_override = false;
+
+    // Infinite plane with 4 triangles / 12 indices - https://stackoverflow.com/questions/12965161/rendering-infinitely-large-plane
+    auto grid = make_renderpass("Grid");
+    grid->mesh_layers           = {};
+    grid->non_mesh_vertex_count = 12;
+    grid->passes                = { &m_pipeline_renderpasses.grid };
+    grid->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
+    grid->filter = erhe::Item_filter{
+        .require_all_bits_set         = 0,
+        .require_at_least_one_bit_set = 0,
+        .require_all_bits_clear       = 0
+    };
+    grid->allow_shader_stages_override = false;
 
     // Translucent
     auto translucent_fill = make_renderpass("Content fill translucent");
@@ -591,6 +605,19 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
         },
         [](){ gl::depth_range(0.0f, 0.0f); },
         [](){ gl::depth_range(0.0f, 1.0f); }
+    }
+    , grid{
+        erhe::graphics::Pipeline{
+            erhe::graphics::Pipeline_data{
+                .name           = "Grid",
+                .shader_stages  = &programs.grid.shader_stages,
+                .vertex_input   = &mesh_memory.vertex_input,
+                .input_assembly = Input_assembly_state::triangles,
+                .rasterization  = Rasterization_state::cull_mode_none_depth_clamp,
+                .depth_stencil  = Depth_stencil_state::depth_test_enabled_less_or_equal_stencil_test_disabled(REVERSE_DEPTH),
+                .color_blend    = Color_blend_state::color_blend_premultiplied
+            }
+        }
     }
 #undef REVERSE_DEPTH
 {

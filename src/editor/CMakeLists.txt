@@ -128,6 +128,8 @@ erhe_target_sources_grouped(
     res/shaders/fat_triangle.frag
     res/shaders/fat_triangle.geom
     res/shaders/fat_triangle.vert
+    res/shaders/grid.frag
+    res/shaders/grid.vert
     res/shaders/id.frag
     res/shaders/id.vert
     res/shaders/line_after_compute.frag

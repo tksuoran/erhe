@@ -76,6 +76,20 @@ Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_stencil_test_disab
     .stencil_test_enable = false
 };
 
+Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_less_or_equal_stencil_test_disabled_forward_depth = Depth_stencil_state{
+    .depth_test_enable   = true,
+    .depth_write_enable  = true,
+    .depth_compare_op    = gl::Depth_function::lequal,
+    .stencil_test_enable = false
+};
+
+Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_less_or_equal_stencil_test_disabled_reverse_depth = Depth_stencil_state{
+    .depth_test_enable   = true,
+    .depth_write_enable  = true,
+    .depth_compare_op    = reverse(gl::Depth_function::lequal),
+    .stencil_test_enable = false
+};
+
 Depth_stencil_state Depth_stencil_state::s_depth_test_enabled_greater_or_equal_stencil_test_disabled_forward_depth = Depth_stencil_state{
     .depth_test_enable   = true,
     .depth_write_enable  = true,
@@ -97,11 +111,18 @@ auto Depth_stencil_state::depth_test_enabled_stencil_test_disabled(bool reverse_
         : s_depth_test_enabled_stencil_test_disabled_forward_depth;
 }
 
+auto Depth_stencil_state::depth_test_enabled_less_or_equal_stencil_test_disabled(bool reverse_depth) -> const Depth_stencil_state&
+{
+    return reverse_depth
+        ? s_depth_test_enabled_less_or_equal_stencil_test_disabled_reverse_depth
+        : s_depth_test_enabled_less_or_equal_stencil_test_disabled_forward_depth;
+}
+
 auto Depth_stencil_state::depth_test_enabled_greater_or_equal_stencil_test_disabled(bool reverse_depth) -> const Depth_stencil_state&
 {
     return reverse_depth
-        ? s_depth_test_enabled_stencil_test_disabled_reverse_depth
-        : s_depth_test_enabled_stencil_test_disabled_forward_depth;
+        ? s_depth_test_enabled_greater_or_equal_stencil_test_disabled_reverse_depth
+        : s_depth_test_enabled_greater_or_equal_stencil_test_disabled_forward_depth;
 }
 
 Depth_stencil_state Depth_stencil_state::depth_test_always_stencil_test_disabled = Depth_stencil_state{

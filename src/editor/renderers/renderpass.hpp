@@ -32,7 +32,7 @@ public:
 
     explicit Renderpass(const std::string_view name);
 
-    void render(const Render_context& context) const;
+    virtual void render(const Render_context& context) const;
     void imgui();
 
     // Implements Item_base
@@ -42,6 +42,7 @@ public:
     auto get_type_name() const -> std::string_view override;
 
     std::vector<erhe::scene::Layer_id>                mesh_layers;
+    std::size_t                                       non_mesh_vertex_count{0};
     std::vector<erhe::renderer::Pipeline_renderpass*> passes;
     erhe::primitive::Primitive_mode                   primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     erhe::Item_filter                                 filter{};

@@ -111,6 +111,7 @@ public:
     erhe::graphics::Reloadable_shader_stages circular_brushed_metal;
     erhe::graphics::Reloadable_shader_stages textured;
     erhe::graphics::Reloadable_shader_stages sky;
+    erhe::graphics::Reloadable_shader_stages grid;
     erhe::graphics::Reloadable_shader_stages fat_triangle;
     erhe::graphics::Reloadable_shader_stages wide_lines_draw_color;
     erhe::graphics::Reloadable_shader_stages wide_lines_vertex_color;

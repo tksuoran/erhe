@@ -160,6 +160,7 @@ void Pipelines::rasterization(erhe::graphics::Rasterization_state& rasterization
             gl::Cull_face_mode_from_base_zero
         );
     }
+    ImGui::Checkbox("Depth Clamp", &rasterization.depth_clamp_enable);
     make_combo<gl::Front_face_direction>(
         "Front Face Direction",
         rasterization.front_face_direction,

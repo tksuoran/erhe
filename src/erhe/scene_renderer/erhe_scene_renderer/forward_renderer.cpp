@@ -224,7 +224,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     }
 }
 
-void Forward_renderer::render_fullscreen(const Render_parameters& parameters, const erhe::scene::Light* light)
+void Forward_renderer::draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -289,7 +289,7 @@ void Forward_renderer::render_fullscreen(const Render_parameters& parameters, co
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
         m_graphics_instance.opengl_state_tracker.execute(pipeline);
-        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 3);
+        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, static_cast<GLsizei>(parameters.non_mesh_vertex_count));
 
         if (pass->end) {
             pass->end();
