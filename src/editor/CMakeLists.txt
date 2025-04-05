@@ -273,6 +273,8 @@ erhe_target_sources_grouped(
     windows/composer_window.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
+    windows/icon_browser.cpp
+    windows/icon_browser.hpp
     windows/imgui_window_scene_view_node.cpp
     windows/imgui_window_scene_view_node.hpp
     windows/item_tree_window.cpp
