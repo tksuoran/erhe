@@ -26,6 +26,8 @@ public:
     std::size_t view_depth_near;      // float
     std::size_t view_depth_far;       // float
     std::size_t exposure;             // float
+    std::size_t grid_size;            // vec4
+    std::size_t grid_line_width;      // vec4
 };
 
 class Camera_interface
@@ -48,7 +50,9 @@ public:
         const erhe::scene::Projection& camera_projection,
         const erhe::scene::Node&       camera_node,
         erhe::math::Viewport           viewport,
-        float                          exposure
+        float                          exposure,
+        glm::vec4                      grid_size,
+        glm::vec4                      grid_line_width
     ) -> erhe::renderer::Buffer_range;
 
 private:

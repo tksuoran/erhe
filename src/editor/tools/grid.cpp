@@ -101,8 +101,8 @@ void Grid::render(const Render_context& context)
         return;
     }
 
-    render(context, true); // major
-    render(context, false); // minor
+    //render(context, true); // major
+    //render(context, false); // minor
 }
 
 void Grid::render(const Render_context& context, bool major)

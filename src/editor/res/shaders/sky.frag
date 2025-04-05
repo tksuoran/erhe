@@ -31,11 +31,18 @@ void main()
         camera.cameras[0].world_from_node[3][2]
     );
 
-    highp vec3 pos = v_position.xyz / v_position.w;
-    highp vec3 V = normalize(view_position_in_world - pos);
-    const float pi = 3.1415926535897932384626433832795;
-    highp float elevation = acos(V.y) / pi;      // 0..pi
-    highp float heading   = atan(V.x, V.z) / pi; // -pi/2 .. pi/2
+    highp vec3  pos       = v_position.xyz / v_position.w;
+    highp vec3  V0        = normalize(view_position_in_world - pos);
+    highp vec3  V         = clamp(V, vec3(-1.0), vec3(1.0));
+    const float pi        = 3.1415926535897932384626433832795;
+    highp float epsilon   = 0.000001;
+    highp float elevation = acos(V.y) / pi; // 0..pi
+    highp float heading;
+    if (abs(V.y) > (1.0 - epsilon)) {
+        heading = 0.0;
+    } else {
+        heading = atan(V.x, V.z) / pi; // -pi/2 .. pi/2
+    }
     highp float intensity = checkerboard(
         vec2(heading, elevation),
         vec2(18.0, 18.0), 
@@ -44,7 +51,7 @@ void main()
     );
 
     highp vec3 sky_color;
-    //out_color.rgb = 0.5 * V + vec3(0.5);
+    // V.y must be clamped or pow() can result NaN
     if (V.y > 0) {
         highp float ground_factor        = 1.0 - pow(1.0 - max(V.y, 0.0), 8.0);
         highp vec3  ground_nadir_color   = vec3(0.1, 0.1, 0.1);

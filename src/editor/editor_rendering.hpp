@@ -66,6 +66,7 @@ public:
     erhe::renderer::Pipeline_renderpass polygon_centroids;
     erhe::renderer::Pipeline_renderpass rendertarget_meshes;
     erhe::renderer::Pipeline_renderpass sky;
+    erhe::renderer::Pipeline_renderpass grid;
 };
 
 class Editor_rendering

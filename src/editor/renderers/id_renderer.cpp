@@ -326,7 +326,14 @@ void Id_renderer::render(const Render_parameters& parameters)
     idr.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
     idr.clip_from_world = clip_from_world;
 
-    const auto camera_range = m_camera_buffers.update(*camera.projection(), *camera.get_node(), viewport, 1.0f);
+    const auto camera_range = m_camera_buffers.update(
+        *camera.projection(),
+        *camera.get_node(),
+        viewport,
+        1.0f,
+        glm::vec4{0.0f},
+        glm::vec4{0.0f}
+    );
     m_camera_buffers.bind(camera_range);
 
     {

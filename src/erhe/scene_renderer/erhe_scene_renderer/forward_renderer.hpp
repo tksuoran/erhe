@@ -59,6 +59,7 @@ public:
         const std::vector<
             std::span<const std::shared_ptr<erhe::scene::Mesh>>
         >&                                                                 mesh_spans;
+        std::size_t                                                        non_mesh_vertex_count{0};
         const std::vector<erhe::renderer::Pipeline_renderpass*>            passes;
         erhe::primitive::Primitive_mode                                    primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
         Primitive_interface_settings                                       primitive_settings{};
@@ -70,10 +71,14 @@ public:
         const glm::uvec4&                                                  debug_joint_indices{0, 0, 0, 0};
         const std::span<glm::vec4>&                                        debug_joint_colors{};
         const std::string_view                                             debug_label;
+
+        const glm::vec4                                                    grid_size      {10.0f,  1.0f,  0.1f,  0.01f};
+        const glm::vec4                                                    grid_line_width{ 0.006, 0.02f, 0.02f, 0.02f};
+
     };
 
     void render(const Render_parameters& parameters);
-    void render_fullscreen(const Render_parameters& parameters, const erhe::scene::Light* light);
+    void draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light);
 
 private:
     erhe::graphics::Instance&                m_graphics_instance;

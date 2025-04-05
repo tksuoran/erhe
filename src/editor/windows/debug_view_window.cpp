@@ -138,20 +138,21 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 
     log_render->trace("Depth to color from texture '{}'", texture->debug_label());
 
-    m_forward_renderer.render_fullscreen(
+    m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
-            .index_type         = m_mesh_memory.buffer_info.index_type,
-            .index_buffer       = nullptr,
-            .vertex_buffer0     = nullptr,
-            .vertex_buffer1     = nullptr,
-            .light_projections  = &light_projections,
-            .lights             = layers.light()->lights,
-            .materials          = {},
-            .mesh_spans         = {},
-            .passes             = { &m_renderpass },
-            .shadow_texture     = texture.get(),
-            .viewport           = output_viewport,
-            .debug_label        = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
+            .index_type            = m_mesh_memory.buffer_info.index_type,
+            .index_buffer          = nullptr,
+            .vertex_buffer0        = nullptr,
+            .vertex_buffer1        = nullptr,
+            .light_projections     = &light_projections,
+            .lights                = layers.light()->lights,
+            .materials             = {},
+            .mesh_spans            = {},
+            .non_mesh_vertex_count = 3, // Full-screen triangle
+            .passes                = { &m_renderpass },
+            .shadow_texture        = texture.get(),
+            .viewport              = output_viewport,
+            .debug_label           = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
         },
         light_projection_transforms.light
     );

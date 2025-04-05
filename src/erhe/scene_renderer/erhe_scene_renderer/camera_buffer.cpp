@@ -26,7 +26,9 @@ Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
         .clip_depth_direction = camera_struct.add_float("clip_depth_direction")->offset_in_parent(),
         .view_depth_near      = camera_struct.add_float("view_depth_near"     )->offset_in_parent(),
         .view_depth_far       = camera_struct.add_float("view_depth_far"      )->offset_in_parent(),
-        .exposure             = camera_struct.add_float("exposure"            )->offset_in_parent()
+        .exposure             = camera_struct.add_float("exposure"            )->offset_in_parent(),
+        .grid_size            = camera_struct.add_vec4 ("grid_size"           )->offset_in_parent(),
+        .grid_line_width      = camera_struct.add_vec4 ("grid_line_width"     )->offset_in_parent()
     }
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
@@ -53,7 +55,9 @@ auto Camera_buffer::update(
     const erhe::scene::Projection& camera_projection,
     const erhe::scene::Node&       camera_node,
     erhe::math::Viewport           viewport,
-    float                          exposure
+    float                          exposure,
+    glm::vec4                      grid_size,
+    glm::vec4                      grid_line_width
 ) -> erhe::renderer::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -99,6 +103,8 @@ auto Camera_buffer::update(
     write(gpu_data, write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
     write(gpu_data, write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
     write(gpu_data, write_offset + offsets.exposure,             as_span(exposure            ));
+    write(gpu_data, write_offset + offsets.grid_size,            as_span(grid_size           ));
+    write(gpu_data, write_offset + offsets.grid_line_width,      as_span(grid_line_width     ));
     write_offset += entry_size;
     buffer_range.close(write_offset);
 

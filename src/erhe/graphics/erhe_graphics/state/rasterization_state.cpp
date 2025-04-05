@@ -2,24 +2,26 @@
 #include "erhe_gl/enum_base_zero_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 
-#define DISABLE_CACHE 1
+// #define DISABLE_CACHE 1
 
 namespace erhe::graphics {
 
 auto Rasterization_state_hash::operator()(const Rasterization_state& rasterization_state) noexcept -> std::size_t
 {
     return
-        (rasterization_state.face_cull_enable ? 1u : 0u)                |
-        (gl::base_zero(rasterization_state.cull_face_mode      ) << 1u) | // 2 bits
-        (gl::base_zero(rasterization_state.front_face_direction) << 3u) | // 1 bit
-        (gl::base_zero(rasterization_state.polygon_mode        ) << 4u);  // 2 bits
+        (rasterization_state.depth_clamp_enable ? 1u : 0u)              |
+        (rasterization_state.face_cull_enable ? 2u : 0u)                |
+        (gl::base_zero(rasterization_state.cull_face_mode      ) << 2u) | // 2 bits
+        (gl::base_zero(rasterization_state.front_face_direction) << 4u) | // 1 bit
+        (gl::base_zero(rasterization_state.polygon_mode        ) << 5u);  // 2 bits
 }
 
-Rasterization_state Rasterization_state::cull_mode_none     {false, gl::Cull_face_mode::back,  gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_front_cw {true,  gl::Cull_face_mode::front, gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_front_ccw{true,  gl::Cull_face_mode::front, gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_back_cw  {true,  gl::Cull_face_mode::back,  gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_back_ccw {true,  gl::Cull_face_mode::back,  gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_none_depth_clamp{true,  false, gl::Cull_face_mode::back,  gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_none            {false, false, gl::Cull_face_mode::back,  gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_front_cw        {false, true,  gl::Cull_face_mode::front, gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_front_ccw       {false, true,  gl::Cull_face_mode::front, gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_back_cw         {false, true,  gl::Cull_face_mode::back,  gl::Front_face_direction::cw,  gl::Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_back_ccw        {false, true,  gl::Cull_face_mode::back,  gl::Front_face_direction::ccw, gl::Polygon_mode::fill};
 
 void Rasterization_state_tracker::reset()
 {
@@ -38,6 +40,11 @@ void Rasterization_state_tracker::execute(const Rasterization_state& state)
         gl::cull_face(state.cull_face_mode);
     } else {
         gl::disable(gl::Enable_cap::cull_face);
+    }
+    if (state.depth_clamp_enable) {
+        gl::enable(gl::Enable_cap::depth_clamp);
+    } else {
+        gl::disable(gl::Enable_cap::depth_clamp);
     }
 
     gl::front_face(state.front_face_direction);
@@ -59,6 +66,14 @@ void Rasterization_state_tracker::execute(const Rasterization_state& state)
         }
     }
 
+    if (state.depth_clamp_enable) {
+        gl::enable(gl::Enable_cap::depth_clamp);
+        m_cache.depth_clamp_enable = true;
+    } else {
+        gl::disable(gl::Enable_cap::depth_clamp);
+        m_cache.depth_clamp_enable = false;
+    }
+
     if (m_cache.front_face_direction != state.front_face_direction) {
         gl::front_face(state.front_face_direction);
         m_cache.front_face_direction = state.front_face_direction;
@@ -75,6 +90,7 @@ auto operator==(const Rasterization_state& lhs, const Rasterization_state& rhs) 
 {
     return
         (lhs.face_cull_enable     == rhs.face_cull_enable    ) &&
+        (lhs.depth_clamp_enable   == rhs.depth_clamp_enable  ) &&
         (lhs.cull_face_mode       == rhs.cull_face_mode      ) &&
         (lhs.front_face_direction == rhs.front_face_direction) &&
         (lhs.polygon_mode         == rhs.polygon_mode        );
