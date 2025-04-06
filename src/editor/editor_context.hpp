@@ -72,6 +72,7 @@ class Scene_message_bus;
 class Selection;
 class Selection_tool;
 class Settings_window;
+class Sheet_window;
 class Time;
 class Tools;
 class Transform_tool;
@@ -139,6 +140,7 @@ public:
     Selection*                              selection             {nullptr};
     Selection_tool*                         selection_tool        {nullptr};
     Settings_window*                        settings_window       {nullptr};
+    Sheet_window*                           sheet_window          {nullptr};
     Time*                                   time                  {nullptr};
     Tools*                                  tools                 {nullptr};
     Transform_tool*                         transform_tool        {nullptr};

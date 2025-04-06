@@ -103,8 +103,10 @@ public:
     static constexpr uint64_t index_node_attachment        = 29;
     static constexpr uint64_t index_brush_placement        = 30;
     static constexpr uint64_t index_render_style           = 31;
-    static constexpr uint64_t index_shader_graph_node      = 32;
-    static constexpr uint64_t count                        = 33;
+    static constexpr uint64_t index_graph                  = 32;
+    static constexpr uint64_t index_graph_node             = 33;
+    static constexpr uint64_t index_graph_link             = 34;
+    static constexpr uint64_t count                        = 35;
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -138,7 +140,9 @@ public:
     static constexpr uint64_t node_attachment        = (uint64_t{1} << index_node_attachment       );
     static constexpr uint64_t brush_placement        = (uint64_t{1} << index_brush_placement       );
     static constexpr uint64_t render_style           = (uint64_t{1} << index_render_style          );
-    static constexpr uint64_t shader_graph_node      = (uint64_t{1} << index_shader_graph_node     );
+    static constexpr uint64_t graph                  = (uint64_t{1} << index_graph                 );
+    static constexpr uint64_t graph_node             = (uint64_t{1} << index_graph_node            );
+    static constexpr uint64_t graph_link             = (uint64_t{1} << index_graph_link            );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -173,7 +177,10 @@ public:
         "Node_attachment",
         "Brush_placement",
         "Render_style",
-        "Shader_graph_node"
+        "Graph",
+        "Graph_node",
+        "Graph_link"
+        "Graph_link"
     };
 };
 

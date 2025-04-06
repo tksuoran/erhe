@@ -47,6 +47,7 @@
 #include "windows/rendergraph_window.hpp"
 #include "windows/selection_window.hpp"
 #include "windows/settings_window.hpp"
+#include "windows/sheet_window.hpp"
 #include "windows/tool_properties_window.hpp"
 #include "windows/viewport_config_window.hpp"
 
@@ -68,6 +69,7 @@
 #include "erhe_gl/gl_log.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gltf/gltf_log.hpp"
+#include "erhe_graph/graph_log.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/instance.hpp"
@@ -1020,6 +1022,7 @@ public:
         m_editor_context.selection              = m_selection             .get();
         m_editor_context.selection_tool         = m_selection_tool        .get();
         m_editor_context.settings_window        = m_settings_window       .get();
+        m_editor_context.sheet_window           = m_sheet_window          .get();
         m_editor_context.time                   = m_time                  .get();
         m_editor_context.tools                  = m_tools                 .get();
         m_editor_context.transform_tool         = m_transform_tool        .get();
@@ -1199,6 +1202,7 @@ void run_editor()
         erhe::file::initialize_logging();
         erhe::gltf::initialize_logging();
         erhe::geometry::initialize_logging();
+        erhe::graph::initialize_logging();
         erhe::graphics::initialize_logging();
         erhe::imgui::initialize_logging();
         erhe::item::initialize_logging();

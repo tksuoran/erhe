@@ -301,6 +301,8 @@ erhe_target_sources_grouped(
     windows/selection_window.hpp
     windows/settings_window.cpp
     windows/settings_window.hpp
+    windows/sheet_window.cpp
+    windows/sheet_window.hpp
     windows/tool_properties_window.cpp
     windows/tool_properties_window.hpp
     windows/viewport_config_window.cpp
@@ -343,6 +345,7 @@ target_link_libraries(
     erhe::geometry_renderer
     erhe::gl
     erhe::gltf
+    erhe::graph
     erhe::graphics
     erhe::graphics_buffer_sink
     erhe::imgui
