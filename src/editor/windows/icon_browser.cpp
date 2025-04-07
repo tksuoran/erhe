@@ -1,10 +1,12 @@
 #include "windows/icon_browser.hpp"
 
+#include "editor_context.hpp"
+
+#include "IconsMaterialDesignIcons.h"
+
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-
-#include "editor_context.hpp"
 
 #include <imgui/imgui.h>
 
@@ -19,8 +21,6 @@ Icon_browser::Icon_browser(
     , m_context                {context}
 {
 }
-
-#include "IconsMaterialDesignIcons.h"
 
 void Icon_browser::imgui()
 {

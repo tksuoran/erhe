@@ -21,6 +21,30 @@ erhe_target_sources_grouped(
     editor_windows.cpp
     editor_windows.hpp
     erhe.ini
+    graph/node_properties.cpp
+    graph/node_properties.hpp
+    graph/graph_window.cpp
+    graph/graph_window.hpp
+    graph/payload.cpp
+    graph/payload.hpp
+    graph/constant.cpp
+    graph/constant.hpp
+    graph/add.cpp
+    graph/add.hpp
+    graph/subtract.cpp
+    graph/subtract.hpp
+    graph/multiply.cpp
+    graph/multiply.hpp
+    graph/divide.cpp
+    graph/divide.hpp
+    graph/load.cpp
+    graph/load.hpp
+    graph/shader_graph.cpp
+    graph/shader_graph.hpp
+    graph/shader_graph_node.cpp
+    graph/shader_graph_node.hpp
+    graph/store.cpp
+    graph/store.hpp
     graphics/gradients.cpp
     graphics/gradients.hpp
     graphics/icon_rasterization.cpp
@@ -279,8 +303,6 @@ erhe_target_sources_grouped(
     windows/imgui_window_scene_view_node.hpp
     windows/item_tree_window.cpp
     windows/item_tree_window.hpp
-    windows/graph_window.cpp
-    windows/graph_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
     windows/network_window.cpp
