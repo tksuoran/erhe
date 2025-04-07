@@ -20,6 +20,7 @@ auto Node::get_type_name() const -> std::string_view
 }
 
 Node::Node(const Node&) = default;
+
 Node& Node::operator=(const Node&) = default;
 
 Node::Node()
@@ -46,11 +47,6 @@ auto Node::node_from_this() -> std::shared_ptr<Node>
 auto Node::get_graph_id() const -> int
 {
     return m_graph_node_id;
-}
-
-auto Node::get_name() const -> const std::string_view
-{
-    return m_name;
 }
 
 auto Node::get_input_pins() const -> const std::vector<Pin>&

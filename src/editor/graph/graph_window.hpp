@@ -1,5 +1,7 @@
 #pragma once
 
+#include "graph/shader_graph.hpp"
+
 #include "erhe_commands/command.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graph/graph.hpp"
@@ -34,57 +36,9 @@ class Editor_context;
 class Editor_message;
 class Editor_message_bus;
 
-class Payload
-{
-public:
-    auto operator+=(const Payload& rhs) -> Payload&;
-    auto operator-=(const Payload& rhs) -> Payload&;
-    auto operator*=(const Payload& rhs) -> Payload&;
-    auto operator/=(const Payload& rhs) -> Payload&;
-
-    erhe::dataformat::Format format;
-    std::array<int, 4>       int_value;
-    std::array<float, 4>     float_value;
-};
-
-auto operator+(const Payload& lhs, const Payload& rhs) -> Payload;
-auto operator-(const Payload& lhs, const Payload& rhs) -> Payload;
-auto operator*(const Payload& lhs, const Payload& rhs) -> Payload;
-auto operator/(const Payload& lhs, const Payload& rhs) -> Payload;
 
 class Sheet;
-
-class Shader_graph : public erhe::graph::Graph
-{
-public:
-    void evaluate(Sheet* sheet);
-    auto load    (int row, int column) const -> double;
-    void store   (int row, int column, double value);
-
-private:
-    Sheet* m_sheet{nullptr};
-};
-
-class Shader_graph_node : public erhe::graph::Node
-{
-public:
-    Shader_graph_node(const char* label);
-
-    auto accumulate_input_from_links(std::size_t i) -> Payload;
-    auto get_output                 (std::size_t i) const -> Payload;
-    auto get_input                  (std::size_t i) const -> Payload;
-    void set_input                  (std::size_t i, Payload payload);
-    void set_output                 (std::size_t i, Payload payload);
-    void make_input_pin             (std::size_t key, std::string_view name);
-    void make_output_pin            (std::size_t key, std::string_view name);
-
-    virtual void evaluate(Shader_graph& graph);
-    virtual void imgui   ();
-
-private:
-    std::vector<Payload> m_input_payloads;
-    std::vector<Payload> m_output_payloads;
-};
+class Shader_graph_node;
 
 class Graph_window : public erhe::imgui::Imgui_window
 {

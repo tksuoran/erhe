@@ -31,7 +31,6 @@ public:
     auto get_type_name() const -> std::string_view override;
 
     [[nodiscard]] auto get_graph_id   () const -> int;
-    [[nodiscard]] auto get_name       () const -> const std::string_view;
     [[nodiscard]] auto get_input_pins () const -> const std::vector<Pin>&;
     [[nodiscard]] auto get_input_pins ()       -> std::vector<Pin>&;
     [[nodiscard]] auto get_output_pins() const -> const std::vector<Pin>&;
@@ -42,7 +41,6 @@ public:
 
 protected:
     int              m_graph_node_id;
-    std::string      m_name;
     std::vector<Pin> m_input_pins;
     std::vector<Pin> m_output_pins;
 };
