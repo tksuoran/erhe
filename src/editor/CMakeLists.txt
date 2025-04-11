@@ -31,6 +31,8 @@ erhe_target_sources_grouped(
     graph/constant.hpp
     graph/add.cpp
     graph/add.hpp
+    graph/passthrough.cpp
+    graph/passthrough.hpp
     graph/subtract.cpp
     graph/subtract.hpp
     graph/multiply.cpp

@@ -15,17 +15,17 @@ class Editor_context;
 class Sheet;
 class Shader_graph;
 
-class Flow_direction
+class Node_edge
 {
 public:
-    static constexpr int left_to_right = 0;
-    static constexpr int right_to_left = 1;
-    static constexpr int top_to_bottom = 2;
-    static constexpr int bottom_to_top = 3;
-    static constexpr int count         = 4;
+    static constexpr int left   = 0;
+    static constexpr int right  = 1;
+    static constexpr int top    = 2;
+    static constexpr int bottom = 3;
+    static constexpr int count  = 4;
 };
 
-auto get_flow_direction_name(int direction) -> const char*;
+auto get_node_edge_name(int direction) -> const char*;
 
 class Shader_graph_node : public erhe::graph::Node
 {
@@ -52,6 +52,7 @@ protected:
     {
         Editor_context&                context;
         ax::NodeEditor::EditorContext& node_editor;
+        ImDrawList*                    draw_list{nullptr};
         float                          pin_width;
         float                          pin_label_width;
         float                          side_width;
@@ -59,16 +60,21 @@ protected:
         ImVec2                         pin_table_size{};
         ImVec2                         node_table_size{};
         ImFont*                        icon_font{nullptr};
+        int                            pin_col;
+        int                            pin_label_col;
+        int                            pin_edge;
+        float                          edge_x;
     };
-    void show_input_pins (Node_context& context);
-    void show_output_pins(Node_context& context);
+    void show_pins(Node_context& context, std::vector<erhe::graph::Pin>& pins);
+
+    void text_unformatted_edge(int edge, const char* text);
 
     static constexpr std::size_t pin_key_todo = 1;
 
     std::vector<Payload> m_input_payloads;
     std::vector<Payload> m_output_payloads;
-    //bool                 m_show_config   {false};
-    int                  m_flow_direction{Flow_direction::left_to_right};
+    int                  m_input_pin_edge {Node_edge::left};
+    int                  m_output_pin_edge{Node_edge::right};
 };
 
 } // namespace editor

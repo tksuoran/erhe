@@ -39,6 +39,7 @@ class Editor_message_bus;
 
 class Sheet;
 class Shader_graph_node;
+class Node_style_editor_window;
 
 class Graph_window : public erhe::imgui::Imgui_window
 {
@@ -57,21 +58,24 @@ public:
     auto flags() -> ImGuiWindowFlags override;
 
 private:
-    auto make_constant() -> Shader_graph_node*;
-    auto make_load    () -> Shader_graph_node*;
-    auto make_store   () -> Shader_graph_node*;
-    auto make_add     () -> Shader_graph_node*;
-    auto make_sub     () -> Shader_graph_node*;
-    auto make_mul     () -> Shader_graph_node*;
-    auto make_div     () -> Shader_graph_node*;
+    auto make_constant   () -> Shader_graph_node*;
+    auto make_passthrough() -> Shader_graph_node*;
+    auto make_load       () -> Shader_graph_node*;
+    auto make_store      () -> Shader_graph_node*;
+    auto make_add        () -> Shader_graph_node*;
+    auto make_sub        () -> Shader_graph_node*;
+    auto make_mul        () -> Shader_graph_node*;
+    auto make_div        () -> Shader_graph_node*;
 
     void on_message(Editor_message& message);
 
-    Editor_context&                                m_context;
-    Shader_graph                                   m_graph;
-    std::unique_ptr<ax::NodeEditor::EditorContext> m_node_editor;
+    Editor_context&                                 m_context;
+    Shader_graph                                    m_graph;
+    std::unique_ptr<ax::NodeEditor::EditorContext>  m_node_editor;
 
+    std::unique_ptr<Node_style_editor_window>       m_style_editor_window;
     std::vector<std::shared_ptr<Shader_graph_node>> m_nodes;
+
 };
 
 

@@ -537,7 +537,7 @@ void ed::Pin::Draw(ImDrawList* drawList, DrawFlags flags)
 ImVec2 ed::Pin::GetClosestPoint(const ImVec2& p) const
 {
     auto pivot  = m_Pivot;
-    auto extent = m_Radius + m_ArrowSize;
+    auto extent = m_Radius;// + m_ArrowSize;
 
     if (m_SnapLinkToDir && extent > 0.0f)
     {
@@ -554,8 +554,8 @@ ImLine ed::Pin::GetClosestLine(const Pin* pin) const
 {
     auto pivotA  =      m_Pivot;
     auto pivotB  = pin->m_Pivot;
-    auto extentA =      m_Radius +      m_ArrowSize;
-    auto extentB = pin->m_Radius + pin->m_ArrowSize;
+    auto extentA =      m_Radius; // +      m_ArrowSize;
+    auto extentB = pin->m_Radius; // + pin->m_ArrowSize;
 
     if (m_SnapLinkToDir && extentA > 0.0f)
     {
@@ -991,6 +991,7 @@ ImRect ed::Link::GetBounds() const
             bounds.Max.y += 0.5f;
         }
 
+#if 0
         if (m_StartPin->m_ArrowSize)
         {
             const auto start_dir = ImNormalized(ImCubicBezierTangent(curve.P0, curve.P1, curve.P2, curve.P3, 0.0f));
@@ -1012,6 +1013,7 @@ ImRect ed::Link::GetBounds() const
             auto arrowBounds = ImRect(min, ImMax(max, min + ImVec2(1, 1)));
             bounds.Add(arrowBounds);
         }
+#endif
 
         return bounds;
     }

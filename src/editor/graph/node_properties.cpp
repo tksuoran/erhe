@@ -114,14 +114,29 @@ void Node_properties_window::node_properties(Shader_graph_node& node)
 {
     m_property_editor.push_group("Node", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
     m_property_editor.add_entry(
-        "Flow Direction",
+        "Inputs",
         [&node]() {
-            if (ImGui::BeginCombo("Flow Direction", get_flow_direction_name(node.m_flow_direction))) {
-                for (int i = 0; i < Flow_direction::count; ++i) {
-                    bool selected = (node.m_flow_direction == i);
-                    ImGui::Selectable(get_flow_direction_name(i), &selected, ImGuiSelectableFlags_None);
+            if (ImGui::BeginCombo("##inputs", get_node_edge_name(node.m_input_pin_edge))) {
+                for (int i = 0; i < Node_edge::count; ++i) {
+                    bool selected = (node.m_input_pin_edge == i);
+                    ImGui::Selectable(get_node_edge_name(i), &selected, ImGuiSelectableFlags_None);
                     if (selected) {
-                        node.m_flow_direction = i;
+                        node.m_input_pin_edge = i;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        }
+    );
+    m_property_editor.add_entry(
+        "Outputs",
+        [&node]() {
+            if (ImGui::BeginCombo("##outputs", get_node_edge_name(node.m_output_pin_edge))) {
+                for (int i = 0; i < Node_edge::count; ++i) {
+                    bool selected = (node.m_output_pin_edge == i);
+                    ImGui::Selectable(get_node_edge_name(i), &selected, ImGuiSelectableFlags_None);
+                    if (selected) {
+                        node.m_output_pin_edge = i;
                     }
                 }
                 ImGui::EndCombo();

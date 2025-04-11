@@ -2088,6 +2088,10 @@ private:
             }
             const std::shared_ptr<erhe::primitive::Triangle_soup>& triangle_soup = primitive_render_shape->get_triangle_soup();
             const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive_render_shape->get_geometry_const();
+            if (!geometry && !triangle_soup) {
+                log_gltf->warn("Mesh primitive has neither triangle soup nor geometry");
+                continue;
+            }
             Export_entry export_entry = triangle_soup
                 ? process_triangle_soup(triangle_soup.get())
                 : process_geometry(geometry.get());

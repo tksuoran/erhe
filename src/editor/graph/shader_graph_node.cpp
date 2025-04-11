@@ -3,9 +3,6 @@
 #include "editor_log.hpp"
 #include "tools/selection_tool.hpp"
 
-//#include "windows/IconsMaterialDesignIcons.h"
-#define ICON_MDI_COG                                      "\xf3\xb0\x92\x93" // U+F0493
-
 #include "erhe_defer/defer.hpp"
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
@@ -15,13 +12,13 @@
 
 namespace editor {
 
-auto get_flow_direction_name(int direction) -> const char*
+auto get_node_edge_name(int direction) -> const char*
 {
     switch (direction) {
-        case Flow_direction::left_to_right: return "Left to Right";
-        case Flow_direction::right_to_left: return "Right to Left";
-        case Flow_direction::top_to_bottom: return "Top to Bottom";
-        case Flow_direction::bottom_to_top: return "Bottom to Top";
+        case Node_edge::left:   return "Left";
+        case Node_edge::right:  return "Right";
+        case Node_edge::top:    return "Top";
+        case Node_edge::bottom: return "Bottom";
         default: return "?";
     }
 }
@@ -103,18 +100,27 @@ void Shader_graph_node::node_editor(Editor_context& editor_context, ax::NodeEdit
 
     ax::NodeEditor::NodeId node_id{get_id()};
     node_editor.BeginNode(node_id);
-
     Node_context context {
         .context         = editor_context,
         .node_editor     = node_editor,
-        .pin_width       = 32.0f,
+        .pin_width       =   0.0f,
         .pin_label_width =  70.0f,
-        .center_width    = 220.0f,
+        .center_width    = 150.0f,
         .icon_font       = editor_context.imgui_renderer->icon_font()
     };
     context.side_width      = context.pin_width + context.pin_label_width;
     context.pin_table_size  = ImVec2{context.side_width, 0.0f};
-    context.node_table_size = ImVec2{context.center_width + 2.0f * context.side_width, 0.0f},
+    context.node_table_size = ImVec2{context.center_width + 2.0f * context.side_width, 0.0f};
+    //context.draw_list       = node_editor.GetNodeBackgroundDrawList(node_id);
+    context.draw_list       = ImGui::GetWindowDrawList();
+    //context.draw_list       = node_editor.GetHintBackgroundDrawList();
+
+    const ImVec2 node_position = node_editor.GetNodePosition(node_id);
+    const ImVec2 node_size     = node_editor.GetNodeSize(node_id);
+    const ImVec2 top_left      = node_position;
+    const ImVec2 bottom_right  = top_left + node_size;
+    const float  left_edge     = top_left.x;
+    const float  right_edge    = bottom_right.x;
 
     ImGui::BeginTable("##NodeTable", 3, ImGuiTableFlags_None, context.node_table_size);
     ImGui::TableSetupColumn("lhs",    ImGuiTableColumnFlags_WidthFixed, context.side_width);
@@ -126,51 +132,58 @@ void Shader_graph_node::node_editor(Editor_context& editor_context, ax::NodeEdit
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(m_name.c_str());
-        //ImGui::TableSetColumnIndex(2);
-        //ImGui::PushFont(context.icon_font);
-        //const float cell_width   = ImGui::GetContentRegionAvail().x;
-        //const float button_width = ImGui::CalcTextSize(ICON_MDI_COG).x + ImGui::GetStyle().FramePadding.x * 2.0f;
-        //ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cell_width - button_width);
-        //if (ImGui::Button(ICON_MDI_COG)) {
-        //    m_show_config = !m_show_config;
-        //}
-        ImGui::PopFont();
     }
 
     ImGui::TableNextRow();
 
-    //if (m_show_config) {
-    //    ImGui::TableSetColumnIndex(1);
-    //    ImGui::TextUnformatted("Config");
-    //    if (ImGui::IsItemHovered()) {
-    //        node_editor.Suspend();
-    //        ImGui::SetTooltip("Config tooltip");
-    //        node_editor.Resume();
-    //    }
-    //
-    //    if (ImGui::BeginCombo("Flow Direction", get_flow_direction_name(m_flow_direction))) {
-    //        for (int i = 0; i < Flow_direction::count; ++i) {
-    //            bool selected = (m_flow_direction == i);
-    //            ImGui::Selectable(get_flow_direction_name(i), &selected, ImGuiSelectableFlags_None);
-    //            if (selected) {
-    //                m_flow_direction = i;
-    //            }
-    //        }
-    //        ImGui::EndCombo();
-    //    }
-    //} else
     {
-        // Input pins
+        // Left edge
         ImGui::TableSetColumnIndex(0);
-        show_input_pins(context);
+        context.pin_edge      = Node_edge::left;
+        context.pin_col       = 0;
+        context.pin_label_col = 1;
+        context.edge_x        = left_edge;
+        if (m_input_pin_edge == Node_edge::left) {
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{1.0f, 0.0});
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{-1.0f, 0.0});
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PivotAlignment,  ImVec2{-0.75f, 0.5f});
+            show_pins(context, get_input_pins());
+            node_editor.PopStyleVar(3);
+        }
+        if (m_output_pin_edge == Node_edge::left) {
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{-1.0f, 0.0});
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{ 1.0f, 0.0});
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowSize,   0.0f);
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowWidth,  0.0f);
+            show_pins(context, get_output_pins());
+            node_editor.PopStyleVar(4);
+        }
 
         // Content
         ImGui::TableSetColumnIndex(1);
         imgui();
 
-        // Output pins - and settings icon
+        // Right edge
         ImGui::TableSetColumnIndex(2);
-        show_output_pins(context);
+        context.pin_edge      = Node_edge::right;
+        context.pin_col       = 1;
+        context.pin_label_col = 0;
+        context.edge_x        = right_edge;
+        if (m_input_pin_edge == Node_edge::right) {
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{1.0f, 0.0});
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{1.0f, 0.0});
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PivotAlignment,  ImVec2{1.75f, 0.5f});
+            show_pins(context, get_input_pins());
+            node_editor.PopStyleVar(3);
+        }
+        if (m_output_pin_edge == Node_edge::right) {
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{1.0f, 0.0});
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{1.0f, 0.0});
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowSize,  0.0f);
+            node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowWidth, 0.0f);
+            show_pins(context, get_output_pins());
+            node_editor.PopStyleVar(4);
+        }
     }
 
     ImGui::EndTable();
@@ -187,48 +200,48 @@ void Shader_graph_node::node_editor(Editor_context& editor_context, ax::NodeEdit
     }
 }
 
-void Shader_graph_node::show_input_pins(Node_context& context)
+void Shader_graph_node::text_unformatted_edge(int edge, const char* text)
 {
-    ImGui::BeginTable("##InputPins", 2, ImGuiTableFlags_None, context.pin_table_size);
-    ImGui::TableSetupColumn("InputPin",   ImGuiTableColumnFlags_WidthFixed, context.pin_width);
-    ImGui::TableSetupColumn("InputLabel", ImGuiTableColumnFlags_WidthFixed, context.pin_label_width);
-    for (const erhe::graph::Pin& pin : get_input_pins()) {
-        log_graph_editor->info("  Input Pin {} {}", pin.get_name(), pin.get_id());
-        ImGui::TableNextRow();
-            
-        ImGui::TableSetColumnIndex(0);
-        context.node_editor.BeginPin(ax::NodeEditor::PinId{&pin}, ax::NodeEditor::PinKind::Input);
-        ImGui::Bullet();
-        context.node_editor.EndPin();
-
-        ImGui::TableSetColumnIndex(1);
-        ImGui::TextUnformatted(pin.get_name().data());
+    switch (edge) {
+        case Node_edge::left: {
+            ImGui::TextUnformatted(text);
+            break;
+        }
+        case Node_edge::right: {
+            float column_width = ImGui::GetColumnWidth();
+            float text_width   = ImGui::CalcTextSize(text).x;
+            float padding      = column_width - text_width;
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + padding);
+            ImGui::TextUnformatted(text);
+            break;
+        }
+        default: {
+            ImGui::TextUnformatted("!TODO!"); // TODO
+            break;
+        }
     }
-    ImGui::EndTable();
 }
 
-void Shader_graph_node::show_output_pins(Node_context& context)
+void Shader_graph_node::show_pins(Node_context& context, std::vector<erhe::graph::Pin>& pins)
 {
-    ImGui::BeginTable("##OutputPins", 2, ImGuiTableFlags_None, context.pin_table_size);
-    ImGui::TableSetupColumn("OutputLabel", ImGuiTableColumnFlags_WidthFixed, context.pin_label_width);
-    ImGui::TableSetupColumn("OutputPin",   ImGuiTableColumnFlags_WidthFixed, context.pin_width);
-    for (const erhe::graph::Pin& pin : get_output_pins()) {
-        log_graph_editor->info("  Output Pin {} {}", pin.get_name(), pin.get_id());
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        const char* label = pin.get_name().data();
-        float column_width = ImGui::GetColumnWidth();
-        float text_width   = ImGui::CalcTextSize(label).x;
-        float padding      = column_width - text_width;
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + padding);
-        ImGui::TextUnformatted(label);
+    float half_extent = 10.0f;
+    for (const erhe::graph::Pin& pin : pins) {
+        text_unformatted_edge(context.pin_edge, pin.get_name().data());
 
-        ImGui::TableSetColumnIndex(1);
-        context.node_editor.BeginPin(ax::NodeEditor::PinId{&pin}, ax::NodeEditor::PinKind::Output);
-        ImGui::Bullet();
+        const ImVec2 cell_min      = ImGui::GetItemRectMin();
+        const ImVec2 cell_max      = ImGui::GetItemRectMax();
+        const float  cell_center_y = 0.5f * (cell_min.y + cell_max.y);
+        const ImVec2 pin_center{context.edge_x, cell_center_y};
+        const ImVec2 min{pin_center.x - half_extent, pin_center.y - half_extent};
+        const ImVec2 max{pin_center.x + half_extent, pin_center.y + half_extent};
+
+        context.node_editor.BeginPin(ax::NodeEditor::PinId{&pin}, pin.is_source() ? ax::NodeEditor::PinKind::Output : ax::NodeEditor::PinKind::Input);
+        context.node_editor.PinRect(min, max);
         context.node_editor.EndPin();
+
+        context.draw_list->AddRectFilled(min, max, 0xff444444, 4.0f, ImDrawFlags_RoundCornersAll);
+        context.draw_list->AddRect      (min, max, 0xffcccccc, 4.0f, ImDrawFlags_RoundCornersAll, 2.0f);
     }
-    ImGui::EndTable(); // Outputs
 }
 
 } // namespace editor

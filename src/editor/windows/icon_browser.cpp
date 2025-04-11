@@ -25,6 +25,9 @@ Icon_browser::Icon_browser(
 void Icon_browser::imgui()
 {
     ImFont* icon_font = m_context.imgui_renderer->icon_font();
+    if (icon_font == nullptr) {
+        return;
+    }
 
     ImGui::PushFont(icon_font);
     ImGui::TextUnformatted(ICON_MDI_FILTER);

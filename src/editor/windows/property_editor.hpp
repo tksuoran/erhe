@@ -13,6 +13,7 @@ namespace editor {
 class Property_editor
 {
 public:
+    void reset_row   ();
     void reset       ();
     void resume      ();
     void push_group  (std::string_view label, ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None, float indent = 0.0f, bool* open_state = nullptr);
