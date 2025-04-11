@@ -185,23 +185,23 @@
 
 
         {
-            "name": "Configure Clang 18",
+            "name": "Configure Clang 20",
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX":      "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER":          "clang-18",
-                "CMAKE_CXX_COMPILER":        "clang++-18",
+                "CMAKE_C_COMPILER":          "clang-20",
+                "CMAKE_CXX_COMPILER":        "clang++-20",
                 "CMAKE_EXE_LINKER_FLAGS":    "-fuse-ld=lld",
                 "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld"
             }
         },
         {
-            "name": "Configure Clang 18 Debug",
-            "inherits": [ "Configure Debug", "Configure Clang 18" ]
+            "name": "Configure Clang 20 Debug",
+            "inherits": [ "Configure Debug", "Configure Clang 20" ]
         },
         {
-            "name": "Configure Clang 18 Release",
-            "inherits": [ "Configure Release", "Configure Clang 18" ]
+            "name": "Configure Clang 20 Release",
+            "inherits": [ "Configure Release", "Configure Clang 20" ]
         }
     ],
     "buildPresets": [
@@ -272,13 +272,13 @@
         },
 
         {
-            "name": "Build Clang 18 Debug",
-            "configurePreset": "Configure Clang 18 Debug",
+            "name": "Build Clang 20 Debug",
+            "configurePreset": "Configure Clang 20 Debug",
             "configuration": "Debug"
         },
         {
-            "name": "Build Clang 18 Release",
-            "configurePreset": "Configure Clang 18 Release",
+            "name": "Build Clang 20 Release",
+            "configurePreset": "Configure Clang 20 Release",
             "configuration": "Release"
         },
 
