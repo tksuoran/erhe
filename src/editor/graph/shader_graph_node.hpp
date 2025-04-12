@@ -52,18 +52,16 @@ protected:
     {
         Editor_context&                context;
         ax::NodeEditor::EditorContext& node_editor;
-        ImDrawList*                    draw_list{nullptr};
+        ImDrawList*                    draw_list      {nullptr};
         float                          pin_width;
         float                          pin_label_width;
-        float                          side_width;
+        float                          side_width     {0.0f};
         float                          center_width;
-        ImVec2                         pin_table_size{};
+        ImVec2                         pin_table_size {};
         ImVec2                         node_table_size{};
-        ImFont*                        icon_font{nullptr};
-        int                            pin_col;
-        int                            pin_label_col;
-        int                            pin_edge;
-        float                          edge_x;
+        ImFont*                        icon_font      {nullptr};
+        int                            pin_edge       {0};
+        float                          edge_x         {0.0f};
     };
     void show_pins(Node_context& context, std::vector<erhe::graph::Pin>& pins);
 

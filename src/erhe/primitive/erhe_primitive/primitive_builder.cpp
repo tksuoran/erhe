@@ -25,8 +25,8 @@ Build_context_root::Build_context_root(
     , mesh            {mesh}
     , build_info      {build_info}
     , element_mappings{element_mappings_in}
-    , vertex_format   {build_info.buffer_info.vertex_format}
     , mesh_info       {::get_mesh_info(mesh)}
+    , vertex_format   {build_info.buffer_info.vertex_format}
 {
     get_mesh_info          ();
     get_vertex_attributes  ();

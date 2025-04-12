@@ -27,7 +27,7 @@ public:
         std::function<erhe::geometry::Geometry(
             const erhe::geometry::Geometry& lhs,
             const erhe::geometry::Geometry& rhs)
-        >                           operation;
+        >                           operation{};
     };
 
     explicit Merge_operation(Parameters&& parameters);

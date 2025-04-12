@@ -69,13 +69,13 @@ void Shader_graph_node::set_output(const std::size_t i, Payload payload)
 
 void Shader_graph_node::make_input_pin(std::size_t key, std::string_view name)
 {
-    m_input_payloads.emplace_back(std::move(Payload{}));
+    m_input_payloads.emplace_back();
     base_make_input_pin(key, name);
 }
 
 void Shader_graph_node::make_output_pin(std::size_t key, std::string_view name)
 {
-    m_output_payloads.emplace_back(std::move(Payload{}));
+    m_output_payloads.emplace_back();
     base_make_output_pin(key, name);
 }
 
@@ -140,8 +140,6 @@ void Shader_graph_node::node_editor(Editor_context& editor_context, ax::NodeEdit
         // Left edge
         ImGui::TableSetColumnIndex(0);
         context.pin_edge      = Node_edge::left;
-        context.pin_col       = 0;
-        context.pin_label_col = 1;
         context.edge_x        = left_edge;
         if (m_input_pin_edge == Node_edge::left) {
             node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{1.0f, 0.0});
@@ -166,8 +164,6 @@ void Shader_graph_node::node_editor(Editor_context& editor_context, ax::NodeEdit
         // Right edge
         ImGui::TableSetColumnIndex(2);
         context.pin_edge      = Node_edge::right;
-        context.pin_col       = 1;
-        context.pin_label_col = 0;
         context.edge_x        = right_edge;
         if (m_input_pin_edge == Node_edge::right) {
             node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{1.0f, 0.0});

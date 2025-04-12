@@ -33,8 +33,8 @@ protected:
         std::function<void()>   editor;
         ImGuiTreeNodeFlags      flags{ImGuiTreeNodeFlags_None};
         float                   indent{0.0f};
-        std::optional<uint32_t> label_text_color;
-        std::optional<uint32_t> label_background_color;
+        std::optional<uint32_t> label_text_color{};
+        std::optional<uint32_t> label_background_color{};
         bool*                   open_state{nullptr};
     };
     std::vector<Entry> m_entries;

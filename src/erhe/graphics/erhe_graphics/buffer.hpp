@@ -88,6 +88,7 @@ private:
     void capability_check(gl::Buffer_storage_mask storage_mask);
     void capability_check(gl::Map_buffer_access_mask access_mask);
 
+    ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
     Instance&                      m_instance;
     Gl_buffer                      m_handle;
     gl::Buffer_target              m_target             {gl::Buffer_target::array_buffer};
@@ -96,7 +97,6 @@ private:
     gl::Buffer_storage_mask        m_storage_mask       {0};
     gl::Map_buffer_access_mask     m_access_mask        {0};
     const char*                    m_debug_label        {nullptr};
-    ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
 
     static constexpr const char* s_pool_name = "glBuffer";
 

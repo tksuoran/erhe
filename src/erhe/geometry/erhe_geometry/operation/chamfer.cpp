@@ -449,14 +449,14 @@ void Chamfer::build()
         const GEO::index_t facet0_next_vertex = src_corner_to_dst_vertex[facet0_next_corner];
         const GEO::index_t facet0_vertex      = src_corner_to_dst_vertex[facet0_corner];
         if (facet0_increasing) {
-            //  Source mesh         Destination mesh 
-            //                                       
-            //       facet 0            -------      
-            //    \     <     /       /         \    
-            //    hi---------lo      hi - - - - lo   
-            //    /     >     \       \         /    
-            //       facet 1            -------      
-            //                                       
+            //  Source mesh         Destination mesh  .
+            //                                        .
+            //       facet 0            -------       .
+            //    \     <     /       /         \     .
+            //    hi---------lo      hi - - - - lo    .
+            //    /     >     \       \         /     .
+            //       facet 1            -------       .
+            //                                        .
             assert_elements_are_unique({lo_vertex, facet1_next_vertex, facet1_vertex, hi_vertex, facet0_next_vertex, facet0_vertex});
             destination_mesh.facets.set_vertex(new_dst_facet, 0, lo_vertex);
             destination_mesh.facets.set_vertex(new_dst_facet, 1, facet1_next_vertex);
@@ -466,14 +466,14 @@ void Chamfer::build()
             destination_mesh.facets.set_vertex(new_dst_facet, 5, facet0_vertex);
         } else {
             assert_elements_are_unique({hi_vertex, facet1_next_vertex, facet1_vertex, lo_vertex, facet0_next_vertex, facet0_vertex});
-            //  Source mesh         Destination mesh 
-            //                                       
-            //       facet 0            -------      
-            //    \     <     /       /         \    
-            //    lo---------hi      lo - - - - hi   
-            //    /     >     \       \         /    
-            //       facet 1            -------      
-            //                                       
+            //  Source mesh         Destination mesh  .
+            //                                        .
+            //       facet 0            -------       .
+            //    \     <     /       /         \     .
+            //    lo---------hi      lo - - - - hi    .
+            //    /     >     \       \         /     .
+            //       facet 1            -------       .
+            //                                        .
             destination_mesh.facets.set_vertex(new_dst_facet, 0, hi_vertex);
             destination_mesh.facets.set_vertex(new_dst_facet, 1, facet1_next_vertex);
             destination_mesh.facets.set_vertex(new_dst_facet, 2, facet1_vertex);

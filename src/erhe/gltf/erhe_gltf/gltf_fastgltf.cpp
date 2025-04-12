@@ -1817,7 +1817,8 @@ private:
             .data = fastgltf::sources::Vector{
                 .bytes    = std::vector<std::byte>{index_data_source.begin(), index_data_source.end()},
                 .mimeType = fastgltf::MimeType::GltfBuffer
-            }
+            },
+            .name = {}
         };
 
         m_gltf_asset.buffers.emplace_back(std::move(gltf_index_buffer));
@@ -1840,6 +1841,8 @@ private:
             .type            = fastgltf::AccessorType::Scalar,
             .componentType   = fastgltf::ComponentType::UnsignedInt,
             .normalized      = false,
+            .max             = {},
+            .min             = {},
             .bufferViewIndex = entry.index_buffer_view,
             .sparse          = {},
             .name            = "indices"
@@ -1869,7 +1872,8 @@ private:
             .data = fastgltf::sources::Vector{
                 .bytes    = std::vector<std::byte>{vertex_data_source.begin(), vertex_data_source.end()},
                 .mimeType = fastgltf::MimeType::GltfBuffer
-            }
+            },
+            .name = {}
         };
         m_gltf_asset.buffers.emplace_back(std::move(gltf_vertex_buffer));
 
@@ -1925,6 +1929,8 @@ private:
                 .type            = get_accessor_type (erhe_attribute.attribute->format),
                 .componentType   = get_component_type(erhe_attribute.attribute->format),
                 .normalized      = get_normalized    (erhe_attribute.attribute->format),
+                .max             = {},
+                .min             = {},
                 .bufferViewIndex = entry.vertex_buffer_view,
                 .sparse          = {},
                 .name            = FASTGLTF_STD_PMR_NS::string{attribute_name}
@@ -2052,15 +2058,29 @@ private:
                         material->base_color.b,
                         material->base_color.a
                     },
-                    .metallicFactor  = material->metallic,
-                    .roughnessFactor = material->roughness.x,
+                    .metallicFactor           = material->metallic,
+                    .roughnessFactor          = material->roughness.x,
+                    .baseColorTexture         = {},
+                    .metallicRoughnessTexture = {}
                 },
+                .normalTexture    = {},
+                .occlusionTexture = {},
+                .emissiveTexture  = {},
                 .emissiveFactor = {
                     material->emissive.r,
                     material->emissive.g,
                     material->emissive.b
                 },
-                .name = FASTGLTF_STD_PMR_NS::string{material->get_name()}
+                .anisotropy                               = {},
+                .clearcoat                                = {},
+                .iridescence                              = {},
+                .sheen                                    = {},
+                .specular                                 = {},
+                .transmission                             = {},
+                .volume                                   = {},
+                .packedNormalMetallicRoughnessTexture     = {},
+                .packedOcclusionRoughnessMetallicTextures = {},
+                .name                                     = FASTGLTF_STD_PMR_NS::string{material->get_name()}
             };
             m_gltf_asset.materials.push_back(std::move(gltf_material));
         }
@@ -2148,6 +2168,7 @@ private:
                 };
                 break;
             }
+            case erhe::scene::Projection::Type::other:
             case erhe::scene::Projection::Type::generic_frustum: {
                 ERHE_FATAL("Not implemented");
             }

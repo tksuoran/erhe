@@ -245,8 +245,8 @@ GPU_ring_buffer::GPU_ring_buffer(
             .debug_label         = create_info.debug_label
         }
     }
-    , m_read_offset    {m_buffer.capacity_byte_count()}
     , m_read_wrap_count{0}
+    , m_read_offset    {m_buffer.capacity_byte_count()}
 {
     ERHE_VERIFY(gl_helpers::is_indexed(create_info.target) || create_info.binding_point == std::numeric_limits<unsigned int>::max());
 

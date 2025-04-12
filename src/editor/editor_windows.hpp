@@ -34,10 +34,9 @@ private:
 
     void renderdoc_capture();
 
+    Editor_context&                m_context;
+    Imgui_builtin_windows          m_imgui_builtin_windows;
     erhe::commands::Lambda_command m_renderdoc_capture_command;
-
-    Editor_context&       m_context;
-    Imgui_builtin_windows m_imgui_builtin_windows;
 };
 
 }

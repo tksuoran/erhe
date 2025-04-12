@@ -459,6 +459,7 @@ void Fly_camera_tool::synthesize_input()
         erhe::window::Input_event{
             .type = erhe::window::Input_event_type::no_event,
             .timestamp_ns = timestamp_ns,
+            .u = { .dummy = false }
         }
     );
 

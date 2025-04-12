@@ -1062,7 +1062,7 @@ void Context_window::clear_current() const
     glfwMakeContextCurrent(nullptr);
 }
 
-auto Context_window::delay_before_swap(float seconds) const -> bool
+auto Context_window::delay_before_swap(float /*seconds*/) const -> bool
 {
 #if defined(_WIN32)
     if (m_NV_delay_before_swap != nullptr) {

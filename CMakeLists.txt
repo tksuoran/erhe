@@ -127,14 +127,14 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              fmt
-    VERSION           11.0.2
-    GIT_TAG           11.0.2
+    VERSION           11.1.4
+    GIT_TAG           11.1.4
     GITHUB_REPOSITORY fmtlib/fmt
 )
 
 CPMAddPackage(
     NAME              spdlog
-    VERSION           1.14.1
+    VERSION           1.15.2
     GITHUB_REPOSITORY gabime/spdlog
     OPTIONS "SPDLOG_FMT_EXTERNAL ON"
 )
@@ -395,8 +395,11 @@ endif ()
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(
         NAME              JoltPhysics
-        GIT_TAG           cpm
+        #VERSION           5.3.0
+        #GIT_TAG           v5.3.0
+        GIT_TAG           clang-20-no-overriding-option
         GITHUB_REPOSITORY tksuoran/JoltPhysics
+        #GITHUB_REPOSITORY jrouwe/JoltPhysics
         DOWNLOAD_ONLY     YES
     )
     if (JoltPhysics_ADDED)

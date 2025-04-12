@@ -151,8 +151,8 @@ private:
     const erhe::graphics::Shader_resource*             m_downsample_texture_resource; // for non bindless textures
     const erhe::graphics::Shader_resource*             m_upsample_texture_resource;   // for non bindless textures
     std::filesystem::path                              m_shader_path;
-    Pipelines                                          m_pipelines;
     Shader_stages                                      m_shader_stages;
+    Pipelines                                          m_pipelines;
     erhe::graphics::Gpu_timer                          m_gpu_timer;
 };
 

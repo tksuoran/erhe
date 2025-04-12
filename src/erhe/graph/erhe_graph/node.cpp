@@ -72,13 +72,13 @@ auto Node::get_output_pins() -> std::vector<Pin>&
 void Node::base_make_input_pin(std::size_t key, std::string_view name)
 {
     const std::size_t slot = m_input_pins.size();
-    m_input_pins.emplace_back(std::move(erhe::graph::Pin{this, slot, false, key, name}));
+    m_input_pins.emplace_back(erhe::graph::Pin{this, slot, false, key, name});
 }
 
 void Node::base_make_output_pin(std::size_t key, std::string_view name)
 {
     const std::size_t slot = m_output_pins.size();
-    m_output_pins.emplace_back(std::move(erhe::graph::Pin{this, slot, true, key, name}));
+    m_output_pins.emplace_back(erhe::graph::Pin{this, slot, true, key, name});
 }
 
 } // namespace erhe::graph

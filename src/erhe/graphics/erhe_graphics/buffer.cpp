@@ -126,12 +126,12 @@ Buffer::~Buffer() noexcept
 Buffer::Buffer(Buffer&& other) noexcept
     : m_instance              {other.m_instance}
     , m_handle                {std::move(other.m_handle)}
-    , m_debug_label           {other.m_debug_label}
     , m_target                {other.m_target}
     , m_capacity_byte_count   {other.m_capacity_byte_count}
     , m_next_free_byte        {other.m_next_free_byte}
     , m_storage_mask          {other.m_storage_mask}
     , m_access_mask           {other.m_access_mask}
+    , m_debug_label           {other.m_debug_label}
     , m_map                   {other.m_map}
     , m_map_byte_offset       {other.m_map_byte_offset}
     , m_map_buffer_access_mask{other.m_map_buffer_access_mask}

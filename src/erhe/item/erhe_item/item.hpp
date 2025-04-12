@@ -179,7 +179,7 @@ public:
         "Render_style",
         "Graph",
         "Graph_node",
-        "Graph_link"
+        "Graph_link",
         "Graph_link"
     };
 };
