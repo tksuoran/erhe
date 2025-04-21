@@ -612,16 +612,16 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
         delaunay->set_keeps_infinite(true);
         delaunay->set_vertices(nb_pts, points.data());
         destination.vertices.set_dimension(dim);
-        GEO::vector<GEO::index_t> tri2v;
+        GEO::vector<GEO::index_t> triangles_indices;
         for (GEO::index_t t = delaunay->nb_finite_cells(); t < delaunay->nb_cells(); ++t) {
             for (GEO::index_t lv = 0; lv < 4; ++lv) {
                 GEO::signed_index_t v = delaunay->cell_vertex(t, lv);
-                if (v != -1) {
-                    tri2v.push_back(GEO::index_t(v));
+                if (v != GEO::NO_INDEX) {
+                    triangles_indices.push_back(GEO::index_t(v));
                 }
             }
         }
-        destination.facets.assign_triangle_mesh(3, points, tri2v, true);
+        destination.facets.assign_triangle_mesh(3, points, triangles_indices, true);
         destination.vertices.remove_isolated();
         destination.vertices.set_single_precision();
         return true;

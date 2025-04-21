@@ -52,6 +52,8 @@ erhe_target_sources_grouped(
     erhe_geometry/shapes/box.hpp
     erhe_geometry/shapes/cone.cpp
     erhe_geometry/shapes/cone.hpp
+    erhe_geometry/shapes/convex_hull.cpp
+    erhe_geometry/shapes/convex_hull.hpp
     erhe_geometry/shapes/disc.cpp
     erhe_geometry/shapes/disc.hpp
     erhe_geometry/shapes/regular_polygon.cpp
