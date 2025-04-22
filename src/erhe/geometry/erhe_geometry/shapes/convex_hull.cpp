@@ -1,4 +1,5 @@
 #include "erhe_geometry/shapes/convex_hull.hpp"
+#include "erhe_geometry/geometry_log.hpp"
 
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_repair.h>
@@ -14,7 +15,9 @@ void make_convex_hull(GEO::Mesh& mesh, const std::vector<glm::vec3>& in_points)
 {
     GEO::vector<double> points;
     GEO::index_t point_count = 0;
+    //log_geometry->info("Input points:");
     for (glm::vec3 p : in_points) {
+        //log_geometry->info("  {}, {}, {}", p.x, p.y, p.z);
         points.push_back(static_cast<double>(p.x));
         points.push_back(static_cast<double>(p.y));
         points.push_back(static_cast<double>(p.z));
@@ -27,33 +30,34 @@ void make_convex_hull(GEO::Mesh& mesh, const std::vector<glm::vec3>& in_points)
     delaunay->set_vertices(point_count, points.data());
     GEO::vector<GEO::index_t> triangles_indices;
     for (GEO::index_t t = delaunay->nb_finite_cells(); t < delaunay->nb_cells(); ++t) {
-        for (GEO::index_t lv = 0; lv < 4; ++lv ) {
-            GEO::signed_index_t v = delaunay->cell_vertex(t, lv);
-            if (v != GEO::NO_INDEX) {
-                triangles_indices.push_back(GEO::index_t(v));
-            }
+        GEO::index_t v0 = delaunay->cell_vertex(t, 0);
+        GEO::index_t v1 = delaunay->cell_vertex(t, 1);
+        GEO::index_t v2 = delaunay->cell_vertex(t, 2);
+        GEO::index_t v3 = delaunay->cell_vertex(t, 3);
+        if(v0 == GEO::NO_INDEX) {
+            triangles_indices.push_back(v3);
+            triangles_indices.push_back(v2);
+            triangles_indices.push_back(v1);
+        } else if (v1 == GEO::NO_INDEX) {
+            triangles_indices.push_back(v0);
+            triangles_indices.push_back(v2);
+            triangles_indices.push_back(v3);
+        } else if (v2 == GEO::NO_INDEX) {
+            triangles_indices.push_back(v0);
+            triangles_indices.push_back(v3);
+            triangles_indices.push_back(v1);
+        } else if (v3 == GEO::NO_INDEX) {
+            triangles_indices.push_back(v0);
+            triangles_indices.push_back(v1);
+            triangles_indices.push_back(v2);
         }
     }
+
     mesh.vertices.set_dimension(3);
     mesh.vertices.set_double_precision();
     mesh.facets.assign_triangle_mesh(GEO::coord_index_t{3}, points, triangles_indices, true);
     mesh.vertices.remove_isolated();
-
-    GEO::mesh_reorient(mesh);
-
-    //const double merge_vertices_epsilon = 0.001;
-    //const double fill_hole_max_area = 0.01;
-    //GEO::mesh_repair(
-    //    mesh,
-    //    static_cast<GEO::MeshRepairMode>(GEO::MeshRepairMode::MESH_REPAIR_COLOCATE | GEO::MeshRepairMode::MESH_REPAIR_DUP_F),
-    //    merge_vertices_epsilon
-    //);
-    //GEO::fill_holes(mesh, fill_hole_max_area);
-    GEO::MeshSurfaceIntersection intersection(mesh);
-    intersection.intersect();
-    //intersection.remove_internal_shells();
-    intersection.simplify_coplanar_facets();
-    //GEO::mesh_repair(mesh, GEO::MESH_REPAIR_DEFAULT, merge_vertices_epsilon);
+    mesh.facets.connect();
     mesh.vertices.set_single_precision();
 }
 

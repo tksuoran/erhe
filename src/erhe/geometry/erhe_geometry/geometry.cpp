@@ -1072,6 +1072,11 @@ void Geometry::process(const uint64_t flags)
         update_connectivity();
         build_edges();
     }
+    if (flags & process_flag_merge_coplanar_neighbors) {
+        merge_coplanar_neighbors();
+        update_connectivity();
+        build_edges();
+    }
     if (flags & process_flag_compute_smooth_vertex_normals) {
         compute_mesh_vertex_normal_smooth(m_mesh, m_attributes);
     }
@@ -1182,6 +1187,122 @@ void build_extra_connectivity(
 void Geometry::update_connectivity()
 {
     build_extra_connectivity(m_mesh, m_vertex_to_corners, m_corner_to_facet);
+}
+
+
+void Geometry::collect_corners_from_facet(Edge_collapse_context& context, GEO::index_t facet, std::optional<GEO::index_t> trigger_vertex)
+{
+    context.facets_to_delete.push_back(facet);
+
+    const GEO::index_t corner_count = m_mesh.facets.nb_corners(facet);
+
+    GEO::index_t corner_rotation = 0;
+    if (trigger_vertex.has_value()) {
+        for (GEO::index_t local_facet_corner = 0; local_facet_corner < corner_count; ++local_facet_corner) {
+            const GEO::index_t corner = m_mesh.facets.corner(facet, local_facet_corner);
+            const GEO::index_t vertex = m_mesh.facet_corners.vertex(corner);
+            if (vertex == trigger_vertex.value()) {
+                // log_geometry->debug("Found trigger vertex {} from local corner {}", vertex, local_facet_corner);
+                corner_rotation = local_facet_corner;
+                break;
+            }
+        }
+    }
+
+    for (GEO::index_t local_facet_corner_ = 0; local_facet_corner_ < corner_count; ++local_facet_corner_) {
+        const GEO::index_t local_facet_corner = (local_facet_corner_ + corner_rotation) % corner_count;
+        const GEO::index_t local_edge         = local_facet_corner;
+        const GEO::index_t corner             = m_mesh.facets.corner(facet, local_facet_corner);
+        const GEO::index_t vertex             = m_mesh.facet_corners.vertex(corner);
+        const GEO::index_t adjacent_facet     = m_mesh.facets.adjacent(facet, local_edge);
+        if (!context.is_edge_facet(adjacent_facet)) {
+            // log_geometry->trace("Add vertex {} corner {} from facet {}", vertex, corner, facet);
+            context.merged_face_corners.push_back(vertex);
+        } else {
+            if (!context.is_started(adjacent_facet)) {
+                // log_geometry->trace("Edge vertex {} corner {} from facet {} -> adjacent facet {} call", vertex, corner, facet, adjacent_facet);
+                collect_corners_from_facet(context, adjacent_facet, vertex);
+            }
+            // else {
+            //     log_geometry->trace("Edge vertex {} corner {} from facet {} -> adjacent facet {} already done", vertex, corner, facet, adjacent_facet);
+            // }
+        }
+    }
+}
+
+void Geometry::merge_coplanar_neighbors()
+{
+    constexpr float epsilon = 0.99f;
+
+    std::vector<GEO::index_t> edges_to_merge;
+    for (GEO::index_t edge : m_mesh.edges) {
+        std::optional<GEO::vec3f> reference_normal;
+        bool can_merge = true;
+        for (GEO::index_t facet : m_edge_to_facets.at(edge)) {
+            GEO::vec3f facet_normal = mesh_facet_normalf(m_mesh, facet);
+            if (!reference_normal.has_value()) {
+                reference_normal = facet_normal;
+                continue;
+            }
+            float dp = GEO::dot(reference_normal.value(), facet_normal);
+            if (dp < epsilon) {
+                can_merge = false;
+                break;
+            }
+        }
+
+        if (can_merge) {
+            edges_to_merge.push_back(edge);
+        }
+    }
+
+    // {
+    //     std::stringstream ss;
+    //     ss << fmt::format("Found {} mergable edges:", edges_to_merge.size());
+    //     for (GEO::index_t edge : edges_to_merge) {
+    //         ss << " " << edge;
+    //     }
+    //     log_geometry->debug(ss.str());
+    // }
+
+    GEO::vector<GEO::index_t> facets_to_delete;
+    std::vector<std::vector<GEO::index_t>> new_facets;
+    for (GEO::index_t edge : edges_to_merge) {
+        Edge_collapse_context context{
+            .edge             = edge,
+            .v0               = m_mesh.edges.vertex(edge, 0),
+            .v1               = m_mesh.edges.vertex(edge, 1),
+            .facets_to_delete = facets_to_delete,
+            .edge_facets      = m_edge_to_facets.at(edge)
+        };
+        ERHE_VERIFY(context.edge_facets.size() == 2);
+
+        // log_geometry->debug("  Mergable edge {} vertex {} to {}", edge, context.v0, context.v1);
+
+        collect_corners_from_facet(context, context.edge_facets.front(), {});
+
+        // std::stringstream ss;
+        // ss << "    Original facets";
+        // for (GEO::index_t facet : context.facets_to_delete) {
+        //     ss << " " << facet;
+        // }
+        // ss << " - combined corners:";
+        // for (GEO::index_t corner : context. merged_face_corners) {
+        //     ss << " " << corner;
+        // }
+        // log_geometry->debug("{}", ss.str());
+
+        new_facets.push_back(std::move(context.merged_face_corners));
+    }
+    m_mesh.facets.delete_elements(facets_to_delete);
+    for (const auto& new_facet_corners : new_facets) {
+        GEO::index_t corner_count = static_cast<GEO::index_t>(new_facet_corners.size());
+        GEO::index_t new_facet = m_mesh.facets.create_polygon(corner_count);
+        for (GEO::index_t local_corner = 0; local_corner < corner_count; ++local_corner) {
+            m_mesh.facets.set_vertex(new_facet, local_corner, new_facet_corners[local_corner]);
+        }
+    }
+    m_mesh.facets.connect();
 }
 
 void Geometry::debug_trace() const

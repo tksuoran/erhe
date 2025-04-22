@@ -711,12 +711,13 @@ public:
     static constexpr uint64_t process_flag_compute_smooth_vertex_normals      = (1u << 3u);
     static constexpr uint64_t process_flag_generate_facet_texture_coordinates = (1u << 4u);
     static constexpr uint64_t process_flag_debug_trace                        = (1u << 5u);
+    static constexpr uint64_t process_flag_merge_coplanar_neighbors           = (1u << 6u);
 
     void process(uint64_t flags);
     void generate_mesh_facet_texture_coordinates();
     void build_edges();
-
     void update_connectivity();
+    void merge_coplanar_neighbors();
 
     void debug_trace() const;
 
@@ -747,6 +748,25 @@ public:
     void access_debug_entries(std::function<void(std::vector<Debug_text>& debug_texts, std::vector<Debug_line>& debug_lines)> op);
 
 private:
+    class Edge_collapse_context
+    {
+    public:
+        inline auto is_edge_facet(GEO::index_t facet) -> bool {
+            return std::find(edge_facets.begin(), edge_facets.end(), facet) != edge_facets.end();
+        };
+        inline auto is_started(GEO::index_t facet) -> bool {
+            return std::find(facets_to_delete.begin(), facets_to_delete.end(), facet) != facets_to_delete.end();
+        };
+
+        GEO::index_t                     edge;
+        GEO::index_t                     v0;
+        GEO::index_t                     v1;
+        GEO::vector<GEO::index_t>&       facets_to_delete;
+        std::vector<GEO::index_t>        merged_face_corners;
+        const std::vector<GEO::index_t>& edge_facets;
+    };
+    void collect_corners_from_facet(Edge_collapse_context& edge_collapse_context, GEO::index_t facet, std::optional<GEO::index_t> trigger_vertex);
+
     GEO::Mesh                              m_mesh;
     Mesh_attributes                        m_attributes;
     std::string                            m_name;
