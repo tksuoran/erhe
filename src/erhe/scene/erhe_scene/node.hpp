@@ -118,7 +118,7 @@ public:
     [[nodiscard]] auto transform_direction_from_local_to_world(const glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto get_scene                              () const -> Scene*;
 
-    void node_sanity_check     () const;
+    void node_sanity_check     (bool destruction_in_progress = false) const;
     void update_world_from_node();
     void update_transform      (uint64_t serial);
     void set_parent_from_node  (const glm::mat4 parent_from_node);

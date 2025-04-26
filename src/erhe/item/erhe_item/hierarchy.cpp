@@ -289,7 +289,7 @@ auto Hierarchy::get_mutable_children() -> std::vector<std::shared_ptr<Hierarchy>
     return m_children;
 }
 
-void Hierarchy::hierarchy_sanity_check() const
+void Hierarchy::hierarchy_sanity_check(bool destruction_in_progress) const
 {
 #if 1
     sanity_check_root_path(this);
@@ -309,7 +309,17 @@ void Hierarchy::hierarchy_sanity_check() const
     }
 
     for (const auto& child : m_children) {
-        if (child->get_parent().lock().get() != this) {
+        if (destruction_in_progress) {
+            std::shared_ptr<Hierarchy> expected_missing_parent = child->get_parent().lock();
+            if (expected_missing_parent) {
+                log->error(
+                    "Item {} child {} parent == {} (expected missing parent, as it is being destroyed)",
+                    describe(),
+                    child->describe(),
+                    expected_missing_parent->describe()
+                );
+            }
+        } else if (child->get_parent().lock().get() != this) {
             log->error(
                 "Item {} child {} parent == {}",
                 describe(),

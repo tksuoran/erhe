@@ -73,7 +73,7 @@ Node::Node(const Node& src, for_clone)
 
 Node::~Node() noexcept
 {
-    node_sanity_check();
+    node_sanity_check(true);
 
     log->trace(
         "~Node '{}' depth = {} child count = {}",
@@ -376,7 +376,7 @@ void Node::update_world_from_node()
     }
 }
 
-void Node::node_sanity_check() const
+void Node::node_sanity_check(bool destruction_in_progress) const
 {
     for (const auto& child : get_children()) {
         erhe::Item_host* child_host  = child->get_item_host();
@@ -414,7 +414,7 @@ void Node::node_sanity_check() const
         }
     }
 
-    hierarchy_sanity_check();
+    hierarchy_sanity_check(destruction_in_progress);
 }
 
 auto Node::parent_from_node_transform() const -> const Trs_transform&
