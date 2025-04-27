@@ -7,6 +7,8 @@ cmake ^
  -B build ^
  -S . ^
  --graphviz=erhe_cmake_dependencies.dot ^
+ --profiling-format=google-trace ^
+ --profiling-output=erhe_cmake_profiling.json ^
  -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
  -Wno-dev ^
  -DERHE_USE_PRECOMPILED_HEADERS=OFF ^
