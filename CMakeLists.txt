@@ -198,7 +198,7 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              nlohmann_json
-    VERSION           3.11.3
+    VERSION           3.12.0
     GITHUB_REPOSITORY nlohmann/json
 )
 
@@ -208,17 +208,18 @@ vscode_support()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     CPMAddPackage(
         NAME              sdl
-        VERSION           release-3.2.4
-        GIT_TAG           release-3.2.4
+        VERSION           release-3.2.10
+        GIT_TAG           release-3.2.10
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
-                    "SDL_STATIC ON"
-            "SDL_STATIC_DEFAULT ON"
-              "SDL3_MAINPROJECT OFF"
-                  "SDL_OPENGLES OFF"
-                    "SDL_OPENVR OFF"
-                     "SDL_AUDIO OFF"
-                    "SDL_RENDER OFF"
+                         "SDL_STATIC ON"
+                 "SDL_STATIC_DEFAULT ON"
+                   "SDL3_MAINPROJECT OFF"
+                       "SDL_OPENGLES OFF"
+                         "SDL_OPENVR OFF"
+                          "SDL_AUDIO OFF"
+                         "SDL_RENDER OFF"
+        "SDL_WAYLAND_LIBDECOR_SHARED OFF"
     )
     message(STATUS "Erhe configured to use SDL for OpenGL context window.")
     add_definitions(-DERHE_WINDOW_LIBRARY_SDL)
@@ -245,13 +246,13 @@ endif ()
 
 CPMAddPackage(
     NAME              simdjson
-    VERSION           3.9.4
+    VERSION           3.12.3
     GITHUB_REPOSITORY simdjson/simdjson
 )
 
 CPMAddPackage(
     NAME              taskflow
-    VERSION           3.7.0
+    VERSION           3.9.0
     GITHUB_REPOSITORY taskflow/taskflow
     OPTIONS
            "TF_BUILD_TESTS OFF"
@@ -260,7 +261,7 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              wuffs
-    VERSION           0.4.0-alpha.5
+    VERSION           0.4.0-alpha.9
     GITHUB_REPOSITORY google/wuffs
 )
 
@@ -284,7 +285,7 @@ endif ()
 if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
     CPMAddPackage(
         NAME              lunasvg
-        VERSION           2.4.0
+        VERSION           3.2.1
         GITHUB_REPOSITORY sammycage/lunasvg
     )
     message(STATUS "Erhe configured to use lunasvg for SVG.")
@@ -348,8 +349,8 @@ endif ()
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
     CPMAddPackage(
         NAME              freetype
-        VERSION           2.13.2
-        GIT_TAG           VER-2-13-2
+        VERSION           2.13.3
+        GIT_TAG           VER-2-13-3
         GITHUB_REPOSITORY freetype/freetype
     )
     message(STATUS "Erhe configured to use freetype for font rasterization.")
@@ -396,10 +397,11 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(
         NAME              JoltPhysics
         #VERSION           5.3.0
+        GIT_TAG           2dcab94cbc97e57747aa96b4f7060ffedaa2dbc3
         #GIT_TAG           v5.3.0
-        GIT_TAG           clang-20-no-overriding-option
-        GITHUB_REPOSITORY tksuoran/JoltPhysics
-        #GITHUB_REPOSITORY jrouwe/JoltPhysics
+        #GIT_TAG           clang-20-no-overriding-option
+        #GITHUB_REPOSITORY tksuoran/JoltPhysics
+        GITHUB_REPOSITORY jrouwe/JoltPhysics
         DOWNLOAD_ONLY     YES
     )
     if (JoltPhysics_ADDED)

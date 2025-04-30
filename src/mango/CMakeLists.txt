@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(mango CXX C)
 
 cmake_policy(SET CMP0076 NEW) # target_sources() command converts relative paths
