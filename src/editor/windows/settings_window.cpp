@@ -43,7 +43,7 @@ void Settings_window::rasterize_icons()
 
 void Settings_window::imgui()
 {
-    m_entries.clear();
+    reset();
 
     const float ui_scale = m_context.editor_settings->get_ui_scale();
     const ImVec2 button_size{110.0f * ui_scale, 0.0f};
@@ -173,7 +173,7 @@ void Settings_window::imgui()
 
         //ImGui::SliderInt  ("Shadow Resolution",  &graphics_preset.shadow_resolution,  1, graphics.max_shadow_resolution);
         add_entry("Shadow Light Count", [&graphics, &graphics_preset](){
-            ImGui::SliderInt("##", &graphics_preset.shadow_light_count, 1, std::max(graphics.max_depth_layers, 20));
+            ImGui::SliderInt("##", &graphics_preset.shadow_light_count, 1, std::min(graphics.max_depth_layers, 20));
         });
     }
 
