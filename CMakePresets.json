@@ -16,7 +16,7 @@
                 "ERHE_RAYTRACE_LIBRARY":           "bvh",
                 "ERHE_SVG_LIBRARY":                "lunasvg",
                 "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
+                "ERHE_WINDOW_LIBRARY":             "sdl",
                 "ERHE_XR_LIBRARY":                 "none"
             }
         },
@@ -84,10 +84,8 @@
             "hidden": true,
             "name": "Configure Clang",
             "cacheVariables": {
-                "CMAKE_C_COMPILER":          "clang",
-                "CMAKE_CXX_COMPILER":        "clang++",
-                "CMAKE_EXE_LINKER_FLAGS":    "-fuse-ld=lld",
-                "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld"
+                "CMAKE_C_COMPILER":   "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
             }
         },
         {
@@ -188,11 +186,9 @@
             "name": "Configure Clang 20",
             "hidden": true,
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX":      "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER":          "clang-20",
-                "CMAKE_CXX_COMPILER":        "clang++-20",
-                "CMAKE_EXE_LINKER_FLAGS":    "-fuse-ld=lld",
-                "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld"
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER":     "clang-20",
+                "CMAKE_CXX_COMPILER":   "clang++-20"
             }
         },
         {
