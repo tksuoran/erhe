@@ -38,7 +38,7 @@ public:
     }
 
 private:
-    FILE* m_file; // owning pointer
+    FILE* m_file{nullptr}; // owning pointer
 };
 
 class File_read_stream
@@ -68,7 +68,7 @@ public:
     }
 
 private:
-    FILE* m_file; // owning pointer
+    FILE* m_file{nullptr}; // owning pointer
 };
 
 } // namespace hextiles

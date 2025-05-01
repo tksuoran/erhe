@@ -3,7 +3,7 @@
 #include "types.hpp"
 
 #include <cstdint>
-#include "etl/string.h"
+#include <string>
 
 namespace hextiles {
 
@@ -90,7 +90,7 @@ public:
 
 struct Unit_type
 {
-    etl::string<max_name_length> name;
+    std::string name;
     int         tile           {0};
     int         tech_level     {0};
     int         production_time{0};

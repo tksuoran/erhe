@@ -6,8 +6,9 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 
-#include "etl/string.h"
 #include "etl/vector.h"
+
+#include <string>
 
 namespace erhe::imgui {
     class Imgui_windows;
@@ -53,11 +54,10 @@ private:
     Tile_renderer& m_tile_renderer;
     Tiles&         m_tiles;
 
-    etl::vector<etl::string<max_name_length>, max_player_count> m_player_names;
-    etl::vector<size_t, max_city_count>       m_start_cities;
+    etl::vector<std::string, max_player_count> m_player_names;
+    etl::vector<size_t, max_city_count>        m_start_cities;
 
-    struct Create_parameters
-    {
+    struct Create_parameters {
         int  number_of_coastal_cities {10};
         int  number_of_land_cities    {10};
         int  minimum_city_distance    {10};

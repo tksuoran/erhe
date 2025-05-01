@@ -25,11 +25,8 @@
 #include <glm/glm.hpp>
 
 #include <array>
-#include <bitset>
 #include <cstdint>
-#include <deque>
 #include <memory>
-#include <string_view>
 #include <vector>
 
 namespace erhe::graphics{

@@ -479,10 +479,7 @@ auto Game::make_unit(
     };
 }
 
-void Game::add_player(
-    const etl::string<max_name_length>& name,
-    const Tile_coordinate               location
-)
+void Game::add_player(const std::string& name, const Tile_coordinate location)
 {
     const terrain_tile_t city_terrain_tile = m_map->get_terrain_tile(location);
     const terrain_t      city_terrain      = m_tiles.get_terrain_from_tile(city_terrain_tile);

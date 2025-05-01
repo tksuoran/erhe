@@ -2,10 +2,10 @@
 
 #include "types.hpp"
 
-#include <cstdint>
-
-#include "etl/string.h"
 #include "etl/vector.h"
+
+#include <cstdint>
+#include <string>
 
 namespace hextiles {
 
@@ -27,26 +27,26 @@ public:
 
 struct Terrain_type
 {
-    etl::string<max_name_length> name;
-    int       tile                    {0};
-    uint32_t  move_type_allow_mask    {0};  // MAllow
-    int       move_cost               {0};  // MCost
-    int       threat                  {0};  // Threat
-    terrain_t damaged_version         {0};  // ADamage
-    int       defence_bonus           {0};  // DBonus
-    int       city_size               {0};  // CSize
-    int       strength                {0};  // Strength
-    uint32_t  move_type_level_mask    {0};  // VChg
-    uint32_t  flags                   {0};  //
-    int       generate_elevation      {0};
-    int       generate_priority       {0};
-    terrain_t generate_base           {0};
-    int       generate_min_temperature{0};
-    int       generate_max_temperature{0};
-    int       generate_min_humidity   {0};
-    int       generate_max_humidity   {0};
-    float     generate_ratio          {1.0f};
-    int       group = -1;
+    std::string name;
+    int         tile                    {0};
+    uint32_t    move_type_allow_mask    {0};  // MAllow
+    int         move_cost               {0};  // MCost
+    int         threat                  {0};  // Threat
+    terrain_t   damaged_version         {0};  // ADamage
+    int         defence_bonus           {0};  // DBonus
+    int         city_size               {0};  // CSize
+    int         strength                {0};  // Strength
+    uint32_t    move_type_level_mask    {0};  // VChg
+    uint32_t    flags                   {0};  //
+    int         generate_elevation      {0};
+    int         generate_priority       {0};
+    terrain_t   generate_base           {0};
+    int         generate_min_temperature{0};
+    int         generate_max_temperature{0};
+    int         generate_min_humidity   {0};
+    int         generate_max_humidity   {0};
+    float       generate_ratio          {1.0f};
+    int         group = -1;
 };
 
 constexpr terrain_t Terrain_field   = 39u; // For city gen

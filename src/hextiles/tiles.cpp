@@ -653,11 +653,11 @@ void Tiles::load_unit_defs_v1()
     m_unit_types.reserve(json_unit_types.size());
     for (const auto& json_unit_type : json_unit_types) {
         Unit_type unit_type;
-        unit_type.name            = json_unit_type["Name"    ];
+        unit_type.name            = json_unit_type["Name" ];
 
         // Production
-        unit_type.tech_level      = json_unit_type["Tech"    ];
-        unit_type.production_time = json_unit_type["PTime"   ];
+        unit_type.tech_level      = json_unit_type["Tech" ];
+        unit_type.production_time = json_unit_type["PTime"];
         unit_type.city_size       = 0;
 
         // flags

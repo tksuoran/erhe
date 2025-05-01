@@ -4,8 +4,6 @@
 #include "stream.hpp"
 #include "types.hpp"
 
-#include <span>
-
 #include "etl/vector.h"
 
 namespace hextiles {

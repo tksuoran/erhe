@@ -7,8 +7,9 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 
-#include "etl/string.h"
 #include "etl/vector.h"
+
+#include <string>
 
 namespace erhe::imgui {
     class Imgui_windows;
@@ -27,10 +28,7 @@ class Unit;
 struct Game_create_parameters
 {
     Map* map{nullptr};
-    etl::vector<
-        etl::string<max_name_length>,
-        max_player_count
-    >                                              player_names;
+    etl::vector<std::string, max_player_count>     player_names;
     etl::vector<size_t,          max_player_count> player_starting_cities;
     etl::vector<Tile_coordinate, max_city_count>   city_positions;
 };
@@ -124,7 +122,7 @@ public:
     void reveal              (Map& target_map, Tile_coordinate position, int radius) const;
 
 private:
-    void add_player           (const etl::string<max_name_length>& name, Tile_coordinate start_city);
+    void add_player           (const std::string& name, Tile_coordinate start_city);
     void update_current_player();
 
     Map_window&    m_map_window;

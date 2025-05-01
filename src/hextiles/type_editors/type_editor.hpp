@@ -11,11 +11,11 @@
 
 #include "erhe_imgui/imgui_renderer.hpp"
 
-#include <imgui/imgui.h>
-#include <etl/string.h>
 #include <etl/vector.h>
 
 #include <cstdint>
+#include <imgui/imgui.h>
+#include <string>
 
 namespace erhe::imgui {
     class Imgui_renderer;
@@ -90,11 +90,11 @@ private:
     unit_t      m_simulate_unit_type_b {1};
 
     // Table
-    int                          m_current_column;
-    int                          m_current_row;
-    etl::string<max_name_length> m_current_element_name;
-    terrain_t                    m_current_terrain_id;
-    unit_t                       m_current_unit_id;
+    int         m_current_column;
+    int         m_current_row;
+    std::string m_current_element_name;
+    terrain_t   m_current_terrain_id;
+    unit_t      m_current_unit_id;
 
     constexpr static int max_column_count = 40;
 

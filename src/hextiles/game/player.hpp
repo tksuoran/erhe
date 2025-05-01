@@ -5,11 +5,11 @@
 #include "map.hpp"
 #include "game/unit.hpp"
 
-#include "etl/string.h"
 #include "etl/vector.h"
 
 #include <memory>
 #include <optional>
+#include <string>
 
 namespace hextiles {
 
@@ -22,7 +22,7 @@ public:
 
     int                               id{0};
     Map                               map;
-    etl::string<max_name_length>      name;
+    std::string                       name;
     etl::vector<Unit, max_city_count> cities;
     etl::vector<Unit, max_unit_count> units;
     size_t                            current_unit{0};

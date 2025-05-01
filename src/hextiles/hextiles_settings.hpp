@@ -2,8 +2,6 @@
 
 #include "erhe_imgui/imgui_renderer.hpp"
 
-#include <string>
-
 namespace erhe::window {
     class Context_window;
 }

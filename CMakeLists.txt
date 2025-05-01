@@ -153,8 +153,8 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              etl
-    VERSION           20.38.17
-    GIT_TAG           20.38.17
+    VERSION           20.40.0
+    GIT_TAG           20.40.0
     GITHUB_REPOSITORY ETLCPP/etl
 )
 
@@ -198,7 +198,7 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              nlohmann_json
-    VERSION           3.11.3
+    VERSION           3.12.0
     GITHUB_REPOSITORY nlohmann/json
 )
 
@@ -208,8 +208,8 @@ vscode_support()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     CPMAddPackage(
         NAME              sdl
-        VERSION           release-3.2.4
-        GIT_TAG           release-3.2.4
+        VERSION           release-3.2.10
+        GIT_TAG           release-3.2.10
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
                     "SDL_STATIC ON"
@@ -245,13 +245,13 @@ endif ()
 
 CPMAddPackage(
     NAME              simdjson
-    VERSION           3.9.4
+    VERSION           3.12.3
     GITHUB_REPOSITORY simdjson/simdjson
 )
 
 CPMAddPackage(
     NAME              taskflow
-    VERSION           3.7.0
+    VERSION           3.9.0
     GITHUB_REPOSITORY taskflow/taskflow
     OPTIONS
            "TF_BUILD_TESTS OFF"
@@ -260,7 +260,7 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              wuffs
-    VERSION           0.4.0-alpha.5
+    VERSION           0.4.0-alpha.9
     GITHUB_REPOSITORY google/wuffs
 )
 
@@ -297,9 +297,7 @@ endif ()
 if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
     CPMAddPackage(
         NAME              fastgltf
-        GIT_TAG           ad3931d
-        #GIT_TAG           main
-        #VERSION           0.8.0
+        GIT_TAG           42d26b2b11ebe16ad43e481ddbd4e10fa50360fa
         GITHUB_REPOSITORY spnda/fastgltf
     )
     message(STATUS "Erhe configured to use fastgltf for glTF.")
@@ -348,8 +346,8 @@ endif ()
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
     CPMAddPackage(
         NAME              freetype
-        VERSION           2.13.2
-        GIT_TAG           VER-2-13-2
+        VERSION           2.13.3
+        GIT_TAG           VER-2-13-3
         GITHUB_REPOSITORY freetype/freetype
     )
     message(STATUS "Erhe configured to use freetype for font rasterization.")
@@ -396,10 +394,11 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(
         NAME              JoltPhysics
         #VERSION           5.3.0
+        GIT_TAG           2dcab94cbc97e57747aa96b4f7060ffedaa2dbc3
         #GIT_TAG           v5.3.0
-        GIT_TAG           clang-20-no-overriding-option
-        GITHUB_REPOSITORY tksuoran/JoltPhysics
-        #GITHUB_REPOSITORY jrouwe/JoltPhysics
+        #GIT_TAG           clang-20-no-overriding-option
+        #GITHUB_REPOSITORY tksuoran/JoltPhysics
+        GITHUB_REPOSITORY jrouwe/JoltPhysics
         DOWNLOAD_ONLY     YES
     )
     if (JoltPhysics_ADDED)
@@ -421,8 +420,8 @@ endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     CPMAddPackage(
         NAME              OpenXR-SDK
-        VERSION           1.1.38
-        GIT_TAG           release-1.1.38
+        VERSION           1.1.47
+        GIT_TAG           release-1.1.47
         GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK
     )
     message(STATUS "Erhe configured to use OpenXR for XR.")
