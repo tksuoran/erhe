@@ -4,6 +4,7 @@
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/cube_instance_buffer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/material_buffer.hpp"
@@ -45,6 +46,7 @@ public:
     erhe::graphics::Fragment_outputs fragment_outputs;
     erhe::dataformat::Vertex_format& vertex_format;
     Camera_interface                 camera_interface;
+    Cube_interface                   cube_interface;
     Joint_interface                  joint_interface;
     Light_interface                  light_interface;
     Material_interface               material_interface;
