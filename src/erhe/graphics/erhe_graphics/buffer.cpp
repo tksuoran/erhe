@@ -1,7 +1,6 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_gl/command_info.hpp"
-#include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
@@ -97,13 +96,16 @@ Buffer::Buffer(Instance& instance, const Buffer_create_info& create_info) noexce
     , m_access_mask        {create_info.access_mask}
     , m_debug_label        {create_info.debug_label}
 {
-    log_buffer->trace(
-        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {}",
+    ERHE_VERIFY(create_info.debug_label != nullptr);
+    ERHE_VERIFY(m_capacity_byte_count < 1024 * 1024 * 1024); // sanity check, can raisi limit when needed
+    log_buffer->info(
+        "Buffer::Buffer() target = {}, capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {} debug_label = {}",
         gl::c_str(m_target),
         m_capacity_byte_count,
         gl::to_string(m_storage_mask),
         gl::to_string(m_access_mask),
-        gl_name()
+        gl_name(),
+        ((m_debug_label != nullptr) ? m_debug_label : "")
     );
     if (m_debug_label != nullptr) {
         gl::object_label(gl::Object_identifier::buffer, gl_name(), -1, m_debug_label);
@@ -197,7 +199,10 @@ auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) 
 {
     ERHE_VERIFY(gl_name() != 0);
 
-    if (!m_instance.info.use_persistent_buffers) {
+    if (
+        !m_instance.info.use_persistent_buffers ||
+        !erhe::bit::test_all_rhs_bits_set(m_storage_mask, gl::Buffer_storage_mask::map_persistent_bit)
+    ) {
         ERHE_VERIFY(m_map.empty());
         if (byte_count == 0) {
             byte_count = m_capacity_byte_count - byte_offset;
@@ -241,7 +246,10 @@ void Buffer::end_write(const std::size_t byte_offset, const std::size_t byte_cou
     ERHE_VERIFY(!m_map.empty());
     ERHE_VERIFY(gl_name() != 0);
 
-    if (!m_instance.info.use_persistent_buffers) {
+    if (
+        !m_instance.info.use_persistent_buffers ||
+        !erhe::bit::test_all_rhs_bits_set(m_storage_mask, gl::Buffer_storage_mask::map_persistent_bit)
+    ) {
         if (byte_count > 0) {
             flush_bytes(byte_offset, byte_count);
         }
