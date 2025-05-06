@@ -36,32 +36,11 @@ bool is_initialized{false};
 
 void initialize_frame_capture()
 {
-    //auto ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
-    //ini->get("capture_support", config.capture_support);
-    //
-    //if (m_is_initialized) {
-    //    return;
-    //}
-    //if (!config.capture_support) {
-    //    return;
-    //}
-
-    //bool openxr{false};
-    //auto headset_ini = erhe::configuration::get_ini("erhe.ini", "headset");
-    //headset_ini->get("openxr", openxr);
-    //if (openxr) {
-    //    log_renderdoc->warn("Disabling RenderDoc capture support due to OpenXR being enabled.");
-    //    return;
-    //}
-
 #if defined(_WIN32) || defined(WIN32)
     HMODULE renderdoc_module = LoadLibraryExA("C:\\Program Files\\RenderDoc\\renderdoc.dll", NULL, 0);
     if (renderdoc_module) {
         auto RENDERDOC_GetAPI = reinterpret_cast<pRENDERDOC_GetAPI>(
-            GetProcAddress(
-                renderdoc_module,
-                "RENDERDOC_GetAPI"
-            )
+            GetProcAddress(renderdoc_module, "RENDERDOC_GetAPI")
         );
         if (RENDERDOC_GetAPI == nullptr) {
             log_renderdoc->warn("RenderDoc: RENDERDOC_GetAPI() not found in renderdoc.dll");
@@ -101,9 +80,8 @@ void start_frame_capture(const erhe::window::Context_window& context_window)
 
     const auto device = context_window.get_device_pointer();
     const auto window = context_window.get_window_handle();
-    renderdoc_api->DiscardFrameCapture(device, window);
+    //renderdoc_api->DiscardFrameCapture(device, window);
     renderdoc_api->SetActiveWindow(device, window);
-    //renderdoc_api->TriggerCapture();
     renderdoc_api->StartFrameCapture(device, window);
 }
 
