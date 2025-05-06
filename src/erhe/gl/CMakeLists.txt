@@ -57,11 +57,25 @@ set(GEN_DEPENDS
     templates/wrapper_functions.cpp
 )
 
-add_custom_command(
+#add_custom_command(
+#    COMMAND ${GEN_COMMAND}
+#    DEPENDS ${GEN_DEPENDS}
+#    OUTPUT  ${GENERATED_SOURCES}
+#)
+
+# Run the Python script to generate sources at configure time
+execute_process(
     COMMAND ${GEN_COMMAND}
-    DEPENDS ${GEN_DEPENDS}
-    OUTPUT  ${GENERATED_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    RESULT_VARIABLE gl_gen_result
+    OUTPUT_VARIABLE gl_gen_output
+    ERROR_VARIABLE gl_gen_error
 )
+if (gl_gen_result)
+    message(FATAL_ERROR "Error generating sources: ${gl_gen_error}")
+else()
+    message(STATUS "Generated sources: ${gl_gen_output}")
+endif()
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
