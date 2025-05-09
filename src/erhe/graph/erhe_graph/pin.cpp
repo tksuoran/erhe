@@ -2,6 +2,8 @@
 #include "erhe_graph/graph.hpp"
 #include "erhe_graph/link.hpp"
 
+#include <algorithm>
+
 namespace erhe::graph {
 
 Pin::Pin(Node* owner_node, std::size_t slot, bool is_source, std::size_t key, std::string_view name)

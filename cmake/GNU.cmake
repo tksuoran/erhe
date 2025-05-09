@@ -7,5 +7,10 @@ add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-empty-body>")
 add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
 add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 
+# Workaround for MinGW linker (ld) is failing due to relocation overflows 
+if (WIN32)
+    add_compile_options(-Wa,-mbig-obj)
+endif ()
+
 function (erhe_target_settings target)
 endfunction()

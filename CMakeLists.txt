@@ -98,16 +98,21 @@ if(CMAKE_SYSTEM_NAME MATCHES Linux)
 elseif(CMAKE_SYSTEM_NAME MATCHES Darwin)
     set(VORPALINE_PLATFORM "Darwin-clang-dynamic")
 elseif(CMAKE_SYSTEM_NAME MATCHES Windows)
-    set(VORPALINE_PLATFORM "Win-vs-generic")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        set(VORPALINE_PLATFORM "Win64-gcc" CACHE STRING "")
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        set(VORPALINE_PLATFORM "Win-vs-generic" CACHE STRING "")
+    endif()
 elseif(CMAKE_SYSTEM_NAME MATCHES Android)
     set(VORPALINE_PLATFORM "Android-aarch64-gcc-dynamic")
 endif()
 
 CPMAddPackage(
     NAME              geogram
+    #GIT_TAG           clion
     GIT_TAG           pull_requests
     GITHUB_REPOSITORY tksuoran/geogram
-    #VERSION            1.9.2
+    #VERSION            1.9.5
     #GITHUB_REPOSITORY  BrunoLevy/geogram
     OPTIONS
                   "VORPALINE_PLATFORM ${VORPALINE_PLATFORM}"

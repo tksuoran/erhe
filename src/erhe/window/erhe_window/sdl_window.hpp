@@ -42,6 +42,7 @@ constexpr Mouse_cursor Mouse_cursor_NotAllowed =  8;   // When hovering somethin
 constexpr Mouse_cursor Mouse_cursor_Crosshair  =  9;   // Crosshair cursor
 constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
 
+typedef void (*SDL_FunctionPointer)(void);
 
 class Context_window
 {
@@ -128,7 +129,7 @@ private:
     std::thread                m_joystick_scan_task;
     std::function<void(Context_window& context_window)> m_input_event_synthesizer_callback;
 
-    void* m_NV_delay_before_swap{nullptr};
+    SDL_FunctionPointer m_NV_delay_before_swap{nullptr};
 
     static int s_window_count;
 };

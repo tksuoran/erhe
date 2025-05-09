@@ -1,6 +1,7 @@
 .idea
 .vs
 .vscode/compile_commands.json
+erhe_cmake_profiling.json
 src/editor/user.ini
 src/editor/erhe_init_graph.dot
 src/editor/cache/bvh/*
