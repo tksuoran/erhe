@@ -132,14 +132,14 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              fmt
-    VERSION           11.1.4
-    GIT_TAG           11.1.4
+    GIT_TAG           11.2.0
+    VERSION           11.2.0
     GITHUB_REPOSITORY fmtlib/fmt
 )
 
 CPMAddPackage(
     NAME              spdlog
-    VERSION           1.15.2
+    VERSION           1.15.3
     GITHUB_REPOSITORY gabime/spdlog
     OPTIONS "SPDLOG_FMT_EXTERNAL ON"
 )
@@ -175,8 +175,8 @@ add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              glslang
-        VERSION           15.0.0
-        GIT_TAG           15.0.0
+        VERSION           15.3.0
+        GIT_TAG           15.3.0
         GITHUB_REPOSITORY KhronosGroup/glslang
         OPTIONS
                       "GLSLANG_TESTS OFF"
@@ -213,8 +213,8 @@ vscode_support()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     CPMAddPackage(
         NAME              sdl
-        VERSION           release-3.2.10
-        GIT_TAG           release-3.2.10
+        VERSION           release-3.2.12
+        GIT_TAG           release-3.2.12
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
                     "SDL_STATIC ON"
@@ -256,7 +256,7 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              taskflow
-    VERSION           3.9.0
+    VERSION           3.10.0
     GITHUB_REPOSITORY taskflow/taskflow
     OPTIONS
            "TF_BUILD_TESTS OFF"
@@ -315,7 +315,7 @@ endif ()
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
     CPMAddPackage(
         NAME              nvtx
-        VERSION           3.1.0
+        VERSION           3.1.1
         GITHUB_REPOSITORY NVIDIA/NVTX
     )
     message(STATUS "Erhe configured to use nvtx for profiling.")
@@ -365,8 +365,8 @@ endif ()
 if (${ERHE_TEXT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
     CPMAddPackage(
         NAME              harfbuzz
-        GIT_TAG           fix-bigobj
-        GITHUB_REPOSITORY tksuoran/harfbuzz
+        GIT_TAG           11.2.0
+        GITHUB_REPOSITORY harfbuzz/harfbuzz
     )
     message(STATUS "Erhe configured to use harfbuzz for text layout.")
     add_definitions(-DERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
