@@ -10,6 +10,8 @@ erhe_target_sources_grouped(
     erhe_math/math_util.hpp
     erhe_math/input_axis.cpp
     erhe_math/input_axis.hpp
+    erhe_math/sphere.cpp
+    erhe_math/sphere.hpp
     erhe_math/viewport.cpp
     erhe_math/viewport.hpp
 )
@@ -24,7 +26,6 @@ target_link_libraries(
         erhe::log
         erhe::profile
         erhe::verify
-        MathGeoLib
 )
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

@@ -53,7 +53,6 @@ target_link_libraries(${_target}
         erhe::profile
         erhe::verify
         fmt::fmt
-        MathGeoLib
 )
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

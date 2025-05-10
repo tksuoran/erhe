@@ -45,7 +45,6 @@ target_link_libraries(
         erhe::verify
         fmt::fmt
         glm::glm-header-only
-        MathGeoLib
 )
 #target_link_libraries(${_target} PUBLIC hidapi)
 if (ERHE_TARGET_OS_WINDOWS)

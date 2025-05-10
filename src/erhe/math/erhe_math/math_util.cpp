@@ -1,11 +1,10 @@
 #include "erhe_math/math_util.hpp"
+#include "erhe_math/sphere.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/pca.hpp>
-
-#include "Geometry/Sphere.h"
 
 #include <algorithm>
 
@@ -522,22 +521,19 @@ void calculate_bounding_volume(
         }
     }
 
-    std::vector<::math::vec> points;
+    std::vector<glm::vec3> points;
     for (size_t i = 0, i_end = source.get_element_count(); i < i_end; ++i) {
         for (size_t j = 0, j_end = source.get_element_point_count(i); j < j_end; ++j) {
             const auto point = source.get_point(i, j);
             if (point.has_value()) {
                 const auto p = point.value();
-                points.push_back(::math::vec{p.x, p.y, p.z});
+                points.push_back(p);
             }
         }
     }
-    const ::math::Sphere sphere = ::math::Sphere::OptimalEnclosingSphere(
-        points.data(),
-        static_cast<int>(points.size())
-    );
-    bounding_sphere.radius = sphere.r;
-    bounding_sphere.center = glm::vec3{sphere.pos.x, sphere.pos.y, sphere.pos.z};
+    const Sphere sphere = optimal_enclosing_sphere(points);
+    bounding_sphere.radius = sphere.radius;
+    bounding_sphere.center = sphere.center;
 }
 
 [[nodiscard]] auto transform(const glm::mat4& m, const Bounding_sphere& sphere) -> Bounding_sphere

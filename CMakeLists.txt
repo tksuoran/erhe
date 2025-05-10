@@ -194,13 +194,6 @@ if (ERHE_SPIRV)
     add_definitions(-DERHE_SPIRV)
 endif ()
 
-
-CPMAddPackage(
-    NAME              MathGeoLib
-    GIT_TAG           origin/winver
-    GITHUB_REPOSITORY tksuoran/MathGeoLib
-)
-
 CPMAddPackage(
     NAME              nlohmann_json
     VERSION           3.12.0
