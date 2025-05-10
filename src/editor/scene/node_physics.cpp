@@ -2,7 +2,6 @@
 #include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
-#include "erhe_log/log_glm.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_bit/bit_helpers.hpp"

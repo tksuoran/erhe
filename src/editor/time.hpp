@@ -2,7 +2,6 @@
 
 #include "erhe_profile/profile.hpp"
 
-#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <mutex>

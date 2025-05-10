@@ -117,19 +117,19 @@ public:
         Property_editor&       property_editor
     );
 
-    bool                               m_multiselect;
-    std::shared_ptr<erhe::scene::Node> m_first_node;
-    glm::mat4                          m_world_from_parent;
-    bool                               m_use_world_mode;
-    erhe::scene::Trs_transform*        m_transform{nullptr};
+    bool                               m_multiselect       {false};
+    std::shared_ptr<erhe::scene::Node> m_first_node        {};
+    glm::mat4                          m_world_from_parent {1.0f};
+    bool                               m_use_world_mode    {false};
+    erhe::scene::Trs_transform*        m_transform         {nullptr};
     erhe::scene::Trs_transform*        m_rotation_transform{nullptr};
 
-    glm::vec3                          m_scale;
-    glm::quat                          m_rotation;
-    glm::vec3                          m_translation;
-    glm::vec3                          m_skew;
+    glm::vec3                          m_scale      {1.0f};
+    glm::quat                          m_rotation   {1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3                          m_translation{0.0f};
+    glm::vec3                          m_skew       {0.0f};
 
-    erhe::imgui::Value_edit_state      m_translate_state;
+    erhe::imgui::Value_edit_state      m_translate_state{};
     erhe::imgui::Value_edit_state      m_rotate_quaternion_state;
     erhe::imgui::Value_edit_state      m_rotate_euler_state;
     erhe::imgui::Value_edit_state      m_rotate_axis_angle_state;
