@@ -5,12 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS        NO)
 
 if (${ERHE_USE_PRECOMPILED_HEADERS})
-    add_library(erhe_pch)
-    target_sources(erhe_pch PRIVATE dummy.cpp)
-    target_precompile_headers(erhe_pch PUBLIC [[erhe_pch.hpp]])
-    erhe_target_settings(erhe_pch)
-    set_property(TARGET erhe_pch PROPERTY FOLDER "erhe")
-    target_link_libraries(erhe_pch PRIVATE fmt::fmt glm::glm-header-only)
+    add_subdirectory(pch)
 endif()
 
 add_subdirectory(bit)

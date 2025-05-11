@@ -31,9 +31,12 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
 endif()
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+    target_link_libraries(${_target} PUBLIC erhe_pch)
 endif ()
+
 target_link_libraries(
     ${_target}
     PUBLIC
@@ -46,7 +49,7 @@ target_link_libraries(
         fmt::fmt
         glm::glm-header-only
 )
-#target_link_libraries(${_target} PUBLIC hidapi)
+
 if (ERHE_TARGET_OS_WINDOWS)
     target_link_libraries(${_target} PUBLIC Setupapi.lib)
 endif ()

@@ -332,9 +332,12 @@ erhe_target_sources_grouped(
     windows/viewport_config_window.cpp
     windows/viewport_config_window.hpp
 )
+
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+    target_link_libraries(${_target} PUBLIC erhe_pch)
 endif ()
+
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -356,6 +359,7 @@ else ()
         xr/null_headset_view.hpp
     )
 endif ()
+
 target_link_libraries(
     ${_target}
     PRIVATE
@@ -469,6 +473,7 @@ endif ()
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+    target_link_libraries(${_target} PUBLIC erhe_pch)
 endif ()
 # MSVC only target_link_options(${_target} PRIVATE "/MAP:${CMAKE_CURRENT_SOURCE_DIR}/editor.map")
 erhe_target_settings(${_target})

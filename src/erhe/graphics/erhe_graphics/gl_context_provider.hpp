@@ -31,10 +31,10 @@ class Gl_context_provider
 public:
     Gl_context_provider(Instance& graphics_instance, OpenGL_state_tracker& opengl_state_tracker);
 
-    Gl_context_provider (const Gl_context_provider&) = delete;
-    void operator=      (const Gl_context_provider&) = delete;
-    Gl_context_provider (Gl_context_provider&&)      = delete;
-    void operator=      (Gl_context_provider&&)      = delete;
+    Gl_context_provider(const Gl_context_provider&) = delete;
+    void operator=     (const Gl_context_provider&) = delete;
+    Gl_context_provider(Gl_context_provider&&)      = delete;
+    void operator=     (Gl_context_provider&&)      = delete;
 
     // Public API
     [[nodiscard]] auto acquire_gl_context() -> Gl_worker_context;

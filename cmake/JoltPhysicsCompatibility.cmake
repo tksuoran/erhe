@@ -8,52 +8,23 @@ if (MSVC)
     set(CMAKE_VS_PLATFORM_TOOLSET_HOST_ARCHITECTURE "x64")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
-    # Zi      separate pdb
-    # Gm      minimal rebuild
-    # FC      Full path of source code file in diagnostics
-    # GS      buffer security check
-    # GL      whole program optimization
-    # Gy      enable function level linking
-    # Od      disable all optimizations, faster to compile
-    # Ob0     disable inline expansion
-    # Oi      generate intrinsic functions
-    # Ot      favor fast code
-    # MP      build with multiple processes
-    # fp:fast fast floating-point model; results are less predicable
-    # /DUNICODE /D_UNICODE
-    #
-    # EHs             Enables standard C++ stack unwinding.
-    #                 Catches only standard C++ exceptions when you use catch(...) syntax.
-    #                 Unless /EHc is also specified, the compiler assumes that functions declared as extern "C" may throw a C++ exception.
-    # EHc             When used with /EHs, the compiler assumes that functions declared as extern "C" never throw a C++ exception.
-    #                 It has no effect when used with /EHa (that is, /EHca is equivalent to /EHa).
-    #                 /EHc is ignored if /EHs or /EHa aren't specified.
-    # /Zc:inline      Remove unreferenced COMDAT
-    # /Zc:__cplusplus Report updated __cplusplus
-    # FC              Full path of source code file in diagnostics
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:__cplusplus /Gm- /MP /nologo /diagnostics:classic /FC /fp:except- /Zc:inline")
     # Removed /Gm- because it is deprecaed.
-    # Removed /GS because it is on by default
     # Removed /nologo
     # Removed /diagnostics:classic 
     # Removed /fp:except- (for now)
-    set(CMAKE_CXX_FLAGS         "/Zc:__cplusplus /FC /fp:except- /Zc:inline /Zi /DWIN32 /D_WINDOWS")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:__cplusplus /MP /FC /Zc:inline")
 
-    #if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "ARM")
-    #    # On ARM the exception handling flag is missing which causes warnings
-    #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
-    #endif()
-    # erhe needs /EHsc also on x64 since fmt needs exceptions (I have not yet tried to configure fmt not to use exceptions)
+    # Enable exceptions
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
 
+    # Set compiler flags for various configurations
     set(CMAKE_CXX_FLAGS_DEBUG   "/GS /Od /Ob0 /RTC1")
     set(CMAKE_CXX_FLAGS_RELEASE "/GS- /Gy /O2 /Oi /Ot")
-    #### set(CMAKE_CXX_FLAGS_DISTRIBUTION "${CMAKE_CXX_FLAGS_RELEASE}")
-    #### set(CMAKE_CXX_FLAGS_RELEASEASAN "-fsanitize=address /Od")
-    #### set(CMAKE_CXX_FLAGS_RELEASEUBSAN "-fsanitize=undefined,implicit-conversion,float-divide-by-zero,local-bounds -fno-sanitize-recover=all")
-    #### set(CMAKE_CXX_FLAGS_RELEASECOVERAGE "-fprofile-instr-generate -fcoverage-mapping")
+
     # Jolt has /SUBSYSTEM:WINDOWS
     set(CMAKE_EXE_LINKER_FLAGS "/ignore:4221")
+
+    # Set linker flags
     if (GENERATE_DEBUG_SYMBOLS)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /DEBUG")
     endif()

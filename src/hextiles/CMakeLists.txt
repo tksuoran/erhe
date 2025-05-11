@@ -106,16 +106,22 @@ target_link_libraries(
     imgui
     nlohmann_json::nlohmann_json
 )
+
 if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
     target_link_libraries(${_target} PRIVATE lunasvg)
 endif ()
+
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     target_link_libraries(${_target} PRIVATE miniaudio)
 endif ()
+
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+    target_link_libraries(${_target} PUBLIC erhe_pch)
 endif ()
+
 set_target_properties(
     ${_target} PROPERTIES
     CXX_STANDARD                  20

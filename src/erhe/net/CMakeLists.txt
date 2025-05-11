@@ -18,6 +18,7 @@ erhe_target_sources_grouped(
     erhe_net/socket.cpp
     erhe_net/socket.hpp
 )
+
 if (ERHE_TARGET_OS_WINDOWS)
     target_link_libraries(${_target} PUBLIC ws2_32.lib)
     erhe_target_sources_grouped(
@@ -25,16 +26,21 @@ if (ERHE_TARGET_OS_WINDOWS)
         erhe_net/net_windows.cpp
     )
 endif ()
+
 if (ERHE_TARGET_OS_LINUX)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}/erhe_net" FILES
         erhe_net/net_linux.cpp
     )
 endif ()
+
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+    target_link_libraries(${_target} PUBLIC erhe_pch)
 endif ()
+
 target_link_libraries(${_target}
     PUBLIC
         erhe::log

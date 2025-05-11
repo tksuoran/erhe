@@ -42,14 +42,19 @@ erhe_target_sources_grouped(
     erhe_commands/xr_vector2f_binding.cpp
     erhe_commands/xr_vector2f_binding.hpp
 )
+
 target_link_libraries(${_target} PUBLIC erhe::xr)
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PUBLIC openxr_loader)
 endif ()
+
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+    target_link_libraries(${_target} PUBLIC erhe_pch)
 endif ()
+
 target_link_libraries(${_target}
     PUBLIC
         cxxopts

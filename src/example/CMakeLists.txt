@@ -44,13 +44,18 @@ target_link_libraries(
     erhe::window
     mINI
 )
+
 if (DEFINED ERHE_PROFILE_TARGET)
     target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
 endif ()
+
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+    target_link_libraries(${_target} PUBLIC erhe_pch)
 endif ()
+
 set_target_properties(
     ${_target} PROPERTIES
     CXX_STANDARD                  20

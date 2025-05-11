@@ -114,6 +114,7 @@ target_link_libraries(${_target}
 
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+    target_link_libraries(${_target} PUBLIC erhe_pch)
 endif ()
 
 target_compile_definitions(${_target} PUBLIC -DERHE_TRACY_GL)

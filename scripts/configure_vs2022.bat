@@ -1,5 +1,7 @@
-@rem TODO Re-enable -DERHE_USE_PRECOMPILED_HEADERS=ON
-@rem      https://github.com/tksuoran/erhe/issues/139
+@rem  --graphviz=erhe_cmake_dependencies.dot ^
+@rem  --profiling-format=google-trace ^
+@rem  --profiling-output=erhe_cmake_profiling.json ^
+@rem  -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
 
 cmake ^
  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ^
@@ -7,12 +9,8 @@ cmake ^
  -A x64 ^
  -B build ^
  -S . ^
- --graphviz=erhe_cmake_dependencies.dot ^
- --profiling-format=google-trace ^
- --profiling-output=erhe_cmake_profiling.json ^
- -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
  -Wno-dev ^
- -DERHE_USE_PRECOMPILED_HEADERS=OFF ^
+ -DERHE_USE_PRECOMPILED_HEADERS=ON ^
  -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
  -DERHE_GLTF_LIBRARY=fastgltf ^
  -DERHE_GUI_LIBRARY=imgui ^

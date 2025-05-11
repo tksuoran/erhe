@@ -27,9 +27,12 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
 endif ()
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+    target_link_libraries(${_target} PUBLIC erhe_pch)
 endif ()
+
 target_link_libraries(${_target}
     PUBLIC
         erhe::gl
@@ -42,6 +45,7 @@ target_link_libraries(${_target}
         etl::etl
         fmt::fmt
 )
+
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE openxr_loader)
 endif ()
