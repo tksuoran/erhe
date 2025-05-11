@@ -656,7 +656,10 @@ void Context_window::handle_text_event(int64_t timestamp, const char* utf8_text)
 {
     Input_event text_event{
         .type = Input_event_type::text_event,
-        .timestamp_ns = timestamp
+        .timestamp_ns = timestamp,
+        .u = {
+            .dummy = true
+        }
     };
     memset(text_event.u.text_event.utf8_text, 0, 32);
     ERHE_VERIFY(strlen(utf8_text) < 32);
@@ -933,6 +936,7 @@ auto Context_window::delay_before_swap(float seconds) const -> bool
     }
 #else
     // TODO
+    static_cast<void>(seconds);
     return false;
 #endif
 }

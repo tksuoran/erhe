@@ -5,7 +5,7 @@ set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/MP>)
 
-function (erhe_target_settings target)
+function (erhe_target_settings_toolchain target)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_CRT_SECURE_NO_WARNINGS>)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_SILENCE_CXX20_U8PATH_DEPRECATION_WARNING>)

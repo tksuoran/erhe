@@ -762,7 +762,7 @@ private:
         GEO::index_t                     v0;
         GEO::index_t                     v1;
         GEO::vector<GEO::index_t>&       facets_to_delete;
-        std::vector<GEO::index_t>        merged_face_corners;
+        std::vector<GEO::index_t>        merged_face_corners{};
         const std::vector<GEO::index_t>& edge_facets;
     };
     void collect_corners_from_facet(Edge_collapse_context& edge_collapse_context, GEO::index_t facet, std::optional<GEO::index_t> trigger_vertex);

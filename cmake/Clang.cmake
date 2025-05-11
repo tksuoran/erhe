@@ -28,7 +28,7 @@ if (WIN32)
     set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 endif ()
 
-function (erhe_target_settings target)
+function (erhe_target_settings_toolchain target)
     if (WIN32)
         target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
         target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_CRT_SECURE_NO_WARNINGS>)

@@ -51,11 +51,6 @@ endif ()
 
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-if (${ERHE_USE_PRECOMPILED_HEADERS})
-    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
-    target_link_libraries(${_target} PUBLIC erhe_pch)
-endif ()
-
 set_target_properties(
     ${_target} PROPERTIES
     CXX_STANDARD                  20
@@ -63,5 +58,5 @@ set_target_properties(
     CXX_EXTENSIONS                NO
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-erhe_target_settings(${_target})
-set_property(TARGET ${_target} PROPERTY FOLDER "erhe-executables")
+
+erhe_target_settings(${_target} "erhe-executables")

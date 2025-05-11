@@ -12,5 +12,5 @@ if (WIN32)
     add_compile_options(-Wa,-mbig-obj)
 endif ()
 
-function (erhe_target_settings target)
+function (erhe_target_settings_toolchain target)
 endfunction()

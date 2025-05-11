@@ -24,7 +24,7 @@ set(GENERATED_SOURCES
 
 list(TRANSFORM GENERATED_SOURCES PREPEND "${CMAKE_CURRENT_BINARY_DIR}/erhe_gl/")
 
-set_source_files_properties(${GENERATED_SOURCES} GENERATED)
+#set_source_files_properties(${GENERATED_SOURCES} GENERATED)
 
 set(GEN_COMMAND
     "${Python3_EXECUTABLE}"
@@ -112,11 +112,6 @@ target_link_libraries(${_target}
         erhe::verify
 )
 
-if (${ERHE_USE_PRECOMPILED_HEADERS})
-    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
-    target_link_libraries(${_target} PUBLIC erhe_pch)
-endif ()
-
 target_compile_definitions(${_target} PUBLIC -DERHE_TRACY_GL)
-erhe_target_settings(${_target})
-set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
+
+erhe_target_settings(${_target} "erhe")

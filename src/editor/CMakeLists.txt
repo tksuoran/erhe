@@ -333,11 +333,6 @@ erhe_target_sources_grouped(
     windows/viewport_config_window.hpp
 )
 
-if (${ERHE_USE_PRECOMPILED_HEADERS})
-    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
-    target_link_libraries(${_target} PUBLIC erhe_pch)
-endif ()
-
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -437,6 +432,7 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
 endif ()
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 set_target_properties(
     ${_target} PROPERTIES
     CXX_STANDARD                  20
@@ -444,8 +440,8 @@ set_target_properties(
     CXX_EXTENSIONS                NO
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-erhe_target_settings(${_target})
-set_property(TARGET ${_target} PROPERTY FOLDER "erhe-executables")
+
+erhe_target_settings(${_target} "erhe-executables")
 
 ########
 
@@ -470,12 +466,9 @@ target_link_libraries(
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
     target_link_libraries(${_target} PRIVATE cpp-terminal)
 endif ()
-target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-if (${ERHE_USE_PRECOMPILED_HEADERS})
-    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
-    target_link_libraries(${_target} PUBLIC erhe_pch)
-endif ()
-# MSVC only target_link_options(${_target} PRIVATE "/MAP:${CMAKE_CURRENT_SOURCE_DIR}/editor.map")
-erhe_target_settings(${_target})
-set_property(TARGET ${_target} PROPERTY FOLDER "erhe-executables")
 
+target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# MSVC only target_link_options(${_target} PRIVATE "/MAP:${CMAKE_CURRENT_SOURCE_DIR}/editor.map")
+
+erhe_target_settings(${_target} "erhe-executables")

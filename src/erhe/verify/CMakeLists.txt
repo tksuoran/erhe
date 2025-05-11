@@ -9,10 +9,4 @@ erhe_target_sources_grouped(
 
 target_include_directories(${_target} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
-if (${ERHE_USE_PRECOMPILED_HEADERS})
-    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
-    target_link_libraries(${_target} PUBLIC erhe_pch)
-endif ()
-
-erhe_target_settings(${_target})
-set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
+erhe_target_settings(${_target} "erhe")
