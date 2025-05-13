@@ -1,7 +1,6 @@
-@rem  --graphviz=erhe_cmake_dependencies.dot ^
-@rem  --profiling-format=google-trace ^
-@rem  --profiling-output=erhe_cmake_profiling.json ^
-@rem  -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
+@rem --graphviz=build/erhe_cmake_dependencies.dot ^
+@rem --profiling-format=google-trace ^
+@rem --profiling-output=build/erhe_cmake_profiling.json ^
 
 cmake ^
  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ^
@@ -20,4 +19,5 @@ cmake ^
  -DERHE_SVG_LIBRARY=lunasvg ^
  -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
  -DERHE_WINDOW_LIBRARY=sdl ^
- -DERHE_XR_LIBRARY=openxr
+ -DERHE_XR_LIBRARY=openxr ^
+ -DERHE_USE_ASAN:BOOL=OFF
