@@ -6,6 +6,14 @@ erhe_target_sources_grouped(
     erhe_pch/erhe_pch.cpp
 )
 target_include_directories(${_target} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# target_link_libraries(.. Threads::Threads) only brings interface, and PCH
+# building does not seem to consider that. Maybe a future CMake policy will
+# provide a better way..
+if (NOT MSVC)
+    target_compile_options(${_target} PUBLIC -pthread)
+endif ()
+
 target_precompile_headers(erhe_pch PUBLIC
     [[erhe_pch/erhe_windows.hpp]]
     <glm/glm.hpp>
@@ -39,12 +47,15 @@ target_precompile_headers(erhe_pch PUBLIC
     <vector>
 )
 
+find_package(Threads REQUIRED)
+
 # Need to depend on spdlog to ensure compile settings in PCH match
 target_link_libraries(${_target}
     PUBLIC
         #spdlog::spdlog
         spdlog::spdlog_header_only
         glm::glm-header-only
+        Threads::Threads # Note that this does not help getting -pthreads flag
     PRIVATE
         fmt::fmt
 )

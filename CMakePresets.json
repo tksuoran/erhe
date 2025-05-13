@@ -7,7 +7,8 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS":   "1",
+                "CMAKE_EXPORT_COMPILE_COMMAND":    "ON",
+                "ERHE_USE_PRECOMPILED_HEADERS":    "ON",
                 "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
                 "ERHE_GLTF_LIBRARY":               "fastgltf",
                 "ERHE_GUI_LIBRARY":                "imgui",
