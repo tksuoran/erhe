@@ -8,26 +8,29 @@ if (MSVC)
     set(CMAKE_VS_PLATFORM_TOOLSET_HOST_ARCHITECTURE "x64")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
-    # Removed /Gm- because it is deprecaed.
-    # Removed /nologo
-    # Removed /diagnostics:classic 
-    # Removed /fp:except- (for now)
+    # Set general compiler flags
+    # erhe: Removed /Gm- because it is deprecaed.
+    # erhe: Removed /nologo
+    # erhe: Removed /diagnostics:classic 
+    # erhe: Removed /fp:except- (for now)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:__cplusplus /MP /FC /Zc:inline")
+
+    # Set compiler flag for enabling RTTI
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR")
 
     # Enable exceptions
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
 
     # Set compiler flags for various configurations
-    set(CMAKE_CXX_FLAGS_DEBUG   "/GS /Od /Ob0 /RTC1")
+    # erhe: Added debug symbols
+    set(CMAKE_CXX_FLAGS_DEBUG   "/GS /Od /Ob0 /RTC1 /Zi")
     set(CMAKE_CXX_FLAGS_RELEASE "/GS- /Gy /O2 /Oi /Ot")
 
     # Jolt has /SUBSYSTEM:WINDOWS
     set(CMAKE_EXE_LINKER_FLAGS "/ignore:4221")
 
     # Set linker flags
-    if (GENERATE_DEBUG_SYMBOLS)
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /DEBUG")
-    endif()
+    set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS} /DEBUG")
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
         if (CROSS_PLATFORM_DETERMINISTIC)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /fp:precise")
