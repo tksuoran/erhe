@@ -77,20 +77,20 @@ public:
     [[nodiscard]] virtual auto get_world_transform         () const -> glm::mat4                         = 0;
     [[nodiscard]] virtual auto is_active                   () const -> bool                              = 0;
     [[nodiscard]] virtual auto get_allow_sleeping          () const -> bool                              = 0;
-    virtual void begin_move                  ()                                             = 0;
-    virtual void end_move                    ()                                             = 0;
-    virtual void set_angular_velocity        (const glm::vec3& velocity)                    = 0;
-    virtual void set_damping                 (float linear_damping, float angular_damping)  = 0;
-    virtual void set_friction                (float friction)                               = 0;
-    virtual void set_gravity_factor          (float gravity_factor)                         = 0;
-    virtual void set_linear_velocity         (const glm::vec3& velocity)                    = 0;
-    virtual void set_mass_properties         (float mass, const glm::mat4& local_inertia)   = 0;
-    virtual void set_motion_mode             (Motion_mode motion_mode)                      = 0;
-    virtual void set_restitution             (float restitution)                            = 0;
-    virtual void set_world_transform         (const Transform& transform)                   = 0;
-    virtual void set_allow_sleeping          (bool value)                                   = 0;
-    virtual void set_owner                   (void* owner)                                  = 0;
-    virtual auto get_owner                   () const -> void*                              = 0;
+    virtual void begin_move          ()                                             = 0;
+    virtual void end_move            ()                                             = 0;
+    virtual void set_angular_velocity(const glm::vec3& velocity)                    = 0;
+    virtual void set_damping         (float linear_damping, float angular_damping)  = 0;
+    virtual void set_friction        (float friction)                               = 0;
+    virtual void set_gravity_factor  (float gravity_factor)                         = 0;
+    virtual void set_linear_velocity (const glm::vec3& velocity)                    = 0;
+    virtual void set_mass_properties (float mass, const glm::mat4& local_inertia)   = 0;
+    virtual void set_motion_mode     (Motion_mode motion_mode)                      = 0;
+    virtual void set_restitution     (float restitution)                            = 0;
+    virtual void set_world_transform (const Transform& transform)                   = 0;
+    virtual void set_allow_sleeping  (bool value)                                   = 0;
+    virtual void set_owner           (void* owner)                                  = 0;
+    virtual auto get_owner           () const -> void*                              = 0;
 };
 
 } // namespace erhe::physics

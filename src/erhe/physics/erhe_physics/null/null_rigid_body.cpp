@@ -1,46 +1,24 @@
 #include "erhe_physics/null/null_rigid_body.hpp"
 #include "erhe_physics/null/null_collision_shape.hpp"
-#include "erhe_physics/imotion_state.hpp"
-#include "erhe_physics/iworld.hpp"
-#include "erhe_scene/node.hpp"
+#include "erhe_physics/null/null_world.hpp"
 
 #include <glm/glm.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
 
-namespace erhe::physics
-{
-
-auto IRigid_body::create_rigid_body(
-    const IRigid_body_create_info& create_info,
-    IMotion_state*                 motion_state
-) -> IRigid_body*
-{
-    return new Null_rigid_body(create_info, motion_state);
-}
-
-auto IRigid_body::create_rigid_body_shared(
-    const IRigid_body_create_info& create_info,
-    IMotion_state*                 motion_state
-) -> std::shared_ptr<IRigid_body>
-{
-    return std::make_shared<Null_rigid_body>(create_info, motion_state);
-}
+namespace erhe::physics {
 
 Null_rigid_body::Null_rigid_body(
+    Null_world&                    world,
     const IRigid_body_create_info& create_info,
-    IMotion_state*                 /*motion_state*/
+    glm::vec3                      ,
+    glm::quat                      
 )
-    : m_collision_shape{create_info.collision_shape}
+    : m_world          {world}
+    , m_collision_shape{create_info.collision_shape}
     , m_mass           {create_info.mass}
-    , m_motion_mode{
-        (create_info.mass.has_value())
-            ? Motion_mode::e_dynamic
-            : Motion_mode::e_static
-    }
-    , m_debug_label{create_info.debug_label}
+    , m_motion_mode    {create_info.motion_mode}
+    , m_debug_label    {create_info.debug_label}
 {
-    if (create_info.inertia_override.has_value())
-    {
+    if (create_info.inertia_override.has_value()) {
         m_local_inertia = create_info.inertia_override.value();
     }
 }
@@ -85,7 +63,17 @@ auto Null_rigid_body::get_restitution() const -> float
 
 auto Null_rigid_body::get_world_transform() const -> glm::mat4
 {
-    return m_transform;
+    return {};
+}
+
+auto Null_rigid_body::is_active() const -> bool
+{
+    return false;
+}
+
+auto Null_rigid_body::get_allow_sleeping() const -> bool
+{
+    return true;
 }
 
 void Null_rigid_body::set_restitution(float restitution)
@@ -106,20 +94,8 @@ void Null_rigid_body::set_motion_mode(const Motion_mode motion_mode)
     m_motion_mode = motion_mode;
 }
 
-void Null_rigid_body::set_center_of_mass_transform(const Transform& transform)
-{
-    // TODO
-    static_cast<void>(transform);
-}
-
 void Null_rigid_body::set_world_transform(const Transform& transform)
 {
-    m_transform = transform;
-}
-
-void Null_rigid_body::move_world_transform(const Transform& transform, const float delta_time)
-{
-    static_cast<void>(delta_time);
     m_transform = transform;
 }
 
@@ -169,6 +145,11 @@ auto Null_rigid_body::get_local_inertia() const -> glm::mat4
     return m_local_inertia;
 }
 
+auto Null_rigid_body::get_center_of_mass() const -> glm::vec3
+{
+    return glm::vec3{0.0f, 0.0f, 0.0f};
+}
+
 auto Null_rigid_body::get_center_of_mass_transform() const -> Transform
 {
     return Transform{};
@@ -190,6 +171,18 @@ auto Null_rigid_body::get_debug_label() const -> const char*
     return m_debug_label.c_str();
 }
 
+void Null_rigid_body::set_allow_sleeping(bool)
+{
+}
+
+void Null_rigid_body::set_owner(void*)
+{
+}
+
+auto Null_rigid_body::get_owner() const -> void*
+{
+    return nullptr;
+}
 
 } // namespace erhe::physics
 

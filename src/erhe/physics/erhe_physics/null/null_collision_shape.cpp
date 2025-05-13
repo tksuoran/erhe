@@ -1,28 +1,23 @@
 #include "erhe_physics/null/null_collision_shape.hpp"
 
-namespace erhe::physics
-{
+namespace erhe::physics {
 
-auto ICollision_shape::create_empty_shape()
-    -> ICollision_shape*
+auto ICollision_shape::create_empty_shape() -> ICollision_shape*
 {
     return new Null_box_shape(glm::vec3{0.0f});
 }
 
-auto ICollision_shape::create_empty_shape_shared()
-    -> std::shared_ptr<ICollision_shape>
+auto ICollision_shape::create_empty_shape_shared() -> std::shared_ptr<ICollision_shape>
 {
     return std::make_shared<Null_box_shape>(glm::vec3{0.0f});
 }
 
-auto ICollision_shape::create_box_shape(const glm::vec3 half_extents)
-    -> ICollision_shape*
+auto ICollision_shape::create_box_shape(const glm::vec3 half_extents) -> ICollision_shape*
 {
     return new Null_box_shape(half_extents);
 }
 
-auto ICollision_shape::create_box_shape_shared(const glm::vec3 half_extents)
-    -> std::shared_ptr<ICollision_shape>
+auto ICollision_shape::create_box_shape_shared(const glm::vec3 half_extents) -> std::shared_ptr<ICollision_shape>
 {
     return std::make_shared<Null_box_shape>(half_extents);
 }
@@ -114,6 +109,11 @@ auto Null_collision_shape::get_mass_properties() const -> Mass_properties
         .mass           = 1.0f,
         .inertia_tensor = glm::mat4{1.0f}
     };
+}
+
+auto Null_collision_shape::describe() const -> std::string
+{
+    return {};
 }
 
 } // namespace erhe::physics
