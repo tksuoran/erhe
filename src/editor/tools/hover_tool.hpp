@@ -37,6 +37,7 @@ public:
     void add_line(const std::string& line);
 
 private:
+    bool                     m_show_hover_normal              {true};
     bool                     m_show_snapped_grid_position     {false};
     bool                     m_geometry_debug_hover_facet_only{true};
     std::vector<std::string> m_text_lines;

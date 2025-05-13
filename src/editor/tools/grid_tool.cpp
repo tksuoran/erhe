@@ -189,7 +189,7 @@ auto Grid_tool::update_hover(const glm::vec3 ray_origin_in_world, const glm::vec
         if (distance < min_distance) {
             min_distance    = distance;
             result.position = position_in_world;
-            result.grid     = grid.get();
+            result.grid     = grid;
         }
     }
     return result;

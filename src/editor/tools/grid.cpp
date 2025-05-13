@@ -17,9 +17,17 @@
 
 #include <fmt/format.h>
 
+#include <glm/gtx/matrix_operation.hpp>
+
 namespace editor {
 
 using glm::vec3;
+
+
+Grid::Grid()
+{
+    update();
+}
 
 auto Grid::get_static_type() -> uint64_t
 {
@@ -178,6 +186,19 @@ void Grid::render(const Render_context& context, bool major)
     }
 }
 
+void Grid::update()
+{
+    if (m_plane_type != Grid_plane_type::Node) {
+        const float     radians      = glm::radians(m_rotation);
+        const glm::mat4 orientation  = get_plane_transform(m_plane_type);
+        const glm::vec3 plane_normal = glm::vec3{0.0f, 1.0f, 0.0f};
+        const glm::mat4 offset       = erhe::math::create_translation<float>(m_center);
+        const glm::mat4 rotation     = erhe::math::create_rotation<float>(radians, plane_normal);
+        m_world_from_grid = orientation * rotation * offset;
+        m_grid_from_world = glm::inverse(m_world_from_grid); // orientation * inverse_rotation * inverse_offset;
+    }
+}
+
 void Grid::imgui(Editor_context& context)
 {
     ImGui::InputText  ("Name",             &m_name);
@@ -200,19 +221,13 @@ void Grid::imgui(Editor_context& context)
     ImGui::ColorEdit4 ("Minor Color",      &m_minor_color.x, ImGuiColorEditFlags_Float);
 
     erhe::imgui::make_combo("Plane", m_plane_type, grid_plane_type_strings, IM_ARRAYSIZE(grid_plane_type_strings));
+
     if (m_plane_type != Grid_plane_type::Node) {
         ImGui::DragScalarN("Offset", ImGuiDataType_Float, &m_center.x, 3, 0.01f);
         const float min_rotation = -180.0;
         const float max_rotation =  180.0;
         ImGui::DragScalarN("Rotation", ImGuiDataType_Float, &m_rotation, 1, 0.05f, &min_rotation, &max_rotation);
-
-        const float     radians      = glm::radians(m_rotation);
-        const glm::mat4 orientation  = get_plane_transform(m_plane_type);
-        const glm::vec3 plane_normal = glm::vec3{0.0, 1.0, 0.0};
-        const glm::mat4 offset       = erhe::math::create_translation<float>(m_center);
-        const glm::mat4 rotation     = erhe::math::create_rotation<float>( radians, plane_normal);
-        m_world_from_grid = orientation * rotation * offset;
-        m_grid_from_world = glm::inverse(m_world_from_grid); // orientation * inverse_rotation * inverse_offset;
+        update();
     } else {
         {
             erhe::scene::Node* host_node = get_node();
@@ -235,6 +250,36 @@ void Grid::imgui(Editor_context& context)
             }
         }
     }
+}
+
+auto Grid::normal_in_world() const -> glm::vec3
+{
+    const glm::mat4 world_from_grid_       = world_from_grid();
+    const glm::mat4 normal_world_from_grid = glm::transpose(glm::adjugate(world_from_grid_));
+    const glm::vec3 normal_in_world        = glm::vec3{normal_world_from_grid * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+    const glm::vec3 unit_normal_in_world   = glm::normalize(normal_in_world);
+    return unit_normal_in_world;
+}
+
+auto Grid::tangent_in_world() const -> glm::vec3
+{
+    const glm::mat4 world_from_grid_      = world_from_grid();
+    const glm::vec3 tangent_in_world      = glm::vec3{world_from_grid_ * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+    const glm::vec3 unit_tangent_in_world = glm::normalize(tangent_in_world);
+    return unit_tangent_in_world;
+}
+
+auto Grid::bitangent_in_world() const -> glm::vec3
+{
+    const glm::mat4 world_from_grid_        = world_from_grid();
+    const glm::vec3 bitangent_in_world      = glm::vec3{world_from_grid_ * glm::vec4{1.0f, 0.0f, 0.0f, 0.0f}};
+    const glm::vec3 unit_bitangent_in_world = glm::normalize(bitangent_in_world);
+    return unit_bitangent_in_world;
+}
+
+auto Grid::get_cell_size() const -> float
+{
+    return m_cell_size;
 }
 
 auto Grid::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>

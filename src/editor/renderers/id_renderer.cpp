@@ -18,6 +18,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -517,7 +518,7 @@ auto Id_renderer::get(const int x, const int y) -> Id_query_result
             (result.id >= r.offset) &&
             (result.id < (r.offset + r.length))
         ) {
-            result.mesh            = r.mesh;
+            result.mesh            = std::dynamic_pointer_cast<erhe::scene::Mesh>(r.mesh->shared_from_this());
             result.primitive_index = r.primitive_index;
             result.triangle_id     = result.id - r.offset;
             return result;

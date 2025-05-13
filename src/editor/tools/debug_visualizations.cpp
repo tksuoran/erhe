@@ -944,7 +944,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
     erhe::scene::Mesh* hovered_scene_mesh{nullptr};
     if (m_hover_scene_view != nullptr) {
         const Hover_entry& content_hover = m_hover_scene_view->get_hover(Hover_entry::content_slot);
-        hovered_scene_mesh = content_hover.scene_mesh;
+        hovered_scene_mesh = content_hover.scene_mesh_weak.lock().get();
     }
 
     for (erhe::primitive::Primitive& primitive : scene_mesh->get_mutable_primitives()) {

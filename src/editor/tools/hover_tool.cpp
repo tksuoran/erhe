@@ -52,7 +52,10 @@ Hover_tool::Hover_tool(
 void Hover_tool::imgui()
 {
     ImGui::Checkbox("Geometry Debug Facet Hover Only", &m_geometry_debug_hover_facet_only);
+    ImGui::Checkbox("Show Hover Normal",               &m_show_hover_normal);
+    ImGui::Checkbox("Show Snapped Grid Position",      &m_show_snapped_grid_position);
 
+    // Rest requires scene_view so we can early out here
     auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
         return;
@@ -63,20 +66,22 @@ void Hover_tool::imgui()
     const auto& rendertarget = scene_view->get_hover(Hover_entry::rendertarget_slot);
     const auto& grid         = scene_view->get_hover(Hover_entry::grid_slot);
     const auto* nearest      = scene_view->get_nearest_hover(Hover_entry::all_bits);
-    if (nearest == nullptr) {
-        return;
+    if ((nearest != nullptr) && nearest->valid) {
+        ImGui::Text("Nearest: %s", nearest->get_name().c_str());
     }
-    ImGui::Checkbox("Show Snapped Grid Position", &m_show_snapped_grid_position);
-    ImGui::Text("Nearest: %s",      nearest->valid ? nearest->get_name().c_str() : "");
-    ImGui::Text("Content: %s",      (hover       .valid && (hover       .scene_mesh != nullptr)) ? hover       .scene_mesh->get_name().c_str() : "");
-    ImGui::Text("Tool: %s",         (tool        .valid && (tool        .scene_mesh != nullptr)) ? tool        .scene_mesh->get_name().c_str() : "");
-    ImGui::Text("Rendertarget: %s", (rendertarget.valid && (rendertarget.scene_mesh != nullptr)) ? rendertarget.scene_mesh->get_name().c_str() : "");
+
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh        = hover       .scene_mesh_weak.lock();
+    std::shared_ptr<erhe::scene::Mesh> tool_scene_mesh         = tool        .scene_mesh_weak.lock();
+    std::shared_ptr<erhe::scene::Mesh> rendertarget_scene_mesh = rendertarget.scene_mesh_weak.lock();
+    ImGui::Text("Content: %s",      (hover       .valid && hover_scene_mesh       ) ? hover_scene_mesh       ->get_name().c_str() : "");
+    ImGui::Text("Tool: %s",         (tool        .valid && tool_scene_mesh        ) ? tool_scene_mesh        ->get_name().c_str() : "");
+    ImGui::Text("Rendertarget: %s", (rendertarget.valid && rendertarget_scene_mesh) ? rendertarget_scene_mesh->get_name().c_str() : "");
     if (grid.valid && grid.position.has_value()) {
         const std::string text = fmt::format("Grid: {}", grid.position.value());
         ImGui::TextUnformatted(text.c_str());
     }
 
-    if (nearest->valid) {
+    if ((nearest != nullptr) && nearest->valid) {
         {
             const std::string text = fmt::format("Nearest Primitive Index: {}", nearest->scene_mesh_primitive_index);
             ImGui::TextUnformatted(text.c_str());
@@ -169,7 +174,7 @@ void Hover_tool::tool_render(const Render_context& context)
         return;
     }
 
-    if (entry->normal.has_value()) {
+    if (m_show_hover_normal && entry->normal.has_value()) {
         erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
         const auto p0 = entry->position.value();
         const auto p1 = entry->position.value() + entry->normal.value();
@@ -178,8 +183,9 @@ void Hover_tool::tool_render(const Render_context& context)
             get_line_color_from_slot(entry->slot),
             {{ glm::vec3{p0}, glm::vec3{p1} }}
         );
-        if (m_show_snapped_grid_position && entry->grid) {
-            const auto sp0 = entry->grid->snap_world_position(p0);
+        std::shared_ptr<Grid> grid = entry->grid_weak.lock();
+        if (m_show_snapped_grid_position && grid) {
+            const auto sp0 = grid->snap_world_position(p0);
             const auto sp1 = sp0 + entry->normal.value();
             line_renderer.add_lines(
                 glm::vec4{1.0f, 1.0f, 0.0f, 1.0},
@@ -225,15 +231,17 @@ void Hover_tool::tool_render(const Render_context& context)
     //// std::optional<glm::vec3> local_position;
     //// std::optional<glm::vec3> local_normal;
     std::optional<std::string> name;
-    if (entry->scene_mesh != nullptr) {
+    std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry->scene_mesh_weak.lock();
+    std::shared_ptr<Grid>              grid       = entry->grid_weak.lock();
+    if (scene_mesh) {
         //// const auto* node = entry->scene_mesh->get_node();
         //// entity_position  = glm::vec3{node->position_in_world()};
         //// local_position   = node->transform_point_from_world_to_local(entry->position.value());
-        name             = entry->scene_mesh->get_name();
-    } else if (entry->grid != nullptr) {
+        name             = scene_mesh->get_name();
+    } else if (grid) {
         //// entity_position  = glm::vec3{entry->grid->grid_from_world() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
         //// local_position   = glm::vec3{entry->grid->grid_from_world() * glm::vec4{entry->position.value(), 1.0f}};
-        name = entry->grid->get_name();
+        name = grid->get_name();
     }
     if (name.has_value()) {
         add_line(name.value());
@@ -270,15 +278,15 @@ void Hover_tool::tool_render(const Render_context& context)
     const Hover_entry& hover = scene_view->get_hover(Hover_entry::content_slot);
 
     if (
-        !hover.valid ||
+        !hover.valid                ||
         !hover.position.has_value() ||
-        (hover.scene_mesh == nullptr) ||
+        !scene_mesh                 ||
         !hover.geometry
     )  {
         return;
     }
 
-    const erhe::scene::Node* node = hover.scene_mesh->get_node();
+    const erhe::scene::Node* node = scene_mesh->get_node();
     if (node == nullptr) {
         return;
     }

@@ -481,14 +481,15 @@ void Transform_tool::update_hover()
     }
 
     const auto& tool = scene_view->get_hover(Hover_entry::tool_slot);
-    if (!tool.valid || (tool.scene_mesh == nullptr)) {
+    std::shared_ptr<erhe::scene::Mesh> scene_mesh = tool.scene_mesh_weak.lock();
+    if (!tool.valid || !scene_mesh) {
         if (m_hover_handle != Handle::e_handle_none) {
             m_hover_handle = Handle::e_handle_none;
         }
         return;
     }
 
-    const auto new_handle = get_handle(tool.scene_mesh);
+    const auto new_handle = get_handle(scene_mesh.get());
     if (m_hover_handle == new_handle) {
         return;
     }
@@ -552,7 +553,8 @@ auto Transform_tool::on_drag_ready() -> bool
     }
 
     const auto& hover_entry = scene_view->get_hover(Hover_entry::tool_slot);
-    if (!hover_entry.valid || (hover_entry.scene_mesh == nullptr)) {
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = hover_entry.scene_mesh_weak.lock();
+    if (!hover_entry.valid || !hover_scene_mesh) {
         log_trs_tool->trace("Transform tool cannot start drag - Pointer is not hovering over tool handle");
         return false;
     }

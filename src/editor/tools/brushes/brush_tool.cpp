@@ -208,22 +208,30 @@ void Brush_tool::remove_preview_mesh()
 
 auto Brush_tool::try_insert_ready() -> bool
 {
-    return is_enabled() && ((m_hover.scene_mesh != nullptr) || (m_hover.grid != nullptr));
+    return is_enabled() &&
+        (
+            !m_hover.scene_mesh_weak.expired() ||
+            !m_hover.grid_weak.expired()
+        );
 }
 
 auto Brush_tool::get_hover_brush() const -> std::shared_ptr<Brush>
 {
-    if (m_hover.scene_mesh == nullptr) {
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
+    if (!hover_scene_mesh) {
         return {};
     }
-    erhe::scene::Node* node = m_hover.scene_mesh->get_node();
+
+    erhe::scene::Node* node = hover_scene_mesh->get_node();
     if (node == nullptr) {
         return {};
     }
+
     std::shared_ptr<Brush_placement> brush_placement = get_brush_placement(node);
     if (!brush_placement) {
         return {};
     }
+
     std::shared_ptr<Brush> brush = brush_placement->get_brush();
     return brush;
 }
@@ -285,10 +293,14 @@ void Brush_tool::on_motion()
     }
     m_hover = *nearest_hover;
 
-    if ((m_hover.scene_mesh != nullptr) && (m_hover.scene_mesh->get_node() != nullptr) && m_hover.position.has_value()) {
-        m_hover.position = m_hover.scene_mesh->get_node()->transform_direction_from_world_to_local(
-            m_hover.position.value()
-        );
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
+    if (hover_scene_mesh) {
+        erhe::scene::Node* hover_node = hover_scene_mesh->get_node();
+        if (hover_node != nullptr) {
+            if (m_hover.position.has_value()) {
+                m_hover.position = hover_node->transform_direction_from_world_to_local(m_hover.position.value());
+            }
+        }
     }
 
     update_preview_mesh();
@@ -302,120 +314,162 @@ void Brush_tool::preview_drag_and_drop(std::shared_ptr<Brush> brush)
 
 auto Brush_tool::get_placement_facet() const -> GEO::index_t
 {
-    return m_brush_placement_frame.m_facet;
+    return m_brush_placement_frame.has_value() ? m_brush_placement_frame.value().m_facet : GEO::NO_INDEX;
 }
 
-auto Brush_tool::get_placement_corner() const -> GEO::index_t
+auto Brush_tool::get_placement_corner0() const -> GEO::index_t
 {
-    return m_brush_placement_frame.m_corner;
+    return m_brush_placement_frame.has_value() ? m_brush_placement_frame.value().m_corner0 : GEO::NO_INDEX;
 }
 
-// Returns transform which places brush in parent (hover) mesh space.
-auto Brush_tool::get_hover_mesh_transform(Brush& brush, const float hover_distance) -> glm::mat4
+auto Brush_tool::update_hover_frame_from_mesh() -> bool
 {
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
     if (
-        (m_hover.scene_mesh == nullptr)                                            ||
+        !hover_scene_mesh ||
         (m_hover.scene_mesh_primitive_index == std::numeric_limits<std::size_t>::max()) ||
         (!m_hover.geometry)
     ) {
-        return glm::mat4{1};
+        return false;
     }
+
+    const erhe::scene::Node* node = hover_scene_mesh->get_node();
+    if (node == nullptr) {
+        return false;
+    }
+
     auto* geometry = m_hover.geometry.get();
     const GEO::Mesh& geo_mesh = geometry->get_mesh();
     ERHE_VERIFY(m_hover.facet < geo_mesh.facets.nb());
 
-    Reference_frame hover_frame{geo_mesh, m_hover.facet, 0, 0};
-    const GEO::index_t hover_facet_corner_count = geo_mesh.facets.nb_corners(m_hover.facet);
+    GEO::index_t corner = 0;
+    Reference_frame hover_frame{geo_mesh, m_hover.facet, 0, corner, Frame_orientation::out};
 
-    m_brush_placement_frame = Reference_frame{};
-    if (m_use_matching_face) {
+    if (!m_snap_to_hover_polygon && m_hover.position.has_value()) {
+        hover_frame.m_centroid = to_geo_vec3f(m_hover.position.value());
+    }
+
+    m_world_from_hover         = node->world_from_node();
+    m_hover_frame              = hover_frame;
+    m_hover_facet_corner_count = geo_mesh.facets.nb_corners(m_hover.facet);
+    return true;
+}
+
+auto Brush_tool::update_brush_frame(Brush& brush) -> bool
+{
+    if (!m_hover_frame.has_value()) {
+        return false;
+    }
+
+    const Reference_frame& hover_frame = m_hover_frame.value();
+
+    if (m_hover_facet_corner_count.has_value() && m_use_matching_face) {
         m_brush_placement_frame = brush.get_reference_frame(
-            hover_facet_corner_count,
+            m_hover_facet_corner_count.value(),
             static_cast<uint32_t>(m_polygon_offset),
             static_cast<uint32_t>(m_corner_offset)
         );
-        hover_frame.m_N *= -1.0f;
-        hover_frame.m_B *= -1.0f;
-    } else if (m_use_selected_face) {
+    }
+
+    if (!m_brush_placement_frame.has_value()) {
         const size_t selected_corner_count = m_selected_corner_count.has_value() ? m_selected_corner_count.value() : brush.get_max_corner_count();
         m_brush_placement_frame = brush.get_reference_frame(
             static_cast<uint32_t>(selected_corner_count),
             static_cast<uint32_t>(m_polygon_offset),
             static_cast<uint32_t>(m_corner_offset)
         );
-        hover_frame.m_N *= -1.0f;
-        hover_frame.m_B *= -1.0f;
     }
 
-    ERHE_VERIFY(m_brush_placement_frame.scale() != 0.0f);
+    Reference_frame& brush_frame = m_brush_placement_frame.value();
 
+    ERHE_VERIFY(brush_frame.scale() != 0.0f);
+    
     if (m_scale_to_match) {
         const float hover_scale = hover_frame.scale();
-        const float brush_scale = m_brush_placement_frame.scale();
+        const float brush_scale = brush_frame.scale();
         const float scale       = (brush_scale != 0.0f) ? static_cast<float>(hover_scale / brush_scale) : 1.0f;
-
+    
         m_transform_scale = m_scale * scale;
         if (m_transform_scale != 1.0f) {
             const glm::mat4 scale_transform = erhe::math::create_scale(m_transform_scale);
-            m_brush_placement_frame.transform_by(to_geo_mat4f(scale_transform));
+            brush_frame.transform_by(to_geo_mat4f(scale_transform));
         }
     }
 
-    if (!m_snap_to_hover_polygon && m_hover.position.has_value()) {
-        hover_frame.m_centroid = to_geo_vec3f(m_hover.position.value());
-    }
-
     const GEO::mat4f hover_transform = hover_frame.transform(0.0f);
-    const GEO::mat4f brush_transform = m_brush_placement_frame.transform(hover_distance);
+    const GEO::mat4f brush_transform = brush_frame.transform(0.0f); // hover distance
     const GEO::mat4f inverse_brush   = brush_transform.inverse();
     const GEO::mat4f align           = hover_transform * inverse_brush;
-    return to_glm_mat4(align);
+    m_hover_transform = to_glm_mat4(hover_transform);
+    m_align_transform = to_glm_mat4(align);
+    return true;
 }
 
-auto Brush_tool::get_hover_grid_transform(Brush& brush, const float hover_distance) -> glm::mat4
+auto Brush_tool::get_world_from_grid_hover_point() const -> glm::mat4
 {
-    m_transform_scale = m_scale;
-    m_brush_placement_frame = brush.get_reference_frame(
-        static_cast<uint32_t>(m_selected_corner_count.has_value() ? m_selected_corner_count.value() : brush.get_max_corner_count()),
-        static_cast<uint32_t>(m_polygon_offset),
-        static_cast<uint32_t>(m_corner_offset)
-    );
-    const glm::mat4  scale_transform = erhe::math::create_scale(m_scale);
-    m_brush_placement_frame.transform_by(to_geo_mat4f(scale_transform));
-    const GEO::mat4f brush_transform = m_brush_placement_frame.transform(hover_distance);
-    const GEO::mat4f inverse_brush   = brush_transform.inverse();
-
-    if (m_hover.grid == nullptr) {
+    std::shared_ptr<const Grid> hover_grid = m_hover.grid_weak.lock();
+    if (!hover_grid) {
         return glm::mat4{1};
     }
 
-    const glm::vec3 position_in_grid0 = m_hover.grid->grid_from_world() * glm::vec4{m_hover.position.value(), 1.0f};
-    const glm::vec3 position_in_grid  = m_snap_to_grid ? m_hover.grid->snap_grid_position(position_in_grid0) : position_in_grid0;
+    const glm::vec3 position_in_grid0 = hover_grid->grid_from_world() * glm::vec4{m_hover.position.value(), 1.0f};
+    const glm::vec3 position_in_grid  = m_snap_to_grid ? hover_grid->snap_grid_position(position_in_grid0) : position_in_grid0;
     const glm::mat4 offset            = erhe::math::create_translation<float>(position_in_grid);
-    const glm::mat4 world_from_grid   = m_hover.grid->world_from_grid() * offset;
+    const glm::mat4 world_from_grid   = hover_grid->world_from_grid() * offset;
 
-    const glm::mat4 align = glm::mat4{world_from_grid} * to_glm_mat4(inverse_brush);
-    return align;
+    return world_from_grid;
+}
+
+auto Brush_tool::update_hover_frame_from_grid() -> bool
+{
+    std::shared_ptr<const Grid> hover_grid = m_hover.grid_weak.lock();
+    if (!hover_grid || !m_hover.position.has_value()) {
+        return false;
+    }
+
+    const Grid& grid = *hover_grid.get();
+    Reference_frame hover_frame{grid, to_geo_vec3f(m_hover.position.value())};
+
+    m_world_from_hover = hover_grid->world_from_grid();
+    m_hover_frame      = hover_frame;
+    return true;
 }
 
 void Brush_tool::update_preview_mesh_node_transform()
 {
+    m_hover_facet_corner_count.reset();
+    m_brush_placement_frame.reset();
+    m_world_from_hover.reset();
+    m_hover_transform.reset();
+    m_align_transform.reset();
+
     auto shared_brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : m_context.selection->get_last_selected<Brush>();
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
+    std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
     if (
         !shared_brush ||
         !m_hover.position.has_value() ||
         !m_preview_mesh ||
         !m_preview_node ||
-        ((m_hover.scene_mesh == nullptr) && (m_hover.grid == nullptr))
+        (!hover_scene_mesh && !hover_grid)
     ) {
         return;
     }
 
-    Brush& brush = *shared_brush.get();
-    const auto transform = (m_hover.scene_mesh != nullptr)
-        ? get_hover_mesh_transform(brush, m_preview_hover_distance) 
-        : get_hover_grid_transform(brush, m_preview_hover_distance);
-    const auto& brush_scaled = brush.get_scaled(m_transform_scale);
+    const bool got_hover_frame_from_mesh = update_hover_frame_from_mesh();
+    const bool got_hover_frame_from_grid = !got_hover_frame_from_mesh && update_hover_frame_from_grid();
+    if (!got_hover_frame_from_mesh && !got_hover_frame_from_grid) {
+        return;
+    }
+
+    Brush&     brush          = *shared_brush.get();
+    const bool brush_frame_ok = update_brush_frame(brush);
+    if (!brush_frame_ok || !m_align_transform.has_value()) {
+        return;
+    }
+
+    const Brush::Scaled& brush_scaled = brush.get_scaled(m_transform_scale);
+    const glm::mat4&     transform    = m_align_transform.value();
 
     // TODO Unparent, to remove raytrace primitives to raytrace scene.
     //      This is a workaround for clear_primitives() issue below
@@ -430,10 +484,10 @@ void Brush_tool::update_preview_mesh_node_transform()
     m_preview_mesh->clear_primitives(); // TODO This is dangerous, as primitives *must* first be removed from rt_scene
     m_preview_mesh->add_primitive(brush_scaled.primitive, material);
 
-    if (m_hover.scene_mesh != nullptr) {
-        m_preview_node->set_parent(m_hover.scene_mesh->get_node());
+    if (hover_scene_mesh) {
+        m_preview_node->set_parent(hover_scene_mesh->get_node());
         m_preview_node->set_parent_from_node(transform);
-    } else if (m_hover.grid) {
+    } else if (hover_grid) {
         auto* scene_view = get_hover_scene_view();
         ERHE_VERIFY(scene_view != nullptr);
         const auto& scene_root = scene_view->get_scene_root();
@@ -456,7 +510,13 @@ void Brush_tool::do_insert_operation(Brush& brush)
         return;
     }
 
-    const auto hover_from_brush = (m_hover.scene_mesh != nullptr) ? get_hover_mesh_transform(brush, 0.0f) : get_hover_grid_transform(brush, 0.0f);
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
+    std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
+
+    if (!m_align_transform.has_value()) {
+        return;
+    }
+    const auto hover_from_brush = m_align_transform.value(); ////hover_scene_mesh ? get_hover_mesh_transform(brush, 0.0f) : get_hover_grid_transform(brush, 0.0f);
     const uint64_t mesh_flags =
         erhe::Item_flags::visible     |
         erhe::Item_flags::content     |
@@ -469,7 +529,7 @@ void Brush_tool::do_insert_operation(Brush& brush)
         erhe::Item_flags::content     |
         erhe::Item_flags::show_in_ui;
 
-    auto* const hover_node = (m_hover.scene_mesh != nullptr) ? m_hover.scene_mesh->get_node() : nullptr;
+    auto* const hover_node = hover_scene_mesh ? hover_scene_mesh->get_node() : nullptr;
     const Instance_create_info brush_instance_create_info {
         .node_flags       = node_flags,
         .mesh_flags       = mesh_flags,
@@ -483,7 +543,7 @@ void Brush_tool::do_insert_operation(Brush& brush)
     const auto instance_node = brush.make_instance(brush_instance_create_info);
 
     std::shared_ptr<Brush> shared_brush = std::dynamic_pointer_cast<Brush>(brush.shared_from_this());
-    std::shared_ptr<Brush_placement> brush_placement = std::make_shared<Brush_placement>(shared_brush, get_placement_facet(), get_placement_corner());
+    std::shared_ptr<Brush_placement> brush_placement = std::make_shared<Brush_placement>(shared_brush, get_placement_facet(), get_placement_corner0());
     instance_node->attach(brush_placement);
 
     std::shared_ptr<erhe::scene::Node> parent = (hover_node != nullptr)
@@ -511,7 +571,11 @@ void Brush_tool::add_preview_mesh(Brush& brush)
 {
     const auto material = get_material();
     auto* scene_view = get_hover_scene_view();
-    if (!material || !m_hover.position.has_value() || ((m_hover.scene_mesh == nullptr) && (m_hover.grid == nullptr)) || (scene_view == nullptr)) {
+
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
+    std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
+
+    if (!material || !m_hover.position.has_value() || (!hover_scene_mesh && !hover_grid) || (scene_view == nullptr)) {
         return;
     }
 
@@ -549,8 +613,12 @@ void Brush_tool::add_preview_mesh(Brush& brush)
 void Brush_tool::update_preview_mesh()
 {
     const auto brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : m_context.selection->get_last_selected<Brush>();
-    if (!m_preview_mesh && (is_enabled() || m_drag_and_drop_brush)) {
-        if (!brush || !m_hover.position.has_value() || ((m_hover.scene_mesh == nullptr) && (m_hover.grid == nullptr))) {
+
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
+    std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
+
+    if (!m_preview_mesh && (is_enabled() || m_drag_and_drop_brush) && m_show_preview) {
+        if (!brush || !m_hover.position.has_value() || (!hover_scene_mesh && !hover_grid)) {
             return;
         }
 
@@ -562,9 +630,8 @@ void Brush_tool::update_preview_mesh()
         (!m_drag_and_drop_brush && !is_enabled()) ||
         !brush ||
         !m_hover.position.has_value() ||
-        (
-            (m_hover.scene_mesh == nullptr) && (m_hover.grid == nullptr)
-        )
+        !m_show_preview ||
+        (!hover_scene_mesh && !hover_grid)
     ) {
         remove_preview_mesh();
     }
@@ -638,7 +705,19 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
     ImGui::DragInt    ("Corner Offset",   &m_corner_offset,  0.1f, 0, INT_MAX);
 
     ImGui::NewLine    ();
-    ImGui::Checkbox   ("Debug visualization", &m_debug_visualization);
+    ImGui::Checkbox   ("Debug Visualization", &m_debug_visualization);
+    ImGui::Checkbox   ("Show Receiver Frame", &m_show_receiver_frame);
+    ImGui::Checkbox   ("Show Brush Frame",    &m_show_brush_frame);
+    ImGui::Checkbox   ("Show Preview",        &m_show_preview);
+
+    if (ImGui::IsItemEdited()) {
+        if (m_show_preview) {
+            update_preview_mesh();
+        }
+        else {
+            remove_preview_mesh();
+        }
+    }
 
     if (!m_brush_item_tree) {
         std::shared_ptr<Content_library> content_library = get_content_library();
@@ -669,50 +748,94 @@ void Brush_tool::tool_render(const Render_context& render_context)
         return;
     }
 
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
+    std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
+
     auto shared_brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : m_context.selection->get_last_selected<Brush>();
-    if (
-        !shared_brush ||
-        !m_hover.position.has_value() ||
-        (m_hover.scene_mesh == nullptr)
-    ) {
-        return;
+    //if (
+    //    !shared_brush ||
+    //    !m_hover.position.has_value() ||
+    //    (!hover_scene_mesh && !hover_grid)
+    //) {
+    //    return;
+    //}
+
+    if (m_hover_frame.has_value()) {
+        const Reference_frame& hover_frame      = m_hover_frame.value();
+        const GEO::mat4f       hover_transform_ = hover_frame.transform(0.0f);
+        const glm::mat4        hover_transform  = to_glm_mat4(hover_transform_);
+        const glm::mat4        world_from_hover = m_world_from_hover.has_value() ? m_world_from_hover.value() : glm::mat4{1.0f};
+        const glm::mat4        world_from_align = world_from_hover * hover_transform;
+        constexpr glm::vec3 C    {0.0f, 0.0f, 0.0f};
+        constexpr glm::vec3 C_t  {1.0f, 0.0f, 0.0f};
+        constexpr glm::vec3 C_b  {0.0f, 1.0f, 0.0f};
+        constexpr glm::vec3 C_n  {0.0f, 0.0f, 1.0f};
+        constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+        constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+        constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
+        erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+        line_renderer.set_thickness(10.0f);
+        line_renderer.add_lines( world_from_align, red,   { { C, C_t }});
+        line_renderer.add_lines( world_from_align, green, { { C, C_b }});
+        line_renderer.add_lines( world_from_align, blue,  { { C, C_n }});
     }
 
-    erhe::scene::Node* hover_node = m_hover.scene_mesh->get_node();
-    if (hover_node == nullptr) {
-        return;
+#if 0
+    if (m_show_receiver_frame) {
+        //if (!hover_scene_mesh && hover_grid) {
+        //    const glm::mat4 world_from_hover = get_world_from_grid_hover_point();
+        //    constexpr glm::vec3 C    {0.0f, 0.0f, 0.0f};
+        //    constexpr glm::vec3 C_t  {1.0f, 0.0f, 0.0f};
+        //    constexpr glm::vec3 C_b  {0.0f, 1.0f, 0.0f};
+        //    constexpr glm::vec3 C_n  {0.0f, 0.0f, 1.0f};
+        //    constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+        //    constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+        //    constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
+        //    erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+        //    line_renderer.set_thickness(10.0f);
+        //    line_renderer.add_lines( world_from_hover, red,   { { C, C_t }});
+        //    line_renderer.add_lines( world_from_hover, green, { { C, C_b }});
+        //    line_renderer.add_lines( world_from_hover, blue,  { { C, C_n }});
+        //    return;
+        //}
+        //
+        //erhe::scene::Node* hover_node = hover_scene_mesh->get_node();
+        //if (hover_node == nullptr) {
+        //    return;
+        //}
+        //
+        //const glm::mat4 world_from_hover_node = hover_node->world_from_node();
+        //
+        //Brush& brush = *shared_brush.get();
+        //auto* geometry = m_hover.geometry.get();
+        //const GEO::Mesh& geo_mesh = geometry->get_mesh();
+        //GEO::index_t corner = 0;
+        //Reference_frame hover_frame{geo_mesh, m_hover.facet, 0, corner, Frame_orientation::out};
+        //const GEO::index_t hover_facet_corner_count = geo_mesh.facets.nb_corners(m_hover.facet);
+        //m_brush_placement_frame = brush.get_reference_frame(
+        //    hover_facet_corner_count,
+        //    static_cast<uint32_t>(m_polygon_offset),
+        //    static_cast<uint32_t>(m_corner_offset)
+        //);
+
+        const GEO::vec3f C_   = hover_frame.m_centroid;
+        const GEO::vec3f C_t_ = hover_frame.m_centroid + hover_frame.m_T;
+        const GEO::vec3f C_b_ = hover_frame.m_centroid + hover_frame.m_B;
+        const GEO::vec3f C_n_ = hover_frame.m_centroid + hover_frame.m_N;
+        const glm::vec3  C    = to_glm_vec3(C_  );
+        const glm::vec3  C_t  = to_glm_vec3(C_t_);
+        const glm::vec3  C_b  = to_glm_vec3(C_b_);
+        const glm::vec3  C_n  = to_glm_vec3(C_n_);
+        constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+        constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+        constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
+        erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+        line_renderer.set_thickness(10.0f);
+        line_renderer.add_lines( world_from_hover_node, red,   { { C, C_t }});
+        line_renderer.add_lines( world_from_hover_node, green, { { C, C_b }});
+        line_renderer.add_lines( world_from_hover_node, blue,  { { C, C_n }});
     }
-    const glm::mat4 world_from_hover_node = hover_node->world_from_node();
-
-    Brush& brush = *shared_brush.get();
-    auto* geometry = m_hover.geometry.get();
-    const GEO::Mesh& geo_mesh = geometry->get_mesh();
-    Reference_frame hover_frame{geo_mesh, m_hover.facet, 0, 0};
-    const GEO::index_t hover_facet_corner_count = geo_mesh.facets.nb_corners(m_hover.facet);
-    m_brush_placement_frame = brush.get_reference_frame(
-        hover_facet_corner_count,
-        static_cast<uint32_t>(m_polygon_offset),
-        static_cast<uint32_t>(m_corner_offset)
-    );
-    hover_frame.m_N *= -1.0f;
-    hover_frame.m_B *= -1.0f;
-
-    const GEO::vec3f C_   = hover_frame.m_centroid;
-    const GEO::vec3f C_n_ = hover_frame.m_centroid + hover_frame.m_N;
-    const GEO::vec3f C_t_ = hover_frame.m_centroid + hover_frame.m_T;
-    const GEO::vec3f C_b_ = hover_frame.m_centroid + hover_frame.m_B;
-    const glm::vec3  C    = to_glm_vec3(C_  );
-    const glm::vec3  C_n  = to_glm_vec3(C_n_);
-    const glm::vec3  C_t  = to_glm_vec3(C_t_);
-    const glm::vec3  C_b  = to_glm_vec3(C_b_);
-    constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
-    constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
-    constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
-    erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
-    line_renderer.set_thickness(10.0f);
-    line_renderer.add_lines( world_from_hover_node, red,   { { C, C_n }});
-    line_renderer.add_lines( world_from_hover_node, green, { { C, C_t }});
-    line_renderer.add_lines( world_from_hover_node, blue,  { { C, C_b }});
+#endif
 }
 
 } // namespace editor

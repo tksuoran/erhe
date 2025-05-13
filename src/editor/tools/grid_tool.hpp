@@ -20,8 +20,8 @@ class Tools;
 class Grid_hover_position
 {
 public:
-    glm::vec3   position{0.0f};
-    const Grid* grid    {nullptr};
+    glm::vec3             position{0.0f};
+    std::shared_ptr<Grid> grid    {};
 };
 
 class Grid_tool

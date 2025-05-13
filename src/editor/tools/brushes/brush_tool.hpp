@@ -94,10 +94,13 @@ private:
     void remove_preview_mesh               ();
     void update_preview_mesh_node_transform();
 
-    [[nodiscard]] auto get_hover_mesh_transform(Brush& brush, float hover_distance) -> glm::mat4; // Places brush in parent (hover) mesh
-    [[nodiscard]] auto get_hover_grid_transform(Brush& brush, float hover_distance) -> glm::mat4;
-    [[nodiscard]] auto get_placement_facet () const -> GEO::index_t;
-    [[nodiscard]] auto get_placement_corner() const -> GEO::index_t;
+    [[nodiscard]] auto get_world_from_grid_hover_point() const -> glm::mat4;
+
+    [[nodiscard]] auto update_hover_frame_from_mesh() -> bool;
+    [[nodiscard]] auto update_hover_frame_from_grid() -> bool;
+    [[nodiscard]] auto update_brush_frame          (Brush& brush) -> bool;
+    [[nodiscard]] auto get_placement_facet  () const -> GEO::index_t;
+    [[nodiscard]] auto get_placement_corner0() const -> GEO::index_t;
 
     Brush_tool_preview_command              m_preview_command;
     Brush_tool_insert_command               m_insert_command;
@@ -112,7 +115,10 @@ private:
     bool                               m_scale_to_match        {true};
     bool                               m_use_matching_face     {true};
     bool                               m_use_selected_face     {false};
-    bool                               m_debug_visualization   {false};
+    bool                               m_debug_visualization   {true};
+    bool                               m_show_receiver_frame   {true};
+    bool                               m_show_brush_frame      {true};
+    bool                               m_show_preview          {true};
     Hover_entry                        m_hover;
     std::shared_ptr<erhe::scene::Mesh> m_preview_mesh;
     std::shared_ptr<erhe::scene::Node> m_preview_node;
@@ -122,7 +128,12 @@ private:
     int                                m_polygon_offset {0};
     int                                m_corner_offset  {0};
     std::optional<std::size_t>         m_selected_corner_count{};
-    Reference_frame                    m_brush_placement_frame;
+    std::optional<GEO::index_t>        m_hover_facet_corner_count;
+    std::optional<glm::mat4>           m_world_from_hover;
+    std::optional<Reference_frame>     m_hover_frame;
+    std::optional<Reference_frame>     m_brush_placement_frame;
+    std::optional<glm::mat4>           m_hover_transform;
+    std::optional<glm::mat4>           m_align_transform;
     std::unique_ptr<Item_tree>         m_brush_item_tree;
 };
 

@@ -82,8 +82,11 @@ public:
     std::size_t                               slot                      {slot_count};
     uint32_t                                  mask                      {0};
     bool                                      valid                     {false};
-    erhe::scene::Mesh*                        scene_mesh                {nullptr};
-    const Grid*                               grid                      {nullptr};
+
+    // For now, these are weak pointers to avoid dangling pointers
+    std::weak_ptr<erhe::scene::Mesh>          scene_mesh_weak           {};
+    std::weak_ptr<Grid>                       grid_weak                 {};
+
     std::size_t                               scene_mesh_primitive_index{std::numeric_limits<std::size_t>::max()};
     std::shared_ptr<erhe::geometry::Geometry> geometry                  {};
     std::optional<glm::vec3>                  position                  {};

@@ -257,21 +257,26 @@ auto Hud::try_begin_drag() -> bool
         return false;
     }
 
-    const auto* drag_entry = scene_view->get_nearest_hover(
-        Hover_entry::rendertarget_bit
-    );
-    if ((drag_entry == nullptr) || !drag_entry->valid || (drag_entry->scene_mesh == nullptr)) {
+    const auto* drag_entry = scene_view->get_nearest_hover(Hover_entry::rendertarget_bit);
+    if ((drag_entry == nullptr) || !drag_entry->valid) {
         return false;
     }
-    auto* node = drag_entry->scene_mesh->get_node();
+
+    std::shared_ptr<erhe::scene::Mesh> drag_scene_mesh = drag_entry->scene_mesh_weak.lock();
+    if (!drag_scene_mesh) {
+        return false;
+    }
+    erhe::scene::Node* node = drag_scene_mesh->get_node();
     if (node == nullptr) {
         return false;
     }
-    m_drag_node = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
-    auto drag_node = m_drag_node.lock();
+
+    std::shared_ptr<erhe::scene::Node> drag_node = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+    m_drag_node = drag_node;
     if (!drag_node) {
         return false;
     }
+
     const glm::mat4 world_from_control = world_from_control_opt.value();
     const glm::mat4 node_from_world    = drag_node->node_from_world();
     const glm::mat4 world_from_node    = drag_node->world_from_node();

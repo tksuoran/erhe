@@ -140,7 +140,7 @@ auto Material_paint_tool::on_paint_ready() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    return hover.valid && hover.scene_mesh;
+    return hover.valid && !hover.scene_mesh_weak.expired();
 }
 
 auto Material_paint_tool::on_pick_ready() -> bool
@@ -150,7 +150,7 @@ auto Material_paint_tool::on_pick_ready() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    return hover.valid && hover.scene_mesh;
+    return hover.valid && !hover.scene_mesh_weak.expired();
 }
 
 auto Material_paint_tool::on_paint() -> bool
@@ -164,10 +164,12 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    if (!hover.valid || !hover.scene_mesh) {
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = hover.scene_mesh_weak.lock();
+    if (!hover.valid || !hover_scene_mesh) {
         return false;
     }
-    auto& hover_primitive = hover.scene_mesh->get_mutable_primitives().at(hover.scene_mesh_primitive_index);
+
+    auto& hover_primitive = hover_scene_mesh->get_mutable_primitives().at(hover.scene_mesh_primitive_index);
     hover_primitive.material = m_material;
 
     return true;
@@ -180,10 +182,11 @@ auto Material_paint_tool::on_pick() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    if (!hover.valid || (hover.scene_mesh == nullptr)) {
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = hover.scene_mesh_weak.lock();
+    if (!hover.valid || !hover_scene_mesh) {
         return false;
     }
-    auto& hover_primitive = hover.scene_mesh->get_primitives().at(hover.scene_mesh_primitive_index);
+    auto& hover_primitive = hover_scene_mesh->get_primitives().at(hover.scene_mesh_primitive_index);
     m_material = hover_primitive.material;
 
     return true;

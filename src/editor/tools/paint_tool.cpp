@@ -198,17 +198,17 @@ void Paint_tool::tool_render(const Render_context& context)
     }
 
     const Hover_entry& content = scene_view->get_hover(Hover_entry::content_slot);
+    std::shared_ptr<erhe::scene::Mesh> scene_mesh = content.scene_mesh_weak.lock();
     if (
-        !content.valid                  ||
-        !content.position.has_value()   ||
-        !content.normal.has_value()     ||
-        (content.scene_mesh == nullptr) ||
+        !content.valid                ||
+        !content.position.has_value() ||
+        !content.normal.has_value()   ||
+        !scene_mesh                   ||
         !content.geometry
     ) {
         return;
     }
 
-    ERHE_VERIFY(content.scene_mesh != nullptr);
     ERHE_VERIFY(content.scene_mesh_primitive_index != std::numeric_limits<std::size_t>::max());
 
     erhe::geometry::Geometry& geometry = *content.geometry.get();
@@ -222,7 +222,7 @@ void Paint_tool::tool_render(const Render_context& context)
 
     const glm::vec3 hover_position_in_world = content.position.value();
 
-    const erhe::scene::Node* node = content.scene_mesh->get_node();
+    const erhe::scene::Node* node = scene_mesh->get_node();
     if (node == nullptr) {
         return;
     }
@@ -394,7 +394,10 @@ void Paint_tool::paint()
         return;
     }
 
-    ERHE_VERIFY(content.scene_mesh != nullptr);
+    std::shared_ptr<erhe::scene::Mesh> scene_mesh = content.scene_mesh_weak.lock();
+    if (!scene_mesh) {
+        return;
+    }
     ERHE_VERIFY(content.scene_mesh_primitive_index != std::numeric_limits<std::size_t>::max());
 
     erhe::geometry::Geometry& geometry = *content.geometry.get();
@@ -408,7 +411,7 @@ void Paint_tool::paint()
 
     const glm::vec3 hover_position_in_world = content.position.value();
 
-    const erhe::scene::Node* node = content.scene_mesh->get_node();
+    const erhe::scene::Node* node = scene_mesh->get_node();
     if (node == nullptr) {
         return;
     }
@@ -436,20 +439,20 @@ void Paint_tool::paint()
     glm::vec4 color = m_palette.at(m_selected_palette_slot);
     switch (m_paint_mode) {
         case Paint_mode::Corner: {
-            paint_corner(*content.scene_mesh, content.scene_mesh_primitive_index, nearest_corner, color);
+            paint_corner(*scene_mesh, content.scene_mesh_primitive_index, nearest_corner, color);
             break;
         }
         case Paint_mode::Point: {
             const GEO::index_t vertex = geo_mesh.facet_corners.vertex(nearest_corner);
             const std::vector<GEO::index_t>& vertex_corners = geometry.get_vertex_corners(vertex);
             for (GEO::index_t corner : vertex_corners) {
-                paint_corner(*content.scene_mesh, content.scene_mesh_primitive_index, corner, color);
+                paint_corner(*scene_mesh, content.scene_mesh_primitive_index, corner, color);
             }
             break;
         }
         case Paint_mode::Polygon: {
             for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
-                paint_corner(*content.scene_mesh, content.scene_mesh_primitive_index, corner, color);
+                paint_corner(*scene_mesh, content.scene_mesh_primitive_index, corner, color);
             }
             break;
         }

@@ -209,7 +209,7 @@ private:
     Scene_view*                                   m_hover_scene_view{nullptr};
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection;
     Range_selection                               m_range_selection;
-    erhe::scene::Mesh*                            m_hover_mesh   {nullptr};
+    std::weak_ptr<erhe::scene::Mesh>              m_hover_mesh   {};
     bool                                          m_hover_content{false};
     bool                                          m_hover_tool   {false};
 

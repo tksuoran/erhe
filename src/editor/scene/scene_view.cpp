@@ -39,9 +39,11 @@ void Hover_entry::reset()
 
 auto Hover_entry::get_name() const -> const std::string&
 {
+    std::shared_ptr<erhe::scene::Mesh> scene_mesh = scene_mesh_weak.lock();
     if (scene_mesh) {
         return scene_mesh->get_name();
     }
+    std::shared_ptr<const Grid> grid = grid_weak.lock();
     if (grid) {
         return grid->get_name();
     }
@@ -58,8 +60,12 @@ Scene_view::~Scene_view() noexcept = default;
 
 void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
 {
-    const bool mesh_changed = m_hover_entries[slot].scene_mesh != entry.scene_mesh;
-    const bool grid_changed = m_hover_entries[slot].grid       != entry.grid;
+    std::shared_ptr<erhe::scene::Mesh> hower_scene_mesh = m_hover_entries[slot].scene_mesh_weak.lock();
+    std::shared_ptr<const Grid>        hover_grid       = m_hover_entries[slot].grid_weak.lock();
+    std::shared_ptr<erhe::scene::Mesh> entry_scene_mesh = entry.scene_mesh_weak.lock();
+    std::shared_ptr<const Grid>        entry_grid       = entry.grid_weak.lock();
+    const bool mesh_changed = (hower_scene_mesh != entry_scene_mesh);
+    const bool grid_changed = (hover_grid       != entry_grid);
     m_hover_entries[slot]      = entry;
     m_hover_entries[slot].slot = slot;
 
@@ -236,13 +242,10 @@ void Scene_view::update_grid_hover()
     Hover_entry entry;
     entry.valid = (hover_position.grid != nullptr);
     if (entry.valid) {
-        const glm::mat4  world_from_grid        = hover_position.grid->world_from_grid();
-        const glm::mat4  normal_world_from_grid = glm::transpose(glm::adjugate(world_from_grid));
-        const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_grid * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-        const glm::vec3  unit_normal_in_world   = glm::normalize(normal_in_world);
-        entry.position = hover_position.position;
-        entry.normal   = unit_normal_in_world;
-        entry.grid     = hover_position.grid;
+        const glm::vec3 unit_normal_in_world = hover_position.grid->normal_in_world();
+        entry.position  = hover_position.position;
+        entry.normal    = unit_normal_in_world;
+        entry.grid_weak = hover_position.grid;
     }
 
     set_hover(Hover_entry::grid_slot, entry);
@@ -332,12 +335,13 @@ void Scene_view::update_hover_with_raytrace()
             entry.triangle                   = std::numeric_limits<uint32_t>::max();
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit position: {}", Hover_entry::slot_names[slot], entry.position.value());
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit normal: {}", Hover_entry::slot_names[slot], hit.normal);
-            entry.scene_mesh                 = raytrace_primitive->mesh;
+            std::shared_ptr scene_mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(raytrace_primitive->mesh->shared_from_this());
+            ERHE_VERIFY(scene_mesh);
+            entry.scene_mesh_weak            = scene_mesh;
             entry.scene_mesh_primitive_index = raytrace_primitive->primitive_index;
-            ERHE_VERIFY(entry.scene_mesh != nullptr);
-            auto* const node = entry.scene_mesh->get_node();
+            auto* const node = scene_mesh->get_node();
             ERHE_VERIFY(node != nullptr);
-            const std::vector<erhe::primitive::Primitive>& scene_mesh_primitives = entry.scene_mesh->get_primitives();
+            const std::vector<erhe::primitive::Primitive>& scene_mesh_primitives = scene_mesh->get_primitives();
             ERHE_VERIFY(raytrace_primitive->primitive_index < scene_mesh_primitives.size());
             const erhe::primitive::Primitive& scene_mesh_primitive = scene_mesh_primitives[raytrace_primitive->primitive_index];
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit node: {}", Hover_entry::slot_names[slot], node->get_name());

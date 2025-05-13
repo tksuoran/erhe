@@ -353,7 +353,7 @@ void Viewport_scene_view::update_hover_with_id_render()
 
     Hover_entry entry{
         .valid                      = id_query.valid,
-        .scene_mesh                 = id_query.mesh,
+        .scene_mesh_weak            = id_query.mesh,
         .scene_mesh_primitive_index = id_query.primitive_index,
         .position                   = position_in_world_viewport_depth(id_query.depth),
         .triangle                   = static_cast<uint32_t>(id_query.triangle_id) // TODO Consider these types
@@ -361,10 +361,11 @@ void Viewport_scene_view::update_hover_with_id_render()
 
     SPDLOG_LOGGER_TRACE(log_controller_ray, "position in world = {}", entry.position.value());
 
-    if (entry.scene_mesh != nullptr) {
-        const erhe::scene::Node* node = entry.scene_mesh->get_node();
+    std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry.scene_mesh_weak.lock();
+    if (scene_mesh) {
+        const erhe::scene::Node* node = scene_mesh->get_node();
         ERHE_VERIFY(node != nullptr);
-        const erhe::primitive::Primitive& primitive = entry.scene_mesh->get_primitives()[entry.scene_mesh_primitive_index];
+        const erhe::primitive::Primitive& primitive = scene_mesh->get_primitives()[entry.scene_mesh_primitive_index];
         const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
         if (shape) {
             entry.geometry = shape->get_geometry();
@@ -387,7 +388,7 @@ void Viewport_scene_view::update_hover_with_id_render()
 
     using namespace erhe::bit;
 
-    const uint64_t flags = (id_query.mesh != nullptr) ? entry.scene_mesh->get_flag_bits() : 0;
+    const uint64_t flags = (id_query.mesh != nullptr) && scene_mesh ? scene_mesh->get_flag_bits() : 0;
 
     const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::content     );
     const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::tool        );

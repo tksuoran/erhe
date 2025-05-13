@@ -135,9 +135,9 @@ auto Brush::get_reference_frame(const GEO::index_t corner_count, const GEO::inde
 {
     for (const auto& reference_frame : m_reference_frames) {
         if (
-            (reference_frame.m_corner_count  == corner_count  ) &&
-            (reference_frame.m_face_offset   == in_face_offset) &&
-            (reference_frame.m_corner_offset == corner_offset )
+            (reference_frame.m_corner_count   == corner_count  ) &&
+            (reference_frame.m_face_offset    == in_face_offset) &&
+            (reference_frame.m_corner_offset0 == corner_offset)
         ) {
             return reference_frame;
         }
@@ -159,7 +159,7 @@ auto Brush::get_reference_frame(const GEO::index_t corner_count, const GEO::inde
             ++face_offset;
         }
     }
-    return m_reference_frames.emplace_back(geo_mesh, selected_facet, in_face_offset, corner_offset);
+    return m_reference_frames.emplace_back(geo_mesh, selected_facet, in_face_offset, corner_offset, Frame_orientation::in);
 }
 
 auto Brush::get_scaled(const double scale) -> const Scaled&

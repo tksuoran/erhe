@@ -43,12 +43,12 @@ public:
     class Id_query_result
     {
     public:
-        uint32_t           id             {0};
-        float              depth          {0.0f};
-        erhe::scene::Mesh* mesh           {nullptr};
-        std::size_t        primitive_index{0};
-        std::size_t        triangle_id    {std::numeric_limits<std::size_t>::max()};
-        bool               valid          {false};
+        uint32_t                           id             {0};
+        float                              depth          {0.0f};
+        std::shared_ptr<erhe::scene::Mesh> mesh           {};
+        std::size_t                        primitive_index{0};
+        std::size_t                        triangle_id    {std::numeric_limits<std::size_t>::max()};
+        bool                               valid          {false};
     };
 
     Id_renderer(

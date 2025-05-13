@@ -34,6 +34,7 @@ auto get_plane_transform(Grid_plane_type plane_type) -> glm::mat4;
 class Grid : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Grid>
 {
 public:
+    Grid();
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Grid"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
@@ -47,6 +48,10 @@ public:
     [[nodiscard]] auto world_from_grid    () const -> glm::mat4;
     [[nodiscard]] auto grid_from_world    () const -> glm::mat4;
     [[nodiscard]] auto intersect_ray      (const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>;
+    [[nodiscard]] auto normal_in_world    () const -> glm::vec3;
+    [[nodiscard]] auto tangent_in_world   () const -> glm::vec3;
+    [[nodiscard]] auto bitangent_in_world () const -> glm::vec3;
+    [[nodiscard]] auto get_cell_size      () const -> float;
 
     void render          (const Render_context& context);
     void imgui           (Editor_context& context);
@@ -61,6 +66,7 @@ public:
 
 private:
     void render(const Render_context& context, bool major);
+    void update();
 
     Grid_plane_type m_plane_type      {Grid_plane_type::XZ};
     bool            m_intersect_enable{true};
