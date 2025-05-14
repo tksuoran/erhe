@@ -1,6 +1,12 @@
-@rem --graphviz=build/erhe_cmake_dependencies.dot ^
-@rem --profiling-format=google-trace ^
-@rem --profiling-output=build/erhe_cmake_profiling.json ^
+:: --graphviz=build/erhe_cmake_dependencies.dot ^
+:: --profiling-format=google-trace ^
+:: --profiling-output=build/erhe_cmake_profiling.json ^
+
+@echo off
+
+setlocal
+
+for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "start=%%a"
 
 cmake ^
  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ^
@@ -21,3 +27,9 @@ cmake ^
  -DERHE_WINDOW_LIBRARY=sdl ^
  -DERHE_XR_LIBRARY=openxr ^
  -DERHE_USE_ASAN:BOOL=OFF
+
+for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "end=%%a"
+
+for /f "delims=" %%a in ('powershell -nologo -command "$start=[datetime]::Parse('%start%'); $end=[datetime]::Parse('%end%'); ($end - $start).TotalSeconds"') do set duration=%%a
+
+echo Configure completed in %duration% seconds
