@@ -111,6 +111,7 @@ CPMAddPackage(
     NAME              geogram
     #GIT_TAG           clion
     GIT_TAG           pull_requests
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY tksuoran/geogram
     #VERSION            1.9.5
     #GITHUB_REPOSITORY  BrunoLevy/geogram
@@ -134,12 +135,14 @@ CPMAddPackage(
     NAME              fmt
     GIT_TAG           11.2.0
     VERSION           11.2.0
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY fmtlib/fmt
 )
 
 CPMAddPackage(
     NAME              spdlog
     VERSION           1.15.3
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY gabime/spdlog
     OPTIONS "SPDLOG_FMT_EXTERNAL ON"
 )
@@ -147,12 +150,14 @@ CPMAddPackage(
 CPMAddPackage(
     NAME              concurrentqueue 
     GIT_TAG           master
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY cameron314/concurrentqueue
 )
 
 CPMAddPackage(
     NAME              cxxopts 
     VERSION           3.2.1
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY jarro2783/cxxopts
 )
 
@@ -160,6 +165,7 @@ CPMAddPackage(
     NAME              etl
     VERSION           20.40.0
     GIT_TAG           20.40.0
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY ETLCPP/etl
 )
 
@@ -167,6 +173,7 @@ CPMAddPackage(
     NAME              glm
     VERSION           1.0.1
     GIT_TAG           1.0.1
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY g-truc/glm
 )
 # Enable GLM_GTX_component_wise
@@ -177,6 +184,7 @@ if (ERHE_SPIRV)
         NAME              glslang
         VERSION           15.3.0
         GIT_TAG           15.3.0
+        GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/glslang
         OPTIONS
                       "GLSLANG_TESTS OFF"
@@ -197,6 +205,7 @@ endif ()
 CPMAddPackage(
     NAME              nlohmann_json
     VERSION           3.12.0
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY nlohmann/json
 )
 
@@ -208,6 +217,7 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
         NAME              sdl
         VERSION           release-3.2.12
         GIT_TAG           release-3.2.12
+        GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
                     "SDL_STATIC ON"
@@ -225,6 +235,7 @@ elseif (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
         NAME              glfw
         VERSION           3.4
         GIT_TAG           3.4
+        GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY glfw/glfw
         OPTIONS
               "BUILD_SHARED_LIBS OFF"
@@ -250,6 +261,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME              taskflow
     VERSION           3.10.0
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY taskflow/taskflow
     OPTIONS
            "TF_BUILD_TESTS OFF"
@@ -259,6 +271,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME              wuffs
     VERSION           0.4.0-alpha.9
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY google/wuffs
 )
 
@@ -283,6 +296,7 @@ if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
     CPMAddPackage(
         NAME              lunasvg
         VERSION           2.4.0
+        GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY sammycage/lunasvg
     )
     message(STATUS "Erhe configured to use lunasvg for SVG.")
@@ -309,6 +323,7 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
     CPMAddPackage(
         NAME              nvtx
         VERSION           3.1.1
+        GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY NVIDIA/NVTX
     )
     message(STATUS "Erhe configured to use nvtx for profiling.")
@@ -318,6 +333,7 @@ elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     CPMAddPackage(
         NAME              tracy
         VERSION           0.11.1
+        GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY wolfpld/tracy
         OPTIONS 
     )
@@ -346,6 +362,7 @@ if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
         NAME              freetype
         VERSION           2.13.3
         GIT_TAG           VER-2-13-3
+        GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY freetype/freetype
     )
     message(STATUS "Erhe configured to use freetype for font rasterization.")
@@ -359,6 +376,7 @@ if (${ERHE_TEXT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
     CPMAddPackage(
         NAME              harfbuzz
         GIT_TAG           11.2.0
+        GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY harfbuzz/harfbuzz
     )
     message(STATUS "Erhe configured to use harfbuzz for text layout.")
@@ -422,6 +440,7 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
         NAME              OpenXR-SDK
         VERSION           1.1.47
         GIT_TAG           release-1.1.47
+        GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK
     )
     message(STATUS "Erhe configured to use OpenXR for XR.")
