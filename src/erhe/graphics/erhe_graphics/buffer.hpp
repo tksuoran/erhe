@@ -47,6 +47,7 @@ public:
     [[nodiscard]] auto free_capacity_bytes() const noexcept -> std::size_t;
     [[nodiscard]] auto target             () const noexcept -> gl::Buffer_target;
     [[nodiscard]] auto gl_name            () const noexcept -> unsigned int;
+    void clear                () noexcept;
     void unmap                () noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_and_unmap_bytes(std::size_t byte_count) noexcept;
