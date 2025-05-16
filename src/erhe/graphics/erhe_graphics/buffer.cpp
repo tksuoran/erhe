@@ -173,6 +173,11 @@ auto Buffer::debug_label() const noexcept -> const char*
     return m_debug_label;
 }
 
+void Buffer::clear() noexcept
+{
+    m_next_free_byte = 0;
+}
+
 auto Buffer::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::optional<std::size_t>
 {
     ERHE_VERIFY(alignment > 0);

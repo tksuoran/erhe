@@ -51,6 +51,7 @@ class Cube_instance_buffer
 public:
     Cube_instance_buffer(erhe::graphics::Instance& graphics_instance, Cube_interface& cube_interface);
 
+    void clear       ();
     auto append_frame(const std::vector<Cube_instance>& cubes) -> std::size_t;
     auto bind        (std::size_t frame_index) -> std::size_t;
 

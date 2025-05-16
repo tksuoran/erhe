@@ -35,6 +35,12 @@ Cube_instance_buffer::Cube_instance_buffer(erhe::graphics::Instance& graphics_in
 {
 }
 
+void Cube_instance_buffer::clear()
+{
+    m_frames.clear();
+    m_buffer.clear();
+}
+
 auto Cube_instance_buffer::append_frame(const std::vector<Cube_instance>& cubes) -> std::size_t
 {
     const std::size_t frame_index = m_frames.size();
