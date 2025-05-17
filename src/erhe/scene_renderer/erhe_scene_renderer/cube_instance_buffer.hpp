@@ -17,16 +17,39 @@ class Cube_instance_struct
 {
 public:
     std::size_t position; // vec4 4 * 4 bytes
-    std::size_t color;    // vec4 4 * 4 bytes
 };
 
-class Cube_instance
+[[nodiscard]] inline auto pack_x11y11z10(glm::uvec3 xyz) -> uint32_t
 {
-public:
-    glm::vec4 position;
-    glm::vec4 color;
-};
+    const uint32_t x = std::min(xyz.x, 0x7FFu); // 11 bits
+    const uint32_t y = std::min(xyz.y, 0x7FFu); // 11 bits
+    const uint32_t z = std::min(xyz.z, 0x3FFu); // 10 bits
 
+    return (x & 0x7FFu) | ((y & 0x7FFu) << 11) | ((z & 0x3FFu) << 22);
+}
+
+[[nodiscard]] inline auto pack_x11y11z10(int x, int y, int z) -> uint32_t
+{
+    assert(x >= 0);
+    assert(y >= 0);
+    assert(z >= 0);
+    assert(x <= 0x7FFu);
+    assert(y <= 0x7FFu);
+    assert(z <= 0x3FFu);
+
+    return 
+        ((static_cast<uint32_t>(x) & 0x7FFu)      ) |
+        ((static_cast<uint32_t>(y) & 0x7FFu) << 11) |
+        ((static_cast<uint32_t>(z) & 0x3FFu) << 22);
+}
+
+[[nodiscard]] inline auto unpack_x11y11z10(uint32_t packed_xyz) -> glm::uvec3
+{
+    const uint32_t x =  packed_xyz        & 0x7FFu;
+    const uint32_t y = (packed_xyz >> 11) & 0x7FFu;
+    const uint32_t z = (packed_xyz >> 22) & 0x3FFu;
+    return glm::uvec3{x, y, z};
+}
 
 class Cube_interface
 {
@@ -36,7 +59,6 @@ public:
     erhe::graphics::Shader_resource cube_instance_block;
     erhe::graphics::Shader_resource cube_instance_struct;
     Cube_instance_struct            offsets;
-    std::size_t                     max_cube_instance_count{65536 * 32};
 };
 
 class Cube_frame_info
@@ -49,17 +71,18 @@ public:
 class Cube_instance_buffer
 {
 public:
-    Cube_instance_buffer(erhe::graphics::Instance& graphics_instance, Cube_interface& cube_interface);
+    Cube_instance_buffer(
+        erhe::graphics::Instance&    graphics_instance,
+        Cube_interface&              cube_interface,
+        const std::vector<uint32_t>& cubes
+    );
 
-    void clear       ();
-    auto append_frame(const std::vector<Cube_instance>& cubes) -> std::size_t;
-    auto bind        (std::size_t frame_index) -> std::size_t;
+    auto bind() -> std::size_t;
 
 private:
-    Cube_interface&              m_cube_interface;
-    erhe::graphics::Buffer       m_buffer;
-    std::vector<Cube_frame_info> m_frames;
-
+    Cube_interface&        m_cube_interface;
+    erhe::graphics::Buffer m_buffer;
+    std::size_t            m_cube_count;
 };
 
 } // namespace erhe::scene_renderer

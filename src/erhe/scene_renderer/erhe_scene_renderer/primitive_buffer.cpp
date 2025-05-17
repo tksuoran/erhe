@@ -222,4 +222,42 @@ auto Primitive_buffer::update(
     return buffer_range;
 }
 
+auto Primitive_buffer::update(
+    const std::span<const std::shared_ptr<erhe::scene::Node>>& nodes,
+    const Primitive_interface_settings&                        primitive_settings
+) -> erhe::renderer::Buffer_range
+{
+    const std::size_t primitive_count = nodes.size();
+    const auto        entry_size      = m_primitive_interface.primitive_struct.size_bytes();
+    const auto&       offsets         = m_primitive_interface.offsets;
+    const std::size_t max_byte_count  = primitive_count * entry_size;
+
+    erhe::renderer::Buffer_range buffer_range       = open(erhe::renderer::Ring_buffer_usage::CPU_write, max_byte_count);
+    std::span<std::byte>         primitive_gpu_data = buffer_range.get_span();
+    std::size_t                  write_offset       = 0;
+
+    for (const auto& node : nodes) {
+        const glm::mat4 world_from_node  = node->world_from_node();
+        const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_node));
+        const glm::vec4 wireframe_color  = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
+        const uint32_t  material_index   = 0;
+        const float     skinning_factor  = 0.0f;
+        const uint32_t  base_joint_index = 0;
+        using erhe::graphics::as_span;
+        const auto color_span = as_span(primitive_settings.constant_color);
+        const auto size_span  = as_span(primitive_settings.constant_size);
+        using erhe::graphics::write;
+        write(primitive_gpu_data, write_offset + offsets.world_from_node,  as_span(world_from_node ));
+        write(primitive_gpu_data, write_offset + offsets.normal_transform, as_span(normal_transform));
+        write(primitive_gpu_data, write_offset + offsets.color,            color_span               );
+        write(primitive_gpu_data, write_offset + offsets.material_index,   as_span(material_index  ));
+        write(primitive_gpu_data, write_offset + offsets.size,             size_span                );
+        write(primitive_gpu_data, write_offset + offsets.skinning_factor,  as_span(skinning_factor ));
+        write(primitive_gpu_data, write_offset + offsets.base_joint_index, as_span(base_joint_index));
+        write_offset += entry_size;
+    }
+    buffer_range.close(write_offset);
+    return buffer_range;
+}
+
 } // namespace erhe::scene_renderer

@@ -96,8 +96,9 @@ Buffer::Buffer(Instance& instance, const Buffer_create_info& create_info) noexce
     , m_access_mask        {create_info.access_mask}
     , m_debug_label        {create_info.debug_label}
 {
+    constexpr const std::size_t sanity_threshold{2'000'000'000};
     ERHE_VERIFY(create_info.debug_label != nullptr);
-    ERHE_VERIFY(m_capacity_byte_count < 1024 * 1024 * 1024); // sanity check, can raisi limit when needed
+    ERHE_VERIFY(m_capacity_byte_count < sanity_threshold); // sanity check, can raise limit when needed
     log_buffer->info(
         "Buffer::Buffer() target = {}, capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {} debug_label = {}",
         gl::c_str(m_target),
