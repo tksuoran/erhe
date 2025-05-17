@@ -13,10 +13,10 @@ namespace erhe {
 namespace erhe::scene {
     class Mesh;
     class Mesh_layer;
+    class Node;
 }
 
-namespace erhe::scene_renderer
-{
+namespace erhe::scene_renderer {
 
 class Primitive_struct
 {
@@ -111,6 +111,11 @@ public:
         const Primitive_interface_settings&                        settings,
         std::size_t&                                               out_primitive_count,
         bool                                                       use_id_ranges = false
+    ) -> erhe::renderer::Buffer_range;
+
+    auto update(
+        const std::span<const std::shared_ptr<erhe::scene::Node>>& nodes,
+        const Primitive_interface_settings&                        primitive_settings
     ) -> erhe::renderer::Buffer_range;
 
     class Id_range

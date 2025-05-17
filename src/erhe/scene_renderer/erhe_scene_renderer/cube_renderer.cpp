@@ -9,6 +9,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/scoped_buffer_mapping.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_profile/profile.hpp"
@@ -73,38 +74,21 @@ using erhe::graphics::Color_blend_state;
 // GPU's do index dedup. Extra "slot" doesn't cost anything, 
 
 Cube_renderer::Cube_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
-    : m_graphics_instance   {graphics_instance}
-    , m_index_buffer{
-        graphics_instance,
-        erhe::graphics::Buffer_create_info{
-            .target              = gl::Buffer_target::element_array_buffer,
-            .capacity_byte_count = sizeof(uint32_t) * program_interface.cube_interface.max_cube_instance_count * 36,
-            .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
-            .debug_label         = "Cube renderer indices"
-        }
-    }
-    , m_camera_buffer       {graphics_instance, program_interface.camera_interface}
-    , m_cube_instance_buffer{graphics_instance, program_interface.cube_interface}
+    : m_graphics_instance{graphics_instance}
+    , m_camera_buffer    {graphics_instance, program_interface.camera_interface}
+    , m_program_interface{program_interface}
+    , m_light_buffer     {graphics_instance, program_interface.light_interface}
+    , m_primitive_buffer {graphics_instance, program_interface.primitive_interface}
 {
-    std::array<uint32_t, 6 * 6> cube_indices{
-        1,7,3, 7,1,5,
-        0,6,4, 6,0,2,
-        2,7,6, 7,2,3,
-        0,5,1, 5,0,4,
-        4,7,5, 7,4,6,
-        0,3,2, 3,0,1
-    };
-
-    erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{m_index_buffer, 0, program_interface.cube_interface.max_cube_instance_count * 36, gl::Map_buffer_access_mask::map_write_bit};
-    const std::span<uint32_t>& gpu_index_data = index_buffer_map.span();
-    for (size_t i = 0, end = gpu_index_data.size(); i < end; ++i) {
-        gpu_index_data[i] = static_cast<uint32_t>(cube_indices[i % 36] + (i / 36) * 8);
-    }
 }
 
-auto Cube_renderer::get_buffer() -> Cube_instance_buffer&
+auto Cube_renderer::make_buffer(const std::vector<uint32_t>& cubes) -> std::shared_ptr<Cube_instance_buffer>
 {
-    return m_cube_instance_buffer;
+    return std::make_shared<Cube_instance_buffer>(
+        m_graphics_instance,
+        m_program_interface.cube_interface,
+        cubes
+    );
 }
 
 void Cube_renderer::render(const Render_parameters& parameters)
@@ -131,21 +115,20 @@ void Cube_renderer::render(const Render_parameters& parameters)
     );
     camera_buffer_range.value().bind();
 
+    erhe::renderer::Buffer_range primitive_range = m_primitive_buffer.update(
+        erhe::graphics::as_span(parameters.node),
+        parameters.primitive_settings
+    );
+    primitive_range.bind();
+
     const erhe::graphics::Pipeline& pipeline = parameters.pipeline;
     m_graphics_instance.opengl_state_tracker.execute(pipeline, false);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
-
-    const std::size_t cube_count   = m_cube_instance_buffer.bind(parameters.frame);
+    const std::size_t cube_count   = parameters.cube_instance_buffer.bind();
     const GLsizei     vertex_count = static_cast<GLsizei>(cube_count * 6 * 6);
-
-    gl::draw_elements(
-        pipeline.data.input_assembly.primitive_topology,
-        vertex_count,
-        erhe::graphics::to_gl_index_type(erhe::dataformat::Format::format_32_scalar_uint),
-        0
-    );
+    gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, vertex_count);
 
     camera_buffer_range.value().submit();
+    primitive_range.submit();
 }
 
 } // namespace erhe::scene_renderer
