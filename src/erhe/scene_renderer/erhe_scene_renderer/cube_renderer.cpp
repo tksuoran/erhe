@@ -74,11 +74,12 @@ using erhe::graphics::Color_blend_state;
 // GPU's do index dedup. Extra "slot" doesn't cost anything, 
 
 Cube_renderer::Cube_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
-    : m_graphics_instance{graphics_instance}
-    , m_camera_buffer    {graphics_instance, program_interface.camera_interface}
-    , m_program_interface{program_interface}
-    , m_light_buffer     {graphics_instance, program_interface.light_interface}
-    , m_primitive_buffer {graphics_instance, program_interface.primitive_interface}
+    : m_graphics_instance  {graphics_instance}
+    , m_camera_buffer      {graphics_instance, program_interface.camera_interface}
+    , m_program_interface  {program_interface}
+    , m_light_buffer       {graphics_instance, program_interface.light_interface}
+    , m_primitive_buffer   {graphics_instance, program_interface.primitive_interface}
+    , m_cube_control_buffer{graphics_instance, program_interface.cube_interface}
 {
 }
 
@@ -121,6 +122,15 @@ void Cube_renderer::render(const Render_parameters& parameters)
     );
     primitive_range.bind();
 
+    erhe::renderer::Buffer_range cube_control_range = m_cube_control_buffer.update(
+        parameters.cube_size,
+        parameters.color_bias,
+        parameters.color_scale,
+        parameters.color_start,
+        parameters.color_end
+    );
+    cube_control_range.bind();
+
     const erhe::graphics::Pipeline& pipeline = parameters.pipeline;
     m_graphics_instance.opengl_state_tracker.execute(pipeline, false);
     const std::size_t cube_count   = parameters.cube_instance_buffer.bind();
@@ -129,6 +139,7 @@ void Cube_renderer::render(const Render_parameters& parameters)
 
     camera_buffer_range.value().submit();
     primitive_range.submit();
+    cube_control_range.submit();
 }
 
 } // namespace erhe::scene_renderer

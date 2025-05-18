@@ -69,6 +69,7 @@ auto Program_interface::make_prototype(
     create_info.struct_types.push_back(&light_interface.light_struct);
     create_info.struct_types.push_back(&camera_interface.camera_struct);
     create_info.struct_types.push_back(&cube_interface.cube_instance_struct);
+    create_info.struct_types.push_back(&cube_interface.cube_control_struct);
     create_info.struct_types.push_back(&primitive_interface.primitive_struct);
     create_info.struct_types.push_back(&joint_interface.joint_struct);
     // TODO: This will be (eventually) for compute shaders.
@@ -79,6 +80,7 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&light_interface.light_control_block);
     create_info.add_interface_block(&camera_interface.camera_block);
     create_info.add_interface_block(&cube_interface.cube_instance_block);
+    create_info.add_interface_block(&cube_interface.cube_control_block);
     create_info.add_interface_block(&primitive_interface.primitive_block);
     create_info.add_interface_block(&joint_interface.joint_block);
 
