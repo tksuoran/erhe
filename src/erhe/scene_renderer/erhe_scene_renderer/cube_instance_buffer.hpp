@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_renderer/gpu_ring_buffer.hpp"
 
 #include <glm/glm.hpp>
 
@@ -16,7 +17,17 @@ namespace erhe::scene_renderer {
 class Cube_instance_struct
 {
 public:
-    std::size_t position; // vec4 4 * 4 bytes
+    std::size_t packed_position; // uint 1 * 4 bytes
+};
+
+class Cube_control_struct
+{
+public:
+    std::size_t cube_size;   // vec4 4 * 4 bytes
+    std::size_t color_bias;  // vec4 4 * 4 bytes
+    std::size_t color_scale; // vec4 4 * 4 bytes
+    std::size_t color_start; // vec4 4 * 4 bytes
+    std::size_t color_end;   // vec4 4 * 4 bytes
 };
 
 [[nodiscard]] inline auto pack_x11y11z10(glm::uvec3 xyz) -> uint32_t
@@ -58,7 +69,11 @@ public:
 
     erhe::graphics::Shader_resource cube_instance_block;
     erhe::graphics::Shader_resource cube_instance_struct;
-    Cube_instance_struct            offsets;
+    Cube_instance_struct            cube_instance_offsets;
+
+    erhe::graphics::Shader_resource cube_control_block;
+    erhe::graphics::Shader_resource cube_control_struct;
+    Cube_control_struct             cube_control_offsets;
 };
 
 class Cube_frame_info
@@ -83,6 +98,23 @@ private:
     Cube_interface&        m_cube_interface;
     erhe::graphics::Buffer m_buffer;
     std::size_t            m_cube_count;
+};
+
+class Cube_control_buffer : public erhe::renderer::GPU_ring_buffer
+{
+public:
+    Cube_control_buffer(erhe::graphics::Instance& graphics_instance, Cube_interface& cube_interface);
+
+    auto update(
+        const glm::vec4& cube_size,
+        const glm::vec4& color_bias,
+        const glm::vec4& color_scale,
+        const glm::vec4& color_start,
+        const glm::vec4& color_end
+    ) -> erhe::renderer::Buffer_range;
+
+private:
+    Cube_interface& m_cube_interface;
 };
 
 } // namespace erhe::scene_renderer

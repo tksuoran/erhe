@@ -30,9 +30,13 @@ public:
         erhe::graphics::Pipeline&           pipeline;
         const erhe::scene::Camera*          camera{nullptr};
         std::shared_ptr<erhe::scene::Node>  node{};
-        //std::shared_ptr<erhe::scene::Light> light{};
         Primitive_interface_settings        primitive_settings{};
         erhe::math::Viewport                viewport;
+        glm::vec4                           cube_size  {0.4f, 0.4f, 0.4f, 1.0f};
+        glm::vec4                           color_bias {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4                           color_scale{1.0f, 1.0f, 1.0f, 0.0f};
+        glm::vec4                           color_start{0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4                           color_end  {1.0f, 1.0f, 1.0f, 0.0f};
     };
 
     void render(const Render_parameters& parameters);
@@ -43,6 +47,7 @@ private:
     Camera_buffer             m_camera_buffer;
     Light_buffer              m_light_buffer;
     Primitive_buffer          m_primitive_buffer;
+    Cube_control_buffer       m_cube_control_buffer;
 };
 
 } // erhe::scene_renderer
