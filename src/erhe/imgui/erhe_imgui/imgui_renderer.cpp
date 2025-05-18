@@ -407,7 +407,7 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
     m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.vr_font_size);
     m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.vr_font_size);
 
-#if 0 // TODO Profile
+#if 1 // TODO Profile
     // TODO Something nicer
 #define ICON_MIN_MDI 0xF68C
 #define ICON_MAX_16_MDI 0xF68C
