@@ -38,6 +38,7 @@
 #include "windows/commands_window.hpp"
 #include "windows/composer_window.hpp"
 #include "windows/debug_view_window.hpp"
+#include "windows/gradient_editor.hpp"
 #include "windows/icon_browser.hpp"
 #include "windows/layers_window.hpp"
 #include "windows/network_window.hpp"
@@ -595,6 +596,7 @@ public:
                 m_commands_window        = std::make_unique<Commands_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_graph_window           = std::make_unique<Graph_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context, *m_editor_message_bus.get());
                 m_node_properties_window = std::make_unique<Node_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
+                m_gradient_editor        = std::make_unique<Gradient_editor                 >(*m_imgui_renderer.get(), *m_imgui_windows.get());
                 m_icon_browser           = std::make_unique<Icon_browser                    >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_sheet_window           = std::make_unique<Sheet_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context, *m_editor_message_bus.get());
                 m_layers_window          = std::make_unique<Layers_window                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
@@ -1135,6 +1137,7 @@ public:
     std::unique_ptr<Commands_window                 >        m_commands_window;
     std::unique_ptr<Graph_window                    >        m_graph_window;
     std::unique_ptr<Node_properties_window          >        m_node_properties_window;
+    std::unique_ptr<Gradient_editor                 >        m_gradient_editor;
     std::unique_ptr<Icon_browser                    >        m_icon_browser;
     std::unique_ptr<Sheet_window                    >        m_sheet_window;
     std::unique_ptr<Layers_window                   >        m_layers_window;

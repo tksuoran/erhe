@@ -304,6 +304,8 @@ erhe_target_sources_grouped(
     windows/imgui_window_scene_view_node.hpp
     windows/item_tree_window.cpp
     windows/item_tree_window.hpp
+    windows/gradient_editor.cpp
+    windows/gradient_editor.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
     windows/network_window.cpp
@@ -460,6 +462,7 @@ target_link_libraries(
         mINI
         RectangleBinPack
         rapidjson
+        imgui_gradient::imgui_gradient
 )
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
     target_link_libraries(${_target} PRIVATE cpp-terminal)
