@@ -333,7 +333,8 @@ void Id_renderer::render(const Render_parameters& parameters)
         viewport,
         1.0f,
         glm::vec4{0.0f},
-        glm::vec4{0.0f}
+        glm::vec4{0.0f},
+        0
     );
     m_camera_buffers.bind(camera_range);
 

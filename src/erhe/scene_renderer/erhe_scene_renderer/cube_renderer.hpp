@@ -37,6 +37,7 @@ public:
         glm::vec4                           color_scale{1.0f, 1.0f, 1.0f, 0.0f};
         glm::vec4                           color_start{0.0f, 0.0f, 0.0f, 0.0f};
         glm::vec4                           color_end  {1.0f, 1.0f, 1.0f, 0.0f};
+        uint64_t                            frame_number{0};
     };
 
     void render(const Render_parameters& parameters);

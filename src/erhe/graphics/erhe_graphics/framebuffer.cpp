@@ -241,6 +241,19 @@ void Framebuffer::create()
     ERHE_VERIFY(check_status());
 }
 
+auto Framebuffer::get_sample_count() const -> unsigned int
+{
+    for (const Attachment& attachment : m_attachments) {
+        if (attachment.texture != nullptr) {
+            return attachment.texture->sample_count();
+        }
+        if (attachment.renderbuffer != nullptr) {
+            return attachment.renderbuffer->sample_count();
+        }
+    }
+    return 0;
+}
+
 auto Framebuffer::check_status() const -> bool
 {
 #if !defined(NDEBUG)
