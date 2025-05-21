@@ -25,6 +25,7 @@ add_subdirectory(RectangleBinPack)
 add_subdirectory(tinyexpr)
 
 add_subdirectory(mango)
+add_subdirectory(quickhull)
 
 add_subdirectory(erhe)
 
