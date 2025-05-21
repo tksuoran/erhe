@@ -74,7 +74,8 @@ public:
     static void on_thread_enter();
     static void on_thread_exit ();
 
-    [[nodiscard]] auto gl_name() const -> unsigned int;
+    [[nodiscard]] auto gl_name         () const -> unsigned int;
+    [[nodiscard]] auto get_sample_count() const -> unsigned int;
 
     void create         ();
     void reset          ();

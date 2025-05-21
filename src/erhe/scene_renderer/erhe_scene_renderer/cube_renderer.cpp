@@ -112,7 +112,8 @@ void Cube_renderer::render(const Render_parameters& parameters)
         viewport,
         camera->get_exposure(),
         glm::vec4{0.0f},
-        glm::vec4{0.0f}
+        glm::vec4{0.0f},
+        parameters.frame_number
     );
     camera_buffer_range.value().bind();
 

@@ -68,6 +68,7 @@ void Pipeline::reset()
     data.shader_stages  = nullptr;
     data.vertex_input   = nullptr;
     data.input_assembly = Input_assembly_state{};
+    data.multisample    = Multisample_state   {};
     data.rasterization  = Rasterization_state {};
     data.depth_stencil  = Depth_stencil_state {};
     data.color_blend    = Color_blend_state   {};

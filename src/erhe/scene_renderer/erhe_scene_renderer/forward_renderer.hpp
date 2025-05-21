@@ -75,6 +75,7 @@ public:
         const glm::vec4                                                    grid_size      {10.0f,  1.0f,  0.1f,  0.01f};
         const glm::vec4                                                    grid_line_width{ 0.006, 0.02f, 0.02f, 0.02f};
 
+        uint64_t                                                           frame_number{0};
     };
 
     void render(const Render_parameters& parameters);

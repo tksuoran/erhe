@@ -2,10 +2,11 @@
 
 #include "erhe_graphics/state/color_blend_state.hpp"
 #include "erhe_graphics/state/depth_stencil_state.hpp"
-#include "erhe_graphics/state/viewport_state.hpp"
-#include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/input_assembly_state.hpp"
+#include "erhe_graphics/state/multisample_state.hpp"
+#include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_graphics/state/viewport_state.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -32,10 +33,10 @@ public:
     Shader_stages_tracker        shader_stages;
     Vertex_input_state_tracker   vertex_input;
     Input_assembly_state_tracker input_assembly;
+    Multisample_state_tracker    multisample;
     // TODO Tessellation state
     Viewport_state_tracker       viewport;
     Rasterization_state_tracker  rasterization;
-    // TODO Multisample state?
     Depth_stencil_state_tracker  depth_stencil;
     Color_blend_state_tracker    color_blend;
     // RODO Dynamic state

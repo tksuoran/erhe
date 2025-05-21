@@ -106,7 +106,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             viewport,
             camera->get_exposure(),
             parameters.grid_size,
-            parameters.grid_line_width
+            parameters.grid_line_width,
+            parameters.frame_number
         );
         camera_buffer_range.value().bind();
     }
@@ -262,7 +263,8 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
             viewport,
             camera->get_exposure(),
             parameters.grid_size,
-            parameters.grid_line_width
+            parameters.grid_line_width,
+            parameters.frame_number
         );
         camera_range.value().bind();
     }

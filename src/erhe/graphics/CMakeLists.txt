@@ -55,6 +55,8 @@ erhe_target_sources_grouped(
     erhe_graphics/state/depth_stencil_state.hpp
     erhe_graphics/state/input_assembly_state.cpp
     erhe_graphics/state/input_assembly_state.hpp
+    erhe_graphics/state/multisample_state.cpp
+    erhe_graphics/state/multisample_state.hpp
     erhe_graphics/state/rasterization_state.cpp
     erhe_graphics/state/rasterization_state.hpp
     erhe_graphics/state/vertex_input_state.cpp
