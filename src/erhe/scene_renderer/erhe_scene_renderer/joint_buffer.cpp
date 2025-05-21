@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene_renderer/joint_buffer.hpp"
+#include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -15,7 +16,7 @@
 namespace erhe::scene_renderer {
 
 Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
-    : joint_block{graphics_instance, "joint", 4, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    : joint_block{graphics_instance, "joint", joint_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , joint_struct{graphics_instance, "Joint"}
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");

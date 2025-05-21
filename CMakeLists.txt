@@ -52,7 +52,7 @@ set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either 
 set_option(ERHE_TERMINAL_LIBRARY           "Terminal use with erhe. Either cpp-terminal, or none"                       "none"     "cpp-terminal;none")
 set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "OFF"      "ON;OFF")
 set_option(ERHE_USE_ASAN                   "Enable AddressSanitizer"                                                    "OFF"      "ON;OFF")
-set_option(ERHE_SPRIV                      "Enable SPIRV"                                                               "OFF"      "ON;OFF")
+set_option(ERHE_SPIRV                      "Enable SPIR-V"                                                              "OFF"      "ON;OFF")
 
 # TODO fix ERHE_USE_PRECOMPILED_HEADERS
 

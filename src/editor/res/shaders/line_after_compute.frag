@@ -1,6 +1,6 @@
-in float v_line_width;
-in vec4  v_color;
-in vec4  v_start_end;
+layout(location = 0) in float v_line_width;
+layout(location = 1) in vec4  v_color;
+layout(location = 2) in vec4  v_start_end;
 
 void main(void)
 {

@@ -90,9 +90,9 @@ auto Shader_stages_prototype::compile_glslang(const Shader_stage& shader) -> std
     const bool parse_ok = glslang_shader->parse(&glslang_built_in_resources, 100, true, static_cast<const EShMessages>(messages));
     const char* info_log = glslang_shader->getInfoLog();
     if (!parse_ok) {
-        //std::string formatted_source = format_source(source);
-        //log_glsl->error("glslang parse error in shader = {}\n{}\n{}\n{}\n", name, info_log, formatted_source, info_log);
-        log_glsl->error("glslang parse error in shader = {}\n{}\n{}\n{}\n", name, info_log, source, info_log);
+        std::string formatted_source = format_source(source);
+        log_glsl->error("glslang parse error in shader = {}\n{}\n{}\n{}\n", name, info_log, formatted_source, info_log);
+        //log_glsl->error("glslang parse error in shader = {}\n{}\n{}\n{}\n", name, info_log, source, info_log);
         m_state = state_fail;
     } else if (info_log[0] != '\0') {
         log_glsl->info("\n{}\n", info_log);

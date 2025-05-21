@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene_renderer/material_buffer.hpp"
+#include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -14,7 +15,7 @@
 namespace erhe::scene_renderer {
 
 Material_interface::Material_interface(erhe::graphics::Instance& graphics_instance)
-    : material_block {graphics_instance, "material", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    : material_block {graphics_instance, "material", material_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , material_struct{graphics_instance, "Material"}
     , offsets        {
         .roughness                  = material_struct.add_vec2 ("roughness"                 )->offset_in_parent(),

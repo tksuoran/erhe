@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -15,7 +16,7 @@
 namespace erhe::scene_renderer {
 
 Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
-    : camera_block{graphics_instance, "camera", 4, erhe::graphics::Shader_resource::Type::uniform_block}
+    : camera_block{graphics_instance, "camera", camera_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
     , camera_struct{graphics_instance, "Camera"}
     , offsets{
         .world_from_node      = camera_struct.add_mat4 ("world_from_node"     )->offset_in_parent(),

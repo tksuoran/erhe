@@ -1,4 +1,4 @@
-highp out vec4 v_position;
+layout(location = 0) highp out vec4 v_position;
 
 void main()
 {

@@ -1,4 +1,4 @@
-in vec2 v_texcoord;
+layout(location = 0) in vec2 v_texcoord;
 
 bool is_nan(float val)
 {

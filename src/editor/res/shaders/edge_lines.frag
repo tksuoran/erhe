@@ -1,5 +1,5 @@
-in      vec3 v_position;
-in flat uint v_material_index;
+layout(location = 0) in      vec3 v_position;
+layout(location = 1) in flat uint v_material_index;
 
 void main()
 {

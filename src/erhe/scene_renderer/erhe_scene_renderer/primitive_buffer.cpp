@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene_renderer/primitive_buffer.hpp"
+#include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -18,7 +19,7 @@
 namespace erhe::scene_renderer {
 
 Primitive_interface::Primitive_interface(erhe::graphics::Instance& graphics_instance)
-    : primitive_block {graphics_instance, "primitive", 3, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    : primitive_block {graphics_instance, "primitive", primitive_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , primitive_struct{graphics_instance, "Primitive"}
     , offsets{
         .world_from_node  = primitive_struct.add_mat4 ("world_from_node"       )->offset_in_parent(),

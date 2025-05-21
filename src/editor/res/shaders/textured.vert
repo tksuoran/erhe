@@ -1,5 +1,5 @@
-out      vec2  v_texcoord;
-out flat uvec2 v_texture;
+layout(location = 0) out      vec2  v_texcoord;
+layout(location = 1) out flat uvec2 v_texture;
 
 void main()
 {

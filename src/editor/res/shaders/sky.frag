@@ -1,4 +1,4 @@
-highp in vec4 v_position;
+layout(location = 0) highp in vec4 v_position;
 
 highp float checkerboard(highp vec2 coord, highp vec2 frequency, highp float a, highp float b)
 {

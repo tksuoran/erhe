@@ -36,13 +36,13 @@ namespace {
 #define ERHE_IMGUI_VERTEX_ATTRIBUTE_COLOR    2
 
 constexpr std::string_view c_vertex_shader_source = R"NUL(
-out vec4 v_color;
-out vec2 v_texcoord;
+layout(location = 0) out vec4 v_color;
+layout(location = 1) out vec2 v_texcoord;
 
 #if defined(ERHE_BINDLESS_TEXTURE)
-out flat uvec2 v_texture;
+layout(location = 2) out flat uvec2 v_texture;
 #else
-out flat uint v_texture_id;
+layout(location = 2) out flat uint v_texture_id;
 #endif
 
 out gl_PerVertex {
@@ -90,13 +90,13 @@ void main()
 )NUL";
 
 const std::string_view c_fragment_shader_source = R"NUL(
-in vec4 v_color;
-in vec2 v_texcoord;
+layout(location = 0) in vec4 v_color;
+layout(location = 1) in vec2 v_texcoord;
 
 #if defined(ERHE_BINDLESS_TEXTURE)
-in flat uvec2 v_texture;
+layout(location = 2) in flat uvec2 v_texture;
 #else
-in flat uint v_texture_id;
+layout(location = 2) in flat uint v_texture_id;
 #endif
 
 void main()

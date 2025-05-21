@@ -1,6 +1,6 @@
-out vec3      v_position;
-out vec3      v_normal;
-out flat uint v_material_index;
+layout(location = 0) out vec3      v_position;
+layout(location = 1) out vec3      v_normal;
+layout(location = 2) out flat uint v_material_index;
 
 void main()
 {

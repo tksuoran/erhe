@@ -1,3 +1,5 @@
+layout(location = 0) in flat uint v_material_index;
+
 void main(void)
 {
     const float bayer_matrix[256] = float[256](

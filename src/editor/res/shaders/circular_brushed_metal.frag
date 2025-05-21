@@ -2,12 +2,12 @@
 #include "erhe_light.glsl"
 #include "erhe_texture.glsl"
 
-in vec2      v_texcoord;
-in vec4      v_position;
-in vec4      v_color;
-in vec2      v_aniso_control;
-in mat3      v_TBN;
-in flat uint v_material_index;
+layout(location = 0) in vec2      v_texcoord;
+layout(location = 1) in vec4      v_position;
+layout(location = 2) in vec4      v_color;
+layout(location = 3) in vec2      v_aniso_control;
+layout(location = 4) in mat3      v_TBN;
+layout(location = 7) in flat uint v_material_index;
 
 void main() {
     const float bayer_matrix[256] = float[256](

@@ -1,18 +1,19 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene_renderer/cube_instance_buffer.hpp"
+#include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 
 namespace erhe::scene_renderer {
 
 Cube_interface::Cube_interface(erhe::graphics::Instance& graphics_instance)
-    : cube_instance_block  {graphics_instance, "instance", 5, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    : cube_instance_block  {graphics_instance, "instance", cube_instance_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , cube_instance_struct {graphics_instance, "Instance"}
     , cube_instance_offsets{
         .packed_position = cube_instance_struct.add_uint("packed_position")->offset_in_parent(),
     }
 
-    , cube_control_block  {graphics_instance, "cube_control", 6, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    , cube_control_block  {graphics_instance, "cube_control", cube_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , cube_control_struct {graphics_instance, "Cube_control"}
     , cube_control_offsets{
         .cube_size   = cube_control_struct.add_vec4("cube_size"  )->offset_in_parent(),

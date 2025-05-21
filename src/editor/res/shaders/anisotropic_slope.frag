@@ -2,11 +2,11 @@
 #include "erhe_light.glsl"
 #include "erhe_texture.glsl"
 
-in vec2      v_texcoord;
-in vec4      v_position;
-in vec4      v_color;
-in mat3      v_TBN;
-in flat uint v_material_index;
+layout(location = 0) in vec2      v_texcoord;
+layout(location = 1) in vec4      v_position;
+layout(location = 2) in vec4      v_color;
+layout(location = 3) in mat3      v_TBN;
+layout(location = 6) in flat uint v_material_index;
 
 void main() {
     vec3 view_position_in_world = vec3(

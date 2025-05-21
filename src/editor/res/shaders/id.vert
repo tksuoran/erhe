@@ -1,6 +1,6 @@
 #define a_id a_custom
 
-flat out vec3 v_id;
+layout(location = 0) out flat vec3 v_id;
 
 void main()
 {

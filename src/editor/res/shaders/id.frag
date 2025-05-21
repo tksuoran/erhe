@@ -1,4 +1,4 @@
-flat in vec3 v_id;
+layout(location = 0) in flat vec3 v_id;
 
 void main(void)
 {

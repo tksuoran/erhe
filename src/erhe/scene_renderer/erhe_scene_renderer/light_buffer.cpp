@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene_renderer/light_buffer.hpp"
+#include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -25,8 +26,8 @@ namespace erhe::scene_renderer {
 
 Light_interface::Light_interface(erhe::graphics::Instance& graphics_instance)
     : max_light_count{get_max_light_count()}
-    , light_block        {graphics_instance, "light_block",         1, erhe::graphics::Shader_resource::Type::uniform_block}
-    , light_control_block{graphics_instance, "light_control_block", 2, erhe::graphics::Shader_resource::Type::uniform_block}
+    , light_block        {graphics_instance, "light_block",         light_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
+    , light_control_block{graphics_instance, "light_control_block", light_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
     , light_struct       {graphics_instance, "Light"}
     , offsets     {
         .shadow_texture_compare    = light_block.add_uvec2("shadow_texture_compare"   )->offset_in_parent(),

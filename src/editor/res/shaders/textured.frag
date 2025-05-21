@@ -1,7 +1,7 @@
 //// TODO #include "erhe_texture.glsl"
 
-in      vec2  v_texcoord;
-in flat uvec2 v_texture;
+layout(location = 0) in      vec2  v_texcoord;
+layout(location = 1) in flat uvec2 v_texture;
 
 vec4 sample_texture(vec2 texcoord)
 {

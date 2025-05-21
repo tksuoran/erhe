@@ -1,8 +1,8 @@
 #define a_line_start_end a_custom
 
-out float v_line_width;
-out vec4  v_color;
-out vec4  v_start_end;
+layout(location = 0) out float v_line_width;
+layout(location = 1) out vec4  v_color;
+layout(location = 2) out vec4  v_start_end;
 
 void main()
 {

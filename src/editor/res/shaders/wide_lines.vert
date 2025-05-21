@@ -1,5 +1,5 @@
-out layout(location = 0) vec4  vs_color;
-out layout(location = 1) float vs_line_width;
+layout(location = 0) out vec4  vs_color;
+layout(location = 1) out float vs_line_width;
 
 void main()
 {

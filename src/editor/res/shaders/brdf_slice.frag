@@ -1,6 +1,6 @@
 #include "erhe_bxdf.glsl"
 
-in vec2 v_texcoord;
+layout(location = 0) in vec2 v_texcoord;
 
 float Sqr(float x) {
     return x * x;
