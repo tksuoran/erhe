@@ -55,7 +55,6 @@ endfunction (erhe_disable_incremental_linking)
 if (ERHE_USE_ASAN)
     erhe_disable_incremental_linking()
     add_compile_options(-fsanitize=address)
-    add_link_options(-fsanitize=address)
 endif()
 
 #add_definitions(-DUNICODE -D_UNICODE)
