@@ -567,7 +567,7 @@ public:
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
                 m_id_renderer = std::make_unique<Id_renderer>(*m_graphics_instance.get(), *m_program_interface.get(), *m_mesh_memory.get(), *m_programs.get());
             }
-            )  .name("Id_renderer")
+            )   .name("Id_renderer")
                 .succeed(mesh_memory_task);
 
             auto editor_rendering_task = taskflow.emplace([this]()
