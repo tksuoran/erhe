@@ -3,7 +3,7 @@ layout(location = 1) out vec4      v_position;
 layout(location = 2) out vec4      v_color;
 layout(location = 3) out vec2      v_aniso_control;
 layout(location = 4) out mat3      v_TBN;
-layout(location = 7) out flat uint v_material_index;
+layout(location = 7) out flat uint v_draw_id;
 
 void main()
 {
@@ -35,7 +35,7 @@ void main()
     v_TBN            = mat3(tangent, bitangent, normal);
     v_position       = position;
     gl_Position      = clip_from_world * position;
-    v_material_index = primitive.primitives[gl_DrawID].material_index;
+    v_draw_id        = gl_DrawID;
     v_texcoord       = a_texcoord_0;
     v_color          = a_color_0;
     v_aniso_control  = a_custom_1; //aniso_control;

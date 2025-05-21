@@ -7,9 +7,11 @@ layout(location = 1) in vec4      v_position;
 layout(location = 2) in vec4      v_color;
 layout(location = 3) in vec2      v_aniso_control;
 layout(location = 4) in mat3      v_TBN;
-layout(location = 7) in flat uint v_material_index;
+layout(location = 7) in flat uint v_draw_id;
 
 void main() {
+    uint v_material_index = primitive.primitives[v_draw_id].material_index;
+
     const float bayer_matrix[256] = float[256](
           0.0 / 255.0, 128.0 / 255.0,  32.0 / 255.0, 160.0 / 255.0,   8.0 / 255.0, 136.0 / 255.0,  40.0 / 255.0, 168.0 / 255.0,   2.0 / 255.0, 130.0 / 255.0,  34.0 / 255.0, 162.0 / 255.0,  10.0 / 255.0, 138.0 / 255.0,  42.0 / 255.0, 170.0 / 255.0,
         192.0 / 255.0,  64.0 / 255.0, 224.0 / 255.0,  96.0 / 255.0, 200.0 / 255.0,  72.0 / 255.0, 232.0 / 255.0, 104.0 / 255.0, 194.0 / 255.0,  66.0 / 255.0, 226.0 / 255.0,  98.0 / 255.0, 202.0 / 255.0,  74.0 / 255.0, 234.0 / 255.0, 106.0 / 255.0,
@@ -42,11 +44,11 @@ void main() {
         0u, 0u, 1u, 1u, 0u, 0u, 1u, 1u,
         1u, 1u, 2u, 2u, 1u, 1u, 2u, 2u
     );
-    const ivec2 dither_pos   = ivec2(
-        uint(gl_FragCoord.x) + odd_bits[gl_SampleID & 31],
-        uint(gl_FragCoord.y) + even_bits[gl_SampleID & 31]
-    ) % 16;
-    const int   dither_index = (dither_pos.y * 16 + dither_pos.x + gl_SampleID) & 255;
+    const uvec2 dither_pos   = uvec2(
+        uint(gl_FragCoord.x) + odd_bits[gl_SampleID & 31u],
+        uint(gl_FragCoord.y) + even_bits[gl_SampleID & 31u]
+    ) % 16u;
+    const uint  dither_index = (dither_pos.y * 16u + dither_pos.x + gl_SampleID * 211u + v_draw_id * 241u) & 255u;
     const float dither_value = bayer_matrix[dither_index];
 
     Material material = material.materials[v_material_index];
