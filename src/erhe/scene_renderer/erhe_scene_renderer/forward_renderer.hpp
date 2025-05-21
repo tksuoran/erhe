@@ -84,14 +84,16 @@ public:
 private:
     erhe::graphics::Instance&                m_graphics_instance;
     Program_interface&                       m_program_interface;
-    int                                      m_base_texture_unit{0};
+    int                                      m_base_texture_unit{2};
     Camera_buffer                            m_camera_buffer;
     erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffer;
     Joint_buffer                             m_joint_buffer;
     Light_buffer                             m_light_buffer;
     Material_buffer                          m_material_buffer;
     Primitive_buffer                         m_primitive_buffer;
-    erhe::graphics::Sampler                  m_nearest_sampler;
+    erhe::graphics::Sampler                  m_shadow_sampler_compare;
+    erhe::graphics::Sampler                  m_shadow_sampler_no_compare;
+    erhe::graphics::Sampler                  m_fallback_sampler;
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
 };
 

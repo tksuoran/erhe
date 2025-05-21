@@ -46,17 +46,36 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
             }
         )
     }
-    , m_nearest_sampler{
+    , m_shadow_sampler_compare{
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
-            .mag_filter  = gl::Texture_mag_filter::nearest,
-            .debug_label = "Shadow_renderer"
+            .min_filter   = gl::Texture_min_filter::linear,
+            .mag_filter   = gl::Texture_mag_filter::linear,
+            .wrap_mode    = { gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge },
+            .compare_mode = gl::Texture_compare_mode::compare_ref_to_texture,
+            .compare_func = gl::Texture_compare_func::gequal,
+            .lod_bias     = 0.0f,
+            .max_lod      = 0.0f,
+            .min_lod      = 0.0f,
+            .debug_label  = "Shadow_renderer::m_shadow_sampler_compare"
+        }
+    }
+    , m_shadow_sampler_no_compare{
+        erhe::graphics::Sampler_create_info{
+            .min_filter   = gl::Texture_min_filter::linear,
+            .mag_filter   = gl::Texture_mag_filter::nearest,
+            .wrap_mode    = { gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge },
+            .compare_mode = gl::Texture_compare_mode::none,
+            .lod_bias     = 0.0f,
+            .max_lod      = 0.0f,
+            .min_lod      = 0.0f,
+            .debug_label  = "Shadow_renderer::m_shadow_sampler_no_compare"
         }
     }
     , m_draw_indirect_buffers{graphics_instance}
     , m_joint_buffers        {graphics_instance, program_interface.joint_interface}
     , m_light_buffers        {graphics_instance, program_interface.light_interface}
     , m_primitive_buffers    {graphics_instance, program_interface.primitive_interface}
+    , m_material_buffers     {graphics_instance, program_interface.material_interface}
     , m_gpu_timer            {"Shadow_renderer"}
 {
     m_pipeline_cache_entries.resize(8);
@@ -107,14 +126,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     ERHE_VERIFY(parameters.vertex_buffer != nullptr);
     ERHE_VERIFY(parameters.view_camera != nullptr);
 
-    log_render->debug("Shadow_renderer::render()");
-    log_shadow_renderer->trace(
-        "Making light projections using texture '{}' sampler '{}' handle '{}'",
-        parameters.texture->debug_label(),
-        m_nearest_sampler.debug_label(),
-        erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle)
-    );
-    const auto shadow_texture_handle = m_graphics_instance.get_handle(*parameters.texture.get(), m_nearest_sampler);
+    const uint64_t shadow_texture_handle_compare    = m_graphics_instance.get_handle(*parameters.texture.get(), m_shadow_sampler_compare);
+    const uint64_t shadow_texture_handle_no_compare = m_graphics_instance.get_handle(*parameters.texture.get(), m_shadow_sampler_no_compare);
 
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections = Light_projections{
@@ -123,8 +136,19 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         ////parameters.view_camera_viewport,
         parameters.light_camera_viewport,
         parameters.texture,
-        shadow_texture_handle
+        shadow_texture_handle_compare,
+        shadow_texture_handle_no_compare
     };
+
+    log_render->debug("Shadow_renderer::render()");
+    log_shadow_renderer->trace(
+        "Making light projections using texture '{}' sampler '{}' / '{}' handle '{}' / '{}'",
+        parameters.texture->debug_label(),
+        m_shadow_sampler_compare.debug_label(),
+        m_shadow_sampler_no_compare.debug_label(),
+        erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle_compare),
+        erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle_no_compare)
+    );
 
     //ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render)
 
@@ -148,6 +172,13 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.light_camera_viewport.height
     );
 
+    gl::scissor(
+        parameters.light_camera_viewport.x + 1,
+        parameters.light_camera_viewport.y + 1,
+        parameters.light_camera_viewport.width - 2,
+        parameters.light_camera_viewport.height - 2
+    );
+
     erhe::Item_filter shadow_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
@@ -157,6 +188,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     using Buffer_range = erhe::renderer::Buffer_range;
     using Draw_indirect_buffer_range = erhe::renderer::Draw_indirect_buffer_range;
+
+    Buffer_range material_range = m_material_buffers.update(parameters.materials);
+    material_range.bind();
 
     Buffer_range joint_range = m_joint_buffers.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
     Buffer_range light_range = m_light_buffers.update(lights, &parameters.light_projections, glm::vec3{0.0f});
@@ -196,7 +230,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             }
 
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, parameters.framebuffers[light_index]->gl_name());
+            gl::disable(gl::Enable_cap::scissor_test);
             gl::clear_buffer_fv(gl::Buffer::depth, 0, m_graphics_instance.depth_clear_value_pointer());
+            gl::enable(gl::Enable_cap::scissor_test);
 
             Buffer_range control_range = m_light_buffers.update_control(light_index);
             control_range.bind();
@@ -221,8 +257,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         draw_indirect_buffer_range.range.submit();
     }
 
+    material_range.submit();
     joint_range.submit();
     light_range.submit();
+
+    gl::disable(gl::Enable_cap::scissor_test);
 
     return true;
 }

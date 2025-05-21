@@ -349,8 +349,13 @@ void Debug_view_window::imgui()
         return;
     }
 
-    const auto& light_projections           = shadow_render_node->get_light_projections();
+    erhe::scene_renderer::Light_projections& light_projections = shadow_render_node->get_light_projections();
     const auto& light_projection_transforms = light_projections.light_projection_transforms;
+
+    ImGui::SliderFloat("Shadow Bias Scale", &erhe::scene_renderer::Light_projections::s_shadow_bias_scale, 0.0f, 1.0f, "%.5f", ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("Shadow Min Bias", &erhe::scene_renderer::Light_projections::s_shadow_min_bias,     0.0f, 1.0f, "%.5f", ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("Shadow Max Bias", &erhe::scene_renderer::Light_projections::s_shadow_max_bias,     0.0f, 1.0f, "%.5f", ImGuiSliderFlags_Logarithmic);
+
     const int count = static_cast<int>(light_projection_transforms.size());
     int& light_index = input_texture_node->get_light_index();
     ImGui::Text("Light");
@@ -373,9 +378,13 @@ void Debug_view_window::imgui()
         }
     }
 
-    const uint32_t shadow_map_texture_handle_uvec2[2] = {
-        static_cast<uint32_t>((light_projections.shadow_map_texture_handle & 0xffffffffu)),
-        static_cast<uint32_t>( light_projections.shadow_map_texture_handle >> 32u)
+    const uint32_t shadow_map_texture_handle_compare_uvec2[2] = {
+        static_cast<uint32_t>((light_projections.shadow_map_texture_handle_compare & 0xffffffffu)),
+        static_cast<uint32_t>( light_projections.shadow_map_texture_handle_compare >> 32u)
+    };
+    const uint32_t shadow_map_texture_handle_no_compare_uvec2[2] = {
+        static_cast<uint32_t>((light_projections.shadow_map_texture_handle_no_compare & 0xffffffffu)),
+        static_cast<uint32_t>( light_projections.shadow_map_texture_handle_no_compare >> 32u)
     };
 
     const auto& texture = m_node.get_consumer_input_texture(
@@ -383,14 +392,18 @@ void Debug_view_window::imgui()
         erhe::rendergraph::Rendergraph_node_key::depth_visualization
     );
 
-    ImGui::Text("Shadow Texture Handle: 0x%08x 0x%08x", shadow_map_texture_handle_uvec2[1], shadow_map_texture_handle_uvec2[0]);
-    ImGui::Text("Shadow Texture Handle: %u %u", shadow_map_texture_handle_uvec2[1], shadow_map_texture_handle_uvec2[0]);
+#if 0
+    ImGui::Text("Shadow Texture Handle Compare: 0x%08x 0x%08x", shadow_map_texture_handle_compare_uvec2[1], shadow_map_texture_handle_compare_uvec2[0]);
+    ImGui::Text("Shadow Texture Handle No Compare: 0x%08x 0x%08x", shadow_map_texture_handle_no_compare_uvec2[1], shadow_map_texture_handle_no_compare_uvec2[0]);
+    ImGui::Text("Shadow Texture Handle Compare: %u %u", shadow_map_texture_handle_compare_uvec2[1], shadow_map_texture_handle_compare_uvec2[0]);
+    ImGui::Text("Shadow Texture Handle No Compare: %u %u", shadow_map_texture_handle_no_compare_uvec2[1], shadow_map_texture_handle_no_compare_uvec2[0]);
     if (light_projections.shadow_map_texture) {
         ImGui::Text(
             "Shadow Texture Name: %u",
             light_projections.shadow_map_texture->gl_name()
         );
     }
+#endif
 
     const auto  available_size = ImGui::GetContentRegionAvail();
     const float image_size     = std::min(available_size.x, available_size.y);

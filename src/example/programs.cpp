@@ -8,11 +8,11 @@ namespace example {
 Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface)
     : shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , default_uniform_block{graphics_instance}
-    , shadow_sampler{
+    , shadow_sampler_compare{
         graphics_instance.info.use_bindless_texture
             ? nullptr
             : default_uniform_block.add_sampler(
-                "s_shadow",
+                "s_shadow_compare",
                 gl::Uniform_type::sampler_2d_array,
                 shadow_texture_unit
             )

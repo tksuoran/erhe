@@ -31,14 +31,25 @@ public:
 class Light_block
 {
 public:
-    std::size_t  shadow_texture;          // uvec2
-    std::size_t  brdf_phi_incident_phi;   // vec2  - was reserved1
-    std::size_t  directional_light_count; // uint
-    std::size_t  spot_light_count;        // uint
-    std::size_t  point_light_count;       // uint
-    std::size_t  brdf_material;           // uint  - was reserved0
-    std::size_t  ambient_light;           // vec4
-    std::size_t  reserved_2;              // uvec4
+    std::size_t  shadow_texture_compare;    // uvec2
+    std::size_t  shadow_texture_no_compare; // uvec2
+
+    std::size_t  shadow_bias_scale;         // float
+    std::size_t  shadow_min_bias;           // float
+    std::size_t  shadow_max_bias;           // float
+    std::size_t  reserved_0;                // float
+
+    std::size_t  directional_light_count;   // uint
+    std::size_t  spot_light_count;          // uint
+    std::size_t  point_light_count;         // uint
+    std::size_t  reserved_1;                // uint
+
+    std::size_t  brdf_material;             // uint
+    std::size_t  reserved_2;                // uint
+    std::size_t  brdf_phi_incident_phi;     // vec2
+
+    std::size_t  ambient_light;             // vec4
+
     Light_struct light;
     std::size_t  light_struct;
 };
@@ -67,7 +78,8 @@ public:
         ////const erhe::math::Viewport&                             view_camera_viewport,
         const erhe::math::Viewport&                                 light_texture_viewport,
         const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
-        uint64_t                                                    shadow_map_texture_handle
+        uint64_t                                                    shadow_map_texture_handle_compare,
+        uint64_t                                                    shadow_map_texture_handle_no_compare
     );
 
     // Warning: Returns pointer to element of member vector. That pointer
@@ -79,12 +91,17 @@ public:
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
     std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
-    uint64_t                                              shadow_map_texture_handle;
+    uint64_t                                              shadow_map_texture_handle_compare;
+    uint64_t                                              shadow_map_texture_handle_no_compare;
 
     // TODO A bit hacky injection of these parameters..
     float                                                 brdf_phi         {0.0f};
     float                                                 brdf_incident_phi{0.0f};
     std::shared_ptr<erhe::primitive::Material>            brdf_material    {};
+
+    static float                                          s_shadow_bias_scale;
+    static float                                          s_shadow_min_bias;
+    static float                                          s_shadow_max_bias;
 };
 
 class Light_buffer

@@ -547,13 +547,16 @@ auto Instance::texture_unit_cache_allocate(const uint64_t handle) -> std::option
     return result;
 }
 
-auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> size_t
+auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::size_t
 {
     const GLuint fallback_texture_name = erhe::graphics::get_texture_from_handle(fallback_handle);
     const GLuint fallback_sampler_name = erhe::graphics::get_sampler_from_handle(fallback_handle);
 
     GLuint i{};
-    GLuint end = std::min(static_cast<GLuint>(m_texture_units.size()), static_cast<GLuint>(limits.max_texture_image_units));
+    GLuint end = std::min(
+        static_cast<GLuint>(m_texture_units.size()),
+        static_cast<GLuint>(limits.max_texture_image_units - m_base_texture_unit)
+    );
 
     for (i = 0; i < end; ++i) {
         const uint64_t handle       = m_texture_units[i];

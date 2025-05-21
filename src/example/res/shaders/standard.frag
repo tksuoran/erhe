@@ -52,7 +52,7 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L)
 #if defined(ERHE_SHADOW_MAP_NOPE)
 
 #if defined(ERHE_BINDLESS_TEXTURE)
-    sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture);
+    sampler2DArrayShadow s_shadow_compare = sampler2DArrayShadow(light_block.shadow_texture);
 #endif
 
     //Light light = light_block.lights[light_index];
@@ -61,13 +61,13 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L)
 
     vec4  position_in_light_texture = position_in_light_texture_homogeneous / position_in_light_texture_homogeneous.w;
     float depth_in_light_texture    = position_in_light_texture.z;
-    float sampled_depth = texture(
-        s_shadow,
-        vec3(
-            position_in_light_texture.xy,
-            float(light_index)
-        )
-    ).x;
+    //float sampled_depth = texture(
+    //    s_shadow,
+    //    vec3(
+    //        position_in_light_texture.xy,
+    //        float(light_index)
+    //    )
+    //).x;
 
     float bias = 0.005 * sqrt(1.0 - N_dot_L * N_dot_L) / N_dot_L; // tan(acos(N_dot_L))
     bias = clamp(bias, 0.0, 0.01);

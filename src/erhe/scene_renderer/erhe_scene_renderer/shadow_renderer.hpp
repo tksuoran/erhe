@@ -10,6 +10,7 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
+#include "erhe_scene_renderer/material_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
 #include <initializer_list>
@@ -38,7 +39,8 @@ class Settings;
 class Shadow_renderer
 {
 public:
-    static const int shadow_texture_unit{15};
+    static const int shadow_texture_unit_compare{0};
+    static const int shadow_texture_unit_no_compare{1};
 
     Shadow_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface);
 
@@ -63,10 +65,11 @@ public:
             const std::span<
                 const std::shared_ptr<erhe::scene::Mesh>
             >
-        >&                                                         mesh_spans;
-        const std::span<const std::shared_ptr<erhe::scene::Light>> lights;
-        const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins{};
-        Light_projections&                                         light_projections;
+        >&                                                                 mesh_spans;
+        const std::span<const std::shared_ptr<erhe::scene::Light>>         lights;
+        const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins{};
+        const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials{};
+        Light_projections&                                                 light_projections;
     };
 
     auto render(const Render_parameters& parameters) -> bool;
@@ -85,12 +88,15 @@ private:
     uint64_t                                 m_pipeline_cache_serial{0};
     std::vector<Pipeline_cache_entry>        m_pipeline_cache_entries;
     erhe::graphics::Reloadable_shader_stages m_shader_stages;
-    erhe::graphics::Sampler                  m_nearest_sampler;
+    erhe::graphics::Sampler                  m_shadow_sampler_compare;
+    erhe::graphics::Sampler                  m_shadow_sampler_no_compare;
+
     erhe::graphics::Vertex_input_state       m_vertex_input;
     erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffers;
     Joint_buffer                             m_joint_buffers;
     Light_buffer                             m_light_buffers;
     Primitive_buffer                         m_primitive_buffers;
+    Material_buffer                          m_material_buffers;
     erhe::graphics::Gpu_timer                m_gpu_timer;
 };
 

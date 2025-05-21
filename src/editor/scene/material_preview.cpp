@@ -305,6 +305,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         m_camera.get(),
         erhe::math::Viewport{},
         std::shared_ptr<erhe::graphics::Texture>{},
+        erhe::graphics::invalid_texture_handle,
         erhe::graphics::invalid_texture_handle
     };
 

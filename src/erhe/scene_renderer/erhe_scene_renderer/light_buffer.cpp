@@ -29,14 +29,25 @@ Light_interface::Light_interface(erhe::graphics::Instance& graphics_instance)
     , light_control_block{graphics_instance, "light_control_block", 2, erhe::graphics::Shader_resource::Type::uniform_block}
     , light_struct       {graphics_instance, "Light"}
     , offsets     {
-        .shadow_texture          = light_block.add_uvec2("shadow_texture"         )->offset_in_parent(),
-        .brdf_phi_incident_phi   = light_block.add_vec2 ("brdf_phi_incident_phi"  )->offset_in_parent(),
+        .shadow_texture_compare    = light_block.add_uvec2("shadow_texture_compare"   )->offset_in_parent(),
+        .shadow_texture_no_compare = light_block.add_uvec2("shadow_texture_no_compare")->offset_in_parent(),
+
+        .shadow_bias_scale         = light_block.add_float("shadow_bias_scale"      )->offset_in_parent(),
+        .shadow_min_bias           = light_block.add_float("shadow_min_bias"        )->offset_in_parent(),
+        .shadow_max_bias           = light_block.add_float("shadow_max_bias"        )->offset_in_parent(),
+        .reserved_0                = light_block.add_float("reserved_0"             )->offset_in_parent(),
+
         .directional_light_count = light_block.add_uint ("directional_light_count")->offset_in_parent(),
         .spot_light_count        = light_block.add_uint ("spot_light_count"       )->offset_in_parent(),
         .point_light_count       = light_block.add_uint ("point_light_count"      )->offset_in_parent(),
+        .reserved_1              = light_block.add_uint ("reserved_1"             )->offset_in_parent(),
+
         .brdf_material           = light_block.add_uint ("brdf_material"          )->offset_in_parent(),
+        .reserved_2              = light_block.add_uint ("reserved_2"             )->offset_in_parent(),
+        .brdf_phi_incident_phi   = light_block.add_vec2 ("brdf_phi_incident_phi"  )->offset_in_parent(),
+
         .ambient_light           = light_block.add_vec4 ("ambient_light"          )->offset_in_parent(),
-        .reserved_2              = light_block.add_uvec4("reserved_2"             )->offset_in_parent(),
+
         .light = {
             .clip_from_world              = light_struct.add_mat4("clip_from_world"             )->offset_in_parent(),
             .texture_from_world           = light_struct.add_mat4("texture_from_world"          )->offset_in_parent(),
@@ -75,8 +86,13 @@ Light_buffer::Light_buffer(erhe::graphics::Instance& graphics_instance, Light_in
 {
 }
 
+float Light_projections::s_shadow_bias_scale = 0.00025f;
+float Light_projections::s_shadow_min_bias   = 0.00006f;
+float Light_projections::s_shadow_max_bias   = 0.00237f;
+
 Light_projections::Light_projections()
-    : shadow_map_texture_handle{erhe::graphics::invalid_texture_handle}
+    : shadow_map_texture_handle_compare   {erhe::graphics::invalid_texture_handle}
+    , shadow_map_texture_handle_no_compare{erhe::graphics::invalid_texture_handle}
 {
 }
 
@@ -85,14 +101,16 @@ Light_projections::Light_projections(
     const erhe::scene::Camera*                                  view_camera,
     const erhe::math::Viewport&                                 light_texture_viewport,
     const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
-    uint64_t                                                    shadow_map_texture_handle
+    uint64_t                                                    shadow_map_texture_handle_compare,
+    uint64_t                                                    shadow_map_texture_handle_no_compare
 )
     : parameters{
         .view_camera         = view_camera,
         .shadow_map_viewport = light_texture_viewport
     }
-    , shadow_map_texture       {shadow_map_texture}
-    , shadow_map_texture_handle{shadow_map_texture_handle}
+    , shadow_map_texture                  {shadow_map_texture}
+    , shadow_map_texture_handle_compare   {shadow_map_texture_handle_compare}
+    , shadow_map_texture_handle_no_compare{shadow_map_texture_handle_no_compare}
 {
     light_projection_transforms.clear();
 
@@ -155,10 +173,16 @@ auto Light_buffer::update(
     uint32_t       directional_light_count{0u};
     uint32_t       spot_light_count       {0u};
     uint32_t       point_light_count      {0u};
+    const uint32_t uint_zero              {0u};
+    const float    float_zero             {0.0f};
     const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
-    const uint32_t shadow_map_texture_handle_uvec2[2] = {
-        light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle & 0xffffffffu)) : 0xffffffffu,
-        light_projections ? static_cast<uint32_t>( light_projections->shadow_map_texture_handle >> 32u) : 0
+    const uint32_t shadow_map_texture_handle_compare_uvec2[2] = {
+        light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle_compare & 0xffffffffu)) : 0xffffffffu,
+        light_projections ? static_cast<uint32_t>( light_projections->shadow_map_texture_handle_compare >> 32u) : 0
+    };
+    const uint32_t shadow_map_texture_handle_no_compare_uvec2[2] = {
+        light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle_no_compare & 0xffffffffu)) : 0xffffffffu,
+        light_projections ? static_cast<uint32_t>( light_projections->shadow_map_texture_handle_no_compare >> 32u) : 0
     };
 
     using erhe::graphics::as_span;
@@ -223,18 +247,31 @@ auto Light_buffer::update(
     );
     write_offset += m_light_interface.max_light_count * light_struct_size;
 
-    const auto brdf_phi_incident_phi = light_projections != nullptr ? glm::vec2{light_projections->brdf_phi, light_projections->brdf_incident_phi} : glm::vec2{0.0f, 0.0f};
-    const auto brdf_material         = light_projections != nullptr ? (light_projections->brdf_material ? light_projections->brdf_material->material_buffer_index : 0) : 0;
+    const glm::vec2 brdf_phi_incident_phi = (light_projections != nullptr) ? glm::vec2{light_projections->brdf_phi, light_projections->brdf_incident_phi} : glm::vec2{0.0f, 0.0f};
+    const uint32_t  brdf_material         = (light_projections != nullptr) ? (light_projections->brdf_material ? light_projections->brdf_material->material_buffer_index : 0) : 0;
+    const float     shadow_bias_scale     = Light_projections::s_shadow_bias_scale;
+    const float     shadow_min_bias       = Light_projections::s_shadow_min_bias;
+    const float     shadow_max_bias       = Light_projections::s_shadow_max_bias;
 
     // Late write to begin of buffer to full in light counts
-    write(light_gpu_data, common_offset + offsets.shadow_texture,          as_span(shadow_map_texture_handle_uvec2));
-    write(light_gpu_data, common_offset + offsets.brdf_phi_incident_phi,   as_span(brdf_phi_incident_phi)    );
-    write(light_gpu_data, common_offset + offsets.directional_light_count, as_span(directional_light_count)  );
-    write(light_gpu_data, common_offset + offsets.spot_light_count,        as_span(spot_light_count)         );
-    write(light_gpu_data, common_offset + offsets.point_light_count,       as_span(point_light_count)        );
-    write(light_gpu_data, common_offset + offsets.brdf_material,           as_span(brdf_material)            );
-    write(light_gpu_data, common_offset + offsets.ambient_light,           as_span(ambient_light)            );
-    write(light_gpu_data, common_offset + offsets.reserved_2,              as_span(uvec4_zero)               );
+    write(light_gpu_data, common_offset + offsets.shadow_texture_compare,    as_span(shadow_map_texture_handle_compare_uvec2));
+    write(light_gpu_data, common_offset + offsets.shadow_texture_no_compare, as_span(shadow_map_texture_handle_no_compare_uvec2));
+
+    write(light_gpu_data, common_offset + offsets.shadow_bias_scale,         as_span(shadow_bias_scale)      );
+    write(light_gpu_data, common_offset + offsets.shadow_min_bias,           as_span(shadow_min_bias)        );
+    write(light_gpu_data, common_offset + offsets.shadow_max_bias,           as_span(shadow_max_bias)        );
+    write(light_gpu_data, common_offset + offsets.reserved_0,                as_span(float_zero)             );
+
+    write(light_gpu_data, common_offset + offsets.directional_light_count,   as_span(directional_light_count));
+    write(light_gpu_data, common_offset + offsets.spot_light_count,          as_span(spot_light_count)       );
+    write(light_gpu_data, common_offset + offsets.point_light_count,         as_span(point_light_count)      );
+    write(light_gpu_data, common_offset + offsets.reserved_1,                as_span(uint_zero)              );
+
+    write(light_gpu_data, common_offset + offsets.brdf_material,             as_span(brdf_material)          );
+    write(light_gpu_data, common_offset + offsets.reserved_2,                as_span(uint_zero)              );
+    write(light_gpu_data, common_offset + offsets.brdf_phi_incident_phi,     as_span(brdf_phi_incident_phi)  );
+
+    write(light_gpu_data, common_offset + offsets.ambient_light,             as_span(ambient_light)          );
 
     buffer_range.close(write_offset);
     SPDLOG_LOGGER_TRACE(log_draw, "wrote up to {} entries to light buffer", padding_light_offset);

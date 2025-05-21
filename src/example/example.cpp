@@ -213,7 +213,8 @@ public:
             m_camera.get(),
             erhe::math::Viewport{},
             std::shared_ptr<erhe::graphics::Texture>{},
-            0
+            erhe::graphics::invalid_texture_handle,
+            erhe::graphics::invalid_texture_handle
         };
 
         std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;

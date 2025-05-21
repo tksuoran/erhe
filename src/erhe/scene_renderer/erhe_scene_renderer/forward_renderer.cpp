@@ -36,11 +36,38 @@ Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, 
     , m_light_buffer        {graphics_instance, program_interface.light_interface}
     , m_material_buffer     {graphics_instance, program_interface.material_interface}
     , m_primitive_buffer    {graphics_instance, program_interface.primitive_interface}
-    , m_nearest_sampler{
+    , m_shadow_sampler_compare{
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
-            .mag_filter  = gl::Texture_mag_filter::nearest,
-            .debug_label = "Forward_aer nearest"
+            .min_filter   = gl::Texture_min_filter::linear,
+            .mag_filter   = gl::Texture_mag_filter::linear,
+            .wrap_mode    = { gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge },
+            .compare_mode = gl::Texture_compare_mode::compare_ref_to_texture,
+            .compare_func = gl::Texture_compare_func::gequal,
+            .lod_bias     = 0.0f,
+            .max_lod      = 0.0f,
+            .min_lod      = 0.0f,
+            .debug_label  = "Forward_renderer::m_shadow_sampler_compare"
+        }
+    }
+    , m_shadow_sampler_no_compare{
+        erhe::graphics::Sampler_create_info{
+            .min_filter   = gl::Texture_min_filter::linear,
+            .mag_filter   = gl::Texture_mag_filter::nearest,
+            .wrap_mode    = { gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge },
+            .compare_mode = gl::Texture_compare_mode::none,
+            .lod_bias     = 0.0f,
+            .max_lod      = 0.0f,
+            .min_lod      = 0.0f,
+            .debug_label  = "Forward_renderer::m_shadow_sampler_no_compare"
+        }
+    }
+    , m_fallback_sampler{
+        erhe::graphics::Sampler_create_info{
+            .min_filter   = gl::Texture_min_filter::nearest,
+            .mag_filter   = gl::Texture_mag_filter::nearest,
+            .wrap_mode    = { gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge },
+            .compare_mode = gl::Texture_compare_mode::none,
+            .debug_label  = "Shadow_renderer::m_fallback_sampler"
         }
     }
 {
@@ -81,19 +108,19 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const bool  enable_shadows =
         (!lights.empty()) &&
         (parameters.shadow_texture != nullptr) &&
-        (parameters.light_projections->shadow_map_texture_handle != erhe::graphics::invalid_texture_handle);
+        (parameters.light_projections->shadow_map_texture_handle_compare != erhe::graphics::invalid_texture_handle) &&
+        (parameters.light_projections->shadow_map_texture_handle_no_compare != erhe::graphics::invalid_texture_handle);
+    const uint64_t fallback_texture_handle = m_graphics_instance.get_handle(*m_dummy_texture.get(), m_fallback_sampler);
 
-    const uint64_t shadow_texture_handle = enable_shadows
-        ? parameters.light_projections->shadow_map_texture_handle
-        : erhe::graphics::invalid_texture_handle;
-    const uint64_t fallback_texture_handle = m_graphics_instance.get_handle(*m_dummy_texture.get(), m_nearest_sampler);
-
-    log_forward_renderer->trace(
-        "render({}) shadow T '{}' handle {}",
-        safe_str(parameters.passes.front()->pipeline.data.name),
-        enable_shadows ? parameters.shadow_texture->debug_label() : "",
-        erhe::graphics::format_texture_handle(shadow_texture_handle)
-    );
+    if (enable_shadows) {
+        log_forward_renderer->trace(
+            "render({}) shadow T '{}' handle {} / {}",
+            safe_str(parameters.passes.front()->pipeline.data.name),
+            enable_shadows ? parameters.shadow_texture->debug_label() : "",
+            erhe::graphics::format_texture_handle(parameters.light_projections->shadow_map_texture_handle_compare),
+            erhe::graphics::format_texture_handle(parameters.light_projections->shadow_map_texture_handle_no_compare)
+        );
+    }
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
@@ -129,19 +156,20 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     if (m_graphics_instance.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures resident");
-
         if (enable_shadows) {
-            gl::make_texture_handle_resident_arb(shadow_texture_handle);
+            gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
+            gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
         }
         for (const uint64_t handle : m_material_buffer.used_handles()) {
             gl::make_texture_handle_resident_arb(handle);
         }
     } else {
         ERHE_PROFILE_SCOPE("bind texture units");
-
         if (enable_shadows) {
-            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit, parameters.shadow_texture->gl_name());
-            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit, m_nearest_sampler.gl_name());
+            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_compare,    parameters.shadow_texture->gl_name());
+            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_no_compare, parameters.shadow_texture->gl_name());
+            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_compare,    m_shadow_sampler_compare.gl_name());
+            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_no_compare, m_shadow_sampler_no_compare.gl_name());
         }
 
         m_graphics_instance.texture_unit_cache_bind(fallback_texture_handle);
@@ -222,9 +250,9 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     if (m_graphics_instance.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures non resident");
-
         if (enable_shadows) {
-            gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
+            gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
+            gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
         }
         for (const uint64_t handle : m_material_buffer.used_handles()) {
             gl::make_texture_handle_non_resident_arb(handle);
@@ -241,11 +269,10 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     const auto& lights         = parameters.lights;
     const auto& passes         = parameters.passes;
     const bool  enable_shadows =
-        //(g_shadow_renderer != nullptr) &&
         (!lights.empty()) &&
-        (parameters.shadow_texture != nullptr);
-
-    const uint64_t shadow_texture_handle = enable_shadows ? m_graphics_instance.get_handle(*parameters.shadow_texture, m_nearest_sampler) : 0;
+        (parameters.shadow_texture != nullptr) &&
+        (parameters.light_projections->shadow_map_texture_handle_compare != erhe::graphics::invalid_texture_handle) &&
+        (parameters.light_projections->shadow_map_texture_handle_no_compare != erhe::graphics::invalid_texture_handle);
 
     erhe::graphics::Scoped_debug_group forward_renderer_render{c_forward_renderer_render};
 
@@ -285,10 +312,13 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
 
     if (enable_shadows) {
         if (m_graphics_instance.info.use_bindless_texture) {
-            gl::make_texture_handle_resident_arb(shadow_texture_handle);
+            gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
+            gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
         } else {
-            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit, parameters.shadow_texture->gl_name());
-            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit, m_nearest_sampler.gl_name());
+            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_compare,    parameters.shadow_texture->gl_name());
+            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_no_compare, parameters.shadow_texture->gl_name());
+            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_compare,    m_shadow_sampler_compare.gl_name());
+            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_no_compare, m_shadow_sampler_no_compare.gl_name());
         }
     }
 
@@ -324,7 +354,8 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
 
     if (enable_shadows) {
         if (m_graphics_instance.info.use_bindless_texture) {
-            gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
+            gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
+            gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
         }
     }
 }

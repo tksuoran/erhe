@@ -6,6 +6,7 @@
 
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
+#include "scene/content_library.hpp"
 
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_gl/command_info.hpp"
@@ -123,6 +124,11 @@ void Shadow_render_node::execute_rendergraph_node()
         return;
     }
 
+    // TODO: Keep this vector in content library and update when needed.
+    //       Make content library item host for content library nodes.
+    const auto& material_library = scene_root->content_library()->materials;
+    std::vector<std::shared_ptr<erhe::primitive::Material>> materials = material_library->get_all<erhe::primitive::Material>();
+
     scene_root->sort_lights();
 
     m_context.shadow_renderer->render(
@@ -139,6 +145,7 @@ void Shadow_render_node::execute_rendergraph_node()
             .mesh_spans            = { layers.content()->meshes },
             .lights                = layers.light()->lights,
             .skins                 = scene_root->get_scene().get_skins(),
+            .materials             = materials,
             .light_projections     = m_light_projections
         }
     );

@@ -43,7 +43,7 @@ public:
     int                              base_texture_unit{0};
     std::filesystem::path            shader_path;
     erhe::graphics::Shader_resource  default_uniform_block;   // for non-bindless textures
-    erhe::graphics::Shader_resource* shadow_sampler;
+    erhe::graphics::Shader_resource* shadow_sampler_compare;
     erhe::graphics::Shader_resource* texture_sampler;
     erhe::graphics::Sampler          nearest_sampler;
     erhe::graphics::Sampler          linear_sampler;
