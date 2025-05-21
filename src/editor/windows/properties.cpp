@@ -746,10 +746,11 @@ void Properties::material_properties()
     ERHE_PROFILE_FUNCTION();
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const std::shared_ptr<erhe::primitive::Material> selected_material = m_context.selection->get<erhe::primitive::Material>();
-    if (!selected_material) {
+    const std::shared_ptr<erhe::primitive::Material> selected_material_ = m_context.selection->get<erhe::primitive::Material>();
+    if (!selected_material_) {
         return;
     }
+    erhe::primitive::Material* selected_material = selected_material_.get();
     push_group("Material", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, m_indent);
 
     add_entry("Name", [=]() {
@@ -764,12 +765,12 @@ void Properties::material_properties()
     const int   area_size      = std::max(1, static_cast<int>(area_size_0));
     m_context.material_preview->set_area_size(area_size);
     m_context.material_preview->update_rendertarget(*m_context.graphics_instance);
-    m_context.material_preview->render_preview(selected_material);
+    m_context.material_preview->render_preview(selected_material_);
     m_context.material_preview->show_preview();
     auto* node = m_context.brdf_slice->get_node();
     if (node != nullptr) {
         push_group("BRDF Slice", ImGuiTreeNodeFlags_None);
-        node->set_material(selected_material);
+        node->set_material(selected_material_);
         add_entry("BRDF", [this, area_size]() {
             m_context.brdf_slice->show_brdf_slice(area_size);
         });
@@ -783,14 +784,15 @@ void Properties::material_properties()
     add_entry("Emissive",    [=](){ ImGui::ColorEdit4 ("##", &selected_material->emissive.x,   ImGuiColorEditFlags_Float); });
     add_entry("Opacity",     [=](){ ImGui::SliderFloat("##", &selected_material->opacity,      0.0f,  1.0f); });
 
-    Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material.get());
+    Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material);
     if (scene_root != nullptr) {
         const std::shared_ptr<Content_library>& content_library = scene_root->content_library();
         if (content_library) {
-            const std::shared_ptr<Content_library_node>& textures = content_library->textures;
-            if (textures) {
-                add_entry("Base Color Texture",         [this, &textures, &selected_material](){ textures->combo(m_context, "##", selected_material->textures.base_color,         true); });
-                add_entry("Metallic Roughness Texture", [this, &textures, &selected_material](){ textures->combo(m_context, "##", selected_material->textures.metallic_roughness, true); });
+            const std::shared_ptr<Content_library_node>& textures_ = content_library->textures;
+            if (textures_) {
+                Content_library_node* textures = textures_.get();
+                add_entry("Base Color Texture",         [this, textures, selected_material](){ textures->combo(m_context, "##", selected_material->textures.base_color,         true); });
+                add_entry("Metallic Roughness Texture", [this, textures, selected_material](){ textures->combo(m_context, "##", selected_material->textures.metallic_roughness, true); });
             }
         }
     }
