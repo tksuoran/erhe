@@ -1,6 +1,6 @@
 #pragma once
-#include <cmath>
 #include "RelativePosition.hpp"
+#include <cmath>
 
 // https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf page 260
 

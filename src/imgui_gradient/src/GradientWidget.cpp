@@ -1,11 +1,11 @@
 #include "GradientWidget.hpp"
-#include <array>
-#include <iterator>
-#include <random>
 #include "Settings.hpp"
 #include "imgui_draw.hpp"
 #include "internal.hpp"
 #include "maybe_disabled.hpp"
+#include <array>
+#include <iterator>
+#include <random>
 
 namespace ImGG {
 
@@ -134,6 +134,7 @@ static void draw_gradient_bar(
     ImGui::SetCursorScreenPos(
         gradient_bar_position + ImVec2{0.f, gradient_size.y}
     );
+    ImGui::Dummy(ImVec2{0, 0});
 }
 
 static auto handle_interactions_with_hovered_mark(
@@ -205,6 +206,7 @@ auto GradientWidget::draw_gradient_marks(
     ImGui::SetCursorScreenPos(
         gradient_bar_position + ImVec2{0.f, gradient_size.y + space_between_gradient_bar_and_options}
     );
+    ImGui::Dummy(ImVec2{0, 0});
     return res;
 }
 
@@ -544,6 +546,7 @@ auto GradientWidget::widget(
                 : ImGui::GetStyle().ItemSpacing.y * 3.f,
         }
     );
+    ImGui::Dummy(ImVec2{0, 0});
     ImGuiContext& g = *GImGui;
 
     if (modified)

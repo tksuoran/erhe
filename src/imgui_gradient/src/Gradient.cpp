@@ -1,6 +1,6 @@
 #include "Gradient.hpp"
 #include "color_conversions.hpp"
-#include "imgui_internal.hpp"
+#include <imgui/imgui_internal.h>
 
 namespace ImGG {
 

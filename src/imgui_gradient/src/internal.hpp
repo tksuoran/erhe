@@ -1,7 +1,7 @@
 #pragma once
 
 #define IMGUI_DEFINE_MATH_OPERATORS
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 namespace ImGG { namespace internal {
 

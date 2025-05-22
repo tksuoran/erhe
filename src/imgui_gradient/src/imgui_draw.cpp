@@ -53,16 +53,21 @@ static void draw_gradient_between_two_colors(
         )
         * ImVec4{0.5f, 0.5f, 0.5f, 0.5f}
     );
-    auto const color_left_as_ImU32   = ImGui::ColorConvertFloat4ToU32(color_left);
-    auto const color_middle_as_ImU32 = ImGui::ColorConvertFloat4ToU32(color_middle);
-    auto const color_right_as_ImU32  = ImGui::ColorConvertFloat4ToU32(color_right);
-
+    auto const d_x                  = (bottom_right_corner.x - top_left_corner.x);
     auto const middle_x             = (top_left_corner.x + bottom_right_corner.x) * 0.5f;
     auto const bottom_middle_corner = ImVec2{middle_x, bottom_right_corner.y};
     auto const top_middle_corner    = ImVec2{middle_x, top_left_corner.y};
+    if (d_x > 10.0f) {
+        draw_gradient_between_two_colors(draw_list, top_left_corner, bottom_middle_corner, color_left, color_middle);
+        draw_gradient_between_two_colors(draw_list, top_middle_corner, bottom_right_corner, color_middle, color_right);
+    } else {
+        auto const color_left_as_ImU32   = ImGui::ColorConvertFloat4ToU32(color_left);
+        auto const color_middle_as_ImU32 = ImGui::ColorConvertFloat4ToU32(color_middle);
+        auto const color_right_as_ImU32  = ImGui::ColorConvertFloat4ToU32(color_right);
 
-    draw_naive_gradient_between_two_colors(draw_list, top_left_corner, bottom_middle_corner, color_left_as_ImU32, color_middle_as_ImU32);
-    draw_naive_gradient_between_two_colors(draw_list, top_middle_corner, bottom_right_corner, color_middle_as_ImU32, color_right_as_ImU32);
+        draw_naive_gradient_between_two_colors(draw_list, top_left_corner, bottom_middle_corner, color_left_as_ImU32, color_middle_as_ImU32);
+        draw_naive_gradient_between_two_colors(draw_list, top_middle_corner, bottom_right_corner, color_middle_as_ImU32, color_right_as_ImU32);
+    }
 }
 
 void draw_gradient(

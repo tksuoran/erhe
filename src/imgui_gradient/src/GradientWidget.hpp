@@ -2,11 +2,11 @@
 
 #pragma once
 
-#include <functional>
 #include "Gradient.hpp"
 #include "HoverChecker.hpp"
 #include "MarkId.hpp"
 #include "Settings.hpp"
+#include <functional>
 
 namespace ImGG {
 

@@ -1,9 +1,9 @@
 #pragma once
 
-#include <imgui.h>
-#include <functional>
 #include "Flags.hpp"
 #include "internal.hpp"
+#include <imgui/imgui.h>
+#include <functional>
 
 namespace ImGG {
 

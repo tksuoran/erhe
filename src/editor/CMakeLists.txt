@@ -389,6 +389,7 @@ target_link_libraries(
     #meshoptimizer
     geogram
     imgui
+    imgui_gradient::imgui_gradient
     mINI
     RectangleBinPack
     rapidjson
@@ -462,7 +463,6 @@ target_link_libraries(
         mINI
         RectangleBinPack
         rapidjson
-        imgui_gradient::imgui_gradient
 )
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
     target_link_libraries(${_target} PRIVATE cpp-terminal)

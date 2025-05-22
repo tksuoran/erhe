@@ -1,7 +1,7 @@
 #include "extra_widgets.hpp"
-#include <imgui.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 #include <array>
-#include "imgui_internal.hpp"
 
 namespace ImGG {
 
