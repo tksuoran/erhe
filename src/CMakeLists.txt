@@ -12,6 +12,7 @@ endif ()
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     add_subdirectory(imgui)
+    add_subdirectory(imgui_gradient)
 endif ()
 
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
