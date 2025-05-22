@@ -18,10 +18,10 @@ Reference_frame::Reference_frame(
     const GEO::index_t in_corner_offset0,
     Frame_orientation  frame_orientation
 )
-    : m_face_offset      {face_offset}
-    , m_facet            {std::min(facet, mesh.facets.nb() - 1)}
-    , m_frame_orientation{frame_orientation}
+    : m_frame_orientation{frame_orientation}
     , m_frame_source     {Frame_source::derived_from_surface_points}
+    , m_face_offset      {face_offset}
+    , m_facet            {std::min(facet, mesh.facets.nb() - 1)}
 {
     m_corner_count = mesh.facets.nb_corners(facet);
     if (m_corner_count == 0) {

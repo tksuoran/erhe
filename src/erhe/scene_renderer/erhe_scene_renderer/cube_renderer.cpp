@@ -75,8 +75,8 @@ using erhe::graphics::Color_blend_state;
 
 Cube_renderer::Cube_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
     : m_graphics_instance  {graphics_instance}
-    , m_camera_buffer      {graphics_instance, program_interface.camera_interface}
     , m_program_interface  {program_interface}
+    , m_camera_buffer      {graphics_instance, program_interface.camera_interface}
     , m_light_buffer       {graphics_instance, program_interface.light_interface}
     , m_primitive_buffer   {graphics_instance, program_interface.primitive_interface}
     , m_cube_control_buffer{graphics_instance, program_interface.cube_interface}
