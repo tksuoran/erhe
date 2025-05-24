@@ -5,6 +5,7 @@
 
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
+#include "erhe_graphics/align.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
@@ -45,7 +46,11 @@ Post_processing_node::Post_processing_node(
         graphics_instance,
         erhe::graphics::Buffer_create_info{
             .target              = gl::Buffer_target::uniform_buffer,
-            .capacity_byte_count = graphics_instance.align_buffer_offset(gl::Buffer_target::uniform_buffer, post_processing.get_parameter_block().size_bytes()) * 20, // max 20 levels
+            .capacity_byte_count =
+                erhe::graphics::align_offset(
+                    post_processing.get_parameter_block().size_bytes(),
+                    graphics_instance.get_buffer_alignment(gl::Buffer_target::uniform_buffer)
+                ) * 20, // max 20 levels
             .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
             .access_mask         = gl::Map_buffer_access_mask::map_write_bit,
             .debug_label         = "post processing"
@@ -197,7 +202,10 @@ void Post_processing_node::update_parameters()
     const std::size_t               entry_size = post_processing.get_parameter_block().size_bytes();
     const Post_processing::Offsets& offsets    = post_processing.get_offsets();
 
-    const std::size_t level_offset_size = graphics_instance.align_buffer_offset(parameter_buffer.target(), entry_size);
+    const std::size_t level_offset_size = erhe::graphics::align_offset(
+        entry_size,
+        graphics_instance.get_buffer_alignment(parameter_buffer.target())
+    );
 
     const uint64_t downsample_handle = graphics_instance.get_handle(*downsample_texture, sampler);
     const uint64_t upsample_handle   = graphics_instance.get_handle(*upsample_texture,   sampler);
@@ -416,9 +424,11 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 
 void Post_processing::post_process(Post_processing_node& node)
 {
-    const std::size_t level_offset_size = m_context.graphics_instance->align_buffer_offset(
-        node.parameter_buffer.target(),
-        m_parameter_block.size_bytes()
+    const std::size_t level_offset_size = erhe::graphics::align_offset(
+        m_parameter_block.size_bytes(),
+        m_context.graphics_instance->get_buffer_alignment(
+            node.parameter_buffer.target()
+        )
     );
 
     const uint64_t downsample_handle = m_context.graphics_instance->get_handle(*node.downsample_texture, m_linear_mipmap_nearest_sampler);

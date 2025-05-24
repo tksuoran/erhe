@@ -15,7 +15,8 @@ cmake ^
  -B build ^
  -S . ^
  -Wno-dev ^
- -DERHE_SPIRV=OFF ^
+ %* ^
+ -DERHE_SPIRV=ON ^
  -DERHE_USE_PRECOMPILED_HEADERS=ON ^
  -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
  -DERHE_GLTF_LIBRARY=fastgltf ^

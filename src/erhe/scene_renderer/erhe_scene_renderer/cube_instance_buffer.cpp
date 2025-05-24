@@ -68,14 +68,11 @@ auto Cube_instance_buffer::bind() -> std::size_t
 }
 
 Cube_control_buffer::Cube_control_buffer(erhe::graphics::Instance& graphics_instance, Cube_interface& cube_interface)
-    : GPU_ring_buffer{
+    : GPU_ring_buffer_client{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::shader_storage_buffer,
-            .binding_point = cube_interface.cube_control_block.binding_point(),
-            .size          = cube_interface.cube_control_struct.size_bytes() * 10,
-            .debug_label   = "cube_control"
-        }
+        "cube_control",
+        gl::Buffer_target::shader_storage_buffer,
+        cube_interface.cube_control_block.binding_point()
     }
     , m_cube_interface{cube_interface}
 {
@@ -87,13 +84,13 @@ auto Cube_control_buffer::update(
     const glm::vec4& color_scale,
     const glm::vec4& color_start,
     const glm::vec4& color_end
-) -> erhe::renderer::Buffer_range
+) -> erhe::graphics::Buffer_range
 {
     const std::size_t primitive_count = 1;
     const auto        entry_size      = m_cube_interface.cube_control_struct.size_bytes();
     const auto&       offsets         = m_cube_interface.cube_control_offsets;
     const std::size_t max_byte_count  = primitive_count * entry_size;
-    erhe::renderer::Buffer_range buffer_range = open(erhe::renderer::Ring_buffer_usage::CPU_write, max_byte_count);
+    erhe::graphics::Buffer_range buffer_range = allocate_range(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
     std::span<std::byte>         gpu_data     = buffer_range.get_span();
     std::size_t                  write_offset = 0;
     using erhe::graphics::as_span;
@@ -104,7 +101,8 @@ auto Cube_control_buffer::update(
     write(gpu_data, write_offset + offsets.color_start, as_span(color_start));
     write(gpu_data, write_offset + offsets.color_end,   as_span(color_end));
     write_offset += entry_size;
-    buffer_range.close(write_offset);
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
     return buffer_range;
 }
 

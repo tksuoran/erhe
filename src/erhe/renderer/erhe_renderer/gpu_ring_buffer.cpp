@@ -1,3 +1,4 @@
+#if 0
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_renderer/gpu_ring_buffer.hpp"
@@ -576,3 +577,4 @@ auto GPU_ring_buffer::bind(const Buffer_range& range) -> bool
 }
 
 } // namespace erhe::renderer
+#endif

@@ -5,12 +5,13 @@
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_graphics/span.hpp"
+#include "erhe_math/viewport.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/transform.hpp"
-#include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::scene_renderer {
@@ -41,14 +42,11 @@ Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
 }
 
 Camera_buffer::Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface)
-    : GPU_ring_buffer{
+    : GPU_ring_buffer_client{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::uniform_buffer,
-            .binding_point = camera_interface.camera_block.binding_point(),
-            .size          = 64 * camera_interface.max_camera_count * camera_interface.camera_struct.size_bytes(),
-            .debug_label   = "Camera_buffer"
-        }
+        "Camera_buffer",
+        gl::Buffer_target::uniform_buffer,
+        camera_interface.camera_block.binding_point()
     }
     , m_camera_interface{camera_interface}
 {
@@ -62,7 +60,7 @@ auto Camera_buffer::update(
     glm::vec4                      grid_size,
     glm::vec4                      grid_line_width,
     uint64_t                       frame_number
-) -> erhe::renderer::Buffer_range
+) -> erhe::graphics::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -72,7 +70,7 @@ auto Camera_buffer::update(
     const auto& offsets          = m_camera_interface.offsets;
     const auto  clip_from_camera = camera_projection.clip_from_node_transform(viewport);
 
-    erhe::renderer::Buffer_range buffer_range = open(erhe::renderer::Ring_buffer_usage::CPU_write, entry_size);
+    erhe::graphics::Buffer_range buffer_range = allocate_range(erhe::graphics::Ring_buffer_usage::CPU_write, entry_size);
     std::span<std::byte>         gpu_data     = buffer_range.get_span();
     size_t                       write_offset = 0;
 
@@ -112,7 +110,8 @@ auto Camera_buffer::update(
     write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number        ));
     write(gpu_data, write_offset + offsets.padding,              as_span(frame_number        ));
     write_offset += entry_size;
-    buffer_range.close(write_offset);
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
 
     return buffer_range;
 }

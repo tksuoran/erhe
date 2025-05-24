@@ -611,7 +611,7 @@ void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
 void Vertex_input_state_tracker::set_index_buffer(erhe::graphics::Buffer* buffer) const
 {
     ERHE_VERIFY(m_last != 0); // Must have VAO bound
-    gl::vertex_array_element_buffer(m_last, buffer->gl_name());
+    gl::vertex_array_element_buffer(m_last, (buffer != nullptr) ? buffer->gl_name() : 0);
 }
 
 void Vertex_input_state_tracker::set_vertex_buffer(const uint32_t binding_index, const erhe::graphics::Buffer* const buffer, const std::size_t offset)
@@ -620,7 +620,13 @@ void Vertex_input_state_tracker::set_vertex_buffer(const uint32_t binding_index,
     ERHE_VERIFY(buffer != nullptr);
     for (const Vertex_input_binding& binding : m_bindings) {
         if (binding.binding == binding_index) {
-            gl::vertex_array_vertex_buffer(m_last, binding_index, buffer->gl_name(), offset, binding.stride);
+            gl::vertex_array_vertex_buffer(
+                m_last,
+                binding_index,
+                (buffer != nullptr) ? buffer->gl_name() : 0,
+                offset,
+                binding.stride
+            );
             break;
         }
     }

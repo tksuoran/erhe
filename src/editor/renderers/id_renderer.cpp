@@ -259,7 +259,7 @@ void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     std::size_t primitive_count{0};
-    erhe::renderer::Buffer_range               primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, id_filter, settings, primitive_count, true);
+    erhe::graphics::Buffer_range               primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, id_filter, settings, primitive_count, true);
     erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, id_filter);
     if (draw_indirect_buffer_range.draw_indirect_count == 0) {
         return;
@@ -268,8 +268,8 @@ void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh
         log_render->warn("primitive_range != draw_indirect_buffer_range.draw_indirect_count");
     }
 
-    primitive_range.bind();
-    draw_indirect_buffer_range.range.bind();
+    m_primitive_buffers.bind(primitive_range);
+    m_draw_indirect_buffers.bind(draw_indirect_buffer_range.range);
     {
         static constexpr std::string_view c_draw{"draw"};
 

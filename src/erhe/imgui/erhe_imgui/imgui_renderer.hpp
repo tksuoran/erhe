@@ -3,6 +3,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -149,10 +150,10 @@ private:
     erhe::graphics::Instance&                m_graphics_instance;
     Imgui_program_interface                  m_imgui_program_interface;
     erhe::graphics::Shader_stages            m_shader_stages;
-    erhe::renderer::GPU_ring_buffer          m_vertex_buffer;
-    erhe::renderer::GPU_ring_buffer          m_index_buffer;
-    erhe::renderer::GPU_ring_buffer          m_draw_parameter_buffer;
-    erhe::renderer::GPU_ring_buffer          m_draw_indirect_buffer;
+    erhe::graphics::GPU_ring_buffer_client   m_vertex_buffer;
+    erhe::graphics::GPU_ring_buffer_client   m_index_buffer;
+    erhe::graphics::GPU_ring_buffer_client   m_draw_parameter_buffer;
+    erhe::graphics::GPU_ring_buffer_client   m_draw_indirect_buffer;
     erhe::graphics::Vertex_input_state       m_vertex_input;
     erhe::graphics::Pipeline                 m_pipeline;
 

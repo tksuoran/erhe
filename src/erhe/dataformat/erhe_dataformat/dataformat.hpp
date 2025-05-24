@@ -5,14 +5,16 @@
 
 namespace erhe::dataformat {
 
-int16_t float_to_snorm16(float v);
-float snorm16_to_float(int16_t v);
-int8_t float_to_snorm8(float v);
-float snorm8_to_float(int8_t v);
-uint16_t float_to_unorm16(float v);
-float unorm16_to_float(uint16_t v);
-uint8_t float_to_unorm8(float v);
-float unorm8_to_float(uint8_t v);
+auto float_to_snorm16(float    v) -> int16_t;
+auto snorm16_to_float(int16_t  v) -> float;
+auto float_to_snorm8 (float    v) -> int8_t;
+auto snorm8_to_float (int8_t   v) -> float;
+auto float_to_unorm16(float    v) -> uint16_t;
+auto unorm16_to_float(uint16_t v) -> float;
+auto float_to_unorm8 (float    v) -> uint8_t;
+auto unorm8_to_float (uint8_t  v) -> float;
+auto pack_unorm2x16  (float x, float y) -> uint32_t;
+auto pack_unorm4x8   (float x, float y) -> uint32_t;
 
 enum class Format {
     format_undefined = 0,

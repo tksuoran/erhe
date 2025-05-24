@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"

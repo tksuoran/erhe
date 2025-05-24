@@ -37,7 +37,6 @@ public:
     }
 
     auto print(
-        std::span<float>    float_data,
         std::span<uint32_t> uint_data,
         std::string_view    text,
         glm::vec3           text_position,

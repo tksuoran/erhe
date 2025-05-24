@@ -69,30 +69,30 @@ public:
     auto get_indirect(unsigned int stencil, bool visible, bool hidden) -> Scoped_line_renderer;
 
     void close ();
-    void render    (const erhe::math::Viewport camera_viewport, const erhe::scene::Camera& camera);
+    void render(const erhe::math::Viewport camera_viewport, const erhe::scene::Camera& camera);
 
     // API for Line_renderer_bucket
-    auto get_line_offset           () const -> std::size_t;
-    auto allocate_vertex_subspan   (std::size_t byte_count) -> std::span<std::byte>;
-    auto get_program_interface     () const -> const Line_renderer_program_interface& { return m_program_interface; }
-    auto get_line_vertex_buffer    () -> erhe::graphics::Buffer& { return m_line_vertex_buffer.get_buffer(); }
-    auto get_triangle_vertex_buffer() -> erhe::graphics::Buffer& { return m_triangle_vertex_buffer.get_buffer(); }
-    auto get_view_buffer           () -> erhe::graphics::Buffer& { return m_view_buffer.get_buffer(); }
-    auto get_vertex_input          () -> erhe::graphics::Vertex_input_state* { return &m_vertex_input ;}
-    auto verify_is_open            () const -> bool;
+    auto get_line_offset        () const -> std::size_t;
+    auto allocate_vertex_subspan(std::size_t byte_count) -> std::span<std::byte>;
+    auto get_program_interface  () const -> const Line_renderer_program_interface& { return m_program_interface; }
+    // auto get_line_vertex_buffer    () -> erhe::graphics::Buffer& { return m_line_vertex_buffer.get_buffer(); }
+    // auto get_triangle_vertex_buffer() -> erhe::graphics::Buffer& { return m_triangle_vertex_buffer.get_buffer(); }
+    // auto get_view_buffer           () -> erhe::graphics::Buffer& { return m_view_buffer.get_buffer(); }
+    auto get_vertex_input       () -> erhe::graphics::Vertex_input_state* { return &m_vertex_input ;}
+    auto verify_is_open         () const -> bool;
 
 private:
     erhe::graphics::Instance&             m_graphics_instance;
     Line_renderer_program_interface       m_program_interface;
 
-    GPU_ring_buffer                       m_line_vertex_buffer;
-    GPU_ring_buffer                       m_triangle_vertex_buffer;
-    GPU_ring_buffer                       m_view_buffer;
-    erhe::graphics::Vertex_input_state    m_vertex_input;
-    std::span<std::byte>                  m_slot_span;
+    erhe::graphics::GPU_ring_buffer_client m_line_vertex_buffer;
+    erhe::graphics::GPU_ring_buffer_client m_triangle_vertex_buffer;
+    erhe::graphics::GPU_ring_buffer_client m_view_buffer;
+    erhe::graphics::Vertex_input_state     m_vertex_input;
+    std::span<std::byte>                   m_slot_span;
 
-    std::optional<Buffer_range>           m_vertex_buffer_range;
-    std::size_t                           m_vertex_write_offset{0};
+    std::optional<erhe::graphics::Buffer_range> m_vertex_buffer_range;
+    std::size_t                                 m_vertex_write_offset{0};
 
     // NOTE: Elements in m_buckets must be stable, etl::vector<> works, std::vector<> does not work.
     etl::vector<Line_renderer_bucket, 32> m_buckets;

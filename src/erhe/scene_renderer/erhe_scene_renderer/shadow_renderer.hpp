@@ -92,11 +92,11 @@ private:
     erhe::graphics::Sampler                  m_shadow_sampler_no_compare;
 
     erhe::graphics::Vertex_input_state       m_vertex_input;
-    erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffers;
-    Joint_buffer                             m_joint_buffers;
-    Light_buffer                             m_light_buffers;
-    Primitive_buffer                         m_primitive_buffers;
-    Material_buffer                          m_material_buffers;
+    erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffer;
+    Joint_buffer                             m_joint_buffer;
+    Light_buffer                             m_light_buffer;
+    Primitive_buffer                         m_primitive_buffer;
+    Material_buffer                          m_material_buffer;
     erhe::graphics::Gpu_timer                m_gpu_timer;
 };
 

@@ -108,15 +108,12 @@ void Line_renderer_bucket::append_lines(std::size_t first_line, std::size_t line
 
 void Line_renderer_bucket::render(
     erhe::graphics::Instance& graphics_instance,
-    erhe::graphics::Buffer*   vertex_buffer,
-    size_t                    vertex_buffer_offset,
     bool                      draw_hidden,
     bool                      draw_visible
 )
 {
     if (draw_hidden && m_config.draw_hidden) {
         graphics_instance.opengl_state_tracker.execute(m_pipeline_hidden);
-        graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_offset);
         for (const Line_draw_entry& draw : m_draws) {
             gl::draw_arrays(
                 m_pipeline_hidden.data.input_assembly.primitive_topology,
@@ -128,7 +125,6 @@ void Line_renderer_bucket::render(
 
     if (draw_visible && m_config.draw_visible) {
         graphics_instance.opengl_state_tracker.execute(m_pipeline_visible);
-        graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_offset);
         for (const Line_draw_entry& draw : m_draws) {
             gl::draw_arrays(
                 m_pipeline_visible.data.input_assembly.primitive_topology,

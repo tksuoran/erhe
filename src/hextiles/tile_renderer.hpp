@@ -9,6 +9,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
@@ -139,12 +140,12 @@ private:
     std::shared_ptr<erhe::graphics::Texture>  m_tileset_texture;
     Image                                     m_tileset_image;
 
-    erhe::renderer::GPU_ring_buffer           m_vertex_buffer;
-    erhe::renderer::GPU_ring_buffer           m_projection_buffer;
+    erhe::graphics::GPU_ring_buffer_client    m_vertex_buffer;
+    erhe::graphics::GPU_ring_buffer_client    m_projection_buffer;
     erhe::graphics::Vertex_input_state        m_vertex_input;
     erhe::graphics::Pipeline                  m_pipeline;
 
-    std::optional<erhe::renderer::Buffer_range> m_vertex_buffer_range;
+    std::optional<erhe::graphics::Buffer_range> m_vertex_buffer_range;
     size_t                                      m_vertex_write_offset{0};
     size_t                                      m_index_count        {0};
 

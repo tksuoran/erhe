@@ -147,30 +147,21 @@ Line_renderer::Line_renderer(erhe::graphics::Instance& graphics_instance)
     , m_program_interface{graphics_instance}
     , m_line_vertex_buffer{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::shader_storage_buffer, // for compute bind range
-            .binding_point = m_program_interface.line_vertex_buffer_block->binding_point(),
-            .size          = m_program_interface.line_vertex_format.streams.front().stride * 2 * s_max_line_count,
-            .debug_label   = "Line_renderer line vertex ring buffer"
-        }
+        "Line_renderer::m_line_vertex_buffer",
+        gl::Buffer_target::shader_storage_buffer, // for compute bind range
+        m_program_interface.line_vertex_buffer_block->binding_point()
     }
     , m_triangle_vertex_buffer{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::shader_storage_buffer, // for compute bind range
-            .binding_point = m_program_interface.triangle_vertex_buffer_block->binding_point(),
-            .size          = m_program_interface.triangle_vertex_format.streams.front().stride * 6 * s_max_line_count,
-            .debug_label   = "Line_renderer triangle vertex ring buffer"
-        }
+        "Line_renderer::m_triangle_vertex_buffer",
+        gl::Buffer_target::shader_storage_buffer, // for compute bind range
+        m_program_interface.triangle_vertex_buffer_block->binding_point()
     }
     , m_view_buffer{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::uniform_buffer,
-            .binding_point = m_program_interface.view_block->binding_point(),
-            .size          = s_view_stride * s_max_view_count,
-            .debug_label   = "Line_renderer view ring buffer"
-        }
+        "Line_renderer::m_view_buffer",
+        gl::Buffer_target::uniform_buffer,
+        m_program_interface.view_block->binding_point()
     }
     , m_vertex_input{
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)
@@ -241,10 +232,10 @@ void Line_renderer::open()
     ERHE_VERIFY(!m_is_opened || m_is_closed);
     ERHE_VERIFY(!m_vertex_buffer_range.has_value());
 
-    const std::size_t total_capacity_byte_count = m_line_vertex_buffer.get_buffer().capacity_byte_count();
-    const std::size_t reserved_usage_byte_count =total_capacity_byte_count / 4;
+    //const std::size_t total_capacity_byte_count = m_line_vertex_buffer.get_buffer().capacity_byte_count();
+    //const std::size_t reserved_usage_byte_count = total_capacity_byte_count / 4;
     // TODO Using 0 here would give no guarantee we get any useful amount
-    m_vertex_buffer_range = m_line_vertex_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, reserved_usage_byte_count);
+    m_vertex_buffer_range = m_line_vertex_buffer.allocate_range(erhe::graphics::Ring_buffer_usage::CPU_write, 10240); // TODO
     m_vertex_write_offset = 0;
 
     for (Line_renderer_bucket& bucket : m_buckets) {
@@ -285,7 +276,8 @@ void Line_renderer::render(const erhe::math::Viewport viewport, const erhe::scen
     ERHE_VERIFY(m_is_closed);
 
     if (m_vertex_buffer_range.has_value()) {
-        m_vertex_buffer_range->close(m_vertex_write_offset);
+        m_vertex_buffer_range->bytes_written(m_vertex_write_offset);
+        m_vertex_buffer_range->close();
     }
 
     const auto* camera_node = camera.get_node();
@@ -303,7 +295,7 @@ void Line_renderer::render(const erhe::math::Viewport viewport, const erhe::scen
         return;
     }
 
-    Buffer_range& vertex_buffer_range = m_vertex_buffer_range.value();
+    erhe::graphics::Buffer_range& vertex_buffer_range = m_vertex_buffer_range.value();
 
     std::size_t line_vertex_stride     = m_program_interface.line_vertex_format.streams.front().stride;
     std::size_t triangle_vertex_stride = m_program_interface.triangle_vertex_format.streams.front().stride;
@@ -315,8 +307,8 @@ void Line_renderer::render(const erhe::math::Viewport viewport, const erhe::scen
     erhe::graphics::Scoped_debug_group scoped_debug_group{c_line_renderer_render};
 
     const erhe::graphics::Shader_resource& view_block = *m_program_interface.view_block.get();
-    erhe::graphics::Buffer* const triangle_vertex_buffer = &get_triangle_vertex_buffer();
-    Buffer_range                  view_buffer_range      = m_view_buffer.open(Ring_buffer_usage::CPU_write, view_block.size_bytes());
+    //erhe::graphics::Buffer* const triangle_vertex_buffer = &get_triangle_vertex_buffer();
+    erhe::graphics::Buffer_range  view_buffer_range      = m_view_buffer.allocate_range(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.size_bytes());
     const auto                    view_gpu_data          = view_buffer_range.get_span();
     size_t                        view_write_offset      = 0;
     std::byte* const              start                  = view_gpu_data.data();
@@ -350,23 +342,26 @@ void Line_renderer::render(const erhe::math::Viewport viewport, const erhe::scen
     write(view_gpu_data, m_program_interface.fov_offset,                    as_span(fov_floats            ));
 
     view_write_offset += m_program_interface.view_block->size_bytes();
-    view_buffer_range.close(view_write_offset);
+    view_buffer_range.bytes_written(view_write_offset);
+    view_buffer_range.close();
 
     // Bind buffers for compute
-    view_buffer_range.bind();
-    vertex_buffer_range.bind();
+    m_view_buffer.bind(view_buffer_range);
+    m_line_vertex_buffer.bind(vertex_buffer_range);
 
     // TODO Instead of open(), close() there should be a dedicated
     //      API for allocating GPU write range; Writing to that
     //      range potentially needs gl::wait_sync() if there are
     //      previous GPU reads, and possibly also
     //      gl::memory_barrier(gl::Memory_barrier_mask::shader_storage_barrier_bit)
-    Buffer_range triangle_buffer_range = m_triangle_vertex_buffer.open(
-        erhe::renderer::Ring_buffer_usage::GPU_access,
+    erhe::graphics::Buffer_range triangle_buffer_range = m_triangle_vertex_buffer.allocate_range(
+        erhe::graphics::Ring_buffer_usage::GPU_access,
         6 * line_count * triangle_vertex_stride
     );
-    triangle_buffer_range.close(6 * line_count * triangle_vertex_stride);
-    triangle_buffer_range.bind();
+    triangle_buffer_range.bytes_written(6 * line_count * triangle_vertex_stride);
+    triangle_buffer_range.close();
+
+    m_triangle_vertex_buffer.bind(triangle_buffer_range);
 
     // Convert all lines to triangles using compute shader
     m_graphics_instance.opengl_state_tracker.shader_stages.execute(m_program_interface.compute_shader_stages.get());
@@ -382,16 +377,22 @@ void Line_renderer::render(const erhe::math::Viewport viewport, const erhe::scen
     gl::enable  (gl::Enable_cap::sample_alpha_to_one);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
+    erhe::graphics::Buffer* triangle_vertex_buffer = triangle_buffer_range.get_buffer()->get_buffer();
     size_t triangle_vertex_buffer_offset = triangle_buffer_range.get_byte_start_offset_in_buffer();
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(
+        0,
+        triangle_vertex_buffer,
+        triangle_vertex_buffer_offset
+    );
 
     // Draw hidden
     for (Line_renderer_bucket& bucket : m_buckets) {
-        bucket.render(m_graphics_instance, triangle_vertex_buffer, triangle_vertex_buffer_offset, true, false);
+        bucket.render(m_graphics_instance, true, false);
     }
 
     // Draw visible
     for (Line_renderer_bucket& bucket : m_buckets) {
-        bucket.render(m_graphics_instance, triangle_vertex_buffer, triangle_vertex_buffer_offset, false, true);
+        bucket.render(m_graphics_instance, false, true);
     }
 
     vertex_buffer_range  .submit(); // this maybe can be moved after gl::dispatch_compute() call

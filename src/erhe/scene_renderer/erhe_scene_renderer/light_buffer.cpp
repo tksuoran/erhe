@@ -5,6 +5,7 @@
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/light.hpp"
@@ -68,21 +69,15 @@ Light_buffer::Light_buffer(erhe::graphics::Instance& graphics_instance, Light_in
     : m_light_interface{light_interface}
     , m_light_buffer{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::uniform_buffer,
-            .binding_point = light_interface.light_block.binding_point(),
-            .size          = 25 * (light_interface.offsets.light_struct + light_interface.max_light_count * light_interface.light_struct.size_bytes()),
-            .debug_label   = "light"
-        }
+        "Light_buffer::m_light_buffer",
+        gl::Buffer_target::uniform_buffer,
+        light_interface.light_block.binding_point()
     }
     , m_control_buffer{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::uniform_buffer,
-            .binding_point = light_interface.light_control_block.binding_point(),
-            .size          = 32 * (m_light_interface.light_control_block.size_bytes()),
-            .debug_label   = "light_control"
-        }
+        "Light_buffer::m_control_buffer",
+        gl::Buffer_target::uniform_buffer,
+        light_interface.light_control_block.binding_point()
     }
 {
 }
@@ -155,7 +150,7 @@ auto Light_buffer::update(
     const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const Light_projections*                                    light_projections,
     const glm::vec3&                                            ambient_light
-) -> erhe::renderer::Buffer_range
+) -> erhe::graphics::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -168,7 +163,7 @@ auto Light_buffer::update(
     // (m_light_interface.max_light_count) instea of lights.size(), and pad the
     // unused part of the array with zeros.
     const size_t                 exact_byte_count  = offsets.light_struct + m_light_interface.max_light_count * light_struct_size;
-    erhe::renderer::Buffer_range buffer_range      = m_light_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, exact_byte_count);
+    erhe::graphics::Buffer_range buffer_range      = m_light_buffer.allocate_range(erhe::graphics::Ring_buffer_usage::CPU_write, exact_byte_count);
     std::span<std::byte>         light_gpu_data    = buffer_range.get_span();
     ERHE_VERIFY(light_gpu_data.size_bytes() >= exact_byte_count);
     uint32_t       directional_light_count{0u};
@@ -274,18 +269,19 @@ auto Light_buffer::update(
 
     write(light_gpu_data, common_offset + offsets.ambient_light,             as_span(ambient_light)          );
 
-    buffer_range.close(write_offset);
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
     SPDLOG_LOGGER_TRACE(log_draw, "wrote up to {} entries to light buffer", padding_light_offset);
 
     return buffer_range;
 }
 
-auto Light_buffer::update_control(const std::size_t light_index) -> erhe::renderer::Buffer_range
+auto Light_buffer::update_control(const std::size_t light_index) -> erhe::graphics::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
     const auto                   entry_size   = m_light_interface.light_control_block.size_bytes();
-    erhe::renderer::Buffer_range buffer_range = m_control_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, entry_size);
+    erhe::graphics::Buffer_range buffer_range = m_control_buffer.allocate_range(erhe::graphics::Ring_buffer_usage::CPU_write, entry_size);
     const auto                   gpu_data     = buffer_range.get_span();
     size_t                       write_offset = 0;
 
@@ -296,17 +292,18 @@ auto Light_buffer::update_control(const std::size_t light_index) -> erhe::render
     write(gpu_data, write_offset + 0, as_span(uint_light_index));
     write_offset += entry_size;
 
-    buffer_range.close(write_offset);
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
 
     return buffer_range;
 }
 
-void Light_buffer::bind_light_buffer(const erhe::renderer::Buffer_range& range)
+void Light_buffer::bind_light_buffer(const erhe::graphics::Buffer_range& range)
 {
     m_light_buffer.bind(range);
 }
 
-void Light_buffer::bind_control_buffer(const erhe::renderer::Buffer_range& range)
+void Light_buffer::bind_control_buffer(const erhe::graphics::Buffer_range& range)
 {
     m_control_buffer.bind(range);
 }

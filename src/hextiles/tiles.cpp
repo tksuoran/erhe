@@ -237,9 +237,7 @@ void Tiles::load_terrain_defs_v5()
         terrain_type.generate_max_humidity    = json_terrain_type["generate_max_humidity"   ];
         terrain_type.generate_ratio           = json_terrain_type["generate_ratio"          ];
         terrain_type.group                    = json_terrain_type["group"                   ];
-        std::string name                      = json_terrain_type["name"                    ];;
-        terrain_type.name.clear();
-        std::copy(name.begin(), name.end(), terrain_type.name.begin());
+        terrain_type.name                     = json_terrain_type["name"                    ];
         m_terrain_types.push_back(terrain_type);
     }
 }
@@ -820,9 +818,7 @@ void Tiles::load_unit_defs_v2()
     m_unit_types.clear();
     for (const auto& json_unit_type : json_unit_types) {
         Unit_type unit_type;
-        std::string name                       = json_unit_type["name"                        ];
-        unit_type.name.clear();
-        std::copy(name.begin(), name.end(), unit_type.name.begin());
+        unit_type.name                         = json_unit_type["name"                        ];
         unit_type.tech_level                   = json_unit_type["tech_level"                  ];
         unit_type.production_time              = json_unit_type["production_time"             ];
         unit_type.city_size                    = json_unit_type["city_size"                   ];

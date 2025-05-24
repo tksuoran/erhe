@@ -1,7 +1,6 @@
 #pragma once
 
-#include "erhe_renderer/gpu_ring_buffer.hpp"
-
+#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -113,17 +112,17 @@ public:
         const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
         const Light_projections*                                    light_projections,
         const glm::vec3&                                            ambient_light
-    ) -> erhe::renderer::Buffer_range;
+    ) -> erhe::graphics::Buffer_range;
 
-    auto update_control(std::size_t light_index) -> erhe::renderer::Buffer_range;
+    auto update_control(std::size_t light_index) -> erhe::graphics::Buffer_range;
 
-    void bind_light_buffer  (const erhe::renderer::Buffer_range& range);
-    void bind_control_buffer(const erhe::renderer::Buffer_range& range);
+    void bind_light_buffer  (const erhe::graphics::Buffer_range& range);
+    void bind_control_buffer(const erhe::graphics::Buffer_range& range);
 
 private:
-    Light_interface&                m_light_interface;
-    erhe::renderer::GPU_ring_buffer m_light_buffer;
-    erhe::renderer::GPU_ring_buffer m_control_buffer;
+    Light_interface&                       m_light_interface;
+    erhe::graphics::GPU_ring_buffer_client m_light_buffer;
+    erhe::graphics::GPU_ring_buffer_client m_control_buffer;
 };
 
 } // namespace erhe::scene_renderer

@@ -14,16 +14,16 @@ layout(line_strip, max_vertices = 10) out;
 layout(triangle_strip, max_vertices = 6) out;
 #endif
 
-in vec3  vs_position  [];
-in vec4  vs_color     [];
-in float vs_line_width[];
+layout(location = 0) in vec3  vs_position  [];
+layout(location = 1) in vec4  vs_color     [];
+layout(location = 2) in float vs_line_width[];
 
-out vec3  v_position;
-out vec2  v_start;
-out vec2  v_line;
-out vec4  v_color;
-out float v_l2;
-out float v_line_width;
+layout(location = 0) out vec3  v_position;
+layout(location = 1) out vec2  v_start;
+layout(location = 2) out vec2  v_line;
+layout(location = 3) out vec4  v_color;
+layout(location = 4) out float v_l2;
+layout(location = 5) out float v_line_width;
 
 float get_line_width(vec4 position, float thickness)
 {

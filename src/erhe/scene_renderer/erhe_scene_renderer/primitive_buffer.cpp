@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -39,14 +40,11 @@ Primitive_interface::Primitive_interface(erhe::graphics::Instance& graphics_inst
 }
 
 Primitive_buffer::Primitive_buffer(erhe::graphics::Instance& graphics_instance, Primitive_interface& primitive_interface)
-    : GPU_ring_buffer{
+    : GPU_ring_buffer_client{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::shader_storage_buffer,
-            .binding_point = primitive_interface.primitive_block.binding_point(),
-            .size          = primitive_interface.primitive_struct.size_bytes() * primitive_interface.max_primitive_count,
-            .debug_label   = "primitive"
-        }
+        "Primitive_buffer",
+        gl::Buffer_target::shader_storage_buffer,
+        primitive_interface.primitive_block.binding_point()
     }
     , m_primitive_interface{primitive_interface}
 {
@@ -75,7 +73,7 @@ auto Primitive_buffer::update(
     const Primitive_interface_settings&                        settings,
     std::size_t&                                               out_primitive_count,
     bool                                                       use_id_ranges
-) -> erhe::renderer::Buffer_range
+) -> erhe::graphics::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -111,11 +109,15 @@ auto Primitive_buffer::update(
         primitive_count += mesh->get_primitives().size();
     }
 
+    if (primitive_count == 0) {
+        return {};
+    }
+
     const auto        entry_size     = m_primitive_interface.primitive_struct.size_bytes();
     const auto&       offsets        = m_primitive_interface.offsets;
     const std::size_t max_byte_count = primitive_count * entry_size;
 
-    erhe::renderer::Buffer_range buffer_range       = open(erhe::renderer::Ring_buffer_usage::CPU_write, max_byte_count);
+    erhe::graphics::Buffer_range buffer_range       = allocate_range(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
     std::span<std::byte>         primitive_gpu_data = buffer_range.get_span();
     std::size_t                  write_offset       = 0;
 
@@ -217,7 +219,8 @@ auto Primitive_buffer::update(
         }
     }
 
-    buffer_range.close(write_offset);
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
 
     // SPDLOG_LOGGER_TRACE(log_primitive_buffer, "wrote {} entries to primitive buffer", primitive_index);
     return buffer_range;
@@ -226,14 +229,14 @@ auto Primitive_buffer::update(
 auto Primitive_buffer::update(
     const std::span<const std::shared_ptr<erhe::scene::Node>>& nodes,
     const Primitive_interface_settings&                        primitive_settings
-) -> erhe::renderer::Buffer_range
+) -> erhe::graphics::Buffer_range
 {
     const std::size_t primitive_count = nodes.size();
     const auto        entry_size      = m_primitive_interface.primitive_struct.size_bytes();
     const auto&       offsets         = m_primitive_interface.offsets;
     const std::size_t max_byte_count  = primitive_count * entry_size;
 
-    erhe::renderer::Buffer_range buffer_range       = open(erhe::renderer::Ring_buffer_usage::CPU_write, max_byte_count);
+    erhe::graphics::Buffer_range buffer_range       = allocate_range(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
     std::span<std::byte>         primitive_gpu_data = buffer_range.get_span();
     std::size_t                  write_offset       = 0;
 
@@ -257,7 +260,8 @@ auto Primitive_buffer::update(
         write(primitive_gpu_data, write_offset + offsets.base_joint_index, as_span(base_joint_index));
         write_offset += entry_size;
     }
-    buffer_range.close(write_offset);
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
     return buffer_range;
 }
 

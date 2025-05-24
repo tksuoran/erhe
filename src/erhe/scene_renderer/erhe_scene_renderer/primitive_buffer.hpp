@@ -1,7 +1,7 @@
 #pragma once
 
+#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_primitive/enums.hpp"
 
 #include <array>
@@ -97,7 +97,7 @@ public:
     float                  constant_size {1.0f};
 };
 
-class Primitive_buffer : public erhe::renderer::GPU_ring_buffer
+class Primitive_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
     Primitive_buffer(erhe::graphics::Instance& graphics_instance, Primitive_interface& primitive_interface);
@@ -111,12 +111,12 @@ public:
         const Primitive_interface_settings&                        settings,
         std::size_t&                                               out_primitive_count,
         bool                                                       use_id_ranges = false
-    ) -> erhe::renderer::Buffer_range;
+    ) -> erhe::graphics::Buffer_range;
 
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Node>>& nodes,
         const Primitive_interface_settings&                        primitive_settings
-    ) -> erhe::renderer::Buffer_range;
+    ) -> erhe::graphics::Buffer_range;
 
     class Id_range
     {

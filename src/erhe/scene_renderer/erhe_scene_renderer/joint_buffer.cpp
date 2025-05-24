@@ -5,10 +5,11 @@
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_graphics/span.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <glm/gtx/matrix_operation.hpp>
@@ -37,14 +38,11 @@ Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
 }
 
 Joint_buffer::Joint_buffer(erhe::graphics::Instance& graphics_instance, Joint_interface& joint_interface)
-    : GPU_ring_buffer{
+    : GPU_ring_buffer_client{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::shader_storage_buffer,
-            .binding_point = joint_interface.joint_block.binding_point(),
-            .size          = 8 * joint_interface.offsets.joint_struct + joint_interface.joint_struct.size_bytes() * joint_interface.max_joint_count,
-            .debug_label   = "Joint_buffer"
-        }
+        "Joint_buffer",
+        gl::Buffer_target::shader_storage_buffer,
+        joint_interface.joint_block.binding_point()
     }
     , m_graphics_instance{graphics_instance}
     , m_joint_interface  {joint_interface}
@@ -55,7 +53,7 @@ auto Joint_buffer::update(
     const glm::uvec4&                                          debug_joint_indices,
     const std::span<glm::vec4>&                                debug_joint_colors,
     const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins
-) -> erhe::renderer::Buffer_range
+) -> erhe::graphics::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -75,7 +73,7 @@ auto Joint_buffer::update(
     const auto&       offsets          = m_joint_interface.offsets;
     const std::size_t exact_byte_count = offsets.joint_struct + joint_count * entry_size;
 
-    erhe::renderer::Buffer_range buffer_range       = open(erhe::renderer::Ring_buffer_usage::CPU_write, exact_byte_count);
+    erhe::graphics::Buffer_range buffer_range       = allocate_range(erhe::graphics::Ring_buffer_usage::CPU_write, exact_byte_count);
     std::span<std::byte>         primitive_gpu_data = buffer_range.get_span();
     std::size_t                  write_offset       = 0;
 
@@ -132,7 +130,8 @@ auto Joint_buffer::update(
         }
     }
 
-    buffer_range.close(write_offset);
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
 
     SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to joint buffer", joint_index);
 
