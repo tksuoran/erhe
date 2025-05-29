@@ -387,18 +387,18 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
                 .z_fail_op       = gl::Stencil_op::replace,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
-                .reference       = 128,
-                .test_mask       = 0x00u, // always does not use
-                .write_mask      = 0x80u  // 128
+                .reference       = 0b10000000u,
+                .test_mask       = 0b00000000u, // always does not use
+                .write_mask      = 0b10000000u  // = 0x80 = 128
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::replace,
                 .z_fail_op       = gl::Stencil_op::replace,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
-                .reference       = 128,
-                .test_mask       = 0x00u,
-                .write_mask      = 0x80u
+                .reference       = 0b10000000u,
+                .test_mask       = 0b00000000u,
+                .write_mask      = 0b10000000u
             },
         },
         .color_blend    = Color_blend_state::color_blend_disabled
@@ -428,18 +428,18 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::incr,
                 .function        = gl::Stencil_function::equal,
-                .reference       = 0,
-                .test_mask       = 0xffu,
-                .write_mask      = 0x7fu // ignore high bit (selection)
+                .reference       = 0u,
+                .test_mask       = 0b11111111u,
+                .write_mask      = 0b01111111u // ignore high bit (selection)
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::incr,
                 .function        = gl::Stencil_function::equal,
-                .reference       = 0,
-                .test_mask       = 0xffu,
-                .write_mask      = 0x7fu // ignore high bit (selection)
+                .reference       = 0u,
+                .test_mask       = 0b11111111u,
+                .write_mask      = 0b01111111u // ignore high bit (selection)
             },
         },
         .color_blend = {
@@ -491,18 +491,18 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::incr,
                 .function        = gl::Stencil_function::equal,
-                .reference       = 0,
-                .test_mask       = 0x7fu,
-                .write_mask      = 0x7fu // ignore high bit (selection)
+                .reference       = 0u,
+                .test_mask       = 0b01111111u,
+                .write_mask      = 0b01111111u // ignore high bit (selection)
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::incr,
                 .function        = gl::Stencil_function::equal,
-                .reference       = 0,
-                .test_mask       = 0x7fu,
-                .write_mask      = 0x7fu // ignore high bit (selection)
+                .reference       = 0u,
+                .test_mask       = 0b01111111u,
+                .write_mask      = 0b01111111u // ignore high bit (selection)
             }
         },
         .color_blend    = Color_blend_state::color_blend_premultiplied
@@ -523,18 +523,18 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::notequal,
-                .reference       = 128,
-                .test_mask       = 0x80u,
-                .write_mask      = 0x80u
+                .reference       = 0b10000000u,
+                .test_mask       = 0b10000000u,
+                .write_mask      = 0b10000000u
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::notequal,
-                .reference       = 128,
-                .test_mask       = 0x80u,
-                .write_mask      = 0x80u
+                .reference       = 0b10000000u,
+                .test_mask       = 0b10000000u,
+                .write_mask      = 0b10000000u
             }
         },
         .color_blend    = Color_blend_state::color_blend_premultiplied
@@ -586,18 +586,18 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
                         .z_fail_op       = gl::Stencil_op::keep,
                         .z_pass_op       = gl::Stencil_op::keep,
                         .function        = gl::Stencil_function::equal,
-                        .reference       = 0,
-                        .test_mask       = 0xffu,
-                        .write_mask      = 0x00u
+                        .reference       = 0u,
+                        .test_mask       = 0b11111111u,
+                        .write_mask      = 0b00000000u
                     },
                     .stencil_back = {
                         .stencil_fail_op = gl::Stencil_op::keep,
                         .z_fail_op       = gl::Stencil_op::keep,
                         .z_pass_op       = gl::Stencil_op::keep,
                         .function        = gl::Stencil_function::equal,
-                        .reference       = 0,
-                        .test_mask       = 0xffu,
-                        .write_mask      = 0x00u
+                        .reference       = 0u,
+                        .test_mask       = 0b11111111u,
+                        .write_mask      = 0b00000000u
                     },
                 },
                 .color_blend    = Color_blend_state::color_blend_disabled

@@ -13,7 +13,7 @@ void main(void)
     vec2  projection = start + clamp(t, 0.0, 1.0) * line;
     vec2  delta      = gl_FragCoord.xy - projection;
     float d2         = dot(delta, delta);
-    float s          = v_line_width * v_line_width * 0.25;
+    float s          = v_line_width * v_line_width;
     float k          = clamp(s - d2, 0.0, 1.0);
     float end_weight = step(abs(t * 2.0 - 1.0), 1.0);
     float alpha      = mix(k, 1.0, end_weight);

@@ -364,9 +364,7 @@ auto get_attribute_name(const erhe::dataformat::Vertex_attribute& attribute) -> 
         case Vertex_attribute_usage::tex_coord:     return fmt::format("a_texcoord_{}",      attribute.usage_index);
         case Vertex_attribute_usage::joint_indices: return fmt::format("a_joint_indices_{}", attribute.usage_index);
         case Vertex_attribute_usage::joint_weights: return fmt::format("a_joint_weights_{}", attribute.usage_index);
-        case Vertex_attribute_usage::custom: {
-            return attribute.usage_index == 0 ? "a_custom" : fmt::format("a_custom_{}",  attribute.usage_index);
-        }
+        case Vertex_attribute_usage::custom:        return fmt::format("a_custom_{}",        attribute.usage_index);
         default: {
             return {};
         }

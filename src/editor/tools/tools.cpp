@@ -47,8 +47,8 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
                 .reference       = s_stencil_tool_mesh_hidden,
-                .test_mask       = 0x00u,
-                .write_mask      = 0xffu
+                .test_mask       = 0b00000000u,
+                .write_mask      = 0b11111111u
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -56,8 +56,8 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
                 .reference       = s_stencil_tool_mesh_hidden,
-                .test_mask       = 0x00u,
-                .write_mask      = 0xffu
+                .test_mask       = 0b00000000u,
+                .write_mask      = 0b11111111u
             },
         },
         .color_blend             = Color_blend_state::color_writes_disabled
@@ -82,8 +82,8 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
                 .reference       = s_stencil_tool_mesh_visible,
-                .test_mask       = 0x00u,
-                .write_mask      = 0xffu
+                .test_mask       = 0b00000000u,
+                .write_mask      = 0b11111111u
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -91,8 +91,8 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
                 .reference       = s_stencil_tool_mesh_visible,
-                .test_mask       = 0x00u,
-                .write_mask      = 0xffu
+                .test_mask       = 0b00000000u,
+                .write_mask      = 0b11111111u
             },
         },
         .color_blend             = Color_blend_state::color_writes_disabled
@@ -147,8 +147,8 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
                 .z_pass_op       = gl::Stencil_op::keep,
                 .function        = gl::Stencil_function::equal,
                 .reference       = s_stencil_tool_mesh_visible,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .test_mask       = 0b11111111u,
+                .write_mask      = 0b11111111u
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -156,8 +156,8 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
                 .z_pass_op       = gl::Stencil_op::keep,
                 .function        = gl::Stencil_function::equal,
                 .reference       = s_stencil_tool_mesh_visible,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
+                .test_mask       = 0b11111111u,
+                .write_mask      = 0b11111111u
             }
         },
         .color_blend             = Color_blend_state::color_blend_disabled
@@ -182,8 +182,8 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
                 .z_pass_op          = gl::Stencil_op::keep,
                 .function           = gl::Stencil_function::equal,
                 .reference          = s_stencil_tool_mesh_hidden,
-                .test_mask          = 0xffu,
-                .write_mask         = 0xffu
+                .test_mask          = 0b11111111u,
+                .write_mask         = 0b11111111u
             },
             .stencil_back = {
                 .stencil_fail_op    = gl::Stencil_op::keep,
@@ -191,8 +191,8 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
                 .z_pass_op          = gl::Stencil_op::replace,
                 .function           = gl::Stencil_function::always,
                 .reference          = s_stencil_tool_mesh_hidden,
-                .test_mask          = 0x00u,
-                .write_mask         = 0xffu
+                .test_mask          = 0b00000000u,
+                .write_mask         = 0b11111111u,
             },
         },
         .color_blend = {

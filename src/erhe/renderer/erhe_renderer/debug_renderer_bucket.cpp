@@ -44,19 +44,19 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
                     .stencil_fail_op = gl::Stencil_op::keep,
                     .z_fail_op       = gl::Stencil_op::keep,
                     .z_pass_op       = gl::Stencil_op::replace,
-                    .function        = gl::Stencil_function::gequal,
+                    .function        = gl::Stencil_function::greater, //gequal,
                     .reference       = m_config.stencil_reference,
-                    .test_mask       = visible ? 0x7fu : 0xffu,
-                    .write_mask      = 0x7fu
+                    .test_mask       = visible ? 0b01111111u : 0b11111111u,
+                    .write_mask      = 0b01111111u
                 },
                 .stencil_back = {
                     .stencil_fail_op = gl::Stencil_op::keep,
                     .z_fail_op       = gl::Stencil_op::keep,
                     .z_pass_op       = gl::Stencil_op::replace,
-                    .function        = gl::Stencil_function::gequal,
+                    .function        = gl::Stencil_function::greater, //gequal,
                     .reference       = m_config.stencil_reference,
-                    .test_mask       = visible ? 0x7fu : 0xffu,
-                    .write_mask      = 0x7fu
+                    .test_mask       = visible ? 0b01111111u : 0b11111111u,
+                    .write_mask      = 0b01111111u
                 },
             },
 

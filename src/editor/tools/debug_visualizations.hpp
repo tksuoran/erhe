@@ -131,8 +131,8 @@ private:
     glm::vec4 m_selection_minor_color            {2.0f, 1.6f, 0.1f, 0.5f};
     glm::vec4 m_group_selection_major_color      {2.0f, 1.2f, 0.1f, 1.0f};
     glm::vec4 m_group_selection_minor_color      {2.0f, 1.2f, 0.1f, 0.5f};
-    float     m_selection_major_width            {4.0f};
-    float     m_selection_minor_width            {2.0f};
+    float     m_selection_major_width            {2.0f};
+    float     m_selection_minor_width            {1.5f};
     float     m_camera_visualization_width       {4.0f};
     float     m_light_visualization_width        {4.0f};
     int       m_sphere_step_count                {80};

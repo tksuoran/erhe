@@ -136,8 +136,8 @@ Depth_stencil_state Depth_stencil_state::depth_test_always_stencil_test_disabled
         .z_pass_op       = gl::Stencil_op::keep,
         .function        = gl::Stencil_function::always,
         .reference       = 0u,
-        .test_mask       = 0x00u,
-        .write_mask      = 0x00u
+        .test_mask       = 0b00000000u,
+        .write_mask      = 0b00000000u,
     },
     .stencil_back = {
         .stencil_fail_op = gl::Stencil_op::keep,
@@ -145,8 +145,8 @@ Depth_stencil_state Depth_stencil_state::depth_test_always_stencil_test_disabled
         .z_pass_op       = gl::Stencil_op::keep,
         .function        = gl::Stencil_function::always,
         .reference       = 0u,
-        .test_mask       = 0x00u,
-        .write_mask      = 0x00u
+        .test_mask       = 0b00000000u,
+        .write_mask      = 0b00000000u,
     },
 };
 
