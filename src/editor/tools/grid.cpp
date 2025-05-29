@@ -6,7 +6,7 @@
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_math/math_util.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -123,7 +123,7 @@ void Grid::render(const Render_context& context, bool major)
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
     int cell;
 
-    erhe::renderer::Scoped_line_renderer renderer = 
+    erhe::renderer::Primitive_renderer renderer =
         major ? context.get_line_renderer(1, true, m_see_hidden_major) :
                 context.get_line_renderer(0, true, m_see_hidden_minor);
 

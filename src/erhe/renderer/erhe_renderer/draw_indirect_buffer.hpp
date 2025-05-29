@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_renderer/gpu_ring_buffer.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_primitive/enums.hpp"
 
 #include <memory>
@@ -18,11 +18,11 @@ namespace erhe::renderer {
 class Draw_indirect_buffer_range
 {
 public:
-    Buffer_range range;
-    std::size_t  draw_indirect_count{0};
+    erhe::graphics::Buffer_range range;
+    std::size_t                  draw_indirect_count{0};
 };
 
-class Draw_indirect_buffer : public GPU_ring_buffer
+class Draw_indirect_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
     explicit Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance);

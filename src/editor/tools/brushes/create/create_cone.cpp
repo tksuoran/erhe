@@ -7,7 +7,7 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/node.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -24,7 +24,7 @@ void Create_cone::render_preview(const Create_preview_settings& preview_settings
         return;
     }
 
-    erhe::renderer::Scoped_line_renderer line_renderer = get_line_renderer(preview_settings);
+    erhe::renderer::Primitive_renderer line_renderer = get_line_renderer(preview_settings);
     line_renderer.add_cone(
         preview_settings.transform,
         preview_settings.major_color,

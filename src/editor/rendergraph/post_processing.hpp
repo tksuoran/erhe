@@ -9,7 +9,6 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 
 #include <string_view>

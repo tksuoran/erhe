@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_renderer/gpu_ring_buffer.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_math/viewport.hpp"
 
@@ -43,7 +43,7 @@ public:
     std::size_t                     max_camera_count;
 };
 
-class Camera_buffer : public erhe::renderer::GPU_ring_buffer
+class Camera_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
     Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface);
@@ -56,7 +56,7 @@ public:
         glm::vec4                      grid_size,
         glm::vec4                      grid_line_width,
         uint64_t                       frame_number
-    ) -> erhe::renderer::Buffer_range;
+    ) -> erhe::graphics::Buffer_range;
 
 private:
     Camera_interface& m_camera_interface;

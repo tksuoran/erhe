@@ -7,8 +7,8 @@
 #include "xr/headset_view.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_renderer/line_renderer.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/node.hpp"
 
 #include <imgui/imgui.h>
@@ -237,7 +237,7 @@ void Theremin::render(const Render_context& context)
         return;
     }
 
-    erhe::renderer::Scoped_line_renderer line_renderer = m_context.line_renderer->get(2, true, false);
+    erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get(2, true, false);
 
     const auto& root_node = m_context.headset_view->get_root_node();
     if (!root_node) {

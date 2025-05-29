@@ -1,8 +1,8 @@
 #pragma once
 
-#include "erhe_graphics/shader_resource.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/sampler.hpp"
-#include "erhe_renderer/gpu_ring_buffer.hpp"
+#include "erhe_graphics/shader_resource.hpp"
 
 #include <set>
 
@@ -45,12 +45,12 @@ public:
     std::size_t                     max_material_count;
 };
 
-class Material_buffer : public erhe::renderer::GPU_ring_buffer
+class Material_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
     Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface);
 
-    auto update(const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::renderer::Buffer_range;
+    auto update(const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::graphics::Buffer_range;
 
     [[nodiscard]] auto used_handles() const -> const std::set<uint64_t>&;
 

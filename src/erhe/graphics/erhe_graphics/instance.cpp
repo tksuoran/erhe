@@ -5,8 +5,12 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/draw_indirect.hpp"
+#include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/align.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -437,6 +441,7 @@ Instance::Instance(erhe::window::Context_window& context_window)
         ini.get("force_no_persistent_buffers", force_no_persistent_buffers);
         ini.get("initial_clear",               initial_clear);
     }
+
     if (initial_clear) {
         ERHE_PROFILE_SCOPE("Initial clear");
 
@@ -452,11 +457,17 @@ Instance::Instance(erhe::window::Context_window& context_window)
         ini.get("capture_support", capture_support);
     }
 
-    if (force_no_bindless || capture_support) {
-        if (info.use_bindless_texture) {
+    if (info.use_bindless_texture) {
+#if defined(ERHE_SPIRV)
+        // 'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes
+        info.use_bindless_texture = false;
+        log_startup->warn("Force disabled GL_ARB_bindless_texture due to ERHE_SPIRV setting");
+#else
+        if (force_no_bindless || capture_support) {
             info.use_bindless_texture = false;
             log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting");
         }
+#endif
     }
 
     if (force_no_persistent_buffers) {
@@ -470,6 +481,16 @@ Instance::Instance(erhe::window::Context_window& context_window)
         ERHE_PROFILE_SCOPE("Start shader monitor");
         shader_monitor.begin();
     }
+
+    std::fill(
+        m_frame_syncs.begin(),
+        m_frame_syncs.end(),
+        Frame_sync{
+            .frame_number = 0,
+            .fence_sync   = nullptr,
+            .result       = gl::Sync_status::timeout_expired
+        }
+    );
 }
 
 auto Instance::depth_clear_value_pointer() const -> const float*
@@ -592,45 +613,697 @@ auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::s
     return m_texture_units.size();
 }
 
-auto Instance::align_buffer_offset(gl::Buffer_target target, std::size_t offset) -> std::size_t
+auto Instance::get_buffer_alignment(gl::Buffer_target target) -> std::size_t
 {
     switch (target) {
         //using enum gl::Buffer_target;
         case gl::Buffer_target::array_buffer: 
-        case gl::Buffer_target::element_array_buffer:
-        {
-            while (offset % 64u) { // TODO Good alignment?
-                offset++;
-            }
-            return offset;
+        case gl::Buffer_target::element_array_buffer: {
+            return 64; // TODO Good alignment?
         }
 
         case gl::Buffer_target::shader_storage_buffer: {
-            while (offset % implementation_defined.shader_storage_buffer_offset_alignment) {
-                offset++;
-            }
-            return offset;
+            return implementation_defined.shader_storage_buffer_offset_alignment;
         }
 
         case gl::Buffer_target::uniform_buffer: {
-            while (offset % implementation_defined.uniform_buffer_offset_alignment) {
-                offset++;
-            }
-            return offset;
+            return implementation_defined.uniform_buffer_offset_alignment;
         }
 
         case gl::Buffer_target::draw_indirect_buffer: {
-            while (offset % sizeof(gl::Draw_elements_indirect_command)) {
-                offset++;
-            }
-            return offset;
+            return sizeof(gl::Draw_elements_indirect_command);
         }
         default: {
-            // TODO
-            break;
+            return 64; // TODO
         }
     }
-    return offset;
+}
+
+
+
+/// Ring buffer
+
+static constexpr gl::Buffer_storage_mask storage_mask_persistent{
+    gl::Buffer_storage_mask::map_coherent_bit   |
+    gl::Buffer_storage_mask::map_persistent_bit |
+    gl::Buffer_storage_mask::map_write_bit
+};
+static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
+    gl::Buffer_storage_mask::map_write_bit
+};
+inline auto storage_mask(erhe::graphics::Instance& instance) -> gl::Buffer_storage_mask
+{
+    return instance.info.use_persistent_buffers
+        ? storage_mask_persistent
+        : storage_mask_not_persistent;
+}
+
+static constexpr gl::Map_buffer_access_mask access_mask_persistent{
+    gl::Map_buffer_access_mask::map_coherent_bit   |
+    gl::Map_buffer_access_mask::map_persistent_bit |
+    gl::Map_buffer_access_mask::map_write_bit
+};
+static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
+    gl::Map_buffer_access_mask::map_write_bit
+};
+
+inline auto access_mask(erhe::graphics::Instance& instance) -> gl::Map_buffer_access_mask
+{
+    return instance.info.use_persistent_buffers
+        ? access_mask_persistent
+        : access_mask_not_persistent;
+}
+
+
+
+// Ring buffer
+
+Buffer_range::Buffer_range()
+    : m_ring_buffer                     {nullptr}
+    , m_span                            {}
+    , m_wrap_count                      {0}
+    , m_byte_span_start_offset_in_buffer{0}
+    , m_byte_write_position_in_span     {0}
+    , m_usage                           {Ring_buffer_usage::None}
+{
+    SPDLOG_LOGGER_TRACE(log_gpu_ring_buffer, "Buffer_range::Buffer_range()");
+}
+
+Buffer_range::Buffer_range(
+    GPU_ring_buffer&     ring_buffer,
+    Ring_buffer_usage    usage,
+    std::span<std::byte> span,
+    std::size_t          wrap_count,
+    size_t               byte_start_offset_in_buffer
+)
+    : m_ring_buffer                     {&ring_buffer}
+    , m_span                            {span}
+    , m_wrap_count                      {wrap_count}
+    , m_byte_span_start_offset_in_buffer{byte_start_offset_in_buffer}
+    , m_byte_write_position_in_span     {0}
+    , m_usage                           {usage}
+{
+    ERHE_VERIFY(usage != Ring_buffer_usage::None);
+    SPDLOG_LOGGER_TRACE(
+        log_gpu_ring_buffer,
+        "Buffer_range::Buffer_range() buffer = {} start offset in buffer = {} span byte count = {}",
+        ring_buffer.get_buffer().debug_label,
+        byte_start_offset,
+        span.size_bytes()
+    );
+}
+
+Buffer_range::Buffer_range(Buffer_range&& old) noexcept
+    : m_ring_buffer                     {std::exchange(old.m_ring_buffer,                      nullptr)}
+    , m_span                            {std::exchange(old.m_span,                             {}     )}
+    , m_wrap_count                      {std::exchange(old.m_wrap_count,                       0      )}
+    , m_byte_span_start_offset_in_buffer{std::exchange(old.m_byte_span_start_offset_in_buffer, 0      )}
+    , m_byte_write_position_in_span     {std::exchange(old.m_byte_write_position_in_span,      0      )}
+    , m_byte_flush_position_in_span     {std::exchange(old.m_byte_flush_position_in_span,      0      )}
+    , m_usage                           {std::exchange(old.m_usage,                            Ring_buffer_usage::None)}
+    , m_is_closed                       {std::exchange(old.m_is_closed,                        true   )}
+    , m_is_released                     {std::exchange(old.m_is_released ,                     false  )}
+    , m_is_cancelled                    {std::exchange(old.m_is_cancelled,                     true   )}
+{
+}
+
+Buffer_range& Buffer_range::operator=(Buffer_range&& old) noexcept
+{
+    m_ring_buffer                      = std::exchange(old.m_ring_buffer,                      nullptr);
+    m_span                             = std::exchange(old.m_span,                             {}     );
+    m_wrap_count                       = std::exchange(old.m_wrap_count,                       0      );
+    m_byte_span_start_offset_in_buffer = std::exchange(old.m_byte_span_start_offset_in_buffer, 0      );
+    m_byte_write_position_in_span      = std::exchange(old.m_byte_write_position_in_span,      0      );
+    m_byte_flush_position_in_span      = std::exchange(old.m_byte_flush_position_in_span,      0      );
+    m_usage                            = std::exchange(old.m_usage,                            Ring_buffer_usage::None);
+    m_is_closed                        = std::exchange(old.m_is_closed,                        true   );
+    m_is_released                      = std::exchange(old.m_is_released,                      false  );
+    m_is_cancelled                     = std::exchange(old.m_is_cancelled,                     true   );
+    return *this;
+}
+
+Buffer_range::~Buffer_range()
+{
+    ERHE_VERIFY((m_ring_buffer == nullptr) || m_is_released || m_is_cancelled);
+}
+
+void Buffer_range::close()
+{
+    ERHE_VERIFY(!is_closed());
+    ERHE_VERIFY(!m_is_released);
+    ERHE_VERIFY(m_ring_buffer != nullptr);
+    m_ring_buffer->close(m_byte_span_start_offset_in_buffer, m_byte_write_position_in_span);
+    m_is_closed = true;
+}
+
+void Buffer_range::bytes_written(std::size_t byte_count)
+{
+    //ERHE_VERIFY(m_usage == Ring_buffer_usage::CPU_write);
+    ERHE_VERIFY(!is_closed());
+    ERHE_VERIFY(!m_is_released);
+    ERHE_VERIFY(m_byte_write_position_in_span + byte_count <= m_span.size_bytes());
+    ERHE_VERIFY(m_ring_buffer != nullptr);
+    m_byte_write_position_in_span += byte_count;
+}
+
+void Buffer_range::flush(std::size_t byte_write_position_in_span)
+{
+    ERHE_VERIFY(m_usage == Ring_buffer_usage::CPU_write);
+    ERHE_VERIFY(!is_closed());
+    ERHE_VERIFY(!m_is_released);
+    ERHE_VERIFY(byte_write_position_in_span >= m_byte_write_position_in_span);
+    ERHE_VERIFY(byte_write_position_in_span >= m_byte_flush_position_in_span);
+    ERHE_VERIFY(m_ring_buffer != nullptr);
+    const size_t flush_byte_count = byte_write_position_in_span - m_byte_flush_position_in_span;
+    if (flush_byte_count > 0) {
+        m_ring_buffer->flush(m_byte_flush_position_in_span, flush_byte_count);
+    }
+    m_byte_write_position_in_span = byte_write_position_in_span;
+    m_byte_flush_position_in_span = byte_write_position_in_span;
+}
+
+void Buffer_range::release()
+{
+    ERHE_PROFILE_FUNCTION();
+    if (m_ring_buffer == nullptr) {
+        ERHE_VERIFY(!m_is_released);
+        ERHE_VERIFY(m_byte_write_position_in_span == 0);
+        return;
+    }
+    ERHE_VERIFY(is_closed());
+    ERHE_VERIFY(!m_is_released);
+    m_is_released = true;
+    if (m_byte_write_position_in_span == 0) {
+        return;
+    }
+
+    ERHE_VERIFY(m_ring_buffer != nullptr);
+    m_ring_buffer->make_sync_entry(
+        m_wrap_count,
+        m_byte_span_start_offset_in_buffer,
+        m_byte_write_position_in_span
+    );
+}
+
+void Buffer_range::cancel()
+{
+    ERHE_PROFILE_FUNCTION();
+    ERHE_VERIFY(is_closed());
+    m_is_cancelled = true;
+    if (m_byte_write_position_in_span == 0) {
+        return;
+    }
+
+    ERHE_VERIFY(m_ring_buffer != nullptr);
+}
+
+auto Buffer_range::get_span() const -> std::span<std::byte>
+{
+    return m_span;
+}
+
+auto Buffer_range::get_byte_start_offset_in_buffer() const -> std::size_t
+{
+    return m_byte_span_start_offset_in_buffer;
+}
+
+auto Buffer_range::get_writable_byte_count() const -> std::size_t
+{
+    ERHE_VERIFY(m_span.size_bytes() >= m_byte_write_position_in_span);
+    return m_span.size_bytes() - m_byte_write_position_in_span;
+}
+
+auto Buffer_range::get_written_byte_count() const -> std::size_t
+{
+    return m_byte_write_position_in_span;
+}
+
+auto Buffer_range::is_closed() const -> bool
+{
+    return m_is_closed;
+}
+
+auto Buffer_range::get_buffer() const -> GPU_ring_buffer*
+{
+    return m_ring_buffer;
+}
+
+//
+//
+
+GPU_ring_buffer::GPU_ring_buffer(
+    erhe::graphics::Instance&          graphics_instance,
+    const GPU_ring_buffer_create_info& create_info
+)
+    : m_instance     {graphics_instance}
+    //, m_binding_point{create_info.binding_point}
+    , m_buffer{
+        std::make_unique<Buffer>(
+            m_instance,
+            Buffer_create_info{
+                .target              = gl::Buffer_target::copy_write_buffer, // generic buffer target
+                .capacity_byte_count = create_info.size,
+                .storage_mask        = storage_mask(m_instance),
+                .access_mask         = access_mask(m_instance),
+                .debug_label         = create_info.debug_label
+            }
+        )
+    }
+    , m_read_wrap_count{0}
+    , m_read_offset    {m_buffer->capacity_byte_count()}
+{
+    //ERHE_VERIFY(gl_helpers::is_indexed(create_info.target) || create_info.binding_point == std::numeric_limits<unsigned int>::max());
+
+    //// log_gpu_ring_buffer->info(
+    ////     "allocating GPU ring buffer {} bytes for {} - {}",
+    ////     create_info.size,
+    ////     m_buffer.debug_label(),
+    ////     gl::c_str(m_buffer.target())
+    //// );
+}
+
+auto GPU_ring_buffer::get_buffer() -> Buffer*
+{
+    return m_buffer.get();
+}
+
+auto GPU_ring_buffer::get_name() const -> const std::string&
+{
+    return m_name;
+}
+
+void GPU_ring_buffer::sanity_check()
+{
+    ERHE_VERIFY(m_write_position <= m_buffer->capacity_byte_count());
+
+    if (m_write_wrap_count == m_read_wrap_count + 1) {
+        ERHE_VERIFY(m_read_offset >= m_write_position);
+    } else if (m_read_wrap_count == m_write_wrap_count) {
+        ERHE_VERIFY(m_write_position >= m_read_offset);
+    } else {
+        ERHE_FATAL("buffer issue");
+    }
+}
+
+void GPU_ring_buffer::get_size_available_for_write(
+    std::size_t  required_alignment,
+    std::size_t& out_alignment_byte_count_without_wrap,
+    std::size_t& out_available_byte_count_without_wrap,
+    std::size_t& out_available_byte_count_with_wrap
+) const
+{
+    // Initial situation:
+    //   +--------------------------+
+    //   ^                          ^
+    //   w1                         r0
+
+    //  CPU progress:
+    //   +------+---------------+---+
+    //                          ^   ^
+    //                          w1  r0
+
+    //  GPU progress:
+    //   +------+---------------+---+
+    //          ^               ^    
+    //          r1              w1   
+
+    //  CPU progress:
+    //   +----+---+---+--------------+-+
+    //        ^   ^                     
+    //        w2  r1                    
+    //// gl::Buffer_target target = m_buffer.target();
+    //// std::size_t required_alignment = m_instance.get_buffer_alignment(target);
+    const std::size_t aligned_write_position = align_offset(m_write_position, required_alignment);
+    ERHE_VERIFY(aligned_write_position >= m_write_position);
+    out_alignment_byte_count_without_wrap    = aligned_write_position - m_write_position;
+
+    if (m_write_wrap_count == m_read_wrap_count + 1) {
+        ERHE_VERIFY(m_read_offset >= m_write_position);
+        out_available_byte_count_without_wrap = m_read_offset - m_write_position;
+        out_available_byte_count_with_wrap = 0; // cannot wrap because GPU is still using the buffer from this point
+        if (out_available_byte_count_without_wrap > out_alignment_byte_count_without_wrap) {
+            out_available_byte_count_without_wrap -= out_alignment_byte_count_without_wrap;
+        } else {
+            out_alignment_byte_count_without_wrap = 0;
+            out_available_byte_count_without_wrap = 0;
+        }
+        return;
+    } else if (m_read_wrap_count == m_write_wrap_count) {
+        ERHE_VERIFY(m_write_position >= m_read_offset);
+        out_available_byte_count_without_wrap = m_buffer->capacity_byte_count() - m_write_position;
+        out_available_byte_count_with_wrap = m_read_offset;
+        if (out_available_byte_count_without_wrap > out_alignment_byte_count_without_wrap) {
+            out_available_byte_count_without_wrap -= out_alignment_byte_count_without_wrap;
+        } else {
+            out_alignment_byte_count_without_wrap = 0;
+            out_available_byte_count_without_wrap = 0;
+        }
+        return;
+    } else {
+        ERHE_FATAL("buffer issue");
+        out_available_byte_count_without_wrap = 0;
+        out_available_byte_count_with_wrap = 0;
+        return;
+    }
+}
+
+auto GPU_ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
+{
+    ERHE_PROFILE_FUNCTION();
+
+    sanity_check();
+
+    std::size_t alignment_byte_count_without_wrap{0};
+    std::size_t available_byte_count_without_wrap{0};
+    std::size_t available_byte_count_with_wrap   {0};
+    bool wrap{false};
+
+    sanity_check();
+
+    get_size_available_for_write(required_alignment, alignment_byte_count_without_wrap, available_byte_count_without_wrap, available_byte_count_with_wrap);
+
+    if (byte_count == 0) {
+        byte_count = std::max(available_byte_count_without_wrap, available_byte_count_with_wrap);
+    }
+
+    wrap = (byte_count > available_byte_count_without_wrap);
+    if (wrap && (byte_count > available_byte_count_with_wrap)) {
+        return {}; // Not enough space currently available
+    }
+
+    if (wrap) {
+        wrap_write();
+    } else {
+        m_write_position += alignment_byte_count_without_wrap;
+    }
+
+    sanity_check();
+
+    if (!m_instance.info.use_persistent_buffers) {
+        if (usage == Ring_buffer_usage::CPU_write) {
+            m_buffer->begin_write(m_write_position, byte_count); // maps requested range
+        }
+        Buffer_range result{*this, usage, m_buffer->map(), m_write_wrap_count, m_write_position};
+        m_write_position += byte_count;
+        sanity_check();
+        return result;
+    } else {
+        size_t buffer_mapped_span_byte_count = m_buffer->map().size_bytes();
+        ERHE_VERIFY(m_write_position + byte_count <= buffer_mapped_span_byte_count);
+        Buffer_range result{*this, usage, m_buffer->map().subspan(m_write_position, byte_count), m_write_wrap_count, m_write_position};
+        m_write_position += byte_count;
+        sanity_check();
+        return result;
+    }
+}
+
+void GPU_ring_buffer::flush(std::size_t byte_offset, std::size_t byte_count)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    sanity_check();
+
+    if (!m_instance.info.use_persistent_buffers) {
+        m_buffer->flush_bytes(byte_offset, byte_count);
+    }
+}
+
+void GPU_ring_buffer::close(std::size_t byte_offset, std::size_t byte_write_count)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    sanity_check();
+
+    if (!m_instance.info.use_persistent_buffers) {
+        m_buffer->end_write(byte_offset, byte_write_count); // flush and unmap
+    }
+    //m_map = {};
+}
+
+GPU_ring_buffer::~GPU_ring_buffer()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    sanity_check();
+}
+
+void GPU_ring_buffer::frame_completed(uint64_t completed_frame)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    sanity_check();
+
+    for (Ring_buffer_sync_entry& entry : m_sync_entries) {
+        if (entry.waiting_for_frame == completed_frame) {
+            if (
+                (entry.wrap_count > m_read_wrap_count) ||
+                (
+                    (entry.wrap_count == m_read_wrap_count) &&
+                    (entry.byte_offset + entry.byte_count > m_read_offset)
+                )
+            ) {
+                size_t new_read_wrap_count = entry.wrap_count;
+                size_t new_read_offset     = entry.byte_offset + entry.byte_count;
+                if (m_write_wrap_count == new_read_wrap_count + 1) {
+                    ERHE_VERIFY(new_read_offset >= m_write_position);
+                } else if (new_read_wrap_count == m_write_wrap_count) {
+                    ERHE_VERIFY(m_write_position >= new_read_offset);
+                } else {
+                    ERHE_FATAL("buffer issue");
+                }
+
+                m_read_wrap_count = new_read_wrap_count;
+                m_read_offset = new_read_offset;
+                sanity_check();
+            }
+        }
+    }
+
+    auto i = std::remove_if(
+        m_sync_entries.begin(),
+        m_sync_entries.end(),
+        [completed_frame](Ring_buffer_sync_entry& entry) { return entry.waiting_for_frame == completed_frame; }
+    );
+    if (i != m_sync_entries.end()) {
+        m_sync_entries.erase(i, m_sync_entries.end());
+    }
+}
+
+void Instance::frame_completed(uint64_t frame)
+{
+    for (const std::unique_ptr<GPU_ring_buffer>& ring_buffer : m_ring_buffers) {
+        ring_buffer->frame_completed(frame);
+    }
+}
+
+void Instance::end_of_frame()
+{
+    // Check previous frame fences for completion
+    m_completed_frames.clear();
+    for (Frame_sync& frame_sync : m_frame_syncs) {
+        if (frame_sync.fence_sync != nullptr) {
+            if (frame_sync.result != gl::Sync_status::condition_satisfied) {
+                frame_sync.result = gl::client_wait_sync(
+                    (GLsync)(frame_sync.fence_sync),
+                    gl::Sync_object_mask{0}, //gl::Sync_object_mask::sync_flush_commands_bit,
+                    0
+                );
+            }
+
+            if (
+                (frame_sync.result == gl::Sync_status::already_signaled) ||
+                (frame_sync.result == gl::Sync_status::condition_satisfied)
+            ) {
+                gl::delete_sync((GLsync)(frame_sync.fence_sync));
+
+                // Keep record of completed frames
+                m_completed_frames.push_back(frame_sync.frame_number);
+                // Remove from pending frames
+                const auto i = std::remove(m_pending_frames.begin(), m_pending_frames.end(), frame_sync.frame_number);
+                ERHE_VERIFY(i != m_pending_frames.end());
+                m_pending_frames.erase(i, m_pending_frames.end());
+
+                frame_sync.fence_sync = nullptr;
+            }
+        }
+    }
+
+    // Process completed frames
+    if (!m_completed_frames.empty()) {
+        std::sort(m_pending_frames.begin(), m_pending_frames.end(), [](uint64_t lhs, uint64_t rhs) { return lhs < rhs; });
+        std::sort(m_completed_frames.begin(), m_completed_frames.end(), [](uint64_t lhs, uint64_t rhs) { return lhs < rhs; });
+        for (uint64_t frame : m_completed_frames) {
+            frame_completed(frame);
+        }
+    }
+
+    // Find available frame sync slot and make new pending frame sync record
+    for (Frame_sync& frame_sync : m_frame_syncs) {
+        if (frame_sync.fence_sync == nullptr) {
+            frame_sync.frame_number = m_frame_number,
+            frame_sync.fence_sync   = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0),
+            frame_sync.result       = gl::Sync_status::timeout_expired;
+            m_pending_frames.push_back(m_frame_number);
+            ++m_frame_number;
+            return;
+        }
+    }
+    ERHE_FATAL("Not enough frame sync slots");
+}
+
+void GPU_ring_buffer::wrap_write()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    sanity_check();
+
+    ++m_write_wrap_count;
+    m_write_position = 0;
+
+    sanity_check();
+
+}
+
+void GPU_ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_offset, std::size_t byte_count)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    sanity_check();
+
+    // Merge to existing sync
+    for (Ring_buffer_sync_entry& entry : m_sync_entries) {
+        if (
+            (entry.waiting_for_frame == m_instance.get_frame_number()) &&
+            (entry.wrap_count == wrap_count)
+        ) {
+            if (byte_offset + byte_count > entry.byte_offset + entry.byte_count) {
+                entry.byte_offset = byte_offset;
+                entry.byte_count  = byte_count;
+            }
+            return;
+        }
+    }
+
+    // Make new sync entry
+    m_sync_entries.push_back(
+        Ring_buffer_sync_entry{
+            .waiting_for_frame = m_instance.get_frame_number(),
+            .wrap_count        = wrap_count,
+            .byte_offset       = byte_offset,
+            .byte_count        = byte_count
+        }
+    );
+}
+
+GPU_ring_buffer_client::GPU_ring_buffer_client(Instance& graphics_instance, std::string_view debug_label, gl::Buffer_target buffer_target, std::optional<unsigned int> binding_point)
+    : m_graphics_instance{graphics_instance}
+    , m_buffer_target    {buffer_target}
+    , m_debug_label      {debug_label}
+    , m_binding_point    {binding_point}
+{
+}
+
+auto GPU_ring_buffer_client::acquire(Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
+{
+    ERHE_VERIFY(byte_count > 0);
+    return m_graphics_instance.allocate_ring_buffer_entry(m_buffer_target, usage, byte_count);
+}
+
+auto GPU_ring_buffer_client::bind(const Buffer_range& range) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // sanity_check();
+
+    const size_t offset     = range.get_byte_start_offset_in_buffer();
+    const size_t byte_count = range.get_written_byte_count();
+    if (byte_count == 0) {
+        return false;
+    }
+
+    GPU_ring_buffer* ring_buffer = range.get_buffer();
+    ERHE_VERIFY(ring_buffer != nullptr);
+    erhe::graphics::Buffer* buffer = ring_buffer->get_buffer();
+    ERHE_VERIFY(buffer != nullptr);
+
+    SPDLOG_LOGGER_TRACE(
+        log_gpu_ring_buffer,
+        "binding {} {} {} buffer offset = {} byte count = {}",
+        m_name,
+        gl::c_str(m_buffer_target),
+        m_binding_point.has_value() ? "uses binding point" : "non-indexed binding",
+        m_binding_point.has_value() ? m_binding_point.value() : 0,
+        range.first_byte_offset,
+        range.byte_count
+    );
+
+    ERHE_VERIFY(
+        (m_buffer_target != gl::Buffer_target::uniform_buffer) ||
+        (byte_count <= static_cast<std::size_t>(m_graphics_instance.limits.max_uniform_block_size))
+    );
+    ERHE_VERIFY(offset + byte_count <= buffer->capacity_byte_count());
+
+    if (m_binding_point.has_value()) {
+        ERHE_VERIFY(gl_helpers::is_indexed(m_buffer_target));
+        gl::bind_buffer_range(
+            m_buffer_target,
+            static_cast<GLuint>    (m_binding_point.value()),
+            static_cast<GLuint>    (buffer->gl_name()),
+            static_cast<GLintptr>  (offset),
+            static_cast<GLsizeiptr>(byte_count)
+        );
+    } else {
+        ERHE_VERIFY(!gl_helpers::is_indexed(m_buffer_target));
+        gl::bind_buffer(m_buffer_target, static_cast<GLuint>(buffer->gl_name()));
+    }
+    return true;
+}
+
+auto Instance::get_frame_number() const -> uint64_t
+{
+    return m_frame_number;
+}
+
+auto Instance::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
+{
+    std::size_t required_alignment = get_buffer_alignment(buffer_target);
+    std::size_t alignment_byte_count_without_wrap{0};
+    std::size_t available_byte_count_without_wrap{0};
+    std::size_t available_byte_count_with_wrap{0};
+
+    // Pass 1: Do we have buffer that can be used without a wrap?
+    for (const std::unique_ptr<GPU_ring_buffer>& ring_buffer : m_ring_buffers) {
+        ring_buffer->get_size_available_for_write(
+            required_alignment,
+            alignment_byte_count_without_wrap,
+            available_byte_count_without_wrap,
+            available_byte_count_with_wrap
+        );
+        if (available_byte_count_without_wrap >= byte_count) {
+            return ring_buffer->acquire(required_alignment, usage, byte_count);
+        }
+    }
+
+    // Pass 2: Do we have buffer that can be used with a wrap?
+    for (const std::unique_ptr<GPU_ring_buffer>& ring_buffer : m_ring_buffers) {
+        ring_buffer->get_size_available_for_write(
+            required_alignment,
+            alignment_byte_count_without_wrap,
+            available_byte_count_without_wrap,
+            available_byte_count_with_wrap
+        );
+        if (available_byte_count_with_wrap >= byte_count) {
+            return ring_buffer->acquire(required_alignment, usage, byte_count);
+        }
+    }
+
+    // No existing usable buffer found, create new buffer
+    GPU_ring_buffer_create_info create_info{
+        .size        = std::max(m_min_buffer_size, 4 * byte_count),
+        .debug_label = "GPU_ring_buffer"
+    };
+    m_ring_buffers.push_back(std::make_unique<GPU_ring_buffer>(*this, create_info));
+    return m_ring_buffers.back()->acquire(required_alignment, usage, byte_count);
 }
 
 } // namespace erhe::graphics

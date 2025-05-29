@@ -257,38 +257,18 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
             }
         }
     }
-    , m_vertex_buffer{
-        graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target      = gl::Buffer_target::array_buffer,
-            .size        = s_max_vertex_count * m_imgui_program_interface.vertex_format.streams.front().stride,
-            .debug_label = "ImGui Vertex Buffer"
-        }
-    }
-    , m_index_buffer{
-        graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target      = gl::Buffer_target::element_array_buffer,
-            .size        = s_max_index_count * sizeof(uint16_t),
-            .debug_label = "ImGui Index Buffer"
-        }
-    }
+    , m_vertex_buffer{graphics_instance, "ImGui Vertex Buffer", gl::Buffer_target::array_buffer}
+    , m_index_buffer{graphics_instance,  "ImGui Index Buffer", gl::Buffer_target::element_array_buffer, }
     , m_draw_parameter_buffer{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::shader_storage_buffer,
-            .binding_point = m_imgui_program_interface.draw_parameter_block.binding_point(),
-            .size          = m_imgui_program_interface.block_offsets.draw_parameter_struct_array + s_max_draw_count * m_imgui_program_interface.draw_parameter_struct.size_bytes(),
-            .debug_label   = "ImGui Draw Parameter Buffer"
-        }
+        "ImGui Draw Parameter Buffer",
+        gl::Buffer_target::shader_storage_buffer,
+        m_imgui_program_interface.draw_parameter_block.binding_point(),
     }
     , m_draw_indirect_buffer{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target      = gl::Buffer_target::draw_indirect_buffer,
-            .size        = s_max_draw_count * sizeof(gl::Draw_elements_indirect_command),
-            .debug_label = "ImGui Draw Indirect Buffer"
-        }
+        "ImGui Draw Indirect Buffer",
+        gl::Buffer_target::draw_indirect_buffer
     }
     , m_vertex_input{erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
     , m_pipeline{
@@ -818,12 +798,12 @@ void Imgui_renderer::render_draw_data()
         }
     }
 
-    using Buffer_range = erhe::renderer::Buffer_range;
-    constexpr erhe::renderer::Ring_buffer_usage usage{erhe::renderer::Ring_buffer_usage::CPU_write};
-    Buffer_range draw_parameter_buffer_range = m_draw_parameter_buffer.open(usage, draw_parameter_byte_count);
-    Buffer_range draw_indirect_buffer_range  = m_draw_indirect_buffer .open(usage, draw_indirect_byte_count);
-    Buffer_range vertex_buffer_range         = m_vertex_buffer        .open(usage, vertex_byte_count);
-    Buffer_range index_buffer_range          = m_index_buffer         .open(usage, index_byte_count);
+    using Buffer_range = erhe::graphics::Buffer_range;
+    constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
+    Buffer_range draw_parameter_buffer_range = m_draw_parameter_buffer.acquire(usage, draw_parameter_byte_count);
+    Buffer_range draw_indirect_buffer_range  = m_draw_indirect_buffer .acquire(usage, draw_indirect_byte_count);
+    Buffer_range vertex_buffer_range         = m_vertex_buffer        .acquire(usage, vertex_byte_count);
+    Buffer_range index_buffer_range          = m_index_buffer         .acquire(usage, index_byte_count);
     size_t draw_parameter_write_offset = 0;
     size_t draw_indirect_write_offset  = 0;
     size_t vertex_write_offset         = 0;
@@ -983,10 +963,14 @@ void Imgui_renderer::render_draw_data()
         list_index_offset += cmd_list->IdxBuffer.size();
     }
 
-    draw_parameter_buffer_range.close(draw_parameter_write_offset);
-    draw_indirect_buffer_range .close(draw_indirect_write_offset );
-    vertex_buffer_range        .close(vertex_write_offset        );
-    index_buffer_range         .close(index_write_offset         );
+    draw_parameter_buffer_range.bytes_written(draw_parameter_write_offset);
+    draw_parameter_buffer_range.close();
+    draw_indirect_buffer_range .bytes_written(draw_indirect_write_offset);
+    draw_indirect_buffer_range .close();
+    vertex_buffer_range        .bytes_written(vertex_write_offset);
+    vertex_buffer_range        .close();
+    index_buffer_range         .bytes_written(index_write_offset);
+    index_buffer_range         .close();
 
     const size_t vertex_buffer_binding_offset = vertex_buffer_range.get_byte_start_offset_in_buffer();
 
@@ -999,8 +983,12 @@ void Imgui_renderer::render_draw_data()
         // This binds vertex input states (VAO) and shader stages (shader program)
         // and most other state
         m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
-        m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer.get_buffer());
-        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, &m_vertex_buffer.get_buffer(), vertex_buffer_binding_offset);
+
+        erhe::graphics::Buffer* index_buffer  = index_buffer_range.get_buffer()->get_buffer();
+        erhe::graphics::Buffer* vertex_buffer = vertex_buffer_range.get_buffer()->get_buffer();
+
+        m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(index_buffer);
+        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_binding_offset);
 
         // TODO viewport states is not currently in pipeline
         gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));
@@ -1032,8 +1020,8 @@ void Imgui_renderer::render_draw_data()
         }
 
         ERHE_VERIFY(draw_parameter_buffer_range.get_written_byte_count() > 0);
-        draw_parameter_buffer_range.bind();
-        draw_indirect_buffer_range.bind();
+        m_draw_parameter_buffer.bind(draw_parameter_buffer_range);
+        m_draw_indirect_buffer.bind(draw_indirect_buffer_range);
 
         gl::multi_draw_elements_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
@@ -1043,10 +1031,10 @@ void Imgui_renderer::render_draw_data()
             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
         );
 
-        draw_parameter_buffer_range.submit();
-        draw_indirect_buffer_range .submit();
-        vertex_buffer_range        .submit();
-        index_buffer_range         .submit();
+        draw_parameter_buffer_range.release();
+        draw_indirect_buffer_range .release();
+        vertex_buffer_range        .release();
+        index_buffer_range         .release();
 
         if (m_graphics_instance.info.use_bindless_texture) {
             for (const auto handle : m_used_texture_handles) {

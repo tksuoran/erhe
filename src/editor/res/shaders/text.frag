@@ -5,6 +5,15 @@ layout(location = 1) in vec4 v_color;
 layout(location = 2) in flat uvec2 v_texture;
 #endif
 
+// layout(location =  3) in flat uint  v_vertex_id;
+// layout(location =  4) in flat uint  v_glyph_index;
+// layout(location =  5) in flat uint  v_quad_corner;
+// layout(location =  6) in flat uint  v_vertex_index;
+// layout(location =  7) in flat uvec4 v_data;
+// layout(location =  8) in flat int   v_x;
+// layout(location =  9) in flat int   v_y;
+// layout(location = 10) in flat vec2  v_zw;
+
 void main(void)
 {
 #if defined(ERHE_BINDLESS_TEXTURE)

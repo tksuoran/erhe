@@ -6,7 +6,7 @@
 
 namespace erhe::dataformat {
 
-int16_t float_to_snorm16(float v)
+auto float_to_snorm16(float v) -> int16_t
 {
     float a = (v >= 0.0f) ? (v * 32767.0f + 0.5f) : (v * 32767.0f - 0.5f);
     if (a < -32768.0f) {
@@ -18,12 +18,12 @@ int16_t float_to_snorm16(float v)
     return static_cast<int16_t>(a);
 }
 
-float snorm16_to_float(int16_t v)
+auto snorm16_to_float(int16_t v) -> float
 {
     return std::max(static_cast<float>(v) / 32767.0f, -1.0f);
 }
 
-int8_t float_to_snorm8(float v)
+auto float_to_snorm8(float v) -> int8_t
 {
     float a = (v >= 0.0f) ? (v * 127.0f + 0.5f) : (v * 127.0f - 0.5f);
     if (a < -128.0f) {
@@ -35,12 +35,12 @@ int8_t float_to_snorm8(float v)
     return static_cast<int8_t>(a);
 }
 
-float snorm8_to_float(int8_t v)
+auto snorm8_to_float(int8_t v) -> float
 {
     return std::max(static_cast<float>(v) / 127.0f, -1.0f);
 }
 
-uint16_t float_to_unorm16(float v)
+auto float_to_unorm16(float v) -> uint16_t
 {
     float a = 65535.0f * v + 0.5f;
     if (a < 0.0f) {
@@ -52,12 +52,12 @@ uint16_t float_to_unorm16(float v)
     return static_cast<uint16_t>(a);
 }
 
-float unorm16_to_float(uint16_t v)
+auto unorm16_to_float(uint16_t v) -> float
 {
     return static_cast<float>(v) / 65535.0f;
 }
 
-uint8_t float_to_unorm8(float v)
+auto float_to_unorm8(float v) -> uint8_t
 {
     float a = 255.0f * v + 0.5f;
     if (a < 0.0f) {
@@ -69,9 +69,87 @@ uint8_t float_to_unorm8(float v)
     return static_cast<uint8_t>(a);
 }
 
-float unorm8_to_float(uint8_t v)
+auto unorm8_to_float(uint8_t v) -> float
 {
     return static_cast<float>(v) / 255.0f;
+}
+
+auto pack_unorm2x16(float x, float y) -> uint32_t
+{
+    ERHE_VERIFY(x >= 0.0f);
+    ERHE_VERIFY(y >= 0.0f);
+    ERHE_VERIFY(x <= 1.0f);
+    ERHE_VERIFY(y <= 1.0f);
+    const uint32_t lo     = static_cast<uint32_t>(float_to_unorm16(x)) & 0xffffu;
+    const uint32_t hi     = static_cast<uint32_t>(float_to_unorm16(y)) & 0xffffu;
+    const uint32_t result = lo | (hi << 16);
+    return result;
+}
+
+auto pack_unorm4x8(float x, float y, float z, float w) -> uint32_t
+{
+    ERHE_VERIFY(x >= 0.0f);
+    ERHE_VERIFY(y >= 0.0f);
+    ERHE_VERIFY(z >= 0.0f);
+    ERHE_VERIFY(w >= 0.0f);
+    ERHE_VERIFY(x <= 1.0f);
+    ERHE_VERIFY(y <= 1.0f);
+    ERHE_VERIFY(z <= 1.0f);
+    ERHE_VERIFY(w <= 1.0f);
+    const uint32_t x_ = static_cast<uint32_t>(float_to_unorm8(x)) & 0xffu;
+    const uint32_t y_ = static_cast<uint32_t>(float_to_unorm8(y)) & 0xffu;
+    const uint32_t z_ = static_cast<uint32_t>(float_to_unorm8(z)) & 0xffu;
+    const uint32_t w_ = static_cast<uint32_t>(float_to_unorm8(w)) & 0xffu;
+    const uint32_t result =
+        (x_      ) |
+        (y_ <<  8) |
+        (z_ << 16) |
+        (w_ << 24);
+    return result;
+}
+
+auto pack_snorm2x16(float x, float y) -> uint32_t
+{
+    ERHE_VERIFY(x >= -1.0f);
+    ERHE_VERIFY(y >= -1.0f);
+    ERHE_VERIFY(x <= 1.0f);
+    ERHE_VERIFY(y <= 1.0f);
+    const uint32_t lo     = static_cast<uint32_t>(float_to_snorm16(x)) & 0xffffu;
+    const uint32_t hi     = static_cast<uint32_t>(float_to_snorm16(y)) & 0xffffu;
+    const uint32_t result = lo | (hi << 16);
+    return result;
+}
+
+auto pack_snorm4x8(float x, float y, float z, float w) -> uint32_t
+{
+    ERHE_VERIFY(x >= -1.0f);
+    ERHE_VERIFY(y >= -1.0f);
+    ERHE_VERIFY(z >= -1.0f);
+    ERHE_VERIFY(w >= -1.0f);
+    ERHE_VERIFY(x <= 1.0f);
+    ERHE_VERIFY(y <= 1.0f);
+    ERHE_VERIFY(z <= 1.0f);
+    ERHE_VERIFY(w <= 1.0f);
+    const uint32_t x_ = static_cast<uint32_t>(float_to_snorm8(x)) & 0xffu;
+    const uint32_t y_ = static_cast<uint32_t>(float_to_snorm8(y)) & 0xffu;
+    const uint32_t z_ = static_cast<uint32_t>(float_to_snorm8(z)) & 0xffu;
+    const uint32_t w_ = static_cast<uint32_t>(float_to_snorm8(w)) & 0xffu;
+    const uint32_t result =
+        (x_      ) |
+        (y_ <<  8) |
+        (z_ << 16) |
+        (w_ << 24);
+    return result;
+}
+
+auto pack_int2x16(int x, int y) -> uint32_t
+{
+    const uint32_t x_ = static_cast<uint32_t>(x) & 0xffffu;
+    const uint32_t y_ = static_cast<uint32_t>(y) & 0xffffu;
+    const uint32_t result =
+        (x_      ) |
+        (y_ << 16);
+    return result;
 }
 
 auto c_str(Format format) -> const char*

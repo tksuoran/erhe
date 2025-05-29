@@ -9,17 +9,11 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/pipeline.hpp"
-#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/state/color_blend_state.hpp"
-#include "erhe_graphics/state/depth_stencil_state.hpp"
-#include "erhe_graphics/state/input_assembly_state.hpp"
-#include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_renderer/buffer_writer.hpp"
-#include "erhe_renderer/gpu_ring_buffer.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
@@ -86,10 +80,10 @@ public:
         uint32_t color
     );
 
-    void begin    ();
+    void begin    (std::size_t tile_count);
     void end      ();
 
-    void render    (erhe::math::Viewport viewport);
+    void render   (erhe::math::Viewport viewport);
 
 private:
     auto make_prototype(erhe::graphics::Instance& graphics_instance) const -> erhe::graphics::Shader_stages_prototype;
@@ -139,12 +133,12 @@ private:
     std::shared_ptr<erhe::graphics::Texture>  m_tileset_texture;
     Image                                     m_tileset_image;
 
-    erhe::renderer::GPU_ring_buffer           m_vertex_buffer;
-    erhe::renderer::GPU_ring_buffer           m_projection_buffer;
+    erhe::graphics::GPU_ring_buffer_client    m_vertex_buffer;
+    erhe::graphics::GPU_ring_buffer_client    m_projection_buffer;
     erhe::graphics::Vertex_input_state        m_vertex_input;
     erhe::graphics::Pipeline                  m_pipeline;
 
-    std::optional<erhe::renderer::Buffer_range> m_vertex_buffer_range;
+    std::optional<erhe::graphics::Buffer_range> m_vertex_buffer_range;
     size_t                                      m_vertex_write_offset{0};
     size_t                                      m_index_count        {0};
 

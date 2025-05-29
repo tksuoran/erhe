@@ -19,7 +19,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -189,7 +189,7 @@ void Paint_tool::tool_render(const Render_context& context)
     if (!is_enabled()) {
         return;
     }
-    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
     line_renderer.set_thickness(5.0f);
 
     Scene_view* scene_view = get_hover_scene_view();

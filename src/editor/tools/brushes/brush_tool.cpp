@@ -21,8 +21,7 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
-#include "erhe_renderer/line_renderer.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
@@ -773,7 +772,7 @@ void Brush_tool::tool_render(const Render_context& render_context)
         constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
         constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
         constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
-        erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+        erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
         line_renderer.set_thickness(10.0f);
         line_renderer.add_lines( world_from_align, red,   { { C, C_t }});
         line_renderer.add_lines( world_from_align, green, { { C, C_b }});
@@ -791,7 +790,7 @@ void Brush_tool::tool_render(const Render_context& render_context)
         //    constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
         //    constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
         //    constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
-        //    erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+        //    erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
         //    line_renderer.set_thickness(10.0f);
         //    line_renderer.add_lines( world_from_hover, red,   { { C, C_t }});
         //    line_renderer.add_lines( world_from_hover, green, { { C, C_b }});
@@ -829,7 +828,7 @@ void Brush_tool::tool_render(const Render_context& render_context)
         constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
         constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
         constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
-        erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+        erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
         line_renderer.set_thickness(10.0f);
         line_renderer.add_lines( world_from_hover_node, red,   { { C, C_t }});
         line_renderer.add_lines( world_from_hover_node, green, { { C, C_b }});

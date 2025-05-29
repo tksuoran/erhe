@@ -14,7 +14,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/transform/transform_tool.hpp"
 
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_window.hpp"
@@ -25,7 +25,7 @@
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-#   include "erhe_renderer/debug_renderer.hpp"
+#   include "erhe_renderer/jolt_debug_renderer.hpp"
 #endif
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -141,7 +141,7 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
     if (mesh == nullptr) {
         return;
     }
-    erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
 
     const auto* node = mesh->get_node();
     if (node == nullptr) {
@@ -218,7 +218,7 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
 
     const auto* camera_node = render_context.get_camera_node();
     if (camera_node == nullptr) {
@@ -342,8 +342,8 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
         return;
     }
 
-    auto&                                render_context = context.render_context;
-    erhe::renderer::Scoped_line_renderer line_renderer  = render_context.get_line_renderer(3, true, true);
+    auto&                              render_context = context.render_context;
+    erhe::renderer::Primitive_renderer line_renderer  = render_context.get_line_renderer(3, true, true);
     const auto& light_projections           = shadow_render_node->get_light_projections();
     const auto* light                       = context.light;
     const auto  light_projection_transforms = light_projections.get_light_projection_transforms_for_light(light);
@@ -376,8 +376,8 @@ void Debug_visualizations::point_light_visualization(const Light_visualization_c
     if (node == nullptr) {
         return;
     }
-    auto&                                render_context = context.render_context;
-    erhe::renderer::Scoped_line_renderer line_renderer  = render_context.get_line_renderer(2, true, true);
+    auto&                              render_context = context.render_context;
+    erhe::renderer::Primitive_renderer line_renderer  = render_context.get_line_renderer(2, true, true);
 
     constexpr float scale = 0.5f;
     const auto nnn = scale * glm::normalize(-axis_x - axis_y - axis_z);
@@ -416,7 +416,7 @@ void Debug_visualizations::spot_light_visualization(const Light_visualization_co
         return;
     }
 
-    erhe::renderer::Scoped_line_renderer line_renderer = context.render_context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.render_context.get_line_renderer(2, true, true);
     const erhe::scene::Light* light = context.light;
 
     constexpr int   edge_count       = 200;
@@ -617,7 +617,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     const mat4 node_from_clip  = inverse(clip_from_node);
     const mat4 world_from_clip = node->world_from_node() * node_from_clip;
 
-    erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
     line_renderer.set_thickness(m_camera_visualization_width);
     line_renderer.add_cube(
         world_from_clip,
@@ -638,7 +638,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
     }
 
     const auto& viewport_config = context.viewport_scene_view->get_config();
-    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
     const auto& selection = m_context.selection->get_selection();
 
     m_selection_bounding_volume = erhe::math::Bounding_volume_combiner{}; // reset
@@ -764,7 +764,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
 
     const auto& scene_root = context.scene_view.get_scene_root();
     const auto* camera     = context.camera;
@@ -877,9 +877,9 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
     if (editor_context.editor_settings->physics.debug_draw) {
         glm::vec4 camera_position = camera->get_node()->position_in_world();
         const JPH::Vec3 camera_position_jolt{camera_position.x, camera_position.y, camera_position.z};
-        editor_context.debug_renderer->SetCameraPos(camera_position_jolt);
+        editor_context.jolt_debug_renderer->SetCameraPos(camera_position_jolt);
         erhe::physics::IWorld& world = scene_root->get_physics_world();
-        world.debug_draw(*m_context.debug_renderer);
+        world.debug_draw(*m_context.jolt_debug_renderer);
     }
 #endif
 }
@@ -897,7 +897,7 @@ void Debug_visualizations::raytrace_nodes_visualization(const Render_context& co
 
     ERHE_PROFILE_FUNCTION();
 
-    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
 
     const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
     const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
@@ -939,7 +939,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
     const glm::mat4 world_from_node       = node->world_from_node();
 
-    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
 
     erhe::scene::Mesh* hovered_scene_mesh{nullptr};
     if (m_hover_scene_view != nullptr) {
@@ -1154,7 +1154,7 @@ void Debug_visualizations::render(const Render_context& context)
         return;
     }
 
-    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
 
     for (const auto& node : scene_root->get_hosted_scene()->get_flat_nodes()) {
         if (node && should_visualize(m_node_axis_visualization, node)) {

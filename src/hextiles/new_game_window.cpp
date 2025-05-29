@@ -205,7 +205,8 @@ void New_game_window::imgui()
         ImGui::SameLine();
 
         auto label = fmt::format("Name of player {}", player_number);
-        ImGui::InputText(label.c_str(), player_name.data(), player_name.max_size() - 1);
+        // TODO Fix string input text
+        ImGui::InputText(label.c_str(), &player_name);
         if (m_player_names.size() > 2) {
             ImGui::SameLine();
             auto remove_button_label = fmt::format("Remove##remove-player-{}", player_number);

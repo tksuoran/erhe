@@ -124,7 +124,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
-    using Buffer_range = erhe::renderer::Buffer_range;
+    using Buffer_range = erhe::graphics::Buffer_range;
     std::optional<Buffer_range> camera_buffer_range{};
     if (camera != nullptr) {
         camera_buffer_range = m_camera_buffer.update(
@@ -136,7 +136,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             parameters.grid_line_width,
             parameters.frame_number
         );
-        camera_buffer_range.value().bind();
+        m_camera_buffer.bind(camera_buffer_range.value());
     }
 
     if (!m_graphics_instance.info.use_bindless_texture) {
@@ -144,15 +144,15 @@ void Forward_renderer::render(const Render_parameters& parameters)
     }
 
     Buffer_range material_range = m_material_buffer.update(materials);
-    material_range.bind();
+    m_material_buffer.bind(material_range);
 
     Buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
-    joint_range.bind();
+    m_joint_buffer.bind(joint_range);
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
     Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
-    light_range.bind();
+    m_light_buffer.bind_light_buffer(light_range);
 
     if (m_graphics_instance.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures resident");
@@ -212,6 +212,9 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
             std::size_t primitive_count{0};
             Buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, filter, parameters.primitive_settings, primitive_count);
+            if (primitive_count == 0){
+                continue;
+            }
             erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(meshes, primitive_mode, filter);
             if (draw_indirect_buffer_range.draw_indirect_count == 0) {
                 primitive_range.cancel();
@@ -219,8 +222,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 continue;
             }
             ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
-            primitive_range.bind();
-            draw_indirect_buffer_range.range.bind(); // Draw indirect buffer is not indexed, this binds the whole buffer
+            m_primitive_buffer.bind(primitive_range);
+            m_draw_indirect_buffer.bind(draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
 
             gl::multi_draw_elements_indirect(
                 pipeline.data.input_assembly.primitive_topology,
@@ -230,8 +233,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
             );
 
-            primitive_range.submit();
-            draw_indirect_buffer_range.range.submit();
+            primitive_range.release();
+            draw_indirect_buffer_range.range.release();
         }
 
         if (pass->end) {
@@ -242,11 +245,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     // These must come after the draw calls have been done
     if (camera_buffer_range.has_value()) {
-        camera_buffer_range.value().submit();
+        camera_buffer_range.value().release();
     }
-    material_range.submit();
-    joint_range.submit();
-    light_range.submit();
+    material_range.release();
+    joint_range.release();
+    light_range.release();
 
     if (m_graphics_instance.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures non resident");
@@ -278,9 +281,11 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
-    using Buffer_range = erhe::renderer::Buffer_range;
+    using Buffer_range = erhe::graphics::Buffer_range;
     Buffer_range material_range = m_material_buffer.update(parameters.materials);
-    material_range.bind();
+    if (material_range.get_buffer() != nullptr) {
+        m_material_buffer.bind(material_range);
+    }
 
     std::optional<Buffer_range> camera_range;
     if (camera != nullptr) {
@@ -293,7 +298,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
             parameters.grid_line_width,
             parameters.frame_number
         );
-        camera_range.value().bind();
+        m_camera_buffer.bind(camera_range.value());
     }
 
     std::optional<Buffer_range> light_control_range{};
@@ -301,14 +306,14 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         const auto* light_projection_transforms = parameters.light_projections->get_light_projection_transforms_for_light(light);
         if (light_projection_transforms != nullptr) {
             light_control_range = m_light_buffer.update_control(light_projection_transforms->index);
-            light_control_range.value().bind();
+            m_light_buffer.bind_light_buffer(light_control_range.value());
         } else {
             //// log_render->warn("Light {} has no light projection transforms", light->name());
         }
     }
 
     Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
-    light_range.bind();
+    m_light_buffer.bind_light_buffer(light_range);
 
     if (enable_shadows) {
         if (m_graphics_instance.info.use_bindless_texture) {
@@ -342,14 +347,14 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         }
     }
 
-    material_range.submit();
-    light_range.submit();
+    material_range.release();
+    light_range.release();
 
     if (light_control_range.has_value()) {
-        light_control_range.value().submit();
+        light_control_range.value().release();
     }
     if (camera_range.has_value()) {
-        camera_range.value().submit();
+        camera_range.value().release();
     }
 
     if (enable_shadows) {

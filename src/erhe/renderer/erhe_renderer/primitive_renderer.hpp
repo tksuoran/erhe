@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe_renderer/buffer_writer.hpp"
 #include "erhe_graphics/instance.hpp"
 
 namespace erhe::graphics {
@@ -13,8 +12,8 @@ namespace erhe::scene {
 
 namespace erhe::renderer {
 
-class Line_renderer;
-class Line_renderer_bucket;
+class Debug_renderer;
+class Debug_renderer_bucket;
 
 class Line
 {
@@ -30,15 +29,14 @@ public:
     glm::vec4 p1;
 };
 
-class Scoped_line_renderer
+class Primitive_renderer
 {
 public:
-    Scoped_line_renderer(Line_renderer& line_renderer, Line_renderer_bucket& bucket, bool indirect = false);
-    ~Scoped_line_renderer();
-    Scoped_line_renderer(Scoped_line_renderer& other) = delete;
-    auto operator=(Scoped_line_renderer& other) -> Scoped_line_renderer& = delete;
-    Scoped_line_renderer(Scoped_line_renderer&& old);
-    auto operator=(Scoped_line_renderer&& old) -> Scoped_line_renderer&;
+    Primitive_renderer(Debug_renderer& debug_renderer, Debug_renderer_bucket& bucket);
+    Primitive_renderer(Primitive_renderer& other) = delete;
+    auto operator=    (Primitive_renderer& other) -> Primitive_renderer& = delete;
+    Primitive_renderer(Primitive_renderer&& old);
+    auto operator=    (Primitive_renderer&& old) -> Primitive_renderer&;
 
 #pragma region Draw API
     void set_line_color(float r, float g, float b, float a);
@@ -122,7 +120,8 @@ public:
 #pragma endregion Draw API
 
 private:
-    void allocate(std::size_t line_count);
+    void make_lines(std::size_t line_count);
+
     inline void put(
         const glm::vec3& point,
         float            thickness,
@@ -144,13 +143,11 @@ private:
         ERHE_VERIFY(m_last_allocate_word_offset <= m_last_allocate_word_count);
     }
 
-    Line_renderer*         m_line_renderer{nullptr};
-    Line_renderer_bucket*  m_bucket{nullptr};
-    bool                   m_indirect;
+    Debug_renderer*        m_debug_renderer{nullptr};
+    Debug_renderer_bucket* m_bucket{nullptr};
 
     // offset (in lines), relative to vertex buffer range in Line_renderer
-    // initialized in Scoped_line_renderer constructor
-    std::size_t            m_first_line{0};
+    // initialized in Primitive_renderer constructor
     std::size_t            m_line_vertex_stride;
 
     std::span<std::byte>   m_last_allocate_gpu_data;
@@ -159,7 +156,6 @@ private:
     std::size_t            m_last_allocate_word_count    {0};
 
     // Current state
-    std::vector<std::byte> m_indirect_buffer;
     glm::vec4              m_line_color    {1.0f, 1.0f, 1.0f, 1.0f};
     float                  m_line_thickness{1.0f};
 };

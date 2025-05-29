@@ -7,7 +7,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
 #include "erhe_physics/icollision_shape.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/node.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -24,7 +24,7 @@ void Create_uv_sphere::render_preview(const Create_preview_settings& preview_set
         return;
     }
 
-    erhe::renderer::Scoped_line_renderer line_renderer = get_line_renderer(preview_settings);
+    erhe::renderer::Primitive_renderer line_renderer = get_line_renderer(preview_settings);
     line_renderer.add_sphere(
         preview_settings.transform,
         preview_settings.major_color,

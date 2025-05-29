@@ -13,11 +13,9 @@
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
-namespace hextiles
-{
+namespace hextiles {
 
-namespace
-{
+namespace {
 
 constexpr float drag_speed = 0.2f;
 
@@ -332,7 +330,7 @@ void Type_editor::terrain_editor_imgui()
                 m_tile_renderer.terrain_image(m_tiles.get_terrain_tile_from_terrain(m_current_terrain_id), 2);
                 ImGui::SameLine        ();
                 ImGui::SetNextItemWidth(80.0f);
-                ImGui::InputText       (name_label.c_str(), terrain.name.data(), terrain.name.max_size() - 1);
+                ImGui::InputText       (name_label.c_str(), &terrain.name);
             }
             m_current_column = 1;
 
@@ -643,7 +641,7 @@ void Type_editor::unit_editor_imgui()
                 m_tile_renderer.unit_image(m_tile_renderer.get_single_unit_tile(player, m_current_unit_id), 2);
                 ImGui::SameLine        ();
                 ImGui::SetNextItemWidth(80.0f);
-                ImGui::InputText       (name_label.c_str(), unit.name.data(), unit.name.max_size() - 1);
+                ImGui::InputText       (name_label.c_str(), &unit.name);
             }
             m_current_column = 1;
 

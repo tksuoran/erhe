@@ -3,7 +3,7 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 
-#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 
 #include <glm/glm.hpp>
@@ -55,7 +55,7 @@ void Debug_draw::draw_line(const glm::vec3 from, const glm::vec3 to, const glm::
     static_cast<void>(from);
     static_cast<void>(to);
     static_cast<void>(color);
-    /// TODO auto& line_renderer = m_context.line_renderer->get(
+    /// TODO auto& line_renderer = m_context.debug_renderer->get(
     /// TODO line_renderer.set_thickness(line_width);
     /// TODO line_renderer.add_lines(glm::vec4{color, 1.0f}, { {from, to} });
 }

@@ -103,7 +103,7 @@ void Cube_renderer::render(const Render_parameters& parameters)
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
-    using Buffer_range = erhe::renderer::Buffer_range;
+    using Buffer_range = erhe::graphics::Buffer_range;
     std::optional<Buffer_range> camera_buffer_range{};
     ERHE_VERIFY(camera != nullptr);
     camera_buffer_range = m_camera_buffer.update(
@@ -115,22 +115,22 @@ void Cube_renderer::render(const Render_parameters& parameters)
         glm::vec4{0.0f},
         parameters.frame_number
     );
-    camera_buffer_range.value().bind();
+    m_camera_buffer.bind(camera_buffer_range.value());
 
-    erhe::renderer::Buffer_range primitive_range = m_primitive_buffer.update(
+    Buffer_range primitive_range = m_primitive_buffer.update(
         erhe::graphics::as_span(parameters.node),
         parameters.primitive_settings
     );
-    primitive_range.bind();
+    m_primitive_buffer.bind(primitive_range);
 
-    erhe::renderer::Buffer_range cube_control_range = m_cube_control_buffer.update(
+    Buffer_range cube_control_range = m_cube_control_buffer.update(
         parameters.cube_size,
         parameters.color_bias,
         parameters.color_scale,
         parameters.color_start,
         parameters.color_end
     );
-    cube_control_range.bind();
+    m_cube_control_buffer.bind(cube_control_range);
 
     const erhe::graphics::Pipeline& pipeline = parameters.pipeline;
     m_graphics_instance.opengl_state_tracker.execute(pipeline, false);
@@ -138,9 +138,9 @@ void Cube_renderer::render(const Render_parameters& parameters)
     const GLsizei     vertex_count = static_cast<GLsizei>(cube_count * 6 * 6);
     gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, vertex_count);
 
-    camera_buffer_range.value().submit();
-    primitive_range.submit();
-    cube_control_range.submit();
+    camera_buffer_range.value().release();
+    primitive_range.release();
+    cube_control_range.release();
 }
 
 } // namespace erhe::scene_renderer

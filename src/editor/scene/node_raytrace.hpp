@@ -18,7 +18,7 @@ namespace erhe::primitive {
     class Primitive;
 }
 namespace erhe::renderer {
-    class Scoped_line_renderer;
+    class Primitive_renderer;
 }
 namespace erhe::scene {
     class Mesh;
@@ -45,10 +45,10 @@ public:
 [[nodiscard]] auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>;
 
 void draw_ray_hit(
-    erhe::renderer::Scoped_line_renderer& line_renderer,
-    const erhe::raytrace::Ray&            ray,
-    const erhe::raytrace::Hit&            hit,
-    const Ray_hit_style&                  style = {}
+    erhe::renderer::Primitive_renderer& line_renderer,
+    const erhe::raytrace::Ray&          ray,
+    const erhe::raytrace::Hit&          hit,
+    const Ray_hit_style&                style = {}
 );
 
 [[nodiscard]] auto project_ray(

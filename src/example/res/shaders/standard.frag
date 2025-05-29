@@ -1,7 +1,7 @@
-in vec2      v_texcoord;
-in vec4      v_position;
-in vec3      v_normal;
-in flat uint v_material_index;
+layout(location = 0) in vec2      v_texcoord;
+layout(location = 1) in vec4      v_position;
+layout(location = 2) in vec3      v_normal;
+layout(location = 3) in flat uint v_material_index;
 
 const float m_pi   = 3.1415926535897932384626434;
 const float m_i_pi = 0.3183098861837906715377675;

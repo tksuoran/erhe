@@ -1,6 +1,7 @@
 #include "erhe_ui/font.hpp"
 #include "erhe_ui/glyph.hpp"
 #include "erhe_ui/ui_log.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -493,7 +494,6 @@ void Font::post_process()
 
 #if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 auto Font::print(
-    std::span<float>    float_data,
     std::span<uint32_t> uint_data,
     std::string_view    text,
     glm::vec3           text_position,
@@ -501,6 +501,10 @@ auto Font::print(
     Rectangle&          out_bounds
 ) const -> size_t
 {
+    if ((text_position.z < -1.0f) || (text_position.z >  1.0f))
+    {
+        return 0; // near or far clipped TODO more precise range
+    }
     ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(
@@ -530,18 +534,19 @@ auto Font::print(
     hb_shape                (m_harfbuzz_font, m_harfbuzz_buffer, &userfeatures[0], 1);
 
     unsigned int glyph_count{0};
-    hb_glyph_info_t*     glyph_info = hb_buffer_get_glyph_infos    (m_harfbuzz_buffer, &glyph_count);
-    hb_glyph_position_t* glyph_pos  = hb_buffer_get_glyph_positions(m_harfbuzz_buffer, &glyph_count);
+    hb_glyph_info_t*     glyph_info       = hb_buffer_get_glyph_infos    (m_harfbuzz_buffer, &glyph_count);
+    hb_glyph_position_t* glyph_pos        = hb_buffer_get_glyph_positions(m_harfbuzz_buffer, &glyph_count);
+    const uint32_t       text_position_zw = erhe::dataformat::pack_snorm2x16(text_position.z, 1.0f);
 
     std::size_t chars_printed{0};
     std::size_t word_offset{0};
-    std::size_t glyph_space_remaining = uint_data.size() / (6 * 4);
+    std::size_t glyph_space_remaining = uint_data.size() / (4 * 4);
     for (unsigned int i = 0; i < glyph_count; ++i) {
-        const auto  glyph_id  = glyph_info[i].codepoint;
-        const float x_offset  = static_cast<float>(glyph_pos[i].x_offset ) / 64.0f;
-        const float y_offset  = static_cast<float>(glyph_pos[i].y_offset ) / 64.0f;
-        const float x_advance = static_cast<float>(glyph_pos[i].x_advance) / 64.0f;
-        const float y_advance = static_cast<float>(glyph_pos[i].y_advance) / 64.0f;
+        const auto glyph_id  = glyph_info[i].codepoint;
+        const int  x_offset  = glyph_pos[i].x_offset  / 64;
+        const int  y_offset  = glyph_pos[i].y_offset  / 64;
+        const int  x_advance = glyph_pos[i].x_advance / 64;
+        const int  y_advance = glyph_pos[i].y_advance / 64;
         auto j = m_glyph_to_char.find(glyph_id);
         if (j != m_glyph_to_char.end()) {
             auto c = j->second;
@@ -553,47 +558,45 @@ auto Font::print(
                     return chars_printed;
                 }
 
-                const float b  = static_cast<float>(font_char.g_bottom - font_char.b_bottom);
-                const float t  = static_cast<float>(font_char.g_top    - font_char.b_top);
-                const float w  = static_cast<float>(font_char.width);
-                const float h  = static_cast<float>(font_char.height);
-                const float ox = static_cast<float>(font_char.b_left);
-                const float oy = static_cast<float>(font_char.b_bottom + t + b);
-                const float x0 = text_position.x + x_offset + ox;
-                const float y0 = text_position.y + y_offset + oy;
-                const float x1 = x0 + w;
-                const float y1 = y0 + h;
+                const int b  = font_char.g_bottom - font_char.b_bottom;
+                const int t  = font_char.g_top    - font_char.b_top;
+                const int w  = font_char.width;
+                const int h  = font_char.height;
+                const int ox = font_char.b_left;
+                const int oy = font_char.b_bottom + t + b;
+                const int x0 = static_cast<int>(text_position.x) + x_offset + ox;
+                const int y0 = static_cast<int>(text_position.y) + y_offset + oy;
+                const int x1 = x0 + w;
+                const int y1 = y0 + h;
 
-                float_data[word_offset++] = x0;
-                float_data[word_offset++] = y0;
-                float_data[word_offset++] = text_position.z;
-                uint_data [word_offset++] = text_color;
-                float_data[word_offset++] = font_char.u[0];
-                float_data[word_offset++] = font_char.v[0];
+                //  3---2
+                //  |  /|
+                //  | / |
+                //  |/  |
+                //  0---1
 
-                float_data[word_offset++] = x1;
-                float_data[word_offset++] = y0;
-                float_data[word_offset++] = text_position.z;
-                uint_data [word_offset++] = text_color;
-                float_data[word_offset++] = font_char.u[1];
-                float_data[word_offset++] = font_char.v[1];
+                uint_data[word_offset++] = erhe::dataformat::pack_int2x16(x0, y0);
+                uint_data[word_offset++] = text_position_zw;
+                uint_data[word_offset++] = text_color;
+                uint_data[word_offset++] = erhe::dataformat::pack_unorm2x16(font_char.u[0], font_char.v[0]);
 
-                float_data[word_offset++] = x1;
-                float_data[word_offset++] = y1;
-                float_data[word_offset++] = text_position.z;
-                uint_data [word_offset++] = text_color;
-                float_data[word_offset++] = font_char.u[2];
-                float_data[word_offset++] = font_char.v[2];
+                uint_data[word_offset++] = erhe::dataformat::pack_int2x16(x1, y0);
+                uint_data[word_offset++] = text_position_zw;
+                uint_data[word_offset++] = text_color;
+                uint_data[word_offset++] = erhe::dataformat::pack_unorm2x16(font_char.u[1], font_char.v[1]);
 
-                float_data[word_offset++] = x0;
-                float_data[word_offset++] = y1;
-                float_data[word_offset++] = text_position.z;
-                uint_data [word_offset++] = text_color;
-                float_data[word_offset++] = font_char.u[3];
-                float_data[word_offset++] = font_char.v[3];
+                uint_data[word_offset++] = erhe::dataformat::pack_int2x16(x1, y1);
+                uint_data[word_offset++] = text_position_zw;
+                uint_data[word_offset++] = text_color;
+                uint_data[word_offset++] = erhe::dataformat::pack_unorm2x16(font_char.u[2], font_char.v[2]);
 
-                out_bounds.extend_by(x0, y0);
-                out_bounds.extend_by(x1, y1);
+                uint_data[word_offset++] = erhe::dataformat::pack_int2x16(x0, y1);
+                uint_data[word_offset++] = text_position_zw;
+                uint_data[word_offset++] = text_color;
+                uint_data[word_offset++] = erhe::dataformat::pack_unorm2x16(font_char.u[3], font_char.v[3]);
+
+                out_bounds.extend_by(static_cast<float>(x0), static_cast<float>(y0));
+                out_bounds.extend_by(static_cast<float>(x1), static_cast<float>(y1));
                 ++chars_printed;
             }
         }

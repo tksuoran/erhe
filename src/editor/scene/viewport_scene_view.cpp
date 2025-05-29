@@ -28,7 +28,7 @@
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_log/log_glm.hpp"
-#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -163,11 +163,9 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     m_context.editor_rendering->render_viewport_main(context);
 
-    m_context.line_renderer   ->open();
     m_context.tools           ->render_viewport_tools(context);
     m_context.editor_rendering->render_viewport_renderables(context);
-    m_context.line_renderer   ->close();
-    m_context.line_renderer   ->render(context.viewport, *context.camera);
+    m_context.debug_renderer  ->render(context.viewport, *context.camera);
 
     m_context.text_renderer->render(context.viewport);
     gl::disable(gl::Enable_cap::scissor_test);

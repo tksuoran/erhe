@@ -27,7 +27,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
@@ -192,7 +192,7 @@ void Headset_view::render(const Render_context& render_context)
     }
 
     // TODO Handle selection stencil
-    erhe::renderer::Scoped_line_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
 
     constexpr glm::vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};
     constexpr glm::vec4 green {0.0f, 1.0f, 0.0f, 1.0f};
@@ -471,11 +471,9 @@ void Headset_view::render_headset()
                 };
 
                 m_context.editor_rendering->render_composer(render_context);
-                m_context.line_renderer   ->open();
                 m_context.tools           ->render_viewport_tools(render_context);
                 m_context.editor_rendering->render_viewport_renderables(render_context);
-                m_context.line_renderer   ->close();
-                m_context.line_renderer   ->render(render_context.viewport, *render_context.camera);
+                m_context.debug_renderer  ->render(render_context.viewport, *render_context.camera);
 
                 if (m_renderdoc_capture_started) {
                     erhe::window::end_frame_capture(m_context_window);

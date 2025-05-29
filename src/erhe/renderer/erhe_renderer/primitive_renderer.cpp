@@ -1,9 +1,7 @@
-#include "erhe_renderer/scoped_line_renderer.hpp"
-#include "erhe_renderer/line_renderer.hpp"
-#include "erhe_renderer/line_renderer_bucket.hpp"
-#include "erhe_renderer/renderer_log.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
+#include "erhe_renderer/debug_renderer_bucket.hpp"
 
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
@@ -13,28 +11,17 @@
 namespace erhe::renderer {
 
 // Note that this relies on bucket being stable, as in etl::vector<> when elements are never removed.
-Scoped_line_renderer::Scoped_line_renderer(
-    Line_renderer&        line_renderer,
-    Line_renderer_bucket& bucket,
-    bool                  indirect
-)
-    : m_line_renderer     {&line_renderer}
+Primitive_renderer::Primitive_renderer(Debug_renderer& debug_renderer, Debug_renderer_bucket& bucket)
+    : m_debug_renderer    {&debug_renderer}
     , m_bucket            {&bucket}
-    , m_indirect          {indirect}
-    , m_line_vertex_stride{m_line_renderer->get_program_interface().line_vertex_format.streams.front().stride}
+    , m_line_vertex_stride{m_debug_renderer->get_program_interface().line_vertex_struct->size_bytes()}
 {
-    if (m_indirect) {
-        m_indirect_buffer.reserve(1000 * m_line_vertex_stride);
-    } 
-    m_first_line = m_line_renderer->get_line_offset();
 }
 
-Scoped_line_renderer::Scoped_line_renderer(Scoped_line_renderer&& old)
-    : m_line_renderer               {std::exchange(old.m_line_renderer, nullptr)}
-    , m_bucket                      {std::exchange(old.m_bucket,        nullptr)}
-    , m_indirect                    {std::exchange(old.m_indirect,      0)}
-    , m_first_line                  {std::exchange(old.m_first_line,    0)}
-    , m_line_vertex_stride          {m_line_renderer->get_program_interface().line_vertex_format.streams.front().stride}
+Primitive_renderer::Primitive_renderer(Primitive_renderer&& old)
+    : m_debug_renderer              {std::exchange(old.m_debug_renderer, nullptr)}
+    , m_bucket                      {std::exchange(old.m_bucket,         nullptr)}
+    , m_line_vertex_stride          {m_debug_renderer->get_program_interface().line_vertex_struct->size_bytes()}
     , m_last_allocate_gpu_float_data{nullptr}
     , m_last_allocate_word_offset   {0}
     , m_last_allocate_word_count    {0}
@@ -45,71 +32,31 @@ Scoped_line_renderer::Scoped_line_renderer(Scoped_line_renderer&& old)
     ERHE_VERIFY(old.m_last_allocate_gpu_float_data == nullptr);
     ERHE_VERIFY(old.m_last_allocate_word_offset == 0);
     ERHE_VERIFY(old.m_last_allocate_word_count == 0);
-    ERHE_VERIFY(old.m_indirect_buffer.empty());
 }
 
-auto Scoped_line_renderer::operator=(Scoped_line_renderer&& old) -> Scoped_line_renderer&
+auto Primitive_renderer::operator=(Primitive_renderer&& old) -> Primitive_renderer&
 {
-    m_line_renderer  = std::exchange(old.m_line_renderer, nullptr);
-    m_bucket         = std::exchange(old.m_bucket,        nullptr);
-    m_indirect       = old.m_indirect;
-    m_first_line     = std::exchange(old.m_first_line,    0);
+    m_debug_renderer = std::exchange(old.m_debug_renderer, nullptr);
+    m_bucket         = std::exchange(old.m_bucket, nullptr);
     m_line_color     = old.m_line_color;
     m_line_thickness = old.m_line_thickness;
     ERHE_VERIFY(m_last_allocate_gpu_data.empty());
     ERHE_VERIFY(m_last_allocate_gpu_float_data == nullptr);
     ERHE_VERIFY(m_last_allocate_word_offset == 0);
     ERHE_VERIFY(m_last_allocate_word_count == 0);
-    ERHE_VERIFY(m_indirect_buffer.empty());
     ERHE_VERIFY(old.m_last_allocate_gpu_data.empty());
     ERHE_VERIFY(old.m_last_allocate_gpu_float_data == nullptr);
     ERHE_VERIFY(old.m_last_allocate_word_offset == 0);
     ERHE_VERIFY(old.m_last_allocate_word_count == 0);
-    ERHE_VERIFY(old.m_indirect_buffer.empty());
     return *this;
 }
 
-Scoped_line_renderer::~Scoped_line_renderer()
+void Primitive_renderer::make_lines(std::size_t line_count)
 {
-    if (m_line_renderer == nullptr) {
-        return;
-    }
-    ERHE_VERIFY(m_bucket != nullptr);
-    if (m_indirect) {
-        const std::size_t byte_count = m_indirect_buffer.size();
-        if (byte_count > 0) {
-            std::size_t first_line_offset = m_line_renderer->get_line_offset();
-            std::span<std::byte> dst = m_line_renderer->allocate_vertex_subspan(byte_count);
-            if (dst.size_bytes() < byte_count) {
-                log_render->warn("Not enough space in Line_renderer vertex buffer");
-                return;
-            }
-            std::copy(m_indirect_buffer.begin(), m_indirect_buffer.end(), dst.begin());
-            std::size_t last_line_offset = m_line_renderer->get_line_offset();
-            std::size_t line_count = last_line_offset - m_first_line;
-            m_bucket->append_lines(first_line_offset, line_count);
-        }
-    } else {
-        std::size_t line_offset = m_line_renderer->get_line_offset();
-        std::size_t line_count = line_offset - m_first_line;
-        if (line_count > 0) {
-            m_bucket->append_lines(m_first_line, line_count);
-        }
-    }
-}
-
-void Scoped_line_renderer::allocate(std::size_t line_count)
-{
-    std::size_t byte_count = line_count * 2 * m_line_vertex_stride;
+    std::size_t byte_count     = line_count * 2 * m_line_vertex_stride;
     m_last_allocate_word_count = byte_count / sizeof(float);
-    if (!m_indirect) {
-        m_last_allocate_gpu_data = m_line_renderer->allocate_vertex_subspan(byte_count);
-    } else {
-        const std::size_t size_before = m_indirect_buffer.size();
-        const std::size_t new_size = size_before + byte_count;
-        m_indirect_buffer.resize(new_size);
-        m_last_allocate_gpu_data = std::span<std::byte>{m_indirect_buffer.data() + size_before, byte_count};
-    }
+    m_last_allocate_gpu_data   = m_bucket->make_draw(byte_count, line_count);
+
     if (m_last_allocate_gpu_data.size_bytes() < byte_count) {
         m_last_allocate_gpu_float_data = nullptr;
         m_last_allocate_word_offset    = 0;
@@ -120,40 +67,30 @@ void Scoped_line_renderer::allocate(std::size_t line_count)
     }
 }
 
-void Scoped_line_renderer::set_line_color(const float r, const float g, const float b, const float a)
+void Primitive_renderer::set_line_color(const float r, const float g, const float b, const float a)
 {
-    ERHE_VERIFY(m_line_renderer->verify_is_open());
-
     m_line_color = glm::vec4{r, g, b, a};
 }
 
-void Scoped_line_renderer::set_line_color(const glm::vec3& color)
+void Primitive_renderer::set_line_color(const glm::vec3& color)
 {
-    ERHE_VERIFY(m_line_renderer->verify_is_open());
-
     m_line_color = glm::vec4{color, 1.0f};
 }
 
-void Scoped_line_renderer::set_line_color(const glm::vec4& color)
+void Primitive_renderer::set_line_color(const glm::vec4& color)
 {
-    ERHE_VERIFY(m_line_renderer->verify_is_open());
-
     m_line_color = color;
 }
 
-void Scoped_line_renderer::set_thickness(const float thickness)
+void Primitive_renderer::set_thickness(const float thickness)
 {
-    ERHE_VERIFY(m_line_renderer->verify_is_open());
-
     m_line_thickness = thickness;
 }
 
 #pragma region add
-void Scoped_line_renderer::add_lines(const glm::mat4& transform, const std::initializer_list<Line> lines)
+void Primitive_renderer::add_lines(const glm::mat4& transform, const std::initializer_list<Line> lines)
 {
-    ERHE_VERIFY(m_line_renderer->verify_is_open());
-
-    allocate(lines.size());
+    make_lines(lines.size());
     for (const Line& line : lines) {
         const glm::vec4 p0{transform * glm::vec4{line.p0, 1.0f}};
         const glm::vec4 p1{transform * glm::vec4{line.p1, 1.0f}};
@@ -162,11 +99,9 @@ void Scoped_line_renderer::add_lines(const glm::mat4& transform, const std::init
     }
 }
 
-void Scoped_line_renderer::add_lines(const glm::mat4& transform, const std::initializer_list<Line4> lines)
+void Primitive_renderer::add_lines(const glm::mat4& transform, const std::initializer_list<Line4> lines)
 {
-    ERHE_VERIFY(m_line_renderer->verify_is_open());
-
-    allocate(lines.size());
+    make_lines(lines.size());
     for (const Line4& line : lines) {
         const glm::vec4 p0{transform * glm::vec4{glm::vec3{line.p0}, 1.0f}};
         const glm::vec4 p1{transform * glm::vec4{glm::vec3{line.p1}, 1.0f}};
@@ -175,27 +110,23 @@ void Scoped_line_renderer::add_lines(const glm::mat4& transform, const std::init
     }
 }
 
-void Scoped_line_renderer::add_line(const glm::vec4& color0, float width0, glm::vec3 p0, const glm::vec4& color1, float width1, glm::vec3 p1)
+void Primitive_renderer::add_line(const glm::vec4& color0, float width0, glm::vec3 p0, const glm::vec4& color1, float width1, glm::vec3 p1)
 {
-    ERHE_VERIFY(m_line_renderer->verify_is_open());
-
-    allocate(1);
+    make_lines(1);
     put(p0, width0, color0);
     put(p1, width1, color1);
 }
 
-void Scoped_line_renderer::add_lines(const std::initializer_list<Line> lines)
+void Primitive_renderer::add_lines(const std::initializer_list<Line> lines)
 {
-    ERHE_VERIFY(m_line_renderer->verify_is_open());
-
-    allocate(lines.size());
+    make_lines(lines.size());
     for (const Line& line : lines) {
         put(line.p0, m_line_thickness, m_line_color);
         put(line.p1, m_line_thickness, m_line_color);
     }
 }
 
-void Scoped_line_renderer::add_cube(
+void Primitive_renderer::add_cube(
     const glm::mat4& transform,
     const glm::vec4& color,
     const glm::vec3& min_corner,
@@ -203,8 +134,6 @@ void Scoped_line_renderer::add_cube(
     const bool       z_cross
 )
 {
-    ERHE_VERIFY(m_line_renderer->verify_is_open());
-
     const auto a = min_corner;
     const auto b = max_corner;
     glm::vec3 p[8] = {
@@ -264,7 +193,7 @@ void Scoped_line_renderer::add_cube(
     }
 }
 
-void Scoped_line_renderer::add_bone(
+void Primitive_renderer::add_bone(
     const glm::mat4& transform,
     const glm::vec4& color,
     const glm::vec3& start,
@@ -274,7 +203,7 @@ void Scoped_line_renderer::add_bone(
     add_lines(transform, color, {{ start, end }} );
 }
 
-void Scoped_line_renderer::add_sphere(
+void Primitive_renderer::add_sphere(
     const erhe::scene::Transform&       world_from_local,
     const glm::vec4&                    edge_color,
     const glm::vec4&                    great_circle_color,
@@ -413,7 +342,7 @@ auto sign(const double x) -> double
     return (x < 0.0) ? -1.0 : (x == 0.0) ? 0.0 : 1.0;
 }
 
-void Scoped_line_renderer::add_cone(
+void Primitive_renderer::add_cone(
     const erhe::scene::Transform& world_from_node,
     const glm::vec4&              major_color,
     const glm::vec4&              minor_color,
@@ -808,7 +737,7 @@ auto ray_torus_intersection(const glm::dvec3 ro, const glm::dvec3 rd, const glm:
 
 } // anonymous namespace
 
-void Scoped_line_renderer::add_torus(
+void Primitive_renderer::add_torus(
     const erhe::scene::Transform& world_from_node,
     const glm::vec4&              major_color,
     const glm::vec4&              minor_color,

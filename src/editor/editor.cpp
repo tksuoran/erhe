@@ -92,11 +92,11 @@
 #include "erhe_physics/physics_log.hpp"
 #include "erhe_physics/iworld.hpp"
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-#   include "erhe_renderer/debug_renderer.hpp"
+#   include "erhe_renderer/jolt_debug_renderer.hpp"
 #endif
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
-#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -489,11 +489,11 @@ public:
                 m_imgui_renderer = std::make_unique<erhe::imgui::Imgui_renderer>(*m_graphics_instance.get(), m_editor_settings->imgui);
             })  .name("Imgui_renderer");
 
-            auto line_renderer_task = taskflow.emplace([this]()
+            auto debug_renderer_task = taskflow.emplace([this]()
             {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
-                m_line_renderer = std::make_unique<erhe::renderer::Line_renderer>(*m_graphics_instance.get());
-            })  .name("Line_renderer");
+                m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_graphics_instance.get());
+            })  .name("Debug_renderer");
 
             auto rendergraph_task = taskflow.emplace([this]()
             {
@@ -502,11 +502,11 @@ public:
             })  .name("Rendergraph");
 
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-            auto debug_renderer_task = taskflow.emplace([this]()
+            auto jolt_debug_renderer_task = taskflow.emplace([this]()
             {
                 erhe::graphics::Scoped_gl_context ctx{m_graphics_instance->context_provider};
-                m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_line_renderer.get());
-            }).name("Debug_renderer").succeed(line_renderer_task);
+                m_jolt_debug_renderer = std::make_unique<erhe::renderer::Jolt_debug_renderer>(*m_debug_renderer.get());
+            }).name("Jolt_debug_renderer").succeed(debug_renderer_task);
 #endif
 
             auto text_renderer_task = taskflow.emplace([this]()
@@ -980,9 +980,9 @@ public:
         m_editor_context.imgui_renderer         = m_imgui_renderer        .get();
         m_editor_context.imgui_windows          = m_imgui_windows         .get();
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-        m_editor_context.debug_renderer         = m_debug_renderer        .get();
+        m_editor_context.jolt_debug_renderer    = m_jolt_debug_renderer   .get();
 #endif
-        m_editor_context.line_renderer          = m_line_renderer         .get();
+        m_editor_context.debug_renderer         = m_debug_renderer        .get();
         m_editor_context.text_renderer          = m_text_renderer         .get();
         m_editor_context.rendergraph            = m_rendergraph           .get();
         m_editor_context.scene_message_bus      = m_scene_message_bus     .get();
@@ -1103,12 +1103,12 @@ public:
     std::unique_ptr<Editor_settings                        > m_editor_settings;
     std::unique_ptr<erhe::graphics::Instance               > m_graphics_instance;
     std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;
-    std::unique_ptr<erhe::renderer::Line_renderer          > m_line_renderer;
+    std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;
     std::unique_ptr<erhe::scene_renderer::Program_interface> m_program_interface;
     std::unique_ptr<erhe::rendergraph::Rendergraph         > m_rendergraph;
     std::unique_ptr<erhe::renderer::Text_renderer          > m_text_renderer;
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-    std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;
+    std::unique_ptr<erhe::renderer::Jolt_debug_renderer    > m_jolt_debug_renderer;
 #endif
     erhe::dataformat::Vertex_format                          m_vertex_format;
 

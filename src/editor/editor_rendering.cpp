@@ -29,7 +29,7 @@
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -699,6 +699,8 @@ void Editor_rendering::end_frame()
         erhe::window::end_frame_capture(*m_context.context_window);
         m_trigger_capture = false;
     }
+
+    m_context.graphics_instance->end_of_frame();
 }
 
 void Editor_rendering::add(Renderable* renderable)

@@ -436,7 +436,15 @@ void Map_window::render()
     gl::clear_color     (0.2f, 0.0f, 0.2f, 1.0f);
     gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
 
-    m_tile_renderer.begin();
+    std::size_t width_in_tiles  = static_cast<size_t>(std::ceil(extent_x / (Tile_shape::interleave_width * m_zoom)));
+    std::size_t height_in_tiles = static_cast<size_t>(std::ceil(extent_y / (Tile_shape::height           * m_zoom)));
+    std::size_t tile_count      = (width_in_tiles + 2) * (height_in_tiles + 2);
+
+    if (m_grid) {
+        tile_count = 2 * tile_count;
+    }
+
+    m_tile_renderer.begin(tile_count + max_unit_count * max_player_count);
     coordinate_t half_width_in_tiles  = 2 + static_cast<coordinate_t>(std::ceil(extent_x / (Tile_shape::interleave_width * m_zoom)));
     coordinate_t half_height_in_tiles = 2 + static_cast<coordinate_t>(std::ceil(extent_y / (Tile_shape::height           * m_zoom)));
     for (coordinate_t vx = -half_width_in_tiles; vx < half_width_in_tiles; ++vx) {

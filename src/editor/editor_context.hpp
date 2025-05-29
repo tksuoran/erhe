@@ -11,10 +11,10 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 namespace erhe::renderer {
-    class Line_renderer;
+    class Debug_renderer;
     class Text_renderer;
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-    class Debug_renderer;
+    class Jolt_debug_renderer;
 #endif
 }
 namespace erhe::rendergraph {
@@ -38,6 +38,7 @@ class Brush_tool;
 class Clipboard;
 class Clipboard_window;
 class Create;
+class Debug_renderer;
 class Editor_message_bus;
 class Editor_rendering;
 class Editor_scenes;
@@ -55,6 +56,7 @@ class Icon_set;
 class Id_renderer;
 class Imgui_window_scene_views;
 class Input_state;
+class Jolt_debug_renderer;
 class Material_paint_tool;
 class Material_preview;
 class Mesh_memory;
@@ -94,9 +96,9 @@ public:
     erhe::imgui::Imgui_renderer*            imgui_renderer        {nullptr};
     erhe::imgui::Imgui_windows*             imgui_windows         {nullptr};
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-    erhe::renderer::Debug_renderer*         debug_renderer        {nullptr};
+    erhe::renderer::Jolt_debug_renderer*    jolt_debug_renderer   {nullptr};
 #endif
-    erhe::renderer::Line_renderer*          line_renderer         {nullptr};
+    erhe::renderer::Debug_renderer*         debug_renderer        {nullptr};
     erhe::renderer::Text_renderer*          text_renderer         {nullptr};
     erhe::rendergraph::Rendergraph*         rendergraph           {nullptr};
     erhe::scene::Scene_message_bus*         scene_message_bus     {nullptr};

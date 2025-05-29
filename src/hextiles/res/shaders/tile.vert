@@ -1,5 +1,5 @@
-out vec2  v_texcoord;
-out vec4  v_color;
+layout(location = 0) out vec2  v_texcoord;
+layout(location = 1) out vec4  v_color;
 
 #if defined(ERHE_BINDLESS_TEXTURE)
 out flat uvec2 v_texture;

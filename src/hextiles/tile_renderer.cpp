@@ -1,14 +1,10 @@
 #include "tile_renderer.hpp"
 
 #include "tiles.hpp"
-#include "hextiles.hpp"
 #include "hextiles_log.hpp"
 
 #include "erhe_dataformat/vertex_format.hpp"
-#include "erhe_graphics/gl_context_provider.hpp"
-#include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_gl/command_info.hpp"
-#include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
@@ -17,6 +13,7 @@
 #include "erhe_graphics/scoped_buffer_mapping.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_log/log_glm.hpp"
@@ -25,8 +22,6 @@
 #include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 
 #include <cstdarg>
 
@@ -152,20 +147,14 @@ Tile_renderer::Tile_renderer(
     , m_shader_stages            {make_program(make_prototype(graphics_instance))}
     , m_vertex_buffer{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target      = gl::Buffer_target::array_buffer,
-            .size        = m_vertex_format.streams.front().stride * max_quad_count * per_quad_vertex_count,
-            .debug_label = "Tile_renderer vertex ring buffer"
-        }
+        "Tile_renderer::m_vertex_buffer",
+        gl::Buffer_target::array_buffer
     }
     , m_projection_buffer{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::uniform_buffer,
-            .binding_point = m_projection_block.binding_point(),
-            .size          = 20 * m_projection_block.size_bytes(), // TODO proper size estimate
-            .debug_label   = "Tile_renderer projection ring buffer"
-        }
+        "Tile_renderer::m_projection_buffer",
+        gl::Buffer_target::uniform_buffer,
+        m_projection_block.binding_point()
     }
     , m_vertex_input{erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
     , m_pipeline{
@@ -584,19 +573,20 @@ auto Tile_renderer::get_grid_tile(const int grid_mode) const -> tile_t
 }
 #endif
 
-void Tile_renderer::begin()
+void Tile_renderer::begin(std::size_t tile_count)
 {
     ERHE_VERIFY(m_can_blit == false);
     ERHE_VERIFY(!m_vertex_buffer_range.has_value());
 
-    m_vertex_buffer_range = m_vertex_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, 0);
+    const std::size_t byte_count = tile_count * 5 * 4 * sizeof(uint32_t); // 20 words per tile
+    m_vertex_buffer_range = m_vertex_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
     m_vertex_write_offset = 0;
     m_index_count = 0;
 
     // TODO byte_count?
     const std::span<std::byte> vertex_gpu_data = m_vertex_buffer_range.value().get_span();
     std::byte* const           start           = vertex_gpu_data.data();
-    const size_t               byte_count      = vertex_gpu_data.size_bytes();
+    ERHE_VERIFY(byte_count <= vertex_gpu_data.size_bytes());
     const size_t               word_count      = byte_count / sizeof(float);
     m_gpu_float_data = std::span<float>   {reinterpret_cast<float*   >(start), word_count};
     m_gpu_uint_data  = std::span<uint32_t>{reinterpret_cast<uint32_t*>(start), word_count};
@@ -675,7 +665,8 @@ void Tile_renderer::end()
     ERHE_VERIFY(m_can_blit == true);
 
     ERHE_VERIFY(m_vertex_buffer_range.has_value());
-    m_vertex_buffer_range.value().close(m_vertex_write_offset);
+    m_vertex_buffer_range.value().bytes_written(m_vertex_write_offset);
+    m_vertex_buffer_range.value().close();
     m_can_blit = false;
 }
 
@@ -697,8 +688,8 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
 
     const auto handle = m_graphics_instance.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
 
-    erhe::renderer::Buffer_range& vertex_buffer_range     = m_vertex_buffer_range.value();
-    erhe::renderer::Buffer_range  projection_buffer_range = m_projection_buffer.open(erhe::renderer::Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
+    erhe::graphics::Buffer_range& vertex_buffer_range     = m_vertex_buffer_range.value();
+    erhe::graphics::Buffer_range  projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
     const auto                    projection_gpu_data     = projection_buffer_range.get_span();
     size_t                        projection_write_offset = 0;
     std::byte* const              start                   = projection_gpu_data.data();
@@ -728,18 +719,21 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     write(gpu_uint32_data, m_u_texture_offset, texture_handle_cpu_data);
     projection_write_offset += m_u_texture_size;
 
-    projection_buffer_range.close(projection_write_offset);
+    projection_buffer_range.bytes_written(projection_write_offset);
+    projection_buffer_range.close();
 
     //m_pipeline_state_tracker->shader_stages.reset();
     //m_pipeline_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
     //gl::invalidate_tex_image()
+    erhe::graphics::Buffer* vertex_buffer = vertex_buffer_range.get_buffer()->get_buffer();
+
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
     m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, &m_vertex_buffer.get_buffer(), vertex_buffer_range.get_byte_start_offset_in_buffer());
+    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_range.get_byte_start_offset_in_buffer());
 
-    projection_buffer_range.bind();
+    m_projection_buffer.bind(projection_buffer_range);
 
     if (m_graphics_instance.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
@@ -755,8 +749,8 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
         nullptr
     );
 
-    projection_buffer_range.submit();
-    vertex_buffer_range.submit();
+    projection_buffer_range.release();
+    vertex_buffer_range.release();
 
     if (m_graphics_instance.info.use_bindless_texture) {
         gl::make_texture_handle_non_resident_arb(handle);

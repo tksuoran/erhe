@@ -71,12 +71,12 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
             .debug_label  = "Shadow_renderer::m_shadow_sampler_no_compare"
         }
     }
-    , m_draw_indirect_buffers{graphics_instance}
-    , m_joint_buffers        {graphics_instance, program_interface.joint_interface}
-    , m_light_buffers        {graphics_instance, program_interface.light_interface}
-    , m_primitive_buffers    {graphics_instance, program_interface.primitive_interface}
-    , m_material_buffers     {graphics_instance, program_interface.material_interface}
-    , m_gpu_timer            {"Shadow_renderer"}
+    , m_draw_indirect_buffer{graphics_instance}
+    , m_joint_buffer        {graphics_instance, program_interface.joint_interface}
+    , m_light_buffer        {graphics_instance, program_interface.light_interface}
+    , m_primitive_buffer    {graphics_instance, program_interface.primitive_interface}
+    , m_material_buffer     {graphics_instance, program_interface.material_interface}
+    , m_gpu_timer           {"Shadow_renderer"}
 {
     m_pipeline_cache_entries.resize(8);
 }
@@ -186,24 +186,27 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         .require_at_least_one_bit_clear = 0u
     };
 
-    using Buffer_range = erhe::renderer::Buffer_range;
+    using Buffer_range = erhe::graphics::Buffer_range;
     using Draw_indirect_buffer_range = erhe::renderer::Draw_indirect_buffer_range;
 
-    Buffer_range material_range = m_material_buffers.update(parameters.materials);
-    material_range.bind();
+    Buffer_range material_range = m_material_buffer.update(parameters.materials);
+    m_material_buffer.bind(material_range);
 
-    Buffer_range joint_range = m_joint_buffers.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
-    Buffer_range light_range = m_light_buffers.update(lights, &parameters.light_projections, glm::vec3{0.0f});
-    joint_range.bind();
-    light_range.bind();
+    Buffer_range joint_range = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
+    Buffer_range light_range = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f});
+    m_joint_buffer.bind(joint_range);
+    m_light_buffer.bind_light_buffer(light_range);
 
     log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->debug_label());
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     for (const auto& meshes : mesh_spans) {
         std::size_t primitive_count{0};
-        Buffer_range primitive_range = m_primitive_buffers.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
-        Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, shadow_filter);
+        Buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
+        if (primitive_count == 0) {
+            continue;
+        }
+        Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(meshes, primitive_mode, shadow_filter);
         ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
         if (primitive_count == 0) {
             primitive_range.cancel();
@@ -211,8 +214,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             continue;
         }
 
-        primitive_range.bind();
-        draw_indirect_buffer_range.range.bind();
+        m_primitive_buffer.bind(primitive_range);
+        m_draw_indirect_buffer.bind(draw_indirect_buffer_range.range);
 
         for (const auto& light : lights) {
             if (!light->cast_shadow) {
@@ -234,8 +237,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             gl::clear_buffer_fv(gl::Buffer::depth, 0, m_graphics_instance.depth_clear_value_pointer());
             gl::enable(gl::Enable_cap::scissor_test);
 
-            Buffer_range control_range = m_light_buffers.update_control(light_index);
-            control_range.bind();
+            Buffer_range control_range = m_light_buffer.update_control(light_index);
+            m_light_buffer.bind_control_buffer(control_range);
 
             {
                 static constexpr std::string_view c_id_mdi{"mdi"};
@@ -250,16 +253,16 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
                 );
             }
-            control_range.submit();
+            control_range.release();
         }
 
-        primitive_range.submit();
-        draw_indirect_buffer_range.range.submit();
+        primitive_range.release();
+        draw_indirect_buffer_range.range.release();
     }
 
-    material_range.submit();
-    joint_range.submit();
-    light_range.submit();
+    material_range.release();
+    joint_range.release();
+    light_range.release();
 
     gl::disable(gl::Enable_cap::scissor_test);
 

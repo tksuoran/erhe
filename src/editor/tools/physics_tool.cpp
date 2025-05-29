@@ -21,7 +21,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/ray.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -488,7 +488,7 @@ void Physics_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
 
     // TODO Make sure this has good enough perf, disable if not.
     if (m_target_mesh) {

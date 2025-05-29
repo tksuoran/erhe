@@ -2,7 +2,7 @@
 #include "scene/scene_view.hpp"
 #include "editor_context.hpp"
 
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_scene/node.hpp"
 
 namespace editor {
@@ -25,26 +25,21 @@ auto Render_context::get_scene() const -> const erhe::scene::Scene*
     return camera_node->get_scene();
 }
 
-auto Render_context::get_line_renderer(const erhe::renderer::Line_renderer_config& config) const -> erhe::renderer::Scoped_line_renderer
+auto Render_context::get_line_renderer(const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer
 {
-    return editor_context.line_renderer->get(config);
+    return editor_context.debug_renderer->get(config);
 }
 
-auto Render_context::get_line_renderer(unsigned int stencil, bool visible, bool hidden, bool indirect) const -> erhe::renderer::Scoped_line_renderer
+auto Render_context::get_line_renderer(unsigned int stencil, bool visible, bool hidden) const -> erhe::renderer::Primitive_renderer
 {
-    erhe::renderer::Line_renderer_config config{
+    erhe::renderer::Debug_renderer_config config{
+        .primitive_type    = gl::Primitive_type::lines,
         .stencil_reference = stencil,
         .draw_visible      = visible,
         .draw_hidden       = hidden,
-        .reverse_depth     = true,
-        .indirect          = indirect
+        .reverse_depth     = true
     };
-    return editor_context.line_renderer->get(config);
-}
-
-auto Render_context::get_line_renderer_indirect(unsigned int stencil, bool visible, bool hidden) const -> erhe::renderer::Scoped_line_renderer
-{
-    return get_line_renderer(stencil, visible, hidden, true);
+    return editor_context.debug_renderer->get(config);
 }
 
 } // namespace editor

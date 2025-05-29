@@ -1,9 +1,9 @@
-in vec3  v_position;
-in vec2  v_start;
-in vec2  v_line;
-in vec4  v_color;
-in float v_l2;
-in float v_line_width;
+layout(location = 0) in vec3  v_position;
+layout(location = 1) in vec2  v_start;
+layout(location = 2) in vec2  v_line;
+layout(location = 3) in vec4  v_color;
+layout(location = 4) in float v_l2;
+layout(location = 5) in float v_line_width;
 
 void main(void)
 {

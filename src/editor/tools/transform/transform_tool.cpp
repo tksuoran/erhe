@@ -31,7 +31,7 @@
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/ray.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -627,7 +627,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
         { 0.0f,  0.0f, -1.0f}
     };
 
-    erhe::renderer::Scoped_line_renderer line_renderer = m_context.line_renderer->get(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get(2, true, true);
 
     auto& raytrace_scene = scene_root->get_raytrace_scene();
 

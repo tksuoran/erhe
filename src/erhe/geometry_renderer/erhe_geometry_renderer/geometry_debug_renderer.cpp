@@ -1,18 +1,18 @@
 #include "erhe_geometry_renderer/geometry_debug_renderer.hpp"
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 
 namespace erhe::geometry_renderer {
 
 void debug_draw(
-    const erhe::math::Viewport&           viewport,
-    const glm::mat4&                      clip_from_world,
-    erhe::renderer::Scoped_line_renderer& line_renderer,
-    erhe::renderer::Text_renderer&        text_renderer,
-    glm::mat4                             world_from_local,
-    erhe::geometry::Geometry&             geometry,
-    GEO::index_t                          facet_filter
+    const erhe::math::Viewport&         viewport,
+    const glm::mat4&                    clip_from_world,
+    erhe::renderer::Primitive_renderer& line_renderer,
+    erhe::renderer::Text_renderer&      text_renderer,
+    glm::mat4                           world_from_local,
+    erhe::geometry::Geometry&           geometry,
+    GEO::index_t                        facet_filter
 )
 {
     geometry.access_debug_entries(

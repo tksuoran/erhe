@@ -7,6 +7,7 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_profile/profile.hpp"
@@ -43,14 +44,11 @@ Material_interface::Material_interface(erhe::graphics::Instance& graphics_instan
 }
 
 Material_buffer::Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface)
-    : GPU_ring_buffer{
+    : GPU_ring_buffer_client{
         graphics_instance,
-        erhe::renderer::GPU_ring_buffer_create_info{
-            .target        = gl::Buffer_target::shader_storage_buffer,
-            .binding_point = material_interface.material_block.binding_point(),
-            .size          = 8 * material_interface.material_struct.size_bytes() * material_interface.max_material_count,
-            .debug_label   = "material"
-        }
+        "Material_buffer",
+        gl::Buffer_target::shader_storage_buffer,
+        material_interface.material_block.binding_point()
     }
     , m_graphics_instance {graphics_instance}
     , m_material_interface{material_interface}
@@ -74,9 +72,13 @@ Material_buffer::Material_buffer(erhe::graphics::Instance& graphics_instance, Ma
 constexpr uint32_t c_texture_unused_32 = 4294967295u;
 constexpr uint32_t c_texture_unused_64 = 4294967295u;
 
-auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::renderer::Buffer_range
+auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::graphics::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (materials.empty()) {
+        return {};
+    }
 
     // SPDLOG_LOGGER_TRACE(
     //     log_material_buffer,
@@ -89,7 +91,7 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
     const auto&       offsets        = m_material_interface.offsets;
     const std::size_t max_byte_count = materials.size() * entry_size;
 
-    erhe::renderer::Buffer_range buffer_range = open(erhe::renderer::Ring_buffer_usage::CPU_write, max_byte_count);
+    erhe::graphics::Buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
     std::span<std::byte>         gpu_data     = buffer_range.get_span();
     std::size_t                  write_offset = 0;
     
@@ -185,7 +187,8 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
         write_offset += entry_size;
         ++material_index;
     }
-    buffer_range.close(write_offset);
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
 
     // SPDLOG_LOGGER_TRACE(log_material_buffer, "wrote {} entries to material buffer", material_index);
 

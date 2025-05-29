@@ -12,8 +12,8 @@
 
 #include "erhe_geometry_renderer/geometry_debug_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_renderer/line_renderer.hpp"
-#include "erhe_renderer/scoped_line_renderer.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -175,7 +175,7 @@ void Hover_tool::tool_render(const Render_context& context)
     }
 
     if (m_show_hover_normal && entry->normal.has_value()) {
-        erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+        erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
         const auto p0 = entry->position.value();
         const auto p1 = entry->position.value() + entry->normal.value();
         line_renderer.set_thickness(8.0f);
@@ -222,6 +222,9 @@ void Hover_tool::tool_render(const Render_context& context)
     add_line(fmt::format("Position in world: {}", entry->position.value()));
 #endif
 
+    std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry->scene_mesh_weak.lock();
+
+#if 0
     const glm::vec3 position_at_fixed_depth_line_3{
         position_in_viewport.x + 50.0f,
         position_in_viewport.y + 16.0f * 2,
@@ -231,7 +234,6 @@ void Hover_tool::tool_render(const Render_context& context)
     //// std::optional<glm::vec3> local_position;
     //// std::optional<glm::vec3> local_normal;
     std::optional<std::string> name;
-    std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry->scene_mesh_weak.lock();
     std::shared_ptr<Grid>              grid       = entry->grid_weak.lock();
     if (scene_mesh) {
         //// const auto* node = entry->scene_mesh->get_node();
@@ -246,6 +248,8 @@ void Hover_tool::tool_render(const Render_context& context)
     if (name.has_value()) {
         add_line(name.value());
     }
+#endif
+
 #if 0
     if (entry->position.has_value()) {
         add_line(fmt::format("Position {}", entry->position.value()));
@@ -296,7 +300,7 @@ void Hover_tool::tool_render(const Render_context& context)
     }
 
     const glm::mat4 world_from_node = node->world_from_node();
-    erhe::renderer::Scoped_line_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
 
     const erhe::scene::Camera* camera                = context.camera;
     const auto                 projection_transforms = camera->projection_transforms(context.viewport);
