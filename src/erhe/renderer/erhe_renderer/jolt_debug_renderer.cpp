@@ -1,3 +1,5 @@
+#ifdef JPH_DEBUG_RENDERER
+
 #include "erhe_renderer/jolt_debug_renderer.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
@@ -135,3 +137,5 @@ void Jolt_debug_renderer::DrawGeometry(
 }
 
 } // namespace erhe::renderer
+
+#endif

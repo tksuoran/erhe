@@ -351,10 +351,13 @@ auto Jolt_world::get_constraint_count() const -> std::size_t
 
 void Jolt_world::debug_draw(erhe::renderer::Jolt_debug_renderer& debug_renderer)
 {
+    static_cast<void>(debug_renderer);
+#ifdef JPH_DEBUG_RENDERER
     m_physics_system.DrawBodies(JPH::BodyManager::DrawSettings{}, &debug_renderer);
     m_physics_system.DrawConstraintLimits(&debug_renderer);
     m_physics_system.DrawConstraintReferenceFrame(&debug_renderer);
     m_physics_system.DrawConstraints(&debug_renderer);
+#endif
 }
 
 auto Jolt_world::get_physics_system() -> JPH::PhysicsSystem&

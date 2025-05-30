@@ -1,5 +1,6 @@
 #pragma once
 
+#ifdef JPH_DEBUG_RENDERER
 #include <Jolt/Jolt.h>
 #include <Jolt/Renderer/DebugRenderer.h>
 
@@ -71,3 +72,4 @@ private:
 };
 
 } // namespace erhe::renderer
+#endif

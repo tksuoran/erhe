@@ -24,9 +24,6 @@
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_raytrace/iinstance.hpp"
-#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-#   include "erhe_renderer/jolt_debug_renderer.hpp"
-#endif
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -40,9 +37,11 @@
 #include <imgui/imgui.h>
 
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
-#   include "erhe_renderer/debug_renderer.hpp"
-#   include "erhe_physics/iworld.hpp"
 #   include <Jolt/Jolt.h>
+#   include "erhe_physics/iworld.hpp"
+#   if defined(JPH_DEBUG_RENDERER)
+#       include "erhe_renderer/jolt_debug_renderer.hpp"
+#   endif
 #endif
 
 #include <geogram/mesh/mesh_geometry.h>
@@ -872,7 +871,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
         }
     }
 
-#if defined(ERHE_PHYSICS_LIBRARY_JOLT)
+#if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
     Editor_context& editor_context = context.editor_context;
     if (editor_context.editor_settings->physics.debug_draw) {
         glm::vec4 camera_position = camera->get_node()->position_in_world();
