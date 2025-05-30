@@ -57,9 +57,6 @@ public:
 
     void update_parameters();
 
-    erhe::graphics::Instance& graphics_instance;
-    Post_processing&          post_processing;
-
     float                                                     upsample_radius{1.0f};
     std::shared_ptr<erhe::graphics::Texture>                  downsample_texture;
     std::shared_ptr<erhe::graphics::Texture>                  upsample_texture;
@@ -78,6 +75,10 @@ public:
     float                                                     tonemap_luminance_max{1.5f};
     float                                                     tonemap_alpha{1.0f / 1.5f};
     int                                                       lowpass_count{2};
+
+private:
+    erhe::graphics::Instance& m_graphics_instance;
+    Post_processing&          m_post_processing;
 };
 
 class Post_processing

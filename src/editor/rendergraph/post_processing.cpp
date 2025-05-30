@@ -40,8 +40,8 @@ Post_processing_node::Post_processing_node(
     const std::string_view          name
 )
     : erhe::rendergraph::Rendergraph_node{rendergraph, name}
-    , graphics_instance{graphics_instance}
-    , post_processing{post_processing}
+    , m_graphics_instance{graphics_instance}
+    , m_post_processing{post_processing}
     , parameter_buffer{
         graphics_instance,
         erhe::graphics::Buffer_create_info{
@@ -87,7 +87,7 @@ auto Post_processing_node::update_size() -> bool
     // Create textures
     downsample_texture = std::make_shared<erhe::graphics::Texture>(
         erhe::graphics::Texture::Create_info{
-            .instance        = graphics_instance,
+            .instance        = m_graphics_instance,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = gl::Internal_format::rgba16f, // TODO other formats
             .use_mipmaps     = true,
@@ -99,7 +99,7 @@ auto Post_processing_node::update_size() -> bool
     );
     upsample_texture = std::make_shared<erhe::graphics::Texture>(
         erhe::graphics::Texture::Create_info{
-            .instance        = graphics_instance,
+            .instance        = m_graphics_instance,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = gl::Internal_format::rgba16f, // TODO other formats
             .use_mipmaps     = true,
@@ -131,7 +131,7 @@ auto Post_processing_node::update_size() -> bool
             framebuffer->set_debug_label(fmt::format("{} downsample level {}", get_name(), level));
             downsample_framebuffers.push_back(framebuffer);
 
-            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(graphics_instance, downsample_texture);
+            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_instance, downsample_texture);
             texture_create_info.view_min_level = level;
             texture_create_info.level_count    = 1;
             texture_create_info.view_min_layer = 0;
@@ -147,7 +147,7 @@ auto Post_processing_node::update_size() -> bool
             framebuffer->set_debug_label(fmt::format("{} upsample level {}", get_name(), level));
             upsample_framebuffers.push_back(framebuffer);
 
-            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(graphics_instance, upsample_texture);
+            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_instance, upsample_texture);
             texture_create_info.view_min_level = level;
             texture_create_info.level_count    = 1;
             texture_create_info.view_min_layer = 0;
@@ -198,17 +198,17 @@ auto Post_processing_node::update_size() -> bool
 void Post_processing_node::update_parameters()
 {
     // Prepare parameter buffer
-    const erhe::graphics::Sampler&  sampler    = post_processing.get_sampler();
-    const std::size_t               entry_size = post_processing.get_parameter_block().size_bytes();
-    const Post_processing::Offsets& offsets    = post_processing.get_offsets();
+    const erhe::graphics::Sampler&  sampler    = m_post_processing.get_sampler();
+    const std::size_t               entry_size = m_post_processing.get_parameter_block().size_bytes();
+    const Post_processing::Offsets& offsets    = m_post_processing.get_offsets();
 
     const std::size_t level_offset_size = erhe::graphics::align_offset(
         entry_size,
-        graphics_instance.get_buffer_alignment(parameter_buffer.target())
+        m_graphics_instance.get_buffer_alignment(parameter_buffer.target())
     );
 
-    const uint64_t downsample_handle = graphics_instance.get_handle(*downsample_texture, sampler);
-    const uint64_t upsample_handle   = graphics_instance.get_handle(*upsample_texture,   sampler);
+    const uint64_t downsample_handle = m_graphics_instance.get_handle(*downsample_texture, sampler);
+    const uint64_t upsample_handle   = m_graphics_instance.get_handle(*upsample_texture,   sampler);
     const uint32_t downsample_texture_handle[2] = {
         static_cast<uint32_t>((downsample_handle & 0xffffffffu)),
         static_cast<uint32_t>(downsample_handle >> 32u)
@@ -290,7 +290,7 @@ void Post_processing_node::execute_rendergraph_node()
         return;
     }
 
-    post_processing.post_process(*this);
+    m_post_processing.post_process(*this);
 }
 
 /// //////////////////////////////////////////

@@ -194,7 +194,7 @@ void Scene_builder::setup_cameras(
 #endif
 
     //// TODO Read these from ini
-    const bool enable_post_processing = true;
+    const bool enable_post_processing = graphics_instance.configuration.post_processing;
     const bool window_viewport        = true;
     bool imgui_window_scene_view = true;
     {
