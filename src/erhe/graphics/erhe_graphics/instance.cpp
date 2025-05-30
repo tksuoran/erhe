@@ -808,7 +808,7 @@ void Buffer_range::release()
 void Buffer_range::cancel()
 {
     ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(is_closed());
+    ERHE_VERIFY(!m_is_cancelled);
     m_is_cancelled = true;
     if (m_byte_write_position_in_span == 0) {
         return;

@@ -796,6 +796,9 @@ public:
             for (std::size_t i = 0, end = scene.nodeIndices.size(); i < end; ++i) {
                 parse_node(scene.nodeIndices[i], m_arguments.root_node);
             }
+            for (std::size_t node_index : m_nodes_with_skin) {
+                parse_node_skin(node_index);
+            }
         } else {
             // TODO Make a graph and sort by depth.
             std::vector<bool> is_child(m_asset->nodes.size()); // default initialized to false
@@ -1548,6 +1551,7 @@ private:
         }
     }
 
+    std::vector<std::size_t> m_nodes_with_skin;
     void parse_node(const std::size_t node_index, const std::shared_ptr<erhe::scene::Node>& parent)
     {
         ERHE_PROFILE_FUNCTION();
@@ -1583,7 +1587,6 @@ private:
             const std::size_t light_index = node.lightIndex.value();
             erhe_node->attach(m_data_out.lights[light_index]);
         }
-
         if (node.meshIndex.has_value()) {
             const std::size_t mesh_index = node.meshIndex.value();
             const erhe::scene::Mesh& template_mesh = *m_data_out.meshes[mesh_index].get();
@@ -1594,14 +1597,24 @@ private:
                 erhe::for_clone{true}
             );
             if (node.skinIndex.has_value()) {
-                const std::size_t skin_index = node.skinIndex.value();
-                if (!m_data_out.skins[skin_index]) {
-                    parse_skin(skin_index);
-                }
-                erhe_mesh->skin = m_data_out.skins[skin_index];
+                m_nodes_with_skin.push_back(node_index);
             }
             erhe_node->attach(erhe_mesh);
         }
+    }
+
+    void parse_node_skin(const std::size_t node_index)
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        const fastgltf::Node& node = m_asset->nodes[node_index];
+        const std::size_t skin_index = node.skinIndex.value();
+        if (!m_data_out.skins[skin_index]) {
+            parse_skin(skin_index);
+        }
+        std::shared_ptr<erhe::scene::Node> erhe_node = m_data_out.nodes[node_index];
+        std::shared_ptr<erhe::scene::Mesh> erhe_mesh = get_mesh(erhe_node.get());
+        erhe_mesh->skin = m_data_out.skins[skin_index];
     }
 };
 

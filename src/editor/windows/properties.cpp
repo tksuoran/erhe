@@ -67,9 +67,8 @@ void Properties::animation_properties(erhe::scene::Animation& animation)
     static float time       = 0.0f;
     static float start_time = 0.0f;
     static float end_time   = 5.0f;
-    bool time_changed = false;
 
-    add_entry("Time", [&](){ time_changed = ImGui::SliderFloat("Time##animation-time", &time, start_time, end_time); });
+    add_entry("Time",     [&](){ ImGui::SliderFloat("Time##animation-time", &time, start_time, end_time); });
     add_entry("Samplers", [&animation](){ ImGui::Text("%d", static_cast<int>(animation.samplers.size())); });
     add_entry("Channels", [&animation](){ ImGui::Text("%d", static_cast<int>(animation.channels.size())); });
     //ImGui::BulletText("Samplers");
@@ -96,10 +95,6 @@ void Properties::animation_properties(erhe::scene::Animation& animation)
     //ImGui::Unindent(10.0f);
 
     add_entry("Curve", [&animation](){ animation_curve(animation); });
-
-    if (!time_changed) {
-        return;
-    }
 
     animation.apply(time);
     m_context.editor_message_bus->send_message(

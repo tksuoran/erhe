@@ -213,6 +213,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             std::size_t primitive_count{0};
             Buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, filter, parameters.primitive_settings, primitive_count);
             if (primitive_count == 0){
+                primitive_range.cancel();
                 continue;
             }
             erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(meshes, primitive_mode, filter);

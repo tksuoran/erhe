@@ -103,13 +103,6 @@ void animation_curve(erhe::scene::Animation& animation)
         default: break;
     }
 
-    {
-        static float time{0.0f};
-        ImGui::SliderFloat("Time", &time, 0.01f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
-        float value = animation.evaluate(time, channel_index, component_index);
-        ImGui::Text("%f", value);
-    }
-
     const auto& io = ImGui::GetIO();
 
     static float zoom_scale{1.0f};
