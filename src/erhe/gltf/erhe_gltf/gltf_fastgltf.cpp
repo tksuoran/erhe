@@ -1237,8 +1237,8 @@ private:
                 pbr_data.baseColorFactor[3]
             };
             new_material->metallic    = pbr_data.metallicFactor;
-            new_material->roughness.x = pbr_data.roughnessFactor;
-            new_material->roughness.y = pbr_data.roughnessFactor;
+            new_material->roughness.x = std::max(pbr_data.roughnessFactor, 0.001f);
+            new_material->roughness.y = std::max(pbr_data.roughnessFactor, 0.001f);
             new_material->emissive    = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
             new_material->enable_flag_bits(erhe::Item_flags::show_in_ui);
             log_gltf->trace(

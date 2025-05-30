@@ -26,9 +26,8 @@ Editor_windows::Editor_windows(
 {
     commands.register_command(&m_renderdoc_capture_command);
 
-    commands.bind_command_to_menu(&m_renderdoc_capture_command, "RenderDoc.Capture");
+    commands.bind_command_to_menu(&m_renderdoc_capture_command, "Developer.RenderDoc Capture");
     commands.bind_command_to_key(&m_renderdoc_capture_command, erhe::window::Key_f9); //, true, erhe::window::Key_modifier_bit_ctrl);
-
 }
 
 void Editor_windows::renderdoc_capture()
@@ -85,13 +84,7 @@ void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
                             m_context.editor_rendering->request_renderdoc_capture();
                         }
                     }
-                    else
 #endif
-                    {
-                        if (ImGui::MenuItem("Make RenderDoc Capture")) {
-                            m_context.editor_rendering->trigger_capture();
-                        }
-                    }
                 }
                 ImGui::EndMenu();
             }
