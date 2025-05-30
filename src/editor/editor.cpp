@@ -50,6 +50,7 @@
 #include "windows/selection_window.hpp"
 #include "windows/settings_window.hpp"
 #include "windows/sheet_window.hpp"
+#include "windows/timeline_window.hpp"
 #include "windows/tool_properties_window.hpp"
 #include "windows/viewport_config_window.hpp"
 
@@ -599,6 +600,7 @@ public:
                 m_gradient_editor        = std::make_unique<Gradient_editor                 >(*m_imgui_renderer.get(), *m_imgui_windows.get());
                 m_icon_browser           = std::make_unique<Icon_browser                    >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_sheet_window           = std::make_unique<Sheet_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context, *m_editor_message_bus.get());
+                m_timeline_window        = std::make_unique<Timeline_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_layers_window          = std::make_unique<Layers_window                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_network_window         = std::make_unique<Network_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_editor_context);
                 m_operations             = std::make_unique<Operations                      >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_editor_context, *m_editor_message_bus.get());
@@ -1028,6 +1030,7 @@ public:
         m_editor_context.settings_window        = m_settings_window       .get();
         m_editor_context.sheet_window           = m_sheet_window          .get();
         m_editor_context.time                   = m_time                  .get();
+        m_editor_context.timeline_window        = m_timeline_window       .get();
         m_editor_context.tools                  = m_tools                 .get();
         m_editor_context.transform_tool         = m_transform_tool        .get();
         m_editor_context.viewport_config_window = m_viewport_config_window.get();
@@ -1147,6 +1150,7 @@ public:
     std::unique_ptr<Post_processing_window          >        m_post_processing_window;
     std::unique_ptr<Properties                      >        m_properties;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
+    std::unique_ptr<Timeline_window                 >        m_timeline_window;
     std::unique_ptr<Tool_properties_window          >        m_tool_properties_window;
     std::unique_ptr<Viewport_config_window          >        m_viewport_config_window;
     std::unique_ptr<erhe::imgui::Logs               >        m_logs;

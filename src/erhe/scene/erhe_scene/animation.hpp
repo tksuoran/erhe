@@ -78,7 +78,10 @@ public:
     auto get_type_name() const -> std::string_view override;
 
     // Public API
-    [[nodiscard]] auto evaluate(float time_current, std::size_t channel_index, std::size_t component) -> float;
+    [[nodiscard]] auto evaluate      (float time_current, std::size_t channel_index, std::size_t component) -> float;
+    [[nodiscard]] auto get_first_time() const -> float;
+    [[nodiscard]] auto get_last_time () const -> float;
+
     void apply(float time_current);
 
     std::vector<Animation_sampler> samplers;

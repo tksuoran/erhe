@@ -330,6 +330,8 @@ erhe_target_sources_grouped(
     windows/sheet_window.hpp
     windows/tool_properties_window.cpp
     windows/tool_properties_window.hpp
+    windows/timeline_window.cpp
+    windows/timeline_window.hpp
     windows/viewport_config_window.cpp
     windows/viewport_config_window.hpp
 )

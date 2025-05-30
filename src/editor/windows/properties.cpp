@@ -14,6 +14,7 @@
 #include "scene/scene_root.hpp"
 #include "windows/animation_curve.hpp"
 #include "windows/brdf_slice.hpp"
+#include "windows/timeline_window.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -64,11 +65,11 @@ void Properties::animation_properties(erhe::scene::Animation& animation)
 {
     ERHE_PROFILE_FUNCTION();
 
-    static float time       = 0.0f;
-    static float start_time = 0.0f;
-    static float end_time   = 5.0f;
+    float start_time = animation.get_first_time();
+    float end_time   = animation.get_last_time();
 
-    add_entry("Time",     [&](){ ImGui::SliderFloat("Time##animation-time", &time, start_time, end_time); });
+    add_entry("Start Time", [=](){ ImGui::Text("%.4f", start_time); });
+    add_entry("End Time",   [=](){ ImGui::Text("%.4f", end_time); });
     add_entry("Samplers", [&animation](){ ImGui::Text("%d", static_cast<int>(animation.samplers.size())); });
     add_entry("Channels", [&animation](){ ImGui::Text("%d", static_cast<int>(animation.channels.size())); });
     //ImGui::BulletText("Samplers");
@@ -96,7 +97,14 @@ void Properties::animation_properties(erhe::scene::Animation& animation)
 
     add_entry("Curve", [&animation](){ animation_curve(animation); });
 
-    animation.apply(time);
+    //if (start_time > end_time) {
+    //    std::swap(start_time, end_time);
+    //}
+    const float timeline_length = end_time - start_time;
+    m_context.timeline_window->set_timeline_length(timeline_length);
+    const float time_in_timeline = m_context.timeline_window->get_play_position();
+    animation.apply(start_time + time_in_timeline);
+
     m_context.editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_animation_update

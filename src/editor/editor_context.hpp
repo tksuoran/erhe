@@ -76,6 +76,7 @@ class Selection_tool;
 class Settings_window;
 class Sheet_window;
 class Time;
+class Timeline_window;
 class Tools;
 class Transform_tool;
 class Viewport_config_window;
@@ -144,6 +145,7 @@ public:
     Settings_window*                        settings_window       {nullptr};
     Sheet_window*                           sheet_window          {nullptr};
     Time*                                   time                  {nullptr};
+    Timeline_window*                        timeline_window       {nullptr};
     Tools*                                  tools                 {nullptr};
     Transform_tool*                         transform_tool        {nullptr};
     Viewport_config_window*                 viewport_config_window{nullptr};

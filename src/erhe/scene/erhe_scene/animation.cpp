@@ -306,6 +306,26 @@ auto Animation::get_type_name() const -> std::string_view
     return static_type_name;
 }
 
+auto Animation::get_first_time() const -> float
+{
+    float first_time = std::numeric_limits<float>::max();
+    for (auto& channel : channels) {
+        const Animation_sampler& sampler = samplers.at(channel.sampler_index);
+        first_time = std::min(first_time, sampler.timestamps.front());
+    }
+    return first_time;
+}
+
+auto Animation::get_last_time() const -> float
+{
+    float last_time = std::numeric_limits<float>::lowest();
+    for (auto& channel : channels) {
+        const Animation_sampler& sampler = samplers.at(channel.sampler_index);
+        last_time = std::max(last_time, sampler.timestamps.back());
+    }
+    return last_time;
+}
+
 auto Animation::evaluate(const float time_current, const std::size_t channel_index, const std::size_t component) -> float
 {
     auto& channel = channels.at(channel_index);
