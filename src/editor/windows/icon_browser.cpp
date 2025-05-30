@@ -33,7 +33,7 @@ void Icon_browser::imgui()
     ImGui::TextUnformatted(ICON_MDI_FILTER);
     ImGui::PopFont();
     ImGui::SameLine();
-    m_name_filter.Draw("", -FLT_MIN);
+    m_name_filter.Draw("##icon_filter", -FLT_MIN);
 
     ImVec2 button_size{36.0f, 36.0f};
     int x = 0;
