@@ -797,6 +797,14 @@ void Imgui_renderer::render_draw_data()
             }
         }
     }
+    if (
+        (draw_parameter_byte_count == 0) ||
+        (draw_indirect_byte_count == 0) ||
+        (vertex_byte_count == 0) ||
+        (index_byte_count == 0)
+    ) {
+        return;
+    }
 
     using Buffer_range = erhe::graphics::Buffer_range;
     constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
