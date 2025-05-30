@@ -200,45 +200,47 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->debug_label());
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
-    for (const auto& meshes : mesh_spans) {
-        std::size_t primitive_count{0};
-        Buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
-        if (primitive_count == 0) {
-            continue;
-        }
-        Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(meshes, primitive_mode, shadow_filter);
-        ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
-        if (primitive_count == 0) {
-            primitive_range.cancel();
-            draw_indirect_buffer_range.range.cancel();
+
+    for (const auto& light : lights) {
+        if (!light->cast_shadow) {
             continue;
         }
 
-        m_primitive_buffer.bind(primitive_range);
-        m_draw_indirect_buffer.bind(draw_indirect_buffer_range.range);
+        auto* light_projection_transform = parameters.light_projections.get_light_projection_transforms_for_light(light.get());
+        if (light_projection_transform == nullptr) {
+            //// log_render->warn("Light {} has no light projection transforms", light->name());
+            continue;
+        }
+        const std::size_t light_index = light_projection_transform->index;
+        if (light_index >= parameters.framebuffers.size()) {
+            continue;
+        }
 
-        for (const auto& light : lights) {
-            if (!light->cast_shadow) {
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, parameters.framebuffers[light_index]->gl_name());
+        gl::disable(gl::Enable_cap::scissor_test);
+        gl::clear_buffer_fv(gl::Buffer::depth, 0, m_graphics_instance.depth_clear_value_pointer());
+        gl::enable(gl::Enable_cap::scissor_test);
+
+        Buffer_range control_range = m_light_buffer.update_control(light_index);
+        m_light_buffer.bind_control_buffer(control_range);
+
+        for (const auto& meshes : mesh_spans) {
+            std::size_t primitive_count{0};
+            Buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
+            if (primitive_count == 0) {
+                primitive_range.cancel();
+                continue;
+            }
+            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(meshes, primitive_mode, shadow_filter);
+            ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
+            if (primitive_count == 0) {
+                primitive_range.cancel();
+                draw_indirect_buffer_range.range.cancel();
                 continue;
             }
 
-            auto* light_projection_transform = parameters.light_projections.get_light_projection_transforms_for_light(light.get());
-            if (light_projection_transform == nullptr) {
-                //// log_render->warn("Light {} has no light projection transforms", light->name());
-                continue;
-            }
-            const std::size_t light_index = light_projection_transform->index;
-            if (light_index >= parameters.framebuffers.size()) {
-                continue;
-            }
-
-            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, parameters.framebuffers[light_index]->gl_name());
-            gl::disable(gl::Enable_cap::scissor_test);
-            gl::clear_buffer_fv(gl::Buffer::depth, 0, m_graphics_instance.depth_clear_value_pointer());
-            gl::enable(gl::Enable_cap::scissor_test);
-
-            Buffer_range control_range = m_light_buffer.update_control(light_index);
-            m_light_buffer.bind_control_buffer(control_range);
+            m_primitive_buffer.bind(primitive_range);
+            m_draw_indirect_buffer.bind(draw_indirect_buffer_range.range);
 
             {
                 static constexpr std::string_view c_id_mdi{"mdi"};
@@ -253,11 +255,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
                 );
             }
-            control_range.release();
+            primitive_range.release();
+            draw_indirect_buffer_range.range.release();
         }
 
-        primitive_range.release();
-        draw_indirect_buffer_range.range.release();
+        control_range.release();
     }
 
     material_range.release();
