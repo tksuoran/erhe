@@ -325,7 +325,7 @@ auto Fly_camera_frame_command::try_call() -> bool
     }
     erhe::math::Viewport viewport = viewport_scene_view->projection_viewport();
 
-    erhe::math::Bounding_box bbox{};
+    erhe::math::Aabb bbox{};
     const std::vector<std::shared_ptr<erhe::Item_base>>& selection = m_context.selection->get_selection();
     for (const std::shared_ptr<erhe::Item_base>& item : selection) {
         const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
@@ -342,7 +342,7 @@ auto Fly_camera_frame_command::try_call() -> bool
             if (!bounding_box.is_valid()) {
                 continue;
             }
-            erhe::math::Bounding_box world_bounding_box = bounding_box.transformed_by(node->world_from_node());
+            erhe::math::Aabb world_bounding_box = bounding_box.transformed_by(node->world_from_node());
             bbox.include(world_bounding_box);
         }
     }

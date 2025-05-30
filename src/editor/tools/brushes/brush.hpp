@@ -103,7 +103,7 @@ public:
     [[nodiscard]] auto get_scaled                (double scale) -> const Scaled&;
     [[nodiscard]] auto create_scaled             (int scale_key) -> Scaled;
     [[nodiscard]] auto make_instance             (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
-    [[nodiscard]] auto get_bounding_box          () -> erhe::math::Bounding_box;
+    [[nodiscard]] auto get_bounding_box          () -> erhe::math::Aabb;
     [[nodiscard]] auto get_geometry              () -> std::shared_ptr<erhe::geometry::Geometry>;
     [[nodiscard]] auto get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&;
     [[nodiscard]] auto get_max_corner_count      () const -> GEO::index_t;

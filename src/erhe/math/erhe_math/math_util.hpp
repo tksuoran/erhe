@@ -11,6 +11,9 @@
 
 namespace erhe::math {
 
+class Aabb;
+class Sphere;
+
 template <typename T, typename U>
 [[nodiscard]] auto round(const float num) -> T
 {
@@ -672,84 +675,7 @@ void gram_schmidt(
     out_c = glm::normalize(out_c);
 }
 
-class Bounding_box
-{
-public:
-    [[nodiscard]] auto diagonal() const -> glm::vec3
-    {
-        return max - min;
-    }
-    [[nodiscard]] auto center() const -> glm::vec3
-    {
-        return (max + min) * 0.5f;
-    }
-    [[nodiscard]] auto volume() const -> float
-    {
-        const auto d = diagonal();
-        return d.x * d.y * d.z;
-    }
-    [[nodiscard]] auto is_valid() const -> bool
-    {
-        return
-            (min.x <= max.x) ||
-            (min.y <= max.y) ||
-            (min.z <= max.z);
-    }
-    void include(const glm::vec3 p)
-    {
-        min = glm::min(min, p);
-        max = glm::max(max, p);
-    }
-    void include(const Bounding_box& bbox)
-    {
-        if (!is_valid()) {
-            min = bbox.min;
-            max = bbox.max;
-            return;
-        }
-        min = glm::min(min, bbox.min);
-        max = glm::max(max, bbox.max);
-    }
-
-    [[nodiscard]] auto transformed_by(const glm::mat4& m) const -> Bounding_box
-    {
-        glm::vec4 corners[8] = {
-            { min.x, min.y, min.z, 1.0f },
-            { max.x, min.y, min.z, 1.0f },
-            { max.x, max.y, min.z, 1.0f },
-            { min.x, max.y, min.z, 1.0f },
-            { min.x, min.y, max.z, 1.0f },
-            { max.x, min.y, max.z, 1.0f },
-            { max.x, max.y, max.z, 1.0f },
-            { min.x, max.y, max.z, 1.0f }
-        };
-
-        Bounding_box result;
-        for (glm::vec4 corner : corners) {
-            glm::vec4 transformedH{m * corner};
-            glm::vec3 transformed = glm::vec3{transformedH} / transformedH.w;
-            result.include(transformed);
-        }
-        return result;
-    }
-
-    glm::vec3 min{std::numeric_limits<float>::max()}; // bounding box
-    glm::vec3 max{std::numeric_limits<float>::lowest()};
-};
-
-class Bounding_sphere
-{
-public:
-    [[nodiscard]] auto volume() const
-    {
-        return (4.0f / 3.0f) * glm::pi<float>() * radius * radius * radius;
-    }
-
-    glm::vec3 center{0.0f};
-    float     radius{0.0f};
-};
-
-[[nodiscard]] auto transform(const glm::mat4& m, const Bounding_sphere& sphere) -> Bounding_sphere;
+[[nodiscard]] auto transform(const glm::mat4& m, const Sphere& sphere) -> Sphere;
 
 class Bounding_volume_source
 {
@@ -777,8 +703,8 @@ private:
 
 void calculate_bounding_volume(
     const Bounding_volume_source& source,
-    Bounding_box&                 bounding_box,
-    Bounding_sphere&              bounding_sphere
+    Aabb&                         bounding_box,
+    Sphere&                       bounding_sphere
 );
 
 class Bounding_volume_combiner : public erhe::math::Bounding_volume_source
@@ -975,5 +901,17 @@ private:
 ) -> glm::mat4;
 
 [[nodiscard]] auto torus_volume(const float major_radius, const float minor_radius) -> float;
+
+[[nodiscard]] auto extract_frustum_planes (const glm::mat4& clip_from_world, float clip_z_near, float clip_z_far) -> std::array<glm::vec4, 6>;
+[[nodiscard]] auto extract_frustum_corners(const glm::mat4& clip_from_world, float clip_z_near, float clip_z_far) -> std::array<glm::vec3, 8>;
+[[nodiscard]] auto get_point_on_plane     (const glm::vec4& plane) -> glm::vec3;
+[[nodiscard]] void get_plane_basis        (const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent);
+
+[[nodiscard]] auto box_in_frustum(
+    const std::array<glm::vec4, 6>& planes,
+    const std::array<glm::vec3, 8>& corners,
+    const Aabb&                     box
+) -> bool;
+
 
 } // namespace erhe::math

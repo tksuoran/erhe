@@ -18,6 +18,7 @@
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_item/item_log.hpp"
 #include "erhe_log/log.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_math/math_log.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"

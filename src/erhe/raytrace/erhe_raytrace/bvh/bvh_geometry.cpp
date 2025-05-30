@@ -354,7 +354,7 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
     return false;
 }
 
-/// auto Bvh_geometry::get_sphere() const -> const erhe::math::Bounding_sphere&
+/// auto Bvh_geometry::get_sphere() const -> const erhe::math::Sphere&
 /// {
 ///     return m_bounding_sphere;
 /// }

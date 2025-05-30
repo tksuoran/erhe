@@ -107,7 +107,7 @@ Debug_renderer_bucket::Debug_renderer_bucket(
 
 auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t primitive_count) -> std::span<std::byte>
 {
-    constexpr std::size_t min_range_size = 1024; // TODO
+    constexpr std::size_t min_range_size = 8192; // TODO
     if (m_draws.empty()) {
         m_draws.emplace_back(
             m_vertex_ssbo_buffer.acquire(

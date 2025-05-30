@@ -339,7 +339,7 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
     return node;
 }
 
-auto Brush::get_bounding_box() -> erhe::math::Bounding_box
+auto Brush::get_bounding_box() -> erhe::math::Aabb
 {
     if (
         !m_primitive.has_renderable_triangles() ||

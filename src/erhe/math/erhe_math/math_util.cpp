@@ -1,4 +1,5 @@
 #include "erhe_math/math_util.hpp"
+#include "erhe_math/aabb.hpp"
 #include "erhe_math/sphere.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -479,8 +480,8 @@ auto spherical_to_cartesian_iso(const float theta, const float phi) -> vec3
 
 void calculate_bounding_volume(
     const Bounding_volume_source& source,
-    Bounding_box&                 bounding_box,
-    Bounding_sphere&              bounding_sphere
+    Aabb&                         bounding_box,
+    Sphere&                       bounding_sphere
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -536,7 +537,7 @@ void calculate_bounding_volume(
     bounding_sphere.center = sphere.center;
 }
 
-[[nodiscard]] auto transform(const glm::mat4& m, const Bounding_sphere& sphere) -> Bounding_sphere
+[[nodiscard]] auto transform(const glm::mat4& m, const Sphere& sphere) -> Sphere
 {
 #if 0
     // Initial simple version
@@ -561,8 +562,8 @@ void calculate_bounding_volume(
     combiner.add_point(m, sphere.center + vec3{ k_phi,  0.0f,  -k    });
     combiner.add_point(m, sphere.center + vec3{-k_phi,  0.0f,  -k    });
 
-    Bounding_box    transformed_icosahedron_bounding_box;
-    Bounding_sphere transformed_icosahedron_bounding_sphere;
+    Aabb   transformed_icosahedron_bounding_box;
+    Sphere transformed_icosahedron_bounding_sphere;
     calculate_bounding_volume(combiner, transformed_icosahedron_bounding_box, transformed_icosahedron_bounding_sphere);
 #endif
 
@@ -582,7 +583,7 @@ void calculate_bounding_volume(
     }
     const float R_ = r * std::sqrt(max_eigenvalue);
 
-    Bounding_sphere transformed_bounding_sphere
+    Sphere transformed_bounding_sphere
     {
         .center = vec3{m * vec4{sphere.center, 1.0f}},
         .radius = R_
@@ -704,5 +705,106 @@ auto torus_volume(const float major_radius, const float minor_radius) -> float
         glm::two_pi<float>() *
         major_radius;
 }
+
+auto extract_frustum_planes(const glm::mat4& clip_from_world, float clip_z_near, float clip_z_far) -> std::array<glm::vec4, 6>
+{
+    const glm::mat4& m = clip_from_world;
+    const glm::vec4 row0{m[0][0], m[1][0], m[2][0], m[3][0]};
+    const glm::vec4 row1{m[0][1], m[1][1], m[2][1], m[3][1]};
+    const glm::vec4 row2{m[0][2], m[1][2], m[2][2], m[3][2]};
+    const glm::vec4 row3{m[0][3], m[1][3], m[2][3], m[3][3]};
+
+    auto normalize = [](const glm::vec4 plane) -> glm::vec4 {
+        const float length = glm::length(glm::vec3(plane));
+        return plane / length;
+    };
+
+    return {
+        normalize(              row3 + row0), // Left
+        normalize(              row3 - row0), // Right
+        normalize(              row3 + row1), // Bottom
+        normalize(              row3 - row1), // Top
+        normalize(clip_z_near * row3 + row2), // Near, or far when using reverse Z
+        normalize(clip_z_far  * row3 - row2)  // Far, or near when using reverse Z
+    };
+}
+
+[[nodiscard]] auto extract_frustum_corners(const glm::mat4& world_from_clip, float clip_z_near, float clip_z_far) -> std::array<glm::vec3, 8>
+{
+    const glm::vec3 a = glm::vec3{world_from_clip * glm::vec4{-1.0f, -1.0f, clip_z_near, 1.0f}}; // clip min corner
+    const glm::vec3 b = glm::vec3{world_from_clip * glm::vec4{ 1.0f,  1.0f, clip_z_far,  1.0f}}; // clip max corner
+    return {
+        glm::vec3{a.x, a.y, a.z},
+        glm::vec3{b.x, a.y, a.z},
+        glm::vec3{b.x, b.y, a.z},
+        glm::vec3{a.x, b.y, a.z},
+        glm::vec3{a.x, a.y, b.z},
+        glm::vec3{b.x, a.y, b.z},
+        glm::vec3{b.x, b.y, b.z},
+        glm::vec3{a.x, b.y, b.z}
+    };
+}
+
+auto get_point_on_plane(const glm::vec4& plane) -> glm::vec3
+{
+    glm::vec3 normal = glm::vec3(plane);
+    float d = plane.w;
+
+    // Avoid division by zero
+    float denom = glm::dot(normal, normal);
+    if (denom == 0.0f) {
+        return glm::vec3{0.0f}; // degenerate plane
+    }
+
+    // Return point: -d * n / ||n||^2
+    return -d * normal / denom;
+}
+
+void get_plane_basis(const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent)
+{
+    glm::vec3 tangent_ = erhe::math::min_axis<float>(normal);
+
+    bitangent = glm::normalize(glm::cross(normal, tangent_));
+    tangent   = glm::normalize(glm::cross(bitangent, normal));
+}
+
+// https://iquilezles.org/articles/frustumcorrect/
+// false if fully outside, true if inside or intersects
+auto box_in_frustum(
+    const std::array<glm::vec4, 6>& planes,
+    const std::array<glm::vec3, 8>& corners,
+    const Aabb&                     box
+) -> bool
+{
+    // Check box outside/inside of frustum
+    for (int i = 0; i < 6; i++) {
+        int out = 0;
+        out += ((glm::dot(planes[i], glm::vec4(box.min.x, box.min.y, box.min.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(box.max.x, box.min.y, box.min.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(box.min.x, box.max.y, box.min.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(box.max.x, box.max.y, box.min.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(box.min.x, box.min.y, box.max.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(box.max.x, box.min.y, box.max.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(box.min.x, box.max.y, box.max.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(box.max.x, box.max.y, box.max.z, 1.0f)) < 0.0f) ? 1 : 0);
+        if (out == 8) {
+            return false;
+        }
+    }
+
+    // check frustum outside/inside box
+    int out;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.x > box.max.x) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.x < box.min.x) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.y > box.max.y) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.y < box.min.y) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.z > box.max.z) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.z < box.min.z) ? 1 : 0); if (out == 8) return false;
+    return true;
+}
+
+// https://bruop.github.io/improved_frustum_culling/
+// https://iquilezles.org/articles/frustumcorrect/
+
 
 } // namespace erhe::math

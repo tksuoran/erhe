@@ -129,7 +129,7 @@ void Properties::camera_properties(erhe::scene::Camera& camera)
 
     auto* const projection = camera.projection();
     if (projection != nullptr) {
-        push_group("Projection", ImGuiTreeNodeFlags_None, m_indent);
+        push_group("Projection", ImGuiTreeNodeFlags_None | ImGuiTreeNodeFlags_DefaultOpen, m_indent);
         //ImGui::TreeNodeEx("Projection", ImGuiTreeNodeFlags_DefaultOpen)
 
         //ImGui::Indent(indent);

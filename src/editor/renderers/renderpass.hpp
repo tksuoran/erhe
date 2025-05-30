@@ -41,6 +41,7 @@ public:
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
+    bool                                              enabled{true};
     std::vector<erhe::scene::Layer_id>                mesh_layers;
     std::size_t                                       non_mesh_vertex_count{0};
     std::vector<erhe::renderer::Pipeline_renderpass*> passes;

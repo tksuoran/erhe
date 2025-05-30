@@ -6,6 +6,7 @@
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"

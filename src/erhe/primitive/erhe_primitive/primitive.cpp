@@ -646,9 +646,9 @@ auto Primitive::get_name() const -> std::string_view
         collision_geometry ? collision_geometry->get_name() : Primitive__get_name__empty;
 }
 
-auto Primitive::get_bounding_box() const -> erhe::math::Bounding_box
+auto Primitive::get_bounding_box() const -> erhe::math::Aabb
 {
-    erhe::math::Bounding_box bounding_box{};
+    erhe::math::Aabb bounding_box{};
     if (render_shape) {
         bounding_box.include(render_shape->get_renderable_mesh().bounding_box);
     }

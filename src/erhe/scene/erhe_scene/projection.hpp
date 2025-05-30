@@ -5,6 +5,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include <array>
+
 namespace erhe::scene {
 
 class Transform;
@@ -61,7 +63,7 @@ public:
     [[nodiscard]] auto get_fov_sides(const erhe::math::Viewport viewport) const -> Fov_sides;
 
     Type  projection_type{Type::perspective_vertical};
-    float z_near         {  0.03f};
+    float z_near         { 0.03f};
     float z_far          {64.0};
     float fov_x          { glm::pi<float>() / 4.0f};
     float fov_y          { glm::pi<float>() / 4.0f};

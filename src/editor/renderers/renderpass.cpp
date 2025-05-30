@@ -57,6 +57,10 @@ void Renderpass::render(const Render_context& context) const
 {
     ERHE_PROFILE_FUNCTION();
 
+    if (!enabled) {
+        return;
+    }
+
     // TODO This is a bit hacky, route this better.
     const int64_t t0_ns  = context.editor_context.time->get_host_system_time_ns();
     const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
@@ -205,6 +209,7 @@ void Renderpass::render(const Render_context& context) const
 
 void Renderpass::imgui()
 {
+    ImGui::Checkbox("Enabled", &enabled);
     if (ImGui::TreeNodeEx("Pipeline passes", ImGuiTreeNodeFlags_Framed)) {
         int pipeline_pass_index = 0;
         for (erhe::renderer::Pipeline_renderpass* pass : passes) {

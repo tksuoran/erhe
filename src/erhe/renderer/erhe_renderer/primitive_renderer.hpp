@@ -62,6 +62,8 @@ public:
         add_lines(lines);
     }
 
+    void add_plane(const glm::vec4& color, const glm::vec4& plane);
+
     void add_cube(
         const glm::mat4& transform,
         const glm::vec4& color,
@@ -120,6 +122,7 @@ public:
 #pragma endregion Draw API
 
 private:
+    void reserve_lines(std::size_t line_count);
     void make_lines(std::size_t line_count);
 
     inline void put(
@@ -156,8 +159,8 @@ private:
     std::size_t            m_last_allocate_word_count    {0};
 
     // Current state
-    glm::vec4              m_line_color    {1.0f, 1.0f, 1.0f, 1.0f};
-    float                  m_line_thickness{1.0f};
+    glm::vec4              m_line_color         {1.0f, 1.0f, 1.0f, 1.0f};
+    float                  m_half_line_thickness{0.5f};
 };
 
 } // namespace erhe::renderer

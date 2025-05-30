@@ -12,6 +12,11 @@ public:
     glm::vec3 center;
     float radius;
 
+    [[nodiscard]] auto volume() const
+    {
+        return (4.0f / 3.0f) * glm::pi<float>() * radius * radius * radius;
+    }
+
     auto contains(const glm::vec3& point) const -> bool;
     auto contains(const glm::vec3& point, float epsilon) const -> bool;
 };

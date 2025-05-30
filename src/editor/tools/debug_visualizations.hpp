@@ -106,7 +106,7 @@ private:
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;
 
     Visualization_mode m_lights                 {Visualization_mode::None};
-    Visualization_mode m_cameras                {Visualization_mode::None};
+    Visualization_mode m_cameras                {Visualization_mode::Selected};
     Visualization_mode m_skins                  {Visualization_mode::All};
     Visualization_mode m_node_axis_visualization{Visualization_mode::None};
     Visualization_mode m_physics_visualization  {Visualization_mode::None};
@@ -131,10 +131,17 @@ private:
     glm::vec4 m_selection_minor_color            {2.0f, 1.6f, 0.1f, 0.5f};
     glm::vec4 m_group_selection_major_color      {2.0f, 1.2f, 0.1f, 1.0f};
     glm::vec4 m_group_selection_minor_color      {2.0f, 1.2f, 0.1f, 0.5f};
-    float     m_selection_major_width            {2.0f};
-    float     m_selection_minor_width            {1.5f};
-    float     m_camera_visualization_width       {2.0f};
-    float     m_light_visualization_width        {2.0f};
+    float     m_selection_major_width            {4.0f};
+    float     m_selection_minor_width            {2.0f};
+
+    float     m_camera_visualization_width       {8.0f};
+    glm::vec4 m_camera_line_color                {1.0f, 1.0f, 1.0f, 1.0f};
+
+    float     m_light_visualization_width        {8.0f};
+
+    bool      m_frustum_box                      {true};
+    bool      m_frustum_planes                   {false};
+
     int       m_sphere_step_count                {80};
     int       m_max_labels                       {400};
     glm::vec4 m_vertex_label_text_color          {0.3f, 1.0f, 0.3f, 1.0f};

@@ -146,7 +146,7 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 80.0f;
-    camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     camera->set_exposure(m_config.camera_exposure);
     camera->set_shadow_range(m_config.shadow_range);
     node->attach(camera);
@@ -189,7 +189,8 @@ void Scene_builder::setup_cameras(
         vec3{-7.0f, 1.0f, 0.0f},
         vec3{ 0.0f, 0.5f, 0.0f}
     );
-    camera_b->projection()->z_far = 64.0f;
+    camera_b->projection()->z_near = 1.0f;
+    camera_b->projection()->z_far  = 8.0f;
     //// camera_b->set_wireframe_color(glm::vec4{0.3f, 0.6f, 1.00f, 1.0f});
 #endif
 
@@ -235,26 +236,6 @@ auto Scene_builder::make_brush(Content_library_node& folder, Brush_data&& brush_
 
     return folder.make<Brush>(brush_create_info);
 }
-
-//// auto Scene_builder::make_brush(
-////     Content_library_node& folder,
-////     Editor_settings&      editor_settings,
-////     Mesh_memory&          mesh_memory,
-////     GEO::Mesh&&           geo_mesh
-//// ) -> std::shared_ptr<Brush>
-//// {
-////     return make_brush(
-////         folder,
-////         Brush_data{
-////             .context         = m_context,
-////             .editor_settings = editor_settings,
-////             .build_info      = build_info(mesh_memory),
-////             .normal_style    = Normal_style::polygon_normals,
-////             .mesh            = std::make_shared<GEO::Mesh>(std::move(geo_mesh)),
-////             .density         = m_config.mass_scale,
-////         }
-////     );
-//// }
 
 auto Scene_builder::build_info(Mesh_memory& mesh_memory) -> erhe::primitive::Build_info
 {
@@ -813,7 +794,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
 
     for (const auto& brush : brushes) {
         for (int i = 0; i < config.instance_count; ++i) {
-            const erhe::math::Bounding_box& bounding_box = brush->get_bounding_box();
+            const erhe::math::Aabb& bounding_box = brush->get_bounding_box();
             ERHE_VERIFY(bounding_box.is_valid());
             pack_entries.emplace_back(brush.get());
             pack_entries.back().instance_number = i;
@@ -1003,7 +984,7 @@ auto Scene_builder::make_directional_light(
     light->intensity = intensity;
     light->range     = 0.0f;
     light->layer_id  = m_scene_root->layers().light()->id;
-    light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
+    light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     node->attach          (light);
     node->set_parent      (m_scene_root->get_scene().get_root_node());
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);

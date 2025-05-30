@@ -5,6 +5,7 @@
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
 
+#include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace editor {

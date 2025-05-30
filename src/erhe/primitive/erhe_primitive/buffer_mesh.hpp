@@ -3,7 +3,8 @@
 #include "erhe_primitive/buffer_range.hpp"
 #include "erhe_primitive/index_range.hpp"
 #include "erhe_primitive/enums.hpp"
-#include "erhe_math/math_util.hpp"
+#include "erhe_math/aabb.hpp"
+#include "erhe_math/sphere.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -17,8 +18,8 @@ public:
     [[nodiscard]] auto base_index () const -> uint32_t;
     [[nodiscard]] auto index_range(const Primitive_mode primitive_mode) const -> Index_range;
 
-    erhe::math::Bounding_box    bounding_box;
-    erhe::math::Bounding_sphere bounding_sphere;
+    erhe::math::Aabb   bounding_box;
+    erhe::math::Sphere bounding_sphere;
 
     Index_range triangle_fill_indices   {};
     Index_range edge_line_indices       {};

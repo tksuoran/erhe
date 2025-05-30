@@ -14,25 +14,26 @@
 #include "tools/selection_tool.hpp"
 #include "tools/transform/transform_tool.hpp"
 
-#include "erhe_renderer/primitive_renderer.hpp"
-#include "erhe_renderer/text_renderer.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_geometry/geometry.hpp"
 #include "erhe_log/log_glm.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/iinstance.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
+#include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/mesh_raytrace.hpp"
+#include "erhe_scene/projection.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
-#include "erhe_bit/bit_helpers.hpp"
-#include "erhe_math/math_util.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
 
@@ -355,12 +356,23 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
     const glm::mat4 world_from_light_camera = light_projection_transforms->world_from_light_camera.get_matrix();
 
     line_renderer.set_thickness(m_light_visualization_width);
-    line_renderer.add_cube(
-        world_from_light_clip,
-        context.light_color,
-        clip_min_corner,
-        clip_max_corner
-    );
+
+    if (m_frustum_box) {
+        line_renderer.add_cube(
+            world_from_light_clip,
+            context.light_color,
+            clip_min_corner,
+            clip_max_corner
+        );
+    }
+
+    if (m_frustum_planes) {
+        const glm::mat4 clip_from_world = light_projection_transforms->clip_from_world.get_matrix();
+        std::array<glm::vec4, 6> planes = erhe::math::extract_frustum_planes(clip_from_world, 0.0f, 1.0f);
+        for (const glm::vec4& plane : planes) {
+            line_renderer.add_plane(context.light_color, plane);
+        }
+    }
 
     line_renderer.add_lines(
         world_from_light_camera,
@@ -613,18 +625,33 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     //}
 
     const mat4 clip_from_node  = camera->projection()->get_projection_matrix(1.0f, render_context.viewport.reverse_depth);
+    const mat4 clip_from_world = clip_from_node * node->node_from_world();
     const mat4 node_from_clip  = inverse(clip_from_node);
     const mat4 world_from_clip = node->world_from_node() * node_from_clip;
 
     erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
     line_renderer.set_thickness(m_camera_visualization_width);
-    line_renderer.add_cube(
-        world_from_clip,
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}, //// camera->get_wireframe_color(),
-        clip_min_corner,
-        clip_max_corner,
-        true
-    );
+
+    if (m_frustum_box) {
+        line_renderer.add_cube(
+            world_from_clip,
+            m_camera_line_color,
+            clip_min_corner,
+            clip_max_corner,
+            true
+        );
+    }
+
+    if (m_frustum_planes) {
+        std::array<glm::vec4, 6> planes = erhe::math::extract_frustum_planes(clip_from_world, 0.0f, 1.0f);
+        line_renderer.add_plane(glm::vec4{1.0f, 0.0f, 0.0f, 1.0f}, planes[0]); // R Left
+        line_renderer.add_plane(glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}, planes[1]); // G Right
+        line_renderer.add_plane(glm::vec4{0.0f, 0.0f, 1.0f, 1.0f}, planes[2]); // B Bottom
+        line_renderer.add_plane(glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}, planes[3]); // C Top
+        line_renderer.add_plane(glm::vec4{1.0f, 1.0f, 0.0f, 1.0f}, planes[4]); // Y Near
+        line_renderer.add_plane(glm::vec4{1.0f, 0.0f, 1.0f, 1.0f}, planes[5]); // M Far
+    }
+
 }
 
 void Debug_visualizations::selection_visualization(const Render_context& context)
@@ -712,8 +739,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             }
         }
 
-        erhe::math::Bounding_box    selection_bounding_box;
-        erhe::math::Bounding_sphere selection_bounding_sphere;
+        erhe::math::Aabb   selection_bounding_box;
+        erhe::math::Sphere selection_bounding_sphere;
         erhe::math::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
         const float box_volume    = selection_bounding_box.volume();
         const float sphere_volume = selection_bounding_sphere.volume();
@@ -1246,8 +1273,8 @@ void Debug_visualizations::imgui()
     p.add_entry("Selection",       [this](){ ImGui::Checkbox   ("##", &m_selection); });
     p.add_entry("Bounding points", [this](){ ImGui::Checkbox   ("##", &m_selection_bounding_points_visible); });
     if (m_selection_bounding_points_visible) {
-        erhe::math::Bounding_box    selection_bounding_box;
-        erhe::math::Bounding_sphere selection_bounding_sphere;
+        erhe::math::Aabb   selection_bounding_box;
+        erhe::math::Sphere selection_bounding_sphere;
         erhe::math::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
         const float box_volume    = selection_bounding_box.volume();
         const float sphere_volume = selection_bounding_sphere.volume();
@@ -1270,9 +1297,19 @@ void Debug_visualizations::imgui()
     p.add_entry("Tool Hide",             [this](){ ImGui::Checkbox   ("##", &m_tool_hide); });
     //ImGui::Checkbox   ("Raytrace",              &m_raytrace_visualization);
 
-    p.add_entry("Lights",  [this](){ make_combo("##", m_lights); });
-    p.add_entry("Cameras", [this](){ make_combo("##", m_cameras); });
-    p.add_entry("Skins",   [this](){ make_combo("##", m_skins); });
+    p.add_entry("Frustum Box",       [this](){ ImGui::Checkbox("##", &m_frustum_box); });
+    p.add_entry("Frustum Planes",    [this](){ ImGui::Checkbox("##", &m_frustum_planes); });
+    p.add_entry("Lights",            [this](){ make_combo("##", m_lights); });
+    if (m_lights != Visualization_mode::None) {
+        p.add_entry("Light Line Width", [this](){ ImGui::SliderFloat("##", &m_light_visualization_width, 0.1f, 100.0f); });
+    }
+    p.add_entry("Cameras",           [this](){ make_combo("##", m_cameras); });
+    if (m_cameras != Visualization_mode::None) {
+        p.add_entry("Camera Line Width", [this](){ ImGui::SliderFloat("##", &m_camera_visualization_width, 0.1f, 100.0f); });
+        p.add_entry("Camera Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_camera_line_color.x, ImGuiColorEditFlags_Float); });
+    }
+
+    p.add_entry("Skins",          [this](){ make_combo("##", m_skins); });
 
     p.push_group("Annotiations", ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Max Labels", [this](){ ImGui::SliderInt("##", &m_max_labels, 0, 2000); });

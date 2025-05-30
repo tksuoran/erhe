@@ -141,7 +141,7 @@ public:
     [[nodiscard]] auto make_raytrace           () -> bool;
     [[nodiscard]] auto get_renderable_mesh     () const -> const Buffer_mesh*;
     [[nodiscard]] auto get_name                () const -> std::string_view;
-    [[nodiscard]] auto get_bounding_box        () const -> erhe::math::Bounding_box;
+    [[nodiscard]] auto get_bounding_box        () const -> erhe::math::Aabb;
     [[nodiscard]] auto get_shape_for_raytrace  () const -> std::shared_ptr<Primitive_shape>;
     
     std::shared_ptr<Primitive_render_shape> render_shape;

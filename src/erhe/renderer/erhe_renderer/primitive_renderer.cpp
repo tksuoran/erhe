@@ -3,7 +3,9 @@
 #include "erhe_renderer/debug_renderer_bucket.hpp"
 
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/projection.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_math/sphere.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <glm/gtx/norm.hpp>
@@ -26,7 +28,7 @@ Primitive_renderer::Primitive_renderer(Primitive_renderer&& old)
     , m_last_allocate_word_offset   {0}
     , m_last_allocate_word_count    {0}
     , m_line_color                  {old.m_line_color}
-    , m_line_thickness              {old.m_line_thickness}
+    , m_half_line_thickness              {old.m_half_line_thickness}
 {
     ERHE_VERIFY(old.m_last_allocate_gpu_data.empty());
     ERHE_VERIFY(old.m_last_allocate_gpu_float_data == nullptr);
@@ -39,7 +41,7 @@ auto Primitive_renderer::operator=(Primitive_renderer&& old) -> Primitive_render
     m_debug_renderer = std::exchange(old.m_debug_renderer, nullptr);
     m_bucket         = std::exchange(old.m_bucket, nullptr);
     m_line_color     = old.m_line_color;
-    m_line_thickness = old.m_line_thickness;
+    m_half_line_thickness = old.m_half_line_thickness;
     ERHE_VERIFY(m_last_allocate_gpu_data.empty());
     ERHE_VERIFY(m_last_allocate_gpu_float_data == nullptr);
     ERHE_VERIFY(m_last_allocate_word_offset == 0);
@@ -49,6 +51,22 @@ auto Primitive_renderer::operator=(Primitive_renderer&& old) -> Primitive_render
     ERHE_VERIFY(old.m_last_allocate_word_offset == 0);
     ERHE_VERIFY(old.m_last_allocate_word_count == 0);
     return *this;
+}
+
+void Primitive_renderer::reserve_lines(std::size_t line_count)
+{
+    std::size_t byte_count     = line_count * 2 * m_line_vertex_stride;
+    m_last_allocate_word_count = byte_count / sizeof(float);
+    m_last_allocate_gpu_data   = m_bucket->make_draw(byte_count, 0);
+
+    if (m_last_allocate_gpu_data.size_bytes() < byte_count) {
+        m_last_allocate_gpu_float_data = nullptr;
+        m_last_allocate_word_offset    = 0;
+    } else {
+        std::byte* start = m_last_allocate_gpu_data.data();
+        m_last_allocate_gpu_float_data = reinterpret_cast<float*>(start);
+        m_last_allocate_word_offset    = 0;
+    }
 }
 
 void Primitive_renderer::make_lines(std::size_t line_count)
@@ -84,7 +102,7 @@ void Primitive_renderer::set_line_color(const glm::vec4& color)
 
 void Primitive_renderer::set_thickness(const float thickness)
 {
-    m_line_thickness = thickness;
+    m_half_line_thickness = 0.5f * thickness;
 }
 
 #pragma region add
@@ -94,8 +112,8 @@ void Primitive_renderer::add_lines(const glm::mat4& transform, const std::initia
     for (const Line& line : lines) {
         const glm::vec4 p0{transform * glm::vec4{line.p0, 1.0f}};
         const glm::vec4 p1{transform * glm::vec4{line.p1, 1.0f}};
-        put(glm::vec3{p0} / p0.w, m_line_thickness, m_line_color);
-        put(glm::vec3{p1} / p1.w, m_line_thickness, m_line_color);
+        put(glm::vec3{p0} / p0.w, m_half_line_thickness, m_line_color);
+        put(glm::vec3{p1} / p1.w, m_half_line_thickness, m_line_color);
     }
 }
 
@@ -113,17 +131,53 @@ void Primitive_renderer::add_lines(const glm::mat4& transform, const std::initia
 void Primitive_renderer::add_line(const glm::vec4& color0, float width0, glm::vec3 p0, const glm::vec4& color1, float width1, glm::vec3 p1)
 {
     make_lines(1);
-    put(p0, width0, color0);
-    put(p1, width1, color1);
+    put(p0, 0.5f * width0, color0);
+    put(p1, 0.5f * width1, color1);
 }
 
 void Primitive_renderer::add_lines(const std::initializer_list<Line> lines)
 {
     make_lines(lines.size());
     for (const Line& line : lines) {
-        put(line.p0, m_line_thickness, m_line_color);
-        put(line.p1, m_line_thickness, m_line_color);
+        put(line.p0, m_half_line_thickness, m_line_color);
+        put(line.p1, m_half_line_thickness, m_line_color);
     }
+}
+
+void Primitive_renderer::add_plane(const glm::vec4& color, const glm::vec4& plane)
+{
+    glm::vec3 center = erhe::math::get_point_on_plane(plane);
+    glm::vec3 normal{plane};
+    glm::vec3 tangent;
+    glm::vec3 bitangent;
+    erhe::math::get_plane_basis(normal, tangent, bitangent);
+    glm::vec4 zero{0.0f, 0.0f, 0.0f, 0.0f};
+
+    make_lines(9);
+    put(center,          m_half_line_thickness * 5.0f, color);
+    put(center + normal, 0.0f, zero);
+
+    put(center - tangent,        m_half_line_thickness, zero);
+    put(center,           0.7f * m_half_line_thickness, color);
+    put(center,           0.7f * m_half_line_thickness, color);
+    put(center + tangent,        m_half_line_thickness, zero);
+
+    put(center - bitangent,        m_half_line_thickness, zero);
+    put(center,             0.7f * m_half_line_thickness, color);
+    put(center,             0.7f * m_half_line_thickness, color);
+    put(center + bitangent,        m_half_line_thickness, zero);
+
+    put(center + tangent - bitangent, m_half_line_thickness, color);
+    put(center + tangent + bitangent, m_half_line_thickness, color);
+
+    put(center + tangent + bitangent, m_half_line_thickness, color);
+    put(center - tangent + bitangent, m_half_line_thickness, color);
+
+    put(center - tangent + bitangent, m_half_line_thickness, color);
+    put(center - tangent - bitangent, m_half_line_thickness, color);
+
+    put(center - tangent - bitangent, m_half_line_thickness, color);
+    put(center + tangent - bitangent, m_half_line_thickness, color);
 }
 
 void Primitive_renderer::add_cube(
@@ -175,7 +229,7 @@ void Primitive_renderer::add_cube(
         // lines
         add_lines(
             transform,
-            color,
+            0.5f * color,
             {
                 // near to far middle
                 { 0.5f * p[0] + 0.5f * p[1], 0.5f * p[4] + 0.5f * p[5] },
@@ -215,9 +269,9 @@ void Primitive_renderer::add_sphere(
     const int                           step_count
 )
 {
-    erhe::math::Bounding_sphere sphere = erhe::math::transform(
+    erhe::math::Sphere sphere = erhe::math::transform(
         world_from_local.get_matrix(),
-        erhe::math::Bounding_sphere{
+        erhe::math::Sphere{
             .center = local_center,
             .radius = local_radius
         }
