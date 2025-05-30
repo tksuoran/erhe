@@ -1,9 +1,12 @@
 #pragma once
 
+#include "erhe_math/plane.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
+
+#include <array>
 
 namespace erhe::scene {
 
@@ -78,5 +81,10 @@ public:
     float frustum_bottom {-0.5f};
     float frustum_top    { 0.5f};
 };
+
+[[nodiscard]] auto get_planes_from_clip_from_world(const glm::mat4& m) -> std::array<glm::vec4, 6>;
+[[nodiscard]] auto get_point_on_plane             (const glm::vec4& plane) -> glm::vec3;
+[[nodiscard]] void get_plane_basis                (const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent);
+
 
 } // namespace erhe::scene

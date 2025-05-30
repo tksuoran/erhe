@@ -62,6 +62,8 @@ public:
         add_lines(lines);
     }
 
+    void add_plane(const glm::vec4& color, const glm::vec4& plane);
+
     void add_cube(
         const glm::mat4& transform,
         const glm::vec4& color,

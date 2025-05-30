@@ -10,6 +10,8 @@ erhe_target_sources_grouped(
     erhe_math/math_util.hpp
     erhe_math/input_axis.cpp
     erhe_math/input_axis.hpp
+    erhe_math/plane.cpp
+    erhe_math/plane.hpp
     erhe_math/sphere.cpp
     erhe_math/sphere.hpp
     erhe_math/viewport.cpp

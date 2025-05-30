@@ -220,4 +220,45 @@ auto Projection::get_fov_sides(const erhe::math::Viewport viewport) const -> Fov
     return Fov_sides{ 0.0f, 0.0f, 0.0f, 0.0f };
 }
 
+auto get_planes_from_clip_from_world(const glm::mat4& m) -> std::array<glm::vec4, 6>
+{
+    // Reconstruct rows from the column-major matrix
+    glm::vec4 row0{m[0][0], m[1][0], m[2][0], m[3][0]};
+    glm::vec4 row1{m[0][1], m[1][1], m[2][1], m[3][1]};
+    glm::vec4 row2{m[0][2], m[1][2], m[2][2], m[3][2]};
+    glm::vec4 row3{m[0][3], m[1][3], m[2][3], m[3][3]};
+
+    return {
+        row3 + row0, // Left
+        row3 - row0, // Right
+        row3 + row1, // Bottom
+        row3 - row1, // Top
+        row3 + row2, // Near
+        row3 - row2  // Far
+    };
+}
+
+auto get_point_on_plane(const glm::vec4& plane) -> glm::vec3
+{
+    glm::vec3 normal = glm::vec3(plane);
+    float d = plane.w;
+
+    // Avoid division by zero
+    float denom = glm::dot(normal, normal);
+    if (denom == 0.0f) {
+        return glm::vec3{0.0f}; // degenerate plane
+    }
+
+    // Return point: -d * n / ||n||^2
+    return -d * normal / denom;
+}
+
+void get_plane_basis(const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent)
+{
+    glm::vec3 tangent_ = erhe::math::min_axis<float>(normal);
+
+    bitangent = glm::normalize(glm::cross(normal, tangent_));
+    tangent   = glm::normalize(glm::cross(bitangent, normal));
+}
+
 } // namespace erhe::scene

@@ -3,6 +3,7 @@
 #include "erhe_renderer/debug_renderer_bucket.hpp"
 
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/projection.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -124,6 +125,26 @@ void Primitive_renderer::add_lines(const std::initializer_list<Line> lines)
         put(line.p0, m_line_thickness, m_line_color);
         put(line.p1, m_line_thickness, m_line_color);
     }
+}
+
+void Primitive_renderer::add_plane(const glm::vec4& color, const glm::vec4& plane)
+{
+    glm::vec3 center = erhe::scene::get_point_on_plane(plane);
+    glm::vec3 tangent;
+    glm::vec3 bitangent;
+    erhe::scene::get_plane_basis(glm::vec3{plane}, tangent, bitangent);
+    make_lines(4);
+    put(center + tangent - bitangent, m_line_thickness, color);
+    put(center + tangent + bitangent, m_line_thickness, color);
+
+    put(center + tangent + bitangent, m_line_thickness, color);
+    put(center - tangent + bitangent, m_line_thickness, color);
+
+    put(center - tangent + bitangent, m_line_thickness, color);
+    put(center - tangent - bitangent, m_line_thickness, color);
+
+    put(center - tangent - bitangent, m_line_thickness, color);
+    put(center + tangent - bitangent, m_line_thickness, color);
 }
 
 void Primitive_renderer::add_cube(
