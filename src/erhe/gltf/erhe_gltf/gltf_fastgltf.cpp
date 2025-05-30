@@ -103,48 +103,48 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
     switch (accessor.type) {
         case fastgltf::AccessorType::Scalar: {
             switch (accessor.componentType) {
-                case fastgltf::ComponentType::Byte         : return Format::format_8_scalar_sint;
-                case fastgltf::ComponentType::UnsignedByte : return Format::format_8_scalar_uint;
-                case fastgltf::ComponentType::Short        : return Format::format_16_scalar_sint;
-                case fastgltf::ComponentType::UnsignedShort: return Format::format_16_scalar_uint;
-                case fastgltf::ComponentType::Int          : return Format::format_32_scalar_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return Format::format_32_scalar_uint;
+                case fastgltf::ComponentType::Byte         : return accessor.normalized ? Format::format_8_scalar_snorm  : Format::format_8_scalar_sint;
+                case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_scalar_unorm  : Format::format_8_scalar_uint;
+                case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_scalar_snorm : Format::format_16_scalar_sint;
+                case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_scalar_unorm : Format::format_16_scalar_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_scalar_snorm : Format::format_32_scalar_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_scalar_unorm : Format::format_32_scalar_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_scalar_float;
                 default: break;
             }
         }
         case fastgltf::AccessorType::Vec2: {
             switch (accessor.componentType) {
-                case fastgltf::ComponentType::Byte         : return Format::format_8_vec2_sint;
-                case fastgltf::ComponentType::UnsignedByte : return Format::format_8_vec2_uint;
-                case fastgltf::ComponentType::Short        : return Format::format_16_vec2_sint;
-                case fastgltf::ComponentType::UnsignedShort: return Format::format_16_vec2_uint;
-                case fastgltf::ComponentType::Int          : return Format::format_32_vec2_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return Format::format_32_vec2_uint;
+                case fastgltf::ComponentType::Byte         : return accessor.normalized ? Format::format_8_vec2_snorm  : Format::format_8_vec2_sint;
+                case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_vec2_unorm  : Format::format_8_vec2_uint;
+                case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_vec2_snorm : Format::format_16_vec2_sint;
+                case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_vec2_unorm : Format::format_16_vec2_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec2_snorm : Format::format_32_vec2_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec2_unorm : Format::format_32_vec2_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec2_float;
                 default: break;
             }
         }
         case fastgltf::AccessorType::Vec3:{
             switch (accessor.componentType) {
-                case fastgltf::ComponentType::Byte         : return Format::format_8_vec3_sint;
-                case fastgltf::ComponentType::UnsignedByte : return Format::format_8_vec3_uint;
-                case fastgltf::ComponentType::Short        : return Format::format_16_vec3_sint;
-                case fastgltf::ComponentType::UnsignedShort: return Format::format_16_vec3_uint;
-                case fastgltf::ComponentType::Int          : return Format::format_32_vec3_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return Format::format_32_vec3_uint;
+                case fastgltf::ComponentType::Byte         : return accessor.normalized ? Format::format_8_vec3_snorm  : Format::format_8_vec3_sint;
+                case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_vec3_unorm  : Format::format_8_vec3_uint;
+                case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_vec3_snorm : Format::format_16_vec3_sint;
+                case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_vec3_unorm : Format::format_16_vec3_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec3_snorm : Format::format_32_vec3_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec3_unorm : Format::format_32_vec3_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec3_float;
                 default: break;
             }
         }
         case fastgltf::AccessorType::Vec4: {
             switch (accessor.componentType) {
-                case fastgltf::ComponentType::Byte         : return Format::format_8_vec4_sint;
-                case fastgltf::ComponentType::UnsignedByte : return Format::format_8_vec4_uint;
-                case fastgltf::ComponentType::Short        : return Format::format_16_vec4_sint;
-                case fastgltf::ComponentType::UnsignedShort: return Format::format_16_vec4_uint;
-                case fastgltf::ComponentType::Int          : return Format::format_32_vec4_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return Format::format_32_vec4_uint;
+                case fastgltf::ComponentType::Byte         : return accessor.normalized ? Format::format_8_vec4_snorm  : Format::format_8_vec4_sint;
+                case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_vec4_unorm  : Format::format_8_vec4_uint;
+                case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_vec4_snorm : Format::format_16_vec4_sint;
+                case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_vec4_unorm : Format::format_16_vec4_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec4_snorm : Format::format_32_vec4_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec4_unorm : Format::format_32_vec4_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec4_float;
                 default: break;
             }
