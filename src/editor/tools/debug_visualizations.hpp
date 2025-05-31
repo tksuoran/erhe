@@ -126,6 +126,8 @@ private:
     bool      m_selection_bounding_points_visible{false};
     bool      m_selection_box                    {false};
     bool      m_selection_sphere                 {true};
+    bool      m_selection_convex_hull            {false};
+    bool      m_selection_parts                  {true};
     float     m_selection_node_axis_width        {2.0f};
     glm::vec4 m_selection_major_color            {2.0f, 1.6f, 0.1f, 1.0f};
     glm::vec4 m_selection_minor_color            {2.0f, 1.6f, 0.1f, 0.5f};

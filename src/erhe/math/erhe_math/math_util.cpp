@@ -7,6 +7,8 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/pca.hpp>
 
+#include <quickhull/QuickHull.hpp>
+
 #include <algorithm>
 
 namespace erhe::math {
@@ -476,6 +478,53 @@ auto spherical_to_cartesian_iso(const float theta, const float phi) -> vec3
         std::sin(theta) * std::sin(phi),
         std::cos(theta)
     };
+}
+
+auto calculate_bounding_convex_hull(const Bounding_volume_source& source) -> Convex_hull
+{
+    std::vector<quickhull::Vector3<float>> point_cloud;
+    for (size_t i = 0, i_end = source.get_element_count(); i < i_end; ++i) {
+        for (size_t j = 0, j_end = source.get_element_point_count(i); j < j_end; ++j) {
+            const auto point = source.get_point(i, j);
+            if (point.has_value()) {
+                const auto p = point.value();
+                point_cloud.push_back(quickhull::Vector3<float>{p.x, p.y, p.z});
+            }
+        }
+    }
+
+    constexpr bool  ccw                  = true;
+    constexpr bool  use_original_indices = false;
+    //constexpr float epsilon              = 0.0001f;
+
+    quickhull::QuickHull<float> quick_hull{};
+    quickhull::ConvexHull<float> convex_hull = quick_hull.getConvexHull(
+        point_cloud,
+        ccw,
+        use_original_indices,
+        epsilon
+    );
+
+    Convex_hull result{};
+    const std::vector<size_t>& index_buffer = convex_hull.getIndexBuffer();
+    result.triangle_indices.reserve(index_buffer.size() / 3);
+    for (size_t i = 0, end = index_buffer.size(); i < end; i += 3) {
+        result.triangle_indices.push_back(
+            {
+                index_buffer[i + 0],
+                index_buffer[i + 1],
+                index_buffer[i + 2]
+            }
+        );
+    }
+    const quickhull::VertexDataSource<float>& vertex_data_source = convex_hull.getVertexBuffer();
+    result.points.reserve(vertex_data_source.size());
+    for (quickhull::Vector3<float> p : vertex_data_source) {
+        result.points.push_back(
+            glm::vec3{p.x, p.y, p.z}
+        );
+    }
+    return result;
 }
 
 void calculate_bounding_volume(

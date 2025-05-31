@@ -179,36 +179,38 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
                 buffer_mesh.bounding_box.min,
                 buffer_mesh.bounding_box.max
             );
-        }
-        if (m_selection_box || (box_smaller && !m_selection_sphere)) {
-            line_renderer.set_thickness(m_selection_major_width);
-            line_renderer.add_cube(
-                node->world_from_node(),
-                m_selection_major_color,
-                buffer_mesh.bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
-                buffer_mesh.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
-            );
-        }
-        if (!box_smaller) {
+        } else {
             m_selection_bounding_volume.add_sphere(
                 node->world_from_node(),
                 buffer_mesh.bounding_sphere.center,
                 buffer_mesh.bounding_sphere.radius
             );
         }
-        if (m_selection_sphere || (!box_smaller && !m_selection_box)) {
-            if (used_camera) {
-                line_renderer.add_sphere(
-                    node->world_from_node_transform(),
+
+        if (m_selection_parts) {
+            if (m_selection_box || (box_smaller && !m_selection_sphere)) {
+                line_renderer.set_thickness(m_selection_major_width);
+                line_renderer.add_cube(
+                    node->world_from_node(),
                     m_selection_major_color,
-                    m_selection_minor_color,
-                    m_selection_major_width,
-                    m_selection_minor_width,
-                    buffer_mesh.bounding_sphere.center,
-                    buffer_mesh.bounding_sphere.radius + m_gap,
-                    &camera_world_from_node_transform,
-                    m_sphere_step_count
+                    buffer_mesh.bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
+                    buffer_mesh.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
                 );
+            }
+            if (m_selection_sphere || (!box_smaller && !m_selection_box)) {
+                if (used_camera) {
+                    line_renderer.add_sphere(
+                        node->world_from_node_transform(),
+                        m_selection_major_color,
+                        m_selection_minor_color,
+                        m_selection_major_width,
+                        m_selection_minor_width,
+                        buffer_mesh.bounding_sphere.center,
+                        buffer_mesh.bounding_sphere.radius + m_gap,
+                        &camera_world_from_node_transform,
+                        m_sphere_step_count
+                    );
+                }
             }
         }
     }
@@ -811,17 +813,20 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             }
         }
 
-        erhe::math::Aabb   selection_bounding_box;
-        erhe::math::Sphere selection_bounding_sphere;
+        erhe::math::Aabb        selection_bounding_box;
+        erhe::math::Sphere      selection_bounding_sphere;
         erhe::math::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
         const float box_volume    = selection_bounding_box.volume();
         const float sphere_volume = selection_bounding_sphere.volume();
         if (
             m_selection_box ||
             (
-                !m_selection_sphere &&
-                (box_volume > 0.0f) &&
-                (box_volume < sphere_volume)
+                m_selection_parts &&
+                (
+                    !m_selection_sphere &&
+                    (box_volume > 0.0f) &&
+                    (box_volume < sphere_volume)
+                )
             )
         ) {
             line_renderer.set_thickness(m_selection_major_width);
@@ -835,9 +840,12 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         if (
             m_selection_sphere ||
             (
-                !m_selection_box &&
-                (sphere_volume > 0.0f) &&
-                (sphere_volume < box_volume)
+                m_selection_parts &&
+                (
+                    !m_selection_box &&
+                    (sphere_volume > 0.0f) &&
+                    (sphere_volume < box_volume)
+                )
             )
         ) {
             const auto* camera_node = context.get_camera_node();
@@ -853,6 +861,47 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                     &(camera_node->world_from_node_transform()),
                     m_sphere_step_count
                 );
+            }
+        }
+        if (m_selection_convex_hull) {
+            erhe::math::Convex_hull selection_convex_hull = erhe::math::calculate_bounding_convex_hull(m_selection_bounding_volume);
+            for (const std::array<std::size_t, 3>& triangle : selection_convex_hull.triangle_indices) {
+                const std::size_t i0 = triangle[0];
+                const std::size_t i1 = triangle[1];
+                const std::size_t i2 = triangle[2];
+                const glm::vec3   p0 = selection_convex_hull.points[i0];
+                const glm::vec3   p1 = selection_convex_hull.points[i1];
+                const glm::vec3   p2 = selection_convex_hull.points[i2];
+                if (i0 < i1) {
+                    line_renderer.add_line(
+                        m_group_selection_major_color,
+                        m_selection_major_width,
+                        p0,
+                        m_group_selection_major_color,
+                        m_selection_major_width,
+                        p1
+                    );
+                }
+                if (i1 < i2) {
+                    line_renderer.add_line(
+                        m_group_selection_major_color,
+                        m_selection_major_width,
+                        p1,
+                        m_group_selection_major_color,
+                        m_selection_major_width,
+                        p2
+                    );
+                }
+                if (i2 < i0) {
+                    line_renderer.add_line(
+                        m_group_selection_major_color,
+                        m_selection_major_width,
+                        p2,
+                        m_group_selection_major_color,
+                        m_selection_major_width,
+                        p0
+                    );
+                }
             }
         }
     }
@@ -1356,6 +1405,9 @@ void Debug_visualizations::imgui()
     }
     p.add_entry("Selection Box",         [this](){ ImGui::Checkbox   ("##", &m_selection_box); });
     p.add_entry("Selection Sphere",      [this](){ ImGui::Checkbox   ("##", &m_selection_sphere); });
+    p.add_entry("Selection Parts",       [this](){ ImGui::Checkbox   ("##", &m_selection_parts); });
+    p.add_entry("Selection Convex Hull", [this](){ ImGui::Checkbox   ("##", &m_selection_convex_hull); });
+
     p.add_entry("Selection Major Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_major_color.x, ImGuiColorEditFlags_Float); });
     p.add_entry("Selection Minor Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_minor_color.x, ImGuiColorEditFlags_Float); });
     p.add_entry("Group Major Color",     [this](){ ImGui::ColorEdit4 ("##", &m_group_selection_major_color.x, ImGuiColorEditFlags_Float); });

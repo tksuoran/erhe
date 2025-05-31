@@ -701,6 +701,15 @@ private:
     std::vector<glm::vec3> m_points;
 };
 
+class Convex_hull
+{
+public:
+    std::vector<glm::vec3>             points;
+    std::vector<std::array<size_t, 3>> triangle_indices;
+};
+
+[[nodiscard]] auto calculate_bounding_convex_hull(const Bounding_volume_source& source) -> Convex_hull;
+
 void calculate_bounding_volume(
     const Bounding_volume_source& source,
     Aabb&                         bounding_box,

@@ -28,6 +28,7 @@ target_link_libraries(
         erhe::log
         erhe::profile
         erhe::verify
+        quickhull::quickhull
 )
 
 erhe_target_settings(${_target} "erhe")

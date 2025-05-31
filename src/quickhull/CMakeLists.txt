@@ -1,5 +1,6 @@
 set(_target "quickhull")
 add_library(${_target})
+add_library(quickhull::quickhull ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     quickhull/ConvexHull.hpp
