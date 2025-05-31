@@ -375,4 +375,26 @@ auto optimal_enclosing_sphere(const std::vector<glm::vec3>& pts) -> Sphere
     return s;
 }
 
+[[nodiscard]] auto Sphere::transformed_by(const glm::mat4& m) const -> Sphere
+{
+    const glm::vec4 transformed_center =           m * glm::vec4(center, 1.0f);
+    const glm::vec3 scale_x            = glm::vec3(m * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f));
+    const glm::vec3 scale_y            = glm::vec3(m * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
+    const glm::vec3 scale_z            = glm::vec3(m * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f));
+
+    // Find the maximum scale factor to conservatively scale the radius
+    const float max_scale = std::max(
+        {
+            glm::length(scale_x),
+            glm::length(scale_y),
+            glm::length(scale_z)
+        }
+    );
+
+    return Sphere{
+        .center = glm::vec3(transformed_center),
+        .radius = radius * max_scale
+    };
+}
+
 } // namespace erhe::math

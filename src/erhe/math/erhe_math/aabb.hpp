@@ -56,7 +56,7 @@ public:
             { min.x, max.y, max.z, 1.0f }
         };
 
-        Aabb result;
+        Aabb result{};
         for (glm::vec4 corner : corners) {
             glm::vec4 transformedH{m * corner};
             glm::vec3 transformed = glm::vec3{transformedH} / transformedH.w;

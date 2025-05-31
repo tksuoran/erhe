@@ -613,8 +613,8 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
         return;
     }
 
-    const auto* node = camera->get_node();
-    if (node == nullptr) {
+    const auto* camera_node = camera->get_node();
+    if (camera_node == nullptr) {
         return;
     }
 
@@ -625,12 +625,40 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     //}
 
     const mat4 clip_from_node  = camera->projection()->get_projection_matrix(1.0f, render_context.viewport.reverse_depth);
-    const mat4 clip_from_world = clip_from_node * node->node_from_world();
+    const mat4 clip_from_world = clip_from_node * camera_node->node_from_world();
     const mat4 node_from_clip  = inverse(clip_from_node);
-    const mat4 world_from_clip = node->world_from_node() * node_from_clip;
+    const mat4 world_from_clip = camera_node->world_from_node() * node_from_clip;
 
     erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
     line_renderer.set_thickness(m_camera_visualization_width);
+
+    std::array<glm::vec4, 6> planes  = erhe::math::extract_frustum_planes (clip_from_world, 0.0f, 1.0f);
+    std::array<glm::vec3, 8> corners = erhe::math::extract_frustum_corners(world_from_clip, 0.0f, 1.0f);
+    const std::array<glm::vec3, 8>& p = corners;
+
+    line_renderer.add_lines(
+        glm::mat4{1.0f}, //erhe::scene::Transform{},
+        glm::vec4{1.0f, 0.5, 0.0f, 1.0f},
+        {
+            // near plane
+            { p[0], p[1] },
+            { p[1], p[2] },
+            { p[2], p[3] },
+            { p[3], p[0] },
+
+            // far plane
+            { p[4], p[5] },
+            { p[5], p[6] },
+            { p[6], p[7] },
+            { p[7], p[4] },
+
+            // near to far
+            { p[0], p[4] },
+            { p[1], p[5] },
+            { p[2], p[6] },
+            { p[3], p[7] }
+        }
+    );
 
     if (m_frustum_box) {
         line_renderer.add_cube(
@@ -643,7 +671,6 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     }
 
     if (m_frustum_planes) {
-        std::array<glm::vec4, 6> planes = erhe::math::extract_frustum_planes(clip_from_world, 0.0f, 1.0f);
         line_renderer.add_plane(glm::vec4{1.0f, 0.0f, 0.0f, 1.0f}, planes[0]); // R Left
         line_renderer.add_plane(glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}, planes[1]); // G Right
         line_renderer.add_plane(glm::vec4{0.0f, 0.0f, 1.0f, 1.0f}, planes[2]); // B Bottom
@@ -652,6 +679,51 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
         line_renderer.add_plane(glm::vec4{1.0f, 0.0f, 1.0f, 1.0f}, planes[5]); // M Far
     }
 
+    if (m_camera_cull_test) {
+        const auto scene_root = render_context.scene_view.get_scene_root();
+        if (!scene_root) {
+            return;
+        }
+
+        const glm::vec4 red       {1.0f, 0.0f, 0.0f, 1.0f};
+        const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
+        const glm::vec4 green     {0.0f, 1.0f, 0.0f, 1.0f};
+        const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
+
+        line_renderer.set_thickness(4.0f);
+        for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+            for (const auto& mesh : layer->meshes) {
+                using namespace erhe::bit;
+                if (!test_all_rhs_bits_set(mesh->get_flag_bits(), erhe::Item_flags::content)) {
+                    continue;
+                }
+
+                for (const auto& primitive : mesh->get_primitives()) {
+                    erhe::scene::Node*                node                      = mesh->get_node();
+                    const erhe::scene::Trs_transform& world_from_node_transform = node->world_from_node_transform();
+                    const glm::mat4                   world_from_node           = world_from_node_transform.get_matrix();
+                    const erhe::math::Aabb            node_local_aabb           = primitive.render_shape->get_renderable_mesh().bounding_box;
+                    const erhe::math::Sphere          node_local_sphere         = primitive.render_shape->get_renderable_mesh().bounding_sphere;
+                    const erhe::math::Aabb            aabb_in_world             = node_local_aabb  .transformed_by(world_from_node);
+                    const erhe::math::Sphere          sphere_in_world           = node_local_sphere.transformed_by(world_from_node);
+                    const bool aabb_visible   = aabb_in_frustum  (planes, corners, aabb_in_world);
+                    const bool sphere_visible = sphere_in_frustum(planes, sphere_in_world);
+                    line_renderer.add_cube(glm::mat4{1.0f}, aabb_visible ? green : red, aabb_in_world.min, aabb_in_world.max);
+                    line_renderer.add_sphere(
+                        erhe::scene::Transform{},
+                        sphere_visible ? green      : red,
+                        sphere_visible ? half_green : half_red,
+                        4.0f,
+                        3.0f,
+                        sphere_in_world.center,
+                        sphere_in_world.radius,
+                        &(render_context.get_camera_node()->world_from_node_transform()),
+                        m_sphere_step_count
+                    );
+                }
+            }
+        }
+    }
 }
 
 void Debug_visualizations::selection_visualization(const Render_context& context)
@@ -1305,6 +1377,7 @@ void Debug_visualizations::imgui()
     }
     p.add_entry("Cameras",           [this](){ make_combo("##", m_cameras); });
     if (m_cameras != Visualization_mode::None) {
+        p.add_entry("Camera Cull Test",  [this](){ ImGui::Checkbox   ("##", &m_camera_cull_test); });
         p.add_entry("Camera Line Width", [this](){ ImGui::SliderFloat("##", &m_camera_visualization_width, 0.1f, 100.0f); });
         p.add_entry("Camera Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_camera_line_color.x, ImGuiColorEditFlags_Float); });
     }

@@ -19,6 +19,8 @@ public:
 
     auto contains(const glm::vec3& point) const -> bool;
     auto contains(const glm::vec3& point, float epsilon) const -> bool;
+
+    [[nodiscard]] auto transformed_by(const glm::mat4& m) const -> Sphere;
 };
 
 auto optimal_enclosing_sphere(const std::vector<glm::vec3>& points) -> Sphere;

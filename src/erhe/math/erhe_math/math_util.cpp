@@ -731,17 +731,19 @@ auto extract_frustum_planes(const glm::mat4& clip_from_world, float clip_z_near,
 
 [[nodiscard]] auto extract_frustum_corners(const glm::mat4& world_from_clip, float clip_z_near, float clip_z_far) -> std::array<glm::vec3, 8>
 {
-    const glm::vec3 a = glm::vec3{world_from_clip * glm::vec4{-1.0f, -1.0f, clip_z_near, 1.0f}}; // clip min corner
-    const glm::vec3 b = glm::vec3{world_from_clip * glm::vec4{ 1.0f,  1.0f, clip_z_far,  1.0f}}; // clip max corner
+    auto transform = [&world_from_clip](float x, float y, float z) -> glm::vec3 {
+        const glm::vec4 h = world_from_clip * glm::vec4{x, y, z, 1.0f};
+        return h / h.w;
+    };
     return {
-        glm::vec3{a.x, a.y, a.z},
-        glm::vec3{b.x, a.y, a.z},
-        glm::vec3{b.x, b.y, a.z},
-        glm::vec3{a.x, b.y, a.z},
-        glm::vec3{a.x, a.y, b.z},
-        glm::vec3{b.x, a.y, b.z},
-        glm::vec3{b.x, b.y, b.z},
-        glm::vec3{a.x, b.y, b.z}
+        transform(-1.0f, -1.0f, clip_z_near),
+        transform(-1.0f,  1.0f, clip_z_near),
+        transform( 1.0f,  1.0f, clip_z_near),
+        transform( 1.0f, -1.0f, clip_z_near),
+        transform(-1.0f, -1.0f, clip_z_far ),
+        transform(-1.0f,  1.0f, clip_z_far ),
+        transform( 1.0f,  1.0f, clip_z_far ),
+        transform( 1.0f, -1.0f, clip_z_far )
     };
 }
 
@@ -770,41 +772,57 @@ void get_plane_basis(const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bit
 
 // https://iquilezles.org/articles/frustumcorrect/
 // false if fully outside, true if inside or intersects
-auto box_in_frustum(
+auto aabb_in_frustum(
     const std::array<glm::vec4, 6>& planes,
     const std::array<glm::vec3, 8>& corners,
-    const Aabb&                     box
+    const Aabb&                     aabb
 ) -> bool
 {
     // Check box outside/inside of frustum
     for (int i = 0; i < 6; i++) {
         int out = 0;
-        out += ((glm::dot(planes[i], glm::vec4(box.min.x, box.min.y, box.min.z, 1.0f)) < 0.0f) ? 1 : 0);
-        out += ((glm::dot(planes[i], glm::vec4(box.max.x, box.min.y, box.min.z, 1.0f)) < 0.0f) ? 1 : 0);
-        out += ((glm::dot(planes[i], glm::vec4(box.min.x, box.max.y, box.min.z, 1.0f)) < 0.0f) ? 1 : 0);
-        out += ((glm::dot(planes[i], glm::vec4(box.max.x, box.max.y, box.min.z, 1.0f)) < 0.0f) ? 1 : 0);
-        out += ((glm::dot(planes[i], glm::vec4(box.min.x, box.min.y, box.max.z, 1.0f)) < 0.0f) ? 1 : 0);
-        out += ((glm::dot(planes[i], glm::vec4(box.max.x, box.min.y, box.max.z, 1.0f)) < 0.0f) ? 1 : 0);
-        out += ((glm::dot(planes[i], glm::vec4(box.min.x, box.max.y, box.max.z, 1.0f)) < 0.0f) ? 1 : 0);
-        out += ((glm::dot(planes[i], glm::vec4(box.max.x, box.max.y, box.max.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(aabb.min.x, aabb.min.y, aabb.min.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(aabb.max.x, aabb.min.y, aabb.min.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(aabb.min.x, aabb.max.y, aabb.min.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(aabb.max.x, aabb.max.y, aabb.min.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(aabb.min.x, aabb.min.y, aabb.max.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(aabb.max.x, aabb.min.y, aabb.max.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(aabb.min.x, aabb.max.y, aabb.max.z, 1.0f)) < 0.0f) ? 1 : 0);
+        out += ((glm::dot(planes[i], glm::vec4(aabb.max.x, aabb.max.y, aabb.max.z, 1.0f)) < 0.0f) ? 1 : 0);
         if (out == 8) {
             return false;
         }
     }
 
-    // check frustum outside/inside box
+    // Check frustum outside/inside box
     int out;
-    out = 0; for (const glm::vec3& p : corners) out += ((p.x > box.max.x) ? 1 : 0); if (out == 8) return false;
-    out = 0; for (const glm::vec3& p : corners) out += ((p.x < box.min.x) ? 1 : 0); if (out == 8) return false;
-    out = 0; for (const glm::vec3& p : corners) out += ((p.y > box.max.y) ? 1 : 0); if (out == 8) return false;
-    out = 0; for (const glm::vec3& p : corners) out += ((p.y < box.min.y) ? 1 : 0); if (out == 8) return false;
-    out = 0; for (const glm::vec3& p : corners) out += ((p.z > box.max.z) ? 1 : 0); if (out == 8) return false;
-    out = 0; for (const glm::vec3& p : corners) out += ((p.z < box.min.z) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.x > aabb.max.x) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.x < aabb.min.x) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.y > aabb.max.y) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.y < aabb.min.y) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.z > aabb.max.z) ? 1 : 0); if (out == 8) return false;
+    out = 0; for (const glm::vec3& p : corners) out += ((p.z < aabb.min.z) ? 1 : 0); if (out == 8) return false;
     return true;
 }
 
 // https://bruop.github.io/improved_frustum_culling/
 // https://iquilezles.org/articles/frustumcorrect/
+
+auto plane_point_distance(const glm::vec4& plane, const glm::vec3& point) -> float
+{
+    return glm::dot(glm::vec4(point, 1.0f), plane);
+}
+
+[[nodiscard]] auto sphere_in_frustum(
+    const std::array<glm::vec4, 6>& planes,
+    const Sphere&                   sphere
+) -> bool
+{
+   const float dist01 = std::min(plane_point_distance(planes[0], sphere.center), plane_point_distance(planes[1], sphere.center));
+   const float dist23 = std::min(plane_point_distance(planes[2], sphere.center), plane_point_distance(planes[3], sphere.center));
+   const float dist45 = std::min(plane_point_distance(planes[4], sphere.center), plane_point_distance(planes[5], sphere.center));
+   return std::min(std::min(dist01, dist23), dist45) + sphere.radius > 0.0f;
+}
 
 
 } // namespace erhe::math

@@ -903,15 +903,20 @@ private:
 [[nodiscard]] auto torus_volume(const float major_radius, const float minor_radius) -> float;
 
 [[nodiscard]] auto extract_frustum_planes (const glm::mat4& clip_from_world, float clip_z_near, float clip_z_far) -> std::array<glm::vec4, 6>;
-[[nodiscard]] auto extract_frustum_corners(const glm::mat4& clip_from_world, float clip_z_near, float clip_z_far) -> std::array<glm::vec3, 8>;
+[[nodiscard]] auto extract_frustum_corners(const glm::mat4& world_from_clip, float clip_z_near, float clip_z_far) -> std::array<glm::vec3, 8>;
 [[nodiscard]] auto get_point_on_plane     (const glm::vec4& plane) -> glm::vec3;
 [[nodiscard]] void get_plane_basis        (const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent);
 
-[[nodiscard]] auto box_in_frustum(
+[[nodiscard]] auto aabb_in_frustum(
     const std::array<glm::vec4, 6>& planes,
     const std::array<glm::vec3, 8>& corners,
-    const Aabb&                     box
+    const Aabb&                     aabb
 ) -> bool;
 
+[[nodiscard]] auto plane_point_distance(const glm::vec4& plane, const glm::vec3& point) -> float;
+[[nodiscard]] auto sphere_in_frustum(
+    const std::array<glm::vec4, 6>& planes,
+    const Sphere&                   sphere
+) -> bool;
 
 } // namespace erhe::math

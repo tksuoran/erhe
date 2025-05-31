@@ -136,6 +136,7 @@ private:
 
     float     m_camera_visualization_width       {8.0f};
     glm::vec4 m_camera_line_color                {1.0f, 1.0f, 1.0f, 1.0f};
+    bool      m_camera_cull_test                 {false};
 
     float     m_light_visualization_width        {8.0f};
 
