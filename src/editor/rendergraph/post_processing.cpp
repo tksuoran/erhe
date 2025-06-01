@@ -40,8 +40,6 @@ Post_processing_node::Post_processing_node(
     const std::string_view          name
 )
     : erhe::rendergraph::Rendergraph_node{rendergraph, name}
-    , m_graphics_instance{graphics_instance}
-    , m_post_processing{post_processing}
     , parameter_buffer{
         graphics_instance,
         erhe::graphics::Buffer_create_info{
@@ -56,6 +54,8 @@ Post_processing_node::Post_processing_node(
             .debug_label         = "post processing"
         }
     }
+    , m_graphics_instance{graphics_instance}
+    , m_post_processing{post_processing}
 {
     register_input(erhe::rendergraph::Routing::Resource_provided_by_consumer, "viewport", erhe::rendergraph::Rendergraph_node_key::viewport);
     register_output(erhe::rendergraph::Routing::Resource_provided_by_consumer, "viewport", erhe::rendergraph::Rendergraph_node_key::viewport);

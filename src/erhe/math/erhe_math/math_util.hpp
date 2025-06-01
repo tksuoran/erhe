@@ -592,7 +592,7 @@ template <typename T>
 template <typename T>
 [[nodiscard]] auto intersect_plane(
     const typename vector_types<T>::vec3& plane_normal,
-    const typename T                      plane_distance,
+    const T                               plane_distance,
     const typename vector_types<T>::vec3& ray_origin,
     const typename vector_types<T>::vec3& ray_direction
 ) -> std::optional<T>
@@ -951,7 +951,7 @@ private:
 [[nodiscard]] auto extract_frustum_planes (const glm::mat4& clip_from_world, float clip_z_near, float clip_z_far) -> std::array<glm::vec4, 6>;
 [[nodiscard]] auto extract_frustum_corners(const glm::mat4& world_from_clip, float clip_z_near, float clip_z_far) -> std::array<glm::vec3, 8>;
 [[nodiscard]] auto get_point_on_plane     (const glm::vec4& plane) -> glm::vec3;
-[[nodiscard]] void get_plane_basis        (const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent);
+              void get_plane_basis        (const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent);
 
 [[nodiscard]] auto aabb_in_frustum(
     const std::array<glm::vec4, 6>& planes,
