@@ -590,10 +590,25 @@ template <typename T>
 }
 
 template <typename T>
+[[nodiscard]] auto intersect_plane(
+    const typename vector_types<T>::vec3& plane_normal,
+    const typename T                      plane_distance,
+    const typename vector_types<T>::vec3& ray_origin,
+    const typename vector_types<T>::vec3& ray_direction
+) -> std::optional<T>
+{
+    const T denominator = glm::dot(plane_normal, ray_direction);
+    if (std::abs(denominator) < std::numeric_limits<T>::epsilon()) {
+        return {};
+    }
+    return -(glm::dot(plane_normal, ray_origin) + plane_distance) / denominator;
+}
+
+template <typename T>
 [[nodiscard]] auto project_point_to_plane(
     const typename vector_types<T>::vec3& plane_normal,
     const typename vector_types<T>::vec3& point_on_plane,
-    typename vector_types<T>::vec3&       point_to_project
+    const typename vector_types<T>::vec3& point_to_project
 ) -> std::optional<typename vector_types<T>::vec3>
 {
     const auto n = plane_normal;
@@ -609,6 +624,27 @@ template <typename T>
     const typename vector_types<T>::vec3 projected_q1 = q - Pn_v;
 
     return projected_q1;
+}
+
+template <typename T>
+[[nodiscard]] auto project_point_to_plane(
+    const typename vector_types<T>::vec3& plane_normal,
+    const T                               plane_distance,
+    const typename vector_types<T>::vec3& point_to_project
+) -> std::optional<glm::vec3>
+{
+    const auto n = plane_normal;
+    const auto d = plane_distance;
+    const T denom = glm::dot(n, n);
+    if (std::abs(denom) < std::numeric_limits<T>::epsilon()) {
+        return {};
+    }
+
+    const T dist = (glm::dot(n, point_to_project) + d) / denom;
+
+    // Projection of the point onto the plane
+    const typename vector_types<T>::vec3 projected_point = point_to_project - dist * n;
+    return projected_point;
 }
 
 // Returns angle of rotation in radians for point q from reference_direction
@@ -709,6 +745,7 @@ public:
 };
 
 [[nodiscard]] auto calculate_bounding_convex_hull(const Bounding_volume_source& source) -> Convex_hull;
+[[nodiscard]] auto calculate_bounding_convex_hull(const std::vector<glm::vec2>& point_cloud) -> std::vector<glm::vec2>;
 
 void calculate_bounding_volume(
     const Bounding_volume_source& source,

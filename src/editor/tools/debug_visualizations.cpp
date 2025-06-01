@@ -779,7 +779,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         }
     }
 
-    if (m_selection_bounding_volume.get_element_count() > 1) {
+    if ((m_selection_bounding_volume.get_element_count() > 1) || !m_selection_parts) {
         if (m_selection_bounding_points_visible) {
             const erhe::scene::Camera* camera                = context.camera;
             const auto                 projection_transforms = camera->projection_transforms(context.viewport);
@@ -863,8 +863,11 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 );
             }
         }
+    }
+
+    if (m_selection_convex_hull || m_selection_convex_hull_projected) {
+        erhe::math::Convex_hull selection_convex_hull = erhe::math::calculate_bounding_convex_hull(m_selection_bounding_volume);
         if (m_selection_convex_hull) {
-            erhe::math::Convex_hull selection_convex_hull = erhe::math::calculate_bounding_convex_hull(m_selection_bounding_volume);
             for (const std::array<std::size_t, 3>& triangle : selection_convex_hull.triangle_indices) {
                 const std::size_t i0 = triangle[0];
                 const std::size_t i1 = triangle[1];
@@ -903,6 +906,44 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                     );
                 }
             }
+        }
+        std::shared_ptr<erhe::scene::Camera> selected_camera = get_selected_camera(context);
+        if (m_selection_convex_hull_projected && selected_camera) {
+            erhe::scene::Node* camera_node     = selected_camera->get_node();
+            const mat4         clip_from_node  = selected_camera->projection()->get_projection_matrix(1.0f, context.viewport.reverse_depth);
+            const mat4         clip_from_world = clip_from_node * camera_node->node_from_world();
+            const glm::vec4    ray_origin_h    = camera_node->position_in_world();
+            const glm::vec3    ray_origin      = glm::vec3{ray_origin_h / ray_origin_h.w};
+            const mat4         node_from_clip  = inverse(clip_from_node);
+            const mat4         world_from_clip = camera_node->world_from_node() * node_from_clip;
+
+            const float near_plane_z = 1.0f; // Using reverse Z
+            std::vector<glm::vec2> ndc_points;
+            for (const glm::vec3& p : selection_convex_hull.points) {
+                glm::vec4 p_in_clip = clip_from_world * glm::vec4(p, 1.0f);
+                glm::vec2 p_in_ndc  = glm::vec3{p_in_clip} / p_in_clip.w;
+                ndc_points.push_back(p_in_ndc);
+            }
+
+            {
+                std::vector<glm::vec3> projected_convex_hull_points;
+                std::vector<glm::vec2> ndc_convex_hull = erhe::math::calculate_bounding_convex_hull(ndc_points);
+                for (const glm::vec2& p_in_ndc : ndc_convex_hull) {
+                    glm::vec4 p_in_ndc_near = glm::vec4(p_in_ndc.x, p_in_ndc.y, near_plane_z, 1.0f);
+                    glm::vec4 world_pos_h   = world_from_clip * p_in_ndc_near;
+                    glm::vec3 world_pos     = glm::vec3{world_pos_h} / world_pos_h.w;
+                    projected_convex_hull_points.push_back(world_pos);
+                }
+
+                const glm::vec4 magenta{1.0f, 0.0f, 1.0f, 0.7f};
+                for (std::size_t i = 0, count = projected_convex_hull_points.size(); i < count; ++i) {
+                    line_renderer.add_line(
+                        magenta, 2.0f, projected_convex_hull_points[i              ],
+                        magenta, 2.0f, projected_convex_hull_points[(i + 1) % count]
+                    );
+                }
+            }
+
         }
     }
 }
@@ -1403,10 +1444,11 @@ void Debug_visualizations::imgui()
         p.add_entry("Sphere radius", [this, selection_bounding_sphere](){ ImGui::Text("%f", selection_bounding_sphere.radius); });
         p.add_entry("Sphere Volume", [this, sphere_volume            ](){ ImGui::Text("%f", sphere_volume); });
     }
-    p.add_entry("Selection Box",         [this](){ ImGui::Checkbox   ("##", &m_selection_box); });
-    p.add_entry("Selection Sphere",      [this](){ ImGui::Checkbox   ("##", &m_selection_sphere); });
-    p.add_entry("Selection Parts",       [this](){ ImGui::Checkbox   ("##", &m_selection_parts); });
-    p.add_entry("Selection Convex Hull", [this](){ ImGui::Checkbox   ("##", &m_selection_convex_hull); });
+    p.add_entry("Selection Box",            [this](){ ImGui::Checkbox   ("##", &m_selection_box); });
+    p.add_entry("Selection Sphere",         [this](){ ImGui::Checkbox   ("##", &m_selection_sphere); });
+    p.add_entry("Selection Parts",          [this](){ ImGui::Checkbox   ("##", &m_selection_parts); });
+    p.add_entry("Selection Convex Hull",    [this](){ ImGui::Checkbox   ("##", &m_selection_convex_hull); });
+    p.add_entry("Selection Projected Hull", [this](){ ImGui::Checkbox   ("##", &m_selection_convex_hull_projected); });
 
     p.add_entry("Selection Major Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_major_color.x, ImGuiColorEditFlags_Float); });
     p.add_entry("Selection Minor Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_minor_color.x, ImGuiColorEditFlags_Float); });

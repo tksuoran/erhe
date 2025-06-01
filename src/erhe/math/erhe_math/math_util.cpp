@@ -10,6 +10,7 @@
 #include <quickhull/QuickHull.hpp>
 
 #include <algorithm>
+#include <stack>
 
 namespace erhe::math {
 
@@ -525,6 +526,135 @@ auto calculate_bounding_convex_hull(const Bounding_volume_source& source) -> Con
         );
     }
     return result;
+}
+
+[[nodiscard]] inline auto cross(const glm::vec2& a, const glm::vec2& b) -> float {
+    return a.x * b.y - a.y * b.x;
+}
+
+[[nodiscard]] inline auto same_sign(float a, float b, float c) -> bool {
+    return (a >= 0 && b >= 0 && c >= 0) || (a <= 0 && b <= 0 && c <= 0);
+}
+
+auto calculate_bounding_convex_hull(const std::vector<glm::vec2>& point_cloud) -> std::vector<glm::vec2>
+{
+    class Convex_hull_task
+    {
+    public:
+        void execute(std::stack<Convex_hull_task>& tasks, std::vector<glm::vec2>& convex_hull)
+        {
+            // From the given set of points in Sk, find farthest point, say C, from segment PQ
+            glm::vec2       C;
+            float           max_area = 0.0f;
+            const glm::vec2 AB       = B - A;
+            for (const glm::vec2 P : S) {
+                const float area = std::abs(cross(AB, B - P));
+                if (area > max_area) {
+                    max_area = area;
+                    C = P;
+                }
+            }
+
+            // Add point C to convex hull - sorted later using angle
+            convex_hull.push_back(C);
+
+            // Three points P, Q, and C partition the remaining points of Sk into 3 subsets: S0, S1, and S2
+            //     where S0 are points inside triangle PCQ, S1 are points on the right side of the oriented
+            //     line from P to C, and S2 are points on the right side of the oriented line from C to Q.
+            const glm::vec2 AC = C - A;
+            const glm::vec2 BC = C - B;
+            const glm::vec2 CB = B - C;
+            const glm::vec2 CA = A - C;
+            Convex_hull_task S1{ .A = A, .B = C, .S = {} };
+            Convex_hull_task S2{ .A = C, .B = B, .S = {} };
+            for (const glm::vec2 P : S) {
+                const glm::vec2 AP = P - A;
+                const glm::vec2 BP = P - B;
+                const glm::vec2 CP = P - C;
+                const float cross1 = cross(AB, AP);
+                const float cross2 = cross(BC, BP);
+                const float cross3 = cross(CA, CP);
+                if (same_sign(cross1, cross2, cross3)) continue; // S0 - point inside triangle ACB
+
+                if (cross(AC, AP) < 0.0f) {
+                    S1.S.push_back(P);
+                } else if (cross(CB, CP) < 0.0f) {
+                    S2.S.push_back(P);
+                }
+            }
+            if (!S1.S.empty()) {
+                tasks.push(std::move(S1));
+            }
+            if (!S2.S.empty()) {
+                tasks.push(std::move(S2));
+            }
+        }
+        glm::vec2              A; // aka P
+        glm::vec2              B; // aka Q
+        std::vector<glm::vec2> S;
+    };
+
+    // Find left and right most points, say A & B, and add A & B to convex hull
+    glm::vec2 A{std::numeric_limits<float>::max()};
+    glm::vec2 B{std::numeric_limits<float>::lowest()};
+    for (const glm::vec2 P : point_cloud) {
+        if ((P.x < A.x) || ((P.x == A.x) && (P.y < A.y))) {
+            A = P;
+        }
+
+        if ((P.x > B.x) || ((P.x == B.x) && (P.y > B.y))) {
+            B = P;
+        }
+    }
+
+    std::vector<glm::vec2> convex_hull;
+    convex_hull.push_back(A);
+    convex_hull.push_back(B);
+
+    // Segment AB divides the remaining (n − 2) points into 2 groups S1 and S2
+    //     where S1 are points in S that are on the right side of the oriented line from A to B,
+    //     and S2 are points in S that are on the right side of the oriented line from B to A
+    const glm::vec2 B_minus_A = B - A;
+    Convex_hull_task above{.A = A, .B = B, .S = {}};
+    Convex_hull_task below{.A = A, .B = B, .S = {}};
+    for (glm::vec2 P : point_cloud) {
+        if ((P == A) || (P == B)) {
+            continue;
+        }
+        const float area = cross(B_minus_A, P - A);
+        if (area > 0.0f) {
+            above.S.push_back(P);
+        } else if (area < 0.0f) {
+            below.S.push_back(P);
+        }
+    }
+
+    std::stack<Convex_hull_task> tasks;
+    tasks.push(std::move(above));
+    tasks.push(std::move(below));
+
+    while (!tasks.empty()) {
+        Convex_hull_task task = tasks.top();
+        tasks.pop();
+        task.execute(tasks, convex_hull);
+    }
+
+    // Sort based on angle
+    glm::vec2 centroid{0.0f, 0.0f};
+    for (glm::vec2 P : convex_hull) {
+        centroid += P;
+    }
+    centroid /= static_cast<float>(convex_hull.size());
+    std::sort(
+        convex_hull.begin(),
+        convex_hull.end(),
+        [centroid](const glm::vec2& lhs, const glm::vec2& rhs) -> bool {
+            const float angle_lhs = std::atan2(lhs.y - centroid.y, lhs.x - centroid.x);
+            const float angle_rhs = std::atan2(rhs.y - centroid.y, rhs.x - centroid.x);
+            return angle_lhs < angle_rhs;
+        }
+    );
+    return convex_hull;
 }
 
 void calculate_bounding_volume(
