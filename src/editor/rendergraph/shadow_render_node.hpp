@@ -7,12 +7,8 @@
 
 #include <memory>
 
-namespace erhe::graphics {
-    class Instance;
-}
-namespace erhe::scene_renderer {
-    class Light_projections;
-}
+namespace erhe::graphics       { class Instance; }
+namespace erhe::scene_renderer { class Light_projections; }
 
 namespace editor {
 

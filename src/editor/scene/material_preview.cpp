@@ -305,6 +305,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     m_light_projections = erhe::scene_renderer::Light_projections{
         layers.light()->lights,
         m_camera.get(),
+        viewport,
         erhe::math::Viewport{},
         std::shared_ptr<erhe::graphics::Texture>{},
         erhe::graphics::invalid_texture_handle,

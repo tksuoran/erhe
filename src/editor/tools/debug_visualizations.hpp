@@ -122,13 +122,13 @@ private:
 
     float     m_gap                              {0.003f};
     bool      m_tool_hide                        {false};
-    bool      m_selection                        {false};
+    bool      m_selection                        {true};
     bool      m_selection_bounding_points_visible{false};
     bool      m_selection_box                    {false};
-    bool      m_selection_sphere                 {true};
-    bool      m_selection_convex_hull            {false};
-    bool      m_selection_convex_hull_projected  {false};
-    bool      m_selection_parts                  {true};
+    bool      m_selection_sphere                 {false};
+    bool      m_selection_convex_hull            {true};
+    bool      m_selection_convex_hull_projected  {true};
+    bool      m_selection_parts                  {false};
     float     m_selection_node_axis_width        {2.0f};
     glm::vec4 m_selection_major_color            {2.0f, 1.6f, 0.1f, 1.0f};
     glm::vec4 m_selection_minor_color            {2.0f, 1.6f, 0.1f, 0.5f};
@@ -140,6 +140,9 @@ private:
     float     m_camera_visualization_width       {8.0f};
     glm::vec4 m_camera_line_color                {1.0f, 1.0f, 1.0f, 1.0f};
     bool      m_camera_cull_test                 {false};
+
+    bool      m_debug_convex_hull                {false};
+    int       m_convex_hull_edge                 {0};
 
     float     m_light_visualization_width        {8.0f};
 

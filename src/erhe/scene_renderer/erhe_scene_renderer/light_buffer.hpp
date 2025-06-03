@@ -73,8 +73,8 @@ public:
     Light_projections();
     Light_projections(
         const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
-        const erhe::scene::Camera*                                  view_camera,
-        ////const erhe::math::Viewport&                             view_camera_viewport,
+        const erhe::scene::Camera*                                  main_camera,
+        const erhe::math::Viewport&                                 main_camera_viewport,
         const erhe::math::Viewport&                                 light_texture_viewport,
         const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
         uint64_t                                                    shadow_map_texture_handle_compare,

@@ -136,7 +136,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     parameters.light_projections = Light_projections{
         parameters.lights,
         parameters.view_camera,
-        ////parameters.view_camera_viewport,
+        parameters.view_camera_viewport,
         parameters.light_camera_viewport,
         parameters.texture,
         shadow_texture_handle_compare,

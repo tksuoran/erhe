@@ -500,7 +500,7 @@ template <typename T>
     const auto e  = glm::dot(v, w0);
     const auto denominator = (a * c) - (b * b);
 
-    if (denominator < std::numeric_limits<T>::epsilon()) {
+    if (denominator < std::numeric_limits<T>::min()) {
         return {};
     }
 
@@ -521,7 +521,7 @@ template <typename T>
 ) -> std::optional<typename vector_types<T>::vec2>
 {
     const auto u = P1 - P0;
-    if (glm::dot(u, u) < std::numeric_limits<T>::epsilon()) {
+    if (glm::dot(u, u) < std::numeric_limits<T>::min()) {
         return {};
     }
     const auto t = glm::dot(u, Q - P0) / dot(u, u);
@@ -536,7 +536,7 @@ template <typename T>
 ) -> std::optional<typename vector_types<T>::vec3>
 {
     const auto u = P1 - P0;
-    if (dot(u, u) < std::numeric_limits<T>::epsilon()) {
+    if (dot(u, u) < std::numeric_limits<T>::min()) {
         return {};
     }
     const auto t = glm::dot(u, Q - P0) / dot(u, u);
@@ -583,7 +583,7 @@ template <typename T>
 ) -> std::optional<T>
 {
     const T denominator = glm::dot(plane_normal, ray_direction);
-    if (std::abs(denominator) < std::numeric_limits<T>::epsilon()) {
+    if (std::abs(denominator) < std::numeric_limits<T>::min()) {
         return {};
     }
     return glm::dot(point_on_plane - ray_origin, plane_normal) / denominator;
@@ -598,7 +598,7 @@ template <typename T>
 ) -> std::optional<T>
 {
     const T denominator = glm::dot(plane_normal, ray_direction);
-    if (std::abs(denominator) < std::numeric_limits<T>::epsilon()) {
+    if (std::abs(denominator) < std::numeric_limits<T>::min()) {
         return {};
     }
     return -(glm::dot(plane_normal, ray_origin) + plane_distance) / denominator;
@@ -616,7 +616,7 @@ template <typename T>
     const auto q = point_to_project;
     const T nominator   = dot(n, q - p);
     const T denominator = dot(n, n);
-    if (std::abs(denominator) < std::numeric_limits<T>::epsilon()) {
+    if (std::abs(denominator) < std::numeric_limits<T>::min()) {
         return {};
     }
     const T                              t            = nominator / denominator;
@@ -636,7 +636,7 @@ template <typename T>
     const auto n = plane_normal;
     const auto d = plane_distance;
     const T denom = glm::dot(n, n);
-    if (std::abs(denom) < std::numeric_limits<T>::epsilon()) {
+    if (std::abs(denom) < std::numeric_limits<T>::min()) {
         return {};
     }
 
@@ -678,7 +678,7 @@ auto safe_normalize_cross(
     }
 
     const auto c0 = glm::cross(lhs, rhs);
-    if (glm::length(c0) < glm::epsilon<T>()) {
+    if (glm::length(c0) < std::numeric_limits<T>::min()) {
         return min_axis<T>(lhs);
     }
     return glm::normalize(c0);
@@ -948,10 +948,17 @@ private:
 
 [[nodiscard]] auto torus_volume(const float major_radius, const float minor_radius) -> float;
 
-[[nodiscard]] auto extract_frustum_planes (const glm::mat4& clip_from_world, float clip_z_near, float clip_z_far) -> std::array<glm::vec4, 6>;
-[[nodiscard]] auto extract_frustum_corners(const glm::mat4& world_from_clip, float clip_z_near, float clip_z_far) -> std::array<glm::vec3, 8>;
-[[nodiscard]] auto get_point_on_plane     (const glm::vec4& plane) -> glm::vec3;
-              void get_plane_basis        (const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent);
+static constexpr size_t plane_left   = 0;
+static constexpr size_t plane_right  = 1;
+static constexpr size_t plane_bottom = 2;
+static constexpr size_t plane_top    = 3;
+static constexpr size_t plane_near   = 4;
+static constexpr size_t plane_far    = 5;
+[[nodiscard]] auto extract_frustum_planes  (const glm::mat4& clip_from_world, float clip_z_near, float clip_z_far) -> std::array<glm::vec4, 6>;
+[[nodiscard]] auto extract_frustum_corners (const glm::mat4& world_from_clip, float clip_z_near, float clip_z_far) -> std::array<glm::vec3, 8>;
+[[nodiscard]] auto get_frustum_plane_corner(size_t plane, size_t local_corner_index) -> size_t;
+[[nodiscard]] auto get_point_on_plane      (const glm::vec4& plane) -> glm::vec3;
+              void get_plane_basis         (const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent);
 
 [[nodiscard]] auto aabb_in_frustum(
     const std::array<glm::vec4, 6>& planes,

@@ -620,11 +620,17 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
         return;
     }
 
-    //const auto* view_camera_node = render_context.get_camera_node();
-    //if (view_camera_node == nullptr)
-    //{
-    //    return;
-    //}
+    const auto& view_camera = render_context.scene_view.get_camera();
+    if (!view_camera) {
+        return;
+    }
+    const auto* view_camera_node = view_camera->get_node();
+    if (view_camera_node == nullptr) {
+        return;
+    }
+    const float aspect_ratio         = render_context.viewport.aspect_ratio();
+    const mat4  view_clip_from_node  = view_camera->projection()->get_projection_matrix(aspect_ratio, render_context.viewport.reverse_depth);
+    const mat4  view_clip_from_world = view_clip_from_node * view_camera_node->node_from_world();
 
     const mat4 clip_from_node  = camera->projection()->get_projection_matrix(1.0f, render_context.viewport.reverse_depth);
     const mat4 clip_from_world = clip_from_node * camera_node->node_from_world();
@@ -636,31 +642,40 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
 
     std::array<glm::vec4, 6> planes  = erhe::math::extract_frustum_planes (clip_from_world, 0.0f, 1.0f);
     std::array<glm::vec3, 8> corners = erhe::math::extract_frustum_corners(world_from_clip, 0.0f, 1.0f);
-    const std::array<glm::vec3, 8>& p = corners;
+    {
+        const std::array<glm::vec3, 8>& p = corners;
+        line_renderer.add_lines(
+            glm::mat4{1.0f}, //erhe::scene::Transform{},
+            glm::vec4{1.0f, 0.0, 0.0f, 1.0f},
+            {
+                // See extract_frustum_corners() for clip space corner numbering scheme
+                // near plane
+                { p[0], p[1] },
+                { p[1], p[3] },
+                { p[3], p[2] },
+                { p[2], p[0] },
 
-    line_renderer.add_lines(
-        glm::mat4{1.0f}, //erhe::scene::Transform{},
-        glm::vec4{1.0f, 0.5, 0.0f, 1.0f},
-        {
-            // near plane
-            { p[0], p[1] },
-            { p[1], p[2] },
-            { p[2], p[3] },
-            { p[3], p[0] },
+                // far plane
+                { p[4], p[5] },
+                { p[5], p[7] },
+                { p[7], p[6] },
+                { p[6], p[4] },
 
-            // far plane
-            { p[4], p[5] },
-            { p[5], p[6] },
-            { p[6], p[7] },
-            { p[7], p[4] },
-
-            // near to far
-            { p[0], p[4] },
-            { p[1], p[5] },
-            { p[2], p[6] },
-            { p[3], p[7] }
-        }
-    );
+                // near to far
+                { p[0], p[4] },
+                { p[1], p[5] },
+                { p[2], p[6] },
+                { p[3], p[7] }
+            }
+        );
+    }
+    for (size_t i = 0, end = corners.size(); i < end; ++i) {
+        const glm::vec3 p          = corners[i];
+        const auto      p_window   = render_context.viewport.project_to_screen_space(view_clip_from_world, p, 0.0f, 1.0f);
+        const uint32_t  text_color = 0xffffccaau;
+        const glm::vec3 point_in_window_z_negated{p_window.x, p_window.y, -p_window.z};
+        m_context.text_renderer->print(point_in_window_z_negated, text_color, fmt::format("{}", i));
+    }
 
     if (m_frustum_box) {
         line_renderer.add_cube(
@@ -865,6 +880,54 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         }
     }
 
+    auto get_optimization_transform = [](
+        const std::vector<glm::vec2>& points,
+        glm::vec2&                    out_aabb_min,
+        glm::vec2&                    out_aabb_max,
+        int                           debug_edge,
+        glm::vec2&                    out_a,
+        glm::vec2&                    out_b
+    ) -> glm::mat2
+    {
+        std::size_t count = points.size();
+        float     min_aabb_area = std::numeric_limits<float>::max();
+        glm::mat2 rotation{1.0f};
+        for (std::size_t i = 0; i < count; ++i) {
+            const glm::vec2& A      = points[i];
+            const glm::vec2& B      = points[(i + 1) % count];
+            const glm::vec2  AB     = B - A;
+            const glm::vec2  x_axis = glm::normalize(AB);
+            const glm::vec2  y_axis = glm::vec2{-x_axis.y, x_axis.x};
+            const glm::mat2  original_from_edge{x_axis, y_axis};
+            const glm::mat2  edge_from_original = glm::transpose(original_from_edge);
+
+            glm::vec2 edge_aabb_min_corner{std::numeric_limits<float>::max()};
+            glm::vec2 edge_aabb_max_corner{std::numeric_limits<float>::lowest()};
+            for (const glm::vec2& p_in_world : points) {
+                glm::vec2 p_in_edge = edge_from_original * p_in_world;
+                if (p_in_edge.x < edge_aabb_min_corner.x) edge_aabb_min_corner.x = p_in_edge.x;
+                if (p_in_edge.y < edge_aabb_min_corner.y) edge_aabb_min_corner.y = p_in_edge.y;
+                if (p_in_edge.x > edge_aabb_max_corner.x) edge_aabb_max_corner.x = p_in_edge.x;
+                if (p_in_edge.y > edge_aabb_max_corner.y) edge_aabb_max_corner.y = p_in_edge.y;
+            }
+            glm::vec2 edge_aabb_size = edge_aabb_max_corner - edge_aabb_min_corner;
+            float aabb_area = edge_aabb_size.x * edge_aabb_size.y;
+            const bool is_debug_edge = (debug_edge >= 0) && (static_cast<std::size_t>(debug_edge) == i);
+            if ((aabb_area < min_aabb_area) || is_debug_edge) {
+                min_aabb_area = aabb_area;
+                rotation = edge_from_original;
+                out_aabb_min = edge_aabb_min_corner;
+                out_aabb_max = edge_aabb_max_corner;
+                out_a = A;
+                out_b = B;
+                if (is_debug_edge) {
+                    return rotation;
+                }
+            }
+        }
+        return rotation;
+    };
+
     if (m_selection_convex_hull || m_selection_convex_hull_projected) {
         erhe::math::Convex_hull selection_convex_hull = erhe::math::calculate_bounding_convex_hull(m_selection_bounding_volume);
         if (m_selection_convex_hull) {
@@ -912,12 +975,9 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             erhe::scene::Node* camera_node     = selected_camera->get_node();
             const mat4         clip_from_node  = selected_camera->projection()->get_projection_matrix(1.0f, context.viewport.reverse_depth);
             const mat4         clip_from_world = clip_from_node * camera_node->node_from_world();
-            const glm::vec4    ray_origin_h    = camera_node->position_in_world();
-            const glm::vec3    ray_origin      = glm::vec3{ray_origin_h / ray_origin_h.w};
             const mat4         node_from_clip  = inverse(clip_from_node);
             const mat4         world_from_clip = camera_node->world_from_node() * node_from_clip;
 
-            const float near_plane_z = 1.0f; // Using reverse Z
             std::vector<glm::vec2> ndc_points;
             for (const glm::vec3& p : selection_convex_hull.points) {
                 glm::vec4 p_in_clip = clip_from_world * glm::vec4(p, 1.0f);
@@ -925,13 +985,19 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 ndc_points.push_back(p_in_ndc);
             }
 
+            auto unproject_nearplane_to_world = [&](glm::vec2 p_in_ndc, float depth = 1.0f) -> vec3
+            {
+                glm::vec4 p_in_ndc_near = glm::vec4(p_in_ndc.x, p_in_ndc.y, depth, 1.0f);
+                glm::vec4 world_pos_h   = world_from_clip * p_in_ndc_near;
+                glm::vec3 world_pos     = glm::vec3{world_pos_h} / world_pos_h.w;
+                return world_pos;
+            };
+
             {
                 std::vector<glm::vec3> projected_convex_hull_points;
                 std::vector<glm::vec2> ndc_convex_hull = erhe::math::calculate_bounding_convex_hull(ndc_points);
                 for (const glm::vec2& p_in_ndc : ndc_convex_hull) {
-                    glm::vec4 p_in_ndc_near = glm::vec4(p_in_ndc.x, p_in_ndc.y, near_plane_z, 1.0f);
-                    glm::vec4 world_pos_h   = world_from_clip * p_in_ndc_near;
-                    glm::vec3 world_pos     = glm::vec3{world_pos_h} / world_pos_h.w;
+                    glm::vec3 world_pos = unproject_nearplane_to_world(p_in_ndc);
                     projected_convex_hull_points.push_back(world_pos);
                 }
 
@@ -942,6 +1008,39 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                         magenta, 2.0f, projected_convex_hull_points[(i + 1) % count]
                     );
                 }
+
+                glm::vec2 edge_aabb_min{0.0f};
+                glm::vec2 edge_aabb_max{0.0f};
+                glm::vec2 edge_a       {0.0f};
+                glm::vec2 edge_b       {0.0f};
+                glm::mat2 edge_from_original = get_optimization_transform(
+                    ndc_convex_hull,
+                    edge_aabb_min,
+                    edge_aabb_max,
+                    m_debug_convex_hull ? m_convex_hull_edge : -1,
+                    edge_a,
+                    edge_b
+                );
+                glm::mat2 original_from_edge = glm::transpose(edge_from_original);
+
+                std::array<glm::vec3, 4> aabb_in_world{
+                    unproject_nearplane_to_world(original_from_edge * glm::vec2{edge_aabb_min.x, edge_aabb_min.y}, 1.01f),
+                    unproject_nearplane_to_world(original_from_edge * glm::vec2{edge_aabb_max.x, edge_aabb_min.y}, 1.01f),
+                    unproject_nearplane_to_world(original_from_edge * glm::vec2{edge_aabb_max.x, edge_aabb_max.y}, 1.01f),
+                    unproject_nearplane_to_world(original_from_edge * glm::vec2{edge_aabb_min.x, edge_aabb_max.y}, 1.01f)
+                };
+                const glm::vec4 pink{1.0f, 0.3f, 0.6f, 1.0f};
+                for (std::size_t i = 0, count = aabb_in_world.size(); i < count; ++i) {
+                    line_renderer.add_line(
+                        pink, 1.0f, aabb_in_world[i              ],
+                        pink, 1.0f, aabb_in_world[(i + 1) % count]
+                    );
+                }
+                const glm::vec4 lime{0.4f, 1.0f, 0.1f, 1.0f};
+                line_renderer.add_line(
+                    lime, 3.0f, unproject_nearplane_to_world(edge_a, 1.02f),
+                    lime, 3.0f, unproject_nearplane_to_world(edge_b, 1.02f)
+                );
             }
 
         }
@@ -1449,6 +1548,8 @@ void Debug_visualizations::imgui()
     p.add_entry("Selection Parts",          [this](){ ImGui::Checkbox   ("##", &m_selection_parts); });
     p.add_entry("Selection Convex Hull",    [this](){ ImGui::Checkbox   ("##", &m_selection_convex_hull); });
     p.add_entry("Selection Projected Hull", [this](){ ImGui::Checkbox   ("##", &m_selection_convex_hull_projected); });
+    p.add_entry("Debug Convex Hull",        [this](){ ImGui::Checkbox   ("##", &m_debug_convex_hull); });
+    p.add_entry("Convex Hull Edge",         [this](){ ImGui::InputInt("##", &m_convex_hull_edge, 1, 10, ImGuiInputTextFlags_None); });
 
     p.add_entry("Selection Major Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_major_color.x, ImGuiColorEditFlags_Float); });
     p.add_entry("Selection Minor Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_minor_color.x, ImGuiColorEditFlags_Float); });

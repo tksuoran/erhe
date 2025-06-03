@@ -227,31 +227,66 @@ auto Light::stable_directional_light_projection_transforms(
     const Light_projection_parameters& parameters
 ) const -> Light_projection_transforms
 {
-    // WORK IN PROGRESS - NOT YET FUNCTIONAL
-    //
-    // Overview of the right directional light projection transforms algorithm:
-    // - Start with stable directional light projection transforms
-    // - Compute view camera frustum corner points in light space
-    // - Compute min and max corner of view camera frustum in light texture space
-    using vec2 = glm::vec2;
-    using vec3 = glm::vec3;
-    using vec4 = glm::vec4;
-    using mat3 = glm::mat3;
-    using mat4 = glm::mat4;
-
     ERHE_VERIFY(parameters.view_camera != nullptr);
 
-    const Light* light                        = this;
-    const vec3   light_direction              = vec3{light->direction_in_world()};
-    const vec3   light_up_vector              = vec3{light->world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-    const auto   camera_projection_transforms = parameters.view_camera->projection_transforms(parameters.view_camera_viewport);
-    const mat4   world_from_view_camera_clip  = camera_projection_transforms.clip_from_world.inverse_matrix();
+    const Light*    light                                  = this;
+    const glm::vec3 light_direction                        = light->get_node()->direction_in_world();
+
+    const erhe::scene::Camera* main_view_camera                       = parameters.view_camera;
+    const erhe::scene::Node*   main_view_camera_node                  = main_view_camera->get_node();
+    const auto                 main_view_camera_projection_transforms = main_view_camera->projection_transforms(parameters.main_camera_viewport);
+    const glm::mat4            main_view_clip_from_world              = main_view_camera_projection_transforms.clip_from_world.get_matrix();
+    const glm::mat4            world_from_main_view_camera_clip       = main_view_camera_projection_transforms.clip_from_world.get_inverse_matrix();
+    //const glm::mat4            main_view_clip_from_node               = main_view_camera_projection_transforms.clip_from_camera.get_matrix();
+    //const glm::mat4            main_view_node_from_clip               = main_view_camera_projection_transforms.clip_from_camera.get_inverse_matrix();
+
+
+
+    // Define Shadow Caster Volume
+    // - Start with the main camera view frustum F_main.
+    // - Extrude F_main along the light direction to create an initial volume F_shadow.
+    // - Use the plane from F_main whose normal has the most negative dot product
+    // - with the light direction as the far plane of F_shadow.
+    // - Do not define a near plane at this stage.
+    std::array<glm::vec4, 6> F_main         = erhe::math::extract_frustum_planes(main_view_clip_from_world, 0.0f, 1.0f);
+    std::array<glm::vec3, 8> F_main_corners = erhe::math::extract_frustum_corners(world_from_main_view_camera_clip, 0.0f, 1.0f);
+    float min_dot = std::numeric_limits<float>::max();
+    float max_dot = std::numeric_limits<float>::lowest();
+    std::size_t min_dot_plane{0};
+    std::size_t max_dot_plane{0};
+    for (size_t i = 0, end = F_main.size(); i < end; ++i) {
+        const glm::vec4 plane = F_main[i];
+        const float     dot   = glm::dot(glm::vec3{plane}, light_direction);
+        if (dot < min_dot) {
+            min_dot = dot;
+            min_dot_plane = i;
+        }
+        if (dot > max_dot) {
+            max_dot = dot;
+            max_dot_plane = i;
+        }
+    }
+    // 
+    const glm::vec3 edge45 = glm::normalize(F_main_corners[5] - F_main_corners[4]);
+    const glm::vec3 edge56 = glm::normalize(F_main_corners[6] - F_main_corners[5]);
+    const glm::vec3 edge67 = glm::normalize(F_main_corners[7] - F_main_corners[6]);
+    const glm::vec3 edge74 = glm::normalize(F_main_corners[4] - F_main_corners[7]);
+
+    std::array<glm::vec4, 6> F_shadow{
+        normalize(              row3 + row0), // Left
+        normalize(              row3 - row0), // Right
+        normalize(              row3 + row1), // Bottom
+        normalize(              row3 - row1), // Top
+        normalize(clip_z_near * row3 + row2), // Near, or far when using reverse Z
+        normalize(clip_z_far  * row3 - row2)  // Far, or near when using reverse Z
+    };
+
 
     // Rotation only transform
-    const mat3 world_from_light{light->world_from_node()};
-    const mat3 light_from_world{light->node_from_world()};
+    const glm::mat3 world_from_light{light->world_from_node()};
+    const glm::mat3 light_from_world{light->node_from_world()};
 
-    const mat4 light_from_view_camera_clip = mat4{light_from_world} * world_from_view_camera_clip;
+    const glm::mat4 light_from_view_camera_clip = mat4{light_from_world} * world_from_view_camera_clip;
 
     constexpr std::array<vec3, 8> clip_space_points = {
         vec3{-1.0f, -1.0f, 0.0f},

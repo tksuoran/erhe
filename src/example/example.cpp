@@ -213,6 +213,7 @@ public:
         erhe::scene_renderer::Light_projections light_projections{
             lights,
             m_camera.get(),
+            viewport,
             erhe::math::Viewport{},
             std::shared_ptr<erhe::graphics::Texture>{},
             erhe::graphics::invalid_texture_handle,

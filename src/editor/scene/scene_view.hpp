@@ -28,9 +28,7 @@ namespace erhe::scene {
     class Camera;
     class Mesh;
 }
-namespace erhe::scene_renderer {
-    class Light_projections;
-}
+namespace erhe::scene_renderer { class Light_projections; }
 
 namespace editor {
 

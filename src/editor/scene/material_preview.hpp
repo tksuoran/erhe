@@ -17,12 +17,8 @@ namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
 }
-namespace erhe::primitive {
-    class Material;
-}
-namespace erhe::renderer {
-    class Light_projections;
-}
+namespace erhe::primitive { class Material; }
+namespace erhe::renderer  { class Light_projections; }
 namespace erhe::scene {
     class Camera;
     class Light;

@@ -2,6 +2,7 @@
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/sphere.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -915,15 +916,28 @@ auto extract_frustum_planes(const glm::mat4& clip_from_world, float clip_z_near,
         return h / h.w;
     };
     return {
-        transform(-1.0f, -1.0f, clip_z_near),
-        transform(-1.0f,  1.0f, clip_z_near),
-        transform( 1.0f,  1.0f, clip_z_near),
-        transform( 1.0f, -1.0f, clip_z_near),
-        transform(-1.0f, -1.0f, clip_z_far ),
-        transform(-1.0f,  1.0f, clip_z_far ),
-        transform( 1.0f,  1.0f, clip_z_far ),
-        transform( 1.0f, -1.0f, clip_z_far )
+        transform(-1.0f, -1.0f, clip_z_near), // 0    2------3
+        transform( 1.0f, -1.0f, clip_z_near), // 1   /|     /|
+        transform(-1.0f,  1.0f, clip_z_near), // 2  6-+----7 |      <-- the plane further away from camera is the near plane when using reverse Z
+        transform( 1.0f,  1.0f, clip_z_near), // 3  | |    | |
+        transform(-1.0f, -1.0f, clip_z_far ), // 4  | |    | |    <---- the plane closer to camera is the far plane when using reverse Z
+        transform( 1.0f, -1.0f, clip_z_far ), // 5  | 0----|-1
+        transform(-1.0f,  1.0f, clip_z_far ), // 6  |/     |/
+        transform( 1.0f,  1.0f, clip_z_far )  // 7  4------5
     };
+}
+
+auto get_frustum_plane_corner(size_t plane, size_t local_corner_index) -> size_t
+{
+    switch (plane) {
+        case plane_left  : return std::array<size_t, 4>{ 0, 4, 6, 2 }[local_corner_index]; // left    cw
+        case plane_right : return std::array<size_t, 4>{ 1, 5, 7, 3 }[local_corner_index]; // right   ccw
+        case plane_bottom: return std::array<size_t, 4>{ 0, 4, 5, 1 }[local_corner_index]; // bottom  cw
+        case plane_top   : return std::array<size_t, 4>{ 2, 3, 7, 6 }[local_corner_index]; // top     ccw
+        case plane_near  : return std::array<size_t, 4>{ 4, 6, 7, 5 }[local_corner_index]; // near    cw
+        case plane_far   : return std::array<size_t, 4>{ 0, 1, 3, 2 }[local_corner_index]; // far     ccw
+        default: ERHE_FATAL("get_frustum_plane_corner(): invalid plane = %zu (valid range is 0..5)", plane);
+    }
 }
 
 auto get_point_on_plane(const glm::vec4& plane) -> glm::vec3
