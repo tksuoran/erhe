@@ -136,12 +136,14 @@ Renderbuffer::~Renderbuffer() noexcept
 void Renderbuffer::set_debug_label(std::string_view label)
 {
     m_debug_label = fmt::format("(R:{}) {}", gl_name(), label);
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(
         gl::Object_identifier::renderbuffer,
         gl_name(),
         static_cast<GLsizei>(m_debug_label.length()),
         m_debug_label.c_str()
     );
+#endif
 }
 
 auto Renderbuffer::internal_format() const -> gl::Internal_format

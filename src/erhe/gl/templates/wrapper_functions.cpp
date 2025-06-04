@@ -4,6 +4,7 @@
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/dynamic_load.hpp"
 #include "erhe_gl/gl_log.hpp"
+#include "erhe_gl/gl_helpers.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -12,7 +13,7 @@
 
 namespace gl {{
 
-extern void check_error();
+#define ERHE_CHECK_GL_ERRORS gl_helpers::check_error();
 
 auto glbitfield(const ::GLbitfield value) -> ::GLbitfield
 {{

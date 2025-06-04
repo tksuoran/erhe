@@ -4,8 +4,7 @@
 
 #include <memory>
 
-namespace gl
-{
+namespace gl {
 
 extern std::shared_ptr<spdlog::logger> log_gl;
 

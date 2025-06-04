@@ -59,6 +59,7 @@ void Graphics_settings::get_limits()
         }
     }
 
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     int max_depth_width{0};
     gl::get_internalformat_iv(
         gl::Texture_target::texture_2d_array,
@@ -83,6 +84,9 @@ void Graphics_settings::get_limits()
         &max_depth_layers
     );
     max_shadow_resolution = std::min(max_depth_width, max_depth_height);
+#else
+    gl::get_integer_v(gl::Get_p_name::max_texture_size, &max_shadow_resolution);
+#endif
 }
 
 void Graphics_settings::read_presets()

@@ -196,6 +196,7 @@ public:
         bool use_bindless_texture   {false};
         bool use_sparse_texture     {false};
         bool use_persistent_buffers {false};
+        bool use_multi_draw_indirect{false};
     };
 
     class Limits

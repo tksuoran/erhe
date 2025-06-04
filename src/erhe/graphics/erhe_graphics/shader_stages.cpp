@@ -86,7 +86,9 @@ auto Shader_stages::gl_name() const -> unsigned int
 Shader_stages::Shader_stages(const std::string& failed_name)
 {
     std::string label = fmt::format("(P:{}) {} - compilation failed", gl_name(), failed_name);
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+#endif
 }
 
 Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
@@ -100,7 +102,9 @@ Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
     m_is_valid = true;
 
     std::string label = fmt::format("(P:{}) {}{}", gl_name(), m_name, prototype.is_valid() ? "" : " (Failed)");
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+#endif
 }
 
 auto Shader_stages::is_valid() const -> bool
@@ -126,7 +130,9 @@ void Shader_stages::reload(Shader_stages_prototype&& prototype)
     m_is_valid = true;
 
     std::string label = fmt::format("(P:{}) {}", gl_name(), m_name);
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+#endif
 }
 
 auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool

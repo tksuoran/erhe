@@ -144,7 +144,7 @@ Instance::Instance(erhe::window::Context_window& context_window)
     gl::get_integer_v(gl::Get_p_name::max_vertex_attribs, &limits.max_vertex_attribs);
     log_startup->info("max vertex attribs: {}", limits.max_vertex_attribs);
 
-    log_startup->trace("GL Extensions:");
+    log_startup->info("GL Extensions:");
     {
         ERHE_PROFILE_SCOPE("Extensions");
 
@@ -156,7 +156,7 @@ Instance::Instance(erhe::window::Context_window& context_window)
             for (unsigned int i = 0; i < static_cast<unsigned int>(num_extensions); ++i) {
                 const auto* extension_str = gl::get_string_i(gl::String_name::extensions, i);
                 auto e = std::string(reinterpret_cast<const char*>(extension_str));
-                //log_startup->trace("    {}", e);
+                log_startup->info("    {}", e);
                 extensions.push_back(e);
             }
         }
@@ -188,8 +188,13 @@ Instance::Instance(erhe::window::Context_window& context_window)
         gl::get_integer_v(gl::Get_p_name::max_samples,                &limits.max_samples);
         gl::get_integer_v(gl::Get_p_name::max_color_texture_samples,  &limits.max_color_texture_samples);
         gl::get_integer_v(gl::Get_p_name::max_depth_texture_samples,  &limits.max_depth_texture_samples);
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
         gl::get_integer_v(gl::Get_p_name::max_framebuffer_samples,    &limits.max_framebuffer_samples);
         gl::get_integer_v(gl::Get_p_name::max_integer_samples,        &limits.max_integer_samples);
+#else
+        limits.max_framebuffer_samples = limits.max_samples;
+        limits.max_integer_samples     = limits.max_samples;
+#endif
 
         log_startup->info(
             "max samples = {}, max color texture samples = {}, max depth texture samples = {}, "
@@ -229,7 +234,10 @@ Instance::Instance(erhe::window::Context_window& context_window)
         gl::get_integer_v(gl::Get_p_name::max_texture_buffer_size, &limits.max_texture_buffer_size);
     }
 
-    {
+    int shader_storage_buffer_offset_alignment{0};
+    int uniform_buffer_offset_alignment       {0};
+
+    if (info.gl_version >= 430) {
         ERHE_PROFILE_SCOPE("Debug Callback");
         gl::debug_message_callback(erhe_opengl_callback, nullptr);
         gl::debug_message_control(
@@ -242,55 +250,69 @@ Instance::Instance(erhe::window::Context_window& context_window)
         );
         gl::enable(gl::Enable_cap::debug_output);
         gl::enable(gl::Enable_cap::debug_output_synchronous);
+
+        for (GLuint i = 0; i < 3; ++i) {
+            gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_count, i, &limits.max_compute_workgroup_count[i]);
+            gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_size,  i, &limits.max_compute_workgroup_size[i]);
+        }
+        gl::get_integer_v(gl::Get_p_name::max_compute_work_group_invocations, &limits.max_compute_work_group_invocations);
+        gl::get_integer_v(gl::Get_p_name::max_compute_shared_memory_size,     &limits.max_compute_shared_memory_size);
+        log_startup->info(
+            "Max compute workgroup count = {} x {} x {}",
+            limits.max_compute_workgroup_count[0],
+            limits.max_compute_workgroup_count[1],
+            limits.max_compute_workgroup_count[2]
+        );
+        log_startup->info(
+            "Max compute workgroup size = {} x {} x {}",
+            limits.max_compute_workgroup_size[0],
+            limits.max_compute_workgroup_size[1],
+            limits.max_compute_workgroup_size[2]
+        );
+        log_startup->info(
+            "Max compute workgroup invocations = {}",
+            limits.max_compute_work_group_invocations
+        );
+        log_startup->info(
+            "Max compute shared memory size = {}",
+            limits.max_compute_shared_memory_size
+        );
+
+        gl::get_integer_v(gl::Get_p_name::shader_storage_buffer_offset_alignment,    &shader_storage_buffer_offset_alignment);
+        gl::get_integer_v(gl::Get_p_name::max_shader_storage_buffer_bindings,        &limits.max_shader_storage_buffer_bindings);
+        gl::get_integer_v(gl::Get_p_name::max_compute_shader_storage_blocks,         &limits.max_compute_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_compute_uniform_blocks,                &limits.max_compute_uniform_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_vertex_shader_storage_blocks,          &limits.max_vertex_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_fragment_shader_storage_blocks,        &limits.max_fragment_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &limits.max_geometry_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &limits.max_tess_control_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &limits.max_tess_evaluation_shader_storage_blocks);
+    } else {
+        for (GLuint i = 0; i < 3; ++i) {
+            limits.max_compute_workgroup_count[i] = 0;
+            limits.max_compute_workgroup_size [i] = 0;
+        }
+        limits.max_compute_work_group_invocations        = 0;
+        limits.max_compute_shared_memory_size            = 0;
+        limits.max_shader_storage_buffer_bindings        = 0;
+        limits.max_compute_shader_storage_blocks         = 0;
+        limits.max_compute_uniform_blocks                = 0;
+        limits.max_vertex_shader_storage_blocks          = 0;
+        limits.max_fragment_shader_storage_blocks        = 0;
+        limits.max_geometry_shader_storage_blocks        = 0;
+        limits.max_tess_control_shader_storage_blocks    = 0;
+        limits.max_tess_evaluation_shader_storage_blocks = 0;
     }
 
-    for (GLuint i = 0; i < 3; ++i) {
-        gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_count, i, &limits.max_compute_workgroup_count[i]);
-        gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_size,  i, &limits.max_compute_workgroup_size[i]);
-    }
-    gl::get_integer_v(gl::Get_p_name::max_compute_work_group_invocations, &limits.max_compute_work_group_invocations);
-    gl::get_integer_v(gl::Get_p_name::max_compute_shared_memory_size,     &limits.max_compute_shared_memory_size);
-    log_startup->info(
-        "Max compute workgroup count = {} x {} x {}",
-        limits.max_compute_workgroup_count[0],
-        limits.max_compute_workgroup_count[1],
-        limits.max_compute_workgroup_count[2]
-    );
-    log_startup->info(
-        "Max compute workgroup size = {} x {} x {}",
-        limits.max_compute_workgroup_size[0],
-        limits.max_compute_workgroup_size[1],
-        limits.max_compute_workgroup_size[2]
-    );
-    log_startup->info(
-        "Max compute workgroup invocations = {}",
-        limits.max_compute_work_group_invocations
-    );
-    log_startup->info(
-        "Max compute shared memory size = {}",
-        limits.max_compute_shared_memory_size
-    );
-
-    int shader_storage_buffer_offset_alignment{0};
-    int uniform_buffer_offset_alignment       {0};
-    gl::get_integer_v(gl::Get_p_name::shader_storage_buffer_offset_alignment,    &shader_storage_buffer_offset_alignment);
     gl::get_integer_v(gl::Get_p_name::uniform_buffer_offset_alignment,           &uniform_buffer_offset_alignment);
     gl::get_integer_v(gl::Get_p_name::max_uniform_block_size,                    &limits.max_uniform_block_size);
-    gl::get_integer_v(gl::Get_p_name::max_shader_storage_buffer_bindings,        &limits.max_shader_storage_buffer_bindings);
     gl::get_integer_v(gl::Get_p_name::max_uniform_buffer_bindings,               &limits.max_uniform_buffer_bindings);
-    gl::get_integer_v(gl::Get_p_name::max_compute_shader_storage_blocks,         &limits.max_compute_shader_storage_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_compute_uniform_blocks,                &limits.max_compute_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_vertex_shader_storage_blocks,          &limits.max_vertex_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_blocks,                 &limits.max_vertex_uniform_blocks);
     gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_vectors,                &limits.max_vertex_uniform_vectors);
-    gl::get_integer_v(gl::Get_p_name::max_fragment_shader_storage_blocks,        &limits.max_fragment_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_blocks,               &limits.max_fragment_uniform_blocks);
     gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_vectors,              &limits.max_fragment_uniform_vectors);
-    gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &limits.max_geometry_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_geometry_uniform_blocks,               &limits.max_geometry_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &limits.max_tess_control_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_tess_control_uniform_blocks,           &limits.max_tess_control_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &limits.max_tess_evaluation_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_uniform_blocks,        &limits.max_tess_evaluation_uniform_blocks);
 
     implementation_defined.shader_storage_buffer_offset_alignment = static_cast<unsigned int>(shader_storage_buffer_offset_alignment);

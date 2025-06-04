@@ -26,12 +26,14 @@ Sampler::Sampler(const Sampler_create_info& create_info)
 void Sampler::set_debug_label(const std::string& value)
 {
     m_debug_label = fmt::format("(S:{}) {}", gl_name(), value);
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(
         gl::Object_identifier::sampler,
         gl_name(),
         static_cast<GLsizei>(m_debug_label.length()),
         m_debug_label.c_str()
     );
+#endif
 }
 
 auto Sampler::debug_label() const -> const std::string&
@@ -56,11 +58,13 @@ void Sampler::apply()
 {
     ERHE_VERIFY(m_handle.gl_name() != 0);
 
+    check_gl_errors();
     const auto name = m_handle.gl_name();
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_min_filter,     static_cast<int>(min_filter));
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_mag_filter,     static_cast<int>(mag_filter));
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_compare_mode,   static_cast<int>(compare_mode));
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_compare_func,   static_cast<int>(compare_func));
+    check_gl_errors();
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_wrap_s,         static_cast<int>(wrap_mode[0]));
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_wrap_t,         static_cast<int>(wrap_mode[1]));
     gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_wrap_r,         static_cast<int>(wrap_mode[2]));
@@ -68,6 +72,7 @@ void Sampler::apply()
     gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_min_lod,        min_lod);
     gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_max_lod,        max_lod);
     gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_max_anisotropy, max_anisotropy);
+    check_gl_errors();
     //int get_min_filter_i{0};
     //int get_mag_filter_i{0};
     //gl::get_sampler_parameter_iv(name, gl::Sampler_parameter_i::texture_min_filter, &get_min_filter_i);

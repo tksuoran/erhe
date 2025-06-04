@@ -69,6 +69,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
+#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/gl_log.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gltf/gltf_log.hpp"
@@ -1207,6 +1208,7 @@ void run_editor()
     {
         ERHE_PROFILE_SCOPE("initialize logging");
         gl::initialize_logging();
+        gl_helpers::initialize_logging();
         erhe::commands::initialize_logging();
         erhe::dataformat::initialize_logging();
         erhe::file::initialize_logging();

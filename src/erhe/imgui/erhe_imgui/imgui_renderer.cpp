@@ -119,13 +119,15 @@ auto get_shader_extensions(erhe::graphics::Instance& graphics_instance) -> std::
 {
     std::vector<erhe::graphics::Shader_stage_extension> extensions;
     if (graphics_instance.info.gl_version < 430) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
-        extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
-        extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object)) {
+            extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+            extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        }
     }
     if (graphics_instance.info.gl_version < 460) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
-        extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        if gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
+            extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        }
     }
     if (graphics_instance.info.use_bindless_texture) {
         extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
@@ -136,10 +138,12 @@ auto get_shader_extensions(erhe::graphics::Instance& graphics_instance) -> std::
 auto get_shader_defines(erhe::graphics::Instance& graphics_instance) -> std::vector<std::pair<std::string, std::string>>
 {
     std::vector<std::pair<std::string, std::string>> defines;
+#if defined(ERHE_USE_OPENGL_MULTI_DRAW_INDIRECT)
     if (graphics_instance.info.gl_version < 460) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
         defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
     }
+#endif
     if (graphics_instance.info.use_bindless_texture) {
         defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
     }
