@@ -81,6 +81,7 @@ if (ERHE_SPIRV)
 endif()
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(${_target} PRIVATE ERHE_USE_OPENGL_DIRECT_STATE_ACCESS=1)
 
 target_link_libraries(${_target}
     PUBLIC

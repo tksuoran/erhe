@@ -26,12 +26,14 @@ Sampler::Sampler(const Sampler_create_info& create_info)
 void Sampler::set_debug_label(const std::string& value)
 {
     m_debug_label = fmt::format("(S:{}) {}", gl_name(), value);
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(
         gl::Object_identifier::sampler,
         gl_name(),
         static_cast<GLsizei>(m_debug_label.length()),
         m_debug_label.c_str()
     );
+#endif
 }
 
 auto Sampler::debug_label() const -> const std::string&

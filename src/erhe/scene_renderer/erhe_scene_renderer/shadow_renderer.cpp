@@ -247,7 +247,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
                 ERHE_PROFILE_SCOPE("mdi");
                 //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
-                gl::multi_draw_elements_indirect(
+                m_graphics_instance.multi_draw_elements_indirect(
                     pipeline.data.input_assembly.primitive_topology,
                     erhe::graphics::to_gl_index_type(parameters.index_type),
                     reinterpret_cast<const void *>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),

@@ -109,6 +109,8 @@ public:
 
 private:
     void post_link();
+    void query_bindings();
+    std::vector<int> m_gl_from_erhe_bindings;
 
 #if defined(ERHE_SPIRV)
     auto compile_glslang     (const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
@@ -153,15 +155,19 @@ public:
     void reload    (Shader_stages_prototype&& prototype);
     void invalidate();
 
-    [[nodiscard]] auto name    () const -> const std::string&;
-    [[nodiscard]] auto gl_name () const -> unsigned int;
-    [[nodiscard]] auto is_valid() const -> bool;
+    [[nodiscard]] auto name                     () const -> const std::string&;
+    [[nodiscard]] auto gl_name                  () const -> unsigned int;
+    [[nodiscard]] auto is_valid                 () const -> bool;
+    [[nodiscard]] auto erhe_draw_id_location    () const -> int;
+    [[nodiscard]] auto get_gl_from_erhe_bindings() const -> const std::vector<int>*;
 
 private:
     std::string            m_name;
     Gl_program             m_handle;
     bool                   m_is_valid{false};
     std::vector<Gl_shader> m_attached_shaders;
+    int                    m_erhe_draw_id_location{-1};
+    std::vector<int>       m_gl_from_erhe_bindings;
 };
 
 class Reloadable_shader_stages
@@ -195,11 +201,15 @@ public:
 class Shader_stages_tracker
 {
 public:
-    void reset  ();
-    void execute(const Shader_stages* state);
+    void reset           ();
+    void execute         (const Shader_stages* state);
+    void set_erhe_draw_id(int draw_id);
+    auto gl_binding_point(unsigned int erhe_binding_point) -> unsigned int;
 
 private:
-    unsigned int m_last{0};
+    unsigned int            m_last                 {0};
+    int                     m_erhe_draw_id_location{-1};
+    const std::vector<int>* m_gl_from_erhe_bindings{nullptr};
 };
 
 } // namespace erhe::graphics

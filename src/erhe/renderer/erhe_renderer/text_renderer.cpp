@@ -118,6 +118,9 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
     );
 }
 
+Text_renderer::~Text_renderer()
+{
+}
 
 void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_color, const std::string_view text)
 {

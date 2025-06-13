@@ -1,8 +1,7 @@
 #include "erhe_gl/gl_log.hpp"
 #include "erhe_log/log.hpp"
 
-namespace gl
-{
+namespace gl {
 
 std::shared_ptr<spdlog::logger> log_gl;
 

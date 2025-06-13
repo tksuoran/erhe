@@ -17,8 +17,8 @@
 namespace erhe::scene_renderer {
 
 Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
-    : joint_block{graphics_instance, "joint", joint_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
-    , joint_struct{graphics_instance, "Joint"}
+    : joint_block {erhe::graphics::Shader_resource{graphics_instance, "joint", joint_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}}
+    , joint_struct{erhe::graphics::Shader_resource{graphics_instance, "Joint"}}
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
     ini.get("max_joint_count", max_joint_count);
@@ -34,6 +34,7 @@ Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
         .normal_transform = joint_struct.add_mat4("world_from_bind_normal")->offset_in_parent()
     };
 
+    // TODO Unsized arrays require GLSL 430
     offsets.joint_struct = joint_block.add_struct("joints", &joint_struct, erhe::graphics::Shader_resource::unsized_array)->offset_in_parent();
 }
 

@@ -446,13 +446,15 @@ void Post_processing::post_process(Post_processing_node& node)
 
     // Downsample passes
     for (const size_t source_level : node.downsample_source_levels) {
-        const size_t destination_level = source_level + 1;
-        const auto& framebuffer = node.downsample_framebuffers.at(destination_level);
+        const size_t       destination_level = source_level + 1;
+        const auto&        framebuffer       = node.downsample_framebuffers.at(destination_level);
+        const unsigned int binding_point     = m_context.graphics_instance->binding_point(m_parameter_block.binding_point());
+
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
         gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
         gl::bind_buffer_range(
             node.parameter_buffer.target(),
-            static_cast<GLuint>    (m_parameter_block.binding_point()),
+            static_cast<GLuint>    (binding_point),
             static_cast<GLuint>    (node.parameter_buffer.gl_name()),
             static_cast<GLintptr>  (source_level * level_offset_size),
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
@@ -482,11 +484,13 @@ void Post_processing::post_process(Post_processing_node& node)
         const auto&  framebuffer = destination_level == 0
             ? output_framebuffer
             : node.upsample_framebuffers.at(destination_level);
+        const unsigned int binding_point = m_context.graphics_instance->binding_point(m_parameter_block.binding_point());
+
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
         gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
         gl::bind_buffer_range(
             node.parameter_buffer.target(),
-            static_cast<GLuint>    (m_parameter_block.binding_point()),
+            static_cast<GLuint>    (binding_point),
             static_cast<GLuint>    (node.parameter_buffer.gl_name()),
             static_cast<GLintptr>  (source_level * level_offset_size),
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())

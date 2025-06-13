@@ -695,7 +695,9 @@ void Texture::set_debug_label(std::string_view value)
     SPDLOG_LOGGER_TRACE(log_texture, "Texture {} name set to {}", gl_name(), value);
 
     m_debug_label = fmt::format("(T:{}) {}", gl_name(), value);
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(gl::Object_identifier::texture, gl_name(), static_cast<GLsizei>(m_debug_label.length()), m_debug_label.c_str());
+#endif
 }
 
 auto Texture::debug_label() const -> const std::string&

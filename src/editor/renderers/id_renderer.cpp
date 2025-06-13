@@ -15,8 +15,9 @@
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/instance.hpp"
-#include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
+#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
@@ -128,6 +129,10 @@ Id_renderer::Id_renderer(
 
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "id_renderer");
     ini.get("enabled", enabled);
+}
+
+Id_renderer::~Id_renderer()
+{
 }
 
 void Id_renderer::create_id_frame_resources()
@@ -274,8 +279,7 @@ void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh
         static constexpr std::string_view c_draw{"draw"};
 
         ERHE_PROFILE_SCOPE("mdi");
-        //ERHE_PROFILE_GPU_SCOPE(c_draw)
-        gl::multi_draw_elements_indirect(
+        m_graphics_instance.multi_draw_elements_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
             erhe::graphics::to_gl_index_type(m_mesh_memory.buffer_info.index_type),
             reinterpret_cast<const void*>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),

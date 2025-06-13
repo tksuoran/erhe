@@ -3,8 +3,7 @@
 #include "erhe_gl/wrapper_enums.hpp"
 #include <type_traits>
 
-namespace gl
-{
+namespace gl {
 
 template<typename Enum>
 struct Enable_bit_mask_operators

@@ -85,18 +85,19 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&joint_interface.joint_block);
 
     if (graphics_instance.info.gl_version < 430) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
-        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object)) {
+            create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+            create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
+            create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        }
     }
     if (graphics_instance.info.gl_version < 460) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
-        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_draw_parameters"});
-        create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
+        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
+            create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+            create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_draw_parameters"});
+            create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
+        }
     }
-
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
 
     if (graphics_instance.info.use_bindless_texture) {

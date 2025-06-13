@@ -9,6 +9,7 @@
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -226,7 +227,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             m_primitive_buffer.bind(primitive_range);
             m_draw_indirect_buffer.bind(draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
 
-            gl::multi_draw_elements_indirect(
+            m_graphics_instance.multi_draw_elements_indirect(
                 pipeline.data.input_assembly.primitive_topology,
                 erhe::graphics::to_gl_index_type(parameters.index_type),
                 reinterpret_cast<const void *>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),

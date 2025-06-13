@@ -1,3 +1,16 @@
+#if ERHE_GLSL_VERSION < 420
+#ifdef ERHE_HAS_ARB_SHADING_LANGUAGE_PACKING
+#extension GL_ARB_shading_language_packing : require
+#else // ERHE_HAS_ARB_SHADING_LANGUAGE_PACKING
+vec2 unpackSnorm2x16(uint packed) {
+    int x = int(packed << 16) >> 16; // lower 16 bits (sign-extended)
+    int y = int(packed) >> 16;       // upper 16 bits (sign-extended)
+    return vec2(clamp(float(x) / 32767.0, -1.0, 1.0),
+                clamp(float(y) / 32767.0, -1.0, 1.0));
+}
+#endif // ERHE_HAS_ARB_SHADING_LANGUAGE_PACKING
+#endif // ERHE_GLSL_VERSION < 420
+
 layout(location = 0) out vec2 v_texcoord;
 layout(location = 1) out vec4 v_color;
 #if defined(ERHE_BINDLESS_TEXTURE)
@@ -29,10 +42,10 @@ void main()
     int y = int((packed_data[0] >> 16) & 0xffffu);
     if (x >= 0x8000) x -= 0x10000;
     if (y >= 0x8000) y -= 0x10000;
-    vec2 zw = unpackSnorm2x16(packed_data[1]);
+    vec2 zw = unpackSnorm2x16(packed_data.y); // [1]
     vec4 a_position = vec4(float(x), float(y), zw);
-    v_color     = unpackUnorm4x8 (packed_data[2]);
-    v_texcoord  = unpackUnorm2x16(packed_data[3]);
+    v_color     = unpackUnorm4x8 (packed_data.z); // [2]
+    v_texcoord  = unpackUnorm2x16(packed_data.w); // [3]
     gl_Position = projection.clip_from_window * vec4(a_position);
 
 #if defined(ERHE_BINDLESS_TEXTURE)

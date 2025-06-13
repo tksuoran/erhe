@@ -1,5 +1,6 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -386,6 +387,11 @@ Shader_resource::Shader_resource(
     , m_array_size   {array_size}
     , m_binding_point{binding_point}
 {
+    if ((m_type == Type::shader_storage_block) && (instance.info.glsl_version < 430)) {
+        m_type = Type::uniform_block;
+        log_glsl->warn("Replacing SSBO with uniform block");
+        m_ssbo_fallback = true;
+    }
     //// Would be nice to be able to verify this at the time of construction,
     //// but Instance might not be ready yet.
     ////
@@ -455,6 +461,8 @@ Shader_resource::Shader_resource(Instance& instance)
 Shader_resource::~Shader_resource() noexcept
 {
 }
+
+Shader_resource::Shader_resource(Shader_resource&& other) = default;
 
 auto Shader_resource::is_array() const -> bool
 {
@@ -665,6 +673,10 @@ auto Shader_resource::layout_string() const -> std::string
         return {};
     }
 
+    if ((m_type == Type::sampler) && (m_instance.info.glsl_version < 430)) {
+        return {};
+    }
+
     std::stringstream ss;
     bool first{true};
 
@@ -694,20 +706,24 @@ auto Shader_resource::layout_string() const -> std::string
         ss << "offset = " << m_offset_in_parent;
         first = false;
     }
-    if (m_binding_point != -1) {
-        if (!first)
-        {
-            ss << ", ";
+    if (m_instance.info.glsl_version >= 420) {
+        if (m_binding_point != -1) {
+            if (!first)
+            {
+                ss << ", ";
+            }
+            ss << "binding = " << m_binding_point;
+            //first = false;
         }
-        ss << "binding = " << m_binding_point;
-        //first = false;
     }
     ss << ") ";
-    if (m_readonly) {
-        ss << "readonly ";
-    }
-    if (m_writeonly) {
-        ss << "writeonly ";
+    if (m_instance.info.glsl_version >= 420) {
+        if (m_readonly) {
+            ss << "readonly ";
+        }
+        if (m_writeonly) {
+            ss << "writeonly ";
+        }
     }
     return ss.str();
 }
@@ -764,13 +780,23 @@ auto Shader_resource::source(const int indent_level /* = 0 */) const -> std::str
     return ss.str();
 }
 
+void Shader_resource::sanitize(std::optional<std::size_t>& array_size) const
+{
+    if (m_ssbo_fallback && array_size.has_value() && array_size.value() == 0) {
+        array_size = 1;
+        log_glsl->warn("unsized array fallback");
+    }
+    ERHE_VERIFY((m_type != Type::uniform_block) || !array_size.has_value() || array_size.value() > 0); // no unsized arrays in uniform blocks
+}
+
 auto Shader_resource::add_struct(
-    const std::string_view           name,
-    Shader_resource*                 struct_type,
-    const std::optional<std::size_t> array_size /* = {} */
+    const std::string_view     name,
+    Shader_resource*           struct_type,
+    std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(struct_type != nullptr);
+    sanitize(array_size);
     align_offset_to(4); // align by 4 bytes TODO do what spec says
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_instance, name, struct_type, array_size, this)
@@ -780,14 +806,14 @@ auto Shader_resource::add_struct(
 }
 
 auto Shader_resource::add_sampler(
-    const std::string_view           name,
-    const gl::Uniform_type           sampler_type,
-    const std::optional<int>         dedicated_texture_unit, /* = {} */
-    const std::optional<std::size_t> array_size /* = {} */
+    const std::string_view     name,
+    const gl::Uniform_type     sampler_type,
+    const std::optional<int>   dedicated_texture_unit, /* = {} */
+    std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(m_type == Type::default_uniform_block);
-    ERHE_VERIFY(!array_size.has_value() || array_size.value() > 0); // no unsized sampler arrays
+    sanitize(array_size);
 
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -807,9 +833,10 @@ auto Shader_resource::add_sampler(
     return new_member;
 }
 
-auto Shader_resource::add_float(const std::string_view name, const std::optional<std::size_t> array_size) -> Shader_resource*
+auto Shader_resource::add_float(const std::string_view name, std::optional<std::size_t> array_size) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(4); // align by 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_instance, name, gl::Uniform_type::float_, array_size, this)
@@ -818,9 +845,10 @@ auto Shader_resource::add_float(const std::string_view name, const std::optional
     return new_member;
 }
 
-auto Shader_resource::add_vec2(const std::string_view name, const std::optional<std::size_t> array_size) -> Shader_resource*
+auto Shader_resource::add_vec2(const std::string_view name, std::optional<std::size_t> array_size) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(2 * 4); // align by 2 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_instance, name, gl::Uniform_type::float_vec2, array_size, this)
@@ -829,9 +857,10 @@ auto Shader_resource::add_vec2(const std::string_view name, const std::optional<
     return new_member;
 }
 
-auto Shader_resource::add_vec3(const std::string_view name, const std::optional<std::size_t> array_size) -> Shader_resource*
+auto Shader_resource::add_vec3(const std::string_view name, std::optional<std::size_t> array_size) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_instance, name, gl::Uniform_type::float_vec3, array_size, this)
@@ -840,9 +869,10 @@ auto Shader_resource::add_vec3(const std::string_view name, const std::optional<
     return new_member;
 }
 
-auto Shader_resource::add_vec4(const std::string_view name, const std::optional<std::size_t> array_size) -> Shader_resource*
+auto Shader_resource::add_vec4(const std::string_view name, std::optional<std::size_t> array_size) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_instance, name, gl::Uniform_type::float_vec4, array_size, this)
@@ -852,11 +882,12 @@ auto Shader_resource::add_vec4(const std::string_view name, const std::optional<
 }
 
 auto Shader_resource::add_mat4(
-    const std::string_view           name,
-    const std::optional<std::size_t> array_size /* = {} */
+    const std::string_view     name,
+    std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -872,11 +903,12 @@ auto Shader_resource::add_mat4(
 }
 
 auto Shader_resource::add_int(
-    const std::string_view           name,
-    const std::optional<std::size_t> array_size /* = {} */
+    const std::string_view     name,
+    std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(4); // align by 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -892,11 +924,12 @@ auto Shader_resource::add_int(
 }
 
 auto Shader_resource::add_uint(
-    const std::string_view           name,
-    const std::optional<std::size_t> array_size /* = {} */
+    const std::string_view     name,
+    std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(4); // align by 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -912,11 +945,12 @@ auto Shader_resource::add_uint(
 }
 
 auto Shader_resource::add_uvec2(
-    const std::string_view           name,
-    const std::optional<std::size_t> array_size /* = {} */
+    const std::string_view     name,
+    std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(2 * 4); // align by 2 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -932,11 +966,12 @@ auto Shader_resource::add_uvec2(
 }
 
 auto Shader_resource::add_uvec3(
-    const std::string_view           name,
-    const std::optional<std::size_t> array_size /* = {} */
+    const std::string_view     name,
+    std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -952,11 +987,12 @@ auto Shader_resource::add_uvec3(
 }
 
 auto Shader_resource::add_uvec4(
-    const std::string_view           name,
-    const std::optional<std::size_t> array_size /* = {} */
+    const std::string_view     name,
+    std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
@@ -972,11 +1008,12 @@ auto Shader_resource::add_uvec4(
 }
 
 auto Shader_resource::add_uint64(
-    const std::string_view           name,
-    const std::optional<std::size_t> array_size /* = {} */
+    const std::string_view     name,
+    std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(is_aggregate(m_type));
+    sanitize(array_size);
     align_offset_to(8); // align by 8 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(

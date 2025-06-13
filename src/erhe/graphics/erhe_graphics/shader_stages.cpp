@@ -1,9 +1,11 @@
 #include "erhe_graphics/shader_stages.hpp"
 
 #include "erhe_graphics/instance.hpp"
+#include "erhe_gl/command_info.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -84,23 +86,28 @@ auto Shader_stages::gl_name() const -> unsigned int
 }
 
 Shader_stages::Shader_stages(const std::string& failed_name)
+    : m_name{failed_name}
 {
     std::string label = fmt::format("(P:{}) {} - compilation failed", gl_name(), failed_name);
+    ERHE_VERIFY(!failed_name.empty());
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+#endif
+}
+
+auto Shader_stages::erhe_draw_id_location() const -> int
+{
+    return m_erhe_draw_id_location;
+}
+
+auto Shader_stages::get_gl_from_erhe_bindings() const -> const std::vector<int>*
+{
+    return m_gl_from_erhe_bindings.empty() ? nullptr : &m_gl_from_erhe_bindings;
 }
 
 Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
 {
-    ERHE_PROFILE_FUNCTION();
-
-    ERHE_VERIFY(prototype.m_handle.gl_name() != 0);
-
-    m_name     = prototype.name();
-    m_handle   = std::move(prototype.m_handle);
-    m_is_valid = true;
-
-    std::string label = fmt::format("(P:{}) {}{}", gl_name(), m_name, prototype.is_valid() ? "" : " (Failed)");
-    gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+    reload(std::move(prototype));
 }
 
 auto Shader_stages::is_valid() const -> bool
@@ -122,11 +129,21 @@ void Shader_stages::reload(Shader_stages_prototype&& prototype)
         return;
     }
 
-    m_handle   = std::move(prototype.m_handle);
-    m_is_valid = true;
+    ERHE_VERIFY(!prototype.name().empty());
+    m_name                  = prototype.name();
+    m_handle                = std::move(prototype.m_handle);
+    m_gl_from_erhe_bindings = std::move(prototype.m_gl_from_erhe_bindings);
+    m_is_valid              = true;
+    if (!prototype.m_graphics_instance.info.use_multi_draw_indirect) {
+        m_erhe_draw_id_location = gl::get_uniform_location(gl_name(), "erhe_draw_id");
+    }
 
-    std::string label = fmt::format("(P:{}) {}", gl_name(), m_name);
+    std::string label = fmt::format("(P:{}) {}{}", gl_name(), m_name, prototype.is_valid() ? "" : " (Failed)");
+
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+#endif
+
 }
 
 auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool
@@ -145,6 +162,24 @@ void Shader_stages_tracker::reset()
     m_last = 0;
 }
 
+void Shader_stages_tracker::set_erhe_draw_id(int draw_id)
+{
+    // TODO move this to instance ERHE_VERIFY(graphics_instance.info.gl_version < 460);
+    // ERHE_VERIFY(!gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
+
+    // Not all programs use draw, so it is quite possible location is -1
+    if (m_erhe_draw_id_location != -1) {
+        gl::uniform_1i(m_erhe_draw_id_location, draw_id);
+    }
+}
+
+auto Shader_stages_tracker::gl_binding_point(unsigned int erhe_binding_point) -> unsigned int
+{
+    return (m_gl_from_erhe_bindings != nullptr)
+        ? m_gl_from_erhe_bindings->at(erhe_binding_point)
+        : erhe_binding_point;
+}
+
 void Shader_stages_tracker::execute(const Shader_stages* state)
 {
     unsigned int name = (state != nullptr) ? state->gl_name() : 0;
@@ -153,6 +188,8 @@ void Shader_stages_tracker::execute(const Shader_stages* state)
     }
     gl::use_program(name);
     m_last = name;
+    m_erhe_draw_id_location = (state != nullptr) ? state->erhe_draw_id_location() : -1;
+    m_gl_from_erhe_bindings = (state != nullptr) ? state->get_gl_from_erhe_bindings() : nullptr;
 }
 
 } // namespace erhe::graphics

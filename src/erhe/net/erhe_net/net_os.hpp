@@ -10,7 +10,7 @@ using socklen_t = int;
 static constexpr int ERHE_NET_ERROR_CODE_CONNECTED = WSAEISCONN;
 #endif
 
-#if defined(ERHE_OS_LINUX)
+#if defined(ERHE_OS_LINUX) || defined(ERHE_OS_OSX)
 #   include <arpa/inet.h>
 #   include <errno.h>
 #   include <fcntl.h>

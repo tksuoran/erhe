@@ -277,12 +277,14 @@ auto Framebuffer::gl_name() const -> unsigned int
 void Framebuffer::set_debug_label(const std::string& label)
 {
     m_debug_label = fmt::format("(F:{}) {}", gl_name(), label);
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(
         gl::Object_identifier::framebuffer,
         gl_name(),
         static_cast<GLsizei>(m_debug_label.length()),
         m_debug_label.c_str()
     );
+#endif
 }
 
 } // namespace erhe::graphics

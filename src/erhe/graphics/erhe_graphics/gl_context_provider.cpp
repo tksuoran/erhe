@@ -26,7 +26,8 @@ void Gl_context_provider::provide_worker_contexts(
 
     log_context->info("Starting to provide worked GL contexts");
 
-    ERHE_VERIFY(m_main_thread_id == std::this_thread::get_id());
+    std::thread::id current_thread_id = std::this_thread::get_id();
+    ERHE_VERIFY(m_main_thread_id == current_thread_id);
     m_main_window = main_window;
 
     {

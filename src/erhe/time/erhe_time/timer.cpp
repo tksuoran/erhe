@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <string>
+#include <mutex>
 
 namespace erhe::time {
 

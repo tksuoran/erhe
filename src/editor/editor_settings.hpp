@@ -44,7 +44,7 @@ public:
 class Graphics_settings
 {
 public:
-    void get_limits                   ();
+    void get_limits                   (const erhe::graphics::Instance& instance, gl::Internal_format format);
     void read_presets                 ();
     void write_presets                ();
     void apply_limits                 (Graphics_preset& graphics_preset);
@@ -55,8 +55,8 @@ public:
     std::vector<const char*>     msaa_sample_count_entry_s_strings;
     std::vector<std::string>     msaa_sample_count_entry_strings;
     std::vector<int>             msaa_sample_count_entry_values;
-    int                          max_shadow_resolution{1};
-    int                          max_depth_layers{1};
+    int                          max_shadow_resolution{0};
+    int                          max_depth_layers{0};
 };
 
 class Editor_message_bus;
@@ -66,7 +66,7 @@ class Editor_settings
 public:
     explicit Editor_settings();
 
-    void apply_limits(Editor_message_bus& editor_message_bus);
+    void apply_limits(erhe::graphics::Instance& instance, Editor_message_bus& editor_message_bus);
     void read        ();
     void write       ();
 

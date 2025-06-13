@@ -170,4 +170,6 @@ private:
     GLuint m_gl_name{0};
 };
 
+void check_gl_errors();
+
 } // namespace erhe::graphics

@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/glsl_format_source.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -484,10 +485,49 @@ auto Shader_stages_prototype::link_program() -> bool
     }
     m_state = state_program_link_started;
 
+    if (m_graphics_instance.info.glsl_version < 420) {
+        query_bindings();
+    }
+
 #if defined(ERHE_SPIRV)
     link_glslang_program();
 #endif
     return true;
+}
+
+void Shader_stages_prototype::query_bindings()
+{
+    std::map<std::string, unsigned int> erhe_bindings;
+    unsigned int max_binding = 0;
+    for (const Shader_resource* block : m_create_info.interface_blocks) {
+        if (block->get_binding_target() == gl::Buffer_target::uniform_buffer) {
+            std::string key = block->name() + "_block";
+            erhe_bindings[key] = block->binding_point();
+            max_binding = std::max(max_binding, block->binding_point());
+        }
+    }
+
+    m_gl_from_erhe_bindings.resize(max_binding + 1);
+
+    const auto gl_name = m_handle.gl_name();
+    int active_uniform_block_count = 0;
+    gl::get_program_iv(gl_name, gl::Program_property::active_uniform_blocks, &active_uniform_block_count);
+    for (int i = 0; i < active_uniform_block_count; ++i) {
+        int name_length = 0;
+        gl::get_active_uniform_block_iv(gl_name, i, gl::Uniform_block_p_name::uniform_block_name_length, &name_length);
+        ERHE_VERIFY(name_length > 1);
+        std::string name(static_cast<std::size_t>(name_length - 1), 0);
+        gl::get_active_uniform_block_name(gl_name, i, name_length, nullptr, name.data());
+        auto fi = erhe_bindings.find(name);
+        ERHE_VERIFY(fi != erhe_bindings.end());
+        unsigned int erhe_binding = fi->second;
+
+        int gl_binding = 0;
+        gl::get_active_uniform_block_iv(gl_name, i, gl::Uniform_block_p_name::uniform_block_binding, &gl_binding);
+        ERHE_VERIFY(gl_binding > -1);
+
+        m_gl_from_erhe_bindings[erhe_binding] = gl_binding;
+    }
 }
 
 void Shader_stages_prototype::post_link()

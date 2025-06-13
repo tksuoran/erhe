@@ -108,9 +108,11 @@ Buffer::Buffer(Instance& instance, const Buffer_create_info& create_info) noexce
         gl_name(),
         ((m_debug_label != nullptr) ? m_debug_label : "")
     );
+#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     if (m_debug_label != nullptr) {
         gl::object_label(gl::Object_identifier::buffer, gl_name(), -1, m_debug_label);
     }
+#endif
     allocate_storage();
 }
 

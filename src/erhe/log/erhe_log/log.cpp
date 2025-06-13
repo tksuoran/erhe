@@ -122,8 +122,9 @@ public:
             spdlog::sinks_init_list{
 #if defined _WIN32
                 m_sink_msvc,
+#else
+                m_sink_console,
 #endif
-                //sink_console,
                 m_sink_log_file,
                 tail ? m_tail_store_log : m_frame_store_log
             }

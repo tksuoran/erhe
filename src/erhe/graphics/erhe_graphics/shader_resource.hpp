@@ -109,7 +109,7 @@ public:
     explicit Shader_resource(Instance& instance);
     ~Shader_resource() noexcept;
     Shader_resource(const Shader_resource& other) = delete;
-    Shader_resource(Shader_resource&& other) = default;
+    Shader_resource(Shader_resource&& other);
 
     [[nodiscard]] auto is_array        () const -> bool;
     [[nodiscard]] auto type            () const -> Type;
@@ -146,76 +146,78 @@ public:
     [[nodiscard]] auto get_writeonly() const -> bool;
 
     auto add_struct(
-        const std::string_view           name,
-        Shader_resource*                 struct_type,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        Shader_resource*           struct_type,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_sampler(
-        const std::string_view           name,
-        gl::Uniform_type                 sampler_type,
-        const std::optional<int>         dedicated_texture_unit = {},
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        gl::Uniform_type           sampler_type,
+        const std::optional<int>   dedicated_texture_unit = {},
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_float(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec2(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec3(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec4(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_mat4(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_int(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uint(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec2(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec3(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec4(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uint64(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        const std::string_view     name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_attribute(const erhe::dataformat::Vertex_attribute& attribute) -> Shader_resource*;
 
 private:
+    void sanitize(std::optional<std::size_t>& array_size) const;
+
     void align_offset_to(const unsigned int alignment);
 
     void indent(std::stringstream& ss, const int indent_level) const;
@@ -251,8 +253,9 @@ private:
     // Blocks and samplers in default uniform block
     int               m_binding_point{-1};
 
-    bool m_readonly {false};
-    bool m_writeonly{false};
+    bool m_readonly     {false};
+    bool m_writeonly    {false};
+    bool m_ssbo_fallback{false};
 
     // Only used for uniforms in program
 };

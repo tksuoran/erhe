@@ -34,12 +34,12 @@ void main(void)
         0u, 0u, 1u, 1u, 0u, 0u, 1u, 1u,
         1u, 1u, 2u, 2u, 1u, 1u, 2u, 2u
     );
-    const ivec2 dither_pos   = ivec2(
+    ivec2 dither_pos   = ivec2(
         uint(gl_FragCoord.x) + odd_bits[gl_SampleID & 31],
         uint(gl_FragCoord.y) + even_bits[gl_SampleID & 31]
     ) % 16;
-    const int   dither_index = (dither_pos.y * 16 + dither_pos.x + gl_SampleID) & 255;
-    const float dither_value = bayer_matrix[dither_index];
+    int   dither_index = (dither_pos.y * 16 + dither_pos.x + gl_SampleID) & 255;
+    float dither_value = bayer_matrix[dither_index];
 
     Material material = material.materials[v_material_index];
     float opacity = material.opacity;
