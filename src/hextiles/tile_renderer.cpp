@@ -78,10 +78,10 @@ auto Tile_renderer::make_program(erhe::graphics::Shader_stages_prototype&& proto
     if (!prototype.is_valid()) {
         log_startup->error("current directory is {}", std::filesystem::current_path().string());
         log_startup->error("Compiling shader program {} failed", prototype.name());
-        return erhe::graphics::Shader_stages{prototype.name()};
+        return erhe::graphics::Shader_stages{m_graphics_instance, prototype.name()};
     }
 
-    return erhe::graphics::Shader_stages{std::move(prototype)};
+    return erhe::graphics::Shader_stages{m_graphics_instance, std::move(prototype)};
 }
 
 Tile_renderer::Tile_renderer(
@@ -125,6 +125,7 @@ Tile_renderer::Tile_renderer(
         }
     }
     , m_nearest_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -156,7 +157,7 @@ Tile_renderer::Tile_renderer(
         gl::Buffer_target::uniform_buffer,
         m_projection_block.binding_point()
     }
-    , m_vertex_input{erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
+    , m_vertex_input{m_graphics_instance, erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
     , m_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "Map renderer",
@@ -321,7 +322,7 @@ void Tile_renderer::compose_tileset_texture()
         .debug_label     = "tiles"
     };
 
-    m_tileset_texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
+    m_tileset_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_instance, texture_create_info);
     m_tileset_texture->set_debug_label(texture_path.string());
     float clear_rgba[4] = { 1.0f, 0.0f, 1.0f, 1.0f};
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {

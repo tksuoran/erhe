@@ -53,6 +53,7 @@ Material_buffer::Material_buffer(erhe::graphics::Instance& graphics_instance, Ma
     , m_graphics_instance {graphics_instance}
     , m_material_interface{material_interface}
     , m_nearest_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -60,6 +61,7 @@ Material_buffer::Material_buffer(erhe::graphics::Instance& graphics_instance, Ma
         }
     }
     , m_linear_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,

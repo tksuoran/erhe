@@ -53,7 +53,7 @@ public:
     Texture& operator=(Texture&&) = delete;
     ~Texture() noexcept override;
 
-    explicit Texture(const Texture_create_info& create_info);
+    Texture(Instance& instance, const Texture_create_info& create_info);
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Material"};

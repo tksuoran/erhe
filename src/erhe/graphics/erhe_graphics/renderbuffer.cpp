@@ -17,12 +17,12 @@ Renderbuffer::Renderbuffer(
     const unsigned int        height
 )
     : m_instance       {instance}
+    , m_handle         {instance}
     , m_internal_format{internal_format}
     , m_sample_count   {0}
     , m_width          {width}
     , m_height         {height}
 {
-    static_cast<void>(instance);
     ERHE_VERIFY(gl_name() != 0);
     ERHE_VERIFY(m_width  > 0);
     ERHE_VERIFY(m_height > 0);
@@ -38,6 +38,7 @@ Renderbuffer::Renderbuffer(
     const unsigned int        height
 )
     : m_instance       {instance}
+    , m_handle         {instance}
     , m_internal_format{internal_format}
     , m_sample_count   {sample_count}
     , m_width          {width}

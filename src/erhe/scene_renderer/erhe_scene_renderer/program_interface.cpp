@@ -20,7 +20,8 @@ Program_interface::Program_interface(
     erhe::graphics::Instance&        graphics_instance,
     erhe::dataformat::Vertex_format& vertex_format
 )
-    : fragment_outputs{
+    : graphics_instance{graphics_instance}
+    , fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
             .type     = gl::Fragment_shader_output_type::float_vec4,
@@ -38,17 +39,15 @@ Program_interface::Program_interface(
 }
 
 auto Program_interface::make_prototype(
-    erhe::graphics::Instance&                   graphics_instance,
     const std::filesystem::path&                shader_path,
     erhe::graphics::Shader_stages_create_info&& in_create_info
 ) -> erhe::graphics::Shader_stages_prototype
 {
     erhe::graphics::Shader_stages_create_info create_info = std::move(in_create_info);
-    return make_prototype(graphics_instance, shader_path, create_info);
+    return make_prototype(shader_path, create_info);
 }
 
 auto Program_interface::make_prototype(
-    erhe::graphics::Instance&                  graphics_instance,
     const std::filesystem::path&               shader_path,
     erhe::graphics::Shader_stages_create_info& create_info
 ) -> erhe::graphics::Shader_stages_prototype
@@ -128,10 +127,10 @@ auto Program_interface::make_program(erhe::graphics::Shader_stages_prototype&& p
     if (!prototype.is_valid()) {
         log_program_interface->error("current directory is {}", std::filesystem::current_path().string());
         log_program_interface->error("Compiling shader program {} failed", prototype.name());
-        return erhe::graphics::Shader_stages{prototype.name()};
+        return erhe::graphics::Shader_stages{graphics_instance, prototype.name()};
     }
 
-    return erhe::graphics::Shader_stages{std::move(prototype)};
+    return erhe::graphics::Shader_stages{graphics_instance, std::move(prototype)};
 }
 
 } // namespace erhe::scene_renderer

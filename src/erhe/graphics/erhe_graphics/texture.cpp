@@ -327,9 +327,9 @@ auto Texture_create_info::make_view(Instance& instance, const std::shared_ptr<Te
     return create_info;
 }
 
-Texture::Texture(const Create_info& create_info)
+Texture::Texture(Instance& instance, const Create_info& create_info)
     : Item                    {create_info.debug_label}
-    , m_handle                {create_info.target, create_info.wrap_texture_name, create_info.view_source ? Gl_texture::texture_view : Gl_texture::not_texture_view}
+    , m_handle                {instance, create_info.target, create_info.wrap_texture_name, create_info.view_source ? Gl_texture::texture_view : Gl_texture::not_texture_view}
     , m_target                {create_info.target}
     , m_internal_format       {create_info.internal_format}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
@@ -361,7 +361,7 @@ Texture::Texture(const Create_info& create_info)
         set_debug_label(create_info.debug_label);
     }
 
-    Instance& instance = create_info.instance;
+    //// TODO Instance& instance = create_info.instance;
     m_sample_count = std::min(m_sample_count, instance.limits.max_samples);
     if (gl_helpers::has_color(m_internal_format) || gl_helpers::has_alpha(m_internal_format)) {
         m_sample_count = std::min(m_sample_count, instance.limits.max_color_texture_samples);

@@ -22,21 +22,21 @@ auto Reloadable_shader_stages::make_prototype(Instance& graphics_instance) -> Sh
     return prototype;
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(const std::string& non_functional_name)
+Reloadable_shader_stages::Reloadable_shader_stages(Instance& instance, const std::string& non_functional_name)
     : create_info  {}
-    , shader_stages{non_functional_name}
+    , shader_stages{instance, non_functional_name}
 {
 }
 
 Reloadable_shader_stages::Reloadable_shader_stages(Instance& graphics_instance, const Shader_stages_create_info& create_info)
     : create_info  {create_info}
-    , shader_stages{make_prototype(graphics_instance)}
+    , shader_stages{graphics_instance, make_prototype(graphics_instance)}
 {
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(Shader_stages_prototype&& prototype)
+Reloadable_shader_stages::Reloadable_shader_stages(Instance& instance, Shader_stages_prototype&& prototype)
     : create_info  {prototype.create_info()}
-    , shader_stages{std::move(prototype)}
+    , shader_stages{instance, std::move(prototype)}
 {
 }
 
@@ -85,14 +85,40 @@ auto Shader_stages::gl_name() const -> unsigned int
     return m_handle.gl_name();
 }
 
-Shader_stages::Shader_stages(const std::string& failed_name)
-    : m_name{failed_name}
+Shader_stages::Shader_stages(Instance& instance, const std::string& failed_name)
+    : m_instance{instance}
+    , m_handle  {instance}
+    , m_name    {failed_name}
 {
     std::string label = fmt::format("(P:{}) {} - compilation failed", gl_name(), failed_name);
     ERHE_VERIFY(!failed_name.empty());
 #if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
     gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
 #endif
+}
+
+Shader_stages::Shader_stages(Shader_stages&& from)
+    : m_instance             {from.m_instance                        }
+    , m_handle               {std::move(from.m_handle)               }
+    , m_name                 {std::move(from.m_name)                 }
+    , m_is_valid             {from.m_is_valid                        }
+    , m_attached_shaders     {std::move(from.m_attached_shaders)     }
+    , m_erhe_draw_id_location{from.m_erhe_draw_id_location           }
+    , m_gl_from_erhe_bindings{std::move(from.m_gl_from_erhe_bindings)}
+{
+}
+
+Shader_stages& Shader_stages::operator=(Shader_stages&& from)
+{
+    if (*this != from) {
+        m_handle                = std::move(from.m_handle)               ;
+        m_name                  = std::move(from.m_name)                 ;
+        m_is_valid              = from.m_is_valid                        ;
+        m_attached_shaders      = std::move(from.m_attached_shaders)     ;
+        m_erhe_draw_id_location = from.m_erhe_draw_id_location           ;
+        m_gl_from_erhe_bindings = std::move(from.m_gl_from_erhe_bindings);
+    }
+    return *this;
 }
 
 auto Shader_stages::erhe_draw_id_location() const -> int
@@ -105,7 +131,9 @@ auto Shader_stages::get_gl_from_erhe_bindings() const -> const std::vector<int>*
     return m_gl_from_erhe_bindings.empty() ? nullptr : &m_gl_from_erhe_bindings;
 }
 
-Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
+Shader_stages::Shader_stages(Instance& instance, Shader_stages_prototype&& prototype)
+    : m_instance{instance}
+    , m_handle  {instance}
 {
     reload(std::move(prototype));
 }
@@ -175,9 +203,13 @@ void Shader_stages_tracker::set_erhe_draw_id(int draw_id)
 
 auto Shader_stages_tracker::gl_binding_point(unsigned int erhe_binding_point) -> unsigned int
 {
-    return (m_gl_from_erhe_bindings != nullptr)
-        ? m_gl_from_erhe_bindings->at(erhe_binding_point)
-        : erhe_binding_point;
+    if (m_gl_from_erhe_bindings == nullptr) {
+        ERHE_FATAL("binding point");
+    }
+    if (m_gl_from_erhe_bindings->size() <= erhe_binding_point) {
+        ERHE_FATAL("binding point");
+    }
+    return m_gl_from_erhe_bindings->at(erhe_binding_point);
 }
 
 void Shader_stages_tracker::execute(const Shader_stages* state)
@@ -190,6 +222,9 @@ void Shader_stages_tracker::execute(const Shader_stages* state)
     m_last = name;
     m_erhe_draw_id_location = (state != nullptr) ? state->erhe_draw_id_location() : -1;
     m_gl_from_erhe_bindings = (state != nullptr) ? state->get_gl_from_erhe_bindings() : nullptr;
+
+    // NOTE: We would have to keep track of buffer bindings and
+    //       apply remapped buffer bindings every time program is switched..
 }
 
 } // namespace erhe::graphics

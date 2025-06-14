@@ -1,5 +1,6 @@
 #include "erhe_graphics/gl_objects.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_verify/verify.hpp"
@@ -24,43 +25,37 @@ namespace erhe::graphics {
 }
 
 
-Gl_texture::Gl_texture(gl::Texture_target target, bool for_texture_view)
+Gl_texture::Gl_texture(Instance& instance, gl::Texture_target target, bool for_texture_view)
 {
-#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
-    if (!for_texture_view) {
+    if (instance.info.use_direct_state_access && !for_texture_view) {
         gl::create_textures(target, 1, &m_gl_name);
-    } else
-#else
-    static_cast<void>(for_texture_view);
-#endif
-    {
+    } else {
         gl::gen_textures(1, &m_gl_name);
-        int current_texture_binding = 0;
-        gl::get_integer_v(get_p_name_from_texture_target(target), &current_texture_binding);
-        gl::bind_texture(target, m_gl_name);
-        gl::bind_texture(target, current_texture_binding);
-    }
-    ERHE_VERIFY(m_gl_name != 0);
-}
-
-Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name, bool for_texture_view)
-    : m_gl_name{wrap_name}
-    , m_owned  {wrap_name == 0}
-{
-    if (m_owned) {
-#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
         if (!for_texture_view) {
-            gl::create_textures(target, 1, &m_gl_name);
-        } else
-#else
-        static_cast<void>(for_texture_view);
-#endif
-        {
-            gl::gen_textures(1, &m_gl_name);
             int current_texture_binding = 0;
             gl::get_integer_v(get_p_name_from_texture_target(target), &current_texture_binding);
             gl::bind_texture(target, m_gl_name);
             gl::bind_texture(target, current_texture_binding);
+        }
+    }
+    ERHE_VERIFY(m_gl_name != 0);
+}
+
+Gl_texture::Gl_texture(Instance& instance, gl::Texture_target target, GLuint wrap_name, bool for_texture_view)
+    : m_gl_name{wrap_name}
+    , m_owned  {wrap_name == 0}
+{
+    if (m_owned) {
+        if (instance.info.use_direct_state_access && !for_texture_view) {
+            gl::create_textures(target, 1, &m_gl_name);
+        } else {
+            gl::gen_textures(1, &m_gl_name);
+            if (!for_texture_view) {
+                int current_texture_binding = 0;
+                gl::get_integer_v(get_p_name_from_texture_target(target), &current_texture_binding);
+                gl::bind_texture(target, m_gl_name);
+                gl::bind_texture(target, current_texture_binding);
+            }
         }
     }
     ERHE_VERIFY((wrap_name == 0) || (m_gl_name != 0));
@@ -95,7 +90,7 @@ auto Gl_texture::gl_name() const -> GLuint
 }
 
 
-Gl_program::Gl_program()
+Gl_program::Gl_program(Instance&)
 {
     m_gl_name = gl::create_program();
     ERHE_VERIFY(m_gl_name != 0);
@@ -127,7 +122,7 @@ auto Gl_program::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_shader::Gl_shader(gl::Shader_type shader_type)
+Gl_shader::Gl_shader(Instance&, gl::Shader_type shader_type)
 {
     m_gl_name = gl::create_shader(shader_type);
     ERHE_VERIFY(m_gl_name != 0);
@@ -159,13 +154,13 @@ auto Gl_shader::gl_name() const -> unsigned int
     return m_gl_name;
 }
 
-Gl_sampler::Gl_sampler()
+Gl_sampler::Gl_sampler(Instance& instance)
 {
-#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
-    gl::create_samplers(1, &m_gl_name);
-#else
-    gl::gen_samplers(1, &m_gl_name);
-#endif
+    if (instance.info.use_direct_state_access) {
+        gl::create_samplers(1, &m_gl_name);
+    } else {
+        gl::gen_samplers(1, &m_gl_name);
+    }
     ERHE_VERIFY(m_gl_name != 0);
 }
 
@@ -195,18 +190,18 @@ auto Gl_sampler::gl_name() const -> unsigned int
     return m_gl_name;
 }
 
-Gl_framebuffer::Gl_framebuffer()
+Gl_framebuffer::Gl_framebuffer(Instance& instance)
 {
-#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
-    gl::create_framebuffers(1, &m_gl_name);
-#else
-    // DSA Emulation
-    gl::gen_framebuffers(1, &m_gl_name);
-    int current_read_framebuffer = 0;
-    gl::get_integer_v(gl::Get_p_name::read_framebuffer_binding, &current_read_framebuffer);
-    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_gl_name);
-    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, current_read_framebuffer);
-#endif
+    if (instance.info.use_direct_state_access) {
+        gl::create_framebuffers(1, &m_gl_name);
+    } else {
+        // DSA Emulation
+        gl::gen_framebuffers(1, &m_gl_name);
+        int current_read_framebuffer = 0;
+        gl::get_integer_v(gl::Get_p_name::read_framebuffer_binding, &current_read_framebuffer);
+        gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_gl_name);
+        gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, current_read_framebuffer);
+    }
     ERHE_VERIFY(m_gl_name != 0);
 }
 
@@ -236,14 +231,14 @@ auto Gl_framebuffer::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_renderbuffer::Gl_renderbuffer()
+Gl_renderbuffer::Gl_renderbuffer(Instance& instance)
 {
-#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
-    gl::create_renderbuffers(1, &m_gl_name);
-#else
-    // DSA emulation
-    gl::gen_renderbuffers(1, &m_gl_name);
-#endif
+    if (instance.info.use_direct_state_access) {
+        gl::create_renderbuffers(1, &m_gl_name);
+    } else {
+        // DSA emulation
+        gl::gen_renderbuffers(1, &m_gl_name);
+    }
     ERHE_VERIFY(m_gl_name != 0);
 }
 
@@ -273,17 +268,17 @@ auto Gl_renderbuffer::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_buffer::Gl_buffer()
+Gl_buffer::Gl_buffer(Instance& instance)
 {
-#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
-    gl::create_buffers(1, &m_gl_name);
-#else
-    gl::gen_buffers(1, &m_gl_name);
-    int current_buffer = 0;
-    gl::get_integer_v(gl::Get_p_name::uniform_buffer_binding, &current_buffer);
-    gl::bind_buffer(gl::Buffer_target::copy_read_buffer, m_gl_name);
-    gl::bind_buffer(gl::Buffer_target::copy_read_buffer, current_buffer);
-#endif
+    if (instance.info.use_direct_state_access) {
+        gl::create_buffers(1, &m_gl_name);
+    } else {
+        gl::gen_buffers(1, &m_gl_name);
+        int current_buffer = 0;
+        gl::get_integer_v(gl::Get_p_name::uniform_buffer_binding, &current_buffer);
+        gl::bind_buffer(gl::Buffer_target::copy_read_buffer, m_gl_name);
+        gl::bind_buffer(gl::Buffer_target::copy_read_buffer, current_buffer);
+    }
     ERHE_VERIFY(m_gl_name != 0);
 }
 
@@ -314,13 +309,14 @@ auto Gl_buffer::gl_name() const -> GLuint
 }
 
 
-Gl_transform_feedback::Gl_transform_feedback()
+Gl_transform_feedback::Gl_transform_feedback(Instance& instance)
 {
-#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
-    gl::create_transform_feedbacks(1, &m_gl_name);
-#else
-    // TODO
-#endif
+    if (instance.info.use_direct_state_access) {
+        gl::create_transform_feedbacks(1, &m_gl_name);
+    } else {
+        // TODO
+        ERHE_FATAL("TODO");
+    }
     ERHE_VERIFY(m_gl_name != 0);
 }
 
@@ -351,14 +347,14 @@ auto Gl_transform_feedback::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_query::Gl_query(gl::Query_target target)
+Gl_query::Gl_query(Instance& instance, gl::Query_target target)
 {
-#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
-    gl::create_queries(target, 1, &m_gl_name);
-#else
-    gl::gen_queries(1, &m_gl_name);
-    static_cast<void>(target);
-#endif
+    if (instance.info.use_direct_state_access) {
+        gl::create_queries(target, 1, &m_gl_name);
+    } else {
+        gl::gen_queries(1, &m_gl_name);
+        static_cast<void>(target);
+    }
     ERHE_VERIFY(m_gl_name != 0);
 }
 
@@ -388,17 +384,17 @@ auto Gl_query::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_vertex_array::Gl_vertex_array()
+Gl_vertex_array::Gl_vertex_array(Instance& instance)
 {
-#if defined(ERHE_USE_OPENGL_DIRECT_STATE_ACCESS)
-    gl::create_vertex_arrays(1, &m_gl_name);
-#else
-    int current_vao = 0;
-    gl::gen_vertex_arrays(1, &m_gl_name);
-    gl::get_integer_v(gl::Get_p_name::vertex_array_binding, &current_vao);
-    gl::bind_vertex_array(m_gl_name);
-    gl::bind_vertex_array(current_vao);
-#endif
+    if (instance.info.use_direct_state_access) {
+        gl::create_vertex_arrays(1, &m_gl_name);
+    } else {
+        int current_vao = 0;
+        gl::gen_vertex_arrays(1, &m_gl_name);
+        gl::get_integer_v(gl::Get_p_name::vertex_array_binding, &current_vao);
+        gl::bind_vertex_array(m_gl_name);
+        gl::bind_vertex_array(current_vao);
+    }
     ERHE_VERIFY(m_gl_name != 0);
 }
 

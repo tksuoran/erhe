@@ -242,6 +242,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
     : m_graphics_instance{graphics_instance}
     , m_imgui_program_interface{graphics_instance}
     , m_shader_stages{
+        graphics_instance,
         erhe::graphics::Shader_stages_prototype{
             graphics_instance,
             erhe::graphics::Shader_stages_create_info{
@@ -274,7 +275,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
         "ImGui Draw Indirect Buffer",
         gl::Buffer_target::draw_indirect_buffer
     }
-    , m_vertex_input{erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
+    , m_vertex_input{graphics_instance, erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
     , m_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "ImGui Renderer",
@@ -287,22 +288,31 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
         }
     }
     , m_dummy_texture{graphics_instance.create_dummy_texture()}
-    , m_nearest_sampler{{
-        .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
-        .mag_filter  = gl::Texture_mag_filter::nearest,
-        .debug_label = "Imgui_renderer nearest"
-    }}
-    , m_linear_sampler{{
-        .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
-        .mag_filter  = gl::Texture_mag_filter::linear,
-        .debug_label = "Imgui_renderer linear"
-    }}
-    , m_linear_mipmap_linear_sampler{{
-        .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
-        .mag_filter  = gl::Texture_mag_filter::linear,
-        .debug_label = "Imgui_renderer linear mipmap"
-    }}
-    , m_gpu_timer{"Imgui_renderer"}
+    , m_nearest_sampler{
+        graphics_instance,
+        {
+            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .debug_label = "Imgui_renderer nearest"
+        }
+    }
+    , m_linear_sampler{
+        graphics_instance,
+        {
+            .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
+            .mag_filter  = gl::Texture_mag_filter::linear,
+            .debug_label = "Imgui_renderer linear"
+        }
+    }
+    , m_linear_mipmap_linear_sampler{
+        graphics_instance,
+        {
+            .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
+            .mag_filter  = gl::Texture_mag_filter::linear,
+            .debug_label = "Imgui_renderer linear mipmap"
+        }
+    }
+    , m_gpu_timer{graphics_instance, "Imgui_renderer"}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -406,6 +416,7 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
 
     // Create textures
     m_font_texture = std::make_shared<erhe::graphics::Texture>(
+        m_graphics_instance,
         make_font_texture_create_info(m_graphics_instance, m_font_atlas)
     );
 
@@ -420,10 +431,7 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
     }
 
     const auto pixel_data = get_font_atlas_pixel_data(m_font_atlas);
-    const std::span<const std::uint8_t> image_data{
-        pixel_data.data(),
-        pixel_data.size()
-    };
+    const std::span<const std::uint8_t> image_data{pixel_data.data(), pixel_data.size()};
     m_font_texture->upload(gl::Internal_format::rgba8, image_data, m_font_texture->width(), m_font_texture->height());
     m_font_texture->set_debug_label("ImGui Font");
 

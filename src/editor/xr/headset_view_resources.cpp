@@ -41,6 +41,7 @@ Headset_view_resources::Headset_view_resources(
     m_height = static_cast<int>(render_view.height);
 
     m_color_texture = std::make_shared<Texture>(
+        graphics_instance,
         Texture::Create_info{
             .instance          = graphics_instance,
             .target            = gl::Texture_target::texture_2d,
@@ -53,6 +54,7 @@ Headset_view_resources::Headset_view_resources(
     m_color_texture->set_debug_label(fmt::format("XR color {}", slot));
 
     m_depth_stencil_texture = std::make_shared<Texture>(
+        graphics_instance,
         Texture::Create_info{
             .instance          = graphics_instance,
             .target            = gl::Texture_target::texture_2d,
@@ -64,7 +66,7 @@ Headset_view_resources::Headset_view_resources(
     );
     m_depth_stencil_texture->set_debug_label(fmt::format("XR depth stencil {}", slot));
 
-    Framebuffer::Create_info create_info;
+    Framebuffer::Create_info create_info{};
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
     if (gl_helpers::has_depth(render_view.depth_stencil_format)) {
         create_info.attach(gl::Framebuffer_attachment::depth_attachment, m_depth_stencil_texture.get());
@@ -72,7 +74,7 @@ Headset_view_resources::Headset_view_resources(
     if (gl_helpers::has_stencil(render_view.depth_stencil_format)) {
         create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_texture.get());
     }
-    m_framebuffer = std::make_shared<Framebuffer>(create_info);
+    m_framebuffer = std::make_shared<Framebuffer>(graphics_instance, create_info);
     m_framebuffer->set_debug_label(fmt::format("XR {}", slot));
 
     if (!m_framebuffer->check_status()) {

@@ -60,6 +60,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Instance& graphics_instance
 
         if (light_count > 0) {
             m_texture = std::make_shared<Texture>(
+                graphics_instance,
                 erhe::graphics::Texture_create_info {
                     .instance        = graphics_instance,
                     .target          = gl::Texture_target::texture_2d_array,
@@ -90,7 +91,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Instance& graphics_instance
 
         Framebuffer::Create_info create_info;
         create_info.attach(gl::Framebuffer_attachment::depth_attachment, m_texture.get(), 0, static_cast<unsigned int>(i));
-        auto framebuffer = std::make_unique<Framebuffer>(create_info);
+        auto framebuffer = std::make_unique<Framebuffer>(graphics_instance, create_info);
         framebuffer->set_debug_label(fmt::format("Shadow {}", i));
         m_framebuffers.emplace_back(std::move(framebuffer));
     }

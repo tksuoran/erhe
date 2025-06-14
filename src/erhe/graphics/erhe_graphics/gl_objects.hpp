@@ -6,18 +6,20 @@ typedef unsigned int GLuint;
 
 namespace erhe::graphics {
 
+class Instance;
+
 class Gl_texture final
 {
 public:
     static constexpr bool not_texture_view = false;
     static constexpr bool texture_view     = true;
-    explicit Gl_texture(gl::Texture_target target, bool for_texture_view = not_texture_view);
-    Gl_texture         (gl::Texture_target target, GLuint wrap_name, bool for_texture_view = not_texture_view);
-    ~Gl_texture        () noexcept;
-    Gl_texture         (const Gl_texture&) = delete;
-    void operator=     (const Gl_texture&) = delete;
-    Gl_texture         (Gl_texture&& old) noexcept;
-    auto operator=     (Gl_texture&& old) noexcept -> Gl_texture&;
+    Gl_texture    (Instance& instance, gl::Texture_target target, bool for_texture_view = not_texture_view);
+    Gl_texture    (Instance& instance, gl::Texture_target target, GLuint wrap_name, bool for_texture_view = not_texture_view);
+    ~Gl_texture   () noexcept;
+    Gl_texture    (const Gl_texture&) = delete;
+    void operator=(const Gl_texture&) = delete;
+    Gl_texture    (Gl_texture&& old) noexcept;
+    auto operator=(Gl_texture&& old) noexcept -> Gl_texture&;
 
     [[nodiscard]] auto gl_name() const -> GLuint;
 
@@ -29,7 +31,7 @@ private:
 class Gl_program final
 {
 public:
-    Gl_program    ();
+    Gl_program    (Instance& instance);
     ~Gl_program   () noexcept;
     Gl_program    (const Gl_program&) = delete;
     void operator=(const Gl_program&) = delete;
@@ -45,12 +47,12 @@ private:
 class Gl_shader final
 {
 public:
-    explicit Gl_shader(gl::Shader_type shader_type);
-    ~Gl_shader        () noexcept;
-    Gl_shader         (const Gl_shader&) = delete;
-    void operator=    (const Gl_shader&) = delete;
-    Gl_shader         (Gl_shader&& other) noexcept;
-    auto operator=    (Gl_shader&& other) noexcept -> Gl_shader&;
+    Gl_shader     (Instance& instance, gl::Shader_type shader_type);
+    ~Gl_shader    () noexcept;
+    Gl_shader     (const Gl_shader&) = delete;
+    void operator=(const Gl_shader&) = delete;
+    Gl_shader     (Gl_shader&& other) noexcept;
+    auto operator=(Gl_shader&& other) noexcept -> Gl_shader&;
 
     [[nodiscard]] auto gl_name() const -> unsigned int;
 
@@ -61,7 +63,7 @@ private:
 class Gl_sampler final
 {
 public:
-    Gl_sampler    ();
+    Gl_sampler    (Instance& instance);
     ~Gl_sampler   () noexcept;
     Gl_sampler    (const Gl_sampler&) = delete;
     void operator=(const Gl_sampler&) = delete;
@@ -77,7 +79,7 @@ private:
 class Gl_framebuffer final
 {
 public:
-    Gl_framebuffer ();
+    Gl_framebuffer (Instance& instance);
     ~Gl_framebuffer() noexcept;
     Gl_framebuffer (const Gl_framebuffer&) = delete;
     void operator= (const Gl_framebuffer&) = delete;
@@ -93,7 +95,7 @@ private:
 class Gl_renderbuffer final
 {
 public:
-    Gl_renderbuffer ();
+    Gl_renderbuffer (Instance& instance);
     ~Gl_renderbuffer() noexcept;
     Gl_renderbuffer (const Gl_renderbuffer&) = delete;
     void operator=  (const Gl_renderbuffer&) = delete;
@@ -109,7 +111,7 @@ private:
 class Gl_buffer final
 {
 public:
-    Gl_buffer     ();
+    Gl_buffer     (Instance& instance);
     ~Gl_buffer    () noexcept;
     Gl_buffer     (const Gl_buffer&) = delete;
     void operator=(const Gl_buffer&) = delete;
@@ -125,7 +127,7 @@ private:
 class Gl_transform_feedback final
 {
 public:
-    Gl_transform_feedback ();
+    Gl_transform_feedback (Instance& instance);
     ~Gl_transform_feedback() noexcept;
     Gl_transform_feedback (const Gl_transform_feedback&) = delete;
     void operator=        (const Gl_transform_feedback&) = delete;
@@ -141,12 +143,12 @@ private:
 class Gl_query final
 {
 public:
-    explicit Gl_query(gl::Query_target target);
-    ~Gl_query        () noexcept;
-    Gl_query         (const Gl_query&) = delete;
-    void operator=   (const Gl_query&) = delete;
-    Gl_query         (Gl_query&& other) noexcept;
-    auto operator=   (Gl_query&& other) noexcept -> Gl_query&;
+    Gl_query      (Instance& instance, gl::Query_target target);
+    ~Gl_query     () noexcept;
+    Gl_query      (const Gl_query&) = delete;
+    void operator=(const Gl_query&) = delete;
+    Gl_query      (Gl_query&& other) noexcept;
+    auto operator=(Gl_query&& other) noexcept -> Gl_query&;
 
     [[nodiscard]] auto gl_name() const -> GLuint;
 
@@ -157,7 +159,7 @@ private:
 class Gl_vertex_array final
 {
 public:
-    Gl_vertex_array ();
+    Gl_vertex_array (Instance& instance);
     ~Gl_vertex_array() noexcept;
     Gl_vertex_array (const Gl_vertex_array&) = delete;
     void operator=  (const Gl_vertex_array&) = delete;
@@ -169,7 +171,5 @@ public:
 private:
     GLuint m_gl_name{0};
 };
-
-void check_gl_errors();
 
 } // namespace erhe::graphics

@@ -15,6 +15,7 @@ namespace editor {
 
 Thumbnails::Thumbnails(erhe::graphics::Instance& graphics_instance, const unsigned int capacity, const unsigned int size_pixels)
     : m_color_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -30,6 +31,7 @@ Thumbnails::Thumbnails(erhe::graphics::Instance& graphics_instance, const unsign
     const int viewport_size = static_cast<int>(m_capacity_root * m_size_pixels);
 
     m_color_texture = std::make_shared<erhe::graphics::Texture>(
+        graphics_instance,
         erhe::graphics::Texture_create_info{
             .instance        = graphics_instance,
             .target          = gl::Texture_target::texture_2d,
@@ -52,7 +54,7 @@ Thumbnails::Thumbnails(erhe::graphics::Instance& graphics_instance, const unsign
     erhe::graphics::Framebuffer::Create_info framebuffer_create_info;
     framebuffer_create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
     framebuffer_create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_renderbuffer.get());
-    m_framebuffer = std::make_unique<erhe::graphics::Framebuffer>(framebuffer_create_info);
+    m_framebuffer = std::make_unique<erhe::graphics::Framebuffer>(graphics_instance, framebuffer_create_info);
     m_framebuffer->set_debug_label("Thumbnail framebuffer");
 
     m_color_texture_handle = graphics_instance.get_handle(*m_color_texture.get(), m_color_sampler);

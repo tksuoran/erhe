@@ -62,8 +62,8 @@ public:
 class Vertex_input_state
 {
 public:
-    Vertex_input_state();
-    explicit Vertex_input_state(Vertex_input_state_data&& create_info);
+    Vertex_input_state(Instance& instance);
+    Vertex_input_state(Instance& instance, Vertex_input_state_data&& create_info);
     ~Vertex_input_state() noexcept;
 
     void set    (const Vertex_input_state_data& data);
@@ -78,6 +78,7 @@ public:
     static void on_thread_exit();
 
 private:
+    Instance&                      m_instance;
     std::optional<Gl_vertex_array> m_gl_vertex_array;
     std::thread::id                m_owner_thread;
     Vertex_input_state_data        m_data;

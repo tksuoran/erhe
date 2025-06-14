@@ -36,8 +36,8 @@ static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow
 Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
     : m_graphics_instance{graphics_instance}
     , m_shader_stages{
+        graphics_instance,
         program_interface.make_prototype(
-            graphics_instance,
             "res/shaders",
             erhe::graphics::Shader_stages_create_info{
                 .name           = "depth_only",
@@ -47,6 +47,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
         )
     }
     , m_shadow_sampler_compare{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::linear,
@@ -60,6 +61,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
         }
     }
     , m_shadow_sampler_no_compare{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::nearest,
@@ -71,12 +73,13 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
             .debug_label  = "Shadow_renderer::m_shadow_sampler_no_compare"
         }
     }
+    , m_vertex_input        {graphics_instance}
     , m_draw_indirect_buffer{graphics_instance}
     , m_joint_buffer        {graphics_instance, program_interface.joint_interface}
     , m_light_buffer        {graphics_instance, program_interface.light_interface}
     , m_primitive_buffer    {graphics_instance, program_interface.primitive_interface}
     , m_material_buffer     {graphics_instance, program_interface.material_interface}
-    , m_gpu_timer           {"Shadow_renderer"}
+    , m_gpu_timer           {graphics_instance, "Shadow_renderer"}
 {
     m_pipeline_cache_entries.resize(8);
 }

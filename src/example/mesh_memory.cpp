@@ -77,7 +77,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance)
         .vertex_format = vertex_format,
         .buffer_sink   = graphics_buffer_sink
     }
-    , vertex_input{erhe::graphics::Vertex_input_state_data::make(vertex_format)}
+    , vertex_input{graphics_instance, erhe::graphics::Vertex_input_state_data::make(vertex_format)}
 {
 }
 

@@ -74,16 +74,17 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
         }
     }
     , m_nearest_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Text_renderer::m_nearest_sampler"
         }
     }    
-    , m_shader_stages{build_shader_stages()} 
+    , m_shader_stages{graphics_instance, build_shader_stages()} 
     , m_vertex_ssbo_buffer{graphics_instance, "Text_renderer::m_vertex_buffer", gl::Buffer_target::shader_storage_buffer, m_vertex_ssbo_block.binding_point()}
     , m_projection_buffer{graphics_instance, "Text_renderer::m_projection_buffer", gl::Buffer_target::uniform_buffer, m_projection_block.binding_point()}
-    , m_vertex_input{{}}
+    , m_vertex_input{graphics_instance, {}}
     , m_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "Text renderer",

@@ -100,7 +100,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
 
             erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
             if (prototype.is_valid()) {
-                compute_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
+                compute_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(graphics_instance, std::move(prototype));
                 graphics_instance.shader_monitor.add(create_info, compute_shader_stages.get());
             } else {
                 const auto current_path = std::filesystem::current_path();
@@ -127,7 +127,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
 
             erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
             if (prototype.is_valid()) {
-                graphics_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
+                graphics_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(graphics_instance, std::move(prototype));
                 graphics_instance.shader_monitor.add(create_info, graphics_shader_stages.get());
             } else {
                 const auto current_path = std::filesystem::current_path();
@@ -147,6 +147,7 @@ Debug_renderer::Debug_renderer(erhe::graphics::Instance& graphics_instance)
         m_program_interface.view_block->binding_point()
     }
     , m_vertex_input{
+        graphics_instance,
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)
     }
 {

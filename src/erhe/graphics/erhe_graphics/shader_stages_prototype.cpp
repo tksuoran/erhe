@@ -328,7 +328,7 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
 {
     ERHE_PROFILE_FUNCTION();
 
-    Gl_shader gl_shader{shader.type};
+    Gl_shader gl_shader{m_graphics_instance, shader.type};
 
     if (m_state == state_fail) {
         return gl_shader;
@@ -409,6 +409,7 @@ auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader
 
 Shader_stages_prototype::Shader_stages_prototype(Instance& graphics_instance, Shader_stages_create_info&& create_info)
     : m_graphics_instance    {graphics_instance}
+    , m_handle               {graphics_instance}
     , m_create_info          {create_info}
     , m_default_uniform_block{graphics_instance}
 {
@@ -419,9 +420,9 @@ Shader_stages_prototype::Shader_stages_prototype(Instance& graphics_instance, Sh
         post_link();
     }
 }
-Shader_stages_prototype::Shader_stages_prototype(Instance& graphics_instance, const Shader_stages_create_info& create_info
-)
+Shader_stages_prototype::Shader_stages_prototype(Instance& graphics_instance, const Shader_stages_create_info& create_info)
     : m_graphics_instance    {graphics_instance}
+    , m_handle               {graphics_instance}
     , m_create_info          {create_info}
     , m_default_uniform_block{graphics_instance}
 {

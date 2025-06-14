@@ -463,7 +463,7 @@ void Font::post_process()
         .debug_label     = "Font"
     };
 
-    m_texture = std::make_unique<Texture>(create_info);
+    m_texture = std::make_unique<Texture>(m_graphics_instance, create_info);
     m_texture->upload(create_info.internal_format, bm.as_span(), create_info.width, create_info.height);
     m_texture->set_debug_label(m_path.filename().generic_string());
 }

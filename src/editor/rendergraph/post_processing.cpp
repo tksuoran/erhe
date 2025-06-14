@@ -86,6 +86,7 @@ auto Post_processing_node::update_size() -> bool
 
     // Create textures
     downsample_texture = std::make_shared<erhe::graphics::Texture>(
+        m_graphics_instance,
         erhe::graphics::Texture::Create_info{
             .instance        = m_graphics_instance,
             .target          = gl::Texture_target::texture_2d,
@@ -98,6 +99,7 @@ auto Post_processing_node::update_size() -> bool
         }
     );
     upsample_texture = std::make_shared<erhe::graphics::Texture>(
+        m_graphics_instance,
         erhe::graphics::Texture::Create_info{
             .instance        = m_graphics_instance,
             .target          = gl::Texture_target::texture_2d,
@@ -127,7 +129,7 @@ auto Post_processing_node::update_size() -> bool
         {
             erhe::graphics::Framebuffer::Create_info create_info{};
             create_info.attach(gl::Framebuffer_attachment::color_attachment0, downsample_texture.get(), level, 0);
-            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(create_info);
+            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(m_graphics_instance, create_info);
             framebuffer->set_debug_label(fmt::format("{} downsample level {}", get_name(), level));
             downsample_framebuffers.push_back(framebuffer);
 
@@ -138,12 +140,12 @@ auto Post_processing_node::update_size() -> bool
             texture_create_info.width          = level_width;
             texture_create_info.height         = level_height;
             texture_create_info.debug_label    = fmt::format("Downsample level {}", level);
-            downsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(texture_create_info));
+            downsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_instance, texture_create_info));
         }
         {
             erhe::graphics::Framebuffer::Create_info create_info{};
             create_info.attach(gl::Framebuffer_attachment::color_attachment0, upsample_texture.get(), level, 0);
-            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(create_info);
+            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(m_graphics_instance, create_info);
             framebuffer->set_debug_label(fmt::format("{} upsample level {}", get_name(), level));
             upsample_framebuffers.push_back(framebuffer);
 
@@ -154,7 +156,7 @@ auto Post_processing_node::update_size() -> bool
             texture_create_info.width          = level_width;
             texture_create_info.height         = level_height;
             texture_create_info.debug_label    = fmt::format("Upsample level {}", level);
-            upsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(texture_create_info));
+            upsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_instance, texture_create_info));
         }
         if ((level_width == 1) && (level_height == 1)) {
             break;
@@ -334,6 +336,7 @@ Post_processing::Post_processing(erhe::graphics::Instance& graphics_instance, Ed
     , m_fragment_outputs  {erhe::graphics::Fragment_output{.name = "out_color", .type = gl::Fragment_shader_output_type::float_vec4, .location = 0}}
     , m_dummy_texture     {graphics_instance.create_dummy_texture()}
     , m_linear_mipmap_nearest_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
@@ -342,7 +345,7 @@ Post_processing::Post_processing(erhe::graphics::Instance& graphics_instance, Ed
     }
     , m_parameter_block   {graphics_instance, "post_processing", 0, erhe::graphics::Shader_resource::Type::uniform_block}
     , m_offsets           {m_parameter_block}
-    , m_empty_vertex_input{}
+    , m_empty_vertex_input{graphics_instance}
 
     , m_default_uniform_block{graphics_instance}
     , m_downsample_texture_resource{
@@ -396,7 +399,7 @@ Post_processing::Post_processing(erhe::graphics::Instance& graphics_instance, Ed
             }
         }
     }
-    , m_gpu_timer{"Post_processing"}
+    , m_gpu_timer{graphics_instance, "Post_processing"}
 {
     graphics_instance.shader_monitor.add(m_shader_stages.downsample_with_lowpass);
     graphics_instance.shader_monitor.add(m_shader_stages.downsample             );

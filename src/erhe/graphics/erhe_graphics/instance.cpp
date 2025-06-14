@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/instance.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/draw_indirect.hpp"
@@ -456,121 +457,131 @@ Instance::Instance(erhe::window::Context_window& context_window)
         ini.get("capture_support", capture_support);
     }
 
+    // TODO more formats
     gl::Internal_format formats[] = {
         gl::Internal_format::r8,
+        gl::Internal_format::rg8,
         gl::Internal_format::rgba8,
         gl::Internal_format::srgb8_alpha8,
+        gl::Internal_format::r11f_g11f_b10f,
+        gl::Internal_format::r16_snorm,
+        gl::Internal_format::r16f,
+        gl::Internal_format::rg16f,
         gl::Internal_format::rgba16f,
+        gl::Internal_format::r32f,
         gl::Internal_format::rg32f,
         gl::Internal_format::rgba32f,
-        gl::Internal_format::depth_component,
-        gl::Internal_format::depth_component32f,
-        gl::Internal_format::depth24_stencil8,
         gl::Internal_format::depth32f_stencil8,
+        gl::Internal_format::depth24_stencil8,
         gl::Internal_format::depth_stencil,
-        gl::Internal_format::stencil_index8
+        gl::Internal_format::stencil_index8,
+        gl::Internal_format::depth_component32f,
+        gl::Internal_format::depth_component,
+        gl::Internal_format::depth_component16
     };
 
+    log_startup->info("Format properties:");
     for (const gl::Internal_format format : formats) {
+        Format_properties properties{};
+
         GLint supported{};
         gl::get_internalformat_iv(gl::Texture_target::texture_2d, format, gl::Internal_format_p_name::internalformat_supported, 1, &supported);
-        if (supported == GL_FALSE) {
+        properties.supported = (supported == GL_TRUE);
+        if (!properties.supported) {
             continue;
         }
 
-        GLint num_virtual_page_sizes{};
-        gl::get_internalformat_iv(
-            gl::Texture_target::texture_2d,
-            format,
-            gl::Internal_format_p_name::num_virtual_page_sizes_arb,
-            1,
-            &num_virtual_page_sizes
-        );
+        log_startup->info("    {}", gl::c_str(format));
 
-        if (num_virtual_page_sizes == 0) {
-            continue;
+        auto get_int = [format](gl::Internal_format_p_name p_name, gl::Texture_target target = gl::Texture_target::texture_2d) -> int
+        {
+            GLint value{0};
+            gl::get_internalformat_iv(target, format, p_name, 1, &value);
+            return value;
+        };
+        auto get_bool = [format](gl::Internal_format_p_name p_name, gl::Texture_target target = gl::Texture_target::texture_2d) -> bool
+        {
+            GLint value{0};
+            gl::get_internalformat_iv(target, format, p_name, 1, &value);
+            return (value == GL_TRUE);
+        };
+
+        properties.red_size           = get_int(gl::Internal_format_p_name::internalformat_red_size);
+        properties.green_size         = get_int(gl::Internal_format_p_name::internalformat_green_size);
+        properties.blue_size          = get_int(gl::Internal_format_p_name::internalformat_blue_size);
+        properties.alpha_size         = get_int(gl::Internal_format_p_name::internalformat_alpha_size);
+        properties.depth_size         = get_int(gl::Internal_format_p_name::internalformat_depth_size);
+        properties.stencil_size       = get_int(gl::Internal_format_p_name::internalformat_stencil_size);
+        properties.image_texel_size   = get_int(gl::Internal_format_p_name::image_texel_size);
+        properties.color_renderable   = get_bool(gl::Internal_format_p_name::color_renderable);
+        properties.depth_renderable   = get_bool(gl::Internal_format_p_name::depth_renderable);
+        properties.stencil_renderable = get_bool(gl::Internal_format_p_name::stencil_renderable);
+        properties.filter             = get_bool(gl::Internal_format_p_name::filter);
+        properties.framebuffer_blend  = get_bool(gl::Internal_format_p_name::framebuffer_blend);
+
+        int num_virtual_page_sizes = get_int(gl::Internal_format_p_name::num_virtual_page_sizes_arb);
+        if (num_virtual_page_sizes > 0) {
+            properties.sparse_tile_x_sizes.resize(num_virtual_page_sizes);
+            properties.sparse_tile_y_sizes.resize(num_virtual_page_sizes);
+            properties.sparse_tile_z_sizes.resize(num_virtual_page_sizes);
+            gl::get_internalformat_i_64v(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::virtual_page_size_x_arb,
+                static_cast<GLsizei>(num_virtual_page_sizes),
+                properties.sparse_tile_x_sizes.data()
+            );
+            gl::get_internalformat_i_64v(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::virtual_page_size_y_arb,
+                static_cast<GLsizei>(num_virtual_page_sizes),
+                properties.sparse_tile_y_sizes.data()
+            );
+            gl::get_internalformat_i_64v(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::virtual_page_size_z_arb,
+                static_cast<GLsizei>(num_virtual_page_sizes),
+                properties.sparse_tile_z_sizes.data()
+            );
+            std::stringstream ss;
+            for (GLint i = 0; i < num_virtual_page_sizes; ++i) {
+                ss << fmt::format(
+                    " {} x {} x {}",
+                    properties.sparse_tile_x_sizes[i],
+                    properties.sparse_tile_y_sizes[i],
+                    properties.sparse_tile_z_sizes[i]
+                );
+            }
+            log_startup->info("    {} : num page sizes {} :{}", gl::c_str(format), num_virtual_page_sizes, ss.str());
         }
 
-        Format_properties properties{};
-        properties.sparse_tile_x_sizes.resize(num_virtual_page_sizes);
-        properties.sparse_tile_y_sizes.resize(num_virtual_page_sizes);
-        properties.sparse_tile_z_sizes.resize(num_virtual_page_sizes);
-        gl::get_internalformat_i_64v(
-            gl::Texture_target::texture_2d,
-            format,
-            gl::Internal_format_p_name::virtual_page_size_x_arb,
-            static_cast<GLsizei>(num_virtual_page_sizes),
-            properties.sparse_tile_x_sizes.data()
-        );
-        gl::get_internalformat_i_64v(
-            gl::Texture_target::texture_2d,
-            format,
-            gl::Internal_format_p_name::virtual_page_size_y_arb,
-            static_cast<GLsizei>(num_virtual_page_sizes),
-            properties.sparse_tile_y_sizes.data()
-        );
-        gl::get_internalformat_i_64v(
-            gl::Texture_target::texture_2d,
-            format,
-            gl::Internal_format_p_name::virtual_page_size_z_arb,
-            static_cast<GLsizei>(num_virtual_page_sizes),
-            properties.sparse_tile_z_sizes.data()
-        );
-        std::stringstream ss;
-        for (GLint i = 0; i < num_virtual_page_sizes; ++i) {
-            ss << fmt::format(
-                " {} x {} x {}",
-                properties.sparse_tile_x_sizes[i],
-                properties.sparse_tile_y_sizes[i],
-                properties.sparse_tile_z_sizes[i]
-            );
-        }
-        log_startup->info("    {} : num page sizes {} :{}", gl::c_str(format), num_virtual_page_sizes, ss.str());
-
-        int num_sample_counts{0};
-        gl::get_internalformat_iv(
-            gl::Texture_target::texture_2d_multisample,
-            format,
-            gl::Internal_format_p_name::num_sample_counts,
-            1,
-            &num_sample_counts
-        );
-
-        if (num_sample_counts > 0) {
-            properties.texture_2d_sample_counts.resize(num_sample_counts);
-            gl::get_internalformat_iv(
-                gl::Texture_target::texture_2d_multisample,
-                gl::Internal_format::rgba16f,
-                gl::Internal_format_p_name::samples,
-                num_sample_counts,
-                properties.texture_2d_sample_counts.data()
-            );
-            std::sort(properties.texture_2d_sample_counts.begin(), properties.texture_2d_sample_counts.end());
+        {
+            int num_sample_counts = get_int(gl::Internal_format_p_name::num_sample_counts, gl::Texture_target::texture_2d_multisample);
+            std::stringstream ss;
+            ss << fmt::format("    {} sample counts:", c_str(format));
+            if (num_sample_counts > 0) {
+                properties.texture_2d_sample_counts.resize(num_sample_counts);
+                gl::get_internalformat_iv(
+                    gl::Texture_target::texture_2d_multisample,
+                    format,
+                    gl::Internal_format_p_name::samples,
+                    num_sample_counts,
+                    properties.texture_2d_sample_counts.data()
+                );
+                std::sort(properties.texture_2d_sample_counts.begin(), properties.texture_2d_sample_counts.end());
+                for (int count : properties.texture_2d_sample_counts) {
+                    ss << fmt::format(" {}", count);
+                }
+            }
+            log_startup->info(ss.str());
         }
 
         if (info.use_direct_state_access) {
-            gl::get_internalformat_iv(
-                gl::Texture_target::texture_2d_array,
-                format,
-                gl::Internal_format_p_name::max_width,
-                1,
-                &properties.texture_2d_array_max_width
-            );
-            gl::get_internalformat_iv(
-                gl::Texture_target::texture_2d_array,
-                format,
-                gl::Internal_format_p_name::max_height,
-                1,
-                &properties.texture_2d_array_max_height
-            );
-            limits.max_depth_layers = 0;
-            gl::get_internalformat_iv(
-                gl::Texture_target::texture_2d_array,
-                format,
-                gl::Internal_format_p_name::max_layers,
-                1,
-                &properties.texture_2d_array_max_layers
-            );
+            properties.texture_2d_array_max_width  = get_int(gl::Internal_format_p_name::max_width);
+            properties.texture_2d_array_max_height = get_int(gl::Internal_format_p_name::max_height);
+            properties.texture_2d_array_max_layers = get_int(gl::Internal_format_p_name::max_layers);
         } else {
             properties.texture_2d_array_max_width  = limits.max_texture_size;
             properties.texture_2d_array_max_height = limits.max_texture_size;
@@ -617,6 +628,63 @@ auto Instance::get_handle(const Texture& texture, const Sampler& sampler) const 
     }
 }
 
+auto Instance::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> gl::Internal_format
+{
+    using namespace erhe::bit;
+    const bool require_depth     = test_all_rhs_bits_set(flags, format_flag_require_depth    );
+    const bool require_stencil   = test_all_rhs_bits_set(flags, format_flag_require_stencil  );
+    const bool prefer_accuracy   = test_all_rhs_bits_set(flags, format_flag_prefer_accuracy  );
+    const bool prefer_filterable = test_all_rhs_bits_set(flags, format_flag_prefer_filterable);
+    gl::Internal_format formats[] = {
+        gl::Internal_format::depth32f_stencil8,
+        gl::Internal_format::depth24_stencil8,
+        gl::Internal_format::depth_stencil,
+        gl::Internal_format::stencil_index8,
+        gl::Internal_format::depth_component32f,
+        gl::Internal_format::depth_component,
+        gl::Internal_format::depth_component16
+    };
+
+    gl::Internal_format best_format = gl::Internal_format{0};
+    float best_score = 0.0f;
+    for (const auto format : formats) {
+        Format_properties properties = get_format_properties(format);
+        if (!properties.supported) {
+            continue;
+        }
+        if (require_depth) {
+            if ((properties.depth_size == 0) || !properties.depth_renderable) {
+                continue;
+            }
+        }
+        if (require_stencil) {
+            if ((properties.stencil_size == 0) || !properties.stencil_renderable) {
+                continue;
+            }
+        }
+        if (sample_count != 0) {
+            auto i = std::find(properties.texture_2d_sample_counts.begin(), properties.texture_2d_sample_counts.end(), sample_count);
+            if (i == properties.texture_2d_sample_counts.end()) {
+                continue;
+            }
+        }
+        float score = 0.0f;
+        if (prefer_filterable && properties.filter) {
+            score += 1.0f;
+        }
+        if (prefer_accuracy) {
+            score += properties.depth_size;
+        } else {
+            score += 1.0f / properties.image_texel_size;
+        }
+        if (score > best_score) {
+            best_format = format;
+            best_score = score;
+        }
+    }
+    return best_format;
+}
+
 auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
 {
     const erhe::graphics::Texture::Create_info create_info{
@@ -626,7 +694,7 @@ auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
         .debug_label = "dummy"
     };
 
-    auto texture = std::make_shared<Texture>(create_info);
+    auto texture = std::make_shared<Texture>(*this, create_info);
     texture->set_debug_label("dummy");
     const std::array<uint8_t, 16> dummy_pixel{
         0xee, 0x11, 0xdd, 0xff,
@@ -1407,7 +1475,7 @@ void Instance::named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsiz
         int current_renderbuffer = 0;
         gl::get_integer_v(gl::Get_p_name::renderbuffer_binding, &current_renderbuffer);
         gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, renderbuffer);
-        gl::renderbuffer_storage_multisample(gl::Renderbuffer_target::renderbuffer, 0, internalformat, width, height);
+        gl::renderbuffer_storage_multisample(gl::Renderbuffer_target::renderbuffer, samples, internalformat, width, height);
         gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, current_renderbuffer);
     }
 }

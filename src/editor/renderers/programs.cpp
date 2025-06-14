@@ -11,22 +11,17 @@ namespace editor {
 
 Programs::Shader_stages_builder::Shader_stages_builder(
     erhe::graphics::Reloadable_shader_stages& reloadable_shader_stages,
-    erhe::graphics::Instance&                 graphics_instance,
     erhe::scene_renderer::Program_interface&  program_interface,
     std::filesystem::path                     shader_path
 )
     : reloadable_shader_stages{reloadable_shader_stages}
     , prototype{
-        program_interface.make_prototype(
-            graphics_instance,
-            shader_path,
-            reloadable_shader_stages.create_info
-        )
+        program_interface.make_prototype(shader_path, reloadable_shader_stages.create_info)
     }
 {
 }
 
-Programs::Shader_stages_builder::Shader_stages_builder(Shader_stages_builder&& other)
+Programs::Shader_stages_builder::Shader_stages_builder(Shader_stages_builder&& other) noexcept
     : reloadable_shader_stages{other.reloadable_shader_stages}
     , prototype               {std::move(other.prototype)}
 {
@@ -51,6 +46,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance)
             : default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, s_texture_unit_base, s_texture_unit_count)
     }
     , nearest_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -58,6 +54,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance)
         }
     }
     , linear_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter = gl::Texture_mag_filter::linear,
@@ -65,51 +62,52 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance)
         }
     }
     , linear_mipmap_linear_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter = gl::Texture_min_filter::linear_mipmap_linear,
             .mag_filter = gl::Texture_mag_filter::linear,
             .debug_label = "Programs linear mipmap"
         }
     }
-    , error                   {"error-not_loaded"}
-    , brdf_slice              {"brdf_slice-not_loaded"}
-    , brush                   {"brush-not_loaded"}
-    , standard                {"standard-not_loaded"}
-    , anisotropic_slope       {"anisotropic_slope-not_loaded"}
-    , anisotropic_engine_ready{"anisotropic_engine_ready-not_loaded"}
-    , circular_brushed_metal  {"circular_brushed_metal-not_loaded"}
-    , textured                {"textured-not_loaded"}
-    , sky                     {"sky-not_loaded"}
-    , grid                    {"grid-not_loaded"}
-    , fat_triangle            {"fat_triangle-not_loaded"}
-    , wide_lines_draw_color   {"wide_lines_draw_color-not_loaded"}
-    , wide_lines_vertex_color {"wide_lines_vertex_color-not_loaded"}
-    , points                  {"points-not_loaded"}
-    , depth                   {"depth-not_loaded"}
-    , id                      {"id-not_loaded"}
-    , tool                    {"tool-not_loaded"}
-    , debug_depth             {"debug_depth-not_loaded"}
-    , debug_normal            {"debug_normal-not_loaded"}
-    , debug_tangent           {"debug_tangent-not_loaded"}
-    , debug_vertex_tangent_w  {"debug_vertex_tangent_w-not_loaded"}
-    , debug_bitangent         {"debug_bitangent-not_loaded"}
-    , debug_texcoord          {"debug_texcoord-not_loaded"}
-    , debug_base_color_texture{"debug_base_color_texture-not_loaded"}
-    , debug_vertex_color_rgb  {"debug_vertex_color_rgb-not_loaded"}
-    , debug_vertex_color_alpha{"debug_vertex_color_alpha-not_loaded"}
-    , debug_aniso_strength    {"debug_aniso_strength-not_loaded"}
-    , debug_aniso_texcoord    {"debug_aniso_texcoord-not_loaded"}
-    , debug_vdotn             {"debug_v_dot_n-not_loaded"}
-    , debug_ldotn             {"debug_v_dot_n-not_loaded"}
-    , debug_hdotv             {"debug_h_dot_v-not_loaded"}
-    , debug_joint_indices     {"debug_joint_indices-not_loaded"}
-    , debug_joint_weights     {"debug_joint_weights-not_loaded"}
-    , debug_omega_o           {"debug_omega_o-not_loaded"}
-    , debug_omega_i           {"debug_omega_i-not_loaded"}
-    , debug_omega_g           {"debug_omega_g-not_loaded"}
-    , debug_vertex_valency    {"debug_vertex_valency-not_loaded"}
-    , debug_polygon_edge_count{"debug_polygon_edge_count_g-not_loaded"}
-    , debug_misc              {"debug_misc-not_loaded"}
+    , error                   {graphics_instance, "error-not_loaded"}
+    , brdf_slice              {graphics_instance, "brdf_slice-not_loaded"}
+    , brush                   {graphics_instance, "brush-not_loaded"}
+    , standard                {graphics_instance, "standard-not_loaded"}
+    , anisotropic_slope       {graphics_instance, "anisotropic_slope-not_loaded"}
+    , anisotropic_engine_ready{graphics_instance, "anisotropic_engine_ready-not_loaded"}
+    , circular_brushed_metal  {graphics_instance, "circular_brushed_metal-not_loaded"}
+    , textured                {graphics_instance, "textured-not_loaded"}
+    , sky                     {graphics_instance, "sky-not_loaded"}
+    , grid                    {graphics_instance, "grid-not_loaded"}
+    , fat_triangle            {graphics_instance, "fat_triangle-not_loaded"}
+    , wide_lines_draw_color   {graphics_instance, "wide_lines_draw_color-not_loaded"}
+    , wide_lines_vertex_color {graphics_instance, "wide_lines_vertex_color-not_loaded"}
+    , points                  {graphics_instance, "points-not_loaded"}
+    , depth                   {graphics_instance, "depth-not_loaded"}
+    , id                      {graphics_instance, "id-not_loaded"}
+    , tool                    {graphics_instance, "tool-not_loaded"}
+    , debug_depth             {graphics_instance, "debug_depth-not_loaded"}
+    , debug_normal            {graphics_instance, "debug_normal-not_loaded"}
+    , debug_tangent           {graphics_instance, "debug_tangent-not_loaded"}
+    , debug_vertex_tangent_w  {graphics_instance, "debug_vertex_tangent_w-not_loaded"}
+    , debug_bitangent         {graphics_instance, "debug_bitangent-not_loaded"}
+    , debug_texcoord          {graphics_instance, "debug_texcoord-not_loaded"}
+    , debug_base_color_texture{graphics_instance, "debug_base_color_texture-not_loaded"}
+    , debug_vertex_color_rgb  {graphics_instance, "debug_vertex_color_rgb-not_loaded"}
+    , debug_vertex_color_alpha{graphics_instance, "debug_vertex_color_alpha-not_loaded"}
+    , debug_aniso_strength    {graphics_instance, "debug_aniso_strength-not_loaded"}
+    , debug_aniso_texcoord    {graphics_instance, "debug_aniso_texcoord-not_loaded"}
+    , debug_vdotn             {graphics_instance, "debug_v_dot_n-not_loaded"}
+    , debug_ldotn             {graphics_instance, "debug_v_dot_n-not_loaded"}
+    , debug_hdotv             {graphics_instance, "debug_h_dot_v-not_loaded"}
+    , debug_joint_indices     {graphics_instance, "debug_joint_indices-not_loaded"}
+    , debug_joint_weights     {graphics_instance, "debug_joint_weights-not_loaded"}
+    , debug_omega_o           {graphics_instance, "debug_omega_o-not_loaded"}
+    , debug_omega_i           {graphics_instance, "debug_omega_i-not_loaded"}
+    , debug_omega_g           {graphics_instance, "debug_omega_g-not_loaded"}
+    , debug_vertex_valency    {graphics_instance, "debug_vertex_valency-not_loaded"}
+    , debug_polygon_edge_count{graphics_instance, "debug_polygon_edge_count_g-not_loaded"}
+    , debug_misc              {graphics_instance, "debug_misc-not_loaded"}
 {
 }
 
@@ -126,12 +124,12 @@ void Programs::load_programs(
 
     using CI = erhe::graphics::Shader_stages_create_info;
 
-    auto add_shader = [this, &graphics_instance, &program_interface, &prototypes](
+    auto add_shader = [this, &program_interface, &prototypes](
         erhe::graphics::Reloadable_shader_stages&   reloadable_shader_stages,
         erhe::graphics::Shader_stages_create_info&& create_info
     ) {
         reloadable_shader_stages.create_info = std::move(create_info);
-        prototypes.emplace_back(reloadable_shader_stages, graphics_instance, program_interface, shader_path);
+        prototypes.emplace_back(reloadable_shader_stages, program_interface, shader_path);
     };
 
     add_shader(error                   , CI{ .name = "error"                   , .default_uniform_block = &default_uniform_block, .dump_interface = true } );

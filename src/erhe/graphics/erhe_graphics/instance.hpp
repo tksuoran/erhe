@@ -21,10 +21,28 @@ class Format_properties
 {
 public:
     bool                 supported{false};
+
+    // These are all texture_2d
+    bool                 color_renderable{false};
+    bool                 depth_renderable{false};
+    bool                 stencil_renderable{false};
+    bool                 filter{false};
+    bool                 framebuffer_blend{false};
+
+    int                  red_size        {0};
+    int                  green_size      {0};
+    int                  blue_size       {0};
+    int                  alpha_size      {0};
+    int                  depth_size      {0};
+    int                  stencil_size    {0};
+    int                  image_texel_size{0};
+
     std::vector<int>     texture_2d_sample_counts;
     int                  texture_2d_array_max_width{0};
     int                  texture_2d_array_max_height{0};
     int                  texture_2d_array_max_layers{0};
+
+    // These are all texture_2d
     std::vector<int64_t> sparse_tile_x_sizes;
     std::vector<int64_t> sparse_tile_y_sizes;
     std::vector<int64_t> sparse_tile_z_sizes;
@@ -161,6 +179,11 @@ private:
     std::vector<Ring_buffer_sync_entry> m_sync_entries;
 };
 
+static constexpr unsigned int format_flag_require_depth     = 0x01u;
+static constexpr unsigned int format_flag_require_stencil   = 0x02u;
+static constexpr unsigned int format_flag_prefer_accuracy   = 0x04u;
+static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
+
 class Instance
 {
 public:
@@ -200,6 +223,8 @@ public:
     auto binding_point(unsigned int binding_point) -> unsigned int;
 
     auto get_format_properties(gl::Internal_format format) const -> Format_properties;
+
+    auto choose_depth_stencil_format(unsigned int flags, int sample_count) const -> gl::Internal_format;
 
     class Info
     {

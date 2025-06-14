@@ -38,6 +38,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, 
     , m_material_buffer     {graphics_instance, program_interface.material_interface}
     , m_primitive_buffer    {graphics_instance, program_interface.primitive_interface}
     , m_shadow_sampler_compare{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::linear,
@@ -51,6 +52,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, 
         }
     }
     , m_shadow_sampler_no_compare{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::nearest,
@@ -63,6 +65,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, 
         }
     }
     , m_fallback_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::nearest,
             .mag_filter   = gl::Texture_mag_filter::nearest,

@@ -79,8 +79,9 @@ void Gpu_timer::on_thread_exit()
 #endif
 }
 
-Gpu_timer::Gpu_timer(const char* label)
-    : m_label{label}
+Gpu_timer::Gpu_timer(Instance& instance, const char* label)
+    : m_instance{instance}
+    , m_label   {label}
 {
 #if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
@@ -119,7 +120,7 @@ void Gpu_timer::create()
             ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
         } else {
             query.query_object.emplace(
-                Gl_query{gl::Query_target::time_elapsed}
+                Gl_query{m_instance, gl::Query_target::time_elapsed}
             );
         }
     }
