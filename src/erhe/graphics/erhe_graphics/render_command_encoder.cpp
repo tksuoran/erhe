@@ -3,8 +3,9 @@
 
 namespace erhe::graphics {
 
-Render_command_encoder::Render_command_encoder(Render_pass_descriptor& render_pass_descriptor)
-    : m_framebuffer{render_pass_descriptor.framebuffer}
+Render_command_encoder::Render_command_encoder(Device& device, const std::shared_ptr<Framebuffer>& framebuffer)
+    : m_device     {device}
+    , m_framebuffer{framebuffer}
 {
 }
 

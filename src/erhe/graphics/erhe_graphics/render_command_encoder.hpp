@@ -1,17 +1,19 @@
 #pragma once
 
+#include <memory>
+
 namespace erhe::graphics {
 
+class Device;
 class Framebuffer;
-class Render_pass_descriptor;
 
 class Render_command_encoder final
 {
 public:
-    Render_command_encoder(Render_pass_descriptor& render_pass_descriptor);
+    Render_command_encoder(Device& device, const std::shared_ptr<Framebuffer>& framebuffer);
     ~Render_command_encoder();
 
-    void set_render_pipeline_state     ();
+    void set_render_pipeline_state();
     //void set_color_store_action        ();
     //void set_color_store_action_options();
     //void set_depth_store_action();
@@ -26,6 +28,7 @@ public:
     void set_vertex_bytes        ();
 
 private:
+    Device&                      m_device;
     std::shared_ptr<Framebuffer> m_framebuffer;
 };
 
