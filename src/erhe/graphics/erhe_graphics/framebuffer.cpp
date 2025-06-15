@@ -120,7 +120,7 @@ void dump_fbo(int fbo_name)
 
 }
 
-// TODO move to graphics instance?
+// TODO move to graphics::Device?
 ERHE_PROFILE_MUTEX(std::mutex, Framebuffer::s_mutex);
 std::vector<Framebuffer*>      Framebuffer::s_all_framebuffers;
 
@@ -136,8 +136,8 @@ void Framebuffer::Create_info::attach(const gl::Framebuffer_attachment attachmen
     attachments.emplace_back(attachment_point, renderbuffer);
 }
 
-Framebuffer::Framebuffer(Instance& instance, const Create_info& create_info)
-    : m_instance   {instance}
+Framebuffer::Framebuffer(Device& device, const Create_info& create_info)
+    : m_device     {device}
     , m_attachments{create_info.attachments}
 {
     const std::lock_guard lock{s_mutex};
@@ -206,7 +206,7 @@ void Framebuffer::create()
     }
 
     m_owner_thread = std::this_thread::get_id();
-    m_gl_framebuffer.emplace(Gl_framebuffer{m_instance});
+    m_gl_framebuffer.emplace(Gl_framebuffer{m_device});
     for (auto& attachment : m_attachments) {
         if (attachment.texture != nullptr) {
             ERHE_VERIFY(attachment.texture->width() >= 1);

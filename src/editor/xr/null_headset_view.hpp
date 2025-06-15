@@ -14,7 +14,7 @@ namespace erhe::commands {
     class Commands;
 }
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 namespace erhe::imgui {
     class Imgui_windows;
@@ -65,7 +65,7 @@ class Headset_view
 public:
     Headset_view(
         erhe::commands::Commands&       commands,
-        erhe::graphics::Instance&       graphics_instance,
+        erhe::graphics::Device&         graphics_device,
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,

@@ -20,9 +20,9 @@
 
 namespace erhe::scene_renderer {
 
-Primitive_interface::Primitive_interface(erhe::graphics::Instance& graphics_instance)
-    : primitive_block {graphics_instance, "primitive", primitive_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
-    , primitive_struct{graphics_instance, "Primitive"}
+Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device)
+    : primitive_block {graphics_device, "primitive", primitive_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    , primitive_struct{graphics_device, "Primitive"}
     , offsets{
         .world_from_node  = primitive_struct.add_mat4 ("world_from_node"       )->offset_in_parent(),
         .normal_transform = primitive_struct.add_mat4 ("world_from_node_normal")->offset_in_parent(),
@@ -40,9 +40,9 @@ Primitive_interface::Primitive_interface(erhe::graphics::Instance& graphics_inst
     primitive_block.set_readonly(true);
 }
 
-Primitive_buffer::Primitive_buffer(erhe::graphics::Instance& graphics_instance, Primitive_interface& primitive_interface)
+Primitive_buffer::Primitive_buffer(erhe::graphics::Device& graphics_device, Primitive_interface& primitive_interface)
     : GPU_ring_buffer_client{
-        graphics_instance,
+        graphics_device,
         "Primitive_buffer",
         gl::Buffer_target::shader_storage_buffer,
         primitive_interface.primitive_block.binding_point()

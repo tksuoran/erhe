@@ -11,7 +11,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -116,53 +116,53 @@ void main()
 } // anonymous namespace
 
 #pragma region Imgui_program_interface
-auto get_shader_extensions(erhe::graphics::Instance& graphics_instance) -> std::vector<erhe::graphics::Shader_stage_extension>
+auto get_shader_extensions(erhe::graphics::Device& graphics_device) -> std::vector<erhe::graphics::Shader_stage_extension>
 {
     std::vector<erhe::graphics::Shader_stage_extension> extensions;
-    if (graphics_instance.info.gl_version < 430) {
+    if (graphics_device.info.gl_version < 430) {
         if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object)) {
             extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
             extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
         }
     }
-    if (graphics_instance.info.gl_version < 460) {
+    if (graphics_device.info.gl_version < 460) {
         if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
             extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
         }
     }
-    if (graphics_instance.info.use_bindless_texture) {
+    if (graphics_device.info.use_bindless_texture) {
         extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
     return extensions;
 }
 
-auto get_shader_defines(erhe::graphics::Instance& graphics_instance) -> std::vector<std::pair<std::string, std::string>>
+auto get_shader_defines(erhe::graphics::Device& graphics_device) -> std::vector<std::pair<std::string, std::string>>
 {
     std::vector<std::pair<std::string, std::string>> defines;
 
-    if (graphics_instance.info.use_bindless_texture) {
+    if (graphics_device.info.use_bindless_texture) {
         defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
     }
     return defines;
 }
 
-auto get_shader_default_uniform_block(erhe::graphics::Instance& graphics_instance, const int dedicated_texture_unit) -> erhe::graphics::Shader_resource
+auto get_shader_default_uniform_block(erhe::graphics::Device& graphics_device, const int dedicated_texture_unit) -> erhe::graphics::Shader_resource
 {
-    erhe::graphics::Shader_resource default_uniform_block{graphics_instance};
-    if (!graphics_instance.info.use_bindless_texture) {
+    erhe::graphics::Shader_resource default_uniform_block{graphics_device};
+    if (!graphics_device.info.use_bindless_texture) {
         default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, 0, dedicated_texture_unit);
     }
     return default_uniform_block;
 }
 
-Imgui_program_interface::Imgui_program_interface(erhe::graphics::Instance& graphics_instance)
-    : draw_parameter_block{graphics_instance, "draw", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
-    , draw_parameter_struct{graphics_instance, "Draw_parameters"}
+Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphics_device)
+    : draw_parameter_block{graphics_device, "draw", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    , draw_parameter_struct{graphics_device, "Draw_parameters"}
     , draw_parameter_struct_offsets{
         .clip_rect       = draw_parameter_struct.add_vec4("clip_rect")->offset_in_parent(),
-        .texture         = graphics_instance.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("texture"        )->offset_in_parent() : 0, // bindless
-        .extra           = graphics_instance.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("extra"          )->offset_in_parent() : 0, // bindless
-        .texture_indices = graphics_instance.info.use_bindless_texture ? 0 : draw_parameter_struct.add_uvec4("texture_indices")->offset_in_parent()  // non-bindless
+        .texture         = graphics_device.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("texture"        )->offset_in_parent() : 0, // bindless
+        .extra           = graphics_device.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("extra"          )->offset_in_parent() : 0, // bindless
+        .texture_indices = graphics_device.info.use_bindless_texture ? 0 : draw_parameter_struct.add_uvec4("texture_indices")->offset_in_parent()  // non-bindless
     }
     , block_offsets{
         .scale                       = draw_parameter_block.add_vec4  ("scale"    )->offset_in_parent(),
@@ -186,19 +186,19 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Instance& graph
             }
         }
     }
-    , default_uniform_block{get_shader_default_uniform_block(graphics_instance, s_texture_unit_count)}
+    , default_uniform_block{get_shader_default_uniform_block(graphics_device, s_texture_unit_count)}
 {
 }
 
 #pragma endregion Imgui_program_interface
 
-auto make_font_texture_create_info(erhe::graphics::Instance& graphics_instance, ImFontAtlas& font_atlas) -> Texture::Create_info
+auto make_font_texture_create_info(erhe::graphics::Device& graphics_device, ImFontAtlas& font_atlas) -> Texture::Create_info
 {
     ERHE_PROFILE_FUNCTION();
 
     // Build texture atlas
     Texture::Create_info create_info{
-        .instance        = graphics_instance,
+        .device          = graphics_device,
         .internal_format = gl::Internal_format::rgba8,
         .debug_label     = "ImGui Font texture"
     };
@@ -229,22 +229,22 @@ auto get_font_atlas_pixel_data(ImFontAtlas& font_atlas) -> std::vector<uint8_t>
     return post_processed_data;
 }
 
-Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgui_settings& settings)
-    : m_graphics_instance{graphics_instance}
-    , m_imgui_program_interface{graphics_instance}
+Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_settings& settings)
+    : m_graphics_device{graphics_device}
+    , m_imgui_program_interface{graphics_device}
     , m_shader_stages{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Shader_stages_prototype{
-            graphics_instance,
+            graphics_device,
             erhe::graphics::Shader_stages_create_info{
                 .name                  = "ImGui Renderer",
-                .defines               = get_shader_defines(graphics_instance),
-                .extensions            = get_shader_extensions(graphics_instance),
+                .defines               = get_shader_defines(graphics_device),
+                .extensions            = get_shader_extensions(graphics_device),
                 .struct_types          = { &m_imgui_program_interface.draw_parameter_struct },
                 .interface_blocks      = { &m_imgui_program_interface.draw_parameter_block },
                 .fragment_outputs      = &m_imgui_program_interface.fragment_outputs,
                 .vertex_format         = &m_imgui_program_interface.vertex_format,
-                .default_uniform_block = graphics_instance.info.use_bindless_texture ? nullptr : &m_imgui_program_interface.default_uniform_block,
+                .default_uniform_block = graphics_device.info.use_bindless_texture ? nullptr : &m_imgui_program_interface.default_uniform_block,
                 .shaders = {
                     { gl::Shader_type::vertex_shader,   c_vertex_shader_source   },
                     { gl::Shader_type::fragment_shader, c_fragment_shader_source }
@@ -253,20 +253,20 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
             }
         }
     }
-    , m_vertex_buffer{graphics_instance, "ImGui Vertex Buffer", gl::Buffer_target::array_buffer}
-    , m_index_buffer{graphics_instance,  "ImGui Index Buffer", gl::Buffer_target::element_array_buffer, }
+    , m_vertex_buffer{graphics_device, "ImGui Vertex Buffer", gl::Buffer_target::array_buffer}
+    , m_index_buffer{graphics_device,  "ImGui Index Buffer", gl::Buffer_target::element_array_buffer, }
     , m_draw_parameter_buffer{
-        graphics_instance,
+        graphics_device,
         "ImGui Draw Parameter Buffer",
         gl::Buffer_target::shader_storage_buffer,
         m_imgui_program_interface.draw_parameter_block.binding_point(),
     }
     , m_draw_indirect_buffer{
-        graphics_instance,
+        graphics_device,
         "ImGui Draw Indirect Buffer",
         gl::Buffer_target::draw_indirect_buffer
     }
-    , m_vertex_input{graphics_instance, erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
+    , m_vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
     , m_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "ImGui Renderer",
@@ -278,9 +278,9 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied
         }
     }
-    , m_dummy_texture{graphics_instance.create_dummy_texture()}
+    , m_dummy_texture{graphics_device.create_dummy_texture()}
     , m_nearest_sampler{
-        graphics_instance,
+        graphics_device,
         {
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -288,7 +288,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
         }
     }
     , m_linear_sampler{
-        graphics_instance,
+        graphics_device,
         {
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
@@ -296,14 +296,14 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
         }
     }
     , m_linear_mipmap_linear_sampler{
-        graphics_instance,
+        graphics_device,
         {
             .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
             .mag_filter  = gl::Texture_mag_filter::linear,
             .debug_label = "Imgui_renderer linear mipmap"
         }
     }
-    , m_gpu_timer{graphics_instance, "Imgui_renderer"}
+    , m_gpu_timer{graphics_device, "Imgui_renderer"}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -407,8 +407,8 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
 
     // Create textures
     m_font_texture = std::make_shared<erhe::graphics::Texture>(
-        m_graphics_instance,
-        make_font_texture_create_info(m_graphics_instance, m_font_atlas)
+        m_graphics_device,
+        make_font_texture_create_info(m_graphics_device, m_font_atlas)
     );
 
     for (auto imgui_host : m_imgui_hosts) {
@@ -427,7 +427,7 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
     m_font_texture->set_debug_label("ImGui Font");
 
     // Store our handle
-    const uint64_t handle = m_graphics_instance.get_handle(*m_font_texture.get(), m_linear_sampler);
+    const uint64_t handle = m_graphics_device.get_handle(*m_font_texture.get(), m_linear_sampler);
     m_font_atlas.SetTexID(handle);
 }
 
@@ -662,7 +662,7 @@ auto Imgui_renderer::image(
         linear
     );
     const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
-    const uint64_t handle = m_graphics_instance.get_handle(*texture.get(), sampler);
+    const uint64_t handle = m_graphics_device.get_handle(*texture.get(), sampler);
     SPDLOG_LOGGER_TRACE(log_imgui, "sampler = {}, handle = {:16x}", sampler->gl_name(), handle);
 
     ImGui::ImageWithBg(handle, ImVec2{static_cast<float>(width), static_cast<float>(height)}, uv0, uv1, background_color, tint_color);
@@ -704,7 +704,7 @@ auto Imgui_renderer::image_button(
     }
 
     const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
-    const uint64_t handle = m_graphics_instance.get_handle(*texture.get(), sampler);
+    const uint64_t handle = m_graphics_device.get_handle(*texture.get(), sampler);
     ImGui::ImageButtonEx(
         id,
         handle,
@@ -723,7 +723,7 @@ void Imgui_renderer::use(const std::shared_ptr<erhe::graphics::Texture>& texture
     ERHE_PROFILE_FUNCTION();
 
 #if !defined(NDEBUG)
-    if (!m_graphics_instance.info.use_bindless_texture) {
+    if (!m_graphics_device.info.use_bindless_texture) {
         const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
         const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(handle);
         ERHE_VERIFY(texture_name != 0);
@@ -760,7 +760,7 @@ void Imgui_renderer::render_draw_data()
 
     // Make font texture handle resident
     {
-        const uint64_t handle = m_graphics_instance.get_handle(*m_font_texture.get(),m_linear_sampler);
+        const uint64_t handle = m_graphics_device.get_handle(*m_font_texture.get(),m_linear_sampler);
         use(m_font_texture, handle);
     }
 
@@ -838,8 +838,8 @@ void Imgui_renderer::render_draw_data()
     const ImVec2 clip_off   = draw_data->DisplayPos;
     const ImVec2 clip_scale = draw_data->FramebufferScale;
 
-    if (!m_graphics_instance.info.use_bindless_texture) {
-        m_graphics_instance.texture_unit_cache_reset(0);
+    if (!m_graphics_device.info.use_bindless_texture) {
+        m_graphics_device.texture_unit_cache_reset(0);
     }
 
     // Pass 2: fill buffers
@@ -902,7 +902,7 @@ void Imgui_renderer::render_draw_data()
                     );
 
                     // Write texture indices
-                    if (m_graphics_instance.info.use_bindless_texture) {
+                    if (m_graphics_device.info.use_bindless_texture) {
                         const uint64_t handle = pcmd->TextureId;
                         const uint32_t texture_handle[2] = {
                             static_cast<uint32_t>((handle & 0xffffffffu)),
@@ -926,7 +926,7 @@ void Imgui_renderer::render_draw_data()
                         );
                     } else {
                         const uint64_t handle = pcmd->TextureId;
-                        const auto texture_unit_opt = m_graphics_instance.texture_unit_cache_allocate(handle);
+                        const auto texture_unit_opt = m_graphics_device.texture_unit_cache_allocate(handle);
                         if (texture_unit_opt.has_value()) {
                             const auto texture_unit = texture_unit_opt.value();
                             const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit), 0, 0, 0 };
@@ -993,18 +993,18 @@ void Imgui_renderer::render_draw_data()
 
         // This binds vertex input states (VAO) and shader stages (shader program)
         // and most other state
-        m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
+        m_graphics_device.opengl_state_tracker.execute(m_pipeline);
 
         erhe::graphics::Buffer* index_buffer  = index_buffer_range.get_buffer()->get_buffer();
         erhe::graphics::Buffer* vertex_buffer = vertex_buffer_range.get_buffer()->get_buffer();
 
-        m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(index_buffer);
-        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_binding_offset);
+        m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(index_buffer);
+        m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_binding_offset);
 
         // TODO viewport states is not currently in pipeline
         gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));
 
-        if (m_graphics_instance.info.use_bindless_texture) {
+        if (m_graphics_device.info.use_bindless_texture) {
             for (const auto handle : m_used_texture_handles) {
                 SPDLOG_LOGGER_TRACE(log_imgui, "making texture handle {:16x} resident", handle);
                 gl::make_texture_handle_resident_arb(handle);
@@ -1021,8 +1021,8 @@ void Imgui_renderer::render_draw_data()
                 SPDLOG_LOGGER_TRACE(log_imgui, "used sampler: {}", sampler_name);
             }
 #endif
-            const auto dummy_handle = m_graphics_instance.get_handle(*m_dummy_texture.get(), m_nearest_sampler);
-            const auto texture_unit_use_count = m_graphics_instance.texture_unit_cache_bind(dummy_handle);
+            const auto dummy_handle = m_graphics_device.get_handle(*m_dummy_texture.get(), m_nearest_sampler);
+            const auto texture_unit_use_count = m_graphics_device.texture_unit_cache_bind(dummy_handle);
 
             for (size_t i = texture_unit_use_count; i < Imgui_program_interface::s_texture_unit_count; ++i) {
                 gl::bind_texture_unit(static_cast<GLuint>(i), m_dummy_texture->gl_name());
@@ -1034,7 +1034,7 @@ void Imgui_renderer::render_draw_data()
         m_draw_parameter_buffer.bind(draw_parameter_buffer_range);
         m_draw_indirect_buffer.bind(draw_indirect_buffer_range);
 
-        m_graphics_instance.multi_draw_elements_indirect(
+        m_graphics_device.multi_draw_elements_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
             gl::Draw_elements_type::unsigned_short,
             reinterpret_cast<const void*>(draw_indirect_buffer_range.get_byte_start_offset_in_buffer()),
@@ -1047,7 +1047,7 @@ void Imgui_renderer::render_draw_data()
         vertex_buffer_range        .release();
         index_buffer_range         .release();
 
-        if (m_graphics_instance.info.use_bindless_texture) {
+        if (m_graphics_device.info.use_bindless_texture) {
             for (const auto handle : m_used_texture_handles) {
                 SPDLOG_LOGGER_TRACE(log_imgui, "making texture handle {:16x} non-resident", handle);
                 gl::make_texture_handle_non_resident_arb(handle);

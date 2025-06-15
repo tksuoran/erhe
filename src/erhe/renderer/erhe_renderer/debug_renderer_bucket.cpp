@@ -81,20 +81,20 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
 // Note that this relies on bucket being stable, as in etl::vector<> when elements are never removed.
 
 Debug_renderer_bucket::Debug_renderer_bucket(
-    erhe::graphics::Instance& graphics_instance,
-    Debug_renderer&           debug_renderer,
-    Debug_renderer_config     config
+    erhe::graphics::Device& graphics_device,
+    Debug_renderer&         debug_renderer,
+    Debug_renderer_config   config
 )
-    : m_graphics_instance {graphics_instance}
+    : m_graphics_device   {graphics_device}
     , m_debug_renderer    {debug_renderer}
     , m_vertex_ssbo_buffer{
-        graphics_instance,
+        graphics_device,
         "Debug_renderer_bucket::m_vertex_ssbo_buffer",
         gl::Buffer_target::shader_storage_buffer, // for compute bind range
         debug_renderer.get_program_interface().line_vertex_buffer_block->binding_point()
     }
     , m_triangle_vertex_buffer{
-        graphics_instance,
+        graphics_device,
         "Debug_renderer_bucket::m_triangle_vertex_buffer",
         gl::Buffer_target::shader_storage_buffer, // for compute bind range
         debug_renderer.get_program_interface().triangle_vertex_buffer_block->binding_point()
@@ -204,11 +204,11 @@ void Debug_renderer_bucket::release_buffers()
 void Debug_renderer_bucket::render(bool draw_hidden, bool draw_visible)
 {
     if (draw_hidden && m_config.draw_hidden) {
-        m_graphics_instance.opengl_state_tracker.execute(m_pipeline_hidden);
+        m_graphics_device.opengl_state_tracker.execute(m_pipeline_hidden);
         for (const Debug_draw_entry& draw : m_draws) {
             erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
             size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
-            m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(
+            m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(
                 0,
                 triangle_vertex_buffer,
                 triangle_vertex_buffer_offset
@@ -223,11 +223,11 @@ void Debug_renderer_bucket::render(bool draw_hidden, bool draw_visible)
     }
 
     if (draw_visible && m_config.draw_visible) {
-        m_graphics_instance.opengl_state_tracker.execute(m_pipeline_visible);
+        m_graphics_device.opengl_state_tracker.execute(m_pipeline_visible);
         for (const Debug_draw_entry& draw : m_draws) {
             erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
             size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
-            m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(
+            m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(
                 0,
                 triangle_vertex_buffer,
                 triangle_vertex_buffer_offset

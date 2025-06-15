@@ -8,7 +8,7 @@
 
 namespace erhe::graphics {
     class Framebuffer;
-    class Instance;
+    class Device;
     class Renderbuffer;
     class Texture;
 }

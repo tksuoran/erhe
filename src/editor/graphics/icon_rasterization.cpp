@@ -4,7 +4,7 @@
 #include "editor_settings.hpp"
 #include "editor_log.hpp"
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_profile/profile.hpp"
@@ -155,13 +155,13 @@ void Icon_loader::clear_load_queue()
     m_icons_to_load.clear();
 }
 
-Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::graphics::Instance& graphics_instance, const int size)
+Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::graphics::Device& graphics_device, const int size)
     : m_context{editor_context}
     , m_texture{
         std::make_shared<erhe::graphics::Texture>(
-            graphics_instance,
+            graphics_device,
             erhe::graphics::Texture_create_info{
-                .instance        = graphics_instance,
+                .device          = graphics_device,
                 .target          = gl::Texture_target::texture_2d,
                 .internal_format = gl::Internal_format::rgba8,
                 .use_mipmaps     = true,
@@ -172,7 +172,7 @@ Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::gra
         )
     }
     , m_linear_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
@@ -180,7 +180,7 @@ Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::gra
         }
     }
     , m_texture_handle{
-        graphics_instance.get_handle(
+        graphics_device.get_handle(
             *m_texture.get(),
             m_linear_sampler
         )

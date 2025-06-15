@@ -6,7 +6,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -28,17 +28,17 @@ using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
-Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
-    : m_graphics_instance   {graphics_instance}
+Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface)
+    : m_graphics_device     {graphics_device}
     , m_program_interface   {program_interface}
-    , m_camera_buffer       {graphics_instance, program_interface.camera_interface}
-    , m_draw_indirect_buffer{graphics_instance}
-    , m_joint_buffer        {graphics_instance, program_interface.joint_interface}
-    , m_light_buffer        {graphics_instance, program_interface.light_interface}
-    , m_material_buffer     {graphics_instance, program_interface.material_interface}
-    , m_primitive_buffer    {graphics_instance, program_interface.primitive_interface}
+    , m_camera_buffer       {graphics_device, program_interface.camera_interface}
+    , m_draw_indirect_buffer{graphics_device}
+    , m_joint_buffer        {graphics_device, program_interface.joint_interface}
+    , m_light_buffer        {graphics_device, program_interface.light_interface}
+    , m_material_buffer     {graphics_device, program_interface.material_interface}
+    , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
     , m_shadow_sampler_compare{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::linear,
@@ -52,7 +52,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, 
         }
     }
     , m_shadow_sampler_no_compare{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::nearest,
@@ -65,7 +65,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, 
         }
     }
     , m_fallback_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::nearest,
             .mag_filter   = gl::Texture_mag_filter::nearest,
@@ -80,7 +80,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Instance& graphics_instance, 
 
     erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 
-    m_dummy_texture = graphics_instance.create_dummy_texture();
+    m_dummy_texture = graphics_device.create_dummy_texture();
 }
 
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
@@ -114,7 +114,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         (parameters.shadow_texture != nullptr) &&
         (parameters.light_projections->shadow_map_texture_handle_compare != erhe::graphics::invalid_texture_handle) &&
         (parameters.light_projections->shadow_map_texture_handle_no_compare != erhe::graphics::invalid_texture_handle);
-    const uint64_t fallback_texture_handle = m_graphics_instance.get_handle(*m_dummy_texture.get(), m_fallback_sampler);
+    const uint64_t fallback_texture_handle = m_graphics_device.get_handle(*m_dummy_texture.get(), m_fallback_sampler);
 
     if (enable_shadows) {
         log_forward_renderer->trace(
@@ -143,8 +143,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_camera_buffer.bind(camera_buffer_range.value());
     }
 
-    if (!m_graphics_instance.info.use_bindless_texture) {
-        m_graphics_instance.texture_unit_cache_reset(m_base_texture_unit);
+    if (!m_graphics_device.info.use_bindless_texture) {
+        m_graphics_device.texture_unit_cache_reset(m_base_texture_unit);
     }
 
     Buffer_range material_range = m_material_buffer.update(materials);
@@ -158,7 +158,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
     m_light_buffer.bind_light_buffer(light_range);
 
-    if (m_graphics_instance.info.use_bindless_texture) {
+    if (m_graphics_device.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures resident");
         if (enable_shadows) {
             gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
@@ -176,7 +176,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_no_compare, m_shadow_sampler_no_compare.gl_name());
         }
 
-        m_graphics_instance.texture_unit_cache_bind(fallback_texture_handle);
+        m_graphics_device.texture_unit_cache_bind(fallback_texture_handle);
     }
 
     for (auto& pass : passes) {
@@ -200,12 +200,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
         if (use_override_shader_stages) {
-            m_graphics_instance.opengl_state_tracker.shader_stages.execute(used_shader_stages);
+            m_graphics_device.opengl_state_tracker.shader_stages.execute(used_shader_stages);
         }
-        m_graphics_instance.opengl_state_tracker.execute(pipeline, use_override_shader_stages);
-        m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
-        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer0, 0);
-        m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(1, parameters.vertex_buffer1, 0);
+        m_graphics_device.opengl_state_tracker.execute(pipeline, use_override_shader_stages);
+        m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
+        m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer0, 0);
+        m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(1, parameters.vertex_buffer1, 0);
 
         for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");
@@ -230,7 +230,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             m_primitive_buffer.bind(primitive_range);
             m_draw_indirect_buffer.bind(draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
 
-            m_graphics_instance.multi_draw_elements_indirect(
+            m_graphics_device.multi_draw_elements_indirect(
                 pipeline.data.input_assembly.primitive_topology,
                 erhe::graphics::to_gl_index_type(parameters.index_type),
                 reinterpret_cast<const void *>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),
@@ -256,7 +256,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     joint_range.release();
     light_range.release();
 
-    if (m_graphics_instance.info.use_bindless_texture) {
+    if (m_graphics_device.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures non resident");
         if (enable_shadows) {
             gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
@@ -321,7 +321,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     m_light_buffer.bind_light_buffer(light_range);
 
     if (enable_shadows) {
-        if (m_graphics_instance.info.use_bindless_texture) {
+        if (m_graphics_device.info.use_bindless_texture) {
             gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
             gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
         } else {
@@ -344,7 +344,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
 
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
-        m_graphics_instance.opengl_state_tracker.execute(pipeline);
+        m_graphics_device.opengl_state_tracker.execute(pipeline);
         gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, static_cast<GLsizei>(parameters.non_mesh_vertex_count));
 
         if (pass->end) {
@@ -363,7 +363,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     }
 
     if (enable_shadows) {
-        if (m_graphics_instance.info.use_bindless_texture) {
+        if (m_graphics_device.info.use_bindless_texture) {
             gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
             gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
         }

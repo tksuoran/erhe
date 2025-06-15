@@ -21,9 +21,9 @@ auto Draw_indirect_buffer::get_max_draw_count() -> int
     return max_draw_count;
 }
 
-Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance)
+Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Device& graphics_device)
     : GPU_ring_buffer_client{
-        graphics_instance,
+        graphics_device,
         "Draw_indirect_buffer",
         gl::Buffer_target::draw_indirect_buffer
     }

@@ -9,7 +9,7 @@ namespace erhe::xr {
 }
 namespace erhe::graphics {
     class Framebuffer;
-    class Instance;
+    class Device;
     class Texture;
 }
 namespace erhe::scene {
@@ -28,10 +28,10 @@ class Headset_view_resources
 {
 public:
     Headset_view_resources(
-        erhe::graphics::Instance& graphics_instance,
-        erhe::xr::Render_view&    render_view,
-        Headset_view&             headset_view,
-        const std::size_t         slot
+        erhe::graphics::Device& graphics_device,
+        erhe::xr::Render_view&  render_view,
+        Headset_view&           headset_view,
+        const std::size_t       slot
     );
 
     void update(erhe::xr::Render_view& render_view, erhe::scene::Projection::Fov_sides fov_sides);

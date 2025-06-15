@@ -7,7 +7,7 @@
 
 namespace erhe::graphics {
 
-class Instance;
+class Device;
 
 class Sampler_create_info
 {
@@ -32,7 +32,7 @@ public:
 class Sampler
 {
 public:
-    Sampler(Instance& instance, const Sampler_create_info& create_info);
+    Sampler(Device& device, const Sampler_create_info& create_info);
     ~Sampler() noexcept = default;
 
     [[nodiscard]] auto gl_name() const -> unsigned int

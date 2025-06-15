@@ -5,7 +5,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/shader_resource.hpp"
@@ -35,7 +35,7 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
         }
     };
 
-    if (m_graphics_instance.info.use_bindless_texture) {
+    if (m_graphics_device.info.use_bindless_texture) {
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
     } else {
@@ -43,7 +43,7 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
         create_info.default_uniform_block = &m_default_uniform_block;
     }
 
-    erhe::graphics::Shader_stages_prototype prototype{m_graphics_instance, create_info};
+    erhe::graphics::Shader_stages_prototype prototype{m_graphics_device, create_info};
     if (!prototype.is_valid()) {
         log_startup->error("Text renderer shader compilation failed");
         config.enabled = false;
@@ -52,11 +52,11 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
     return prototype;
 }
 
-Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
-    : m_graphics_instance        {graphics_instance}
-    , m_default_uniform_block    {graphics_instance}
-    , m_projection_block         {graphics_instance, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
-    , m_vertex_ssbo_block        {graphics_instance, "vertex_ssbo", 1, erhe::graphics::Shader_resource::Type::shader_storage_block}
+Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
+    : m_graphics_device          {graphics_device}
+    , m_default_uniform_block    {graphics_device}
+    , m_projection_block         {graphics_device, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
+    , m_vertex_ssbo_block        {graphics_device, "vertex_ssbo", 1, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , m_clip_from_window_resource{m_projection_block.add_mat4 ("clip_from_window")}
     , m_texture_resource         {m_projection_block.add_uvec2("texture")}
     , m_vertex_data_resource     {m_vertex_ssbo_block.add_uvec4("data", erhe::graphics::Shader_resource::unsized_array)} // x,y | z,w | color | u,v
@@ -74,17 +74,17 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
         }
     }
     , m_nearest_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Text_renderer::m_nearest_sampler"
         }
     }
-    , m_shader_stages{graphics_instance, build_shader_stages()}
-    , m_vertex_ssbo_buffer{graphics_instance, "Text_renderer::m_vertex_buffer", gl::Buffer_target::shader_storage_buffer, m_vertex_ssbo_block.binding_point()}
-    , m_projection_buffer{graphics_instance, "Text_renderer::m_projection_buffer", gl::Buffer_target::uniform_buffer, m_projection_block.binding_point()}
-    , m_vertex_input{graphics_instance, {}}
+    , m_shader_stages     {graphics_device, build_shader_stages()}
+    , m_vertex_ssbo_buffer{graphics_device, "Text_renderer::m_vertex_buffer", gl::Buffer_target::shader_storage_buffer, m_vertex_ssbo_block.binding_point()}
+    , m_projection_buffer {graphics_device, "Text_renderer::m_projection_buffer", gl::Buffer_target::uniform_buffer, m_projection_block.binding_point()}
+    , m_vertex_input      {graphics_device, {}}
     , m_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "Text renderer",
@@ -92,7 +92,7 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
             .vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangles,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_instance.configuration.reverse_depth),
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.configuration.reverse_depth),
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
         }
     }
@@ -112,7 +112,7 @@ Text_renderer::Text_renderer(erhe::graphics::Instance& graphics_instance)
 
     // Init font
     m_font = std::make_unique<erhe::ui::Font>(
-        m_graphics_instance,
+        m_graphics_device,
         "res/fonts/SourceSansPro-Regular.otf",
         config.font_size,
         0.0f // TODO reimplement outline better 1.0f
@@ -201,7 +201,7 @@ void Text_renderer::render(erhe::math::Viewport viewport)
         return;
     }
 
-    const uint64_t handle = m_graphics_instance.get_handle(*m_font->texture(), m_nearest_sampler);
+    const uint64_t handle = m_graphics_device.get_handle(*m_font->texture(), m_nearest_sampler);
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 
     erhe::graphics::Buffer_range projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
@@ -236,8 +236,8 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     }
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
-    if (m_graphics_instance.info.use_bindless_texture) {
+    m_graphics_device.opengl_state_tracker.execute(m_pipeline);
+    if (m_graphics_device.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
     } else {
         gl::bind_texture_unit(0, m_font->texture()->gl_name());
@@ -262,7 +262,7 @@ void Text_renderer::render(erhe::math::Viewport viewport)
 
     projection_buffer_range.release();
 
-    if (m_graphics_instance.info.use_bindless_texture) {
+    if (m_graphics_device.info.use_bindless_texture) {
         gl::make_texture_handle_non_resident_arb(handle);
     }
 

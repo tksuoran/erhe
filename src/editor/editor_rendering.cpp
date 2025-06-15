@@ -59,7 +59,7 @@ auto Capture_frame_command::try_call() -> bool
 
 Editor_rendering::Editor_rendering(
     erhe::commands::Commands& commands,
-    erhe::graphics::Instance& graphics_instance,
+    erhe::graphics::Device&   graphics_device,
     Editor_context&           editor_context,
     Editor_message_bus&       editor_message_bus,
     Mesh_memory&              mesh_memory,
@@ -67,13 +67,13 @@ Editor_rendering::Editor_rendering(
 )
     : m_context              {editor_context}
     , m_capture_frame_command{commands, editor_context}
-    , m_pipeline_renderpasses{graphics_instance, mesh_memory, programs}
+    , m_pipeline_renderpasses{graphics_device, mesh_memory, programs}
     , m_composer             {"Main Composer"}
-    , m_content_timer        {graphics_instance, "content"}
-    , m_selection_timer      {graphics_instance, "selection"}
-    , m_gui_timer            {graphics_instance, "gui"}
-    , m_brush_timer          {graphics_instance, "brush"}
-    , m_tools_timer          {graphics_instance, "tools"}
+    , m_content_timer        {graphics_device, "content"}
+    , m_selection_timer      {graphics_device, "selection"}
+    , m_gui_timer            {graphics_device, "gui"}
+    , m_brush_timer          {graphics_device, "brush"}
+    , m_tools_timer          {graphics_device, "tools"}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -255,7 +255,7 @@ Editor_rendering::Editor_rendering(
 }
 
 auto Editor_rendering::create_shadow_node_for_scene_view(
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::rendergraph::Rendergraph& rendergraph,
     Editor_settings&                editor_settings,
     Scene_view&                     scene_view
@@ -265,7 +265,7 @@ auto Editor_rendering::create_shadow_node_for_scene_view(
     const int   resolution  = preset.shadow_enable ? preset.shadow_resolution  : 1;
     const int   light_count = preset.shadow_enable ? preset.shadow_light_count : 1;
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
-        graphics_instance,
+        graphics_device,
         rendergraph,
         m_context,
         scene_view,
@@ -282,7 +282,7 @@ void Editor_rendering::handle_graphics_settings_changed(Graphics_preset* graphic
     const int light_count = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
 
     for (const auto& node : m_all_shadow_render_nodes) {
-        node->reconfigure(*m_context.graphics_instance, resolution, light_count);
+        node->reconfigure(*m_context.graphics_device, resolution, light_count);
     }
 }
 
@@ -351,11 +351,11 @@ using Rasterization_state  = erhe::graphics::Rasterization_state;
 using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
-Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_instance, Mesh_memory&mesh_memory, Programs& programs)
+Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory&mesh_memory, Programs& programs)
 
-#define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
+#define REVERSE_DEPTH graphics_device.configuration.reverse_depth
 
-    : m_empty_vertex_input{graphics_instance}
+    : m_empty_vertex_input{graphics_device}
     , polygon_fill_standard_opaque{erhe::graphics::Pipeline{{
         .name           = "Polygon Fill Opaque",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
@@ -374,7 +374,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
         .depth_stencil  = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::less),
+            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::less),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::replace,
@@ -415,7 +415,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
         .depth_stencil  = {
             .depth_test_enable      = true,
             .depth_write_enable     = false,
-            .depth_compare_op       = graphics_instance.depth_function(gl::Depth_function::greater),
+            .depth_compare_op       = graphics_device.depth_function(gl::Depth_function::greater),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -478,7 +478,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::lequal),
+            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::lequal),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -694,7 +694,7 @@ void Editor_rendering::end_frame()
         m_trigger_capture = false;
     }
 
-    m_context.graphics_instance->end_of_frame();
+    m_context.graphics_device->end_of_frame();
 }
 
 void Editor_rendering::add(Renderable* renderable)
@@ -742,14 +742,14 @@ void Editor_rendering::render_viewport_main(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto& opengl_state_tracker = m_context.graphics_instance->opengl_state_tracker;
+    auto& opengl_state_tracker = m_context.graphics_device->opengl_state_tracker;
     opengl_state_tracker.shader_stages.reset();
     opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
 
     const auto& clear_color = context.viewport_config.clear_color;
     gl::clear_color(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
     gl::clear_stencil(0);
-    gl::clear_depth_f(*m_context.graphics_instance->depth_clear_value_pointer());
+    gl::clear_depth_f(*m_context.graphics_device->depth_clear_value_pointer());
     gl::clear(
         gl::Clear_buffer_mask::color_buffer_bit |
         gl::Clear_buffer_mask::depth_buffer_bit |
@@ -777,7 +777,7 @@ void Editor_rendering::render_composer(const Render_context& context)
 
     m_composer.render(context);
 
-    m_context.graphics_instance->opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
+    m_context.graphics_device->opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
 void Editor_rendering::render_id(const Render_context& context)

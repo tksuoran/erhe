@@ -8,7 +8,7 @@
 #include <glm/glm.hpp>
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 namespace erhe::imgui {
     class Imgui_renderer;
@@ -65,7 +65,7 @@ class Hud
 public:
     Hud(
         erhe::commands::Commands&       commands,
-        erhe::graphics::Instance&       graphics_instance,
+        erhe::graphics::Device&         graphics_device,
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::rendergraph::Rendergraph& rendergraph,
         Editor_context&                 editor_context,

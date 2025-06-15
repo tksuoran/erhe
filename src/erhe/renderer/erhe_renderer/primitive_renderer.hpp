@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>

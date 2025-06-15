@@ -3,7 +3,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_renderer/debug_renderer_bucket.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_math/viewport.hpp"
@@ -27,7 +27,7 @@ namespace erhe::renderer {
 class Debug_renderer_program_interface
 {
 public:
-    explicit Debug_renderer_program_interface(erhe::graphics::Instance& graphics_instance);
+    explicit Debug_renderer_program_interface(erhe::graphics::Device& graphics_device);
 
     bool                                             reverse_depth{false};
     erhe::graphics::Fragment_outputs                 fragment_outputs;
@@ -52,7 +52,7 @@ class Debug_renderer_config;
 class Debug_renderer
 {
 public:
-    Debug_renderer(erhe::graphics::Instance& graphics_instance);
+    Debug_renderer(erhe::graphics::Device& graphics_device);
     ~Debug_renderer();
 
     // Public API
@@ -70,7 +70,7 @@ private:
         const erhe::scene::Camera& camera
     ) -> erhe::graphics::Buffer_range;
 
-    erhe::graphics::Instance&              m_graphics_instance;
+    erhe::graphics::Device&                m_graphics_device;
     Debug_renderer_program_interface       m_program_interface;
 
     erhe::graphics::GPU_ring_buffer_client m_view_buffer;

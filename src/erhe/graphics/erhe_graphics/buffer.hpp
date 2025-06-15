@@ -14,7 +14,7 @@
 
 namespace erhe::graphics {
 
-class Instance;
+class Device;
 
 class Buffer_create_info
 {
@@ -29,11 +29,11 @@ public:
 class Buffer final
 {
 public:
-    explicit Buffer(Instance& instance);
+    explicit Buffer(Device& device);
 
     ~Buffer() noexcept;
 
-    Buffer(Instance& instance, const Buffer_create_info& create_info) noexcept;
+    Buffer(Device& device, const Buffer_create_info& create_info) noexcept;
 
     Buffer        (const Buffer&) = delete;
     void operator=(const Buffer&) = delete;
@@ -90,7 +90,7 @@ private:
     void capability_check(gl::Map_buffer_access_mask access_mask);
 
     ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
-    Instance&                      m_instance;
+    Device&                        m_device;
     Gl_buffer                      m_handle;
     gl::Buffer_target              m_target             {gl::Buffer_target::array_buffer};
     std::size_t                    m_capacity_byte_count{0};

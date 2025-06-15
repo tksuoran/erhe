@@ -1,15 +1,15 @@
 #include "programs.hpp"
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 
 namespace example {
 
-Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface)
+Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer::Program_interface& program_interface)
     : shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
-    , default_uniform_block{graphics_instance}
+    , default_uniform_block{graphics_device}
     , shadow_sampler_compare{
-        graphics_instance.info.use_bindless_texture
+        graphics_device.info.use_bindless_texture
             ? nullptr
             : default_uniform_block.add_sampler(
                 "s_shadow_compare",
@@ -18,7 +18,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
             )
     }
     , texture_sampler{
-        graphics_instance.info.use_bindless_texture
+        graphics_device.info.use_bindless_texture
             ? nullptr
             : default_uniform_block.add_sampler(
                 "s_texture",
@@ -29,7 +29,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
     }
 
     , nearest_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -37,7 +37,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
         }
     }
     , linear_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
@@ -45,7 +45,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
         }
     }
     , linear_mipmap_linear_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
             .mag_filter  = gl::Texture_mag_filter::linear,
@@ -59,7 +59,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
                 shader_path,
                 erhe::graphics::Shader_stages_create_info{
                     .name              = "standard",
-                    .default_uniform_block = graphics_instance.info.use_bindless_texture
+                    .default_uniform_block = graphics_device.info.use_bindless_texture
                         ? nullptr
                         : &default_uniform_block,
                     .dump_interface    = true,

@@ -8,7 +8,7 @@
 #include <memory>
 
 namespace erhe::graphics{
-    class Instance;
+    class Device;
     class Sampler;
     class Shader_resource;
     class Shader_stages;
@@ -32,7 +32,7 @@ class Programs
 {
 public:
     Programs(
-        erhe::graphics::Instance&                graphics_instance,
+        erhe::graphics::Device&                  graphics_device,
         erhe::scene_renderer::Program_interface& program_interface
     );
 

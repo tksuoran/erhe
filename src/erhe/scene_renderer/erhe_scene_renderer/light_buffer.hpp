@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -56,7 +56,7 @@ public:
 class Light_interface
 {
 public:
-    explicit Light_interface(erhe::graphics::Instance& graphics_instance);
+    explicit Light_interface(erhe::graphics::Device& graphics_device);
 
     std::size_t                     max_light_count;
     erhe::graphics::Shader_resource light_block;
@@ -106,7 +106,7 @@ public:
 class Light_buffer
 {
 public:
-    Light_buffer(erhe::graphics::Instance& graphics_instance, Light_interface& light_interface);
+    Light_buffer(erhe::graphics::Device& graphics_device, Light_interface& light_interface);
 
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,

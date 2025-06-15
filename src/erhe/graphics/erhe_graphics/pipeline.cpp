@@ -5,7 +5,7 @@
 
 namespace erhe::graphics {
 
-// TODO Move to graphics instance?
+// TODO Move to graphics device?
 ERHE_PROFILE_MUTEX(std::mutex, Pipeline::s_mutex);
 std::vector<Pipeline*>         Pipeline::s_pipelines;
 

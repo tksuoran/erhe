@@ -16,7 +16,7 @@ namespace erhe::window {
 
 namespace erhe::graphics {
 
-class Instance;
+class Device;
 class OpenGL_state_tracker;
 
 class Gl_worker_context
@@ -29,7 +29,7 @@ public:
 class Gl_context_provider
 {
 public:
-    Gl_context_provider(Instance& graphics_instance, OpenGL_state_tracker& opengl_state_tracker);
+    Gl_context_provider(Device& graphics_device, OpenGL_state_tracker& opengl_state_tracker);
 
     Gl_context_provider(const Gl_context_provider&) = delete;
     void operator=     (const Gl_context_provider&) = delete;
@@ -46,7 +46,7 @@ public:
     );
 
 private:
-    erhe::graphics::Instance&                                  m_graphics_instance;
+    erhe::graphics::Device&                                    m_graphics_device;
     OpenGL_state_tracker&                                      m_opengl_state_tracker;
 
     erhe::window::Context_window*                              m_main_window{nullptr};

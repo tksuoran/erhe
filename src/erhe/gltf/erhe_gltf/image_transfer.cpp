@@ -2,18 +2,18 @@
 
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::gltf {
 
-Image_transfer::Image_transfer(erhe::graphics::Instance& graphics_instance)
+Image_transfer::Image_transfer(erhe::graphics::Device& graphics_device)
     : m_slots{
-        Slot{graphics_instance},
-        Slot{graphics_instance},
-        Slot{graphics_instance},
-        Slot{graphics_instance}
+        Slot{graphics_device},
+        Slot{graphics_device},
+        Slot{graphics_device},
+        Slot{graphics_device}
     }
 {
 }
@@ -24,9 +24,9 @@ auto Image_transfer::get_slot() -> Slot&
     return m_slots.at(m_index);
 }
 
-Image_transfer::Slot::Slot(erhe::graphics::Instance& graphics_instance)
-    : m_graphics_instance{graphics_instance}
-    , m_pbo              {graphics_instance}
+Image_transfer::Slot::Slot(erhe::graphics::Device& graphics_device)
+    : m_graphics_device{graphics_device}
+    , m_pbo            {graphics_device}
 {
     ERHE_VERIFY(m_pbo.gl_name() != 0);
 

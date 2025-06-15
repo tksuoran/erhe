@@ -7,7 +7,7 @@
 #include <span>
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 
 namespace erhe::gltf {
@@ -18,7 +18,7 @@ public:
     class Slot
     {
     public:
-        explicit Slot(erhe::graphics::Instance& graphics_instance);
+        explicit Slot(erhe::graphics::Device& graphics_device);
 
         [[nodiscard]] auto begin_span_for(int width, int height, gl::Internal_format internal_format) -> std::span<std::uint8_t>;
         [[nodiscard]] auto gl_name() -> unsigned int
@@ -32,7 +32,7 @@ public:
         void map();
         void unmap();
 
-        erhe::graphics::Instance&  m_graphics_instance;
+        erhe::graphics::Device&    m_graphics_device;
         gl::Buffer_storage_mask    m_storage_mask;
         gl::Map_buffer_access_mask m_access_mask;
 
@@ -41,7 +41,7 @@ public:
         erhe::graphics::Gl_buffer m_pbo;
     };
 
-    explicit Image_transfer(erhe::graphics::Instance& graphics_instance);
+    explicit Image_transfer(erhe::graphics::Device& graphics_device);
 
     [[nodiscard]] auto get_slot() -> Slot&;
 

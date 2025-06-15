@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 
 namespace erhe::rendergraph {
@@ -16,7 +16,7 @@ class Rendergraph_node;
 class Rendergraph final
 {
 public:
-    explicit Rendergraph(erhe::graphics::Instance& graphics_instance);
+    explicit Rendergraph(erhe::graphics::Device& graphics_device);
     ~Rendergraph();
 
     // Public API
@@ -28,7 +28,7 @@ public:
     auto connect        (int key, Rendergraph_node* source_node, Rendergraph_node* sink_node) -> bool;
     auto disconnect     (int key, Rendergraph_node* source_node, Rendergraph_node* sink_node) -> bool;
 
-    [[nodiscard]] auto get_graphics_instance() -> erhe::graphics::Instance&;
+    [[nodiscard]] auto get_graphics_instance() -> erhe::graphics::Device&;
 
     void automatic_layout(float image_size);
 
@@ -36,7 +36,7 @@ public:
     float y_gap{100.0f};
 
 private:
-    erhe::graphics::Instance&      m_graphics_instance;
+    erhe::graphics::Device&        m_graphics_device;
     ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     std::vector<Rendergraph_node*> m_nodes;
 };

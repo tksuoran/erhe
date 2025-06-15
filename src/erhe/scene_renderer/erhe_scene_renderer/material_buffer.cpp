@@ -5,7 +5,7 @@
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_primitive/material.hpp"
@@ -15,9 +15,9 @@
 
 namespace erhe::scene_renderer {
 
-Material_interface::Material_interface(erhe::graphics::Instance& graphics_instance)
-    : material_block {graphics_instance, "material", material_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
-    , material_struct{graphics_instance, "Material"}
+Material_interface::Material_interface(erhe::graphics::Device& graphics_device)
+    : material_block {graphics_device, "material", material_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    , material_struct{graphics_device, "Material"}
     , offsets        {
         .roughness                  = material_struct.add_vec2 ("roughness"                 )->offset_in_parent(),
         .metallic                   = material_struct.add_float("metallic"                  )->offset_in_parent(),
@@ -43,17 +43,17 @@ Material_interface::Material_interface(erhe::graphics::Instance& graphics_instan
     material_block.set_readonly(true);
 }
 
-Material_buffer::Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface)
+Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface)
     : GPU_ring_buffer_client{
-        graphics_instance,
+        graphics_device,
         "Material_buffer",
         gl::Buffer_target::shader_storage_buffer,
         material_interface.material_block.binding_point()
     }
-    , m_graphics_instance {graphics_instance}
+    , m_graphics_device {graphics_device}
     , m_material_interface{material_interface}
     , m_nearest_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -61,7 +61,7 @@ Material_buffer::Material_buffer(erhe::graphics::Instance& graphics_instance, Ma
         }
     }
     , m_linear_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
@@ -106,13 +106,13 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
         using erhe::graphics::write;
 
         const uint64_t base_color_handle = material->textures.base_color
-            ? m_graphics_instance.get_handle(
+            ? m_graphics_device.get_handle(
                 *material->textures.base_color.get(),
                 material->samplers.base_color ? *material->samplers.base_color.get() : m_linear_sampler
             )
             : c_texture_unused_64;
         const uint64_t metallic_roughness_handle = material->textures.metallic_roughness
-            ? m_graphics_instance.get_handle(
+            ? m_graphics_device.get_handle(
                 *material->textures.metallic_roughness.get(),
                 material->samplers.metallic_roughness ? *material->samplers.metallic_roughness.get() : m_linear_sampler
             )
@@ -156,13 +156,13 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
         write(gpu_data, write_offset + offsets.emissive   , as_span(material->emissive   ));
         write(gpu_data, write_offset + offsets.opacity    , as_span(material->opacity    ));
 
-        if (m_graphics_instance.info.use_bindless_texture) {
+        if (m_graphics_device.info.use_bindless_texture) {
             write(gpu_data, write_offset + offsets.base_color_texture,         as_span(base_color_handle));
             write(gpu_data, write_offset + offsets.metallic_roughness_texture, as_span(metallic_roughness_handle));
         } else {
             {
                 std::optional<std::size_t> opt_texture_unit = material->textures.base_color
-                    ? m_graphics_instance.texture_unit_cache_allocate(base_color_handle)
+                    ? m_graphics_device.texture_unit_cache_allocate(base_color_handle)
                     : std::nullopt;
                 if (opt_texture_unit.has_value()) {
                     SPDLOG_LOGGER_TRACE(log_material_buffer, "[{}] {} base_color allocated texture unit = {}", material_index, material->get_name(), opt_texture_unit.value());
@@ -177,7 +177,7 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
             }
             {
                 std::optional<std::size_t> opt_texture_unit = material->textures.metallic_roughness
-                    ? m_graphics_instance.texture_unit_cache_allocate(metallic_roughness_handle)
+                    ? m_graphics_device.texture_unit_cache_allocate(metallic_roughness_handle)
                     : std::nullopt;
                 const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : c_texture_unused_32);
                 //const uint64_t reserved     = static_cast<uint64_t>(0);

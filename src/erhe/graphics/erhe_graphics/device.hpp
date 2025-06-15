@@ -76,7 +76,7 @@ struct Ring_buffer_sync_entry
     size_t      byte_count {0};
 };
 
-class Instance;
+class Device;
 
 enum class Ring_buffer_usage : unsigned int
 {
@@ -138,7 +138,7 @@ public:
 class GPU_ring_buffer
 {
 public:
-    GPU_ring_buffer(Instance& graphics_instance, const GPU_ring_buffer_create_info& create_info);
+    GPU_ring_buffer(Device& graphics_device, const GPU_ring_buffer_create_info& create_info);
     ~GPU_ring_buffer();
 
     void sanity_check();
@@ -158,13 +158,13 @@ public:
     [[nodiscard]] auto get_buffer() -> erhe::graphics::Buffer*;
     [[nodiscard]] auto get_name  () const -> const std::string&;
 
-    // For Instance
+    // For Device
     void frame_completed(uint64_t frame);
 
 private:
     void wrap_write();
 
-    Instance&               m_instance;
+    Device&                 m_device;
     std::unique_ptr<Buffer> m_buffer;
 
     std::size_t             m_map_offset           {0};
@@ -184,14 +184,14 @@ static constexpr unsigned int format_flag_require_stencil   = 0x02u;
 static constexpr unsigned int format_flag_prefer_accuracy   = 0x04u;
 static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
 
-class Instance
+class Device
 {
 public:
-    explicit Instance(erhe::window::Context_window& context_window);
-    Instance      (const Instance&) = delete;
-    void operator=(const Instance&) = delete;
-    Instance      (Instance&&)      = delete;
-    void operator=(Instance&&)      = delete;
+    explicit Device(erhe::window::Context_window& context_window);
+    Device         (const Device&) = delete;
+    void operator= (const Device&) = delete;
+    Device         (Device&&)      = delete;
+    void operator= (Device&&)      = delete;
 
     [[nodiscard]] auto get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture() -> std::shared_ptr<Texture>;
@@ -349,13 +349,13 @@ private:
 class GPU_ring_buffer_client
 {
 public:
-    GPU_ring_buffer_client(Instance& graphics_instance, std::string_view debug_label, gl::Buffer_target buffer_target, std::optional<unsigned int> binding_point = {});
+    GPU_ring_buffer_client(Device& graphics_device, std::string_view debug_label, gl::Buffer_target buffer_target, std::optional<unsigned int> binding_point = {});
 
     auto acquire(Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
     auto bind(const Buffer_range& range) -> bool;
 
 protected:
-    Instance&                   m_graphics_instance;
+    Device&                     m_graphics_device;
 
 private:
     gl::Buffer_target           m_buffer_target;

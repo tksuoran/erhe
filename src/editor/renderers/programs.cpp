@@ -1,7 +1,7 @@
 #include "renderers/programs.hpp"
 
 #include "erhe_graphics/shader_monitor.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -27,26 +27,26 @@ Programs::Shader_stages_builder::Shader_stages_builder(Shader_stages_builder&& o
 {
 }
 
-Programs::Programs(erhe::graphics::Instance& graphics_instance)
+Programs::Programs(erhe::graphics::Device& graphics_device)
     : shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
-    , default_uniform_block{graphics_instance}
+    , default_uniform_block{graphics_device}
     , shadow_sampler_compare{
-        graphics_instance.info.use_bindless_texture
+        graphics_device.info.use_bindless_texture
             ? nullptr
             : default_uniform_block.add_sampler("s_shadow_compare", gl::Uniform_type::sampler_2d_array_shadow, shadow_texture_unit_compare)
     }
     , shadow_sampler_no_compare{
-        graphics_instance.info.use_bindless_texture
+        graphics_device.info.use_bindless_texture
             ? nullptr
             : default_uniform_block.add_sampler("s_shadow_no_compare", gl::Uniform_type::sampler_2d_array, shadow_texture_unit_no_compare)
     }
     , texture_sampler{
-        graphics_instance.info.use_bindless_texture
+        graphics_device.info.use_bindless_texture
             ? nullptr
             : default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, s_texture_unit_base, s_texture_unit_count)
     }
     , nearest_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -54,7 +54,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance)
         }
     }
     , linear_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter = gl::Texture_mag_filter::linear,
@@ -62,58 +62,58 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance)
         }
     }
     , linear_mipmap_linear_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter = gl::Texture_min_filter::linear_mipmap_linear,
             .mag_filter = gl::Texture_mag_filter::linear,
             .debug_label = "Programs linear mipmap"
         }
     }
-    , error                   {graphics_instance, "error-not_loaded"}
-    , brdf_slice              {graphics_instance, "brdf_slice-not_loaded"}
-    , brush                   {graphics_instance, "brush-not_loaded"}
-    , standard                {graphics_instance, "standard-not_loaded"}
-    , anisotropic_slope       {graphics_instance, "anisotropic_slope-not_loaded"}
-    , anisotropic_engine_ready{graphics_instance, "anisotropic_engine_ready-not_loaded"}
-    , circular_brushed_metal  {graphics_instance, "circular_brushed_metal-not_loaded"}
-    , textured                {graphics_instance, "textured-not_loaded"}
-    , sky                     {graphics_instance, "sky-not_loaded"}
-    , grid                    {graphics_instance, "grid-not_loaded"}
-    , fat_triangle            {graphics_instance, "fat_triangle-not_loaded"}
-    , wide_lines_draw_color   {graphics_instance, "wide_lines_draw_color-not_loaded"}
-    , wide_lines_vertex_color {graphics_instance, "wide_lines_vertex_color-not_loaded"}
-    , points                  {graphics_instance, "points-not_loaded"}
-    , depth                   {graphics_instance, "depth-not_loaded"}
-    , id                      {graphics_instance, "id-not_loaded"}
-    , tool                    {graphics_instance, "tool-not_loaded"}
-    , debug_depth             {graphics_instance, "debug_depth-not_loaded"}
-    , debug_normal            {graphics_instance, "debug_normal-not_loaded"}
-    , debug_tangent           {graphics_instance, "debug_tangent-not_loaded"}
-    , debug_vertex_tangent_w  {graphics_instance, "debug_vertex_tangent_w-not_loaded"}
-    , debug_bitangent         {graphics_instance, "debug_bitangent-not_loaded"}
-    , debug_texcoord          {graphics_instance, "debug_texcoord-not_loaded"}
-    , debug_base_color_texture{graphics_instance, "debug_base_color_texture-not_loaded"}
-    , debug_vertex_color_rgb  {graphics_instance, "debug_vertex_color_rgb-not_loaded"}
-    , debug_vertex_color_alpha{graphics_instance, "debug_vertex_color_alpha-not_loaded"}
-    , debug_aniso_strength    {graphics_instance, "debug_aniso_strength-not_loaded"}
-    , debug_aniso_texcoord    {graphics_instance, "debug_aniso_texcoord-not_loaded"}
-    , debug_vdotn             {graphics_instance, "debug_v_dot_n-not_loaded"}
-    , debug_ldotn             {graphics_instance, "debug_v_dot_n-not_loaded"}
-    , debug_hdotv             {graphics_instance, "debug_h_dot_v-not_loaded"}
-    , debug_joint_indices     {graphics_instance, "debug_joint_indices-not_loaded"}
-    , debug_joint_weights     {graphics_instance, "debug_joint_weights-not_loaded"}
-    , debug_omega_o           {graphics_instance, "debug_omega_o-not_loaded"}
-    , debug_omega_i           {graphics_instance, "debug_omega_i-not_loaded"}
-    , debug_omega_g           {graphics_instance, "debug_omega_g-not_loaded"}
-    , debug_vertex_valency    {graphics_instance, "debug_vertex_valency-not_loaded"}
-    , debug_polygon_edge_count{graphics_instance, "debug_polygon_edge_count_g-not_loaded"}
-    , debug_misc              {graphics_instance, "debug_misc-not_loaded"}
+    , error                   {graphics_device, "error-not_loaded"}
+    , brdf_slice              {graphics_device, "brdf_slice-not_loaded"}
+    , brush                   {graphics_device, "brush-not_loaded"}
+    , standard                {graphics_device, "standard-not_loaded"}
+    , anisotropic_slope       {graphics_device, "anisotropic_slope-not_loaded"}
+    , anisotropic_engine_ready{graphics_device, "anisotropic_engine_ready-not_loaded"}
+    , circular_brushed_metal  {graphics_device, "circular_brushed_metal-not_loaded"}
+    , textured                {graphics_device, "textured-not_loaded"}
+    , sky                     {graphics_device, "sky-not_loaded"}
+    , grid                    {graphics_device, "grid-not_loaded"}
+    , fat_triangle            {graphics_device, "fat_triangle-not_loaded"}
+    , wide_lines_draw_color   {graphics_device, "wide_lines_draw_color-not_loaded"}
+    , wide_lines_vertex_color {graphics_device, "wide_lines_vertex_color-not_loaded"}
+    , points                  {graphics_device, "points-not_loaded"}
+    , depth                   {graphics_device, "depth-not_loaded"}
+    , id                      {graphics_device, "id-not_loaded"}
+    , tool                    {graphics_device, "tool-not_loaded"}
+    , debug_depth             {graphics_device, "debug_depth-not_loaded"}
+    , debug_normal            {graphics_device, "debug_normal-not_loaded"}
+    , debug_tangent           {graphics_device, "debug_tangent-not_loaded"}
+    , debug_vertex_tangent_w  {graphics_device, "debug_vertex_tangent_w-not_loaded"}
+    , debug_bitangent         {graphics_device, "debug_bitangent-not_loaded"}
+    , debug_texcoord          {graphics_device, "debug_texcoord-not_loaded"}
+    , debug_base_color_texture{graphics_device, "debug_base_color_texture-not_loaded"}
+    , debug_vertex_color_rgb  {graphics_device, "debug_vertex_color_rgb-not_loaded"}
+    , debug_vertex_color_alpha{graphics_device, "debug_vertex_color_alpha-not_loaded"}
+    , debug_aniso_strength    {graphics_device, "debug_aniso_strength-not_loaded"}
+    , debug_aniso_texcoord    {graphics_device, "debug_aniso_texcoord-not_loaded"}
+    , debug_vdotn             {graphics_device, "debug_v_dot_n-not_loaded"}
+    , debug_ldotn             {graphics_device, "debug_v_dot_n-not_loaded"}
+    , debug_hdotv             {graphics_device, "debug_h_dot_v-not_loaded"}
+    , debug_joint_indices     {graphics_device, "debug_joint_indices-not_loaded"}
+    , debug_joint_weights     {graphics_device, "debug_joint_weights-not_loaded"}
+    , debug_omega_o           {graphics_device, "debug_omega_o-not_loaded"}
+    , debug_omega_i           {graphics_device, "debug_omega_i-not_loaded"}
+    , debug_omega_g           {graphics_device, "debug_omega_g-not_loaded"}
+    , debug_vertex_valency    {graphics_device, "debug_vertex_valency-not_loaded"}
+    , debug_polygon_edge_count{graphics_device, "debug_polygon_edge_count_g-not_loaded"}
+    , debug_misc              {graphics_device, "debug_misc-not_loaded"}
 {
 }
 
 void Programs::load_programs(
     tf::Executor&                            executor,
-    erhe::graphics::Instance&                graphics_instance,
+    erhe::graphics::Device&                graphics_device,
     erhe::scene_renderer::Program_interface& program_interface
 )
 {
@@ -202,7 +202,7 @@ void Programs::load_programs(
 
         for (auto& entry : prototypes) {
             entry.reloadable_shader_stages.shader_stages.reload(std::move(entry.prototype));
-            graphics_instance.shader_monitor.add(entry.reloadable_shader_stages);
+            graphics_device.shader_monitor.add(entry.reloadable_shader_stages);
         }
     }
 }

@@ -1,7 +1,7 @@
 #if 0
 #pragma once
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>

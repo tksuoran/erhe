@@ -15,7 +15,7 @@ class Shader_stages;
 class Shader_monitor
 {
 public:
-    explicit Shader_monitor(Instance& instance);
+    explicit Shader_monitor(Device& device);
     ~Shader_monitor() noexcept;
 
     void begin();
@@ -75,7 +75,7 @@ private:
         std::set<Reload_entry, Compare_object> reload_entries;
     };
 
-    Instance&                             m_graphics_instance;
+    Device&                             m_graphics_device;
     bool                                  m_run{false};
     std::map<std::filesystem::path, File> m_files;
     ERHE_PROFILE_MUTEX(std::mutex,        m_mutex);

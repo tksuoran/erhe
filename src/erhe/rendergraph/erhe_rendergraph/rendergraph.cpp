@@ -9,8 +9,8 @@
 
 namespace erhe::rendergraph {
 
-Rendergraph::Rendergraph(erhe::graphics::Instance& graphics_instance)
-    : m_graphics_instance{graphics_instance}
+Rendergraph::Rendergraph(erhe::graphics::Device& graphics_device)
+    : m_graphics_device{graphics_device}
 {
     log_tail->info("Rendergraph::Rendergraph()");
 }
@@ -206,9 +206,9 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
     log_tail->trace("Unregistered Rendergraph_node {}", node->get_name());
 }
 
-auto Rendergraph::get_graphics_instance() -> erhe::graphics::Instance&
+auto Rendergraph::get_graphics_instance() -> erhe::graphics::Device&
 {
-    return m_graphics_instance;
+    return m_graphics_device;
 }
 
 void Rendergraph::automatic_layout(const float image_size)

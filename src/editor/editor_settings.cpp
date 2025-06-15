@@ -15,7 +15,7 @@ Editor_settings::Editor_settings()
    read();
 }
 
-void Editor_settings::apply_limits(erhe::graphics::Instance& instance, Editor_message_bus& editor_message_bus)
+void Editor_settings::apply_limits(erhe::graphics::Device& instance, Editor_message_bus& editor_message_bus)
 {
     graphics.get_limits(instance, gl::Internal_format::depth_component32f); // TODO Do not hard code depth format
     graphics.select_active_graphics_preset(editor_message_bus);
@@ -26,7 +26,7 @@ auto Editor_settings::get_ui_scale() const -> float
     return imgui.font_size / 16.0f;
 }
 
-void Graphics_settings::get_limits(const erhe::graphics::Instance& instance, gl::Internal_format format)
+void Graphics_settings::get_limits(const erhe::graphics::Device& instance, gl::Internal_format format)
 {
     msaa_sample_count_entry_s_strings.clear();
     msaa_sample_count_entry_strings.clear();

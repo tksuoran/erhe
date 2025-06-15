@@ -2,7 +2,7 @@
 
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/glsl_format_source.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -328,7 +328,7 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
 {
     ERHE_PROFILE_FUNCTION();
 
-    Gl_shader gl_shader{m_graphics_instance, shader.type};
+    Gl_shader gl_shader{m_graphics_device, shader.type};
 
     if (m_state == state_fail) {
         return gl_shader;
@@ -373,7 +373,7 @@ auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::
             return i->second;
         }
     }
-    return m_create_info.final_source(m_graphics_instance, shader, &m_paths, gl_name);
+    return m_create_info.final_source(m_graphics_device, shader, &m_paths, gl_name);
 }
 
 auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool
@@ -407,11 +407,11 @@ auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader
     return true;
 }
 
-Shader_stages_prototype::Shader_stages_prototype(Instance& graphics_instance, Shader_stages_create_info&& create_info)
-    : m_graphics_instance    {graphics_instance}
-    , m_handle               {graphics_instance}
+Shader_stages_prototype::Shader_stages_prototype(Device& graphics_device, Shader_stages_create_info&& create_info)
+    : m_graphics_device      {graphics_device}
+    , m_handle               {graphics_device}
     , m_create_info          {create_info}
-    , m_default_uniform_block{graphics_instance}
+    , m_default_uniform_block{graphics_device}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -420,11 +420,11 @@ Shader_stages_prototype::Shader_stages_prototype(Instance& graphics_instance, Sh
         post_link();
     }
 }
-Shader_stages_prototype::Shader_stages_prototype(Instance& graphics_instance, const Shader_stages_create_info& create_info)
-    : m_graphics_instance    {graphics_instance}
-    , m_handle               {graphics_instance}
+Shader_stages_prototype::Shader_stages_prototype(Device& graphics_device, const Shader_stages_create_info& create_info)
+    : m_graphics_device      {graphics_device}
+    , m_handle               {graphics_device}
     , m_create_info          {create_info}
-    , m_default_uniform_block{graphics_instance}
+    , m_default_uniform_block{graphics_device}
 {
     ERHE_PROFILE_FUNCTION();
 

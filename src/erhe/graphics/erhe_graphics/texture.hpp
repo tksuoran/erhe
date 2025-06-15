@@ -10,7 +10,7 @@
 namespace erhe::graphics {
 
 class Buffer;
-class Instance;
+class Device;
 class Sampler;
 class Texture;
 
@@ -21,9 +21,9 @@ public:
 
     [[nodiscard]] auto calculate_level_count() const -> int;
 
-    static auto make_view(Instance& instance, const std::shared_ptr<Texture>& view_source) -> Texture_create_info;
+    static auto make_view(Device& device, const std::shared_ptr<Texture>& view_source) -> Texture_create_info;
 
-    Instance&                instance;
+    Device&                  device;
     gl::Texture_target       target                {gl::Texture_target::texture_2d};
     gl::Internal_format      internal_format       {gl::Internal_format::rgba8};
     bool                     use_mipmaps           {false};
@@ -53,7 +53,7 @@ public:
     Texture& operator=(Texture&&) = delete;
     ~Texture() noexcept override;
 
-    Texture(Instance& instance, const Texture_create_info& create_info);
+    Texture(Device& device, const Texture_create_info& create_info);
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Material"};

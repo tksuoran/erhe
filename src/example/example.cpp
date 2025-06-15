@@ -14,7 +14,7 @@
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item_log.hpp"
@@ -48,19 +48,19 @@ public:
     Example(
         erhe::window::Context_window&           window,
         erhe::scene::Scene&                     scene,
-        erhe::graphics::Instance&               graphics_instance,
+        erhe::graphics::Device&                 graphics_device,
         erhe::scene_renderer::Forward_renderer& forward_renderer,
         erhe::gltf::Gltf_data&                  gltf_data,
         Mesh_memory&                            mesh_memory,
         Programs&                               programs
     )
-        : m_window           {window}
-        , m_scene            {scene}
-        , m_graphics_instance{graphics_instance}
-        , m_forward_renderer {forward_renderer}
-        , m_gltf_data        {gltf_data}
-        , m_mesh_memory      {mesh_memory}
-        , m_programs         {programs}
+        : m_window          {window}
+        , m_scene           {scene}
+        , m_graphics_device {graphics_device}
+        , m_forward_renderer{forward_renderer}
+        , m_gltf_data       {gltf_data}
+        , m_mesh_memory     {mesh_memory}
+        , m_programs        {programs}
     {
         m_camera = make_camera("Camera", glm::vec3{0.0f, 0.0f, 10.0f}, glm::vec3{0.0f, 0.0f, -1.0f});
         m_light = make_point_light("Light",
@@ -172,7 +172,7 @@ public:
         }
         gl::enable(gl::Enable_cap::framebuffer_srgb);
         gl::clear_color(0.1f, 0.1f, 0.1f, 1.0f);
-        gl::clear_depth_f(*m_graphics_instance.depth_clear_value_pointer());
+        gl::clear_depth_f(*m_graphics_device.depth_clear_value_pointer());
         gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 
         erhe::math::Viewport viewport{
@@ -180,14 +180,14 @@ public:
             .y             = 0,
             .width         = m_window.get_width(),
             .height        = m_window.get_height(),
-            .reverse_depth = m_graphics_instance.configuration.reverse_depth
+            .reverse_depth = m_graphics_device.configuration.reverse_depth
         };
 
         m_scene.update_node_transforms();
 
         std::vector<erhe::renderer::Pipeline_renderpass*> passes;
 
-        const bool reverse_depth = m_graphics_instance.configuration.reverse_depth;
+        const bool reverse_depth = m_graphics_device.configuration.reverse_depth;
         erhe::renderer::Pipeline_renderpass standard_pipeline_renderpass{ 
             erhe::graphics::Pipeline{
                 erhe::graphics::Pipeline_data{
@@ -340,7 +340,7 @@ private:
 
     erhe::window::Context_window&           m_window;
     erhe::scene::Scene&                     m_scene;
-    erhe::graphics::Instance&               m_graphics_instance;
+    erhe::graphics::Device&                 m_graphics_device;
     erhe::scene_renderer::Forward_renderer& m_forward_renderer;
     erhe::gltf::Gltf_data&                  m_gltf_data;
     Mesh_memory&                            m_mesh_memory;
@@ -393,20 +393,20 @@ void run_example()
 
     erhe::scene::Scene_message_bus          scene_message_bus{};
     erhe::scene::Scene                      scene            {scene_message_bus, "example scene", nullptr};
-    erhe::graphics::Instance                graphics_instance{window};
-    erhe::gltf::Image_transfer              image_transfer   {graphics_instance};
-    Mesh_memory                             mesh_memory      {graphics_instance};
-    erhe::scene_renderer::Program_interface program_interface{graphics_instance, mesh_memory.vertex_format};
-    erhe::scene_renderer::Forward_renderer  forward_renderer {graphics_instance, program_interface};
-    Programs                                programs         {graphics_instance, program_interface};
+    erhe::graphics::Device                  graphics_device  {window};
+    erhe::gltf::Image_transfer              image_transfer   {graphics_device};
+    Mesh_memory                             mesh_memory      {graphics_device};
+    erhe::scene_renderer::Program_interface program_interface{graphics_device, mesh_memory.vertex_format};
+    erhe::scene_renderer::Forward_renderer  forward_renderer {graphics_device, program_interface};
+    Programs                                programs         {graphics_device, program_interface};
 
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(
         erhe::gltf::Gltf_parse_arguments{
-            .graphics_instance = graphics_instance,
-            .image_transfer    = image_transfer,
-            .root_node         = scene.get_root_node(),
-            //.path              = "res/models/Box.gltf"
-            .path              = "res/models/SM_Deccer_Cubes_Textured.glb"
+            .graphics_device = graphics_device,
+            .image_transfer  = image_transfer,
+            .root_node       = scene.get_root_node(),
+            //.path          = "res/models/Box.gltf"
+            .path            = "res/models/SM_Deccer_Cubes_Textured.glb"
         }
     );
 
@@ -433,7 +433,7 @@ void run_example()
     gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
     gl::enable      (gl::Enable_cap::framebuffer_srgb);
 
-    Example example{window, scene, graphics_instance, forward_renderer, gltf_data, mesh_memory, programs};
+    Example example{window, scene, graphics_device, forward_renderer, gltf_data, mesh_memory, programs};
     example.run();
 }
 

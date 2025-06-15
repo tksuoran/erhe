@@ -4,7 +4,7 @@
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/framebuffer.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -13,9 +13,9 @@
 
 namespace editor {
 
-Thumbnails::Thumbnails(erhe::graphics::Instance& graphics_instance, const unsigned int capacity, const unsigned int size_pixels)
+Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, const unsigned int capacity, const unsigned int size_pixels)
     : m_color_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -31,9 +31,9 @@ Thumbnails::Thumbnails(erhe::graphics::Instance& graphics_instance, const unsign
     const int viewport_size = static_cast<int>(m_capacity_root * m_size_pixels);
 
     m_color_texture = std::make_shared<erhe::graphics::Texture>(
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Texture_create_info{
-            .instance        = graphics_instance,
+            .device          = graphics_device,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = gl::Internal_format::rgba8,
             .use_mipmaps     = true,
@@ -44,7 +44,7 @@ Thumbnails::Thumbnails(erhe::graphics::Instance& graphics_instance, const unsign
     );
 
     m_depth_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
-        graphics_instance,
+        graphics_device,
         gl::Internal_format::depth_component32f,
         viewport_size,
         viewport_size
@@ -54,10 +54,10 @@ Thumbnails::Thumbnails(erhe::graphics::Instance& graphics_instance, const unsign
     erhe::graphics::Framebuffer::Create_info framebuffer_create_info;
     framebuffer_create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
     framebuffer_create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_renderbuffer.get());
-    m_framebuffer = std::make_unique<erhe::graphics::Framebuffer>(graphics_instance, framebuffer_create_info);
+    m_framebuffer = std::make_unique<erhe::graphics::Framebuffer>(graphics_device, framebuffer_create_info);
     m_framebuffer->set_debug_label("Thumbnail framebuffer");
 
-    m_color_texture_handle = graphics_instance.get_handle(*m_color_texture.get(), m_color_sampler);
+    m_color_texture_handle = graphics_device.get_handle(*m_color_texture.get(), m_color_sampler);
 }
 
 auto Thumbnails::allocate() -> uint32_t

@@ -16,16 +16,16 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
 Framebuffer_window::Framebuffer_window(
-    erhe::graphics::Instance& graphics_instance,
-    Imgui_renderer&           imgui_renderer,
-    Imgui_windows&            imgui_windows,
-    const std::string_view    title,
-    const char*               ini_label
+    erhe::graphics::Device& graphics_device,
+    Imgui_renderer&         imgui_renderer,
+    Imgui_windows&          imgui_windows,
+    const std::string_view  title,
+    const char*             ini_label
 )
-    : Imgui_window       {imgui_renderer, imgui_windows, title, ini_label}
-    , m_graphics_instance{graphics_instance}
-    , m_debug_label      {ini_label}
-    , m_vertex_input     {graphics_instance, erhe::graphics::Vertex_input_state_data{}}
+    : Imgui_window     {imgui_renderer, imgui_windows, title, ini_label}
+    , m_graphics_device{graphics_device}
+    , m_debug_label    {ini_label}
+    , m_vertex_input   {graphics_device, erhe::graphics::Vertex_input_state_data{}}
 {
 }
 
@@ -90,9 +90,9 @@ void Framebuffer_window::update_framebuffer()
     m_viewport.height = size.y;
 
     m_texture = std::make_shared<Texture>(
-        m_graphics_instance,
+        m_graphics_device,
         Texture::Create_info{
-            .instance        = m_graphics_instance,
+            .device          = m_graphics_device,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = gl::Internal_format::srgb8_alpha8,
             .sample_count    = 0,
@@ -111,7 +111,7 @@ void Framebuffer_window::update_framebuffer()
 
     Framebuffer::Create_info create_info;
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
-    m_framebuffer = std::make_unique<Framebuffer>(m_graphics_instance, create_info);
+    m_framebuffer = std::make_unique<Framebuffer>(m_graphics_device, create_info);
     m_framebuffer->set_debug_label(m_debug_label);
 }
 

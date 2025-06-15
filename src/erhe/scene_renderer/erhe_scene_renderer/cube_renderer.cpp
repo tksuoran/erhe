@@ -4,7 +4,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
@@ -73,20 +73,20 @@ using erhe::graphics::Color_blend_state;
 // to be able to use bit shift instead of integer divide (which is slow).
 // GPU's do index dedup. Extra "slot" doesn't cost anything, 
 
-Cube_renderer::Cube_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
-    : m_graphics_instance  {graphics_instance}
+Cube_renderer::Cube_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface)
+    : m_graphics_device    {graphics_device}
     , m_program_interface  {program_interface}
-    , m_camera_buffer      {graphics_instance, program_interface.camera_interface}
-    , m_light_buffer       {graphics_instance, program_interface.light_interface}
-    , m_primitive_buffer   {graphics_instance, program_interface.primitive_interface}
-    , m_cube_control_buffer{graphics_instance, program_interface.cube_interface}
+    , m_camera_buffer      {graphics_device, program_interface.camera_interface}
+    , m_light_buffer       {graphics_device, program_interface.light_interface}
+    , m_primitive_buffer   {graphics_device, program_interface.primitive_interface}
+    , m_cube_control_buffer{graphics_device, program_interface.cube_interface}
 {
 }
 
 auto Cube_renderer::make_buffer(const std::vector<uint32_t>& cubes) -> std::shared_ptr<Cube_instance_buffer>
 {
     return std::make_shared<Cube_instance_buffer>(
-        m_graphics_instance,
+        m_graphics_device,
         m_program_interface.cube_interface,
         cubes
     );
@@ -133,7 +133,7 @@ void Cube_renderer::render(const Render_parameters& parameters)
     m_cube_control_buffer.bind(cube_control_range);
 
     const erhe::graphics::Pipeline& pipeline = parameters.pipeline;
-    m_graphics_instance.opengl_state_tracker.execute(pipeline, false);
+    m_graphics_device.opengl_state_tracker.execute(pipeline, false);
     const std::size_t cube_count   = parameters.cube_instance_buffer.bind();
     const GLsizei     vertex_count = static_cast<GLsizei>(cube_count * 6 * 6);
     gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, vertex_count);

@@ -8,7 +8,7 @@
 #include "erhe_math/viewport.hpp"
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 namespace erhe::imgui {
     class Imgui_windows;

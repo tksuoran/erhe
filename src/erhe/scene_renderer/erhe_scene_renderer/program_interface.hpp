@@ -11,7 +11,7 @@
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 
 namespace erhe::scene_renderer {
@@ -20,7 +20,7 @@ class Program_interface
 {
 public:
     Program_interface(
-        erhe::graphics::Instance&        graphics_instance,
+        erhe::graphics::Device&          graphics_device,
         erhe::dataformat::Vertex_format& vertex_format
     );
 
@@ -41,7 +41,7 @@ public:
 
     [[nodiscard]] auto make_program(erhe::graphics::Shader_stages_prototype&& prototype) -> erhe::graphics::Shader_stages;
 
-    erhe::graphics::Instance&        graphics_instance;
+    erhe::graphics::Device&          graphics_device;
     erhe::graphics::Fragment_outputs fragment_outputs;
     erhe::dataformat::Vertex_format& vertex_format;
     Camera_interface                 camera_interface;

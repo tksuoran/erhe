@@ -68,31 +68,31 @@ void Icons::queue_load_icons(Icon_loader& loader)
 }
 
 Icon_set::Icon_set(
-    Editor_context&           editor_context,
-    erhe::graphics::Instance& graphics_instance,
-    Icon_settings&            icon_settings,
-    Icons&                    icons_in,
-    Icon_loader&              loader
+    Editor_context&         editor_context,
+    erhe::graphics::Device& graphics_device,
+    Icon_settings&          icon_settings,
+    Icons&                  icons_in,
+    Icon_loader&            loader
 )
     : m_context{editor_context}
 {
-    load_icons(graphics_instance, icon_settings, icons_in, loader);
+    load_icons(graphics_device, icon_settings, icons_in, loader);
 }
 
 void Icon_set::load_icons(
-    erhe::graphics::Instance& graphics_instance,
-    Icon_settings&            icon_settings,
-    Icons&                    icons_in,
-    Icon_loader&              loader
+    erhe::graphics::Device& graphics_device,
+    Icon_settings&          icon_settings,
+    Icons&                  icons_in,
+    Icon_loader&            loader
 )
 {
     ERHE_PROFILE_FUNCTION();
 
     icons = icons_in;
 
-    m_small  = std::make_unique<Icon_rasterization>(m_context, graphics_instance, icon_settings.small_icon_size);
-    m_large  = std::make_unique<Icon_rasterization>(m_context, graphics_instance, icon_settings.large_icon_size);
-    m_hotbar = std::make_unique<Icon_rasterization>(m_context, graphics_instance, icon_settings.hotbar_icon_size);
+    m_small  = std::make_unique<Icon_rasterization>(m_context, graphics_device, icon_settings.small_icon_size);
+    m_large  = std::make_unique<Icon_rasterization>(m_context, graphics_device, icon_settings.large_icon_size);
+    m_hotbar = std::make_unique<Icon_rasterization>(m_context, graphics_device, icon_settings.hotbar_icon_size);
 
     loader.upload_to_texture(*m_small.get());
     loader.upload_to_texture(*m_large.get());

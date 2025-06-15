@@ -9,7 +9,7 @@
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
@@ -33,10 +33,10 @@ using erhe::graphics::Color_blend_state;
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
 
-Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
-    : m_graphics_instance{graphics_instance}
+Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface)
+    : m_graphics_device{graphics_device}
     , m_shader_stages{
-        graphics_instance,
+        graphics_device,
         program_interface.make_prototype(
             "res/shaders",
             erhe::graphics::Shader_stages_create_info{
@@ -47,7 +47,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
         )
     }
     , m_shadow_sampler_compare{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::linear,
@@ -61,7 +61,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
         }
     }
     , m_shadow_sampler_no_compare{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::nearest,
@@ -73,13 +73,13 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
             .debug_label  = "Shadow_renderer::m_shadow_sampler_no_compare"
         }
     }
-    , m_vertex_input        {graphics_instance}
-    , m_draw_indirect_buffer{graphics_instance}
-    , m_joint_buffer        {graphics_instance, program_interface.joint_interface}
-    , m_light_buffer        {graphics_instance, program_interface.light_interface}
-    , m_primitive_buffer    {graphics_instance, program_interface.primitive_interface}
-    , m_material_buffer     {graphics_instance, program_interface.material_interface}
-    , m_gpu_timer           {graphics_instance, "Shadow_renderer"}
+    , m_vertex_input        {graphics_device}
+    , m_draw_indirect_buffer{graphics_device}
+    , m_joint_buffer        {graphics_device, program_interface.joint_interface}
+    , m_light_buffer        {graphics_device, program_interface.light_interface}
+    , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
+    , m_material_buffer     {graphics_device, program_interface.material_interface}
+    , m_gpu_timer           {graphics_device, "Shadow_renderer"}
 {
     m_pipeline_cache_entries.resize(8);
 }
@@ -102,7 +102,7 @@ auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state)
         }
     }
     ERHE_VERIFY(lru_entry != nullptr);
-    const bool reverse_depth = m_graphics_instance.configuration.reverse_depth;
+    const bool reverse_depth = m_graphics_device.configuration.reverse_depth;
     lru_entry->serial = m_pipeline_cache_serial;
     lru_entry->pipeline = erhe::graphics::Pipeline{
         erhe::graphics::Pipeline_data{
@@ -129,8 +129,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     ERHE_VERIFY(parameters.vertex_buffer != nullptr);
     ERHE_VERIFY(parameters.view_camera != nullptr);
 
-    const uint64_t shadow_texture_handle_compare    = m_graphics_instance.get_handle(*parameters.texture.get(), m_shadow_sampler_compare);
-    const uint64_t shadow_texture_handle_no_compare = m_graphics_instance.get_handle(*parameters.texture.get(), m_shadow_sampler_no_compare);
+    const uint64_t shadow_texture_handle_compare    = m_graphics_device.get_handle(*parameters.texture.get(), m_shadow_sampler_compare);
+    const uint64_t shadow_texture_handle_no_compare = m_graphics_device.get_handle(*parameters.texture.get(), m_shadow_sampler_no_compare);
 
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections = Light_projections{
@@ -164,9 +164,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     auto& pipeline = get_pipeline(parameters.vertex_input_state);
 
     // TODO Multiple vertex buffer bindings
-    m_graphics_instance.opengl_state_tracker.execute(pipeline);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
+    m_graphics_device.opengl_state_tracker.execute(pipeline);
+    m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
+    m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
 
     gl::viewport(
         parameters.light_camera_viewport.x,
@@ -223,7 +223,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, parameters.framebuffers[light_index]->gl_name());
         gl::disable(gl::Enable_cap::scissor_test);
-        gl::clear_buffer_fv(gl::Buffer::depth, 0, m_graphics_instance.depth_clear_value_pointer());
+        gl::clear_buffer_fv(gl::Buffer::depth, 0, m_graphics_device.depth_clear_value_pointer());
         gl::enable(gl::Enable_cap::scissor_test);
 
         Buffer_range control_range = m_light_buffer.update_control(light_index);
@@ -252,7 +252,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
                 ERHE_PROFILE_SCOPE("mdi");
                 //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
-                m_graphics_instance.multi_draw_elements_indirect(
+                m_graphics_device.multi_draw_elements_indirect(
                     pipeline.data.input_assembly.primitive_topology,
                     erhe::graphics::to_gl_index_type(parameters.index_type),
                     reinterpret_cast<const void *>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),

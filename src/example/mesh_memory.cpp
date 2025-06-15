@@ -23,8 +23,8 @@ auto Mesh_memory::get_index_buffer_size() const -> std::size_t
     return index_buffer_size * 1024 * 1024;
 }
 
-Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance)
-    : graphics_instance{graphics_instance}
+Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device)
+    : graphics_device{graphics_device}
     , vertex_format{
         {
             0,
@@ -41,7 +41,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance)
         }
     }
     , position_vertex_buffer{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Buffer_create_info{
             .target              = gl::Buffer_target::array_buffer,
             .capacity_byte_count = get_vertex_buffer_size(0),
@@ -50,7 +50,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance)
         }
     }
     , non_position_vertex_buffer{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Buffer_create_info{
             .target              = gl::Buffer_target::array_buffer,
             .capacity_byte_count = get_vertex_buffer_size(1),
@@ -59,7 +59,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance)
         }
     }
     , index_buffer{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Buffer_create_info{
             .target              = gl::Buffer_target::element_array_buffer,
             .capacity_byte_count = get_index_buffer_size(),
@@ -77,7 +77,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance)
         .vertex_format = vertex_format,
         .buffer_sink   = graphics_buffer_sink
     }
-    , vertex_input{graphics_instance, erhe::graphics::Vertex_input_state_data::make(vertex_format)}
+    , vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data::make(vertex_format)}
 {
 }
 

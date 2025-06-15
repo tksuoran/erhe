@@ -103,7 +103,7 @@ Scene_builder::Config::Config()
 Scene_builder::Scene_builder(
     std::shared_ptr<Scene_root>     scene,
     tf::Executor&                   executor,
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
@@ -121,7 +121,7 @@ Scene_builder::Scene_builder(
     m_scene_root = scene;
 
     setup_cameras(
-        graphics_instance,
+        graphics_device,
         imgui_renderer,
         imgui_windows,
         rendergraph,
@@ -164,7 +164,7 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
 }
 
 void Scene_builder::setup_cameras(
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
@@ -195,7 +195,7 @@ void Scene_builder::setup_cameras(
 #endif
 
     //// TODO Read these from ini
-    const bool enable_post_processing = graphics_instance.configuration.post_processing;
+    const bool enable_post_processing = graphics_device.configuration.post_processing;
     const bool window_viewport        = true;
     bool imgui_window_scene_view = true;
     {
@@ -209,7 +209,7 @@ void Scene_builder::setup_cameras(
 
     const int msaa_sample_count = editor_settings.graphics.current_graphics_preset.msaa_sample_count;
     m_primary_viewport_window = scene_views.create_viewport_scene_view(
-        graphics_instance,
+        graphics_device,
         rendergraph,
         editor_rendering,
         editor_settings,

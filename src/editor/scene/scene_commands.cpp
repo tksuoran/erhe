@@ -249,7 +249,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
 
     // Rendertarget_mesh is Mesh (can be rendered in 3D scene) with textured rectangle vertex data, provides Texture
     auto mesh = std::make_shared<Rendertarget_mesh>(
-        *m_context.graphics_instance,
+        *m_context.graphics_device,
         *m_context.mesh_memory,
         2048,
         2048,
@@ -328,7 +328,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
 
     // Viewport_scene_view is a Scene_view and rendergraph node, rendering scene view to connnected consumer node
     std::shared_ptr<Viewport_scene_view> scene_view = m_context.scene_views->create_viewport_scene_view(
-        *m_context.graphics_instance,
+        *m_context.graphics_device,
         *m_context.rendergraph,
         *m_context.editor_rendering,
         *m_context.editor_settings,

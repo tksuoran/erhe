@@ -16,9 +16,9 @@
 
 namespace erhe::scene_renderer {
 
-Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
-    : joint_block {erhe::graphics::Shader_resource{graphics_instance, "joint", joint_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}}
-    , joint_struct{erhe::graphics::Shader_resource{graphics_instance, "Joint"}}
+Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device)
+    : joint_block {erhe::graphics::Shader_resource{graphics_device, "joint", joint_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}}
+    , joint_struct{erhe::graphics::Shader_resource{graphics_device, "Joint"}}
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
     ini.get("max_joint_count", max_joint_count);
@@ -38,14 +38,14 @@ Joint_interface::Joint_interface(erhe::graphics::Instance& graphics_instance)
     offsets.joint_struct = joint_block.add_struct("joints", &joint_struct, erhe::graphics::Shader_resource::unsized_array)->offset_in_parent();
 }
 
-Joint_buffer::Joint_buffer(erhe::graphics::Instance& graphics_instance, Joint_interface& joint_interface)
+Joint_buffer::Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interface& joint_interface)
     : GPU_ring_buffer_client{
-        graphics_instance,
+        graphics_device,
         "Joint_buffer",
         gl::Buffer_target::shader_storage_buffer,
         joint_interface.joint_block.binding_point()
     }
-    , m_graphics_instance{graphics_instance}
+    , m_graphics_device{graphics_device}
     , m_joint_interface  {joint_interface}
 {
 }

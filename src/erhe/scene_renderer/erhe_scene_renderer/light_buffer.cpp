@@ -25,12 +25,12 @@ namespace erhe::scene_renderer {
     return max_light_count;
 }
 
-Light_interface::Light_interface(erhe::graphics::Instance& graphics_instance)
-    : max_light_count{get_max_light_count()}
-    , light_block        {graphics_instance, "light_block",         light_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
-    , light_control_block{graphics_instance, "light_control_block", light_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
-    , light_struct       {graphics_instance, "Light"}
-    , offsets     {
+Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
+    : max_light_count    {get_max_light_count()}
+    , light_block        {graphics_device, "light_block",         light_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
+    , light_control_block{graphics_device, "light_control_block", light_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
+    , light_struct       {graphics_device, "Light"}
+    , offsets{
         .shadow_texture_compare    = light_block.add_uvec2("shadow_texture_compare"   )->offset_in_parent(),
         .shadow_texture_no_compare = light_block.add_uvec2("shadow_texture_no_compare")->offset_in_parent(),
 
@@ -65,16 +65,16 @@ Light_interface::Light_interface(erhe::graphics::Instance& graphics_instance)
 {
 }
 
-Light_buffer::Light_buffer(erhe::graphics::Instance& graphics_instance, Light_interface& light_interface)
+Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interface& light_interface)
     : m_light_interface{light_interface}
     , m_light_buffer{
-        graphics_instance,
+        graphics_device,
         "Light_buffer::m_light_buffer",
         gl::Buffer_target::uniform_buffer,
         light_interface.light_block.binding_point()
     }
     , m_control_buffer{
-        graphics_instance,
+        graphics_device,
         "Light_buffer::m_control_buffer",
         gl::Buffer_target::uniform_buffer,
         light_interface.light_control_block.binding_point()

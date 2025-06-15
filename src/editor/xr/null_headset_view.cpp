@@ -4,7 +4,7 @@ namespace editor {
 
 Headset_view::Headset_view(
     erhe::commands::Commands&       commands,
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
@@ -17,7 +17,7 @@ Headset_view::Headset_view(
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset"}
 {
     static_cast<void>(commands);
-    static_cast<void>(graphics_instance);
+    static_cast<void>(graphics_device);
     static_cast<void>(rendergraph);
     static_cast<void>(context_window);
     static_cast<void>(editor_rendering);

@@ -1,6 +1,6 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_configuration/configuration.hpp"
@@ -97,7 +97,7 @@ auto get_string(gl::String_name string_name) -> std::string
 
 //
 
-Instance::Instance(erhe::window::Context_window& context_window)
+Device::Device(erhe::window::Context_window& context_window)
     : shader_monitor  {*this}
     , context_provider{*this, opengl_state_tracker}
     , m_context_window{context_window}
@@ -598,17 +598,17 @@ Instance::Instance(erhe::window::Context_window& context_window)
     );
 }
 
-auto Instance::depth_clear_value_pointer() const -> const float*
+auto Device::depth_clear_value_pointer() const -> const float*
 {
     return configuration.reverse_depth ? &float_zero_value : &float_one_value;
 }
 
-auto Instance::depth_function(const gl::Depth_function depth_function) const -> gl::Depth_function
+auto Device::depth_function(const gl::Depth_function depth_function) const -> gl::Depth_function
 {
     return configuration.reverse_depth ? reverse(depth_function) : depth_function;
 }
 
-auto Instance::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
+auto Device::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
     if (info.use_bindless_texture) {
         return gl::get_texture_sampler_handle_arb(texture.gl_name(), sampler.gl_name());
@@ -620,7 +620,7 @@ auto Instance::get_handle(const Texture& texture, const Sampler& sampler) const 
     }
 }
 
-auto Instance::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> gl::Internal_format
+auto Device::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> gl::Internal_format
 {
     using namespace erhe::bit;
     const bool require_depth     = test_all_rhs_bits_set(flags, format_flag_require_depth    );
@@ -677,10 +677,10 @@ auto Instance::choose_depth_stencil_format(const unsigned int flags, int sample_
     return best_format;
 }
 
-auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
+auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
 {
     const erhe::graphics::Texture::Create_info create_info{
-        .instance    = *this,
+        .device      = *this,
         .width       = 2,
         .height      = 2,
         .debug_label = "dummy"
@@ -702,7 +702,7 @@ auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
 }
 
 
-void Instance::texture_unit_cache_reset(const unsigned int base_texture_unit)
+void Device::texture_unit_cache_reset(const unsigned int base_texture_unit)
 {
     SPDLOG_LOGGER_TRACE(log_texture_frame, "texture_unit_cache_reset(base_texture_unit = {})", base_texture_unit);
 
@@ -710,7 +710,7 @@ void Instance::texture_unit_cache_reset(const unsigned int base_texture_unit)
     m_texture_units.clear();
 }
 
-auto Instance::texture_unit_cache_allocate(const uint64_t handle) -> std::optional<std::size_t>
+auto Device::texture_unit_cache_allocate(const uint64_t handle) -> std::optional<std::size_t>
 {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
     const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
@@ -730,7 +730,7 @@ auto Instance::texture_unit_cache_allocate(const uint64_t handle) -> std::option
     return result;
 }
 
-auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::size_t
+auto Device::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::size_t
 {
     const GLuint fallback_texture_name = erhe::graphics::get_texture_from_handle(fallback_handle);
     const GLuint fallback_sampler_name = erhe::graphics::get_sampler_from_handle(fallback_handle);
@@ -775,7 +775,7 @@ auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::s
     return m_texture_units.size();
 }
 
-auto Instance::get_buffer_alignment(gl::Buffer_target target) -> std::size_t
+auto Device::get_buffer_alignment(gl::Buffer_target target) -> std::size_t
 {
     switch (target) {
         //using enum gl::Buffer_target;
@@ -813,9 +813,9 @@ static constexpr gl::Buffer_storage_mask storage_mask_persistent{
 static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
     gl::Buffer_storage_mask::map_write_bit
 };
-inline auto storage_mask(erhe::graphics::Instance& instance) -> gl::Buffer_storage_mask
+inline auto storage_mask(erhe::graphics::Device& device) -> gl::Buffer_storage_mask
 {
-    return instance.info.use_persistent_buffers
+    return device.info.use_persistent_buffers
         ? storage_mask_persistent
         : storage_mask_not_persistent;
 }
@@ -829,9 +829,9 @@ static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
     gl::Map_buffer_access_mask::map_write_bit
 };
 
-inline auto access_mask(erhe::graphics::Instance& instance) -> gl::Map_buffer_access_mask
+inline auto access_mask(erhe::graphics::Device& device) -> gl::Map_buffer_access_mask
 {
-    return instance.info.use_persistent_buffers
+    return device.info.use_persistent_buffers
         ? access_mask_persistent
         : access_mask_not_persistent;
 }
@@ -1013,18 +1013,18 @@ auto Buffer_range::get_buffer() const -> GPU_ring_buffer*
 //
 
 GPU_ring_buffer::GPU_ring_buffer(
-    erhe::graphics::Instance&          graphics_instance,
+    erhe::graphics::Device&          graphics_device,
     const GPU_ring_buffer_create_info& create_info
 )
-    : m_instance     {graphics_instance}
+    : m_device     {graphics_device}
     , m_buffer{
         std::make_unique<Buffer>(
-            m_instance,
+            m_device,
             Buffer_create_info{
                 .target              = gl::Buffer_target::copy_write_buffer, // generic buffer target
                 .capacity_byte_count = create_info.size,
-                .storage_mask        = storage_mask(m_instance),
-                .access_mask         = access_mask(m_instance),
+                .storage_mask        = storage_mask(m_device),
+                .access_mask         = access_mask(m_device),
                 .debug_label         = create_info.debug_label
             }
         )
@@ -1084,7 +1084,7 @@ void GPU_ring_buffer::get_size_available_for_write(
     //        ^   ^                     
     //        w2  r1                    
     //// gl::Buffer_target target = m_buffer.target();
-    //// std::size_t required_alignment = m_instance.get_buffer_alignment(target);
+    //// std::size_t required_alignment = m_device.get_buffer_alignment(target);
     const std::size_t aligned_write_position = align_offset(m_write_position, required_alignment);
     ERHE_VERIFY(aligned_write_position >= m_write_position);
     out_alignment_byte_count_without_wrap    = aligned_write_position - m_write_position;
@@ -1151,7 +1151,7 @@ auto GPU_ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage 
 
     sanity_check();
 
-    if (!m_instance.info.use_persistent_buffers) {
+    if (!m_device.info.use_persistent_buffers) {
         if (usage == Ring_buffer_usage::CPU_write) {
             m_buffer->begin_write(m_write_position, byte_count); // maps requested range
         }
@@ -1175,7 +1175,7 @@ void GPU_ring_buffer::flush(std::size_t byte_offset, std::size_t byte_count)
 
     sanity_check();
 
-    if (!m_instance.info.use_persistent_buffers) {
+    if (!m_device.info.use_persistent_buffers) {
         m_buffer->flush_bytes(byte_offset, byte_count);
     }
 }
@@ -1186,7 +1186,7 @@ void GPU_ring_buffer::close(std::size_t byte_offset, std::size_t byte_write_coun
 
     sanity_check();
 
-    if (!m_instance.info.use_persistent_buffers) {
+    if (!m_device.info.use_persistent_buffers) {
         m_buffer->end_write(byte_offset, byte_write_count); // flush and unmap
     }
     //m_map = {};
@@ -1241,14 +1241,14 @@ void GPU_ring_buffer::frame_completed(uint64_t completed_frame)
     }
 }
 
-void Instance::frame_completed(uint64_t frame)
+void Device::frame_completed(uint64_t frame)
 {
     for (const std::unique_ptr<GPU_ring_buffer>& ring_buffer : m_ring_buffers) {
         ring_buffer->frame_completed(frame);
     }
 }
 
-void Instance::end_of_frame()
+void Device::end_of_frame()
 {
     // Check previous frame fences for completion
     m_completed_frames.clear();
@@ -1325,7 +1325,7 @@ void GPU_ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_o
     // Merge to existing sync
     for (Ring_buffer_sync_entry& entry : m_sync_entries) {
         if (
-            (entry.waiting_for_frame == m_instance.get_frame_number()) &&
+            (entry.waiting_for_frame == m_device.get_frame_number()) &&
             (entry.wrap_count == wrap_count)
         ) {
             if (byte_offset + byte_count > entry.byte_offset + entry.byte_count) {
@@ -1339,7 +1339,7 @@ void GPU_ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_o
     // Make new sync entry
     m_sync_entries.push_back(
         Ring_buffer_sync_entry{
-            .waiting_for_frame = m_instance.get_frame_number(),
+            .waiting_for_frame = m_device.get_frame_number(),
             .wrap_count        = wrap_count,
             .byte_offset       = byte_offset,
             .byte_count        = byte_count
@@ -1347,18 +1347,18 @@ void GPU_ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_o
     );
 }
 
-GPU_ring_buffer_client::GPU_ring_buffer_client(Instance& graphics_instance, std::string_view debug_label, gl::Buffer_target buffer_target, std::optional<unsigned int> binding_point)
-    : m_graphics_instance{graphics_instance}
-    , m_buffer_target    {buffer_target}
-    , m_debug_label      {debug_label}
-    , m_binding_point    {binding_point}
+GPU_ring_buffer_client::GPU_ring_buffer_client(Device& graphics_device, std::string_view debug_label, gl::Buffer_target buffer_target, std::optional<unsigned int> binding_point)
+    : m_graphics_device{graphics_device}
+    , m_buffer_target  {buffer_target}
+    , m_debug_label    {debug_label}
+    , m_binding_point  {binding_point}
 {
 }
 
 auto GPU_ring_buffer_client::acquire(Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
 {
     ERHE_VERIFY(byte_count > 0);
-    return m_graphics_instance.allocate_ring_buffer_entry(m_buffer_target, usage, byte_count);
+    return m_graphics_device.allocate_ring_buffer_entry(m_buffer_target, usage, byte_count);
 }
 
 auto GPU_ring_buffer_client::bind(const Buffer_range& range) -> bool
@@ -1391,7 +1391,7 @@ auto GPU_ring_buffer_client::bind(const Buffer_range& range) -> bool
 
     ERHE_VERIFY(
         (m_buffer_target != gl::Buffer_target::uniform_buffer) ||
-        (byte_count <= static_cast<std::size_t>(m_graphics_instance.limits.max_uniform_block_size))
+        (byte_count <= static_cast<std::size_t>(m_graphics_device.limits.max_uniform_block_size))
     );
     ERHE_VERIFY(offset + byte_count <= buffer->capacity_byte_count());
 
@@ -1411,12 +1411,12 @@ auto GPU_ring_buffer_client::bind(const Buffer_range& range) -> bool
     return true;
 }
 
-auto Instance::get_frame_number() const -> uint64_t
+auto Device::get_frame_number() const -> uint64_t
 {
     return m_frame_number;
 }
 
-auto Instance::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
+auto Device::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
 {
     std::size_t required_alignment = get_buffer_alignment(buffer_target);
     std::size_t alignment_byte_count_without_wrap{0};
@@ -1458,7 +1458,7 @@ auto Instance::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_
     return m_ring_buffers.back()->acquire(required_alignment, usage, byte_count);
 }
 
-void Instance::named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height)
+void Device::named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height)
 {
     if (info.use_direct_state_access) {
         gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
@@ -1471,7 +1471,7 @@ void Instance::named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsiz
     }
 }
 
-void Instance::multi_draw_elements_indirect(
+void Device::multi_draw_elements_indirect(
     gl::Primitive_type     mode,
     gl::Draw_elements_type type,
     const void*            indirect,
@@ -1482,7 +1482,7 @@ void Instance::multi_draw_elements_indirect(
     gl::multi_draw_elements_indirect(mode, type, indirect, drawcount, stride);
 }
 
-auto Instance::get_format_properties(gl::Internal_format format) const -> Format_properties
+auto Device::get_format_properties(gl::Internal_format format) const -> Format_properties
 {
     auto i = format_properties.find(format);
     if (i == format_properties.end()) {

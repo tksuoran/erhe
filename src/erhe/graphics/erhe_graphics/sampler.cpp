@@ -6,8 +6,8 @@
 
 namespace erhe::graphics {
 
-Sampler::Sampler(Instance& instance, const Sampler_create_info& create_info)
-    : m_handle        {instance}
+Sampler::Sampler(Device& device, const Sampler_create_info& create_info)
+    : m_handle        {device}
     , m_min_filter    {create_info.min_filter    }
     , m_mag_filter    {create_info.mag_filter    }
     , m_wrap_mode     {create_info.wrap_mode     }

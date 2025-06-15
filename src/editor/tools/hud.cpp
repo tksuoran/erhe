@@ -89,7 +89,7 @@ auto Toggle_hud_visibility_command::try_call() -> bool
 
 Hud::Hud(
     erhe::commands::Commands&       commands,
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::rendergraph::Rendergraph& rendergraph,
     Editor_context&                 editor_context,
@@ -151,7 +151,7 @@ Hud::Hud(
     static_cast<void>(headset_view);
 #endif
 
-    m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(graphics_instance, mesh_memory, width, height, ppm);
+    m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(graphics_device, mesh_memory, width, height, ppm);
     auto scene_root = scene_builder.get_scene_root();
     m_rendertarget_mesh->layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(

@@ -78,7 +78,7 @@ public:
     /// <param name="camera">Initial camera to be used</param>
     /// <returns>The newly created Viewport_scene_view</returns>
     auto create_viewport_scene_view(
-        erhe::graphics::Instance&                   graphics_instance,
+        erhe::graphics::Device&                     graphics_device,
         erhe::rendergraph::Rendergraph&             rendergraph,
         Editor_rendering&                           editor_rendering,
         Editor_settings&                            editor_settings,

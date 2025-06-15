@@ -7,7 +7,7 @@
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_graphics/align.hpp"
 #include "erhe_graphics/framebuffer.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -34,27 +34,27 @@ Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block)
 // https://www.elopezr.com/temporal-aa-and-the-quest-for-the-holy-trail/
 
 Post_processing_node::Post_processing_node(
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::rendergraph::Rendergraph& rendergraph,
     Post_processing&                post_processing,
     const std::string_view          name
 )
     : erhe::rendergraph::Rendergraph_node{rendergraph, name}
     , parameter_buffer{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Buffer_create_info{
             .target              = gl::Buffer_target::uniform_buffer,
             .capacity_byte_count =
                 erhe::graphics::align_offset(
                     post_processing.get_parameter_block().size_bytes(),
-                    graphics_instance.get_buffer_alignment(gl::Buffer_target::uniform_buffer)
+                    graphics_device.get_buffer_alignment(gl::Buffer_target::uniform_buffer)
                 ) * 20, // max 20 levels
             .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
             .access_mask         = gl::Map_buffer_access_mask::map_write_bit,
             .debug_label         = "post processing"
         }
     }
-    , m_graphics_instance{graphics_instance}
+    , m_graphics_device{graphics_device}
     , m_post_processing{post_processing}
 {
     register_input(erhe::rendergraph::Routing::Resource_provided_by_consumer, "viewport", erhe::rendergraph::Rendergraph_node_key::viewport);
@@ -86,9 +86,9 @@ auto Post_processing_node::update_size() -> bool
 
     // Create textures
     downsample_texture = std::make_shared<erhe::graphics::Texture>(
-        m_graphics_instance,
+        m_graphics_device,
         erhe::graphics::Texture::Create_info{
-            .instance        = m_graphics_instance,
+            .device          = m_graphics_device,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = gl::Internal_format::rgba16f, // TODO other formats
             .use_mipmaps     = true,
@@ -99,9 +99,9 @@ auto Post_processing_node::update_size() -> bool
         }
     );
     upsample_texture = std::make_shared<erhe::graphics::Texture>(
-        m_graphics_instance,
+        m_graphics_device,
         erhe::graphics::Texture::Create_info{
-            .instance        = m_graphics_instance,
+            .device          = m_graphics_device,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = gl::Internal_format::rgba16f, // TODO other formats
             .use_mipmaps     = true,
@@ -129,34 +129,34 @@ auto Post_processing_node::update_size() -> bool
         {
             erhe::graphics::Framebuffer::Create_info create_info{};
             create_info.attach(gl::Framebuffer_attachment::color_attachment0, downsample_texture.get(), level, 0);
-            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(m_graphics_instance, create_info);
+            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(m_graphics_device, create_info);
             framebuffer->set_debug_label(fmt::format("{} downsample level {}", get_name(), level));
             downsample_framebuffers.push_back(framebuffer);
 
-            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_instance, downsample_texture);
+            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, downsample_texture);
             texture_create_info.view_min_level = level;
             texture_create_info.level_count    = 1;
             texture_create_info.view_min_layer = 0;
             texture_create_info.width          = level_width;
             texture_create_info.height         = level_height;
             texture_create_info.debug_label    = fmt::format("Downsample level {}", level);
-            downsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_instance, texture_create_info));
+            downsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
         }
         {
             erhe::graphics::Framebuffer::Create_info create_info{};
             create_info.attach(gl::Framebuffer_attachment::color_attachment0, upsample_texture.get(), level, 0);
-            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(m_graphics_instance, create_info);
+            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(m_graphics_device, create_info);
             framebuffer->set_debug_label(fmt::format("{} upsample level {}", get_name(), level));
             upsample_framebuffers.push_back(framebuffer);
 
-            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_instance, upsample_texture);
+            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, upsample_texture);
             texture_create_info.view_min_level = level;
             texture_create_info.level_count    = 1;
             texture_create_info.view_min_layer = 0;
             texture_create_info.width          = level_width;
             texture_create_info.height         = level_height;
             texture_create_info.debug_label    = fmt::format("Upsample level {}", level);
-            upsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_instance, texture_create_info));
+            upsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
         }
         if ((level_width == 1) && (level_height == 1)) {
             break;
@@ -206,11 +206,11 @@ void Post_processing_node::update_parameters()
 
     const std::size_t level_offset_size = erhe::graphics::align_offset(
         entry_size,
-        m_graphics_instance.get_buffer_alignment(parameter_buffer.target())
+        m_graphics_device.get_buffer_alignment(parameter_buffer.target())
     );
 
-    const uint64_t downsample_handle = m_graphics_instance.get_handle(*downsample_texture, sampler);
-    const uint64_t upsample_handle   = m_graphics_instance.get_handle(*upsample_texture,   sampler);
+    const uint64_t downsample_handle = m_graphics_device.get_handle(*downsample_texture, sampler);
+    const uint64_t upsample_handle   = m_graphics_device.get_handle(*upsample_texture,   sampler);
     const uint32_t downsample_texture_handle[2] = {
         static_cast<uint32_t>((downsample_handle & 0xffffffffu)),
         static_cast<uint32_t>(downsample_handle >> 32u)
@@ -299,7 +299,7 @@ void Post_processing_node::execute_rendergraph_node()
 /// //////////////////////////////////////////
 
 auto Post_processing::make_program(
-    erhe::graphics::Instance&    graphics_instance,
+    erhe::graphics::Device&    graphics_device,
     const char*                  name,
     const std::filesystem::path& fs_path
 ) -> erhe::graphics::Shader_stages_create_info
@@ -313,7 +313,7 @@ auto Post_processing::make_program(
         {gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"}
     };
     const std::vector<erhe::graphics::Shader_stage_extension> empty_extensions{};
-    const bool bindless_textures = graphics_instance.info.use_bindless_texture;
+    const bool bindless_textures = graphics_device.info.use_bindless_texture;
 
     return
         erhe::graphics::Shader_stages_create_info{
@@ -331,38 +331,38 @@ auto Post_processing::make_program(
         };
 }
 
-Post_processing::Post_processing(erhe::graphics::Instance& graphics_instance, Editor_context& editor_context)
-    : m_context           {editor_context}
-    , m_fragment_outputs  {erhe::graphics::Fragment_output{.name = "out_color", .type = gl::Fragment_shader_output_type::float_vec4, .location = 0}}
-    , m_dummy_texture     {graphics_instance.create_dummy_texture()}
+Post_processing::Post_processing(erhe::graphics::Device& graphics_device, Editor_context& editor_context)
+    : m_context         {editor_context}
+    , m_fragment_outputs{erhe::graphics::Fragment_output{.name = "out_color", .type = gl::Fragment_shader_output_type::float_vec4, .location = 0}}
+    , m_dummy_texture   {graphics_device.create_dummy_texture()}
     , m_linear_mipmap_nearest_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
             .debug_label = "linear_mipmap_nearest"
         }
     }
-    , m_parameter_block   {graphics_instance, "post_processing", 0, erhe::graphics::Shader_resource::Type::uniform_block}
+    , m_parameter_block   {graphics_device, "post_processing", 0, erhe::graphics::Shader_resource::Type::uniform_block}
     , m_offsets           {m_parameter_block}
-    , m_empty_vertex_input{graphics_instance}
+    , m_empty_vertex_input{graphics_device}
 
-    , m_default_uniform_block{graphics_instance}
+    , m_default_uniform_block{graphics_device}
     , m_downsample_texture_resource{
-        graphics_instance.info.use_bindless_texture
+        graphics_device.info.use_bindless_texture
             ? nullptr
             : m_default_uniform_block.add_sampler("s_downsample", gl::Uniform_type::sampler_2d, 0)
     }
     , m_upsample_texture_resource{
-        graphics_instance.info.use_bindless_texture
+        graphics_device.info.use_bindless_texture
             ? nullptr
             : m_default_uniform_block.add_sampler("s_upsample", gl::Uniform_type::sampler_2d, 1)
     }
     , m_shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , m_shader_stages{
-        .downsample_with_lowpass{graphics_instance, make_program(graphics_instance, "downsample_lowpass", std::filesystem::path("downsample_lowpass.frag"))},
-        .downsample             {graphics_instance, make_program(graphics_instance, "downsample",         std::filesystem::path("downsample.frag"))},
-        .upsample               {graphics_instance, make_program(graphics_instance, "upsample",           std::filesystem::path("upsample.frag"))}
+        .downsample_with_lowpass{graphics_device, make_program(graphics_device, "downsample_lowpass", std::filesystem::path("downsample_lowpass.frag"))},
+        .downsample             {graphics_device, make_program(graphics_device, "downsample",         std::filesystem::path("downsample.frag"))},
+        .upsample               {graphics_device, make_program(graphics_device, "upsample",           std::filesystem::path("upsample.frag"))}
     }
     , m_pipelines{
         .downsample_with_lowpass = erhe::graphics::Pipeline{
@@ -399,20 +399,20 @@ Post_processing::Post_processing(erhe::graphics::Instance& graphics_instance, Ed
             }
         }
     }
-    , m_gpu_timer{graphics_instance, "Post_processing"}
+    , m_gpu_timer{graphics_device, "Post_processing"}
 {
-    graphics_instance.shader_monitor.add(m_shader_stages.downsample_with_lowpass);
-    graphics_instance.shader_monitor.add(m_shader_stages.downsample             );
-    graphics_instance.shader_monitor.add(m_shader_stages.upsample               );
+    graphics_device.shader_monitor.add(m_shader_stages.downsample_with_lowpass);
+    graphics_device.shader_monitor.add(m_shader_stages.downsample             );
+    graphics_device.shader_monitor.add(m_shader_stages.upsample               );
 }
 
 auto Post_processing::create_node(
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::rendergraph::Rendergraph& rendergraph,
     const std::string_view          name
 ) -> std::shared_ptr<Post_processing_node>
 {
-    std::shared_ptr<Post_processing_node> new_node = std::make_shared<Post_processing_node>(graphics_instance, rendergraph, *this, name);
+    std::shared_ptr<Post_processing_node> new_node = std::make_shared<Post_processing_node>(graphics_device, rendergraph, *this, name);
     m_nodes.push_back(new_node);
     return new_node;
 }
@@ -429,14 +429,14 @@ void Post_processing::post_process(Post_processing_node& node)
 {
     const std::size_t level_offset_size = erhe::graphics::align_offset(
         m_parameter_block.size_bytes(),
-        m_context.graphics_instance->get_buffer_alignment(
+        m_context.graphics_device->get_buffer_alignment(
             node.parameter_buffer.target()
         )
     );
 
-    const uint64_t downsample_handle = m_context.graphics_instance->get_handle(*node.downsample_texture, m_linear_mipmap_nearest_sampler);
-    const uint64_t upsample_handle   = m_context.graphics_instance->get_handle(*node.upsample_texture,   m_linear_mipmap_nearest_sampler);
-    if (m_context.graphics_instance->info.use_bindless_texture) {
+    const uint64_t downsample_handle = m_context.graphics_device->get_handle(*node.downsample_texture, m_linear_mipmap_nearest_sampler);
+    const uint64_t upsample_handle   = m_context.graphics_device->get_handle(*node.upsample_texture,   m_linear_mipmap_nearest_sampler);
+    if (m_context.graphics_device->info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make input texture resident");
         gl::make_texture_handle_resident_arb(downsample_handle);
         gl::make_texture_handle_resident_arb(upsample_handle);
@@ -463,9 +463,9 @@ void Post_processing::post_process(Post_processing_node& node)
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );
         if (source_level == node.lowpass_count) {
-            m_context.graphics_instance->opengl_state_tracker.execute(m_pipelines.downsample);
+            m_context.graphics_device->opengl_state_tracker.execute(m_pipelines.downsample);
         } else if (source_level == 0) {
-            m_context.graphics_instance->opengl_state_tracker.execute(m_pipelines.downsample_with_lowpass);
+            m_context.graphics_device->opengl_state_tracker.execute(m_pipelines.downsample_with_lowpass);
         }
         gl::draw_arrays(gl::Primitive_type::triangles, 0, 3);
     }
@@ -481,7 +481,7 @@ void Post_processing::post_process(Post_processing_node& node)
     );
 
     // Upsample passes
-    m_context.graphics_instance->opengl_state_tracker.execute(m_pipelines.upsample);
+    m_context.graphics_device->opengl_state_tracker.execute(m_pipelines.upsample);
     for (const size_t source_level : node.upsample_source_levels) {
         const size_t destination_level = source_level - 1;
         const auto&  framebuffer = destination_level == 0
@@ -506,7 +506,7 @@ void Post_processing::post_process(Post_processing_node& node)
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     }
 
-    if (m_context.graphics_instance->info.use_bindless_texture) {
+    if (m_context.graphics_device->info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make input texture non resident");
         gl::make_texture_handle_non_resident_arb(downsample_handle);
         gl::make_texture_handle_non_resident_arb(upsample_handle);

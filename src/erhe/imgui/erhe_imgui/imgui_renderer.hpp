@@ -3,7 +3,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -19,7 +19,7 @@
 #include <vector>
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
     class Sampler;
     class Texture;
     class Vertex_input_state;
@@ -66,7 +66,7 @@ class Imgui_program_interface
 public:
     static constexpr std::size_t s_texture_unit_count = 32; // for non bindless textures
 
-    explicit Imgui_program_interface(erhe::graphics::Instance& graphics_instance);
+    explicit Imgui_program_interface(erhe::graphics::Device& graphics_device);
 
     // scale, translation, clip rectangle, texture indices
     erhe::graphics::Shader_resource     draw_parameter_block;
@@ -82,7 +82,7 @@ public:
 class Imgui_renderer final
 {
 public:
-    Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgui_settings& settings);
+    Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_settings& settings);
 
     static constexpr std::size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
     static constexpr std::size_t s_uvec2_size  = 2 * sizeof(uint32_t);
@@ -146,7 +146,7 @@ private:
     static constexpr std::size_t s_max_index_count    = 2'400'000;
     static constexpr std::size_t s_max_vertex_count   = 2'400'000;
 
-    erhe::graphics::Instance&                m_graphics_instance;
+    erhe::graphics::Device&                  m_graphics_device;
     Imgui_program_interface                  m_imgui_program_interface;
     erhe::graphics::Shader_stages            m_shader_stages;
     erhe::graphics::GPU_ring_buffer_client   m_vertex_buffer;

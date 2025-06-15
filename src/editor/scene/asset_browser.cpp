@@ -79,7 +79,7 @@ void Scene_open_operation::execute(Editor_context& context)
         browser_window->show_window();
 
         import_gltf(
-            *context.graphics_instance,
+            *context.graphics_device,
             erhe::primitive::Build_info{
                 .primitive_types = {
                     .fill_triangles  = true,
@@ -291,7 +291,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
     std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(gltf->get_source_path()));
     if (ImGui::MenuItem(import_label.c_str())) {
         import_gltf(
-            *m_context.graphics_instance,
+            *m_context.graphics_device,
             erhe::primitive::Build_info{
                 .primitive_types = {
                     .fill_triangles  = true,

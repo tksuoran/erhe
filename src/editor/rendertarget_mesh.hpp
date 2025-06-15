@@ -13,7 +13,7 @@ namespace erhe {
 }
 namespace erhe::graphics {
     class Framebuffer;
-    class Instance;
+    class Device;
     class Sampler;
     class Texture;
 }
@@ -38,11 +38,11 @@ class Rendertarget_mesh : public erhe::scene::Mesh
 {
 public:
     Rendertarget_mesh(
-        erhe::graphics::Instance& graphics_instance,
-        Mesh_memory&              mesh_memory,
-        int                       width,
-        int                       height,
-        float                     pixels_per_meter
+        erhe::graphics::Device& graphics_device,
+        Mesh_memory&            mesh_memory,
+        int                     width,
+        int                     height,
+        float                   pixels_per_meter
     );
 
     // Implements Item_base
@@ -70,10 +70,10 @@ public:
     void render_done   (Editor_context& context); // generates mipmaps, updates lod bias
 
     void resize_rendertarget(
-        erhe::graphics::Instance& graphics_instance,
-        Mesh_memory&              mesh_memory,
-        int                       width,
-        int                       height
+        erhe::graphics::Device& graphics_device,
+        Mesh_memory&            mesh_memory,
+        int                     width,
+        int                     height
     );
 
     static void set_mesh_lod_bias(float lod_bias);

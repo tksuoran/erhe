@@ -7,20 +7,20 @@
 
 namespace erhe::graphics {
 
-class Instance;
+class Device;
 
 class Renderbuffer
 {
 public:
     Renderbuffer(
-        Instance&           instance,
+        Device&             device,
         gl::Internal_format internal_format,
         unsigned int        width,
         unsigned int        height
     );
 
     Renderbuffer(
-        Instance&           instance,
+        Device&             device,
         gl::Internal_format internal_format,
         unsigned int        sample_count,
         unsigned int        width,
@@ -38,7 +38,7 @@ public:
     void set_debug_label(std::string_view label);
 
 private:
-    Instance&           m_instance;
+    Device&             m_device;
     Gl_renderbuffer     m_handle;
     std::string         m_debug_label;
     gl::Internal_format m_internal_format;

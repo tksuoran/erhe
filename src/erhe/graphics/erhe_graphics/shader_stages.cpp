@@ -1,6 +1,6 @@
 #include "erhe_graphics/shader_stages.hpp"
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
@@ -15,28 +15,28 @@ namespace erhe::graphics {
 
 using std::string;
 
-auto Reloadable_shader_stages::make_prototype(Instance& graphics_instance) -> Shader_stages_prototype
+auto Reloadable_shader_stages::make_prototype(Device& graphics_device) -> Shader_stages_prototype
 {
     ERHE_PROFILE_FUNCTION();
-    erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+    erhe::graphics::Shader_stages_prototype prototype{graphics_device, create_info};
     return prototype;
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(Instance& instance, const std::string& non_functional_name)
+Reloadable_shader_stages::Reloadable_shader_stages(Device& device, const std::string& non_functional_name)
     : create_info  {}
-    , shader_stages{instance, non_functional_name}
+    , shader_stages{device, non_functional_name}
 {
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(Instance& graphics_instance, const Shader_stages_create_info& create_info)
+Reloadable_shader_stages::Reloadable_shader_stages(Device& graphics_device, const Shader_stages_create_info& create_info)
     : create_info  {create_info}
-    , shader_stages{graphics_instance, make_prototype(graphics_instance)}
+    , shader_stages{graphics_device, make_prototype(graphics_device)}
 {
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(Instance& instance, Shader_stages_prototype&& prototype)
+Reloadable_shader_stages::Reloadable_shader_stages(Device& device, Shader_stages_prototype&& prototype)
     : create_info  {prototype.create_info()}
-    , shader_stages{instance, std::move(prototype)}
+    , shader_stages{device, std::move(prototype)}
 {
 }
 
@@ -85,10 +85,10 @@ auto Shader_stages::gl_name() const -> unsigned int
     return m_handle.gl_name();
 }
 
-Shader_stages::Shader_stages(Instance& instance, const std::string& failed_name)
-    : m_instance{instance}
-    , m_handle  {instance}
-    , m_name    {failed_name}
+Shader_stages::Shader_stages(Device& device, const std::string& failed_name)
+    : m_device{device}
+    , m_handle{device}
+    , m_name  {failed_name}
 {
     std::string label = fmt::format("(P:{}) {} - compilation failed", gl_name(), failed_name);
     ERHE_VERIFY(!failed_name.empty());
@@ -96,7 +96,7 @@ Shader_stages::Shader_stages(Instance& instance, const std::string& failed_name)
 }
 
 Shader_stages::Shader_stages(Shader_stages&& from)
-    : m_instance        {from.m_instance                   }
+    : m_device        {from.m_device                   }
     , m_handle          {std::move(from.m_handle)          }
     , m_name            {std::move(from.m_name)            }
     , m_is_valid        {from.m_is_valid                   }
@@ -115,9 +115,9 @@ Shader_stages& Shader_stages::operator=(Shader_stages&& from)
     return *this;
 }
 
-Shader_stages::Shader_stages(Instance& instance, Shader_stages_prototype&& prototype)
-    : m_instance{instance}
-    , m_handle  {instance}
+Shader_stages::Shader_stages(Device& device, Shader_stages_prototype&& prototype)
+    : m_device{device}
+    , m_handle{device}
 {
     reload(std::move(prototype));
 }

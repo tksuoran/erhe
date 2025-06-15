@@ -31,7 +31,7 @@ class Post_processing_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     Post_processing_node(
-        erhe::graphics::Instance&       graphics_instance,
+        erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
         Post_processing&                post_processing,
         const std::string_view          name
@@ -77,8 +77,8 @@ public:
     int                                                       lowpass_count{2};
 
 private:
-    erhe::graphics::Instance& m_graphics_instance;
-    Post_processing&          m_post_processing;
+    erhe::graphics::Device& m_graphics_device;
+    Post_processing&        m_post_processing;
 };
 
 class Post_processing
@@ -102,11 +102,11 @@ public:
         std::size_t tonemap_alpha        {0}; // float
     };
 
-    Post_processing(erhe::graphics::Instance& graphics_instance, Editor_context& editor_context);
+    Post_processing(erhe::graphics::Device& graphics_device, Editor_context& editor_context);
 
     // Public API
     [[nodiscard]] auto create_node(
-        erhe::graphics::Instance&       graphics_instance,
+        erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
         std::string_view                name
     ) -> std::shared_ptr<Post_processing_node>;
@@ -120,7 +120,7 @@ public:
 
 private:
     [[nodiscard]] auto make_program(
-        erhe::graphics::Instance&    graphics_instance,
+        erhe::graphics::Device&      graphics_device,
         const char*                  name,
         const std::filesystem::path& fs_path
     ) -> erhe::graphics::Shader_stages_create_info;

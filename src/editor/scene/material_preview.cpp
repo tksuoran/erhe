@@ -9,7 +9,7 @@
 #include "scene/content_library.hpp"
 
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
@@ -38,13 +38,13 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Material_preview::Material_preview(
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::scene::Scene_message_bus& scene_message_bus,
     Editor_context&                 editor_context,
     Mesh_memory&                    mesh_memory,
     Programs&                       programs
 )
-#define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
+#define REVERSE_DEPTH graphics_device.configuration.reverse_depth
     : Scene_view{editor_context, Viewport_config{}}
     , m_pipeline_renderpass{erhe::graphics::Pipeline{{
         .name           = "Polygon Fill Opaque",
@@ -78,7 +78,7 @@ Material_preview::Material_preview(
     make_preview_scene(mesh_memory);
 
     set_area_size(256);
-    update_rendertarget(graphics_instance);
+    update_rendertarget(graphics_device);
 }
 
 void Material_preview::set_area_size(int size)
@@ -88,7 +88,7 @@ void Material_preview::set_area_size(int size)
     m_height = size;
 }
 
-void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_instance)
+void Material_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -107,9 +107,9 @@ void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_in
     using Renderbuffer = erhe::graphics::Renderbuffer;
     using Texture      = erhe::graphics::Texture;
     m_color_texture = std::make_shared<Texture>(
-        graphics_instance,
+        graphics_device,
         Texture::Create_info{
-            .instance        = graphics_instance,
+            .device          = graphics_device,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = m_color_format,
             .width           = m_width,
@@ -132,7 +132,7 @@ void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_in
     }
 
     m_depth_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
-        graphics_instance,
+        graphics_device,
         m_depth_format,
         m_width,
         m_height
@@ -150,7 +150,7 @@ void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_in
         gl::Framebuffer_attachment::depth_attachment,
         m_depth_renderbuffer.get()
     );
-    m_framebuffer = std::make_unique<Framebuffer>(graphics_instance, create_info);
+    m_framebuffer = std::make_unique<Framebuffer>(graphics_device, create_info);
     m_framebuffer->set_debug_label("Material Preview Framebuffer");
 
     const gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
@@ -162,9 +162,9 @@ void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_in
     }
 
     m_shadow_texture = std::make_shared<Texture>(
-        graphics_instance,
+        graphics_device,
         Texture::Create_info {
-            .instance        = graphics_instance,
+            .device          = graphics_device,
             .target          = gl::Texture_target::texture_2d_array,
             .internal_format = gl::Internal_format::depth_component32f,
             .width           = 1,
@@ -174,7 +174,7 @@ void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_in
         }
     );
 
-    const bool reverse_depth = graphics_instance.configuration.reverse_depth;
+    const bool reverse_depth = graphics_device.configuration.reverse_depth;
     m_shadow_texture->set_debug_label("Material Preview Shadowmap");
     float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
@@ -298,7 +298,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     gl::scissor(viewport.x, viewport.y, viewport.width, viewport.height);
     gl::clear_color(m_clear_color[0], m_clear_color[1], m_clear_color[2], m_clear_color[3]);
     gl::clear_stencil(0);
-    gl::clear_depth_f(*m_context.graphics_instance->depth_clear_value_pointer());
+    gl::clear_depth_f(*m_context.graphics_device->depth_clear_value_pointer());
 
     const auto& layers = m_scene_root->layers();
 

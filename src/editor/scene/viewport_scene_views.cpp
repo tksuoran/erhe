@@ -135,7 +135,7 @@ void Scene_views::erase(Basic_scene_view_node* basic_viewport_window)
 }
 
 auto Scene_views::create_viewport_scene_view(
-    erhe::graphics::Instance&                   graphics_instance,
+    erhe::graphics::Device&                     graphics_device,
     erhe::rendergraph::Rendergraph&             rendergraph,
     Editor_rendering&                           editor_rendering,
     Editor_settings&                            editor_settings,
@@ -166,7 +166,7 @@ auto Scene_views::create_viewport_scene_view(
     if (editor_settings.graphics.current_graphics_preset.shadow_enable) {
         //// TODO: Share Shadow_render_node for each unique (scene, camera) pair
         const auto shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(
-            graphics_instance,
+            graphics_device,
             rendergraph,
             editor_settings,
             *new_viewport_window.get()
@@ -212,7 +212,7 @@ auto Scene_views::create_viewport_scene_view(
     if (enable_post_processing) {
         log_post_processing->trace("Adding post processing node to rendergraph");
         auto post_processing_node = std::make_shared<Post_processing_node>(
-            graphics_instance,
+            graphics_device,
             rendergraph,
             post_processing,
             fmt::format("Post processing for {}", name)
@@ -308,7 +308,7 @@ auto Scene_views::open_new_viewport_scene_view(const std::shared_ptr<Scene_root>
             const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
             if (camera) {
                 return create_viewport_scene_view(
-                    *m_context.graphics_instance,
+                    *m_context.graphics_device,
                     *m_context.rendergraph,
                     *m_context.editor_rendering,
                     *m_context.editor_settings,
@@ -325,7 +325,7 @@ auto Scene_views::open_new_viewport_scene_view(const std::shared_ptr<Scene_root>
         if (!scene_root->get_scene().get_cameras().empty()) {
             const auto& camera = scene_root->get_scene().get_cameras().front();
             return create_viewport_scene_view(
-                *m_context.graphics_instance,
+                *m_context.graphics_device,
                 *m_context.rendergraph,
                 *m_context.editor_rendering,
                 *m_context.editor_settings,
@@ -341,7 +341,7 @@ auto Scene_views::open_new_viewport_scene_view(const std::shared_ptr<Scene_root>
 
     // Case for when no cameras found in scene
     return create_viewport_scene_view(
-        *m_context.graphics_instance,
+        *m_context.graphics_device,
         *m_context.rendergraph,
         *m_context.editor_rendering,
         *m_context.editor_settings,

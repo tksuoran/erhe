@@ -7,7 +7,7 @@
 
 namespace erhe::graphics {
     class Framebuffer;
-    class Instance;
+    class Device;
     class Renderbuffer;
     class Texture;
 }
@@ -23,7 +23,7 @@ class Icon_settings;
 class Thumbnails
 {
 public:
-    Thumbnails(erhe::graphics::Instance& graphics_instance, unsigned int capacity, unsigned int size_pixels);
+    Thumbnails(erhe::graphics::Device& graphics_device, unsigned int capacity, unsigned int size_pixels);
 
     [[nodiscard]] auto allocate() -> uint32_t;
     void free             (uint32_t slot);

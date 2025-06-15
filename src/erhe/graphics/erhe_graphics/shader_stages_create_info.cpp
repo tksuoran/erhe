@@ -4,7 +4,7 @@
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_graphics/glsl_file_loader.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_file/file.hpp"
@@ -123,7 +123,7 @@ auto Shader_stages_create_info::interface_source() const -> std::string
 }
 
 auto Shader_stages_create_info::final_source(
-    Instance&                           graphics_instance,
+    Device&                           graphics_device,
     const Shader_stage&                 shader,
     std::vector<std::filesystem::path>* paths,
     std::optional<unsigned int>         gl_name
@@ -132,7 +132,7 @@ auto Shader_stages_create_info::final_source(
     ERHE_PROFILE_FUNCTION();
 
     std::stringstream sb;
-    sb << "#version " << graphics_instance.info.glsl_version << " core\n\n";
+    sb << "#version " << graphics_device.info.glsl_version << " core\n\n";
     sb << "// " << gl::c_str(shader.type);
     if (gl_name.has_value()) {
         sb << " " << gl_name.value();
@@ -168,14 +168,14 @@ auto Shader_stages_create_info::final_source(
         sb << "\n";
     }
 
-    sb << "#define ERHE_GLSL_VERSION " << graphics_instance.info.glsl_version << "\n";
+    sb << "#define ERHE_GLSL_VERSION " << graphics_device.info.glsl_version << "\n";
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
         sb << "#define ERHE_HAS_ARB_BINDLESS_TEXTURE 1\n";
     }
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shading_language_packing)) {
         sb << "#define ERHE_HAS_ARB_SHADING_LANGUAGE_PACKING 1\n";
     }
-    if (graphics_instance.info.gl_version < 460) {
+    if (graphics_device.info.gl_version < 460) {
         if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
             sb << "#define ERHE_HAS_ARB_SHADER_DRAW_PARAMETERS 1\n";
             //sb << "#define gl_DrawID gl_DrawIDARB\n";

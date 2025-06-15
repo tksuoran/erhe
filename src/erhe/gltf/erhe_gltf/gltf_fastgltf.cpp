@@ -9,7 +9,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -1012,7 +1012,7 @@ private:
         auto& slot = m_arguments.image_transfer.get_slot();
 
         erhe::graphics::Texture_create_info texture_create_info{
-            .instance        = m_arguments.graphics_instance,
+            .device          = m_arguments.graphics_device,
             .internal_format = to_gl(image_info.format),
             .use_mipmaps     = true, //(image_info.level_count > 1),
             .width           = image_info.width,
@@ -1036,7 +1036,7 @@ private:
             return {};
         }
 
-        auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_instance, texture_create_info);
+        auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
         texture->set_source_path(path);
         texture->set_debug_label(image_name.empty() ? erhe::file::to_string(path) : image_name);
 
@@ -1070,7 +1070,7 @@ private:
         bool load_ok = false;
         auto& slot = m_arguments.image_transfer.get_slot();
         erhe::graphics::Texture_create_info texture_create_info{
-            .instance    = m_arguments.graphics_instance,
+            .device      = m_arguments.graphics_device,
             .debug_label = name
         };
         int  mipmap_count    = 0;
@@ -1128,7 +1128,7 @@ private:
             name, image_index, texture_create_info.width, texture_create_info.height
         );
 
-        auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_instance, texture_create_info);
+        auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
         texture->set_source_path(m_arguments.path);
         texture->set_debug_label(name);
         gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
@@ -1185,10 +1185,10 @@ private:
         create_info.mag_filter     = sampler.magFilter.has_value() ? static_cast<gl::Texture_mag_filter>(sampler.magFilter.value()) : gl::Texture_mag_filter::nearest;
         create_info.wrap_mode[0]   = static_cast<gl::Texture_wrap_mode>(sampler.wrapS);
         create_info.wrap_mode[1]   = static_cast<gl::Texture_wrap_mode>(sampler.wrapT);
-        create_info.max_anisotropy = m_arguments.graphics_instance.limits.max_texture_max_anisotropy;
+        create_info.max_anisotropy = m_arguments.graphics_device.limits.max_texture_max_anisotropy;
         create_info.debug_label    = sampler_name;
 
-        auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(m_arguments.graphics_instance, create_info);
+        auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(m_arguments.graphics_device, create_info);
         // TODO erhe_sampler->set_source_path(m_path);
         erhe_sampler->set_debug_label(sampler_name);
         m_data_out.samplers[sampler_index] = erhe_sampler;

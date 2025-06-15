@@ -9,7 +9,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
@@ -44,7 +44,7 @@ class Tile_renderer
 {
 public:
     Tile_renderer(
-        erhe::graphics::Instance&    graphics_instance,
+        erhe::graphics::Device&      graphics_device,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         Tiles&                       tiles
     );
@@ -87,10 +87,10 @@ public:
     void render   (erhe::math::Viewport viewport);
 
 private:
-    auto make_prototype(erhe::graphics::Instance& graphics_instance) const -> erhe::graphics::Shader_stages_prototype;
+    auto make_prototype(erhe::graphics::Device& graphics_device) const -> erhe::graphics::Shader_stages_prototype;
     auto make_program(erhe::graphics::Shader_stages_prototype&& prototype) const -> erhe::graphics::Shader_stages;
 
-    erhe::graphics::Instance&    m_graphics_instance;
+    erhe::graphics::Device&      m_graphics_device;
     erhe::imgui::Imgui_renderer& m_imgui_renderer;
     Tiles&                       m_tiles;
 

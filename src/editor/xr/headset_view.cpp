@@ -77,7 +77,7 @@ void Headset_view_node::execute_rendergraph_node()
 
 Headset_view::Headset_view(
     erhe::commands::Commands&       commands,
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
@@ -122,7 +122,7 @@ Headset_view::Headset_view(
 
     m_rendergraph_node = std::make_shared<Headset_view_node>(rendergraph, *this);
 
-    m_shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(graphics_instance, rendergraph, editor_settings, *this);
+    m_shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(graphics_device, rendergraph, editor_settings, *this);
     rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_render_node.get(), m_rendergraph_node.get());
 }
 
@@ -276,7 +276,7 @@ auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view
     const auto i = std::find_if(m_view_resources.begin(), m_view_resources.end(), match_color_texture);
     if (i == m_view_resources.end()) {
         auto resource = std::make_shared<Headset_view_resources>(
-            *m_context.graphics_instance,
+            *m_context.graphics_device,
             render_view,                               // erhe::xr::Render_view& render_view,
             *this,                                     // Headset_view&          headset_view,
             static_cast<std::size_t>(render_view.slot) // const std::size_t      slot
@@ -402,7 +402,7 @@ void Headset_view::render_headset()
                 );
             }
 
-            auto& graphics_instance = *m_context.graphics_instance;
+            auto& graphics_device = *m_context.graphics_device;
             auto* openxr_framebuffer = view_resources->get_framebuffer();
             erhe::math::Viewport viewport;
 
@@ -413,7 +413,7 @@ void Headset_view::render_headset()
                     .y             = 0,
                     .width         = m_context.context_window->get_width(),
                     .height        = m_context.context_window->get_height(),
-                    .reverse_depth = graphics_instance.configuration.reverse_depth
+                    .reverse_depth = graphics_device.configuration.reverse_depth
                 };
             } else {
                 gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, openxr_framebuffer->gl_name());
@@ -427,12 +427,12 @@ void Headset_view::render_headset()
                     .y             = 0,
                     .width         = static_cast<int>(render_view.width),
                     .height        = static_cast<int>(render_view.height),
-                    .reverse_depth = graphics_instance.configuration.reverse_depth
+                    .reverse_depth = graphics_device.configuration.reverse_depth
                 };
             }
 
-            graphics_instance.opengl_state_tracker.shader_stages.reset();
-            graphics_instance.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
+            graphics_device.opengl_state_tracker.shader_stages.reset();
+            graphics_device.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
 
             bool render = !m_context.OpenXR_mirror || first_view;
 
@@ -455,7 +455,7 @@ void Headset_view::render_headset()
                 gl::enable(gl::Enable_cap::framebuffer_srgb);
 
                 gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-                gl::clear_depth_f(*graphics_instance.depth_clear_value_pointer());
+                gl::clear_depth_f(*graphics_device.depth_clear_value_pointer());
                 gl::clear_stencil(0);
                 gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit | gl::Clear_buffer_mask::stencil_buffer_bit);
 

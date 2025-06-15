@@ -27,8 +27,8 @@ erhe_target_sources_grouped(
     erhe_graphics/gpu_timer.hpp
     erhe_graphics/graphics_log.cpp
     erhe_graphics/graphics_log.hpp
-    erhe_graphics/instance.cpp
-    erhe_graphics/instance.hpp
+    erhe_graphics/device.cpp
+    erhe_graphics/device.hpp
     erhe_graphics/opengl_state_tracker.cpp
     erhe_graphics/opengl_state_tracker.hpp
     erhe_graphics/pipeline.cpp
@@ -65,6 +65,15 @@ erhe_target_sources_grouped(
     erhe_graphics/state/viewport_state.hpp
     erhe_graphics/texture.cpp
     erhe_graphics/texture.hpp
+
+    erhe_graphics/command_buffer.cpp
+    erhe_graphics/command_buffer.hpp
+    erhe_graphics/blit_command_encoder.cpp
+    erhe_graphics/blit_command_encoder.hpp
+    erhe_graphics/compute_command_encoder.cpp
+    erhe_graphics/compute_command_encoder.hpp
+    erhe_graphics/render_command_encoder.cpp
+    erhe_graphics/render_command_encoder.hpp
 )
 
 if (ERHE_SPIRV)

@@ -2,7 +2,7 @@
 #include "erhe_ui/glyph.hpp"
 #include "erhe_ui/ui_log.hpp"
 #include "erhe_dataformat/dataformat.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <fmt/printf.h>
@@ -50,12 +50,12 @@ Font::~Font() noexcept
 
 #if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE) && defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 Font::Font(
-    erhe::graphics::Instance&    graphics_instance,
+    erhe::graphics::Device&      graphics_device,
     const std::filesystem::path& path,
     const unsigned int           size,
     const float                  outline_thickness
 )
-    : m_graphics_instance{graphics_instance}
+    : m_graphics_device  {graphics_device}
     , m_path             {path}
     , m_bolding          {(size > 10) ? 0.5f : 0.0f}
     , m_outline_thickness{outline_thickness}
@@ -454,7 +454,7 @@ void Font::post_process()
     auto internal_format = gl::Internal_format::rg8;
 
     const Texture::Create_info create_info{
-        .instance        = m_graphics_instance,
+        .device          = m_graphics_device,
         .target          = gl::Texture_target::texture_2d,
         .internal_format = internal_format,
         .use_mipmaps     = false,
@@ -463,7 +463,7 @@ void Font::post_process()
         .debug_label     = "Font"
     };
 
-    m_texture = std::make_unique<Texture>(m_graphics_instance, create_info);
+    m_texture = std::make_unique<Texture>(m_graphics_device, create_info);
     m_texture->upload(create_info.internal_format, bm.as_span(), create_info.width, create_info.height);
     m_texture->set_debug_label(m_path.filename().generic_string());
 }

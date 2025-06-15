@@ -18,7 +18,7 @@
 namespace erhe::graphics {
     class Framebuffer;
     class Gpu_timer;
-    class Instance;
+    class Device;
     class Sampler;
     class Texture;
     class Vertex_input_state;
@@ -42,7 +42,7 @@ public:
     static const int shadow_texture_unit_compare{0};
     static const int shadow_texture_unit_no_compare{1};
 
-    Shadow_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface);
+    Shadow_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface);
 
     // Public API
     class Render_parameters
@@ -84,7 +84,7 @@ private:
 
     [[nodiscard]] auto get_pipeline(const erhe::graphics::Vertex_input_state* vertex_input_state) -> erhe::graphics::Pipeline&;
 
-    erhe::graphics::Instance&                m_graphics_instance;
+    erhe::graphics::Device&                  m_graphics_device;
     uint64_t                                 m_pipeline_cache_serial{0};
     std::vector<Pipeline_cache_entry>        m_pipeline_cache_entries;
     erhe::graphics::Reloadable_shader_stages m_shader_stages;

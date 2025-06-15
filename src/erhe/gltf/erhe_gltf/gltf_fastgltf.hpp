@@ -8,7 +8,7 @@ namespace erhe::geometry {
     class Geometry;
 }
 namespace erhe::graphics {
-    class Instance;
+    class Device;
     class Sampler;
     class Texture;
     class Vertex_format;
@@ -64,7 +64,7 @@ public:
 
 struct Gltf_parse_arguments
 {
-    erhe::graphics::Instance&                 graphics_instance;
+    erhe::graphics::Device&                   graphics_device;
     Image_transfer&                           image_transfer;
     const std::shared_ptr<erhe::scene::Node>& root_node;
     erhe::scene::Layer_id                     mesh_layer_id{};

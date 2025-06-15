@@ -7,7 +7,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/shader_resource.hpp"
@@ -22,7 +22,7 @@
 
 namespace erhe::renderer {
 
-Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphics::Instance& graphics_instance)
+Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphics::Device& graphics_device)
     : fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -45,13 +45,13 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
     // It contains vertex positions (xyz), width (w) and colors (rgba).
     // These are written by CPU and read by compute shader (computer_before_line.comp in editor/res/shaders).
     line_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
-        graphics_instance,
+        graphics_device,
         "line_vertex_buffer",
         0,
         erhe::graphics::Shader_resource::Type::shader_storage_block
     );
     line_vertex_buffer_block->set_readonly(true);
-    line_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_instance, "line_vertex");
+    line_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "line_vertex");
     line_vertex_struct->add_vec4("position_0");
     line_vertex_struct->add_vec4("color_0");
     line_vertex_buffer_block->add_struct("vertices", line_vertex_struct.get(), erhe::graphics::Shader_resource::unsized_array);
@@ -59,9 +59,9 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
     // Triangle vertex buffer will contain triangle vertex positions.
     // These are written by compute shader (when using line renderer),
     // after which they are read by vertex shader.
-    triangle_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_instance, "triangle_vertex");
+    triangle_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "triangle_vertex");
     triangle_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
-        graphics_instance,
+        graphics_device,
         "triangle_vertex_buffer",
         1,
         erhe::graphics::Shader_resource::Type::shader_storage_block
@@ -74,7 +74,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
     );
 
     view_block = std::make_unique<erhe::graphics::Shader_resource>(
-        graphics_instance,
+        graphics_device,
         "view",
         3,
         erhe::graphics::Shader_resource::Type::uniform_block
@@ -87,7 +87,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
-    ERHE_VERIFY(graphics_instance.info.use_compute_shader);
+    ERHE_VERIFY(graphics_device.info.use_compute_shader);
     {
         // Compute shader
         {
@@ -99,10 +99,10 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
                 .shaders          = { { gl::Shader_type::compute_shader, comp_path }, }
             };
 
-            erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+            erhe::graphics::Shader_stages_prototype prototype{graphics_device, create_info};
             if (prototype.is_valid()) {
-                compute_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(graphics_instance, std::move(prototype));
-                graphics_instance.shader_monitor.add(create_info, compute_shader_stages.get());
+                compute_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(graphics_device, std::move(prototype));
+                graphics_device.shader_monitor.add(create_info, compute_shader_stages.get());
             } else {
                 const auto current_path = std::filesystem::current_path();
                 log_startup->error(
@@ -126,10 +126,10 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
                 }
             };
 
-            erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+            erhe::graphics::Shader_stages_prototype prototype{graphics_device, create_info};
             if (prototype.is_valid()) {
-                graphics_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(graphics_instance, std::move(prototype));
-                graphics_instance.shader_monitor.add(create_info, graphics_shader_stages.get());
+                graphics_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(graphics_device, std::move(prototype));
+                graphics_device.shader_monitor.add(create_info, graphics_shader_stages.get());
             } else {
                 const auto current_path = std::filesystem::current_path();
                 log_startup->error("Unable to load Debug_renderer shader - check working directory '{}'", current_path.string());
@@ -138,17 +138,17 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
     }
 }
 
-Debug_renderer::Debug_renderer(erhe::graphics::Instance& graphics_instance)
-    : m_graphics_instance{graphics_instance}
-    , m_program_interface{graphics_instance}
+Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device)
+    : m_graphics_device  {graphics_device}
+    , m_program_interface{graphics_device}
     , m_view_buffer{
-        graphics_instance,
+        graphics_device,
         "Debug_renderer::m_view_buffer",
         gl::Buffer_target::uniform_buffer,
         m_program_interface.view_block->binding_point()
     }
     , m_vertex_input{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)
     }
 {
@@ -165,7 +165,7 @@ auto Debug_renderer::get(const Debug_renderer_config& config) -> Primitive_rende
             return Primitive_renderer{*this, bucket};
         }
     }
-    Debug_renderer_bucket& bucket = m_buckets.emplace_back(m_graphics_instance, *this, config);
+    Debug_renderer_bucket& bucket = m_buckets.emplace_back(m_graphics_device, *this, config);
     return Primitive_renderer{*this, bucket};
 }
 
@@ -233,7 +233,7 @@ void Debug_renderer::render(const erhe::math::Viewport viewport, const erhe::sce
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(m_graphics_instance.info.use_compute_shader);
+    ERHE_VERIFY(m_graphics_device.info.use_compute_shader);
 
     erhe::graphics::Scoped_debug_group scoped_debug_group{c_line_renderer_render};
 
@@ -245,7 +245,7 @@ void Debug_renderer::render(const erhe::math::Viewport viewport, const erhe::sce
     m_view_buffer.bind(view_buffer_range);
 
     // Convert all lines to triangles using compute shader
-    m_graphics_instance.opengl_state_tracker.shader_stages.execute(m_program_interface.compute_shader_stages.get());
+    m_graphics_device.opengl_state_tracker.shader_stages.execute(m_program_interface.compute_shader_stages.get());
     for (Debug_renderer_bucket& bucket : m_buckets) {
         bucket.dispatch_compute();
     }
@@ -275,7 +275,7 @@ void Debug_renderer::render(const erhe::math::Viewport viewport, const erhe::sce
 
     gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     gl::disable(gl::Enable_cap::sample_alpha_to_one);
-    m_graphics_instance.opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
+    m_graphics_device.opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
 } // namespace erhe::renderer

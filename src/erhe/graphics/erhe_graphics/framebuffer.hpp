@@ -10,7 +10,7 @@
 
 namespace erhe::graphics {
 
-class Instance;
+class Device;
 class Renderbuffer;
 class Texture;
 
@@ -64,7 +64,7 @@ public:
         std::vector<Attachment> attachments;
     };
 
-    Framebuffer   (Instance& instance, const Create_info& create_info);
+    Framebuffer   (Device& device, const Create_info& create_info);
     ~Framebuffer  () noexcept;
     Framebuffer   (const Framebuffer&) = delete;
     void operator=(const Framebuffer&) = delete;
@@ -83,7 +83,7 @@ public:
     void set_debug_label(const std::string& label);
 
 private:
-    Instance&                     m_instance;
+    Device&                       m_device;
     std::optional<Gl_framebuffer> m_gl_framebuffer;
     std::vector<Attachment>       m_attachments;
     std::thread::id               m_owner_thread;

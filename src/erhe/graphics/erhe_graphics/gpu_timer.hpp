@@ -11,12 +11,12 @@
 
 namespace erhe::graphics {
 
-class Instance;
+class Device;
 
 class Gpu_timer
 {
 public:
-    Gpu_timer(Instance& instance, const char* label);
+    Gpu_timer(Device& device, const char* label);
     ~Gpu_timer() noexcept;
 
     Gpu_timer     (const Gpu_timer&) = delete;
@@ -53,7 +53,7 @@ private:
     static Gpu_timer*                                 s_active_timer;
     static std::size_t                                s_index;
 
-    Instance&                  m_instance;
+    Device&                    m_device;
     std::array<Query, s_count> m_queries;
     std::thread::id            m_owner_thread;
     uint64_t                   m_last_result{0};

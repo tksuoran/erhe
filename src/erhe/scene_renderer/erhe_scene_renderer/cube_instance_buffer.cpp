@@ -6,15 +6,15 @@
 
 namespace erhe::scene_renderer {
 
-Cube_interface::Cube_interface(erhe::graphics::Instance& graphics_instance)
-    : cube_instance_block  {graphics_instance, "instance", cube_instance_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
-    , cube_instance_struct {graphics_instance, "Instance"}
+Cube_interface::Cube_interface(erhe::graphics::Device& graphics_device)
+    : cube_instance_block  {graphics_device, "instance", cube_instance_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    , cube_instance_struct {graphics_device, "Instance"}
     , cube_instance_offsets{
         .packed_position = cube_instance_struct.add_uint("packed_position")->offset_in_parent(),
     }
 
-    , cube_control_block  {graphics_instance, "cube_control", cube_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
-    , cube_control_struct {graphics_instance, "Cube_control"}
+    , cube_control_block  {graphics_device, "cube_control", cube_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    , cube_control_struct {graphics_device, "Cube_control"}
     , cube_control_offsets{
         .cube_size   = cube_control_struct.add_vec4("cube_size"  )->offset_in_parent(),
         .color_bias  = cube_control_struct.add_vec4("color_bias" )->offset_in_parent(),
@@ -31,13 +31,13 @@ Cube_interface::Cube_interface(erhe::graphics::Instance& graphics_instance)
 }
 
 Cube_instance_buffer::Cube_instance_buffer(
-    erhe::graphics::Instance&    graphics_instance,
+    erhe::graphics::Device&      graphics_device,
     Cube_interface&              cube_interface,
     const std::vector<uint32_t>& cubes
 )
     : m_cube_interface{cube_interface}
     , m_buffer{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Buffer_create_info{
             .target              = gl::Buffer_target::shader_storage_buffer,
             .capacity_byte_count = cube_interface.cube_instance_struct.size_bytes() * cubes.size(),
@@ -67,9 +67,9 @@ auto Cube_instance_buffer::bind() -> std::size_t
     return m_cube_count;
 }
 
-Cube_control_buffer::Cube_control_buffer(erhe::graphics::Instance& graphics_instance, Cube_interface& cube_interface)
+Cube_control_buffer::Cube_control_buffer(erhe::graphics::Device& graphics_device, Cube_interface& cube_interface)
     : GPU_ring_buffer_client{
-        graphics_instance,
+        graphics_device,
         "cube_control",
         gl::Buffer_target::shader_storage_buffer,
         cube_interface.cube_control_block.binding_point()

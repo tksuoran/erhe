@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
 #include <glm/glm.hpp>
@@ -9,7 +9,7 @@
 #include <vector>
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 
 namespace erhe::scene_renderer {
@@ -65,7 +65,7 @@ public:
 class Cube_interface
 {
 public:
-    explicit Cube_interface(erhe::graphics::Instance& graphics_instance);
+    explicit Cube_interface(erhe::graphics::Device& graphics_device);
 
     erhe::graphics::Shader_resource cube_instance_block;
     erhe::graphics::Shader_resource cube_instance_struct;
@@ -87,7 +87,7 @@ class Cube_instance_buffer
 {
 public:
     Cube_instance_buffer(
-        erhe::graphics::Instance&    graphics_instance,
+        erhe::graphics::Device&      graphics_device,
         Cube_interface&              cube_interface,
         const std::vector<uint32_t>& cubes
     );
@@ -103,7 +103,7 @@ private:
 class Cube_control_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
-    Cube_control_buffer(erhe::graphics::Instance& graphics_instance, Cube_interface& cube_interface);
+    Cube_control_buffer(erhe::graphics::Device& graphics_device, Cube_interface& cube_interface);
 
     auto update(
         const glm::vec4& cube_size,

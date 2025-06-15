@@ -17,7 +17,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -60,10 +60,10 @@ public:
         }
         , m_settings            {m_context_window}
         , m_commands            {}
-        , m_graphics_instance   {m_context_window}
-        , m_text_renderer       {m_graphics_instance}
-        , m_rendergraph         {m_graphics_instance}
-        , m_imgui_renderer      {m_graphics_instance, m_settings.imgui}
+        , m_graphics_device     {m_context_window}
+        , m_text_renderer       {m_graphics_device}
+        , m_rendergraph         {m_graphics_device}
+        , m_imgui_renderer      {m_graphics_device, m_settings.imgui}
         , m_imgui_windows       {m_imgui_renderer, &m_context_window, m_rendergraph, ""}
         , m_logs                {m_commands, m_imgui_renderer}
         , m_log_settings_window {m_imgui_renderer, m_imgui_windows, m_logs}
@@ -71,8 +71,8 @@ public:
         , m_frame_log_window    {m_imgui_renderer, m_imgui_windows, m_logs}
         , m_performance_window  {m_imgui_renderer, m_imgui_windows}
         , m_tiles               {}
-        , m_tile_renderer       {m_graphics_instance, m_imgui_renderer, m_tiles}
-        , m_map_window          {m_commands, m_graphics_instance, m_imgui_renderer, m_imgui_windows, m_text_renderer, m_tile_renderer}
+        , m_tile_renderer       {m_graphics_device, m_imgui_renderer, m_tiles}
+        , m_map_window          {m_commands, m_graphics_device, m_imgui_renderer, m_imgui_windows, m_text_renderer, m_tile_renderer}
         , m_menu_window         {m_commands, m_imgui_renderer, m_imgui_windows, *this, m_map_window, m_tiles, m_tile_renderer}
     {
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
@@ -269,7 +269,7 @@ public:
     erhe::window::Context_window     m_context_window;
     Hextiles_settings                m_settings;
     erhe::commands::Commands         m_commands;
-    erhe::graphics::Instance         m_graphics_instance;
+    erhe::graphics::Device           m_graphics_device;
     erhe::renderer::Text_renderer    m_text_renderer;
     erhe::rendergraph::Rendergraph   m_rendergraph;
     erhe::imgui::Imgui_renderer      m_imgui_renderer;

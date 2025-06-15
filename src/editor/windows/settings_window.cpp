@@ -34,7 +34,7 @@ void Settings_window::rasterize_icons()
     icon_loader.execute_rasterization_queue();
 
     m_context.icon_set->load_icons(
-        *m_context.graphics_instance,
+        *m_context.graphics_device,
         m_context.editor_settings->icon_settings,
         icons,
         icon_loader

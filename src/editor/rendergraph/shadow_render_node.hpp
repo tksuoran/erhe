@@ -7,7 +7,7 @@
 
 #include <memory>
 
-namespace erhe::graphics       { class Instance; }
+namespace erhe::graphics       { class Device; }
 namespace erhe::scene_renderer { class Light_projections; }
 
 namespace editor {
@@ -24,7 +24,7 @@ class Shadow_render_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     Shadow_render_node(
-        erhe::graphics::Instance&       graphics_instance,
+        erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
         Editor_context&                 editor_context,
         Scene_view&                     scene_view,
@@ -41,7 +41,7 @@ public:
     auto inputs_allowed() const -> bool override;
 
     // Public API
-    void reconfigure(erhe::graphics::Instance& graphics_instance, int resolution, int light_count);
+    void reconfigure(erhe::graphics::Device& graphics_device, int resolution, int light_count);
 
     [[nodiscard]] auto get_scene_view       () -> Scene_view&;
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;

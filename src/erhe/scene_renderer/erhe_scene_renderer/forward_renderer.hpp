@@ -20,7 +20,7 @@ namespace erhe {
     class Item_filter;
 }
 namespace erhe::graphics {
-    class Instance;
+    class Device;
     class Texture;
 }
 namespace erhe::scene {
@@ -39,7 +39,7 @@ class Forward_renderer
 public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
-    Forward_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface);
+    Forward_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface);
 
     // Public API
     class Render_parameters
@@ -82,7 +82,7 @@ public:
     void draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light);
 
 private:
-    erhe::graphics::Instance&                m_graphics_instance;
+    erhe::graphics::Device&                  m_graphics_device;
     Program_interface&                       m_program_interface;
     int                                      m_base_texture_unit{2};
     Camera_buffer                            m_camera_buffer;

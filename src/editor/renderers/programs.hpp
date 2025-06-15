@@ -5,7 +5,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 namespace erhe::scene_renderer {
     class Program_interface;
@@ -85,9 +85,9 @@ public:
     static constexpr int         s_texture_unit_base  =  2; // First two are reserved for shadow samplers
     static constexpr std::size_t s_texture_unit_count = 14; // For non bindless textures
 
-    Programs(erhe::graphics::Instance& graphics_instance);
+    Programs(erhe::graphics::Device& graphics_device);
 
-    void load_programs(tf::Executor& executor, erhe::graphics::Instance& graphics_instance, erhe::scene_renderer::Program_interface& program_interface);
+    void load_programs(tf::Executor& executor, erhe::graphics::Device& graphics_device, erhe::scene_renderer::Program_interface& program_interface);
 
     [[nodiscard]] auto get_variant_shader_stages(Shader_stages_variant variant) const -> const erhe::graphics::Shader_stages*;
 

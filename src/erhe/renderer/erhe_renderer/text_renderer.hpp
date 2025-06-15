@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/pipeline.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
@@ -18,7 +18,7 @@
 
 namespace erhe::graphics {
     class Gl_context_provider;
-    class Instance;
+    class Device;
     class OpenGL_state_tracker;
     class Sampler;
     class Shader_monitor;
@@ -41,7 +41,7 @@ public:
     };
     Config config;
 
-    explicit Text_renderer(erhe::graphics::Instance& graphics_instance);
+    explicit Text_renderer(erhe::graphics::Device& graphics_device);
     ~Text_renderer();
 
     Text_renderer (const Text_renderer&) = delete;
@@ -69,7 +69,7 @@ private:
     static constexpr std::size_t index_count             {uint16_max * per_quad_index_count};
     static constexpr std::size_t index_stride            {2};
 
-    erhe::graphics::Instance&              m_graphics_instance;
+    erhe::graphics::Device&                m_graphics_device;
     erhe::graphics::Shader_resource        m_default_uniform_block; // containing sampler uniforms for non bindless textures
     erhe::graphics::Shader_resource        m_projection_block;
     erhe::graphics::Shader_resource        m_vertex_ssbo_block;

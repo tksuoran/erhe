@@ -44,7 +44,7 @@ public:
 class Graphics_settings
 {
 public:
-    void get_limits                   (const erhe::graphics::Instance& instance, gl::Internal_format format);
+    void get_limits                   (const erhe::graphics::Device& instance, gl::Internal_format format);
     void read_presets                 ();
     void write_presets                ();
     void apply_limits                 (Graphics_preset& graphics_preset);
@@ -66,7 +66,7 @@ class Editor_settings
 public:
     explicit Editor_settings();
 
-    void apply_limits(erhe::graphics::Instance& instance, Editor_message_bus& editor_message_bus);
+    void apply_limits(erhe::graphics::Device& instance, Editor_message_bus& editor_message_bus);
     void read        ();
     void write       ();
 

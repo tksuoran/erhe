@@ -17,7 +17,7 @@ namespace erhe::commands {
     class Commands;
 }
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 namespace erhe::imgui {
     class Imgui_renderer;
@@ -98,7 +98,7 @@ class Map_window : public erhe::imgui::Framebuffer_window
 public:
     Map_window(
         erhe::commands::Commands&      commands,
-        erhe::graphics::Instance&      graphics_instance,
+        erhe::graphics::Device&        graphics_device,
         erhe::imgui::Imgui_renderer&   imgui_renderer,
         erhe::imgui::Imgui_windows&    imgui_windows,
         erhe::renderer::Text_renderer& text_renderer,

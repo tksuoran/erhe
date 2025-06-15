@@ -267,7 +267,7 @@ void Hotbar::init_hotbar()
     m_rendertarget_imgui_host.reset();
 
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
-        *m_context.graphics_instance,
+        *m_context.graphics_device,
         *m_context.mesh_memory,
         width,
         icon_size,

@@ -13,10 +13,10 @@ namespace glslang {
 
 namespace erhe::graphics {
 
-class Instance;
+class Device;
 
 [[nodiscard]] auto glsl_to_glslang(
-    Instance&          graphics_instance,
+    Device&            graphics_device;
     gl::Shader_type    gl_shader_type,
     std::string_view   source,
     const std::string& name

@@ -14,7 +14,7 @@
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
 
 namespace editor {
@@ -25,8 +25,8 @@ using Rasterization_state  = erhe::graphics::Rasterization_state;
 using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
-Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instance& graphics_instance, Mesh_memory& mesh_memory, Programs& programs)
-#define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
+Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs)
+#define REVERSE_DEPTH graphics_device.configuration.reverse_depth
 
     // Tool pass one: For hidden tool parts, set stencil to s_stencil_tool_mesh_hidden.
     // Only reads depth buffer, only writes stencil buffer.
@@ -39,7 +39,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
-            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::greater),
+            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::greater),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -74,7 +74,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
-            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::lequal),
+            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::lequal),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -139,7 +139,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::lequal),
+            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::lequal),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -174,7 +174,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
         .depth_stencil = {
             .depth_test_enable      = true,
             .depth_write_enable     = true,
-            .depth_compare_op       = graphics_instance.depth_function(gl::Depth_function::lequal),
+            .depth_compare_op       = graphics_device.depth_function(gl::Depth_function::lequal),
             .stencil_test_enable    = true,
             .stencil_front = {
                 .stencil_fail_op    = gl::Stencil_op::keep,
@@ -217,7 +217,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Instanc
 Tools::Tools(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
-    erhe::graphics::Instance&       graphics_instance,
+    erhe::graphics::Device&         graphics_device,
     erhe::scene::Scene_message_bus& scene_message_bus,
     Editor_context&                 editor_context,
     Editor_rendering&               editor_rendering,
@@ -225,7 +225,7 @@ Tools::Tools(
     Programs&                       programs
 )
     : m_context              {editor_context}
-    , m_pipeline_renderpasses{graphics_instance, mesh_memory, programs}
+    , m_pipeline_renderpasses{graphics_device, mesh_memory, programs}
 {
     ERHE_PROFILE_FUNCTION();
 

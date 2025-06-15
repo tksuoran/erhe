@@ -69,7 +69,7 @@ void color_graph(
 }
 
 void import_gltf(
-    erhe::graphics::Instance&    graphics_instance,
+    erhe::graphics::Device&      graphics_device,
     erhe::primitive::Build_info  build_info,
     Scene_root&                  scene_root,
     const std::filesystem::path& path
@@ -82,13 +82,13 @@ void import_gltf(
     root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     root_node->set_parent(temp_scene_root_node); // Will be moved to final scene later
 
-    erhe::gltf::Image_transfer image_transfer{graphics_instance};
+    erhe::gltf::Image_transfer image_transfer{graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
-        .graphics_instance = graphics_instance,
-        .image_transfer    = image_transfer,
-        .root_node         = root_node,
-        .mesh_layer_id     = scene_root.layers().content()->id,
-        .path              = path,
+        .graphics_device = graphics_device,
+        .image_transfer  = image_transfer,
+        .root_node       = root_node,
+        .mesh_layer_id   = scene_root.layers().content()->id,
+        .path            = path,
     };
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 

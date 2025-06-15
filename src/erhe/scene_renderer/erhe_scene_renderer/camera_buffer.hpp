@@ -1,11 +1,11 @@
 #pragma once
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_math/viewport.hpp"
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 namespace erhe::scene {
     class Node;
@@ -35,7 +35,7 @@ public:
 class Camera_interface
 {
 public:
-    explicit Camera_interface(erhe::graphics::Instance& graphics_instance);
+    explicit Camera_interface(erhe::graphics::Device& graphics_device);
 
     erhe::graphics::Shader_resource camera_block;
     erhe::graphics::Shader_resource camera_struct;
@@ -46,7 +46,7 @@ public:
 class Camera_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
-    Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface);
+    Camera_buffer(erhe::graphics::Device& graphics_device, Camera_interface& camera_interface);
 
     auto update(
         const erhe::scene::Projection& camera_projection,

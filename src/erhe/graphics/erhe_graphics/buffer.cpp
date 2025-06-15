@@ -6,7 +6,7 @@
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -37,7 +37,7 @@ void Buffer::capability_check(const gl::Buffer_storage_mask storage_mask)
             gl::Buffer_storage_mask::map_persistent_bit
         )
     ) {
-        const bool in_core       = m_instance.info.gl_version >= 440;
+        const bool in_core       = m_device.info.gl_version >= 440;
         const bool has_extension = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
         ERHE_VERIFY(in_core || has_extension);
     }
@@ -46,7 +46,7 @@ void Buffer::capability_check(const gl::Buffer_storage_mask storage_mask)
 void Buffer::capability_check(const gl::Map_buffer_access_mask access_mask)
 {
     if (erhe::bit::test_any_rhs_bits_set(access_mask,gl::Map_buffer_access_mask::map_coherent_bit | gl::Map_buffer_access_mask::map_persistent_bit)) {
-        const bool in_core       = m_instance.info.gl_version >= 440;
+        const bool in_core       = m_device.info.gl_version >= 440;
         const bool has_extension = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
         ERHE_VERIFY(in_core || has_extension);
     }
@@ -88,9 +88,9 @@ void Buffer::allocate_storage()
     ERHE_VERIFY(m_capacity_byte_count > 0);
 }
 
-Buffer::Buffer(Instance& instance, const Buffer_create_info& create_info) noexcept
-    : m_instance           {instance}
-    , m_handle             {instance}
+Buffer::Buffer(Device& device, const Buffer_create_info& create_info) noexcept
+    : m_device             {device}
+    , m_handle             {device}
     , m_target             {create_info.target}
     , m_capacity_byte_count{create_info.capacity_byte_count}
     , m_storage_mask       {create_info.storage_mask}
@@ -115,9 +115,9 @@ Buffer::Buffer(Instance& instance, const Buffer_create_info& create_info) noexce
     allocate_storage();
 }
 
-Buffer::Buffer(Instance& instance)
-    : m_instance{instance}
-    , m_handle  {instance}
+Buffer::Buffer(Device& device)
+    : m_device{device}
+    , m_handle{device}
 {
 }
 
@@ -129,7 +129,7 @@ Buffer::~Buffer() noexcept
 }
 
 Buffer::Buffer(Buffer&& other) noexcept
-    : m_instance              {other.m_instance}
+    : m_device                {other.m_device}
     , m_handle                {std::move(other.m_handle)}
     , m_target                {other.m_target}
     , m_capacity_byte_count   {other.m_capacity_byte_count}
@@ -146,7 +146,7 @@ Buffer::Buffer(Buffer&& other) noexcept
 
 auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
 {
-    ERHE_VERIFY(&m_instance == &other.m_instance);
+    ERHE_VERIFY(&m_device == &other.m_device);
     m_handle                 = std::move(other.m_handle);
     m_debug_label            = other.m_debug_label;
     m_target                 = other.m_target;
@@ -208,7 +208,7 @@ auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) 
     ERHE_VERIFY(gl_name() != 0);
 
     if (
-        !m_instance.info.use_persistent_buffers ||
+        !m_device.info.use_persistent_buffers ||
         !erhe::bit::test_all_rhs_bits_set(m_storage_mask, gl::Buffer_storage_mask::map_persistent_bit)
     ) {
         ERHE_VERIFY(m_map.empty());
@@ -255,7 +255,7 @@ void Buffer::end_write(const std::size_t byte_offset, const std::size_t byte_cou
     ERHE_VERIFY(gl_name() != 0);
 
     if (
-        !m_instance.info.use_persistent_buffers ||
+        !m_device.info.use_persistent_buffers ||
         !erhe::bit::test_all_rhs_bits_set(m_storage_mask, gl::Buffer_storage_mask::map_persistent_bit)
     ) {
         if (byte_count > 0) {

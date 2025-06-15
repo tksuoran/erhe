@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
     class Texture;
 }
 namespace erhe::imgui {
@@ -69,7 +69,7 @@ private:
 class Icon_rasterization
 {
 public:
-    Icon_rasterization(Editor_context& editor_context, erhe::graphics::Instance& graphics_instance, int size);
+    Icon_rasterization(Editor_context& editor_context, erhe::graphics::Device& graphics_device, int size);
 
     [[nodiscard]] auto get_size() const -> int;
 

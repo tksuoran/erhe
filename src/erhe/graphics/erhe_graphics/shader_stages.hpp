@@ -55,7 +55,7 @@ public:
     // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
     // and source (possibly read from file).
     [[nodiscard]] auto final_source(
-        Instance&                           graphics_instance,
+        Device&                           graphics_device,
         const Shader_stage&                 shader,
         std::vector<std::filesystem::path>* paths,
         std::optional<unsigned int>         gl_name = {}
@@ -90,8 +90,8 @@ public:
 class Shader_stages_prototype final
 {
 public:
-    Shader_stages_prototype (Instance& graphics_instance, Shader_stages_create_info&& create_info);
-    Shader_stages_prototype (Instance& graphics_instance, const Shader_stages_create_info& create_info);
+    Shader_stages_prototype (Device& graphics_device, Shader_stages_create_info&& create_info);
+    Shader_stages_prototype (Device& graphics_device, const Shader_stages_create_info& create_info);
     ~Shader_stages_prototype() noexcept = default;
     Shader_stages_prototype (const Shader_stages_prototype&) = delete;
     void operator=          (const Shader_stages_prototype&) = delete;
@@ -127,7 +127,7 @@ private:
 
     friend class Shader_stages;
     friend class Reloadable_shader_stages;
-    Instance&                                           m_graphics_instance;
+    Device&                                           m_graphics_device;
     Gl_program                                          m_handle;
     Shader_stages_create_info                           m_create_info;
     std::vector<Gl_shader>                              m_prelink_shaders;
@@ -147,8 +147,8 @@ private:
 class Shader_stages
 {
 public:
-    Shader_stages(Instance& instance, Shader_stages_prototype&& prototype);
-    Shader_stages(Instance& instance, const std::string& non_functional_name);
+    Shader_stages(Device& device, Shader_stages_prototype&& prototype);
+    Shader_stages(Device& device, const std::string& non_functional_name);
     Shader_stages(Shader_stages&& old);
     Shader_stages& operator=(Shader_stages&& old);
 
@@ -161,7 +161,7 @@ public:
     [[nodiscard]] auto is_valid() const -> bool;
 
 private:
-    Instance&              m_instance;
+    Device&              m_device;
     Gl_program             m_handle;
     std::string            m_name;
     bool                   m_is_valid{false};
@@ -171,9 +171,9 @@ private:
 class Reloadable_shader_stages
 {
 public:
-    Reloadable_shader_stages(Instance& instance, const std::string& non_functional_name);
-    Reloadable_shader_stages(Instance& instance, Shader_stages_prototype&& prototype);
-    Reloadable_shader_stages(Instance& instance, const Shader_stages_create_info& create_info);
+    Reloadable_shader_stages(Device& device, const std::string& non_functional_name);
+    Reloadable_shader_stages(Device& device, Shader_stages_prototype&& prototype);
+    Reloadable_shader_stages(Device& device, const Shader_stages_create_info& create_info);
     Reloadable_shader_stages(Reloadable_shader_stages&&);
     Reloadable_shader_stages& operator=(Reloadable_shader_stages&&);
 
@@ -181,7 +181,7 @@ public:
     Shader_stages             shader_stages;
 
 private:
-    [[nodiscard]] auto make_prototype(Instance& graphics_instance) -> Shader_stages_prototype;
+    [[nodiscard]] auto make_prototype(Device& graphics_device) -> Shader_stages_prototype;
 };
 
 class Shader_stages_hash

@@ -1,7 +1,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/glsl_format_source.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -41,12 +41,12 @@ namespace erhe::graphics {
     }
 }
 
-[[nodiscard]] auto get_built_in_resources(Instance& graphics_instance) -> ::TBuiltInResource
+[[nodiscard]] auto get_built_in_resources(Device& graphics_device) -> ::TBuiltInResource
 {
     ::TBuiltInResource resources = *::GetDefaultResources();
 
-    size_t MaxFragmentUniformVectors = graphics_instance.limits.max_fragment_uniform_vectors;
-    size_t MaxVertexUniformVectors   = graphics_instance.limits.max_vertex_uniform_vectors;
+    size_t MaxFragmentUniformVectors = graphics_device.limits.max_fragment_uniform_vectors;
+    size_t MaxVertexUniformVectors   = graphics_device.limits.max_vertex_uniform_vectors;
 
     resources.maxVertexUniformVectors      = static_cast<int>(MaxVertexUniformVectors);
     resources.maxVertexUniformComponents   = static_cast<int>(MaxVertexUniformVectors * 4);
@@ -86,7 +86,7 @@ auto Shader_stages_prototype::compile_glslang(const Shader_stage& shader) -> std
     messages = messages | EShMsgEnhanced;           // enhanced message readability
     messages = messages | EShMsgDisplayErrorColumn; // Display error message column aswell as line
 
-    ::TBuiltInResource glslang_built_in_resources = get_built_in_resources(m_graphics_instance);
+    ::TBuiltInResource glslang_built_in_resources = get_built_in_resources(m_graphics_device);
     const bool parse_ok = glslang_shader->parse(&glslang_built_in_resources, 100, true, static_cast<const EShMessages>(messages));
     const char* info_log = glslang_shader->getInfoLog();
     if (!parse_ok) {

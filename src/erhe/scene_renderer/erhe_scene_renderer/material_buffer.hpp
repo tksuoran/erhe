@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
@@ -37,7 +37,7 @@ public:
 class Material_interface
 {
 public:
-    explicit Material_interface(erhe::graphics::Instance& graphics_instance);
+    explicit Material_interface(erhe::graphics::Device& graphics_device);
 
     erhe::graphics::Shader_resource material_block;
     erhe::graphics::Shader_resource material_struct;
@@ -48,14 +48,14 @@ public:
 class Material_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
-    Material_buffer(erhe::graphics::Instance& graphics_instance, Material_interface& material_interface);
+    Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface);
 
     auto update(const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::graphics::Buffer_range;
 
     [[nodiscard]] auto used_handles() const -> const std::set<uint64_t>&;
 
 private:
-    erhe::graphics::Instance& m_graphics_instance;
+    erhe::graphics::Device& m_graphics_device;
     Material_interface&       m_material_interface;
     std::set<uint64_t>        m_used_handles;
 

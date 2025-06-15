@@ -9,8 +9,8 @@
 
 namespace erhe::graphics {
 
-Gl_context_provider::Gl_context_provider(erhe::graphics::Instance& graphics_instance, OpenGL_state_tracker& opengl_state_tracker)
-    : m_graphics_instance   {graphics_instance}
+Gl_context_provider::Gl_context_provider(erhe::graphics::Device& graphics_device, OpenGL_state_tracker& opengl_state_tracker)
+    : m_graphics_device     {graphics_device}
     , m_opengl_state_tracker{opengl_state_tracker}
     , m_main_thread_id      {std::this_thread::get_id()}
 {

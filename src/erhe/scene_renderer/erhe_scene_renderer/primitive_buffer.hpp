@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_primitive/enums.hpp"
 
@@ -35,7 +35,7 @@ public:
 class Primitive_interface
 {
 public:
-    explicit Primitive_interface(erhe::graphics::Instance& graphics_instance);
+    explicit Primitive_interface(erhe::graphics::Device& graphics_device);
 
     erhe::graphics::Shader_resource primitive_block;
     erhe::graphics::Shader_resource primitive_struct;
@@ -102,7 +102,7 @@ public:
 class Primitive_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
-    Primitive_buffer(erhe::graphics::Instance& graphics_instance, Primitive_interface& primitive_interface);
+    Primitive_buffer(erhe::graphics::Device& graphics_device, Primitive_interface& primitive_interface);
 
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 

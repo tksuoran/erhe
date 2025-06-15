@@ -11,7 +11,7 @@
 #include <memory>
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
     class Texture;
 }
 
@@ -23,11 +23,11 @@ class Framebuffer_window : public Imgui_window
 {
 public:
     Framebuffer_window(
-        erhe::graphics::Instance& graphics_instance,
-        Imgui_renderer&           imgui_renderer,
-        Imgui_windows&            imgui_windows,
-        const std::string_view    title,
-        const char*               ini_label
+        erhe::graphics::Device& graphics_device,
+        Imgui_renderer&         imgui_renderer,
+        Imgui_windows&          imgui_windows,
+        const std::string_view  title,
+        const char*             ini_label
     );
 
     // Implements Imgui_window
@@ -44,7 +44,7 @@ public:
     void bind_framebuffer();
 
 protected:
-    erhe::graphics::Instance&                    m_graphics_instance;
+    erhe::graphics::Device&                      m_graphics_device;
     std::string                                  m_debug_label;
     erhe::math::Viewport                         m_viewport           {0, 0, 0, 0, true};
     float                                        m_content_rect_x     {0.0f};

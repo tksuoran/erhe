@@ -8,7 +8,7 @@
 #include "erhe_primitive/build_info.hpp"
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 
 namespace example {
@@ -16,9 +16,9 @@ namespace example {
 class Mesh_memory
 {
 public:
-    explicit Mesh_memory(erhe::graphics::Instance& graphics_instance);
+    explicit Mesh_memory(erhe::graphics::Device& graphics_device);
 
-    erhe::graphics::Instance&                        graphics_instance;
+    erhe::graphics::Device&                          graphics_device;
     erhe::dataformat::Vertex_format                  vertex_format;
     erhe::graphics::Buffer                           position_vertex_buffer;
     erhe::graphics::Buffer                           non_position_vertex_buffer;

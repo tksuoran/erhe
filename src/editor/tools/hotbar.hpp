@@ -13,7 +13,7 @@ namespace erhe::commands {
     class Commands;
 }
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 namespace erhe::imgui {
     class Imgui_windows;

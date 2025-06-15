@@ -12,7 +12,7 @@ namespace erhe {
     class Item_base;
 }
 namespace erhe::graphics {
-    class Instance;
+    class Device;
     class Texture;
 }
 namespace erhe::scene {
@@ -84,14 +84,14 @@ class Icon_set
 public:
     Icon_set(
         Editor_context&           editor_context,
-        erhe::graphics::Instance& graphics_instance,
+        erhe::graphics::Device& graphics_device,
         Icon_settings&            icon_settings,
         Icons&                    icons,
         Icon_loader&              icon_loader
     );
 
     void load_icons(
-        erhe::graphics::Instance& graphics_instance,
+        erhe::graphics::Device& graphics_device,
         Icon_settings&            icon_settings,
         Icons&                    icons_in,
         Icon_loader&              loader

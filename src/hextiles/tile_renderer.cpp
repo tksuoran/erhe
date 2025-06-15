@@ -8,7 +8,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/scoped_buffer_mapping.hpp"
 #include "erhe_graphics/shader_resource.hpp"
@@ -36,14 +36,14 @@ constexpr size_t max_quad_count          {1'000'000}; // each quad consumes 4 in
 constexpr size_t index_count             {max_quad_count * per_quad_index_count};
 constexpr size_t index_stride            {4};
 
-auto Tile_renderer::make_prototype(erhe::graphics::Instance& graphics_instance) const -> erhe::graphics::Shader_stages_prototype
+auto Tile_renderer::make_prototype(erhe::graphics::Device& graphics_device) const -> erhe::graphics::Shader_stages_prototype
 {
     erhe::graphics::Shader_stages_create_info create_info{
         .name                  = "tile",
         .interface_blocks      = { &m_projection_block },
         .fragment_outputs      = &m_fragment_outputs,
         .vertex_format         = &m_vertex_format,
-        .default_uniform_block = m_graphics_instance.info.use_bindless_texture
+        .default_uniform_block = m_graphics_device.info.use_bindless_texture
             ? nullptr
             : &m_default_uniform_block,
         .shaders = {
@@ -54,23 +54,23 @@ auto Tile_renderer::make_prototype(erhe::graphics::Instance& graphics_instance) 
         .dump_final_source = true
     };
 
-    if (m_graphics_instance.info.gl_version < 430) {
+    if (m_graphics_device.info.gl_version < 430) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
         create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
     }
-    if (m_graphics_instance.info.gl_version < 460) {
+    if (m_graphics_device.info.gl_version < 460) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
         create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
         //create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
     }
 
-    if (m_graphics_instance.info.use_bindless_texture) {
+    if (m_graphics_device.info.use_bindless_texture) {
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
-    return erhe::graphics::Shader_stages_prototype{graphics_instance, create_info};
+    return erhe::graphics::Shader_stages_prototype{graphics_device, create_info};
 }
 
 auto Tile_renderer::make_program(erhe::graphics::Shader_stages_prototype&& prototype) const -> erhe::graphics::Shader_stages
@@ -78,23 +78,23 @@ auto Tile_renderer::make_program(erhe::graphics::Shader_stages_prototype&& proto
     if (!prototype.is_valid()) {
         log_startup->error("current directory is {}", std::filesystem::current_path().string());
         log_startup->error("Compiling shader program {} failed", prototype.name());
-        return erhe::graphics::Shader_stages{m_graphics_instance, prototype.name()};
+        return erhe::graphics::Shader_stages{m_graphics_device, prototype.name()};
     }
 
-    return erhe::graphics::Shader_stages{m_graphics_instance, std::move(prototype)};
+    return erhe::graphics::Shader_stages{m_graphics_device, std::move(prototype)};
 }
 
 Tile_renderer::Tile_renderer(
-    erhe::graphics::Instance&    graphics_instance,
+    erhe::graphics::Device&      graphics_device,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     Tiles&                       tiles
 )
-    : m_graphics_instance    {graphics_instance}
+    : m_graphics_device      {graphics_device}
     , m_imgui_renderer       {imgui_renderer}
     , m_tiles                {tiles}
-    , m_default_uniform_block{graphics_instance}
+    , m_default_uniform_block{graphics_device}
     , m_texture_sampler{
-        graphics_instance.info.use_bindless_texture
+        graphics_device.info.use_bindless_texture
             ? nullptr
             : m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, 0)
     }
@@ -116,7 +116,7 @@ Tile_renderer::Tile_renderer(
         }
     }
     , m_index_buffer{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Buffer_create_info{
             .target              = gl::Buffer_target::element_array_buffer,
             .capacity_byte_count = index_stride * index_count,
@@ -125,7 +125,7 @@ Tile_renderer::Tile_renderer(
         }
     }
     , m_nearest_sampler{
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -133,7 +133,7 @@ Tile_renderer::Tile_renderer(
         }
     }
     , m_projection_block{
-        graphics_instance,
+        graphics_device,
         "projection",
         0,
         erhe::graphics::Shader_resource::Type::uniform_block
@@ -145,19 +145,19 @@ Tile_renderer::Tile_renderer(
     , m_u_texture_size           {m_texture_handle->size_bytes()}
     , m_u_texture_offset         {m_texture_handle->offset_in_parent()}
     , m_shader_path              {std::filesystem::path{"res"} / std::filesystem::path{"shaders"}}
-    , m_shader_stages            {make_program(make_prototype(graphics_instance))}
+    , m_shader_stages            {make_program(make_prototype(graphics_device))}
     , m_vertex_buffer{
-        graphics_instance,
+        graphics_device,
         "Tile_renderer::m_vertex_buffer",
         gl::Buffer_target::array_buffer
     }
     , m_projection_buffer{
-        graphics_instance,
+        graphics_device,
         "Tile_renderer::m_projection_buffer",
         gl::Buffer_target::uniform_buffer,
         m_projection_block.binding_point()
     }
-    , m_vertex_input{m_graphics_instance, erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
+    , m_vertex_input{m_graphics_device, erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
     , m_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "Map renderer",
@@ -311,7 +311,7 @@ void Tile_renderer::compose_tileset_texture()
 
     // Texture will be created with additional per-player colored unit tiles
     erhe::graphics::Texture_create_info texture_create_info{
-        .instance        = m_graphics_instance,
+        .device          = m_graphics_device,
         .target          = gl::Texture_target::texture_2d,
         .internal_format = to_gl(m_tileset_image.info.format),
         .use_mipmaps     = false,
@@ -322,7 +322,7 @@ void Tile_renderer::compose_tileset_texture()
         .debug_label     = "tiles"
     };
 
-    m_tileset_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_instance, texture_create_info);
+    m_tileset_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
     m_tileset_texture->set_debug_label(texture_path.string());
     float clear_rgba[4] = { 1.0f, 0.0f, 1.0f, 1.0f};
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
@@ -687,7 +687,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
 
     erhe::graphics::Scoped_debug_group pass_scope{c_tile_renderer_render};
 
-    const auto handle = m_graphics_instance.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
+    const auto handle = m_graphics_device.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
 
     erhe::graphics::Buffer_range& vertex_buffer_range     = m_vertex_buffer_range.value();
     erhe::graphics::Buffer_range  projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
@@ -730,13 +730,13 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
 
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_graphics_instance.opengl_state_tracker.execute(m_pipeline);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
-    m_graphics_instance.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_range.get_byte_start_offset_in_buffer());
+    m_graphics_device.opengl_state_tracker.execute(m_pipeline);
+    m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
+    m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_range.get_byte_start_offset_in_buffer());
 
     m_projection_buffer.bind(projection_buffer_range);
 
-    if (m_graphics_instance.info.use_bindless_texture) {
+    if (m_graphics_device.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
     } else {
         gl::bind_texture_unit(0, m_tileset_texture->gl_name());
@@ -753,7 +753,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
     projection_buffer_range.release();
     vertex_buffer_range.release();
 
-    if (m_graphics_instance.info.use_bindless_texture) {
+    if (m_graphics_device.info.use_bindless_texture) {
         gl::make_texture_handle_non_resident_arb(handle);
     }
 

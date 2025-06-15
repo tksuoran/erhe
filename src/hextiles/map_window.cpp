@@ -13,7 +13,7 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_graphics/gl_context_provider.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_renderer/text_renderer.hpp"
@@ -137,13 +137,13 @@ auto Map_grid_cycle_command::try_call() -> bool
 
 Map_window::Map_window(
     erhe::commands::Commands&      commands,
-    erhe::graphics::Instance&      graphics_instance,
+    erhe::graphics::Device&        graphics_device,
     erhe::imgui::Imgui_renderer&   imgui_renderer,
     erhe::imgui::Imgui_windows&    imgui_windows,
     erhe::renderer::Text_renderer& text_renderer,
     Tile_renderer&                 tile_renderer
 )
-    : Framebuffer_window    {graphics_instance, imgui_renderer, imgui_windows, "Map", "map"}
+    : Framebuffer_window    {graphics_device, imgui_renderer, imgui_windows, "Map", "map"}
     , m_text_renderer       {text_renderer}
     , m_tile_renderer       {tile_renderer}
     , m_free_zoom_command   {commands, *this}

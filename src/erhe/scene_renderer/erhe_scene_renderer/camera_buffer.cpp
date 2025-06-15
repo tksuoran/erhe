@@ -16,9 +16,9 @@
 
 namespace erhe::scene_renderer {
 
-Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
-    : camera_block{graphics_instance, "camera", camera_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
-    , camera_struct{graphics_instance, "Camera"}
+Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device)
+    : camera_block{graphics_device, "camera", camera_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
+    , camera_struct{graphics_device, "Camera"}
     , offsets{
         .world_from_node      = camera_struct.add_mat4 ("world_from_node"     )->offset_in_parent(),
         .world_from_clip      = camera_struct.add_mat4 ("world_from_clip"     )->offset_in_parent(),
@@ -41,9 +41,9 @@ Camera_interface::Camera_interface(erhe::graphics::Instance& graphics_instance)
     camera_block.add_struct("cameras", &camera_struct, 1);
 }
 
-Camera_buffer::Camera_buffer(erhe::graphics::Instance& graphics_instance, Camera_interface& camera_interface)
+Camera_buffer::Camera_buffer(erhe::graphics::Device& graphics_device, Camera_interface& camera_interface)
     : GPU_ring_buffer_client{
-        graphics_instance,
+        graphics_device,
         "Camera_buffer",
         gl::Buffer_target::uniform_buffer,
         camera_interface.camera_block.binding_point()

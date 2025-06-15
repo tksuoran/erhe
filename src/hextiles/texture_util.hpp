@@ -8,7 +8,7 @@
 #include <vector>
 
 namespace erhe::graphics {
-    class Instance;
+    class Device;
     class Texture;
 }
 
@@ -28,7 +28,8 @@ auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format;
 
 auto load_png    (const std::filesystem::path& path) -> Image;
 auto load_texture(
-    erhe::graphics::Instance&    graphics_instance,
-    const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
+    erhe::graphics::Device&      graphics_device,
+    const std::filesystem::path& path
+) -> std::shared_ptr<erhe::graphics::Texture>;
 
 }

@@ -18,7 +18,7 @@ namespace GEO {
 }
 namespace erhe::graphics {
     class Buffer_transfer_queue;
-    class Instance;
+    class Device;
 }
 namespace erhe::imgui {
     class Imgui_windows;
@@ -78,7 +78,7 @@ public:
     Scene_builder(
         std::shared_ptr<Scene_root>     scene,
         tf::Executor&                   executor,
-        erhe::graphics::Instance&       graphics_instance,
+        erhe::graphics::Device&         graphics_device,
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
@@ -143,7 +143,7 @@ private:
     [[nodiscard]] auto build_info(Mesh_memory& mesh_memory) -> erhe::primitive::Build_info;
 
     void setup_cameras(
-        erhe::graphics::Instance&       graphics_instance,
+        erhe::graphics::Device&         graphics_device,
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,

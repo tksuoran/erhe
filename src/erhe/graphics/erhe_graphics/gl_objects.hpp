@@ -6,15 +6,15 @@ typedef unsigned int GLuint;
 
 namespace erhe::graphics {
 
-class Instance;
+class Device;
 
 class Gl_texture final
 {
 public:
     static constexpr bool not_texture_view = false;
     static constexpr bool texture_view     = true;
-    Gl_texture    (Instance& instance, gl::Texture_target target, bool for_texture_view = not_texture_view);
-    Gl_texture    (Instance& instance, gl::Texture_target target, GLuint wrap_name, bool for_texture_view = not_texture_view);
+    Gl_texture    (Device& device, gl::Texture_target target, bool for_texture_view = not_texture_view);
+    Gl_texture    (Device& device, gl::Texture_target target, GLuint wrap_name, bool for_texture_view = not_texture_view);
     ~Gl_texture   () noexcept;
     Gl_texture    (const Gl_texture&) = delete;
     void operator=(const Gl_texture&) = delete;
@@ -31,7 +31,7 @@ private:
 class Gl_program final
 {
 public:
-    Gl_program    (Instance& instance);
+    Gl_program    (Device& device);
     ~Gl_program   () noexcept;
     Gl_program    (const Gl_program&) = delete;
     void operator=(const Gl_program&) = delete;
@@ -47,7 +47,7 @@ private:
 class Gl_shader final
 {
 public:
-    Gl_shader     (Instance& instance, gl::Shader_type shader_type);
+    Gl_shader     (Device& device, gl::Shader_type shader_type);
     ~Gl_shader    () noexcept;
     Gl_shader     (const Gl_shader&) = delete;
     void operator=(const Gl_shader&) = delete;
@@ -63,7 +63,7 @@ private:
 class Gl_sampler final
 {
 public:
-    Gl_sampler    (Instance& instance);
+    Gl_sampler    (Device& device);
     ~Gl_sampler   () noexcept;
     Gl_sampler    (const Gl_sampler&) = delete;
     void operator=(const Gl_sampler&) = delete;
@@ -79,7 +79,7 @@ private:
 class Gl_framebuffer final
 {
 public:
-    Gl_framebuffer (Instance& instance);
+    Gl_framebuffer (Device& device);
     ~Gl_framebuffer() noexcept;
     Gl_framebuffer (const Gl_framebuffer&) = delete;
     void operator= (const Gl_framebuffer&) = delete;
@@ -95,7 +95,7 @@ private:
 class Gl_renderbuffer final
 {
 public:
-    Gl_renderbuffer (Instance& instance);
+    Gl_renderbuffer (Device& device);
     ~Gl_renderbuffer() noexcept;
     Gl_renderbuffer (const Gl_renderbuffer&) = delete;
     void operator=  (const Gl_renderbuffer&) = delete;
@@ -111,7 +111,7 @@ private:
 class Gl_buffer final
 {
 public:
-    Gl_buffer     (Instance& instance);
+    Gl_buffer     (Device& device);
     ~Gl_buffer    () noexcept;
     Gl_buffer     (const Gl_buffer&) = delete;
     void operator=(const Gl_buffer&) = delete;
@@ -127,7 +127,7 @@ private:
 class Gl_transform_feedback final
 {
 public:
-    Gl_transform_feedback (Instance& instance);
+    Gl_transform_feedback (Device& device);
     ~Gl_transform_feedback() noexcept;
     Gl_transform_feedback (const Gl_transform_feedback&) = delete;
     void operator=        (const Gl_transform_feedback&) = delete;
@@ -143,7 +143,7 @@ private:
 class Gl_query final
 {
 public:
-    Gl_query      (Instance& instance, gl::Query_target target);
+    Gl_query      (Device& device, gl::Query_target target);
     ~Gl_query     () noexcept;
     Gl_query      (const Gl_query&) = delete;
     void operator=(const Gl_query&) = delete;
@@ -159,7 +159,7 @@ private:
 class Gl_vertex_array final
 {
 public:
-    Gl_vertex_array (Instance& instance);
+    Gl_vertex_array (Device& device);
     ~Gl_vertex_array() noexcept;
     Gl_vertex_array (const Gl_vertex_array&) = delete;
     void operator=  (const Gl_vertex_array&) = delete;

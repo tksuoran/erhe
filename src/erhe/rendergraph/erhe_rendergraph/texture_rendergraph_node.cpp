@@ -116,12 +116,12 @@ void Texture_rendergraph_node::execute_rendergraph_node()
         ////    .internal_format = m_configuration->graphics.low_hdr
         ////        ? gl::Internal_format::r11f_g11f_b10f
         ////        : gl::Internal_format::rgba16f,
-        erhe::graphics::Instance& graphics_instance = m_rendergraph.get_graphics_instance();
+        erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_instance();
 
         m_color_texture = std::make_shared<Texture>(
-            graphics_instance,
+            graphics_device,
             Texture::Create_info{
-                .instance        = graphics_instance,
+                .device          = graphics_device,
                 .target          = gl::Texture_target::texture_2d,
                 .internal_format = m_color_format,
                 .width           = output_viewport.width,
@@ -140,7 +140,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             m_depth_stencil_renderbuffer.reset();
         } else {
             m_depth_stencil_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
-                graphics_instance,
+                graphics_device,
                 m_depth_stencil_format,
                 output_viewport.width,
                 output_viewport.height
@@ -169,7 +169,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
                     );
                 }
             }
-            m_framebuffer = std::make_unique<Framebuffer>(graphics_instance, create_info);
+            m_framebuffer = std::make_unique<Framebuffer>(graphics_device, create_info);
             m_framebuffer->set_debug_label(
                 fmt::format("{} Texture_rendergraph_node framebuffer", get_name())
             );

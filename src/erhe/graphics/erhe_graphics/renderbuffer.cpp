@@ -1,6 +1,6 @@
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
@@ -11,13 +11,13 @@
 namespace erhe::graphics {
 
 Renderbuffer::Renderbuffer(
-    Instance&                 instance,
+    Device&                   device,
     const gl::Internal_format internal_format,
     const unsigned int        width,
     const unsigned int        height
 )
-    : m_instance       {instance}
-    , m_handle         {instance}
+    : m_device         {device}
+    , m_handle         {device}
     , m_internal_format{internal_format}
     , m_sample_count   {0}
     , m_width          {width}
@@ -27,18 +27,18 @@ Renderbuffer::Renderbuffer(
     ERHE_VERIFY(m_width  > 0);
     ERHE_VERIFY(m_height > 0);
 
-    instance.named_renderbuffer_storage_multisample(gl_name(), 0, internal_format, width, height);
+    device.named_renderbuffer_storage_multisample(gl_name(), 0, internal_format, width, height);
 }
 
 Renderbuffer::Renderbuffer(
-    Instance&                 instance,
+    Device&                   device,
     const gl::Internal_format internal_format,
     const unsigned int        sample_count,
     const unsigned int        width,
     const unsigned int        height
 )
-    : m_instance       {instance}
-    , m_handle         {instance}
+    : m_device         {device}
+    , m_handle         {device}
     , m_internal_format{internal_format}
     , m_sample_count   {sample_count}
     , m_width          {width}
@@ -74,15 +74,15 @@ Renderbuffer::Renderbuffer(
         // }
         // else
         {
-            m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(instance.limits.max_samples));
+            m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_samples));
             if (gl_helpers::has_color(m_internal_format) || gl_helpers::has_alpha(m_internal_format)) {
-                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(instance.limits.max_color_texture_samples));
+                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_color_texture_samples));
             }
             if (gl_helpers::has_depth(m_internal_format) || gl_helpers::has_stencil(m_internal_format)) {
-                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(instance.limits.max_depth_texture_samples));
+                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_depth_texture_samples));
             }
             if (gl_helpers::is_integer(m_internal_format)) {
-                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(instance.limits.max_integer_samples));
+                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_integer_samples));
             }
         }
     }
@@ -118,7 +118,7 @@ Renderbuffer::Renderbuffer(
         m_internal_format = gl::Internal_format::rgba8; // TODO what should be done?
     }
 
-    instance.named_renderbuffer_storage_multisample(
+    device.named_renderbuffer_storage_multisample(
         gl_name(),
         m_sample_count,
         m_internal_format,

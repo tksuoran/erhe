@@ -9,7 +9,7 @@
 
 namespace erhe::graphics {
     class Framebuffer;
-    class Instance;
+    class Device;
     class Renderbuffer;
     class Texture;
 }
@@ -41,7 +41,7 @@ class Material_preview : public Scene_view
 {
 public:
     Material_preview(
-        erhe::graphics::Instance&       graphics_instance,
+        erhe::graphics::Device&         graphics_device,
         erhe::scene::Scene_message_bus& scene_message_bus,
         Editor_context&                 editor_context,
         Mesh_memory&                    mesh_memory,
@@ -62,7 +62,7 @@ public:
     [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;
 
     void set_area_size(int size);
-    void update_rendertarget(erhe::graphics::Instance& graphics_instance);
+    void update_rendertarget(erhe::graphics::Device& graphics_device);
     void render_preview(const std::shared_ptr<erhe::primitive::Material>& material);
     void show_preview();
 

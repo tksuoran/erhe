@@ -51,7 +51,7 @@ private:
 class Pipeline_renderpasses
 {
 public:
-    Pipeline_renderpasses(erhe::graphics::Instance& graphics_instance, Mesh_memory& mesh_memory, Programs& programs);
+    Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs);
 
     erhe::graphics::Vertex_input_state  m_empty_vertex_input;
     erhe::renderer::Pipeline_renderpass polygon_fill_standard_opaque;
@@ -74,7 +74,7 @@ class Editor_rendering
 public:
     Editor_rendering(
         erhe::commands::Commands& commands,
-        erhe::graphics::Instance& graphics_instance,
+        erhe::graphics::Device&   graphics_device,
         Editor_context&           editor_context,
         Editor_message_bus&       editor_message_bus,
         Mesh_memory&              mesh_memory,
@@ -82,7 +82,7 @@ public:
     );
 
     [[nodiscard]] auto create_shadow_node_for_scene_view(
-        erhe::graphics::Instance&       graphics_instance,
+        erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
         Editor_settings&                editor_settings,
         Scene_view&                     scene_view

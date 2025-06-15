@@ -6,7 +6,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -309,9 +309,9 @@ auto Texture_create_info::calculate_level_count() const -> int
         : 1;
 }
 
-auto Texture_create_info::make_view(Instance& instance, const std::shared_ptr<Texture>& view_source) -> Texture_create_info
+auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Texture>& view_source) -> Texture_create_info
 {
-    Texture_create_info create_info{instance};
+    Texture_create_info create_info{device};
     create_info.target                 = view_source->target();
     create_info.internal_format        = view_source->internal_format();
     create_info.use_mipmaps            = view_source->level_count() > 1;
@@ -327,9 +327,9 @@ auto Texture_create_info::make_view(Instance& instance, const std::shared_ptr<Te
     return create_info;
 }
 
-Texture::Texture(Instance& instance, const Create_info& create_info)
+Texture::Texture(Device& device, const Create_info& create_info)
     : Item                    {create_info.debug_label}
-    , m_handle                {instance, create_info.target, create_info.wrap_texture_name, create_info.view_source ? Gl_texture::texture_view : Gl_texture::not_texture_view}
+    , m_handle                {device, create_info.target, create_info.wrap_texture_name, create_info.view_source ? Gl_texture::texture_view : Gl_texture::not_texture_view}
     , m_target                {create_info.target}
     , m_internal_format       {create_info.internal_format}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
@@ -361,21 +361,21 @@ Texture::Texture(Instance& instance, const Create_info& create_info)
         set_debug_label(create_info.debug_label);
     }
 
-    //// TODO Instance& instance = create_info.instance;
-    m_sample_count = std::min(m_sample_count, instance.limits.max_samples);
+    //// TODO Device& device = create_info.device;
+    m_sample_count = std::min(m_sample_count, device.limits.max_samples);
     if (gl_helpers::has_color(m_internal_format) || gl_helpers::has_alpha(m_internal_format)) {
-        m_sample_count = std::min(m_sample_count, instance.limits.max_color_texture_samples);
+        m_sample_count = std::min(m_sample_count, device.limits.max_color_texture_samples);
     }
     if (gl_helpers::has_depth(m_internal_format) || gl_helpers::has_stencil(m_internal_format)) {
-        m_sample_count = std::min(m_sample_count, instance.limits.max_depth_texture_samples);
+        m_sample_count = std::min(m_sample_count, device.limits.max_depth_texture_samples);
     }
     if (gl_helpers::is_integer(m_internal_format)) {
-        m_sample_count = std::min(m_sample_count, instance.limits.max_integer_samples);
+        m_sample_count = std::min(m_sample_count, device.limits.max_integer_samples);
     }
 
     const auto dimensions = storage_dimensions(m_target);
 
-    if (create_info.sparse && instance.info.use_sparse_texture) {
+    if (create_info.sparse && device.info.use_sparse_texture) {
         gl::texture_parameter_i(m_handle.gl_name(), gl::Texture_parameter_name::texture_sparse_arb, GL_TRUE);
         m_is_sparse = true;
     }

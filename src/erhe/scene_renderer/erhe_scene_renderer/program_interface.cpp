@@ -2,7 +2,7 @@
 
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_profile/profile.hpp"
@@ -17,10 +17,10 @@ namespace erhe::scene_renderer {
 using erhe::graphics::Vertex_attribute;
 
 Program_interface::Program_interface(
-    erhe::graphics::Instance&        graphics_instance,
+    erhe::graphics::Device&          graphics_device,
     erhe::dataformat::Vertex_format& vertex_format
 )
-    : graphics_instance{graphics_instance}
+    : graphics_device{graphics_device}
     , fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -29,12 +29,12 @@ Program_interface::Program_interface(
         }
     }
     , vertex_format      {vertex_format}
-    , camera_interface   {graphics_instance}
-    , cube_interface     {graphics_instance}
-    , joint_interface    {graphics_instance}
-    , light_interface    {graphics_instance}
-    , material_interface {graphics_instance}
-    , primitive_interface{graphics_instance}
+    , camera_interface   {graphics_device}
+    , cube_interface     {graphics_device}
+    , joint_interface    {graphics_device}
+    , light_interface    {graphics_device}
+    , material_interface {graphics_device}
+    , primitive_interface{graphics_device}
 {
 }
 
@@ -83,14 +83,14 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&primitive_interface.primitive_block);
     create_info.add_interface_block(&joint_interface.joint_block);
 
-    if (graphics_instance.info.gl_version < 430) {
+    if (graphics_device.info.gl_version < 430) {
         if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object)) {
             create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
             create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
             create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
         }
     }
-    if (graphics_instance.info.gl_version < 460) {
+    if (graphics_device.info.gl_version < 460) {
         if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
             create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
             create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_draw_parameters"});
@@ -99,7 +99,7 @@ auto Program_interface::make_prototype(
     }
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
 
-    if (graphics_instance.info.use_bindless_texture) {
+    if (graphics_device.info.use_bindless_texture) {
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
@@ -117,7 +117,7 @@ auto Program_interface::make_prototype(
         create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
     }
 
-    return erhe::graphics::Shader_stages_prototype{graphics_instance, create_info};
+    return erhe::graphics::Shader_stages_prototype{graphics_device, create_info};
 }
 
 auto Program_interface::make_program(erhe::graphics::Shader_stages_prototype&& prototype) -> erhe::graphics::Shader_stages
@@ -127,10 +127,10 @@ auto Program_interface::make_program(erhe::graphics::Shader_stages_prototype&& p
     if (!prototype.is_valid()) {
         log_program_interface->error("current directory is {}", std::filesystem::current_path().string());
         log_program_interface->error("Compiling shader program {} failed", prototype.name());
-        return erhe::graphics::Shader_stages{graphics_instance, prototype.name()};
+        return erhe::graphics::Shader_stages{graphics_device, prototype.name()};
     }
 
-    return erhe::graphics::Shader_stages{graphics_instance, std::move(prototype)};
+    return erhe::graphics::Shader_stages{graphics_device, std::move(prototype)};
 }
 
 } // namespace erhe::scene_renderer

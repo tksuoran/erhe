@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
 #include <glm/glm.hpp>
@@ -34,7 +34,7 @@ public:
 class Joint_interface
 {
 public:
-    explicit Joint_interface(erhe::graphics::Instance& graphics_instance);
+    explicit Joint_interface(erhe::graphics::Device& graphics_device);
 
     erhe::graphics::Shader_resource joint_block;
     erhe::graphics::Shader_resource joint_struct;
@@ -45,7 +45,7 @@ public:
 class Joint_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
-    Joint_buffer(erhe::graphics::Instance& graphics_instance, Joint_interface& joint_interface);
+    Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interface& joint_interface);
 
     auto update(
         const glm::uvec4&                                          debug_joint_indices,
@@ -54,8 +54,8 @@ public:
     ) -> erhe::graphics::Buffer_range;
 
 private:
-    erhe::graphics::Instance& m_graphics_instance;
-    Joint_interface&          m_joint_interface;
+    erhe::graphics::Device& m_graphics_device;
+    Joint_interface&        m_joint_interface;
 };
 
 } // namespace erhe::scene_renderer

@@ -19,7 +19,7 @@ typedef struct __GLsync *GLsync;
 namespace erhe::graphics {
     class Framebuffer;
     class Gpu_timer;
-    class Instance;
+    class Device;
     class Renderbuffer;
     class Texture;
 }
@@ -53,7 +53,7 @@ public:
     };
 
     Id_renderer(
-        erhe::graphics::Instance&                graphics_instance,
+        erhe::graphics::Device&                  graphics_device,
         erhe::scene_renderer::Program_interface& program_interface,
         Mesh_memory&                             mesh_memory,
         Programs&                                programs
@@ -95,7 +95,7 @@ private:
             Read_complete
         };
 
-        Id_frame_resources(erhe::graphics::Instance& graphics_instance, const std::size_t slot);
+        Id_frame_resources(erhe::graphics::Device& graphics_device, const std::size_t slot);
 
         Id_frame_resources(const Id_frame_resources& other) = delete;
         auto operator=    (const Id_frame_resources&) -> Id_frame_resources& = delete;
@@ -120,7 +120,7 @@ private:
     erhe::math::Viewport                          m_viewport{0, 0, 0, 0, true};
 
     // TODO Do not store these here?
-    erhe::graphics::Instance&                     m_graphics_instance;
+    erhe::graphics::Device&                       m_graphics_device;
     Mesh_memory&                                  m_mesh_memory;
 
     erhe::scene_renderer::Camera_buffer           m_camera_buffers;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_primitive/enums.hpp"
 
 #include <memory>
@@ -25,7 +25,7 @@ public:
 class Draw_indirect_buffer : public erhe::graphics::GPU_ring_buffer_client
 {
 public:
-    explicit Draw_indirect_buffer(erhe::graphics::Instance& graphics_instance);
+    explicit Draw_indirect_buffer(erhe::graphics::Device& graphics_device);
 
     // Can discard return value
     auto update(

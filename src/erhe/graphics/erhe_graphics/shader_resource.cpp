@@ -1,5 +1,5 @@
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_verify/verify.hpp"
@@ -344,8 +344,8 @@ auto Shader_resource::c_str(const Shader_resource::Precision precision) -> const
 };
 
 // Struct type
-Shader_resource::Shader_resource(Instance& instance, const std::string_view struct_type_name, Shader_resource* parent)
-    : m_instance        {instance}
+Shader_resource::Shader_resource(Device& device, const std::string_view struct_type_name, Shader_resource* parent)
+    : m_device          {device}
     , m_type            {Type::struct_type}
     , m_name            {struct_type_name}
     , m_parent          {parent}
@@ -356,13 +356,13 @@ Shader_resource::Shader_resource(Instance& instance, const std::string_view stru
 
 // Struct member
 Shader_resource::Shader_resource(
-    Instance&                        instance,
+    Device&                          device,
     const std::string_view           struct_member_name,
     Shader_resource*                 struct_type,
     const std::optional<std::size_t> array_size /* = {} */,
     Shader_resource*                 parent /* = nullptr */
 )
-    : m_instance        {instance}
+    : m_device          {device}
     , m_type            {Type::struct_member}
     , m_name            {struct_member_name}
     , m_array_size      {array_size}
@@ -375,13 +375,13 @@ Shader_resource::Shader_resource(
 
 // Block (uniform block or shader storage block)
 Shader_resource::Shader_resource(
-    Instance&                        instance,
+    Device&                          device,
     const std::string_view           name,
     const int                        binding_point,
     const Type                       type,
     const std::optional<std::size_t> array_size /* = {} */
 )
-    : m_instance     {instance}
+    : m_device       {device}
     , m_type         {type}
     , m_name         {name}
     , m_array_size   {array_size}
@@ -404,13 +404,13 @@ Shader_resource::Shader_resource(
 
 // Basic type
 Shader_resource::Shader_resource(
-    Instance&                        instance,
+    Device&                          device,
     const std::string_view           basic_name,
     const gl::Uniform_type           basic_type,
     const std::optional<std::size_t> array_size /* = {} */,
     Shader_resource*                 parent /* = nullptr */
 )
-    : m_instance        {instance}
+    : m_device          {device}
     , m_type            {Type::basic}
     , m_name            {basic_name}
     , m_array_size      {array_size}
@@ -423,7 +423,7 @@ Shader_resource::Shader_resource(
 
 // Sampler
 Shader_resource::Shader_resource(
-    Instance&                        instance,
+    Device&                          device,
     const std::string_view           sampler_name,
     Shader_resource*                 parent,
     const int                        location,
@@ -431,7 +431,7 @@ Shader_resource::Shader_resource(
     const std::optional<std::size_t> array_size /* = {} */,
     const std::optional<int>         dedicated_texture_unit /* = {} */
 )
-    : m_instance     {instance}
+    : m_device       {device}
     , m_type         {Type::sampler}
     , m_name         {sampler_name}
     , m_array_size   {array_size}
@@ -447,8 +447,8 @@ Shader_resource::Shader_resource(
 }
 
 // Constructor with no arguments creates default uniform block
-Shader_resource::Shader_resource(Instance& instance)
-    : m_instance{instance}
+Shader_resource::Shader_resource(Device& device)
+    : m_device  {device}
     , m_location{0} // next location
 {
 }
@@ -578,7 +578,7 @@ auto Shader_resource::size_bytes() const -> std::size_t
     // TODO Shader storage buffer alignment?
     if (is_block(m_type)) {
         std::size_t padded_size = m_offset;
-        while ((padded_size % m_instance.implementation_defined.uniform_buffer_offset_alignment) != 0) {
+        while ((padded_size % m_device.implementation_defined.uniform_buffer_offset_alignment) != 0) {
             ++padded_size;
         }
 
@@ -668,7 +668,7 @@ auto Shader_resource::layout_string() const -> std::string
         return {};
     }
 
-    if ((m_type == Type::sampler) && (m_instance.info.glsl_version < 430)) {
+    if ((m_type == Type::sampler) && (m_device.info.glsl_version < 430)) {
         return {};
     }
 
@@ -680,7 +680,7 @@ auto Shader_resource::layout_string() const -> std::string
         ss << "std140";
         first = false;
     } else if (m_type == Type::shader_storage_block) {
-        if (m_instance.info.glsl_version < 430) {
+        if (m_device.info.glsl_version < 430) {
             ss << "std140";
         } else {
             ss << "std430";
@@ -701,7 +701,7 @@ auto Shader_resource::layout_string() const -> std::string
         ss << "offset = " << m_offset_in_parent;
         first = false;
     }
-    if (m_instance.info.glsl_version >= 420) {
+    if (m_device.info.glsl_version >= 420) {
         if (m_binding_point != -1) {
             if (!first)
             {
@@ -712,7 +712,7 @@ auto Shader_resource::layout_string() const -> std::string
         }
     }
     ss << ") ";
-    if (m_instance.info.glsl_version >= 420) {
+    if (m_device.info.glsl_version >= 420) {
         if (m_readonly) {
             ss << "readonly ";
         }
@@ -790,7 +790,7 @@ auto Shader_resource::add_struct(
     sanitize(array_size);
     align_offset_to(4); // align by 4 bytes TODO do what spec says
     auto* const new_member = m_members.emplace_back(
-        std::make_unique<Shader_resource>(m_instance, name, struct_type, array_size, this)
+        std::make_unique<Shader_resource>(m_device, name, struct_type, array_size, this)
     ).get();
     m_offset += new_member->size_bytes();
     return new_member;
@@ -808,7 +808,7 @@ auto Shader_resource::add_sampler(
 
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
-            m_instance,
+            m_device,
             name,
             this,
             dedicated_texture_unit.has_value() ? -1 : m_location,
@@ -830,7 +830,7 @@ auto Shader_resource::add_float(const std::string_view name, const std::optional
     sanitize(array_size);
     align_offset_to(4); // align by 4 bytes
     auto* const new_member = m_members.emplace_back(
-        std::make_unique<Shader_resource>(m_instance, name, gl::Uniform_type::float_, array_size, this)
+        std::make_unique<Shader_resource>(m_device, name, gl::Uniform_type::float_, array_size, this)
     ).get();
     m_offset += new_member->size_bytes();
     return new_member;
@@ -842,7 +842,7 @@ auto Shader_resource::add_vec2(const std::string_view name, const std::optional<
     sanitize(array_size);
     align_offset_to(2 * 4); // align by 2 * 4 bytes
     auto* const new_member = m_members.emplace_back(
-        std::make_unique<Shader_resource>(m_instance, name, gl::Uniform_type::float_vec2, array_size, this)
+        std::make_unique<Shader_resource>(m_device, name, gl::Uniform_type::float_vec2, array_size, this)
     ).get();
     m_offset += new_member->size_bytes();
     return new_member;
@@ -854,7 +854,7 @@ auto Shader_resource::add_vec3(const std::string_view name, const std::optional<
     sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
-        std::make_unique<Shader_resource>(m_instance, name, gl::Uniform_type::float_vec3, array_size, this)
+        std::make_unique<Shader_resource>(m_device, name, gl::Uniform_type::float_vec3, array_size, this)
     ).get();
     m_offset += new_member->size_bytes();
     return new_member;
@@ -866,7 +866,7 @@ auto Shader_resource::add_vec4(const std::string_view name, const std::optional<
     sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
-        std::make_unique<Shader_resource>(m_instance, name, gl::Uniform_type::float_vec4, array_size, this)
+        std::make_unique<Shader_resource>(m_device, name, gl::Uniform_type::float_vec4, array_size, this)
     ).get();
     m_offset += new_member->size_bytes();
     return new_member;
@@ -882,7 +882,7 @@ auto Shader_resource::add_mat4(
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
-            m_instance,
+            m_device,
             name,
             gl::Uniform_type::float_mat4,
             array_size,
@@ -903,7 +903,7 @@ auto Shader_resource::add_int(
     align_offset_to(4); // align by 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
-            m_instance,
+            m_device,
             name,
             gl::Uniform_type::int_,
             array_size,
@@ -924,7 +924,7 @@ auto Shader_resource::add_uint(
     align_offset_to(4); // align by 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
-            m_instance,
+            m_device,
             name,
             gl::Uniform_type::unsigned_int,
             array_size,
@@ -945,7 +945,7 @@ auto Shader_resource::add_uvec2(
     align_offset_to(2 * 4); // align by 2 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
-            m_instance,
+            m_device,
             name,
             gl::Uniform_type::unsigned_int_vec2,
             array_size,
@@ -966,7 +966,7 @@ auto Shader_resource::add_uvec3(
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
-            m_instance,
+            m_device,
             name,
             gl::Uniform_type::unsigned_int_vec3,
             array_size,
@@ -987,7 +987,7 @@ auto Shader_resource::add_uvec4(
     align_offset_to(4 * 4); // align by 4 * 4 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
-            m_instance,
+            m_device,
             name,
             gl::Uniform_type::unsigned_int_vec4,
             array_size,
@@ -1008,7 +1008,7 @@ auto Shader_resource::add_uint64(
     align_offset_to(8); // align by 8 bytes
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
-            m_instance,
+            m_device,
             name,
             gl::Uniform_type::unsigned_int64_arb,
             array_size,

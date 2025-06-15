@@ -16,7 +16,7 @@ namespace erhe::dataformat {
 
 namespace erhe::graphics {
 
-class Instance;
+class Device;
 
 // Shader resource represents data or data structure that can
 // be made available to shader program.
@@ -65,11 +65,11 @@ public:
     [[nodiscard]] static auto c_str(Precision v) -> const char*;
 
     // Struct definition
-    Shader_resource(Instance& instance, const std::string_view struct_type_name, Shader_resource* parent = nullptr);
+    Shader_resource(Device& device, const std::string_view struct_type_name, Shader_resource* parent = nullptr);
 
     // Struct member
     Shader_resource(
-        Instance&                        instance,
+        Device&                          device,
         const std::string_view           struct_member_name,
         Shader_resource*                 struct_type,
         const std::optional<std::size_t> array_size = {},
@@ -78,7 +78,7 @@ public:
 
     // Block (uniform block or shader storage block)
     Shader_resource(
-        Instance&                        instance,
+        Device&                          device,
         const std::string_view           block_name,
         int                              binding_point,
         Type                             block_type,
@@ -87,7 +87,7 @@ public:
 
     // Basic type
     Shader_resource(
-        Instance&                        instance,
+        Device&                          device,
         std::string_view                 basic_name,
         gl::Uniform_type                 basic_type,
         const std::optional<std::size_t> array_size = {},
@@ -96,7 +96,7 @@ public:
 
     // Sampler
     Shader_resource(
-        Instance&                        instance,
+        Device&                          device,
         const std::string_view           sampler_name,
         Shader_resource*                 parent,
         int                              location,
@@ -106,7 +106,7 @@ public:
     );
 
     // Constructor for creating  default uniform block
-    explicit Shader_resource(Instance& instance);
+    explicit Shader_resource(Device& device);
     ~Shader_resource() noexcept;
     Shader_resource(const Shader_resource& other) = delete;
     Shader_resource(Shader_resource&& other);
@@ -222,7 +222,7 @@ private:
 
     void indent(std::stringstream& ss, const int indent_level) const;
 
-    Instance&                  m_instance;
+    Device&                    m_device;
 
     // Any shader type declaration
     Type                       m_type{Type::default_uniform_block};

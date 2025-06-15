@@ -24,18 +24,18 @@
 namespace editor {
 
 Rendertarget_mesh::Rendertarget_mesh(
-    erhe::graphics::Instance& graphics_instance,
-    Mesh_memory&              mesh_memory,
-    const int                 width,
-    const int                 height,
-    const float               pixels_per_meter
+    erhe::graphics::Device& graphics_device,
+    Mesh_memory&            mesh_memory,
+    const int               width,
+    const int               height,
+    const float             pixels_per_meter
 )
     : erhe::scene::Mesh {"Rendertarget Node"}
     , m_pixels_per_meter{pixels_per_meter}
 {
     enable_flag_bits(erhe::Item_flags::rendertarget | erhe::Item_flags::translucent);
 
-    resize_rendertarget(graphics_instance, mesh_memory, width, height);
+    resize_rendertarget(graphics_device, mesh_memory, width, height);
 }
 
 auto Rendertarget_mesh::get_static_type() -> uint64_t
@@ -53,7 +53,7 @@ auto Rendertarget_mesh::get_type_name() const -> std::string_view
     return static_type_name;
 }
 
-void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Instance& graphics_instance, Mesh_memory& mesh_memory, const int width, const int height)
+void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, const int width, const int height)
 {
     if (m_texture && m_texture->width() == width && m_texture->height() == height) {
         return;
@@ -63,9 +63,9 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Instance& graphics_i
     using Framebuffer = erhe::graphics::Framebuffer;
 
     m_texture = std::make_shared<Texture>(
-        graphics_instance,
+        graphics_device,
         Texture::Create_info{
-            .instance        = graphics_instance,
+            .device          = graphics_device,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = gl::Internal_format::srgb8_alpha8,
             .use_mipmaps     = true,
@@ -84,7 +84,7 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Instance& graphics_i
     }
 
     m_sampler = std::make_shared<erhe::graphics::Sampler>(
-        graphics_instance,
+        graphics_device,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -95,7 +95,7 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Instance& graphics_i
 
     Framebuffer::Create_info create_info;
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
-    m_framebuffer = std::make_shared<Framebuffer>(graphics_instance, create_info);
+    m_framebuffer = std::make_shared<Framebuffer>(graphics_device, create_info);
     m_framebuffer->set_debug_label("Rendertarget Node");
 
     m_material = std::make_shared<erhe::primitive::Material>("Rendertarget Node", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
@@ -324,7 +324,7 @@ void Rendertarget_mesh::render_done(Editor_context& context)
 
     if (s_rendertarget_mesh_lod_bias != m_sampler->get_lod_bias()) {
         m_sampler = std::make_shared<erhe::graphics::Sampler>(
-            *context.graphics_instance,
+            *context.graphics_device,
             erhe::graphics::Sampler_create_info{
                 .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
                 .mag_filter  = gl::Texture_mag_filter::nearest,

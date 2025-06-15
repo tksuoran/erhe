@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/pipeline.hpp"
-#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/device.hpp"
 #include <vector>
 
 namespace erhe::graphics {
@@ -35,7 +35,7 @@ public:
 class Debug_renderer_bucket
 {
 public:
-    Debug_renderer_bucket(erhe::graphics::Instance& graphics_instance, Debug_renderer& debug_renderer, Debug_renderer_config config);
+    Debug_renderer_bucket(erhe::graphics::Device& graphics_device, Debug_renderer& debug_renderer, Debug_renderer_config config);
 
     void clear           ();
     auto match           (const Debug_renderer_config& config) const -> bool;
@@ -47,7 +47,7 @@ public:
 private:
     [[nodiscard]] auto make_pipeline(bool visible) -> erhe::graphics::Pipeline;
 
-    erhe::graphics::Instance&              m_graphics_instance;
+    erhe::graphics::Device&                m_graphics_device;
     Debug_renderer&                        m_debug_renderer;
     erhe::graphics::GPU_ring_buffer_client m_vertex_ssbo_buffer;
     erhe::graphics::GPU_ring_buffer_client m_triangle_vertex_buffer;

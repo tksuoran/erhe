@@ -4,7 +4,7 @@ namespace erhe::commands {
     class Commands;
 }
 namespace erhe::graphics {
-    class Instance;
+    class Device;
 }
 namespace erhe::imgui {
     class Imgui_renderer;
@@ -93,7 +93,7 @@ public:
     float sleep_margin  {false};
 
     erhe::commands::Commands*               commands              {nullptr};
-    erhe::graphics::Instance*               graphics_instance     {nullptr};
+    erhe::graphics::Device*                 graphics_device       {nullptr};
     erhe::imgui::Imgui_renderer*            imgui_renderer        {nullptr};
     erhe::imgui::Imgui_windows*             imgui_windows         {nullptr};
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)

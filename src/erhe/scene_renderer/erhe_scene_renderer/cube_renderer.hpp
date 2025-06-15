@@ -7,7 +7,7 @@
 
 #include "erhe_renderer/pipeline_renderpass.hpp"
 
-namespace erhe::graphics { class Instance; }
+namespace erhe::graphics { class Device; }
 namespace erhe::scene    { class Camera; }
 namespace erhe::math     { class Viewport; }
 
@@ -18,7 +18,7 @@ class Program_interface;
 class Cube_renderer
 {
 public:
-    Cube_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface);
+    Cube_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface);
 
     [[nodiscard]] auto make_buffer(const std::vector<uint32_t>& cubes) -> std::shared_ptr<Cube_instance_buffer>;
 
@@ -43,12 +43,12 @@ public:
     void render(const Render_parameters& parameters);
 
 private:
-    erhe::graphics::Instance& m_graphics_instance;
-    Program_interface&        m_program_interface;
-    Camera_buffer             m_camera_buffer;
-    Light_buffer              m_light_buffer;
-    Primitive_buffer          m_primitive_buffer;
-    Cube_control_buffer       m_cube_control_buffer;
+    erhe::graphics::Device& m_graphics_device;
+    Program_interface&      m_program_interface;
+    Camera_buffer           m_camera_buffer;
+    Light_buffer            m_light_buffer;
+    Primitive_buffer        m_primitive_buffer;
+    Cube_control_buffer     m_cube_control_buffer;
 };
 
 } // erhe::scene_renderer
