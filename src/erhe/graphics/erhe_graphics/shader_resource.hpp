@@ -109,7 +109,7 @@ public:
     explicit Shader_resource(Instance& instance);
     ~Shader_resource() noexcept;
     Shader_resource(const Shader_resource& other) = delete;
-    Shader_resource(Shader_resource&& other) = default;
+    Shader_resource(Shader_resource&& other);
 
     [[nodiscard]] auto is_array        () const -> bool;
     [[nodiscard]] auto type            () const -> Type;
@@ -216,6 +216,8 @@ public:
     auto add_attribute(const erhe::dataformat::Vertex_attribute& attribute) -> Shader_resource*;
 
 private:
+    void sanitize(const std::optional<std::size_t>& array_size) const;
+
     void align_offset_to(const unsigned int alignment);
 
     void indent(std::stringstream& ss, const int indent_level) const;

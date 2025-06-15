@@ -15,8 +15,9 @@
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/instance.hpp"
-#include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
+#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
@@ -120,7 +121,7 @@ Id_renderer::Id_renderer(
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
         .color_blend    = Color_blend_state::color_writes_disabled,
     }}
-    , m_gpu_timer{"Id_renderer"}
+    , m_gpu_timer{graphics_instance, "Id_renderer"}
 
 #undef REVERSE_DEPTH
 {
@@ -128,6 +129,10 @@ Id_renderer::Id_renderer(
 
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "id_renderer");
     ini.get("enabled", enabled);
+}
+
+Id_renderer::~Id_renderer()
+{
 }
 
 void Id_renderer::create_id_frame_resources()
@@ -186,7 +191,7 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             Framebuffer::Create_info create_info;
             create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_renderbuffer.get());
             create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_renderbuffer.get());
-            m_framebuffer = std::make_unique<Framebuffer>(create_info);
+            m_framebuffer = std::make_unique<Framebuffer>(m_graphics_instance, create_info);
             m_framebuffer->set_debug_label("ID");
         }
     }
@@ -198,6 +203,7 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             (m_color_texture->height() != viewport.height)
         ) {
             m_color_texture = std::make_unique<Texture>(
+                m_graphics_instance,
                 Texture::Create_info{
                     .instance        = m_graphics_instance,
                     .target          = gl::Texture_target::texture_2d,
@@ -209,6 +215,7 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
                 }
             );
             m_depth_texture = std::make_unique<Texture>(
+                m_graphics_instance,
                 Texture::Create_info{
                     .instance        = m_graphics_instance,
                     .target          = gl::Texture_target::texture_2d,
@@ -224,7 +231,7 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             Framebuffer::Create_info create_info;
             create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
             create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_texture.get());
-            m_framebuffer = std::make_unique<Framebuffer>(create_info);
+            m_framebuffer = std::make_unique<Framebuffer>(m_graphics_instance, create_info);
             m_framebuffer->set_debug_label("ID");
             constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
             if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
@@ -274,8 +281,7 @@ void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh
         static constexpr std::string_view c_draw{"draw"};
 
         ERHE_PROFILE_SCOPE("mdi");
-        //ERHE_PROFILE_GPU_SCOPE(c_draw)
-        gl::multi_draw_elements_indirect(
+        m_graphics_instance.multi_draw_elements_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
             erhe::graphics::to_gl_index_type(m_mesh_memory.buffer_info.index_type),
             reinterpret_cast<const void*>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),

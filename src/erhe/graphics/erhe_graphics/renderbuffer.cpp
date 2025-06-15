@@ -5,6 +5,7 @@
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_verify/verify.hpp"
 #include <fmt/format.h>
 
 namespace erhe::graphics {
@@ -15,23 +16,18 @@ Renderbuffer::Renderbuffer(
     const unsigned int        width,
     const unsigned int        height
 )
-    : m_internal_format{internal_format}
+    : m_instance       {instance}
+    , m_handle         {instance}
+    , m_internal_format{internal_format}
     , m_sample_count   {0}
     , m_width          {width}
     , m_height         {height}
 {
-    static_cast<void>(instance);
     ERHE_VERIFY(gl_name() != 0);
     ERHE_VERIFY(m_width  > 0);
     ERHE_VERIFY(m_height > 0);
 
-    gl::named_renderbuffer_storage_multisample(
-        gl_name(),
-        0,
-        internal_format,
-        width,
-        height
-    );
+    instance.named_renderbuffer_storage_multisample(gl_name(), 0, internal_format, width, height);
 }
 
 Renderbuffer::Renderbuffer(
@@ -41,7 +37,9 @@ Renderbuffer::Renderbuffer(
     const unsigned int        width,
     const unsigned int        height
 )
-    : m_internal_format{internal_format}
+    : m_instance       {instance}
+    , m_handle         {instance}
+    , m_internal_format{internal_format}
     , m_sample_count   {sample_count}
     , m_width          {width}
     , m_height         {height}
@@ -120,7 +118,7 @@ Renderbuffer::Renderbuffer(
         m_internal_format = gl::Internal_format::rgba8; // TODO what should be done?
     }
 
-    gl::named_renderbuffer_storage_multisample(
+    instance.named_renderbuffer_storage_multisample(
         gl_name(),
         m_sample_count,
         m_internal_format,

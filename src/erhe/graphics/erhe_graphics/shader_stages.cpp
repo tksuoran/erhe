@@ -1,9 +1,11 @@
 #include "erhe_graphics/shader_stages.hpp"
 
 #include "erhe_graphics/instance.hpp"
+#include "erhe_gl/command_info.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -20,21 +22,21 @@ auto Reloadable_shader_stages::make_prototype(Instance& graphics_instance) -> Sh
     return prototype;
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(const std::string& non_functional_name)
+Reloadable_shader_stages::Reloadable_shader_stages(Instance& instance, const std::string& non_functional_name)
     : create_info  {}
-    , shader_stages{non_functional_name}
+    , shader_stages{instance, non_functional_name}
 {
 }
 
 Reloadable_shader_stages::Reloadable_shader_stages(Instance& graphics_instance, const Shader_stages_create_info& create_info)
     : create_info  {create_info}
-    , shader_stages{make_prototype(graphics_instance)}
+    , shader_stages{graphics_instance, make_prototype(graphics_instance)}
 {
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(Shader_stages_prototype&& prototype)
+Reloadable_shader_stages::Reloadable_shader_stages(Instance& instance, Shader_stages_prototype&& prototype)
     : create_info  {prototype.create_info()}
-    , shader_stages{std::move(prototype)}
+    , shader_stages{instance, std::move(prototype)}
 {
 }
 
@@ -83,24 +85,41 @@ auto Shader_stages::gl_name() const -> unsigned int
     return m_handle.gl_name();
 }
 
-Shader_stages::Shader_stages(const std::string& failed_name)
+Shader_stages::Shader_stages(Instance& instance, const std::string& failed_name)
+    : m_instance{instance}
+    , m_handle  {instance}
+    , m_name    {failed_name}
 {
     std::string label = fmt::format("(P:{}) {} - compilation failed", gl_name(), failed_name);
+    ERHE_VERIFY(!failed_name.empty());
     gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
 }
 
-Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
+Shader_stages::Shader_stages(Shader_stages&& from)
+    : m_instance        {from.m_instance                   }
+    , m_handle          {std::move(from.m_handle)          }
+    , m_name            {std::move(from.m_name)            }
+    , m_is_valid        {from.m_is_valid                   }
+    , m_attached_shaders{std::move(from.m_attached_shaders)}
 {
-    ERHE_PROFILE_FUNCTION();
+}
 
-    ERHE_VERIFY(prototype.m_handle.gl_name() != 0);
+Shader_stages& Shader_stages::operator=(Shader_stages&& from)
+{
+    if (*this != from) {
+        m_handle           = std::move(from.m_handle)          ;
+        m_name             = std::move(from.m_name)            ;
+        m_is_valid         = from.m_is_valid                   ;
+        m_attached_shaders = std::move(from.m_attached_shaders);
+    }
+    return *this;
+}
 
-    m_name     = prototype.name();
-    m_handle   = std::move(prototype.m_handle);
-    m_is_valid = true;
-
-    std::string label = fmt::format("(P:{}) {}{}", gl_name(), m_name, prototype.is_valid() ? "" : " (Failed)");
-    gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+Shader_stages::Shader_stages(Instance& instance, Shader_stages_prototype&& prototype)
+    : m_instance{instance}
+    , m_handle  {instance}
+{
+    reload(std::move(prototype));
 }
 
 auto Shader_stages::is_valid() const -> bool
@@ -122,10 +141,12 @@ void Shader_stages::reload(Shader_stages_prototype&& prototype)
         return;
     }
 
+    ERHE_VERIFY(!prototype.name().empty());
+    m_name     = prototype.name();
     m_handle   = std::move(prototype.m_handle);
     m_is_valid = true;
 
-    std::string label = fmt::format("(P:{}) {}", gl_name(), m_name);
+    const std::string label = fmt::format("(P:{}) {}{}", gl_name(), m_name, prototype.is_valid() ? "" : " (Failed)");
     gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
 }
 

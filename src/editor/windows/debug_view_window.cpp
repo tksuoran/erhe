@@ -44,9 +44,9 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
             .depth_stencil_format = gl::Internal_format{0}
         }
     }
-    , m_forward_renderer{forward_renderer}
-    , m_mesh_memory{mesh_memory}
-    , m_empty_vertex_input{}
+    , m_forward_renderer  {forward_renderer}
+    , m_mesh_memory       {mesh_memory}
+    , m_empty_vertex_input{rendergraph.get_graphics_instance()}
     , m_renderpass{ 
         erhe::graphics::Pipeline{
             erhe::graphics::Pipeline_data{

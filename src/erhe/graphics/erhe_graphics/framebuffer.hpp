@@ -8,9 +8,9 @@
 #include <thread>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
 
+class Instance;
 class Renderbuffer;
 class Texture;
 
@@ -64,12 +64,12 @@ public:
         std::vector<Attachment> attachments;
     };
 
-    explicit Framebuffer(const Create_info& create_info);
-    ~Framebuffer        () noexcept;
-    Framebuffer         (const Framebuffer&) = delete;
-    void operator=      (const Framebuffer&) = delete;
-    Framebuffer         (Framebuffer&&)      = delete;
-    void operator=      (Framebuffer&&)      = delete;
+    Framebuffer   (Instance& instance, const Create_info& create_info);
+    ~Framebuffer  () noexcept;
+    Framebuffer   (const Framebuffer&) = delete;
+    void operator=(const Framebuffer&) = delete;
+    Framebuffer   (Framebuffer&&)      = delete;
+    void operator=(Framebuffer&&)      = delete;
 
     static void on_thread_enter();
     static void on_thread_exit ();
@@ -83,6 +83,7 @@ public:
     void set_debug_label(const std::string& label);
 
 private:
+    Instance&                     m_instance;
     std::optional<Gl_framebuffer> m_gl_framebuffer;
     std::vector<Attachment>       m_attachments;
     std::thread::id               m_owner_thread;

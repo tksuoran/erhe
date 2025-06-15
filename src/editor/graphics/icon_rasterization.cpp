@@ -159,6 +159,7 @@ Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::gra
     : m_context{editor_context}
     , m_texture{
         std::make_shared<erhe::graphics::Texture>(
+            graphics_instance,
             erhe::graphics::Texture_create_info{
                 .instance        = graphics_instance,
                 .target          = gl::Texture_target::texture_2d,
@@ -171,6 +172,7 @@ Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::gra
         )
     }
     , m_linear_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,

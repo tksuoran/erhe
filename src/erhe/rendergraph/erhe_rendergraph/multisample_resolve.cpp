@@ -7,6 +7,7 @@
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
@@ -127,6 +128,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
         erhe::graphics::Instance& graphics_instance = m_rendergraph.get_graphics_instance();
 
         m_color_texture = std::make_shared<Texture>(
+            graphics_instance,
             Texture::Create_info{
                 .instance        = graphics_instance,
                 .target          = gl::Texture_target::texture_2d_multisample,
@@ -150,9 +152,16 @@ void Multisample_resolve_node::execute_rendergraph_node()
             // TODO
         }
 
+        gl::Internal_format depth_stencil_format = graphics_instance.choose_depth_stencil_format(
+            erhe::graphics::format_flag_require_depth     |
+            erhe::graphics::format_flag_require_stencil   |
+            erhe::graphics::format_flag_prefer_accuracy   |
+            erhe::graphics::format_flag_prefer_filterable,
+            m_sample_count
+        );
         m_depth_stencil_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
             graphics_instance,
-            gl::Internal_format::depth24_stencil8,
+            depth_stencil_format,
             m_sample_count,
             output_viewport.width,
             output_viewport.height
@@ -167,7 +176,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
             create_info.attach(gl::Framebuffer_attachment::color_attachment0,  m_color_texture.get());
             create_info.attach(gl::Framebuffer_attachment::depth_attachment,   m_depth_stencil_renderbuffer.get());
             create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_renderbuffer.get());
-            m_framebuffer = std::make_unique<Framebuffer>(create_info);
+            m_framebuffer = std::make_unique<Framebuffer>(graphics_instance, create_info);
             m_framebuffer->set_debug_label(
                 fmt::format("{} Multisample_resolve_node framebuffer", get_name())
             );
@@ -198,7 +207,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
         create_info.attach(gl::Framebuffer_attachment::color_attachment0,  m_color_texture.get());
         create_info.attach(gl::Framebuffer_attachment::depth_attachment,   m_depth_stencil_renderbuffer.get());
         create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_renderbuffer.get());
-        m_framebuffer = std::make_shared<Framebuffer>(create_info);
+        m_framebuffer = std::make_shared<Framebuffer>(graphics_instance, create_info);
         m_framebuffer->set_debug_label(get_name());
 
         gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };

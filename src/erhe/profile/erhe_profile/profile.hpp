@@ -117,6 +117,8 @@
 #   define ERHE_PROFILE_MEM_FREE_NS(ptr, name)
 #endif
 
+#if 1
+#define ERHE_USE_PROFILE_ALLOCATOR 1
 template <class T>
 class Profile_allocator
 {
@@ -150,3 +152,4 @@ public:
         std::free(p);
     }
 };
+#endif

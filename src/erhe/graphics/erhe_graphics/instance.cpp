@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/instance.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/draw_indirect.hpp"
@@ -138,13 +139,10 @@ Instance::Instance(erhe::window::Context_window& context_window)
 
     info.gl_version = (major * 100) + (minor * 10);
 
-    gl::get_integer_v(gl::Get_p_name::max_texture_size, &limits.max_texture_size);
-    log_startup->info("max texture size: {}", limits.max_texture_size);
-
     gl::get_integer_v(gl::Get_p_name::max_vertex_attribs, &limits.max_vertex_attribs);
     log_startup->info("max vertex attribs: {}", limits.max_vertex_attribs);
 
-    log_startup->trace("GL Extensions:");
+    log_startup->info("GL Extensions:");
     {
         ERHE_PROFILE_SCOPE("Extensions");
 
@@ -156,7 +154,7 @@ Instance::Instance(erhe::window::Context_window& context_window)
             for (unsigned int i = 0; i < static_cast<unsigned int>(num_extensions); ++i) {
                 const auto* extension_str = gl::get_string_i(gl::String_name::extensions, i);
                 auto e = std::string(reinterpret_cast<const char*>(extension_str));
-                //log_startup->trace("    {}", e);
+                log_startup->info("    {}", e);
                 extensions.push_back(e);
             }
         }
@@ -201,8 +199,16 @@ Instance::Instance(erhe::window::Context_window& context_window)
             limits.max_integer_samples
         );
 
-        gl::get_integer_v(gl::Get_p_name::max_3d_texture_size,              &limits.max_3d_texture_size);
-        gl::get_integer_v(gl::Get_p_name::max_cube_map_texture_size,        &limits.max_cube_map_texture_size);
+        gl::get_integer_v(gl::Get_p_name::max_texture_size,          &limits.max_texture_size);
+        gl::get_integer_v(gl::Get_p_name::max_3d_texture_size,       &limits.max_3d_texture_size);
+        gl::get_integer_v(gl::Get_p_name::max_cube_map_texture_size, &limits.max_cube_map_texture_size);
+        gl::get_integer_v(gl::Get_p_name::max_array_texture_layers,  &limits.max_array_texture_layers);
+
+        log_startup->info("max texture size:          {}", limits.max_texture_size);
+        log_startup->info("max 3d texture size:       {}", limits.max_3d_texture_size);
+        log_startup->info("max cube map texture size: {}", limits.max_cube_map_texture_size);
+        log_startup->info("max array texture layers:  {}", limits.max_array_texture_layers);
+
         gl::get_integer_v(gl::Get_p_name::max_texture_image_units,          &limits.max_texture_image_units);
         gl::get_integer_v(gl::Get_p_name::max_combined_texture_image_units, &limits.max_combined_texture_image_units);
 
@@ -229,7 +235,10 @@ Instance::Instance(erhe::window::Context_window& context_window)
         gl::get_integer_v(gl::Get_p_name::max_texture_buffer_size, &limits.max_texture_buffer_size);
     }
 
-    {
+    int shader_storage_buffer_offset_alignment{0};
+    int uniform_buffer_offset_alignment       {0};
+
+    if (info.gl_version >= 430) {
         ERHE_PROFILE_SCOPE("Debug Callback");
         gl::debug_message_callback(erhe_opengl_callback, nullptr);
         gl::debug_message_control(
@@ -242,55 +251,71 @@ Instance::Instance(erhe::window::Context_window& context_window)
         );
         gl::enable(gl::Enable_cap::debug_output);
         gl::enable(gl::Enable_cap::debug_output_synchronous);
+
+        for (GLuint i = 0; i < 3; ++i) {
+            gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_count, i, &limits.max_compute_workgroup_count[i]);
+            gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_size,  i, &limits.max_compute_workgroup_size[i]);
+        }
+        gl::get_integer_v(gl::Get_p_name::max_compute_work_group_invocations, &limits.max_compute_work_group_invocations);
+        gl::get_integer_v(gl::Get_p_name::max_compute_shared_memory_size,     &limits.max_compute_shared_memory_size);
+        log_startup->info(
+            "Max compute workgroup count = {} x {} x {}",
+            limits.max_compute_workgroup_count[0],
+            limits.max_compute_workgroup_count[1],
+            limits.max_compute_workgroup_count[2]
+        );
+        log_startup->info(
+            "Max compute workgroup size = {} x {} x {}",
+            limits.max_compute_workgroup_size[0],
+            limits.max_compute_workgroup_size[1],
+            limits.max_compute_workgroup_size[2]
+        );
+        log_startup->info(
+            "Max compute workgroup invocations = {}",
+            limits.max_compute_work_group_invocations
+        );
+        log_startup->info(
+            "Max compute shared memory size = {}",
+            limits.max_compute_shared_memory_size
+        );
+
+        gl::get_integer_v(gl::Get_p_name::shader_storage_buffer_offset_alignment,    &shader_storage_buffer_offset_alignment);
+        gl::get_integer_v(gl::Get_p_name::max_shader_storage_buffer_bindings,        &limits.max_shader_storage_buffer_bindings);
+        gl::get_integer_v(gl::Get_p_name::max_compute_shader_storage_blocks,         &limits.max_compute_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_compute_uniform_blocks,                &limits.max_compute_uniform_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_vertex_shader_storage_blocks,          &limits.max_vertex_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_fragment_shader_storage_blocks,        &limits.max_fragment_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &limits.max_geometry_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &limits.max_tess_control_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &limits.max_tess_evaluation_shader_storage_blocks);
+        info.use_compute_shader = true;
+    } else {
+        info.use_compute_shader = false;
+        for (GLuint i = 0; i < 3; ++i) {
+            limits.max_compute_workgroup_count[i] = 0;
+            limits.max_compute_workgroup_size [i] = 0;
+        }
+        limits.max_compute_work_group_invocations        = 0;
+        limits.max_compute_shared_memory_size            = 0;
+        limits.max_shader_storage_buffer_bindings        = 0;
+        limits.max_compute_shader_storage_blocks         = 0;
+        limits.max_compute_uniform_blocks                = 0;
+        limits.max_vertex_shader_storage_blocks          = 0;
+        limits.max_fragment_shader_storage_blocks        = 0;
+        limits.max_geometry_shader_storage_blocks        = 0;
+        limits.max_tess_control_shader_storage_blocks    = 0;
+        limits.max_tess_evaluation_shader_storage_blocks = 0;
     }
 
-    for (GLuint i = 0; i < 3; ++i) {
-        gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_count, i, &limits.max_compute_workgroup_count[i]);
-        gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_size,  i, &limits.max_compute_workgroup_size[i]);
-    }
-    gl::get_integer_v(gl::Get_p_name::max_compute_work_group_invocations, &limits.max_compute_work_group_invocations);
-    gl::get_integer_v(gl::Get_p_name::max_compute_shared_memory_size,     &limits.max_compute_shared_memory_size);
-    log_startup->info(
-        "Max compute workgroup count = {} x {} x {}",
-        limits.max_compute_workgroup_count[0],
-        limits.max_compute_workgroup_count[1],
-        limits.max_compute_workgroup_count[2]
-    );
-    log_startup->info(
-        "Max compute workgroup size = {} x {} x {}",
-        limits.max_compute_workgroup_size[0],
-        limits.max_compute_workgroup_size[1],
-        limits.max_compute_workgroup_size[2]
-    );
-    log_startup->info(
-        "Max compute workgroup invocations = {}",
-        limits.max_compute_work_group_invocations
-    );
-    log_startup->info(
-        "Max compute shared memory size = {}",
-        limits.max_compute_shared_memory_size
-    );
-
-    int shader_storage_buffer_offset_alignment{0};
-    int uniform_buffer_offset_alignment       {0};
-    gl::get_integer_v(gl::Get_p_name::shader_storage_buffer_offset_alignment,    &shader_storage_buffer_offset_alignment);
     gl::get_integer_v(gl::Get_p_name::uniform_buffer_offset_alignment,           &uniform_buffer_offset_alignment);
     gl::get_integer_v(gl::Get_p_name::max_uniform_block_size,                    &limits.max_uniform_block_size);
-    gl::get_integer_v(gl::Get_p_name::max_shader_storage_buffer_bindings,        &limits.max_shader_storage_buffer_bindings);
     gl::get_integer_v(gl::Get_p_name::max_uniform_buffer_bindings,               &limits.max_uniform_buffer_bindings);
-    gl::get_integer_v(gl::Get_p_name::max_compute_shader_storage_blocks,         &limits.max_compute_shader_storage_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_compute_uniform_blocks,                &limits.max_compute_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_vertex_shader_storage_blocks,          &limits.max_vertex_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_blocks,                 &limits.max_vertex_uniform_blocks);
     gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_vectors,                &limits.max_vertex_uniform_vectors);
-    gl::get_integer_v(gl::Get_p_name::max_fragment_shader_storage_blocks,        &limits.max_fragment_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_blocks,               &limits.max_fragment_uniform_blocks);
     gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_vectors,              &limits.max_fragment_uniform_vectors);
-    gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &limits.max_geometry_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_geometry_uniform_blocks,               &limits.max_geometry_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &limits.max_tess_control_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_tess_control_uniform_blocks,           &limits.max_tess_control_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &limits.max_tess_evaluation_shader_storage_blocks);
     gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_uniform_blocks,        &limits.max_tess_evaluation_uniform_blocks);
 
     implementation_defined.shader_storage_buffer_offset_alignment = static_cast<unsigned int>(shader_storage_buffer_offset_alignment);
@@ -338,113 +363,86 @@ Instance::Instance(erhe::window::Context_window& context_window)
         ERHE_PROFILE_SCOPE("Sparse texture");
 
         info.use_sparse_texture = true;
-        GLint max_sparse_texture_size{};
-        gl::get_integer_v(gl::Get_p_name::max_sparse_texture_size_arb, &max_sparse_texture_size);
-        log_startup->info("max sparse texture size : {}", max_sparse_texture_size);
-
-        gl::Internal_format formats[] = {
-            gl::Internal_format::r8,
-            gl::Internal_format::rgba8,
-            gl::Internal_format::rgba16f,
-            gl::Internal_format::rg32f,
-            gl::Internal_format::rgba32f,
-            gl::Internal_format::depth_component,
-            gl::Internal_format::depth_component32f,
-            gl::Internal_format::depth24_stencil8,
-            gl::Internal_format::depth32f_stencil8,
-            gl::Internal_format::depth_stencil,
-            gl::Internal_format::stencil_index8
-        };
-
-        for (const auto format : formats) {
-            GLint supported{};
-            gl::get_internalformat_iv(gl::Texture_target::texture_2d, format, gl::Internal_format_p_name::internalformat_supported, 1, &supported);
-            if (supported == GL_FALSE) {
-                continue;
-            }
-
-            GLint num_virtual_page_sizes{};
-            gl::get_internalformat_iv(
-                gl::Texture_target::texture_2d,
-                format,
-                gl::Internal_format_p_name::num_virtual_page_sizes_arb,
-                1,
-                &num_virtual_page_sizes
-            );
-
-            if (num_virtual_page_sizes == 0) {
-                continue;
-            }
-
-            std::vector<GLint64> x_sizes;
-            std::vector<GLint64> y_sizes;
-            std::vector<GLint64> z_sizes;
-            x_sizes.resize(num_virtual_page_sizes);
-            y_sizes.resize(num_virtual_page_sizes);
-            z_sizes.resize(num_virtual_page_sizes);
-            gl::get_internalformat_i_64v(
-                gl::Texture_target::texture_2d,
-                format,
-                gl::Internal_format_p_name::virtual_page_size_x_arb,
-                static_cast<GLsizei>(num_virtual_page_sizes),
-                x_sizes.data()
-            );
-            gl::get_internalformat_i_64v(
-                gl::Texture_target::texture_2d,
-                format,
-                gl::Internal_format_p_name::virtual_page_size_y_arb,
-                static_cast<GLsizei>(num_virtual_page_sizes),
-                y_sizes.data()
-            );
-            gl::get_internalformat_i_64v(
-                gl::Texture_target::texture_2d,
-                format,
-                gl::Internal_format_p_name::virtual_page_size_z_arb,
-                static_cast<GLsizei>(num_virtual_page_sizes),
-                z_sizes.data()
-            );
-            std::stringstream ss;
-            for (GLint i = 0; i < num_virtual_page_sizes; ++i) {
-                ss << fmt::format(" {} x {} x {}", x_sizes[i], y_sizes[i], z_sizes[i]);
-            }
-            sparse_tile_sizes[format] = Tile_size{
-                .x = static_cast<int>(x_sizes[0]),
-                .y = static_cast<int>(y_sizes[0]),
-                .z = static_cast<int>(z_sizes[0]),
-            };
-
-            log_startup->info("    {} : num page sizes {} :{}", gl::c_str(format), num_virtual_page_sizes, ss.str());
-        }
+        gl::get_integer_v(gl::Get_p_name::max_sparse_texture_size_arb, &limits.max_sparse_texture_size);
+        log_startup->info("max sparse texture size : {}", limits.max_sparse_texture_size);
     }
     log_startup->info("GL_ARB_sparse_texture supported : {}", info.use_sparse_texture);
 
     info.use_persistent_buffers = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
-    log_startup->info("GL_ARB_buffer_storage supported : {}", info.use_sparse_texture);
+    info.use_direct_state_access = (info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
+    info.use_multi_draw_indirect = (info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_multi_draw_indirect);
+    log_startup->info("Persistent Buffers supported:  {}", info.use_sparse_texture);
+    log_startup->info("Direct State Access supported: {}", info.use_direct_state_access);
+    log_startup->info("Multi Draw Indirect supported: {}", info.use_multi_draw_indirect);
 
-    if (
-        !gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access) &&
-        (info.gl_version < 450)
-    ) {
-        log_startup->info("Direct state access is not supported by OpenGL driver. This is a fatal error.");
-    }
-
-    bool force_no_bindless          {false};
-    bool force_no_persistent_buffers{false};
-    bool capture_support            {false};
-    bool initial_clear              {false};
+    bool force_no_bindless           {false};
+    bool force_no_persistent_buffers {false};
+    bool force_no_direct_state_access{false};
+    bool force_no_multi_draw_indirect{false};
+    int  force_gl_version            {false};
+    int  force_glsl_version          {false};
+    bool capture_support             {false};
+    bool initial_clear               {false};
     {
         const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "graphics");
-        ini.get("reverse_depth",   configuration.reverse_depth  );
-        ini.get("post_processing", configuration.post_processing);
-        ini.get("use_time_query",  configuration.use_time_query );
-        ini.get("force_no_bindless",           force_no_bindless);
-        ini.get("force_no_persistent_buffers", force_no_persistent_buffers);
-        ini.get("initial_clear",               initial_clear);
+        ini.get("reverse_depth",                configuration.reverse_depth  );
+        ini.get("post_processing",              configuration.post_processing);
+        ini.get("use_time_query",               configuration.use_time_query );
+        ini.get("force_no_bindless",            force_no_bindless);
+        ini.get("force_no_persistent_buffers",  force_no_persistent_buffers);
+        ini.get("force_no_direct_state_access", force_no_direct_state_access);
+        ini.get("force_no_multi_draw_indirect", force_no_multi_draw_indirect);
+        ini.get("force_gl_version",             force_gl_version);
+        ini.get("force_glsl_version",           force_glsl_version);
+        ini.get("initial_clear",                initial_clear);
+    }
+    if (force_gl_version > 0) {
+        info.gl_version = force_gl_version;
+        log_startup->warn("Forced GL version to be {} due to erhe.ini setting", force_gl_version);
+    }
+    if (force_glsl_version > 0) {
+        info.glsl_version = force_glsl_version;
+        log_startup->warn("Forced GLSL version to be {} due to erhe.ini setting", force_glsl_version);
+    }
+
+    if (info.use_bindless_texture) {
+#if defined(ERHE_SPIRV)
+        // 'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes
+        info.use_bindless_texture = false;
+        log_startup->warn("Force disabled GL_ARB_bindless_texture due to ERHE_SPIRV cmake setting");
+#else
+        if (force_no_bindless || capture_support) {
+            info.use_bindless_texture = false;
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting");
+        }
+#endif
+    }
+
+    if (!info.use_direct_state_access) { 
+        ERHE_FATAL("OpenGL driver does not support irect state access, required by erhe. This is a fatal error.");
+    }
+    // if (info.use_direct_state_access) { 
+    //     if (force_no_direct_state_access) {
+    //         info.use_direct_state_access = false;
+    //         log_startup->warn("Force disabled direct state access due to erhe.ini setting");
+    //     }
+    // }
+
+    if (info.use_multi_draw_indirect) { 
+        if (force_no_multi_draw_indirect) {
+            info.use_multi_draw_indirect = false;
+            log_startup->warn("Force disabled multi draw indirect due to erhe.ini setting");
+        }
+    }
+
+    if (force_no_persistent_buffers) {
+        if (info.use_persistent_buffers) {
+            info.use_persistent_buffers = false;
+            log_startup->warn("Force disabled persistently mapped buffers due to erhe.ini setting");
+        }
     }
 
     if (initial_clear) {
-        ERHE_PROFILE_SCOPE("Initial clear");
-
         gl::clear_color(0.2f, 0.2f, 0.2f, 0.2f);
         for (int i = 0; i < 3; ++i) {
             gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
@@ -457,24 +455,131 @@ Instance::Instance(erhe::window::Context_window& context_window)
         ini.get("capture_support", capture_support);
     }
 
-    if (info.use_bindless_texture) {
-#if defined(ERHE_SPIRV)
-        // 'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes
-        info.use_bindless_texture = false;
-        log_startup->warn("Force disabled GL_ARB_bindless_texture due to ERHE_SPIRV setting");
-#else
-        if (force_no_bindless || capture_support) {
-            info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting");
-        }
-#endif
-    }
+    // TODO more formats
+    gl::Internal_format formats[] = {
+        gl::Internal_format::r8,
+        gl::Internal_format::rg8,
+        gl::Internal_format::rgba8,
+        gl::Internal_format::srgb8_alpha8,
+        gl::Internal_format::r11f_g11f_b10f,
+        gl::Internal_format::r16_snorm,
+        gl::Internal_format::r16f,
+        gl::Internal_format::rg16f,
+        gl::Internal_format::rgba16f,
+        gl::Internal_format::r32f,
+        gl::Internal_format::rg32f,
+        gl::Internal_format::rgba32f,
+        gl::Internal_format::depth32f_stencil8,
+        gl::Internal_format::depth24_stencil8,
+        gl::Internal_format::depth_stencil,
+        gl::Internal_format::stencil_index8,
+        gl::Internal_format::depth_component32f,
+        gl::Internal_format::depth_component,
+        gl::Internal_format::depth_component16
+    };
 
-    if (force_no_persistent_buffers) {
-        if (info.use_persistent_buffers) {
-            info.use_persistent_buffers = false;
-            log_startup->warn("Force disabled persistently mapped buffers due to erhe.ini setting");
+    log_startup->info("Format properties:");
+    for (const gl::Internal_format format : formats) {
+        Format_properties properties{};
+
+        GLint supported{};
+        gl::get_internalformat_iv(gl::Texture_target::texture_2d, format, gl::Internal_format_p_name::internalformat_supported, 1, &supported);
+        properties.supported = (supported == GL_TRUE);
+        if (!properties.supported) {
+            continue;
         }
+
+        log_startup->info("    {}", gl::c_str(format));
+
+        auto get_int = [format](gl::Internal_format_p_name p_name, gl::Texture_target target = gl::Texture_target::texture_2d) -> int
+        {
+            GLint value{0};
+            gl::get_internalformat_iv(target, format, p_name, 1, &value);
+            return value;
+        };
+        auto get_bool = [format](gl::Internal_format_p_name p_name, gl::Texture_target target = gl::Texture_target::texture_2d) -> bool
+        {
+            GLint value{0};
+            gl::get_internalformat_iv(target, format, p_name, 1, &value);
+            return (value == GL_TRUE);
+        };
+
+        properties.red_size           = get_int(gl::Internal_format_p_name::internalformat_red_size);
+        properties.green_size         = get_int(gl::Internal_format_p_name::internalformat_green_size);
+        properties.blue_size          = get_int(gl::Internal_format_p_name::internalformat_blue_size);
+        properties.alpha_size         = get_int(gl::Internal_format_p_name::internalformat_alpha_size);
+        properties.depth_size         = get_int(gl::Internal_format_p_name::internalformat_depth_size);
+        properties.stencil_size       = get_int(gl::Internal_format_p_name::internalformat_stencil_size);
+        properties.image_texel_size   = get_int(gl::Internal_format_p_name::image_texel_size);
+        properties.color_renderable   = get_bool(gl::Internal_format_p_name::color_renderable);
+        properties.depth_renderable   = get_bool(gl::Internal_format_p_name::depth_renderable);
+        properties.stencil_renderable = get_bool(gl::Internal_format_p_name::stencil_renderable);
+        properties.filter             = get_bool(gl::Internal_format_p_name::filter);
+        properties.framebuffer_blend  = get_bool(gl::Internal_format_p_name::framebuffer_blend);
+
+        int num_virtual_page_sizes = get_int(gl::Internal_format_p_name::num_virtual_page_sizes_arb);
+        if (num_virtual_page_sizes > 0) {
+            properties.sparse_tile_x_sizes.resize(num_virtual_page_sizes);
+            properties.sparse_tile_y_sizes.resize(num_virtual_page_sizes);
+            properties.sparse_tile_z_sizes.resize(num_virtual_page_sizes);
+            gl::get_internalformat_i_64v(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::virtual_page_size_x_arb,
+                static_cast<GLsizei>(num_virtual_page_sizes),
+                properties.sparse_tile_x_sizes.data()
+            );
+            gl::get_internalformat_i_64v(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::virtual_page_size_y_arb,
+                static_cast<GLsizei>(num_virtual_page_sizes),
+                properties.sparse_tile_y_sizes.data()
+            );
+            gl::get_internalformat_i_64v(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::virtual_page_size_z_arb,
+                static_cast<GLsizei>(num_virtual_page_sizes),
+                properties.sparse_tile_z_sizes.data()
+            );
+            std::stringstream ss;
+            for (GLint i = 0; i < num_virtual_page_sizes; ++i) {
+                ss << fmt::format(
+                    " {} x {} x {}",
+                    properties.sparse_tile_x_sizes[i],
+                    properties.sparse_tile_y_sizes[i],
+                    properties.sparse_tile_z_sizes[i]
+                );
+            }
+            log_startup->info("    {} : num page sizes {} :{}", gl::c_str(format), num_virtual_page_sizes, ss.str());
+        }
+
+        {
+            int num_sample_counts = get_int(gl::Internal_format_p_name::num_sample_counts, gl::Texture_target::texture_2d_multisample);
+            std::stringstream ss;
+            ss << fmt::format("    {} sample counts:", c_str(format));
+            if (num_sample_counts > 0) {
+                properties.texture_2d_sample_counts.resize(num_sample_counts);
+                gl::get_internalformat_iv(
+                    gl::Texture_target::texture_2d_multisample,
+                    format,
+                    gl::Internal_format_p_name::samples,
+                    num_sample_counts,
+                    properties.texture_2d_sample_counts.data()
+                );
+                std::sort(properties.texture_2d_sample_counts.begin(), properties.texture_2d_sample_counts.end());
+                for (int count : properties.texture_2d_sample_counts) {
+                    ss << fmt::format(" {}", count);
+                }
+            }
+            log_startup->info(ss.str());
+        }
+
+        properties.texture_2d_array_max_width  = get_int(gl::Internal_format_p_name::max_width, gl::Texture_target::texture_2d_array);
+        properties.texture_2d_array_max_height = get_int(gl::Internal_format_p_name::max_height, gl::Texture_target::texture_2d_array);
+        properties.texture_2d_array_max_layers = get_int(gl::Internal_format_p_name::max_layers, gl::Texture_target::texture_2d_array);
+        format_properties.insert({format, properties});
     }
 
     {
@@ -515,6 +620,63 @@ auto Instance::get_handle(const Texture& texture, const Sampler& sampler) const 
     }
 }
 
+auto Instance::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> gl::Internal_format
+{
+    using namespace erhe::bit;
+    const bool require_depth     = test_all_rhs_bits_set(flags, format_flag_require_depth    );
+    const bool require_stencil   = test_all_rhs_bits_set(flags, format_flag_require_stencil  );
+    const bool prefer_accuracy   = test_all_rhs_bits_set(flags, format_flag_prefer_accuracy  );
+    const bool prefer_filterable = test_all_rhs_bits_set(flags, format_flag_prefer_filterable);
+    gl::Internal_format formats[] = {
+        gl::Internal_format::depth32f_stencil8,
+        gl::Internal_format::depth24_stencil8,
+        gl::Internal_format::depth_stencil,
+        gl::Internal_format::stencil_index8,
+        gl::Internal_format::depth_component32f,
+        gl::Internal_format::depth_component,
+        gl::Internal_format::depth_component16
+    };
+
+    gl::Internal_format best_format = gl::Internal_format{0};
+    float best_score = 0.0f;
+    for (const auto format : formats) {
+        Format_properties properties = get_format_properties(format);
+        if (!properties.supported) {
+            continue;
+        }
+        if (require_depth) {
+            if ((properties.depth_size == 0) || !properties.depth_renderable) {
+                continue;
+            }
+        }
+        if (require_stencil) {
+            if ((properties.stencil_size == 0) || !properties.stencil_renderable) {
+                continue;
+            }
+        }
+        if (sample_count != 0) {
+            auto i = std::find(properties.texture_2d_sample_counts.begin(), properties.texture_2d_sample_counts.end(), sample_count);
+            if (i == properties.texture_2d_sample_counts.end()) {
+                continue;
+            }
+        }
+        float score = 0.0f;
+        if (prefer_filterable && properties.filter) {
+            score += 1.0f;
+        }
+        if (prefer_accuracy) {
+            score += properties.depth_size;
+        } else {
+            score += 1.0f / properties.image_texel_size;
+        }
+        if (score > best_score) {
+            best_format = format;
+            best_score = score;
+        }
+    }
+    return best_format;
+}
+
 auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
 {
     const erhe::graphics::Texture::Create_info create_info{
@@ -524,7 +686,7 @@ auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
         .debug_label = "dummy"
     };
 
-    auto texture = std::make_shared<Texture>(create_info);
+    auto texture = std::make_shared<Texture>(*this, create_info);
     texture->set_debug_label("dummy");
     const std::array<uint8_t, 16> dummy_pixel{
         0xee, 0x11, 0xdd, 0xff,
@@ -768,36 +930,35 @@ void Buffer_range::bytes_written(std::size_t byte_count)
 
 void Buffer_range::flush(std::size_t byte_write_position_in_span)
 {
-    ERHE_VERIFY(m_usage == Ring_buffer_usage::CPU_write);
     ERHE_VERIFY(!is_closed());
     ERHE_VERIFY(!m_is_released);
     ERHE_VERIFY(byte_write_position_in_span >= m_byte_write_position_in_span);
-    ERHE_VERIFY(byte_write_position_in_span >= m_byte_flush_position_in_span);
+    m_byte_write_position_in_span = byte_write_position_in_span;
+    ERHE_VERIFY(m_usage == Ring_buffer_usage::CPU_write);
     ERHE_VERIFY(m_ring_buffer != nullptr);
     const size_t flush_byte_count = byte_write_position_in_span - m_byte_flush_position_in_span;
     if (flush_byte_count > 0) {
         m_ring_buffer->flush(m_byte_flush_position_in_span, flush_byte_count);
     }
-    m_byte_write_position_in_span = byte_write_position_in_span;
     m_byte_flush_position_in_span = byte_write_position_in_span;
 }
 
 void Buffer_range::release()
 {
     ERHE_PROFILE_FUNCTION();
+
+    ERHE_VERIFY(!m_is_released);
+    m_is_released = true;
+
     if (m_ring_buffer == nullptr) {
-        ERHE_VERIFY(!m_is_released);
         ERHE_VERIFY(m_byte_write_position_in_span == 0);
         return;
     }
     ERHE_VERIFY(is_closed());
-    ERHE_VERIFY(!m_is_released);
-    m_is_released = true;
     if (m_byte_write_position_in_span == 0) {
         return;
     }
 
-    ERHE_VERIFY(m_ring_buffer != nullptr);
     m_ring_buffer->make_sync_entry(
         m_wrap_count,
         m_byte_span_start_offset_in_buffer,
@@ -856,7 +1017,6 @@ GPU_ring_buffer::GPU_ring_buffer(
     const GPU_ring_buffer_create_info& create_info
 )
     : m_instance     {graphics_instance}
-    //, m_binding_point{create_info.binding_point}
     , m_buffer{
         std::make_unique<Buffer>(
             m_instance,
@@ -872,14 +1032,6 @@ GPU_ring_buffer::GPU_ring_buffer(
     , m_read_wrap_count{0}
     , m_read_offset    {m_buffer->capacity_byte_count()}
 {
-    //ERHE_VERIFY(gl_helpers::is_indexed(create_info.target) || create_info.binding_point == std::numeric_limits<unsigned int>::max());
-
-    //// log_gpu_ring_buffer->info(
-    ////     "allocating GPU ring buffer {} bytes for {} - {}",
-    ////     create_info.size,
-    ////     m_buffer.debug_label(),
-    ////     gl::c_str(m_buffer.target())
-    //// );
 }
 
 auto GPU_ring_buffer::get_buffer() -> Buffer*
@@ -1247,7 +1399,7 @@ auto GPU_ring_buffer_client::bind(const Buffer_range& range) -> bool
         ERHE_VERIFY(gl_helpers::is_indexed(m_buffer_target));
         gl::bind_buffer_range(
             m_buffer_target,
-            static_cast<GLuint>    (m_binding_point.value()),
+            m_binding_point.value(),
             static_cast<GLuint>    (buffer->gl_name()),
             static_cast<GLintptr>  (offset),
             static_cast<GLsizeiptr>(byte_count)
@@ -1304,6 +1456,39 @@ auto Instance::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_
     };
     m_ring_buffers.push_back(std::make_unique<GPU_ring_buffer>(*this, create_info));
     return m_ring_buffers.back()->acquire(required_alignment, usage, byte_count);
+}
+
+void Instance::named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height)
+{
+    if (info.use_direct_state_access) {
+        gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
+    } else {
+        int current_renderbuffer = 0;
+        gl::get_integer_v(gl::Get_p_name::renderbuffer_binding, &current_renderbuffer);
+        gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, renderbuffer);
+        gl::renderbuffer_storage_multisample(gl::Renderbuffer_target::renderbuffer, samples, internalformat, width, height);
+        gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, current_renderbuffer);
+    }
+}
+
+void Instance::multi_draw_elements_indirect(
+    gl::Primitive_type     mode,
+    gl::Draw_elements_type type,
+    const void*            indirect,
+    GLsizei                drawcount,
+    GLsizei                stride
+)
+{
+    gl::multi_draw_elements_indirect(mode, type, indirect, drawcount, stride);
+}
+
+auto Instance::get_format_properties(gl::Internal_format format) const -> Format_properties
+{
+    auto i = format_properties.find(format);
+    if (i == format_properties.end()) {
+        return {};
+    }
+    return i->second;
 }
 
 } // namespace erhe::graphics

@@ -36,8 +36,8 @@ static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow
 Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Program_interface& program_interface)
     : m_graphics_instance{graphics_instance}
     , m_shader_stages{
+        graphics_instance,
         program_interface.make_prototype(
-            graphics_instance,
             "res/shaders",
             erhe::graphics::Shader_stages_create_info{
                 .name           = "depth_only",
@@ -47,6 +47,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
         )
     }
     , m_shadow_sampler_compare{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::linear,
@@ -60,6 +61,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
         }
     }
     , m_shadow_sampler_no_compare{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter   = gl::Texture_min_filter::linear,
             .mag_filter   = gl::Texture_mag_filter::nearest,
@@ -71,12 +73,13 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Instance& graphics_instance, Pr
             .debug_label  = "Shadow_renderer::m_shadow_sampler_no_compare"
         }
     }
+    , m_vertex_input        {graphics_instance}
     , m_draw_indirect_buffer{graphics_instance}
     , m_joint_buffer        {graphics_instance, program_interface.joint_interface}
     , m_light_buffer        {graphics_instance, program_interface.light_interface}
     , m_primitive_buffer    {graphics_instance, program_interface.primitive_interface}
     , m_material_buffer     {graphics_instance, program_interface.material_interface}
-    , m_gpu_timer           {"Shadow_renderer"}
+    , m_gpu_timer           {graphics_instance, "Shadow_renderer"}
 {
     m_pipeline_cache_entries.resize(8);
 }
@@ -172,12 +175,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.light_camera_viewport.height
     );
 
-    gl::scissor(
-        parameters.light_camera_viewport.x + 1,
-        parameters.light_camera_viewport.y + 1,
-        parameters.light_camera_viewport.width - 2,
-        parameters.light_camera_viewport.height - 2
-    );
+    if ((parameters.light_camera_viewport.width > 2) && (parameters.light_camera_viewport.height > 2)) {
+        gl::scissor(
+            parameters.light_camera_viewport.x + 1,
+            parameters.light_camera_viewport.y + 1,
+            parameters.light_camera_viewport.width - 2,
+            parameters.light_camera_viewport.height - 2
+        );
+    }
 
     erhe::Item_filter shadow_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
@@ -247,7 +252,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
                 ERHE_PROFILE_SCOPE("mdi");
                 //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
-                gl::multi_draw_elements_indirect(
+                m_graphics_instance.multi_draw_elements_indirect(
                     pipeline.data.input_assembly.primitive_topology,
                     erhe::graphics::to_gl_index_type(parameters.index_type),
                     reinterpret_cast<const void *>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),

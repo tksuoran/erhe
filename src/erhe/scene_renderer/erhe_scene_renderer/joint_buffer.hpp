@@ -3,6 +3,8 @@
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
+#include <glm/glm.hpp>
+
 namespace erhe::scene {
     class Skin;
 }

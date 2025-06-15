@@ -7,7 +7,9 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <unordered_map>
+#include <vector>
 
 namespace erhe::window {
     class Context_window;
@@ -15,12 +17,35 @@ namespace erhe::window {
 
 namespace erhe::graphics {
 
-class Tile_size
+class Format_properties
 {
 public:
-    int x{0};
-    int y{0};
-    int z{0};
+    bool                 supported{false};
+
+    // These are all texture_2d
+    bool                 color_renderable{false};
+    bool                 depth_renderable{false};
+    bool                 stencil_renderable{false};
+    bool                 filter{false};
+    bool                 framebuffer_blend{false};
+
+    int                  red_size        {0};
+    int                  green_size      {0};
+    int                  blue_size       {0};
+    int                  alpha_size      {0};
+    int                  depth_size      {0};
+    int                  stencil_size    {0};
+    int                  image_texel_size{0};
+
+    std::vector<int>     texture_2d_sample_counts;
+    int                  texture_2d_array_max_width{0};
+    int                  texture_2d_array_max_height{0};
+    int                  texture_2d_array_max_layers{0};
+
+    // These are all texture_2d
+    std::vector<int64_t> sparse_tile_x_sizes;
+    std::vector<int64_t> sparse_tile_y_sizes;
+    std::vector<int64_t> sparse_tile_z_sizes;
 };
 
 class Texture;
@@ -90,25 +115,24 @@ public:
     [[nodiscard]] auto get_buffer() const -> GPU_ring_buffer*;
 
 private:
-    GPU_ring_buffer*     m_ring_buffer{nullptr};
-    std::span<std::byte> m_span;
-    std::size_t          m_wrap_count{0};
-    size_t               m_byte_span_start_offset_in_buffer{0};
-    size_t               m_byte_write_position_in_span{0};
-    size_t               m_byte_flush_position_in_span{0};
-    Ring_buffer_usage    m_usage{Ring_buffer_usage::None};
-    bool                 m_is_closed{false};
-    bool                 m_is_released{false};
-    bool                 m_is_cancelled{false};
+    GPU_ring_buffer*       m_ring_buffer{nullptr};
+    std::vector<std::byte> m_cpu_buffer;
+    std::span<std::byte>   m_span;
+    std::size_t            m_wrap_count{0};
+    size_t                 m_byte_span_start_offset_in_buffer{0};
+    size_t                 m_byte_write_position_in_span{0};
+    size_t                 m_byte_flush_position_in_span{0};
+    Ring_buffer_usage      m_usage{Ring_buffer_usage::None};
+    bool                   m_is_closed{false};
+    bool                   m_is_released{false};
+    bool                   m_is_cancelled{false};
 };
 
 class GPU_ring_buffer_create_info
 {
 public:
-    //gl::Buffer_target target       {0};
-    //unsigned int      binding_point{std::numeric_limits<unsigned int>::max()};
-    std::size_t size         {0};
-    const char* debug_label  {nullptr};
+    std::size_t size       {0};
+    const char* debug_label{nullptr};
 };
 
 class GPU_ring_buffer
@@ -155,6 +179,11 @@ private:
     std::vector<Ring_buffer_sync_entry> m_sync_entries;
 };
 
+static constexpr unsigned int format_flag_require_depth     = 0x01u;
+static constexpr unsigned int format_flag_require_stencil   = 0x02u;
+static constexpr unsigned int format_flag_prefer_accuracy   = 0x04u;
+static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
+
 class Instance
 {
 public:
@@ -178,6 +207,25 @@ public:
     [[nodiscard]] auto allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
     void end_of_frame();
 
+    // dsa
+    void named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height);
+
+
+    // multi draw indirect
+    void multi_draw_elements_indirect(
+        gl::Primitive_type     mode,
+        gl::Draw_elements_type type,
+        const void*            indirect,
+        GLsizei                drawcount,
+        GLsizei                stride
+    );
+
+    // auto binding_point(unsigned int binding_point) -> unsigned int;
+
+    auto get_format_properties(gl::Internal_format format) const -> Format_properties;
+
+    auto choose_depth_stencil_format(unsigned int flags, int sample_count) const -> gl::Internal_format;
+
     class Info
     {
     public:
@@ -196,6 +244,9 @@ public:
         bool use_bindless_texture   {false};
         bool use_sparse_texture     {false};
         bool use_persistent_buffers {false};
+        bool use_direct_state_access{false};
+        bool use_multi_draw_indirect{false};
+        bool use_compute_shader     {false};
     };
 
     class Limits
@@ -211,10 +262,14 @@ public:
         int max_framebuffer_samples                  {0};
         int max_integer_samples                      {0};
         int max_vertex_attribs                       {0};
+
         int max_texture_size                        {64};
         int max_3d_texture_size                      {0};
         int max_cube_map_texture_size                {0};
         int max_texture_buffer_size                  {0};
+        int max_array_texture_layers                 {0};
+        int max_sparse_texture_size                  {0};
+
         int max_texture_image_units                  {0};  // in fragment shaders
         int max_combined_texture_image_units         {0};  // combined across all shader stages
         int max_uniform_block_size                   {0};
@@ -235,6 +290,10 @@ public:
         int max_tess_evaluation_shader_storage_blocks{0};
         int max_tess_evaluation_uniform_blocks       {0};
         float max_texture_max_anisotropy{1.0f};
+
+        std::vector<int> msaa_sample_counts;
+        int max_depth_layers    {4};
+        int max_depth_resolution{64};
     };
 
     class Implementation_defined
@@ -264,7 +323,7 @@ public:
     Implementation_defined implementation_defined;
     Configuration          configuration;
 
-    std::unordered_map<gl::Internal_format, Tile_size> sparse_tile_sizes;
+    std::unordered_map<gl::Internal_format, Format_properties> format_properties;
 
     using PFN_generic          = void (*) ();
     using PFN_get_proc_address = PFN_generic (*) (const char*);
@@ -295,8 +354,10 @@ public:
     auto acquire(Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
     auto bind(const Buffer_range& range) -> bool;
 
-private:
+protected:
     Instance&                   m_graphics_instance;
+
+private:
     gl::Buffer_target           m_buffer_target;
     std::string                 m_debug_label;
     std::optional<unsigned int> m_binding_point;

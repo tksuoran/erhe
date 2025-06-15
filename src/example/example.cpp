@@ -16,6 +16,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_item/item_log.hpp"
 #include "erhe_log/log.hpp"
 #include "erhe_math/math_util.hpp"

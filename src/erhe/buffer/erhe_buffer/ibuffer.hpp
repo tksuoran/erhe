@@ -3,11 +3,9 @@
 #include "erhe_profile/profile.hpp"
 
 #include <cstddef>
-#include <memory>
 #include <mutex>
 #include <span>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace erhe::buffer {
@@ -46,9 +44,13 @@ private:
     std::size_t                    m_capacity_byte_count{0};
     std::size_t                    m_next_free_byte     {0};
 
+#if defined(ERHE_USE_PROFILE_ALLOCATOR)
     std::vector<std::byte, Profile_allocator<std::byte>> m_buffer;
-    std::span<std::byte>                                 m_span;
-    std::string                                          m_debug_label;
+#else
+    std::vector<std::byte> m_buffer;
+#endif
+    std::span<std::byte>   m_span;
+    std::string            m_debug_label;
 };
 
 } // namespace erhe::buffer

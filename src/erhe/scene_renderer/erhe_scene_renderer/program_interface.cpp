@@ -20,7 +20,8 @@ Program_interface::Program_interface(
     erhe::graphics::Instance&        graphics_instance,
     erhe::dataformat::Vertex_format& vertex_format
 )
-    : fragment_outputs{
+    : graphics_instance{graphics_instance}
+    , fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
             .type     = gl::Fragment_shader_output_type::float_vec4,
@@ -38,17 +39,15 @@ Program_interface::Program_interface(
 }
 
 auto Program_interface::make_prototype(
-    erhe::graphics::Instance&                   graphics_instance,
     const std::filesystem::path&                shader_path,
     erhe::graphics::Shader_stages_create_info&& in_create_info
 ) -> erhe::graphics::Shader_stages_prototype
 {
     erhe::graphics::Shader_stages_create_info create_info = std::move(in_create_info);
-    return make_prototype(graphics_instance, shader_path, create_info);
+    return make_prototype(shader_path, create_info);
 }
 
 auto Program_interface::make_prototype(
-    erhe::graphics::Instance&                  graphics_instance,
     const std::filesystem::path&               shader_path,
     erhe::graphics::Shader_stages_create_info& create_info
 ) -> erhe::graphics::Shader_stages_prototype
@@ -85,18 +84,19 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&joint_interface.joint_block);
 
     if (graphics_instance.info.gl_version < 430) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
-        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object)) {
+            create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+            create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
+            create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        }
     }
     if (graphics_instance.info.gl_version < 460) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
-        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_draw_parameters"});
-        create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
+        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
+            create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+            create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_draw_parameters"});
+            create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
+        }
     }
-
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
 
     if (graphics_instance.info.use_bindless_texture) {
@@ -127,10 +127,10 @@ auto Program_interface::make_program(erhe::graphics::Shader_stages_prototype&& p
     if (!prototype.is_valid()) {
         log_program_interface->error("current directory is {}", std::filesystem::current_path().string());
         log_program_interface->error("Compiling shader program {} failed", prototype.name());
-        return erhe::graphics::Shader_stages{prototype.name()};
+        return erhe::graphics::Shader_stages{graphics_instance, prototype.name()};
     }
 
-    return erhe::graphics::Shader_stages{std::move(prototype)};
+    return erhe::graphics::Shader_stages{graphics_instance, std::move(prototype)};
 }
 
 } // namespace erhe::scene_renderer

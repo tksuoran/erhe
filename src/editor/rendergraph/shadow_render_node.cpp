@@ -57,24 +57,23 @@ void Shadow_render_node::reconfigure(erhe::graphics::Instance& graphics_instance
         ERHE_PROFILE_SCOPE("allocating shadow map array texture");
 
         m_texture.reset();
+        m_texture = std::make_shared<Texture>(
+            graphics_instance,
+            erhe::graphics::Texture_create_info {
+                .instance        = graphics_instance,
+                .target          = gl::Texture_target::texture_2d_array,
+                .internal_format = gl::Internal_format::depth_component32f,
+                //.sparse          = erhe::graphics::g_instance->info.use_sparse_texture,
+                .width           = std::max(1, resolution),
+                .height          = std::max(1, resolution),
+                .depth           = std::max(1, light_count),
+                .debug_label     = "Shadowmap"
+            }
+        );
 
-        if (light_count > 0) {
-            m_texture = std::make_shared<Texture>(
-                erhe::graphics::Texture_create_info {
-                    .instance        = graphics_instance,
-                    .target          = gl::Texture_target::texture_2d_array,
-                    .internal_format = gl::Internal_format::depth_component32f,
-                    //.sparse          = erhe::graphics::g_instance->info.use_sparse_texture,
-                    .width           = resolution,
-                    .height          = resolution,
-                    .depth           = light_count,
-                    .debug_label     = "Shadowmap"
-                }
-            );
+        m_texture->set_debug_label("Shadowmaps");
 
-            m_texture->set_debug_label("Shadowmaps");
-        }
-        if (resolution == 1) {
+        if (resolution <= 1) {
             float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
             if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
                 gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
@@ -90,7 +89,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Instance& graphics_instance
 
         Framebuffer::Create_info create_info;
         create_info.attach(gl::Framebuffer_attachment::depth_attachment, m_texture.get(), 0, static_cast<unsigned int>(i));
-        auto framebuffer = std::make_unique<Framebuffer>(create_info);
+        auto framebuffer = std::make_unique<Framebuffer>(graphics_instance, create_info);
         framebuffer->set_debug_label(fmt::format("Shadow {}", i));
         m_framebuffers.emplace_back(std::move(framebuffer));
     }

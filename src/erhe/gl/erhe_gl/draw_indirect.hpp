@@ -2,8 +2,7 @@
 
 #include <cstdint>
 
-namespace gl
-{
+namespace gl {
 
 class Draw_arrays_indirect_command
 {

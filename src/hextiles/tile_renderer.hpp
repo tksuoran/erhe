@@ -11,6 +11,7 @@
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"

@@ -400,7 +400,8 @@ auto Vertex_input_state_data::make(const erhe::dataformat::Vertex_format& vertex
     return result;
 }
 
-Vertex_input_state::Vertex_input_state()
+Vertex_input_state::Vertex_input_state(Instance& instance)
+    : m_instance{instance}
 {
     const std::lock_guard lock{s_mutex};
 
@@ -409,8 +410,9 @@ Vertex_input_state::Vertex_input_state()
     create();
 }
 
-Vertex_input_state::Vertex_input_state(Vertex_input_state_data&& create_info)
-    : m_data{std::move(create_info)}
+Vertex_input_state::Vertex_input_state(Instance& instance, Vertex_input_state_data&& create_info)
+    : m_instance{instance}
+    , m_data    {std::move(create_info)}
 {
     const std::lock_guard lock{s_mutex};
 
@@ -464,7 +466,7 @@ void Vertex_input_state::create()
     }
 
     m_owner_thread = std::this_thread::get_id();
-    m_gl_vertex_array.emplace(Gl_vertex_array{});
+    m_gl_vertex_array.emplace(Gl_vertex_array{m_instance});
 
     update();
 

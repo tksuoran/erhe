@@ -107,6 +107,7 @@ void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_in
     using Renderbuffer = erhe::graphics::Renderbuffer;
     using Texture      = erhe::graphics::Texture;
     m_color_texture = std::make_shared<Texture>(
+        graphics_instance,
         Texture::Create_info{
             .instance        = graphics_instance,
             .target          = gl::Texture_target::texture_2d,
@@ -149,10 +150,10 @@ void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_in
         gl::Framebuffer_attachment::depth_attachment,
         m_depth_renderbuffer.get()
     );
-    m_framebuffer = std::make_unique<Framebuffer>(create_info);
+    m_framebuffer = std::make_unique<Framebuffer>(graphics_instance, create_info);
     m_framebuffer->set_debug_label("Material Preview Framebuffer");
 
-    gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
+    const gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
     gl::named_framebuffer_draw_buffers(m_framebuffer->gl_name(), 1, &draw_buffers[0]);
     gl::named_framebuffer_read_buffer(m_framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
 
@@ -161,6 +162,7 @@ void Material_preview::update_rendertarget(erhe::graphics::Instance& graphics_in
     }
 
     m_shadow_texture = std::make_shared<Texture>(
+        graphics_instance,
         Texture::Create_info {
             .instance        = graphics_instance,
             .target          = gl::Texture_target::texture_2d_array,
