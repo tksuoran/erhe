@@ -109,6 +109,7 @@ public:
 
 private:
     void post_link();
+    void query_bindings();
 
 #if defined(ERHE_SPIRV)
     auto compile_glslang     (const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
@@ -118,17 +119,17 @@ private:
     [[nodiscard]] auto compile     (const Shader_stage& shader) -> Gl_shader;
     [[nodiscard]] auto post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool;
 
-    friend class Shader_stages;
-
     static constexpr int state_init                       = 0;
     static constexpr int state_shader_compilation_started = 1;
     static constexpr int state_program_link_started       = 2;
     static constexpr int state_ready                      = 3;
     static constexpr int state_fail                       = 4;
 
+    friend class Shader_stages;
+    friend class Reloadable_shader_stages;
     Instance&                                           m_graphics_instance;
-    Shader_stages_create_info                           m_create_info;
     Gl_program                                          m_handle;
+    Shader_stages_create_info                           m_create_info;
     std::vector<Gl_shader>                              m_prelink_shaders;
     int                                                 m_state{state_init};
     Shader_resource                                     m_default_uniform_block;
@@ -146,8 +147,10 @@ private:
 class Shader_stages
 {
 public:
-    explicit Shader_stages(Shader_stages_prototype&& prototype);
-    explicit Shader_stages(const std::string& non_functional_name);
+    Shader_stages(Instance& instance, Shader_stages_prototype&& prototype);
+    Shader_stages(Instance& instance, const std::string& non_functional_name);
+    Shader_stages(Shader_stages&& old);
+    Shader_stages& operator=(Shader_stages&& old);
 
     // Reloads program by consuming prototype
     void reload    (Shader_stages_prototype&& prototype);
@@ -158,8 +161,9 @@ public:
     [[nodiscard]] auto is_valid() const -> bool;
 
 private:
-    std::string            m_name;
+    Instance&              m_instance;
     Gl_program             m_handle;
+    std::string            m_name;
     bool                   m_is_valid{false};
     std::vector<Gl_shader> m_attached_shaders;
 };
@@ -167,9 +171,9 @@ private:
 class Reloadable_shader_stages
 {
 public:
-    explicit Reloadable_shader_stages(const std::string& non_functional_name);
-    explicit Reloadable_shader_stages(Shader_stages_prototype&& prototype);
-    Reloadable_shader_stages(Instance& graphics_instance, const Shader_stages_create_info& create_info);
+    Reloadable_shader_stages(Instance& instance, const std::string& non_functional_name);
+    Reloadable_shader_stages(Instance& instance, Shader_stages_prototype&& prototype);
+    Reloadable_shader_stages(Instance& instance, const Shader_stages_create_info& create_info);
     Reloadable_shader_stages(Reloadable_shader_stages&&);
     Reloadable_shader_stages& operator=(Reloadable_shader_stages&&);
 

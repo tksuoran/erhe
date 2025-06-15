@@ -14,6 +14,7 @@
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -119,13 +120,15 @@ auto get_shader_extensions(erhe::graphics::Instance& graphics_instance) -> std::
 {
     std::vector<erhe::graphics::Shader_stage_extension> extensions;
     if (graphics_instance.info.gl_version < 430) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
-        extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
-        extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object)) {
+            extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+            extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+        }
     }
     if (graphics_instance.info.gl_version < 460) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
-        extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
+            extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        }
     }
     if (graphics_instance.info.use_bindless_texture) {
         extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
@@ -136,10 +139,7 @@ auto get_shader_extensions(erhe::graphics::Instance& graphics_instance) -> std::
 auto get_shader_defines(erhe::graphics::Instance& graphics_instance) -> std::vector<std::pair<std::string, std::string>>
 {
     std::vector<std::pair<std::string, std::string>> defines;
-    if (graphics_instance.info.gl_version < 460) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
-        defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
-    }
+
     if (graphics_instance.info.use_bindless_texture) {
         defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
     }
@@ -156,12 +156,7 @@ auto get_shader_default_uniform_block(erhe::graphics::Instance& graphics_instanc
 }
 
 Imgui_program_interface::Imgui_program_interface(erhe::graphics::Instance& graphics_instance)
-    : draw_parameter_block{
-        graphics_instance,
-        "draw",
-        0,
-        erhe::graphics::Shader_resource::Type::shader_storage_block
-    }
+    : draw_parameter_block{graphics_instance, "draw", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , draw_parameter_struct{graphics_instance, "Draw_parameters"}
     , draw_parameter_struct_offsets{
         .clip_rect       = draw_parameter_struct.add_vec4("clip_rect")->offset_in_parent(),
@@ -238,6 +233,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
     : m_graphics_instance{graphics_instance}
     , m_imgui_program_interface{graphics_instance}
     , m_shader_stages{
+        graphics_instance,
         erhe::graphics::Shader_stages_prototype{
             graphics_instance,
             erhe::graphics::Shader_stages_create_info{
@@ -270,7 +266,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
         "ImGui Draw Indirect Buffer",
         gl::Buffer_target::draw_indirect_buffer
     }
-    , m_vertex_input{erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
+    , m_vertex_input{graphics_instance, erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
     , m_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "ImGui Renderer",
@@ -283,22 +279,31 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Instance& graphics_instance, Imgu
         }
     }
     , m_dummy_texture{graphics_instance.create_dummy_texture()}
-    , m_nearest_sampler{{
-        .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
-        .mag_filter  = gl::Texture_mag_filter::nearest,
-        .debug_label = "Imgui_renderer nearest"
-    }}
-    , m_linear_sampler{{
-        .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
-        .mag_filter  = gl::Texture_mag_filter::linear,
-        .debug_label = "Imgui_renderer linear"
-    }}
-    , m_linear_mipmap_linear_sampler{{
-        .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
-        .mag_filter  = gl::Texture_mag_filter::linear,
-        .debug_label = "Imgui_renderer linear mipmap"
-    }}
-    , m_gpu_timer{"Imgui_renderer"}
+    , m_nearest_sampler{
+        graphics_instance,
+        {
+            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .debug_label = "Imgui_renderer nearest"
+        }
+    }
+    , m_linear_sampler{
+        graphics_instance,
+        {
+            .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
+            .mag_filter  = gl::Texture_mag_filter::linear,
+            .debug_label = "Imgui_renderer linear"
+        }
+    }
+    , m_linear_mipmap_linear_sampler{
+        graphics_instance,
+        {
+            .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
+            .mag_filter  = gl::Texture_mag_filter::linear,
+            .debug_label = "Imgui_renderer linear mipmap"
+        }
+    }
+    , m_gpu_timer{graphics_instance, "Imgui_renderer"}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -402,6 +407,7 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
 
     // Create textures
     m_font_texture = std::make_shared<erhe::graphics::Texture>(
+        m_graphics_instance,
         make_font_texture_create_info(m_graphics_instance, m_font_atlas)
     );
 
@@ -416,10 +422,7 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
     }
 
     const auto pixel_data = get_font_atlas_pixel_data(m_font_atlas);
-    const std::span<const std::uint8_t> image_data{
-        pixel_data.data(),
-        pixel_data.size()
-    };
+    const std::span<const std::uint8_t> image_data{pixel_data.data(), pixel_data.size()};
     m_font_texture->upload(gl::Internal_format::rgba8, image_data, m_font_texture->width(), m_font_texture->height());
     m_font_texture->set_debug_label("ImGui Font");
 
@@ -1031,7 +1034,7 @@ void Imgui_renderer::render_draw_data()
         m_draw_parameter_buffer.bind(draw_parameter_buffer_range);
         m_draw_indirect_buffer.bind(draw_indirect_buffer_range);
 
-        gl::multi_draw_elements_indirect(
+        m_graphics_instance.multi_draw_elements_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
             gl::Draw_elements_type::unsigned_short,
             reinterpret_cast<const void*>(draw_indirect_buffer_range.get_byte_start_offset_in_buffer()),

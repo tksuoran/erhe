@@ -88,6 +88,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Instance& graphics_instance, erhe::data
     //    .
     //}
     , vertex_input{
+        graphics_instance,
         erhe::graphics::Vertex_input_state_data::make(vertex_format)
     }
 {

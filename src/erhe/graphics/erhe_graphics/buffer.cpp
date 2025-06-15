@@ -90,6 +90,7 @@ void Buffer::allocate_storage()
 
 Buffer::Buffer(Instance& instance, const Buffer_create_info& create_info) noexcept
     : m_instance           {instance}
+    , m_handle             {instance}
     , m_target             {create_info.target}
     , m_capacity_byte_count{create_info.capacity_byte_count}
     , m_storage_mask       {create_info.storage_mask}
@@ -116,6 +117,7 @@ Buffer::Buffer(Instance& instance, const Buffer_create_info& create_info) noexce
 
 Buffer::Buffer(Instance& instance)
     : m_instance{instance}
+    , m_handle  {instance}
 {
 }
 

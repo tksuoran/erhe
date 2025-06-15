@@ -6,6 +6,7 @@
 #include "erhe_graphics/span.hpp"
 
 #include "erhe_gl/draw_indirect.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"

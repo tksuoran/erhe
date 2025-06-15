@@ -26,6 +26,7 @@ auto Image_transfer::get_slot() -> Slot&
 
 Image_transfer::Slot::Slot(erhe::graphics::Instance& graphics_instance)
     : m_graphics_instance{graphics_instance}
+    , m_pbo              {graphics_instance}
 {
     ERHE_VERIFY(m_pbo.gl_name() != 0);
 
@@ -36,12 +37,7 @@ Image_transfer::Slot::Slot(erhe::graphics::Instance& graphics_instance)
         gl::Map_buffer_access_mask::map_flush_explicit_bit    |
         gl::Map_buffer_access_mask::map_write_bit;
 
-    gl::named_buffer_storage(
-        m_pbo.gl_name(),
-        m_capacity,
-        nullptr,
-        gl::Buffer_storage_mask::map_write_bit
-    );
+    gl::named_buffer_storage(m_pbo.gl_name(), m_capacity, nullptr, gl::Buffer_storage_mask::map_write_bit);
 }
 
 void Image_transfer::Slot::map()

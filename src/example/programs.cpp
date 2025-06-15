@@ -29,6 +29,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
     }
 
     , nearest_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
@@ -36,6 +37,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
         }
     }
     , linear_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::linear,
@@ -43,6 +45,7 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
         }
     }
     , linear_mipmap_linear_sampler{
+        graphics_instance,
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
             .mag_filter  = gl::Texture_mag_filter::linear,
@@ -53,7 +56,6 @@ Programs::Programs(erhe::graphics::Instance& graphics_instance, erhe::scene_rend
     , standard{
         program_interface.make_program(
             program_interface.make_prototype(
-                graphics_instance,
                 shader_path,
                 erhe::graphics::Shader_stages_create_info{
                     .name              = "standard",

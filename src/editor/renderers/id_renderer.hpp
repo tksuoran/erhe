@@ -58,6 +58,7 @@ public:
         Mesh_memory&                             mesh_memory,
         Programs&                                programs
     );
+    ~Id_renderer();
 
     // Public API
     class Render_parameters

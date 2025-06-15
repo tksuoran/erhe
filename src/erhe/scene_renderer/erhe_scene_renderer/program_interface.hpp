@@ -30,19 +30,18 @@ public:
     void operator=   (Program_interface&&)      = delete;
 
     [[nodiscard]] auto make_prototype(
-        erhe::graphics::Instance&                   graphics_instance,
         const std::filesystem::path&                shader_path,
         erhe::graphics::Shader_stages_create_info&& create_info
     ) -> erhe::graphics::Shader_stages_prototype;
 
     [[nodiscard]] auto make_prototype(
-        erhe::graphics::Instance&                  graphics_instance,
         const std::filesystem::path&               shader_path,
         erhe::graphics::Shader_stages_create_info& create_info
     ) -> erhe::graphics::Shader_stages_prototype;
 
     [[nodiscard]] auto make_program(erhe::graphics::Shader_stages_prototype&& prototype) -> erhe::graphics::Shader_stages;
 
+    erhe::graphics::Instance&        graphics_instance;
     erhe::graphics::Fragment_outputs fragment_outputs;
     erhe::dataformat::Vertex_format& vertex_format;
     Camera_interface                 camera_interface;

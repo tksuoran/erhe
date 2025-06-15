@@ -1,5 +1,8 @@
 #include "erhe_graphics/gl_objects.hpp"
+#include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/instance.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <new>
@@ -7,8 +10,10 @@
 
 namespace erhe::graphics {
 
-Gl_texture::Gl_texture(gl::Texture_target target, bool for_texture_view)
+Gl_texture::Gl_texture(Instance& instance, gl::Texture_target target, bool for_texture_view)
 {
+    static_cast<void>(instance);
+
     if (!for_texture_view) {
         gl::create_textures(target, 1, &m_gl_name);
     } else {
@@ -17,10 +22,12 @@ Gl_texture::Gl_texture(gl::Texture_target target, bool for_texture_view)
     ERHE_VERIFY(m_gl_name != 0);
 }
 
-Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name, bool for_texture_view)
+Gl_texture::Gl_texture(Instance& instance, gl::Texture_target target, GLuint wrap_name, bool for_texture_view)
     : m_gl_name{wrap_name}
     , m_owned  {wrap_name == 0}
 {
+    static_cast<void>(instance);
+
     if (m_owned) {
         if (!for_texture_view) {
             gl::create_textures(target, 1, &m_gl_name);
@@ -60,7 +67,7 @@ auto Gl_texture::gl_name() const -> GLuint
 }
 
 
-Gl_program::Gl_program()
+Gl_program::Gl_program(Instance&)
 {
     m_gl_name = gl::create_program();
     ERHE_VERIFY(m_gl_name != 0);
@@ -92,7 +99,7 @@ auto Gl_program::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_shader::Gl_shader(gl::Shader_type shader_type)
+Gl_shader::Gl_shader(Instance&, gl::Shader_type shader_type)
 {
     m_gl_name = gl::create_shader(shader_type);
     ERHE_VERIFY(m_gl_name != 0);
@@ -124,8 +131,10 @@ auto Gl_shader::gl_name() const -> unsigned int
     return m_gl_name;
 }
 
-Gl_sampler::Gl_sampler()
+Gl_sampler::Gl_sampler(Instance& instance)
 {
+    static_cast<void>(instance);
+
     gl::create_samplers(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -156,8 +165,10 @@ auto Gl_sampler::gl_name() const -> unsigned int
     return m_gl_name;
 }
 
-Gl_framebuffer::Gl_framebuffer()
+Gl_framebuffer::Gl_framebuffer(Instance& instance)
 {
+    static_cast<void>(instance);
+
     gl::create_framebuffers(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -188,8 +199,10 @@ auto Gl_framebuffer::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_renderbuffer::Gl_renderbuffer()
+Gl_renderbuffer::Gl_renderbuffer(Instance& instance)
 {
+    static_cast<void>(instance);
+
     gl::create_renderbuffers(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -220,8 +233,10 @@ auto Gl_renderbuffer::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_buffer::Gl_buffer()
+Gl_buffer::Gl_buffer(Instance& instance)
 {
+    static_cast<void>(instance);
+
     gl::create_buffers(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -253,8 +268,10 @@ auto Gl_buffer::gl_name() const -> GLuint
 }
 
 
-Gl_transform_feedback::Gl_transform_feedback()
+Gl_transform_feedback::Gl_transform_feedback(Instance& instance)
 {
+    static_cast<void>(instance);
+
     gl::create_transform_feedbacks(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -286,8 +303,10 @@ auto Gl_transform_feedback::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_query::Gl_query(gl::Query_target target)
+Gl_query::Gl_query(Instance& instance, gl::Query_target target)
 {
+    static_cast<void>(instance);
+
     gl::create_queries(target, 1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -318,8 +337,10 @@ auto Gl_query::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_vertex_array::Gl_vertex_array()
+Gl_vertex_array::Gl_vertex_array(Instance& instance)
 {
+    static_cast<void>(instance);
+
     gl::create_vertex_arrays(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }

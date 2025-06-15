@@ -136,8 +136,9 @@ void Framebuffer::Create_info::attach(const gl::Framebuffer_attachment attachmen
     attachments.emplace_back(attachment_point, renderbuffer);
 }
 
-Framebuffer::Framebuffer(const Create_info& create_info)
-    : m_attachments{create_info.attachments}
+Framebuffer::Framebuffer(Instance& instance, const Create_info& create_info)
+    : m_instance   {instance}
+    , m_attachments{create_info.attachments}
 {
     const std::lock_guard lock{s_mutex};
 
@@ -205,7 +206,7 @@ void Framebuffer::create()
     }
 
     m_owner_thread = std::this_thread::get_id();
-    m_gl_framebuffer.emplace(Gl_framebuffer{});
+    m_gl_framebuffer.emplace(Gl_framebuffer{m_instance});
     for (auto& attachment : m_attachments) {
         if (attachment.texture != nullptr) {
             ERHE_VERIFY(attachment.texture->width() >= 1);

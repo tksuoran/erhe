@@ -38,9 +38,7 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     }
     , m_forward_renderer  {forward_renderer}
     , m_brdf_slice        {brdf_slice}
-    , m_empty_vertex_input{
-        erhe::graphics::Vertex_input_state_data{}
-    }
+    , m_empty_vertex_input{rendergraph.get_graphics_instance(), erhe::graphics::Vertex_input_state_data{}}
     , m_renderpass{ 
         erhe::graphics::Pipeline{
             erhe::graphics::Pipeline_data{

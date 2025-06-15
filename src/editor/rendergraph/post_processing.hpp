@@ -113,7 +113,6 @@ public:
 
     [[nodiscard]] auto get_nodes() -> const std::vector<std::shared_ptr<Post_processing_node>>&;
     void post_process(Post_processing_node& node);
-    void next_frame  ();
 
     auto get_offsets        () const -> const Offsets&                         { return m_offsets; }
     auto get_parameter_block() const -> const erhe::graphics::Shader_resource& { return m_parameter_block; }

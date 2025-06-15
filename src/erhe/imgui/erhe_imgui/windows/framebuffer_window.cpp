@@ -25,7 +25,7 @@ Framebuffer_window::Framebuffer_window(
     : Imgui_window       {imgui_renderer, imgui_windows, title, ini_label}
     , m_graphics_instance{graphics_instance}
     , m_debug_label      {ini_label}
-    , m_vertex_input     {erhe::graphics::Vertex_input_state_data{}}
+    , m_vertex_input     {graphics_instance, erhe::graphics::Vertex_input_state_data{}}
 {
 }
 
@@ -90,6 +90,7 @@ void Framebuffer_window::update_framebuffer()
     m_viewport.height = size.y;
 
     m_texture = std::make_shared<Texture>(
+        m_graphics_instance,
         Texture::Create_info{
             .instance        = m_graphics_instance,
             .target          = gl::Texture_target::texture_2d,
@@ -110,7 +111,7 @@ void Framebuffer_window::update_framebuffer()
 
     Framebuffer::Create_info create_info;
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
-    m_framebuffer = std::make_unique<Framebuffer>(create_info);
+    m_framebuffer = std::make_unique<Framebuffer>(m_graphics_instance, create_info);
     m_framebuffer->set_debug_label(m_debug_label);
 }
 

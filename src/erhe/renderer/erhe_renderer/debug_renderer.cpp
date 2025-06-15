@@ -86,48 +86,53 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
     fov_offset                    = view_block->add_vec4("fov"                   )->offset_in_parent();
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-    {
-        const std::filesystem::path comp_path = shader_path / std::filesystem::path("compute_before_line.comp");
-        erhe::graphics::Shader_stages_create_info create_info{
-            .name             = "compute_before_line",
-            .struct_types     = { line_vertex_struct.get(), triangle_vertex_struct.get() },
-            .interface_blocks = { line_vertex_buffer_block.get(), triangle_vertex_buffer_block.get(), view_block.get() },
-            .shaders          = { { gl::Shader_type::compute_shader, comp_path }, }
-        };
 
-        erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
-        if (prototype.is_valid()) {
-            compute_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
-            graphics_instance.shader_monitor.add(create_info, compute_shader_stages.get());
-        } else {
-            const auto current_path = std::filesystem::current_path();
-            log_startup->error(
-                "Unable to load Debug_renderer shader - check working directory '{}'",
-                current_path.string()
-            );
-        }
-    }
-    {
-        const std::filesystem::path vert_path = shader_path / std::filesystem::path("line_after_compute.vert");
-        const std::filesystem::path frag_path = shader_path / std::filesystem::path("line_after_compute.frag");
-        erhe::graphics::Shader_stages_create_info create_info{
-            .name             = "line_after_compute",
-            .interface_blocks = { view_block.get() },
-            .fragment_outputs = &fragment_outputs,
-            .vertex_format    = &triangle_vertex_format,
-            .shaders = {
-                { gl::Shader_type::vertex_shader,   vert_path },
-                { gl::Shader_type::fragment_shader, frag_path }
+    if (graphics_instance.info.use_compute_shader) {
+        // Compute shader
+        {
+            const std::filesystem::path comp_path = shader_path / std::filesystem::path("compute_before_line.comp");
+            erhe::graphics::Shader_stages_create_info create_info{
+                .name             = "compute_before_line",
+                .struct_types     = { line_vertex_struct.get(), triangle_vertex_struct.get() },
+                .interface_blocks = { line_vertex_buffer_block.get(), triangle_vertex_buffer_block.get(), view_block.get() },
+                .shaders          = { { gl::Shader_type::compute_shader, comp_path }, }
+            };
+
+            erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+            if (prototype.is_valid()) {
+                compute_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(graphics_instance, std::move(prototype));
+                graphics_instance.shader_monitor.add(create_info, compute_shader_stages.get());
+            } else {
+                const auto current_path = std::filesystem::current_path();
+                log_startup->error(
+                    "Unable to load Debug_renderer shader - check working directory '{}'",
+                    current_path.string()
+                );
             }
-        };
+        }
+        // Fragment shader
+        {
+            const std::filesystem::path vert_path = shader_path / std::filesystem::path("line_after_compute.vert");
+            const std::filesystem::path frag_path = shader_path / std::filesystem::path("line_after_compute.frag");
+            erhe::graphics::Shader_stages_create_info create_info{
+                .name             = "line_after_compute",
+                .interface_blocks = { view_block.get() },
+                .fragment_outputs = &fragment_outputs,
+                .vertex_format    = &triangle_vertex_format,
+                .shaders = {
+                    { gl::Shader_type::vertex_shader,   vert_path },
+                    { gl::Shader_type::fragment_shader, frag_path }
+                }
+            };
 
-        erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
-        if (prototype.is_valid()) {
-            graphics_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
-            graphics_instance.shader_monitor.add(create_info, graphics_shader_stages.get());
-        } else {
-            const auto current_path = std::filesystem::current_path();
-            log_startup->error("Unable to load Debug_renderer shader - check working directory '{}'", current_path.string());
+            erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+            if (prototype.is_valid()) {
+                graphics_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(graphics_instance, std::move(prototype));
+                graphics_instance.shader_monitor.add(create_info, graphics_shader_stages.get());
+            } else {
+                const auto current_path = std::filesystem::current_path();
+                log_startup->error("Unable to load Debug_renderer shader - check working directory '{}'", current_path.string());
+            }
         }
     }
 }
@@ -142,6 +147,7 @@ Debug_renderer::Debug_renderer(erhe::graphics::Instance& graphics_instance)
         m_program_interface.view_block->binding_point()
     }
     , m_vertex_input{
+        graphics_instance,
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)
     }
 {
@@ -225,6 +231,10 @@ auto Debug_renderer::update_view_buffer(const erhe::math::Viewport viewport, con
 void Debug_renderer::render(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera)
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (m_graphics_instance.info.use_compute_shader) {
+        return; // TODO
+    }
 
     erhe::graphics::Scoped_debug_group scoped_debug_group{c_line_renderer_render};
 

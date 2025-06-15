@@ -6,16 +6,17 @@
 
 namespace erhe::graphics {
 
-Sampler::Sampler(const Sampler_create_info& create_info)
-    : min_filter    {create_info.min_filter    }
-    , mag_filter    {create_info.mag_filter    }
-    , wrap_mode     {create_info.wrap_mode     }
-    , compare_mode  {create_info.compare_mode  }
-    , compare_func  {create_info.compare_func  }
-    , lod_bias      {create_info.lod_bias      }
-    , max_lod       {create_info.max_lod       }
-    , min_lod       {create_info.min_lod       }
-    , max_anisotropy{create_info.max_anisotropy}
+Sampler::Sampler(Instance& instance, const Sampler_create_info& create_info)
+    : m_handle        {instance}
+    , m_min_filter    {create_info.min_filter    }
+    , m_mag_filter    {create_info.mag_filter    }
+    , m_wrap_mode     {create_info.wrap_mode     }
+    , m_compare_mode  {create_info.compare_mode  }
+    , m_compare_func  {create_info.compare_func  }
+    , m_lod_bias      {create_info.lod_bias      }
+    , m_max_lod       {create_info.max_lod       }
+    , m_min_lod       {create_info.min_lod       }
+    , m_max_anisotropy{create_info.max_anisotropy}
 {
     ERHE_VERIFY(m_handle.gl_name() != 0);
     apply();
@@ -41,7 +42,7 @@ auto Sampler::debug_label() const -> const std::string&
 
 auto Sampler::uses_mipmaps() const -> bool
 {
-    switch (min_filter) {
+    switch (m_min_filter) {
         case gl::Texture_min_filter::linear                : return false;
         case gl::Texture_min_filter::linear_mipmap_linear  : return true;
         case gl::Texture_min_filter::linear_mipmap_nearest : return true;
@@ -57,17 +58,17 @@ void Sampler::apply()
     ERHE_VERIFY(m_handle.gl_name() != 0);
 
     const auto name = m_handle.gl_name();
-    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_min_filter,     static_cast<int>(min_filter));
-    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_mag_filter,     static_cast<int>(mag_filter));
-    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_compare_mode,   static_cast<int>(compare_mode));
-    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_compare_func,   static_cast<int>(compare_func));
-    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_wrap_s,         static_cast<int>(wrap_mode[0]));
-    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_wrap_t,         static_cast<int>(wrap_mode[1]));
-    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_wrap_r,         static_cast<int>(wrap_mode[2]));
-    gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_lod_bias,       lod_bias);
-    gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_min_lod,        min_lod);
-    gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_max_lod,        max_lod);
-    gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_max_anisotropy, max_anisotropy);
+    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_min_filter,     static_cast<int>(m_min_filter));
+    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_mag_filter,     static_cast<int>(m_mag_filter));
+    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_compare_mode,   static_cast<int>(m_compare_mode));
+    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_compare_func,   static_cast<int>(m_compare_func));
+    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_wrap_s,         static_cast<int>(m_wrap_mode[0]));
+    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_wrap_t,         static_cast<int>(m_wrap_mode[1]));
+    gl::sampler_parameter_i(name, gl::Sampler_parameter_i::texture_wrap_r,         static_cast<int>(m_wrap_mode[2]));
+    gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_lod_bias,       m_lod_bias);
+    gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_min_lod,        m_min_lod);
+    gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_max_lod,        m_max_lod);
+    gl::sampler_parameter_f(name, gl::Sampler_parameter_f::texture_max_anisotropy, m_max_anisotropy);
     //int get_min_filter_i{0};
     //int get_mag_filter_i{0};
     //gl::get_sampler_parameter_iv(name, gl::Sampler_parameter_i::texture_min_filter, &get_min_filter_i);

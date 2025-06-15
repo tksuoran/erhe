@@ -1,25 +1,20 @@
 #pragma once
 
-#include "erhe_dataformat/vertex_format.hpp"
-
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/instance.hpp"
 #include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_ui/font.hpp"
+//#include "erhe_ui/font.hpp"
 #include "erhe_ui/rectangle.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
 
 #include <cstdint>
-#include <deque>
 #include <memory>
-#include <optional>
-#include <string_view>
 
 namespace erhe::graphics {
     class Gl_context_provider;
@@ -47,6 +42,7 @@ public:
     Config config;
 
     explicit Text_renderer(erhe::graphics::Instance& graphics_instance);
+    ~Text_renderer();
 
     Text_renderer (const Text_renderer&) = delete;
     void operator=(const Text_renderer&) = delete;

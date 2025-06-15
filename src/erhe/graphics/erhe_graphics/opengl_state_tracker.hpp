@@ -8,11 +8,7 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/state/viewport_state.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/texture.hpp"
-#include "erhe_graphics/sampler.hpp"
 
-#include <memory>
-#include <stack>
 
 namespace erhe::graphics {
 
@@ -39,7 +35,7 @@ public:
     Rasterization_state_tracker  rasterization;
     Depth_stencil_state_tracker  depth_stencil;
     Color_blend_state_tracker    color_blend;
-    // RODO Dynamic state
+    // TODO Dynamic state
 };
 
 } // namespace erhe::graphics

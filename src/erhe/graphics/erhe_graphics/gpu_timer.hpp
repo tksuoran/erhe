@@ -6,16 +6,17 @@
 #include <array>
 #include <mutex>
 #include <optional>
-#include <string_view>
 #include <thread>
 #include <vector>
 
 namespace erhe::graphics {
 
+class Instance;
+
 class Gpu_timer
 {
 public:
-    explicit Gpu_timer(const char* label);
+    Gpu_timer(Instance& instance, const char* label);
     ~Gpu_timer() noexcept;
 
     Gpu_timer     (const Gpu_timer&) = delete;
@@ -52,6 +53,7 @@ private:
     static Gpu_timer*                                 s_active_timer;
     static std::size_t                                s_index;
 
+    Instance&                  m_instance;
     std::array<Query, s_count> m_queries;
     std::thread::id            m_owner_thread;
     uint64_t                   m_last_result{0};

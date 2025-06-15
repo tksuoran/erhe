@@ -38,6 +38,7 @@ public:
     void set_debug_label(std::string_view label);
 
 private:
+    Instance&           m_instance;
     Gl_renderbuffer     m_handle;
     std::string         m_debug_label;
     gl::Internal_format m_internal_format;

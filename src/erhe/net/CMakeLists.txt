@@ -22,15 +22,15 @@ erhe_target_sources_grouped(
 if (ERHE_TARGET_OS_WINDOWS)
     target_link_libraries(${_target} PUBLIC ws2_32.lib)
     erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}/erhe_net" FILES
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_net/net_windows.cpp
     )
 endif ()
 
-if (ERHE_TARGET_OS_LINUX)
+if (ERHE_TARGET_OS_LINUX OR ERHE_TARGET_OS_OSX)
     erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}/erhe_net" FILES
-        erhe_net/net_linux.cpp
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_net/net_unix.cpp
     )
 endif ()
 

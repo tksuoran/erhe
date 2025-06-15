@@ -15,10 +15,9 @@ Editor_settings::Editor_settings()
    read();
 }
 
-void Editor_settings::apply_limits(Editor_message_bus& editor_message_bus)
+void Editor_settings::apply_limits(erhe::graphics::Instance& instance, Editor_message_bus& editor_message_bus)
 {
-    graphics.get_limits();
-    read();
+    graphics.get_limits(instance, gl::Internal_format::depth_component32f); // TODO Do not hard code depth format
     graphics.select_active_graphics_preset(editor_message_bus);
 }
 
@@ -27,62 +26,30 @@ auto Editor_settings::get_ui_scale() const -> float
     return imgui.font_size / 16.0f;
 }
 
-void Graphics_settings::get_limits()
+void Graphics_settings::get_limits(const erhe::graphics::Instance& instance, gl::Internal_format format)
 {
-    int num_sample_counts{0};
-    gl::get_internalformat_iv(
-        gl::Texture_target::texture_2d_multisample,
-        gl::Internal_format::rgba16f,
-        gl::Internal_format_p_name::num_sample_counts,
-        1,
-        &num_sample_counts
-    );
-
-    if (num_sample_counts > 0) {
-        msaa_sample_count_entry_values   .resize(num_sample_counts);
-        msaa_sample_count_entry_s_strings.resize(num_sample_counts);
-        msaa_sample_count_entry_strings  .resize(num_sample_counts);
-        gl::get_internalformat_iv(
-            gl::Texture_target::texture_2d_multisample,
-            gl::Internal_format::rgba16f,
-            gl::Internal_format_p_name::samples,
-            num_sample_counts,
-            msaa_sample_count_entry_values.data()
-        );
-        std::sort(
-            msaa_sample_count_entry_values.begin(),
-            msaa_sample_count_entry_values.end()
-        );
-        for (std::size_t i = 0; i < num_sample_counts; ++i) {
-            msaa_sample_count_entry_strings  .at(i) = fmt::format("{}", msaa_sample_count_entry_values.at(i));
-            msaa_sample_count_entry_s_strings.at(i) = msaa_sample_count_entry_strings.at(i).c_str();
-        }
+    msaa_sample_count_entry_s_strings.clear();
+    msaa_sample_count_entry_strings.clear();
+    msaa_sample_count_entry_values.clear();
+    max_shadow_resolution = 4;
+    max_depth_layers = 1;
+    const erhe::graphics::Format_properties format_properties = instance.get_format_properties(format);
+    if (format_properties.supported == false) {
+        return;
     }
-
-    int max_depth_width{0};
-    gl::get_internalformat_iv(
-        gl::Texture_target::texture_2d_array,
-        gl::Internal_format::depth_component32f,
-        gl::Internal_format_p_name::max_width,
-        1,
-        &max_depth_width
+    const std::size_t num_sample_counts = format_properties.texture_2d_sample_counts.size();
+    msaa_sample_count_entry_s_strings.resize(num_sample_counts);
+    msaa_sample_count_entry_strings  .resize(num_sample_counts);
+    for (std::size_t i = 0; i < num_sample_counts; ++i) {
+        const int sample_count = format_properties.texture_2d_sample_counts.at(i);
+        msaa_sample_count_entry_strings  .at(i) = fmt::format("{}", sample_count);
+        msaa_sample_count_entry_s_strings.at(i) = msaa_sample_count_entry_strings.at(i).c_str();
+    }
+    max_shadow_resolution = std::min(
+        format_properties.texture_2d_array_max_width,
+        format_properties.texture_2d_array_max_height
     );
-    int max_depth_height{0};
-    gl::get_internalformat_iv(
-        gl::Texture_target::texture_2d_array,
-        gl::Internal_format::depth_component32f,
-        gl::Internal_format_p_name::max_height,
-        1,
-        &max_depth_height
-    );
-    gl::get_internalformat_iv(
-        gl::Texture_target::texture_2d_array,
-        gl::Internal_format::depth_component32f,
-        gl::Internal_format_p_name::max_layers,
-        1,
-        &max_depth_layers
-    );
-    max_shadow_resolution = std::min(max_depth_width, max_depth_height);
+    max_depth_layers = std::min(10, format_properties.texture_2d_array_max_layers);
 }
 
 void Graphics_settings::read_presets()
@@ -99,7 +66,6 @@ void Graphics_settings::read_presets()
             erhe::configuration::ini_get(section, "shadow_enable",      graphics_preset.shadow_enable     );
             erhe::configuration::ini_get(section, "shadow_resolution",  graphics_preset.shadow_resolution );
             erhe::configuration::ini_get(section, "shadow_light_count", graphics_preset.shadow_light_count);
-            apply_limits(graphics_preset);
             graphics_presets.push_back(graphics_preset);
         }
     }
@@ -130,6 +96,10 @@ void Graphics_settings::apply_limits(Graphics_preset& graphics_preset)
 
 void Graphics_settings::select_active_graphics_preset(Editor_message_bus& editor_message_bus)
 {
+    for (auto& graphics_preset : graphics_presets) {
+        apply_limits(graphics_preset);
+    }
+
     // Override configuration
     for (std::size_t i = 0, end = graphics_presets.size(); i < end; ++i) {
         const auto& graphics_preset = graphics_presets.at(i);

@@ -149,11 +149,10 @@ public:
     public:
         Shader_stages_builder(
             erhe::graphics::Reloadable_shader_stages& reloadable_shader_stages,
-            erhe::graphics::Instance&                 graphics_instance,
             erhe::scene_renderer::Program_interface&  program_interface,
             std::filesystem::path                     shader_path
         );
-        Shader_stages_builder(Shader_stages_builder&& other);
+        Shader_stages_builder(Shader_stages_builder&& other) noexcept;
         //Shader_stages_builder& operator=(Shader_stages_builder&& other);
 
         erhe::graphics::Reloadable_shader_stages& reloadable_shader_stages;

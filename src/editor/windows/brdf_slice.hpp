@@ -59,7 +59,6 @@ private:
 
     erhe::graphics::Vertex_input_state  m_empty_vertex_input;
     erhe::renderer::Pipeline_renderpass m_renderpass;
-    erhe::graphics::Vertex_input_state  m_vertex_input;
     int                                 m_area_size{0};
 };
 

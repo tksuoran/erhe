@@ -69,11 +69,11 @@ Editor_rendering::Editor_rendering(
     , m_capture_frame_command{commands, editor_context}
     , m_pipeline_renderpasses{graphics_instance, mesh_memory, programs}
     , m_composer             {"Main Composer"}
-    , m_content_timer        {"content"}
-    , m_selection_timer      {"selection"}
-    , m_gui_timer            {"gui"}
-    , m_brush_timer          {"brush"}
-    , m_tools_timer          {"tools"}
+    , m_content_timer        {graphics_instance, "content"}
+    , m_selection_timer      {graphics_instance, "selection"}
+    , m_gui_timer            {graphics_instance, "gui"}
+    , m_brush_timer          {graphics_instance, "brush"}
+    , m_tools_timer          {graphics_instance, "tools"}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -355,7 +355,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Instance& graphics_
 
 #define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
 
-    : m_empty_vertex_input{}
+    : m_empty_vertex_input{graphics_instance}
     , polygon_fill_standard_opaque{erhe::graphics::Pipeline{{
         .name           = "Polygon Fill Opaque",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,

@@ -119,6 +119,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
         erhe::graphics::Instance& graphics_instance = m_rendergraph.get_graphics_instance();
 
         m_color_texture = std::make_shared<Texture>(
+            graphics_instance,
             Texture::Create_info{
                 .instance        = graphics_instance,
                 .target          = gl::Texture_target::texture_2d,
@@ -168,7 +169,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
                     );
                 }
             }
-            m_framebuffer = std::make_unique<Framebuffer>(create_info);
+            m_framebuffer = std::make_unique<Framebuffer>(graphics_instance, create_info);
             m_framebuffer->set_debug_label(
                 fmt::format("{} Texture_rendergraph_node framebuffer", get_name())
             );
