@@ -4,6 +4,8 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_primitive/enums.hpp"
 
+#include <glm/glm.hpp>
+
 #include <array>
 #include <vector>
 
