@@ -15,7 +15,7 @@
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item_log.hpp"
 #include "erhe_log/log.hpp"
@@ -189,7 +189,7 @@ public:
 
         const bool reverse_depth = m_graphics_device.configuration.reverse_depth;
         erhe::renderer::Pipeline_renderpass standard_pipeline_renderpass{ 
-            erhe::graphics::Pipeline{
+            erhe::graphics::Render_pipeline_state{
                 erhe::graphics::Pipeline_data{
                     .name           = "Standard Renderpass",
                     .shader_stages  = &m_programs.standard,

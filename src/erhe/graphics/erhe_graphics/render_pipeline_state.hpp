@@ -28,26 +28,26 @@ public:
     Color_blend_state         color_blend   {};
 };
 
-class Pipeline final
+class Render_pipeline_state final
 {
 public:
-    Pipeline();
-    Pipeline(Pipeline_data&& create_info);
-    ~Pipeline() noexcept;
+    Render_pipeline_state();
+    Render_pipeline_state(Pipeline_data&& create_info);
+    ~Render_pipeline_state() noexcept;
 
-    Pipeline(const Pipeline& other);
-    auto operator=(const Pipeline& other) -> Pipeline&;
-    Pipeline(Pipeline&& old);
-    auto operator=(Pipeline&& old) -> Pipeline&;
+    Render_pipeline_state(const Render_pipeline_state& other);
+    auto operator=(const Render_pipeline_state& other) -> Render_pipeline_state&;
+    Render_pipeline_state(Render_pipeline_state&& old);
+    auto operator=(Render_pipeline_state&& old) -> Render_pipeline_state&;
 
     void reset();
 
     Pipeline_data data;
 
-    static auto get_pipelines() -> std::vector<Pipeline*>;
+    static auto get_pipelines() -> std::vector<Render_pipeline_state*>;
 
     static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
-    static std::vector<Pipeline*>                     s_pipelines;
+    static std::vector<Render_pipeline_state*>        s_pipelines;
 };
 
 } // namespace erhe::graphics

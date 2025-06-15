@@ -40,7 +40,7 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     , m_brdf_slice        {brdf_slice}
     , m_empty_vertex_input{rendergraph.get_graphics_instance(), erhe::graphics::Vertex_input_state_data{}}
     , m_renderpass{ 
-        erhe::graphics::Pipeline{
+        erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
                 .name           = "Brdf_slice",
                 .shader_stages  = &programs.brdf_slice.shader_stages,

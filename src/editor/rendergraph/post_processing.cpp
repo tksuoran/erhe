@@ -365,7 +365,7 @@ Post_processing::Post_processing(erhe::graphics::Device& graphics_device, Editor
         .upsample               {graphics_device, make_program(graphics_device, "upsample",           std::filesystem::path("upsample.frag"))}
     }
     , m_pipelines{
-        .downsample_with_lowpass = erhe::graphics::Pipeline{
+        .downsample_with_lowpass = erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
                 .name           = "Downsample with Lowpass",
                 .shader_stages  = &m_shader_stages.downsample.shader_stages,
@@ -376,7 +376,7 @@ Post_processing::Post_processing(erhe::graphics::Device& graphics_device, Editor
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
-        .downsample = erhe::graphics::Pipeline{
+        .downsample = erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
                 .name           = "Post Processing Downsample",
                 .shader_stages  = &m_shader_stages.downsample.shader_stages,
@@ -387,7 +387,7 @@ Post_processing::Post_processing(erhe::graphics::Device& graphics_device, Editor
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
-        .upsample = erhe::graphics::Pipeline{
+        .upsample = erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
                 .name           = "Post Processing Upsample",
                 .shader_stages  = &m_shader_stages.upsample.shader_stages,
@@ -463,9 +463,9 @@ void Post_processing::post_process(Post_processing_node& node)
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );
         if (source_level == node.lowpass_count) {
-            m_context.graphics_device->opengl_state_tracker.execute(m_pipelines.downsample);
+            m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.downsample);
         } else if (source_level == 0) {
-            m_context.graphics_device->opengl_state_tracker.execute(m_pipelines.downsample_with_lowpass);
+            m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.downsample_with_lowpass);
         }
         gl::draw_arrays(gl::Primitive_type::triangles, 0, 3);
     }
@@ -481,7 +481,7 @@ void Post_processing::post_process(Post_processing_node& node)
     );
 
     // Upsample passes
-    m_context.graphics_device->opengl_state_tracker.execute(m_pipelines.upsample);
+    m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.upsample);
     for (const size_t source_level : node.upsample_source_levels) {
         const size_t destination_level = source_level - 1;
         const auto&  framebuffer = destination_level == 0

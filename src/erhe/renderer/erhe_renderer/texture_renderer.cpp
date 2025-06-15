@@ -69,7 +69,7 @@ void Texture_renderer::render(
     );
 
     m_pipeline_state_tracker->execute(
-        erhe::graphics::Pipeline{
+        erhe::graphics::Render_pipeline_state{
             {
                 .name           = "Texture Renderer",
                 .shader_stages  = get<Programs>()->depth.get(),

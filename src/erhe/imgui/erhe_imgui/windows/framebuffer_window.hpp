@@ -4,7 +4,7 @@
 #include "erhe_imgui/imgui_window.hpp"
 
 #include "erhe_graphics/framebuffer.hpp"
-#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_math/viewport.hpp"
 

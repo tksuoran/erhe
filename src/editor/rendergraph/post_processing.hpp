@@ -4,7 +4,7 @@
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
-#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
@@ -131,9 +131,9 @@ private:
         erhe::graphics::Reloadable_shader_stages upsample;
     };
     struct Pipelines {
-        erhe::graphics::Pipeline downsample_with_lowpass;
-        erhe::graphics::Pipeline downsample;
-        erhe::graphics::Pipeline upsample;
+        erhe::graphics::Render_pipeline_state downsample_with_lowpass;
+        erhe::graphics::Render_pipeline_state downsample;
+        erhe::graphics::Render_pipeline_state upsample;
     };
 
     static constexpr size_t s_max_level_count = 20;

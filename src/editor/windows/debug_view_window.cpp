@@ -48,7 +48,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     , m_mesh_memory       {mesh_memory}
     , m_empty_vertex_input{rendergraph.get_graphics_instance()}
     , m_renderpass{ 
-        erhe::graphics::Pipeline{
+        erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
                 .name           = "Debug_view",
                 .shader_stages  = &programs.debug_depth.shader_stages,

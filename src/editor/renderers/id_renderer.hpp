@@ -6,7 +6,7 @@
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
-#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
@@ -127,8 +127,8 @@ private:
     erhe::renderer::Draw_indirect_buffer          m_draw_indirect_buffers;
     erhe::scene_renderer::Primitive_buffer        m_primitive_buffers;
 
-    erhe::graphics::Pipeline                      m_pipeline;
-    erhe::graphics::Pipeline                      m_selective_depth_clear_pipeline;
+    erhe::graphics::Render_pipeline_state         m_pipeline;
+    erhe::graphics::Render_pipeline_state         m_selective_depth_clear_pipeline;
     std::unique_ptr<erhe::graphics::Renderbuffer> m_color_renderbuffer;
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
     std::unique_ptr<erhe::graphics::Texture>      m_color_texture;

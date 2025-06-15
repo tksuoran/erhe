@@ -8,7 +8,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 
 #include <imgui/imgui.h>
 
@@ -154,7 +154,7 @@ private:
     erhe::graphics::GPU_ring_buffer_client   m_draw_parameter_buffer;
     erhe::graphics::GPU_ring_buffer_client   m_draw_indirect_buffer;
     erhe::graphics::Vertex_input_state       m_vertex_input;
-    erhe::graphics::Pipeline                 m_pipeline;
+    erhe::graphics::Render_pipeline_state    m_pipeline;
 
     ImFontAtlas                              m_font_atlas;
     ImFont*                                  m_primary_font   {nullptr};

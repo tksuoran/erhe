@@ -22,13 +22,13 @@ bool operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& r
         (lhs.reverse_depth     == rhs.reverse_depth    );
 }
 
-auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible) -> erhe::graphics::Pipeline
+auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible) -> erhe::graphics::Render_pipeline_state
 {
     erhe::graphics::Shader_stages* const graphics_shader_stages = m_debug_renderer.get_program_interface().graphics_shader_stages.get();
 
     const gl::Depth_function depth_compare_op0 = visible ? gl::Depth_function::less : gl::Depth_function::gequal;
     const gl::Depth_function depth_compare_op  = m_config.reverse_depth ? erhe::graphics::reverse(depth_compare_op0) : depth_compare_op0;
-    return erhe::graphics::Pipeline{
+    return erhe::graphics::Render_pipeline_state{
         erhe::graphics::Pipeline_data{
             .name           = "Line Renderer",
             .shader_stages  = graphics_shader_stages,
@@ -204,7 +204,7 @@ void Debug_renderer_bucket::release_buffers()
 void Debug_renderer_bucket::render(bool draw_hidden, bool draw_visible)
 {
     if (draw_hidden && m_config.draw_hidden) {
-        m_graphics_device.opengl_state_tracker.execute(m_pipeline_hidden);
+        m_graphics_device.opengl_state_tracker.execute_(m_pipeline_hidden);
         for (const Debug_draw_entry& draw : m_draws) {
             erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
             size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
@@ -223,7 +223,7 @@ void Debug_renderer_bucket::render(bool draw_hidden, bool draw_visible)
     }
 
     if (draw_visible && m_config.draw_visible) {
-        m_graphics_device.opengl_state_tracker.execute(m_pipeline_visible);
+        m_graphics_device.opengl_state_tracker.execute_(m_pipeline_visible);
         for (const Debug_draw_entry& draw : m_draws) {
             erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
             size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();

@@ -132,8 +132,8 @@ void Cube_renderer::render(const Render_parameters& parameters)
     );
     m_cube_control_buffer.bind(cube_control_range);
 
-    const erhe::graphics::Pipeline& pipeline = parameters.pipeline;
-    m_graphics_device.opengl_state_tracker.execute(pipeline, false);
+    const erhe::graphics::Render_pipeline_state& pipeline = parameters.pipeline;
+    m_graphics_device.opengl_state_tracker.execute_(pipeline, false);
     const std::size_t cube_count   = parameters.cube_instance_buffer.bind();
     const GLsizei     vertex_count = static_cast<GLsizei>(cube_count * 6 * 6);
     gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, vertex_count);

@@ -13,7 +13,7 @@
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
-#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_profile/profile.hpp"
@@ -993,7 +993,7 @@ void Imgui_renderer::render_draw_data()
 
         // This binds vertex input states (VAO) and shader stages (shader program)
         // and most other state
-        m_graphics_device.opengl_state_tracker.execute(m_pipeline);
+        m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
 
         erhe::graphics::Buffer* index_buffer  = index_buffer_range.get_buffer()->get_buffer();
         erhe::graphics::Buffer* vertex_buffer = vertex_buffer_range.get_buffer()->get_buffer();

@@ -31,8 +31,8 @@ erhe_target_sources_grouped(
     erhe_graphics/device.hpp
     erhe_graphics/opengl_state_tracker.cpp
     erhe_graphics/opengl_state_tracker.hpp
-    erhe_graphics/pipeline.cpp
-    erhe_graphics/pipeline.hpp
+    erhe_graphics/render_pipeline_state.cpp
+    erhe_graphics/render_pipeline_state.hpp
     erhe_graphics/image_loader_wuffs.cpp
     erhe_graphics/image_loader_wuffs.hpp
     erhe_graphics/image_loader.hpp

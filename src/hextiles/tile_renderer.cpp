@@ -730,7 +730,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
 
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_graphics_device.opengl_state_tracker.execute(m_pipeline);
+    m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
     m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
     m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_range.get_byte_start_offset_in_buffer());
 

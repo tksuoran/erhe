@@ -384,7 +384,7 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     m_primitive_buffers.reset_id_ranges();
 
-    m_graphics_device.opengl_state_tracker.execute(m_pipeline);
+    m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
     m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
     m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
 
@@ -396,7 +396,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     // Clear depth for tool pixels
     {
         //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
-        m_graphics_device.opengl_state_tracker.execute(m_selective_depth_clear_pipeline);
+        m_graphics_device.opengl_state_tracker.execute_(m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
         for (auto mesh_spans : tool_mesh_spans) {
             render(mesh_spans);
@@ -407,7 +407,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     {
         //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
 
-        m_graphics_device.opengl_state_tracker.execute(m_pipeline);
+        m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
         m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
         m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
 

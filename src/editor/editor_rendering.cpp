@@ -356,7 +356,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
 #define REVERSE_DEPTH graphics_device.configuration.reverse_depth
 
     : m_empty_vertex_input{graphics_device}
-    , polygon_fill_standard_opaque{erhe::graphics::Pipeline{{
+    , polygon_fill_standard_opaque{erhe::graphics::Render_pipeline_state{{
         .name           = "Polygon Fill Opaque",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -365,7 +365,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
-    , polygon_fill_standard_opaque_selected{erhe::graphics::Pipeline{{
+    , polygon_fill_standard_opaque_selected{erhe::graphics::Render_pipeline_state{{
         .name           = "Polygon Fill Opaque Selected",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -397,7 +397,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         },
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
-    , polygon_fill_standard_translucent{erhe::graphics::Pipeline{{
+    , polygon_fill_standard_translucent{erhe::graphics::Render_pipeline_state{{
         .name           = "Polygon Fill Translucent",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -406,7 +406,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
-    , line_hidden_blend{erhe::graphics::Pipeline{{
+    , line_hidden_blend{erhe::graphics::Render_pipeline_state{{
         .name                       = "Hidden lines with blending",
         .shader_stages              = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input               = &mesh_memory.vertex_input,
@@ -451,7 +451,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
             .constant = { 0.0f, 0.0f, 0.0f, 0.2f }
         }
     }}}
-    , brush_back{erhe::graphics::Pipeline{{
+    , brush_back{erhe::graphics::Render_pipeline_state{{
         .name           = "Brush back faces",
         .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -460,7 +460,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
-    , brush_front{erhe::graphics::Pipeline{{
+    , brush_front{erhe::graphics::Render_pipeline_state{{
         .name           = "Brush front faces",
         .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -469,7 +469,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
-    , edge_lines{erhe::graphics::Pipeline{{
+    , edge_lines{erhe::graphics::Render_pipeline_state{{
         .name           = "Edge Lines",
         .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -501,7 +501,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         },
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
-    , selection_outline{erhe::graphics::Pipeline{{
+    , selection_outline{erhe::graphics::Render_pipeline_state{{
         .name           = "Selection Outline",
         .shader_stages  = &programs.fat_triangle.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -533,7 +533,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         },
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
-    , corner_points{erhe::graphics::Pipeline{{
+    , corner_points{erhe::graphics::Render_pipeline_state{{
         .name           = "Corner Points",
         .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -542,7 +542,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
-    , polygon_centroids{erhe::graphics::Pipeline{{
+    , polygon_centroids{erhe::graphics::Render_pipeline_state{{
         .name           = "Polygon Centroids",
         .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -551,7 +551,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
-    , rendertarget_meshes{erhe::graphics::Pipeline{{
+    , rendertarget_meshes{erhe::graphics::Render_pipeline_state{{
         .name           = "Rendertarget Meshes",
         .shader_stages  = &programs.textured.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
@@ -563,7 +563,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , sky{
-        erhe::graphics::Pipeline{
+        erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
                 .name           = "Sky",
                 .shader_stages  = &programs.sky.shader_stages,
@@ -601,7 +601,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         [](){ gl::depth_range(0.0f, 1.0f); }
     }
     , grid{
-        erhe::graphics::Pipeline{
+        erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
                 .name           = "Grid",
                 .shader_stages  = &programs.grid.shader_stages,

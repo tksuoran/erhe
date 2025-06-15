@@ -4,7 +4,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/framebuffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
-#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_profile/profile.hpp"
 
 namespace erhe::graphics {
@@ -44,7 +44,7 @@ void OpenGL_state_tracker::reset()
     // dynamic
 }
 
-void OpenGL_state_tracker::execute(const Pipeline& pipeline, const bool skip_shader_stages)
+void OpenGL_state_tracker::execute_(const Render_pipeline_state& pipeline, const bool skip_shader_stages)
 {
     ERHE_PROFILE_FUNCTION();
 

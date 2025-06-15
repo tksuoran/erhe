@@ -8,7 +8,7 @@ namespace erhe::graphics {
     class Blend_state_component;
     class Color_blend_state;
     class Depth_stencil_state;
-    class Pipeline;
+    class Render_pipeline_state;
     class Rasterization_state;
     class Stencil_op_state;
 }
@@ -25,13 +25,13 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
-    static void rasterization(erhe::graphics::Rasterization_state& rasterization);
-    static void stencil_op(const char* label, erhe::graphics::Stencil_op_state& stencil_op);
-    static void depth_stencil(erhe::graphics::Depth_stencil_state& depth_stencil);
+    static void rasterization        (erhe::graphics::Rasterization_state& rasterization);
+    static void stencil_op           (const char* label, erhe::graphics::Stencil_op_state& stencil_op);
+    static void depth_stencil        (erhe::graphics::Depth_stencil_state& depth_stencil);
     static void blend_state_component(const char* label, erhe::graphics::Blend_state_component& component);
-    static void color_blend(erhe::graphics::Color_blend_state& color_blend);
+    static void color_blend          (erhe::graphics::Color_blend_state& color_blend);
 };
 
-void pipeline_imgui(erhe::graphics::Pipeline& pipeline);
+void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline);
 
 } // namespace erhe::imgui

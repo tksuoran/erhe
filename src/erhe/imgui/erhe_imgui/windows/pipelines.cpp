@@ -12,7 +12,7 @@
 #include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <fmt/format.h>
@@ -389,7 +389,7 @@ void Pipelines::imgui()
     ERHE_PROFILE_FUNCTION();
 
     //const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
-    auto pipelines = erhe::graphics::Pipeline::get_pipelines();
+    auto pipelines = erhe::graphics::Render_pipeline_state::get_pipelines();
     for (size_t i = 0, end = pipelines.size(); i < end; ++i) {
         auto* pipeline = pipelines[i];
         if (
@@ -403,7 +403,7 @@ void Pipelines::imgui()
 #endif
 }
 
-void pipeline_imgui(erhe::graphics::Pipeline& pipeline)
+void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
 {
     const char* name = (pipeline.data.name != nullptr) ? pipeline.data.name : "";
     if (ImGui::TreeNodeEx(name, ImGuiTreeNodeFlags_Framed)) {

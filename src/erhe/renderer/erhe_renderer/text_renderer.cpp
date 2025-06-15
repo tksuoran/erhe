@@ -236,7 +236,7 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     }
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_graphics_device.opengl_state_tracker.execute(m_pipeline);
+    m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
     if (m_graphics_device.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
     } else {

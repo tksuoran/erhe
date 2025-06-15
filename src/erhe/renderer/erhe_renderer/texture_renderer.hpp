@@ -2,7 +2,7 @@
 
 #include "erhe_renderer/base_renderer.hpp"
 
-#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_scene/viewport.hpp"
 
 namespace erhe::graphics
@@ -32,8 +32,8 @@ public:
     );
 
 private:
-    erhe::graphics::Pipeline           m_pipeline;
-    erhe::graphics::Vertex_input_state m_vertex_input;
+    erhe::graphics::Render_pipeline_state m_pipeline;
+    erhe::graphics::Vertex_input_state    m_vertex_input;
 };
 
 } // namespace erhe::renderer

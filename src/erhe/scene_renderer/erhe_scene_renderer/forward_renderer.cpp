@@ -202,7 +202,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         if (use_override_shader_stages) {
             m_graphics_device.opengl_state_tracker.shader_stages.execute(used_shader_stages);
         }
-        m_graphics_device.opengl_state_tracker.execute(pipeline, use_override_shader_stages);
+        m_graphics_device.opengl_state_tracker.execute_(pipeline, use_override_shader_stages);
         m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
         m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer0, 0);
         m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(1, parameters.vertex_buffer1, 0);
@@ -344,7 +344,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
 
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
-        m_graphics_device.opengl_state_tracker.execute(pipeline);
+        m_graphics_device.opengl_state_tracker.execute_(pipeline);
         gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, static_cast<GLsizei>(parameters.non_mesh_vertex_count));
 
         if (pass->end) {

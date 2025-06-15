@@ -84,7 +84,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
     m_pipeline_cache_entries.resize(8);
 }
 
-auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state) -> erhe::graphics::Pipeline&
+auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state) -> erhe::graphics::Render_pipeline_state&
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -104,7 +104,7 @@ auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state)
     ERHE_VERIFY(lru_entry != nullptr);
     const bool reverse_depth = m_graphics_device.configuration.reverse_depth;
     lru_entry->serial = m_pipeline_cache_serial;
-    lru_entry->pipeline = erhe::graphics::Pipeline{
+    lru_entry->pipeline = erhe::graphics::Render_pipeline_state{
         erhe::graphics::Pipeline_data{
             .name           = "Shadow Renderer",
             .shader_stages  = &m_shader_stages.shader_stages,
@@ -164,7 +164,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     auto& pipeline = get_pipeline(parameters.vertex_input_state);
 
     // TODO Multiple vertex buffer bindings
-    m_graphics_device.opengl_state_tracker.execute(pipeline);
+    m_graphics_device.opengl_state_tracker.execute_(pipeline);
     m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
     m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
 

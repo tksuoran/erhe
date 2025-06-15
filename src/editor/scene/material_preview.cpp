@@ -46,7 +46,7 @@ Material_preview::Material_preview(
 )
 #define REVERSE_DEPTH graphics_device.configuration.reverse_depth
     : Scene_view{editor_context, Viewport_config{}}
-    , m_pipeline_renderpass{erhe::graphics::Pipeline{{
+    , m_pipeline_renderpass{erhe::graphics::Render_pipeline_state{{
         .name           = "Polygon Fill Opaque",
         .shader_stages  = &programs.standard.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
