@@ -93,7 +93,6 @@ auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem
     };
 
     auto texture = std::make_shared<erhe::graphics::Texture>(graphics_device, texture_create_info);
-    texture->set_debug_label(path.string());
     texture->upload(
         texture_create_info.pixelformat,
         image.data,

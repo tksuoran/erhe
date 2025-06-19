@@ -72,10 +72,9 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
             .sample_count = 0,
             .width        = width,
             .height       = height,
-            .debug_label  = "Rendertarget"
+            .debug_label  = "Rendertarget_mesh::m_texture"
         }
     );
-    m_texture->set_debug_label("Rendertarget Node");
     const float clear_value[4] = { 0.0f, 0.0f, 0.0f, 0.85f };
     gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
 

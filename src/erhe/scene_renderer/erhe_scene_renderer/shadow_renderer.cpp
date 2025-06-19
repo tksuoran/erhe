@@ -148,8 +148,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     log_shadow_renderer->trace(
         "Making light projections using texture '{}' sampler '{}' / '{}' handle '{}' / '{}'",
         parameters.texture->get_debug_label(),
-        m_shadow_sampler_compare.debug_label(),
-        m_shadow_sampler_no_compare.debug_label(),
+        m_shadow_sampler_compare.get_debug_label(),
+        m_shadow_sampler_no_compare.get_debug_label(),
         erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle_compare),
         erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle_no_compare)
     );

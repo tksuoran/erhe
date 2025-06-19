@@ -141,6 +141,10 @@ auto Post_processing_node::update_size() -> bool
             render_pass_descriptor.render_target_width                = downsample_texture->get_width(level);
             render_pass_descriptor.render_target_height               = downsample_texture->get_height(level);
             render_pass_descriptor.debug_label                        = fmt::format("{} downsample level {}", get_name(), level);
+
+            ERHE_VERIFY(render_pass_descriptor.render_target_width  == level_width);
+            ERHE_VERIFY(render_pass_descriptor.render_target_height == level_height);
+
             std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
             downsample_render_passes.push_back(std::move(render_pass));
 
@@ -162,6 +166,10 @@ auto Post_processing_node::update_size() -> bool
             render_pass_descriptor.render_target_width                = downsample_texture->get_width(level);
             render_pass_descriptor.render_target_height               = downsample_texture->get_height(level);
             render_pass_descriptor.debug_label                        = fmt::format("{} upsample level {}", get_name(), level);
+
+            ERHE_VERIFY(render_pass_descriptor.render_target_width == level_width);
+            ERHE_VERIFY(render_pass_descriptor.render_target_height == level_height);
+
             std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
             upsample_render_passes.push_back(std::move(render_pass));
 
@@ -509,8 +517,10 @@ void Post_processing::post_process(Post_processing_node& node)
 
         std::unique_ptr<erhe::graphics::Render_command_encoder> encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
 
-        ERHE_VERIFY(render_pass->get_render_target_width() == node.level_widths.at(destination_level));
-        ERHE_VERIFY(render_pass->get_render_target_height() == node.level_heights.at(destination_level));
+        const int render_pass_width  = render_pass->get_render_target_width();
+        const int render_pass_height = render_pass->get_render_target_height();
+        ERHE_VERIFY(render_pass_width  == node.level_widths .at(destination_level));
+        ERHE_VERIFY(render_pass_height == node.level_heights.at(destination_level));
         // gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
         gl::bind_buffer_range(
             node.parameter_buffer.target(),

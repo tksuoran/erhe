@@ -34,7 +34,7 @@ public:
     int                      width                 {1};
     int                      height                {1};
     int                      depth                 {1};
-    int                      array_layer_count     {1};
+    int                      array_layer_count     {0};
     int                      level_count           {0};
     int                      row_stride            {0};
     Buffer*                  buffer                {nullptr};
@@ -70,7 +70,7 @@ public:
     static [[nodiscard]] auto get_mipmap_dimensions (gl::Texture_target target) -> int;
     static [[nodiscard]] auto get_size_level_count  (int size) -> int;
 
-    void upload(erhe::dataformat::Format internal_format, int width, int height = 1, int depth = 1, int array_layer_count = 1);
+    void upload(erhe::dataformat::Format internal_format, int width, int height = 1, int depth = 1, int array_layer_count = 0);
 
     void upload(
         const erhe::dataformat::Format      format,
@@ -78,7 +78,7 @@ public:
         int                                 width,
         int                                 height = 1,
         int                                 depth = 1,
-        int                                 array_layer = 1,
+        int                                 array_layer = 0,
         int                                 level = 0,
         int                                 x = 0,
         int                                 y = 0,
@@ -97,8 +97,6 @@ public:
         int                                 y,
         int                                 z = 0
     );
-
-    void set_debug_label(std::string_view value);
 
     [[nodiscard]] auto get_debug_label           () const -> const std::string&;
     [[nodiscard]] auto get_pixelformat           () const -> erhe::dataformat::Format;
@@ -120,7 +118,6 @@ public:
 
 private:
     Gl_texture               m_handle;
-    std::string              m_debug_label;
     gl::Texture_target       m_target                {gl::Texture_target::texture_2d};
     erhe::dataformat::Format m_pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
     bool                     m_fixed_sample_locations{true};
@@ -132,6 +129,7 @@ private:
     int                      m_array_layer_count     {0};
     int                      m_level_count           {0};
     Buffer*                  m_buffer                {nullptr};
+    std::string              m_debug_label;
 };
 
 [[nodiscard]] auto get_texture_from_handle(uint64_t handle) -> GLuint;
@@ -152,7 +150,8 @@ public:
 [[nodiscard]] auto operator!=(const Texture& lhs, const Texture& rhs) noexcept -> bool;
 
 void convert_texture_dimensions_from_gl(const gl::Texture_target target, int& width, int& height, int& depth, int& array_layer_count);
-void convert_texture_dimensions_to_gl  (const gl::Texture_target target, int& width, int& height, int& depth, int array_count);
+void convert_texture_dimensions_to_gl  (const gl::Texture_target target, int& width, int& height, int& depth, int array_layer_count);
+void convert_texture_offset_to_gl      (const gl::Texture_target target, int& x, int& y, int& z, int array_layer);
 
 
 [[nodiscard]] auto component_count(gl::Pixel_format pixel_format) -> size_t;

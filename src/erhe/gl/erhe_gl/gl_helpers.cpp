@@ -891,18 +891,22 @@ auto has_stencil(const gl::Internal_format format) -> bool
 [[nodiscard]] auto convert_to_gl(erhe::dataformat::Format format) -> std::optional<gl::Internal_format>
 {
     switch (format) {
+        case erhe::dataformat::Format::format_8_scalar_srgb:            return {};
         case erhe::dataformat::Format::format_8_scalar_unorm:           return gl::Internal_format::r8;
         case erhe::dataformat::Format::format_8_scalar_snorm:           return gl::Internal_format::r8_snorm;
         case erhe::dataformat::Format::format_8_scalar_uint:            return gl::Internal_format::r8ui;
         case erhe::dataformat::Format::format_8_scalar_sint:            return gl::Internal_format::r8i;
+        case erhe::dataformat::Format::format_8_vec2_srgb:              return {};
         case erhe::dataformat::Format::format_8_vec2_unorm:             return gl::Internal_format::rg8;
         case erhe::dataformat::Format::format_8_vec2_snorm:             return gl::Internal_format::rg8_snorm;
         case erhe::dataformat::Format::format_8_vec2_uint:              return gl::Internal_format::rg8ui;
         case erhe::dataformat::Format::format_8_vec2_sint:              return gl::Internal_format::rg8i;
+        case erhe::dataformat::Format::format_8_vec3_srgb:              return gl::Internal_format::srgb8;
         case erhe::dataformat::Format::format_8_vec3_unorm:             return gl::Internal_format::rgb8;
         case erhe::dataformat::Format::format_8_vec3_snorm:             return gl::Internal_format::rgb8_snorm;
         case erhe::dataformat::Format::format_8_vec3_uint:              return gl::Internal_format::rgb8ui;
         case erhe::dataformat::Format::format_8_vec3_sint:              return gl::Internal_format::rgb8i;
+        case erhe::dataformat::Format::format_8_vec4_srgb:              return gl::Internal_format::srgb8_alpha8;
         case erhe::dataformat::Format::format_8_vec4_unorm:             return gl::Internal_format::rgba8;
         case erhe::dataformat::Format::format_8_vec4_snorm:             return gl::Internal_format::rgba8_snorm;
         case erhe::dataformat::Format::format_8_vec4_uint:              return gl::Internal_format::rgba8ui;

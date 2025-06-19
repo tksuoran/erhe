@@ -319,11 +319,10 @@ void Tile_renderer::compose_tileset_texture()
         .height      = ty_offset * Tile_shape::height,
         .depth       = 1,
         .level_count = 1,
-        .debug_label = "tiles"
+        .debug_label = fmt::format("Tile_renderer::m_tileset_texture {}", texture_path.string())
     };
 
     m_tileset_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
-    m_tileset_texture->set_debug_label(texture_path.string());
     float clear_rgba[4] = { 1.0f, 0.0f, 1.0f, 1.0f};
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
         gl::clear_tex_image(m_tileset_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_rgba);

@@ -985,6 +985,8 @@ private:
             return {};
         }
 
+        ERHE_VERIFY(!image_name.empty());
+
         auto& slot = m_arguments.image_transfer.get_slot();
 
         erhe::graphics::Texture_create_info texture_create_info{
@@ -1014,7 +1016,6 @@ private:
 
         auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
         texture->set_source_path(path);
-        texture->set_debug_label(image_name.empty() ? erhe::file::to_string(path) : image_name);
 
         gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
@@ -1106,7 +1107,6 @@ private:
 
         auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
         texture->set_source_path(m_arguments.path);
-        texture->set_debug_label(name);
         gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
         texture->upload(texture_create_info.pixelformat, texture_create_info.width, texture_create_info.height);
@@ -1143,7 +1143,6 @@ private:
         );
 
         if (erhe_texture) {
-            erhe_texture->set_debug_label(image_name);
             m_data_out.images.push_back(erhe_texture);
         }
         m_data_out.images[image_index] = erhe_texture;

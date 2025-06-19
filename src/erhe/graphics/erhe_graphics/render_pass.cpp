@@ -122,11 +122,7 @@ void dump_fbo(int fbo_name)
 }
 
 Render_pass_attachment_descriptor::Render_pass_attachment_descriptor()
-    : texture_level{0}
-    , texture_layer{0}
-    , texture      {texture}
-    , renderbuffer {nullptr}
-    , clear_value  {0.0, 0.0, 0.0, 0.0}
+    : clear_value{0.0, 0.0, 0.0, 0.0}
 {
 }
 
@@ -152,6 +148,14 @@ auto Render_pass_attachment_descriptor::get_pixelformat() const -> erhe::datafor
         return renderbuffer->get_pixelformat();
     }
     return {};
+}
+
+Render_pass_descriptor::Render_pass_descriptor()
+{
+}
+
+Render_pass_descriptor::~Render_pass_descriptor()
+{
 }
 
 // TODO move to graphics::Device?
@@ -249,8 +253,11 @@ void Render_pass::create()
     }
 
     m_owner_thread = std::this_thread::get_id();
-    m_gl_framebuffer                    .emplace(Gl_framebuffer{m_device});
-    m_gl_multisample_resolve_framebuffer.emplace(Gl_framebuffer{m_device});
+    m_gl_framebuffer.emplace(Gl_framebuffer{m_device});
+
+    if (m_uses_multisample_resolve) {
+        m_gl_multisample_resolve_framebuffer.emplace(Gl_framebuffer{m_device});
+    }
 
     auto process_attachment = [this](gl::Framebuffer_attachment attachment_point, Render_pass_attachment_descriptor& attachment) -> bool {
         if (attachment.texture != nullptr) {
@@ -308,42 +315,51 @@ void Render_pass::create()
                 );
             }
         }
-        ERHE_VERIFY(attachment.renderbuffer == nullptr);
     };
 
     unsigned int color_index = 0;
+    m_draw_buffers.clear();
     for (auto& attachment : m_color_attachments) {
         const gl::Framebuffer_attachment attachment_point = static_cast<gl::Framebuffer_attachment>(static_cast<unsigned int>(gl::Framebuffer_attachment::color_attachment0) + color_index);
         bool has_attachment = process_attachment(attachment_point, attachment);
-        process_multisample_resolve_attachment(attachment_point, attachment);
         if (has_attachment) {
             const gl::Color_buffer color_buffer = static_cast<gl::Color_buffer>(static_cast<unsigned int>(gl::Color_buffer::color_attachment0) + color_index);
             m_draw_buffers.push_back(color_buffer);
         }
         ++color_index;
     }
-    process_attachment                    (gl::Framebuffer_attachment::depth_attachment, m_depth_attachment);
-    process_multisample_resolve_attachment(gl::Framebuffer_attachment::depth_attachment, m_depth_attachment);
-    process_attachment                    (gl::Framebuffer_attachment::stencil_attachment, m_stencil_attachment);
-    process_multisample_resolve_attachment(gl::Framebuffer_attachment::stencil_attachment, m_stencil_attachment);
-
-    gl::named_framebuffer_draw_buffers(gl_name(), 1, m_draw_buffers.data());
-    gl::named_framebuffer_read_buffer(gl_name(), gl::Color_buffer::color_attachment0);
+    process_attachment(gl::Framebuffer_attachment::depth_attachment,   m_depth_attachment);
+    process_attachment(gl::Framebuffer_attachment::stencil_attachment, m_stencil_attachment);
+    
+    if (!m_draw_buffers.empty()) {
+        gl::named_framebuffer_draw_buffers(gl_name(), static_cast<GLsizei>(m_draw_buffers.size()), m_draw_buffers.data());
+        gl::named_framebuffer_read_buffer(gl_name(), m_draw_buffers.front());
+    }
 
     std::string debug_label = fmt::format("(F:{}) {}", gl_name(), m_debug_label);
-    const std::string multisample_resolve_debug_label = fmt::format("(F:{}) {} Multisample Resolve", gl_name(), m_debug_label);
     gl::object_label(
         gl::Object_identifier::framebuffer,
         gl_name(),
         static_cast<GLsizei>(m_debug_label.length()),
         debug_label.c_str()
     );
-    gl::object_label(
-        gl::Object_identifier::framebuffer,
-        gl_multisample_resolve_name(),
-        static_cast<GLsizei>(multisample_resolve_debug_label.length()),
-        multisample_resolve_debug_label.c_str()
-    );
+
+    if (m_uses_multisample_resolve) {
+        for (auto& attachment : m_color_attachments) {
+            const gl::Framebuffer_attachment attachment_point = static_cast<gl::Framebuffer_attachment>(static_cast<unsigned int>(gl::Framebuffer_attachment::color_attachment0) + color_index);
+            process_multisample_resolve_attachment(attachment_point, attachment);
+        }
+        process_multisample_resolve_attachment(gl::Framebuffer_attachment::depth_attachment,   m_depth_attachment);
+        process_multisample_resolve_attachment(gl::Framebuffer_attachment::stencil_attachment, m_stencil_attachment);
+
+        const std::string multisample_resolve_debug_label = fmt::format("(F:{}) {} Multisample Resolve", gl_name(), m_debug_label);
+        gl::object_label(
+            gl::Object_identifier::framebuffer,
+            gl_multisample_resolve_name(),
+            static_cast<GLsizei>(multisample_resolve_debug_label.length()),
+            multisample_resolve_debug_label.c_str()
+        );
+    }
 
     ERHE_VERIFY(check_status());
 }
@@ -372,7 +388,7 @@ auto Render_pass::check_status() const -> bool
 #if !defined(NDEBUG)
     gl::Framebuffer_status status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
     if (status != gl::Framebuffer_status::framebuffer_complete) {
-        log_render_pass->warn("Render_pass FBO {} not complete: {}", gl_name(), gl::c_str(status));
+        log_render_pass->warn("Render_pass {} FBO {} not complete: {}", get_debug_label(), gl_name(), gl::c_str(status));
         dump_fbo(gl_name());
         return false;
     }
@@ -380,14 +396,16 @@ auto Render_pass::check_status() const -> bool
         return false;
     }
 
-    status = gl::check_named_framebuffer_status(gl_multisample_resolve_name(), gl::Framebuffer_target::draw_framebuffer);
-    if (status != gl::Framebuffer_status::framebuffer_complete) {
-        log_render_pass->warn("Render_pass FBO {} not complete: {}", gl_multisample_resolve_name(), gl::c_str(status));
-        dump_fbo(gl_name());
-        return false;
-    }
-    if (status != gl::Framebuffer_status::framebuffer_complete) {
-        return false;
+    if (m_uses_multisample_resolve) {
+        status = gl::check_named_framebuffer_status(gl_multisample_resolve_name(), gl::Framebuffer_target::draw_framebuffer);
+        if (status != gl::Framebuffer_status::framebuffer_complete) {
+            log_render_pass->warn("Render_pass {} multisample resolve FBO {} not complete: {}", get_debug_label(), gl_multisample_resolve_name(), gl::c_str(status));
+            dump_fbo(gl_multisample_resolve_name());
+            return false;
+        }
+        if (status != gl::Framebuffer_status::framebuffer_complete) {
+            return false;
+        }
     }
 #endif
     return true;

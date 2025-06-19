@@ -53,10 +53,13 @@ public:
 class Render_pass_descriptor
 {
 public:
-    std::array<Render_pass_attachment_descriptor, 4> color_attachments{};
-    Render_pass_attachment_descriptor                depth_attachment{};
-    Render_pass_attachment_descriptor                stencil_attachment{};
-    int                                              render_target_width{0};
+    Render_pass_descriptor();
+    ~Render_pass_descriptor();
+
+    std::array<Render_pass_attachment_descriptor, 4> color_attachments   {};
+    Render_pass_attachment_descriptor                depth_attachment    {};
+    Render_pass_attachment_descriptor                stencil_attachment  {};
+    int                                              render_target_width {0};
     int                                              render_target_height{0};
     std::string                                      debug_label;
 };
@@ -79,10 +82,10 @@ public:
     [[nodiscard]] auto gl_multisample_resolve_name() const -> unsigned int;
     [[nodiscard]] auto get_sample_count           () const -> unsigned int;
 
-    void create         ();
-    void reset          ();
-    auto check_status   () const -> bool;
-    //void set_debug_label(const std::string& label);
+    void create      ();
+    void reset       ();
+    auto check_status() const -> bool;
+
     [[nodiscard]] auto get_render_target_width() const -> int;
     [[nodiscard]] auto get_render_target_height() const -> int;
     [[nodiscard]] auto get_debug_label() const -> const std::string&;

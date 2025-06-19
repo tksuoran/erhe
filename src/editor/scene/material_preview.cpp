@@ -116,22 +116,17 @@ void Material_preview::update_rendertarget(erhe::graphics::Device& graphics_devi
             .pixelformat = m_color_format,
             .width       = m_width,
             .height      = m_height,
-            .debug_label = "Material preview"
+            .debug_label = "Material preview Color Texture"
         }
     );
-    m_color_texture->set_debug_label("Material Preview Color Texture");
     const float clear_value[4] = { 1.0f, 0.0f, 0.5f, 0.0f };
-    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-        gl::clear_tex_image(
-            m_color_texture->gl_name(),
-            0,
-            gl::Pixel_format::rgba,
-            gl::Pixel_type::float_,
-            &clear_value[0]
-        );
-    } else {
-        // TODO
-    }
+    gl::clear_tex_image(
+        m_color_texture->gl_name(),
+        0,
+        gl::Pixel_format::rgba,
+        gl::Pixel_type::float_,
+        &clear_value[0]
+    );
 
     m_depth_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
         graphics_device,
@@ -159,24 +154,20 @@ void Material_preview::update_rendertarget(erhe::graphics::Device& graphics_devi
     m_shadow_texture = std::make_shared<Texture>(
         graphics_device,
         Texture::Create_info {
-            .device      = graphics_device,
-            .target      = gl::Texture_target::texture_2d_array,
-            .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
-            .width       = 1,
-            .height      = 1,
-            .depth       = 1,
-            .debug_label = "dummy shadowmap"
+            .device            = graphics_device,
+            .target            = gl::Texture_target::texture_2d_array,
+            .pixelformat       = erhe::dataformat::Format::format_d32_sfloat,
+            .width             = 1,
+            .height            = 1,
+            .depth             = 1,
+            .array_layer_count = 1,
+            .debug_label       = "Material_preview::m_shadow_texture (dummy shadowmap)"
         }
     );
 
     const bool reverse_depth = graphics_device.configuration.reverse_depth;
-    m_shadow_texture->set_debug_label("Material Preview Shadowmap");
     float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
-    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-        gl::clear_tex_image(m_shadow_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
-    } else {
-        // TODO
-    }
+    gl::clear_tex_image(m_shadow_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
 }
 
 void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)

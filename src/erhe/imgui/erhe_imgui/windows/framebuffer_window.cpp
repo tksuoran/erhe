@@ -96,6 +96,7 @@ void Framebuffer_window::update_render_pass()
     m_viewport.width  = size.x;
     m_viewport.height = size.y;
 
+    m_texture.reset();
     m_texture = std::make_shared<Texture>(
         m_graphics_device,
         Texture::Create_info{
@@ -105,20 +106,19 @@ void Framebuffer_window::update_render_pass()
             .sample_count = 0,
             .width        = m_viewport.width,
             .height       = m_viewport.height,
-            .debug_label  = "Framebuffer_window"
+            .debug_label  = fmt::format("Framebuffer_window {}", m_debug_label)
         }
     );
-    m_texture->set_debug_label(m_debug_label);
     const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
-    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-        gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
-    } else {
-        // TODO
-    }
+    gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
 
     erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
-    render_pass_descriptor.color_attachments[0].texture = m_texture.get();
-    render_pass_descriptor.debug_label                  = m_debug_label;
+    render_pass_descriptor.color_attachments[0].texture      = m_texture.get();
+    render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
+    render_pass_descriptor.render_target_width               = m_viewport.width;
+    render_pass_descriptor.render_target_height              = m_viewport.height;
+    render_pass_descriptor.debug_label                       = m_debug_label;
     m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
 }
 

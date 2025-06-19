@@ -127,11 +127,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             }
         );
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
-        if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-            gl::clear_tex_image(m_color_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
-        } else {
-            // TODO
-        }
+        gl::clear_tex_image(m_color_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
 
         if (m_depth_stencil_format == erhe::dataformat::Format::format_undefined) {
             m_depth_stencil_renderbuffer.reset();
@@ -150,15 +146,23 @@ void Texture_rendergraph_node::execute_rendergraph_node()
 
         {
             erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
-            render_pass_descriptor.color_attachments[0].texture = m_color_texture.get();
-            render_pass_descriptor.debug_label                  = fmt::format("{} Texture_rendergraph_node framebuffer", get_name());
+            render_pass_descriptor.color_attachments[0].texture      = m_color_texture.get();
+            render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.render_target_width               = output_viewport.width;
+            render_pass_descriptor.render_target_height              = output_viewport.height;
+            render_pass_descriptor.debug_label                       = fmt::format("{} Texture_rendergraph_node framebuffer", get_name());
 
             if (m_depth_stencil_renderbuffer) {
                 if (erhe::dataformat::get_depth_size(m_depth_stencil_format) > 0) {
                     render_pass_descriptor.depth_attachment.renderbuffer = m_depth_stencil_renderbuffer.get();
+                    render_pass_descriptor.depth_attachment.load_action  = erhe::graphics::Load_action::Clear;
+                    render_pass_descriptor.depth_attachment.store_action = erhe::graphics::Store_action::Dont_care;
                 }
                 if (erhe::dataformat::get_stencil_size(m_depth_stencil_format) > 0) {
                     render_pass_descriptor.stencil_attachment.renderbuffer = m_depth_stencil_renderbuffer.get();
+                    render_pass_descriptor.stencil_attachment.load_action  = erhe::graphics::Load_action::Clear;
+                    render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care;
                 }
             }
             m_render_pass = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);

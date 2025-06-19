@@ -687,7 +687,6 @@ auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
     };
 
     auto texture = std::make_shared<Texture>(*this, create_info);
-    texture->set_debug_label("dummy");
     const std::array<uint8_t, 16> dummy_pixel{
         0xee, 0x11, 0xdd, 0xff,
         0xcc, 0x11, 0xbb, 0xff,

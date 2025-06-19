@@ -191,7 +191,11 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             m_depth_renderbuffer->set_debug_label("ID Depth");
             erhe::graphics::Render_pass_descriptor render_pass_descriptor;
             render_pass_descriptor.color_attachments[0].renderbuffer = m_color_renderbuffer.get();
+            render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
             render_pass_descriptor.depth_attachment.renderbuffer     = m_depth_renderbuffer.get();
+            render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Store;
             render_pass_descriptor.render_target_width               = viewport.width;
             render_pass_descriptor.render_target_height              = viewport.height;
             render_pass_descriptor.debug_label                       = "ID";
@@ -229,14 +233,16 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
                     .debug_label     = "ID Render depth"
                 }
             );
-            m_color_texture->set_debug_label("ID Color");
-            m_depth_texture->set_debug_label("ID Depth");
             erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-            render_pass_descriptor.color_attachments[0].texture = m_color_texture.get();
-            render_pass_descriptor.depth_attachment    .texture = m_depth_texture.get();
-            render_pass_descriptor.render_target_width          = viewport.width;
-            render_pass_descriptor.render_target_height         = viewport.height;
-            render_pass_descriptor.debug_label                  = "ID";
+            render_pass_descriptor.color_attachments[0].texture      = m_color_texture.get();
+            render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.depth_attachment.texture          = m_depth_texture.get();
+            render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.render_target_width               = viewport.width;
+            render_pass_descriptor.render_target_height              = viewport.height;
+            render_pass_descriptor.debug_label                       = "ID";
             m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
             constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
             //if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {

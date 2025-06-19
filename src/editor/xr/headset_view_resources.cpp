@@ -48,10 +48,10 @@ Headset_view_resources::Headset_view_resources(
             .pixelformat       = render_view.color_format,
             .width             = m_width,
             .height            = m_height,
-            .wrap_texture_name = render_view.color_texture
+            .wrap_texture_name = render_view.color_texture,
+            .debug_label       = fmt::format("XR color {}", slot)
         }
     );
-    m_color_texture->set_debug_label(fmt::format("XR color {}", slot));
 
     m_depth_stencil_texture = std::make_shared<Texture>(
         graphics_device,
@@ -62,18 +62,26 @@ Headset_view_resources::Headset_view_resources(
             .width             = m_width,
             .height            = m_height,
             .wrap_texture_name = render_view.depth_stencil_texture,
+            .debug_label       = fmt::format("XR depth stencil {}", slot)
         }
     );
-    m_depth_stencil_texture->set_debug_label(fmt::format("XR depth stencil {}", slot));
 
     erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
-    render_pass_descriptor.color_attachments[0].texture = m_color_texture.get();
+    render_pass_descriptor.color_attachments[0].texture      = m_color_texture.get();
+    render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
     if (erhe::dataformat::get_depth_size(render_view.depth_stencil_format) > 0) {
-        render_pass_descriptor.depth_attachment.texture = m_depth_stencil_texture.get();
+        render_pass_descriptor.depth_attachment.texture      = m_depth_stencil_texture.get();
+        render_pass_descriptor.depth_attachment.load_action  = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment.store_action = erhe::graphics::Store_action::Dont_care; // TODO
     }
     if (erhe::dataformat::get_stencil_size(render_view.depth_stencil_format) > 0) {
-        render_pass_descriptor.stencil_attachment.texture = m_depth_stencil_texture.get();
+        render_pass_descriptor.stencil_attachment.texture      = m_depth_stencil_texture.get();
+        render_pass_descriptor.stencil_attachment.load_action  = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care; // TODO
     }
+    render_pass_descriptor.render_target_width  = m_width;
+    render_pass_descriptor.render_target_height = m_height;
     render_pass_descriptor.debug_label = fmt::format("XR {}", slot);
     m_render_pass = std::make_shared<Render_pass>(graphics_device, render_pass_descriptor);
 

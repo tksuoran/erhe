@@ -424,7 +424,6 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
     const auto pixel_data = get_font_atlas_pixel_data(m_font_atlas);
     const std::span<const std::uint8_t> image_data{pixel_data.data(), pixel_data.size()};
     m_font_texture->upload(erhe::dataformat::Format::format_8_vec4_unorm, image_data, m_font_texture->get_width(), m_font_texture->get_height());
-    m_font_texture->set_debug_label("ImGui Font");
 
     // Store our handle
     const uint64_t handle = m_graphics_device.get_handle(*m_font_texture.get(), m_linear_sampler);

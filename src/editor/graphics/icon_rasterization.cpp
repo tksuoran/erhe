@@ -95,7 +95,18 @@ void Icon_load_data::upload(int size, erhe::graphics::Texture& texture)
             static_cast<size_t>(bitmap.stride()) * static_cast<size_t>(bitmap.height())
         };
 
-        texture.upload(erhe::dataformat::Format::format_8_vec4_unorm, span, bitmap.width(), bitmap.height(), 1, 0, x_offset, y_offset, 0);
+        texture.upload(
+            erhe::dataformat::Format::format_8_vec4_unorm,
+            span,
+            bitmap.width(),
+            bitmap.height(),
+            1, // depth
+            0, // array layer
+            0, // level
+            x_offset,
+            y_offset,
+            0
+        );
     }
 }
 

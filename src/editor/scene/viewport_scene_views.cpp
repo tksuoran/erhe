@@ -191,7 +191,7 @@ auto Scene_views::create_viewport_scene_view(
         //// }
     }
 
-    std::shared_ptr<erhe::rendergraph::Rendergraph_node> previous_node;
+    std::shared_ptr<erhe::rendergraph::Rendergraph_node> previous_node = new_viewport_window;
     log_post_processing->trace("Scene_views::create_viewport_scene_view(): msaa_sample_count = {}", msaa_sample_count);
     //// TODO
     //// if (msaa_sample_count > 1) {

@@ -21,7 +21,7 @@ Sampler::Sampler(Device& device, const Sampler_create_info& create_info)
     ERHE_VERIFY(m_handle.gl_name() != 0);
     apply();
     set_debug_label(create_info.debug_label);
-    log_texture->trace("Created sampler '{}'", debug_label());
+    log_texture->trace("Created sampler '{}'", get_debug_label());
 }
 
 void Sampler::set_debug_label(const std::string& value)
@@ -35,7 +35,7 @@ void Sampler::set_debug_label(const std::string& value)
     );
 }
 
-auto Sampler::debug_label() const -> const std::string&
+auto Sampler::get_debug_label() const -> const std::string&
 {
     return m_debug_label;
 }

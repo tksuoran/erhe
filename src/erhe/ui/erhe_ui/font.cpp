@@ -458,12 +458,11 @@ void Font::post_process()
         .use_mipmaps = false,
         .width       = m_texture_width,
         .height      = m_texture_height,
-        .debug_label = "Font"
+        .debug_label = fmt::format("Font::m_texture {}", m_path.filename().generic_string())
     };
 
     m_texture = std::make_unique<Texture>(m_graphics_device, create_info);
     m_texture->upload(create_info.pixelformat, bm.as_span(), create_info.width, create_info.height);
-    m_texture->set_debug_label(m_path.filename().generic_string());
 }
 
 // https://en.wikipedia.org/wiki/List_of_typographic_features

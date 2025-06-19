@@ -64,17 +64,16 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         m_texture = std::make_shared<Texture>(
             graphics_device,
             erhe::graphics::Texture_create_info {
-                .device      = graphics_device,
-                .target      = gl::Texture_target::texture_2d_array,
-                .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
-                .width       = std::max(1, resolution),
-                .height      = std::max(1, resolution),
-                .depth       = std::max(1, light_count),
-                .debug_label = "Shadowmap"
+                .device            = graphics_device,
+                .target            = gl::Texture_target::texture_2d_array,
+                .pixelformat       = erhe::dataformat::Format::format_d32_sfloat,
+                .width             = std::max(1, resolution),
+                .height            = std::max(1, resolution),
+                .depth             = 1,
+                .array_layer_count = std::max(1, light_count),
+                .debug_label       = "Shadowmap"
             }
         );
-
-        m_texture->set_debug_label("Shadowmaps");
 
         if (resolution <= 1) {
             float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
@@ -89,9 +88,15 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
     m_render_passes.clear();
     for (int i = 0; i < light_count; ++i) {
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-        render_pass_descriptor.depth_attachment.texture       = m_texture.get();
-        render_pass_descriptor.depth_attachment.texture_level = static_cast<unsigned int>(i);
-        render_pass_descriptor.debug_label                    = fmt::format("Shadow {}", i);
+        render_pass_descriptor.depth_attachment.texture        = m_texture.get();
+        render_pass_descriptor.depth_attachment.texture_level  = 0;
+        render_pass_descriptor.depth_attachment.texture_layer  = static_cast<unsigned int>(i);
+        render_pass_descriptor.depth_attachment.load_action    = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment.store_action   = erhe::graphics::Store_action::Store;
+        render_pass_descriptor.depth_attachment.clear_value[0] = 0.0; // Reverse Z
+        render_pass_descriptor.render_target_width             = resolution;
+        render_pass_descriptor.render_target_height            = resolution;
+        render_pass_descriptor.debug_label                     = fmt::format("Shadow {}", i);
         std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);
         m_render_passes.emplace_back(std::move(render_pass));
     }
