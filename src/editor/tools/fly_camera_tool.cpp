@@ -103,7 +103,7 @@ auto Fly_camera_tool::try_ready() -> bool
         }
         constexpr float border   = 32.0f;
         const glm::vec2 position = position_opt.value();
-        const erhe::math::Viewport viewport = viewport_scene_view->projection_viewport();
+        const erhe::math::Viewport viewport = viewport_scene_view->get_projection_viewport();
         if (
             (position.x <  border) ||
             (position.y <  border) ||
@@ -323,7 +323,7 @@ auto Fly_camera_frame_command::try_call() -> bool
     if (viewport_scene_view == nullptr) {
         return false;
     }
-    erhe::math::Viewport viewport = viewport_scene_view->projection_viewport();
+    const erhe::math::Viewport viewport = viewport_scene_view->get_projection_viewport();
 
     erhe::math::Aabb bbox{};
     const std::vector<std::shared_ptr<erhe::Item_base>>& selection = m_context.selection->get_selection();

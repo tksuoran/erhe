@@ -2,7 +2,7 @@
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -36,6 +36,7 @@ public:
         Post_processing&                post_processing,
         const std::string_view          name
     );
+    ~Post_processing_node() override;
 
     // Implements Rendergraph_node
     auto get_type_name() const -> std::string_view override { return "Post_processing_node"; }
@@ -45,7 +46,7 @@ public:
     auto get_consumer_input_texture(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
 
     // Overridden to provide framebuffer from the first downsample node
-    auto get_consumer_input_framebuffer(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_consumer_input_render_pass(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::graphics::Render_pass* override;
 
     // Override so that size is always sources from output
     auto get_consumer_input_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
@@ -60,8 +61,8 @@ public:
     float                                                     upsample_radius{1.0f};
     std::shared_ptr<erhe::graphics::Texture>                  downsample_texture;
     std::shared_ptr<erhe::graphics::Texture>                  upsample_texture;
-    std::vector<std::shared_ptr<erhe::graphics::Framebuffer>> downsample_framebuffers;
-    std::vector<std::shared_ptr<erhe::graphics::Framebuffer>> upsample_framebuffers;
+    std::vector<std::unique_ptr<erhe::graphics::Render_pass>> downsample_render_passes;
+    std::vector<std::unique_ptr<erhe::graphics::Render_pass>> upsample_render_passes;
     std::vector<std::shared_ptr<erhe::graphics::Texture>>     downsample_texture_views;
     std::vector<std::shared_ptr<erhe::graphics::Texture>>     upsample_texture_views;
     std::vector<int>                                          level_widths;

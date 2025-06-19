@@ -320,13 +320,13 @@ void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Textur
     push_group("Texture", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
 
     add_entry("Name",   [&](){ ImGui::TextUnformatted(texture->get_name().c_str()); });
-    add_entry("Width",  [&](){ ImGui::Text("%d", texture->width()); });
-    add_entry("Height", [&](){ ImGui::Text("%d", texture->height()); });
-    add_entry("Format", [&](){ ImGui::TextUnformatted(gl::c_str(texture->internal_format())); });
+    add_entry("Width",  [&](){ ImGui::Text("%d", texture->get_width()); });
+    add_entry("Height", [&](){ ImGui::Text("%d", texture->get_height()); });
+    add_entry("Format", [&](){ ImGui::TextUnformatted(erhe::dataformat::c_str(texture->get_pixelformat())); });
 
     add_entry("Preview", [&](){
         // TODO Draw to available size respecting aspect ratio
-        m_context.imgui_renderer->image(texture, texture->width(), texture->height());
+        m_context.imgui_renderer->image(texture, texture->get_width(), texture->get_height());
     });
 
     pop_group();
@@ -495,9 +495,9 @@ void Properties::rendertarget_properties(Rendertarget_mesh& rendertarget)
 {
     ERHE_PROFILE_FUNCTION();
 
-    add_entry("Width",            [&](){ ImGui::Text("%f", rendertarget.width()); });
-    add_entry("Height",           [&](){ ImGui::Text("%f", rendertarget.height()); });
-    add_entry("Pixels per Meter", [&](){ ImGui::Text("%f", static_cast<float>(rendertarget.pixels_per_meter())); });
+    add_entry("Width",            [&](){ ImGui::Text("%f", rendertarget.get_width()); });
+    add_entry("Height",           [&](){ ImGui::Text("%f", rendertarget.get_height()); });
+    add_entry("Pixels per Meter", [&](){ ImGui::Text("%f", static_cast<float>(rendertarget.get_pixels_per_meter())); });
 }
 
 void Properties::brush_placement_properties(Brush_placement& brush_placement)

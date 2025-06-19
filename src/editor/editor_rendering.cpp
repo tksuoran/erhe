@@ -23,7 +23,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_profile/profile.hpp"

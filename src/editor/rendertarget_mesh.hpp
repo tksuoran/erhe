@@ -8,12 +8,15 @@
 
 #include <glm/glm.hpp>
 
+#include <memory>
+
 namespace erhe {
     class Item_host;
 }
 namespace erhe::graphics {
-    class Framebuffer;
+    class Render_pass;
     class Device;
+    class Render_command_encoder;
     class Sampler;
     class Texture;
 }
@@ -52,22 +55,21 @@ public:
     auto get_type_name() const -> std::string_view override;
 
     // Public API
-    [[nodiscard]] auto texture         () const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] auto framebuffer     () const -> std::shared_ptr<erhe::graphics::Framebuffer>;
-    [[nodiscard]] auto width           () const -> float;
-    [[nodiscard]] auto height          () const -> float;
-    [[nodiscard]] auto pixels_per_meter() const -> float;
-    [[nodiscard]] auto get_pointer     () const -> std::optional<glm::vec2>;
-    [[nodiscard]] auto world_to_window (glm::vec3 world_position) const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto get_texture         () const -> std::shared_ptr<erhe::graphics::Texture>;
+    [[nodiscard]] auto get_render_pass     () const -> erhe::graphics::Render_pass*;
+    [[nodiscard]] auto get_width           () const -> float;
+    [[nodiscard]] auto get_height          () const -> float;
+    [[nodiscard]] auto get_pixels_per_meter() const -> float;
+    [[nodiscard]] auto get_pointer         () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto get_world_to_window (glm::vec3 world_position) const -> std::optional<glm::vec2>;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void update_headset_hand_tracking();
 #endif
 
-    auto update_pointer(Scene_view* scene_view) -> bool;
-    void bind          ();
-    void clear         (glm::vec4 clear_color);
-    void render_done   (Editor_context& context); // generates mipmaps, updates lod bias
+    auto update_pointer   (Scene_view* scene_view) -> bool;
+    void clear            (glm::vec4 clear_color);
+    void render_done      (Editor_context& context); // generates mipmaps, updates lod bias
 
     void resize_rendertarget(
         erhe::graphics::Device& graphics_device,
@@ -87,7 +89,7 @@ private:
     std::shared_ptr<erhe::graphics::Texture>     m_texture;
     std::shared_ptr<erhe::graphics::Sampler>     m_sampler;
     std::shared_ptr<erhe::primitive::Material>   m_material;
-    std::shared_ptr<erhe::graphics::Framebuffer> m_framebuffer;
+    std::shared_ptr<erhe::graphics::Render_pass> m_render_pass;
     std::optional<glm::vec2>                     m_pointer;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

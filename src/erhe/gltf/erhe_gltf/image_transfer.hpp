@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/gl_objects.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 
 #include <array>
 #include <cstdint>
@@ -20,7 +21,7 @@ public:
     public:
         explicit Slot(erhe::graphics::Device& graphics_device);
 
-        [[nodiscard]] auto begin_span_for(int width, int height, gl::Internal_format internal_format) -> std::span<std::uint8_t>;
+        [[nodiscard]] auto begin_span_for(int width, int height, erhe::dataformat::Format pixelformat) -> std::span<std::uint8_t>;
         [[nodiscard]] auto gl_name() -> unsigned int
         {
             return m_pbo.gl_name();

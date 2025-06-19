@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 
 #include <string>
@@ -44,7 +45,7 @@ public:
 class Graphics_settings
 {
 public:
-    void get_limits                   (const erhe::graphics::Device& instance, gl::Internal_format format);
+    void get_limits                   (const erhe::graphics::Device& instance, erhe::dataformat::Format format);
     void read_presets                 ();
     void write_presets                ();
     void apply_limits                 (Graphics_preset& graphics_preset);

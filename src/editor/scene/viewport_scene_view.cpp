@@ -18,13 +18,16 @@
 #include "tools/tools.hpp"
 #include "tools/transform/transform_tool.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
-#include "erhe_rendergraph/multisample_resolve.hpp"
+////#include "erhe_rendergraph/multisample_resolve.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_log/log_glm.hpp"
@@ -33,7 +36,6 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -52,7 +54,7 @@ using erhe::graphics::Input_assembly_state;
 using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
@@ -101,10 +103,8 @@ void Viewport_scene_view::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& output_viewport = get_producer_output_viewport(erhe::rendergraph::Routing::Resource_provided_by_consumer, erhe::rendergraph::Rendergraph_node_key::viewport);
-    const auto& output_framebuffer = get_producer_output_framebuffer(erhe::rendergraph::Routing::Resource_provided_by_consumer, erhe::rendergraph::Rendergraph_node_key::viewport);
-
-    const GLint output_framebuffer_name = output_framebuffer ? output_framebuffer->gl_name() : 0;
+    const auto& output_viewport    = get_producer_output_viewport(erhe::rendergraph::Routing::Resource_provided_by_consumer, erhe::rendergraph::Rendergraph_node_key::viewport);
+    auto*       output_render_pass = get_producer_output_render_pass(erhe::rendergraph::Routing::Resource_provided_by_consumer, erhe::rendergraph::Rendergraph_node_key::viewport);
 
     if ((output_viewport.width < 1) || (output_viewport.height < 1)) {
         return;
@@ -133,22 +133,21 @@ void Viewport_scene_view::execute_rendergraph_node()
         m_context.editor_rendering->render_id(context);
     }
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, output_framebuffer_name);
-    if (output_framebuffer) {
-        if (!output_framebuffer->check_status()) {
-            return;
-        }
+    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder;
+    if (!output_render_pass) {
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
+    } else {
+        erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
+        render_encoder = graphics_device.make_render_command_encoder(*output_render_pass);
+    }
+
+    if (!do_render) {
+        return;
     }
 
     gl::enable(gl::Enable_cap::scissor_test);
     gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
-
-    if (!do_render) {
-        gl::clear_color(0.1f, 0.1f, 0.1f, 1.0f);
-        gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
-        gl::disable    (gl::Enable_cap::scissor_test);
-        return;
-    }
+    ERHE_DEFER( gl::disable(gl::Enable_cap::scissor_test); );
 
     scene_root->get_scene().update_node_transforms();
 
@@ -162,21 +161,18 @@ void Viewport_scene_view::execute_rendergraph_node()
     );
 
     m_context.editor_rendering->render_viewport_main(context);
-
     m_context.tools           ->render_viewport_tools(context);
     m_context.editor_rendering->render_viewport_renderables(context);
     m_context.debug_renderer  ->render(context.viewport, *context.camera);
-
-    m_context.text_renderer->render(context.viewport);
-    gl::disable(gl::Enable_cap::scissor_test);
+    m_context.text_renderer   ->render(context.viewport);
 }
 
-void Viewport_scene_view::reconfigure(const int sample_count)
-{
-    if (m_multisample_resolve_node != nullptr) {
-        m_multisample_resolve_node->reconfigure(sample_count);
-    }
-}
+////void Viewport_scene_view::reconfigure(const int sample_count)
+////{
+////    if (m_multisample_resolve_node != nullptr) {
+////        m_multisample_resolve_node->reconfigure(sample_count);
+////    }
+////}
 
 void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
 {
@@ -210,12 +206,12 @@ auto Viewport_scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
     return m_scene_root.lock();
 }
 
-auto Viewport_scene_view::window_viewport() const -> const erhe::math::Viewport&
+auto Viewport_scene_view::get_window_viewport() const -> const erhe::math::Viewport&
 {
     return m_window_viewport;
 }
 
-auto Viewport_scene_view::projection_viewport() const -> const erhe::math::Viewport&
+auto Viewport_scene_view::get_projection_viewport() const -> const erhe::math::Viewport&
 {
     return m_projection_viewport;
 }
@@ -240,7 +236,7 @@ auto Viewport_scene_view::as_viewport_scene_view() const -> const Viewport_scene
     return this;
 }
 
-auto Viewport_scene_view::viewport_from_window(const glm::vec2 window_position) const -> glm::vec2
+auto Viewport_scene_view::get_viewport_from_window(const glm::vec2 window_position) const -> glm::vec2
 {
     const float content_x      = static_cast<float>(window_position.x) - m_window_viewport.x;
     const float content_y      = static_cast<float>(window_position.y) - m_window_viewport.y;
@@ -299,9 +295,9 @@ void Viewport_scene_view::update_pointer_2d_position(const glm::vec2 position_in
 
 void Viewport_scene_view::update_hover(bool ray_only)
 {
-    const bool reverse_depth          = projection_viewport().reverse_depth;
-    const auto near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
-    const auto far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
+    const bool reverse_depth          = get_projection_viewport().reverse_depth;
+    const auto near_position_in_world = get_position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
+    const auto far_position_in_world  = get_position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
 
     // log_input_frame->info("Viewport_scene_view::update_hover");
 
@@ -353,7 +349,7 @@ void Viewport_scene_view::update_hover_with_id_render()
         .valid                      = id_query.valid,
         .scene_mesh_weak            = id_query.mesh,
         .scene_mesh_primitive_index = id_query.primitive_index,
-        .position                   = position_in_world_viewport_depth(id_query.depth),
+        .position                   = get_position_in_world_viewport_depth(id_query.depth),
         .triangle                   = static_cast<uint32_t>(id_query.triangle_id) // TODO Consider these types
     };
 
@@ -414,7 +410,7 @@ auto Viewport_scene_view::get_position_in_viewport() const -> std::optional<glm:
     return m_position_in_viewport;
 }
 
-auto Viewport_scene_view::position_in_world_viewport_depth(const float viewport_depth) const -> std::optional<glm::vec3>
+auto Viewport_scene_view::get_position_in_world_viewport_depth(const float viewport_depth) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
     if (!m_position_in_viewport.has_value() || !camera) {
@@ -428,9 +424,9 @@ auto Viewport_scene_view::position_in_world_viewport_depth(const float viewport_
         m_position_in_viewport.value().y,
         viewport_depth
     };
-    const auto      vp                    = projection_viewport();
-    const auto      projection_transforms = camera->projection_transforms(vp);
-    const glm::mat4 world_from_clip       = projection_transforms.clip_from_world.get_inverse_matrix();
+    const erhe::math::Viewport&                     vp                    = get_projection_viewport();
+    const erhe::scene::Camera_projection_transforms projection_transforms = camera->projection_transforms(vp);
+    const glm::mat4                                 world_from_clip       = projection_transforms.clip_from_world.get_inverse_matrix();
 
     return erhe::math::unproject<float>(
         glm::mat4{world_from_clip},
@@ -626,8 +622,8 @@ auto Viewport_scene_view::get_closest_point_on_line(const glm::vec3 P0, const gl
             }
         }
     } else {
-        const auto Q0_opt = position_in_world_viewport_depth(1.0);
-        const auto Q1_opt = position_in_world_viewport_depth(0.0);
+        const auto Q0_opt = get_position_in_world_viewport_depth(1.0);
+        const auto Q1_opt = get_position_in_world_viewport_depth(0.0);
         if (Q0_opt.has_value() && Q1_opt.has_value()) {
             const auto Q0 = Q0_opt.value();
             const auto Q1 = Q1_opt.value();
@@ -647,8 +643,8 @@ auto Viewport_scene_view::get_closest_point_on_plane(const glm::vec3 N, const gl
 
     using vec3 = glm::vec3;
 
-    const auto Q0_opt = position_in_world_viewport_depth(1.0);
-    const auto Q1_opt = position_in_world_viewport_depth(0.0);
+    const auto Q0_opt = get_position_in_world_viewport_depth(1.0);
+    const auto Q1_opt = get_position_in_world_viewport_depth(0.0);
     if (
         !Q0_opt.has_value() ||
         !Q1_opt.has_value()

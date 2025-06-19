@@ -14,10 +14,12 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/gl_helpers.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui/imgui.h>
@@ -25,46 +27,8 @@
 
 namespace editor {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
-
-[[nodiscard]] auto choose_depth_stencil_format() 
-{
-    gl::Internal_format formats[] = {
-        gl::Internal_format::depth32f_stencil8,
-        gl::Internal_format::depth24_stencil8,
-        gl::Internal_format::depth_stencil,
-        gl::Internal_format::stencil_index8,
-        gl::Internal_format::depth_component32f,
-        gl::Internal_format::depth_component,
-        gl::Internal_format::depth_component16
-    };
-
-    for (const auto format : formats) {
-        if (gl_helpers::has_depth(format)) {
-            GLint depth_renderable{};
-            gl::get_internalformat_iv(
-                gl::Texture_target::texture_2d, format, gl::Internal_format_p_name::depth_renderable, 1,
-                &depth_renderable
-            );
-            if (depth_renderable == GL_FALSE) {
-                continue;
-            }
-        }
-        if (gl_helpers::has_stencil(format)) {
-            GLint stencil_renderable{};
-            gl::get_internalformat_iv(
-                gl::Texture_target::texture_2d, format, gl::Internal_format_p_name::stencil_renderable, 1,
-                &stencil_renderable
-            );
-            if (stencil_renderable == GL_FALSE) {
-                continue;
-            }
-        }
-        return format;
-    }
-    return gl::Internal_format::depth_component; // fallback
-}
 
 Imgui_window_scene_view_node::Imgui_window_scene_view_node(
     erhe::imgui::Imgui_renderer&                imgui_renderer,
@@ -82,8 +46,14 @@ Imgui_window_scene_view_node::Imgui_window_scene_view_node(
             .name                 = std::string{name},
             .input_key            = erhe::rendergraph::Rendergraph_node_key::viewport,
             .output_key           = erhe::rendergraph::Rendergraph_node_key::window,
-            .color_format         = gl::Internal_format::rgba16f,
-            .depth_stencil_format = choose_depth_stencil_format()
+            .color_format         = erhe::dataformat::Format::format_16_vec4_float,
+            .depth_stencil_format = rendergraph.get_graphics_device().choose_depth_stencil_format(
+                erhe::graphics::format_flag_require_depth     |
+                erhe::graphics::format_flag_require_stencil   |
+                erhe::graphics::format_flag_prefer_accuracy   |
+                erhe::graphics::format_flag_prefer_filterable,
+                0 // TODO sample count
+            )
         }
     }
     , m_editor_context{editor_context}
@@ -127,7 +97,7 @@ void Imgui_window_scene_view_node::on_mouse_move(glm::vec2 mouse_position_in_win
     if (!viewport_scene_view) {
         return;
     }
-    const auto mouse_position_in_viewport = viewport_scene_view->viewport_from_window(mouse_position_in_window);
+    const auto mouse_position_in_viewport = viewport_scene_view->get_viewport_from_window(mouse_position_in_window);
     viewport_scene_view->update_pointer_2d_position(mouse_position_in_viewport);
 }
 
@@ -261,8 +231,8 @@ void Imgui_window_scene_view_node::imgui()
     );
 
     if (color_texture) {
-        const int texture_width  = color_texture->width();
-        const int texture_height = color_texture->height();
+        const int texture_width  = color_texture->get_width();
+        const int texture_height = color_texture->get_height();
 
         if ((texture_width >= 1) && (texture_height >= 1)) {
             SPDLOG_LOGGER_TRACE(

@@ -62,12 +62,12 @@ void Image_transfer::Slot::end(bool flush)
     unmap();
 }
 
-auto Image_transfer::Slot::begin_span_for(const int span_width, const int span_height, const gl::Internal_format internal_format) -> std::span<std::uint8_t>
+auto Image_transfer::Slot::begin_span_for(const int span_width, const int span_height, const erhe::dataformat::Format pixelformat) -> std::span<std::uint8_t>
 {
     ERHE_VERIFY(span_width >= 1);
     ERHE_VERIFY(span_height >= 1);
 
-    auto row_stride = span_width * erhe::graphics::get_upload_pixel_byte_count(internal_format);
+    auto row_stride = span_width * erhe::graphics::get_upload_pixel_byte_count(pixelformat);
     auto byte_count = row_stride * span_height;
     ERHE_VERIFY(byte_count >= 1);
     ERHE_VERIFY(byte_count <= m_capacity);

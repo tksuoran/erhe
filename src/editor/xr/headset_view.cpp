@@ -22,7 +22,8 @@
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_log/log_glm.hpp"
@@ -66,6 +67,10 @@ Headset_view_node::Headset_view_node(erhe::rendergraph::Rendergraph& rendergraph
 {
     register_input(erhe::rendergraph::Routing::Resource_provided_by_producer, "shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     register_input(erhe::rendergraph::Routing::Resource_provided_by_producer, "rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
+}
+
+Headset_view_node::~Headset_view_node()
+{
 }
 
 void Headset_view_node::execute_rendergraph_node()
@@ -403,9 +408,10 @@ void Headset_view::render_headset()
             }
 
             auto& graphics_device = *m_context.graphics_device;
-            auto* openxr_framebuffer = view_resources->get_framebuffer();
+            auto* render_pass = view_resources->get_render_pass();
             erhe::math::Viewport viewport;
 
+            std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder;
             if (m_context.OpenXR_mirror) {
                 gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
                 viewport = erhe::math::Viewport{
@@ -415,13 +421,18 @@ void Headset_view::render_headset()
                     .height        = m_context.context_window->get_height(),
                     .reverse_depth = graphics_device.configuration.reverse_depth
                 };
-            } else {
-                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, openxr_framebuffer->gl_name());
+                gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
-                auto status = gl::check_named_framebuffer_status(openxr_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
-                if (status != gl::Framebuffer_status::framebuffer_complete) {
-                    log_headset->error("OpenXR framebuffer status = {}", gl::c_str(status));
-                }
+            } else {
+                //// gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, openxr_framebuffer->gl_name());
+                render_encoder = graphics_device.make_render_command_encoder(*render_pass);
+
+                // auto status = gl::check_named_framebuffer_status(openxr_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
+                // if (status != gl::Framebuffer_status::framebuffer_complete) {
+                //     log_headset->error("OpenXR framebuffer status = {}", gl::c_str(status));
+                // }
+                ERHE_VERIFY(render_view.width  == static_cast<uint32_t>(render_pass->get_render_target_width()));
+                ERHE_VERIFY(render_view.height == static_cast<uint32_t>(render_pass->get_render_target_height()));
                 viewport = erhe::math::Viewport{
                     .x             = 0,
                     .y             = 0,
@@ -451,13 +462,13 @@ void Headset_view::render_headset()
             // }
 
             if (render) {
-                gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-                gl::enable(gl::Enable_cap::framebuffer_srgb);
+                //// gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+                //// gl::enable(gl::Enable_cap::framebuffer_srgb);
 
-                gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-                gl::clear_depth_f(*graphics_device.depth_clear_value_pointer());
-                gl::clear_stencil(0);
-                gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit | gl::Clear_buffer_mask::stencil_buffer_bit);
+                /// gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
+                /// gl::clear_depth_f(*graphics_device.depth_clear_value_pointer());
+                /// gl::clear_stencil(0);
+                /// gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit | gl::Clear_buffer_mask::stencil_buffer_bit);
 
                 //Viewport_config viewport_config;
                 const erhe::graphics::Shader_stages* override_shader_stages = m_context.programs->get_variant_shader_stages(m_shader_stages_variant);
@@ -502,7 +513,7 @@ void Headset_view::render_headset()
                     int dst_y1 = (src_height > dst_height) ? dst_height          : dst_y0 + src_height;
                     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
                     gl::read_buffer(gl::Read_buffer_mode::back);
-                    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, openxr_framebuffer->gl_name());
+                    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, render_pass->gl_name());
                     gl::disable(gl::Enable_cap::framebuffer_srgb);
                     gl::blit_framebuffer(
                         src_x0, src_y0, src_x1, src_y1, 

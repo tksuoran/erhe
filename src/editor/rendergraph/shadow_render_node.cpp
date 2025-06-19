@@ -12,7 +12,7 @@
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene/scene.hpp"
@@ -23,7 +23,7 @@
 
 namespace editor {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 Shadow_render_node::Shadow_render_node(
@@ -48,6 +48,10 @@ Shadow_render_node::Shadow_render_node(
     reconfigure(graphics_device, resolution, light_count);
 }
 
+Shadow_render_node::~Shadow_render_node()
+{
+}
+
 void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, const int resolution, const int light_count)
 {
     log_render->trace("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
@@ -60,14 +64,13 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         m_texture = std::make_shared<Texture>(
             graphics_device,
             erhe::graphics::Texture_create_info {
-                .device          = graphics_device,
-                .target          = gl::Texture_target::texture_2d_array,
-                .internal_format = gl::Internal_format::depth_component32f,
-                //.sparse          = erhe::graphics::g_instance->info.use_sparse_texture,
-                .width           = std::max(1, resolution),
-                .height          = std::max(1, resolution),
-                .depth           = std::max(1, light_count),
-                .debug_label     = "Shadowmap"
+                .device      = graphics_device,
+                .target      = gl::Texture_target::texture_2d_array,
+                .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
+                .width       = std::max(1, resolution),
+                .height      = std::max(1, resolution),
+                .depth       = std::max(1, light_count),
+                .debug_label = "Shadowmap"
             }
         );
 
@@ -83,15 +86,14 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         }
     }
 
-    m_framebuffers.clear();
+    m_render_passes.clear();
     for (int i = 0; i < light_count; ++i) {
-        ERHE_PROFILE_SCOPE("framebuffer creation");
-
-        Framebuffer::Create_info create_info;
-        create_info.attach(gl::Framebuffer_attachment::depth_attachment, m_texture.get(), 0, static_cast<unsigned int>(i));
-        auto framebuffer = std::make_unique<Framebuffer>(graphics_device, create_info);
-        framebuffer->set_debug_label(fmt::format("Shadow {}", i));
-        m_framebuffers.emplace_back(std::move(framebuffer));
+        erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+        render_pass_descriptor.depth_attachment.texture       = m_texture.get();
+        render_pass_descriptor.depth_attachment.texture_level = static_cast<unsigned int>(i);
+        render_pass_descriptor.debug_label                    = fmt::format("Shadow {}", i);
+        std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);
+        m_render_passes.emplace_back(std::move(render_pass));
     }
 
     m_viewport = {
@@ -140,7 +142,7 @@ void Shadow_render_node::execute_rendergraph_node()
             .view_camera_viewport  = {},
             .light_camera_viewport = m_viewport,
             .texture               = m_texture,
-            .framebuffers          = m_framebuffers,
+            .render_passes         = m_render_passes,
             .mesh_spans            = { layers.content()->meshes },
             .lights                = layers.light()->lights,
             .skins                 = scene_root->get_scene().get_skins(),

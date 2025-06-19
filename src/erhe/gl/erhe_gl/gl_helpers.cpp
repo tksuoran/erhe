@@ -272,6 +272,115 @@ auto is_integer(const gl::Internal_format format) -> bool
         case gl::Internal_format::r16_snorm                                 : return false;
         case gl::Internal_format::r16f                                      : return false;
         case gl::Internal_format::r16i                                      : return true;
+        case gl::Internal_format::r16ui                                     : return false;
+        case gl::Internal_format::r32f                                      : return false;
+        case gl::Internal_format::r32i                                      : return true;
+        case gl::Internal_format::r32ui                                     : return false;
+        case gl::Internal_format::r3_g3_b2                                  : return false;
+        case gl::Internal_format::r8                                        : return false;
+        case gl::Internal_format::r8_snorm                                  : return false;
+        case gl::Internal_format::r8i                                       : return true;
+        case gl::Internal_format::r8ui                                      : return false;
+        case gl::Internal_format::red                                       : return false;
+        case gl::Internal_format::rg                                        : return false;
+        case gl::Internal_format::rg16                                      : return false;
+        case gl::Internal_format::rg16_snorm                                : return false;
+        case gl::Internal_format::rg16f                                     : return false;
+        case gl::Internal_format::rg16i                                     : return true;
+        case gl::Internal_format::rg16ui                                    : return false;
+        case gl::Internal_format::rg32f                                     : return false;
+        case gl::Internal_format::rg32i                                     : return true;
+        case gl::Internal_format::rg32ui                                    : return false;
+        case gl::Internal_format::rg8                                       : return false;
+        case gl::Internal_format::rg8_snorm                                 : return false;
+        case gl::Internal_format::rg8i                                      : return true;
+        case gl::Internal_format::rg8ui                                     : return false;
+        case gl::Internal_format::rgb                                       : return false;
+        case gl::Internal_format::rgb10                                     : return false;
+        case gl::Internal_format::rgb10_a2                                  : return false;
+        case gl::Internal_format::rgb10_a2ui                                : return false;
+        case gl::Internal_format::rgb12                                     : return false;
+        case gl::Internal_format::rgb16                                     : return false;
+        case gl::Internal_format::rgb16_snorm                               : return false;
+        case gl::Internal_format::rgb16f                                    : return false;
+        case gl::Internal_format::rgb16i                                    : return true;
+        case gl::Internal_format::rgb16ui                                   : return false;
+        case gl::Internal_format::rgb32f                                    : return false;
+        case gl::Internal_format::rgb32i                                    : return true;
+        case gl::Internal_format::rgb32ui                                   : return false;
+        case gl::Internal_format::rgb4                                      : return false;
+        case gl::Internal_format::rgb5                                      : return false;
+        case gl::Internal_format::rgb5_a1                                   : return false;
+        case gl::Internal_format::rgb8                                      : return false;
+        case gl::Internal_format::rgb8_snorm                                : return false;
+        case gl::Internal_format::rgb8i                                     : return true;
+        case gl::Internal_format::rgb8ui                                    : return true;
+        case gl::Internal_format::rgb9_e5                                   : return false;
+        case gl::Internal_format::rgba                                      : return false;
+        case gl::Internal_format::rgba12                                    : return false;
+        case gl::Internal_format::rgba16                                    : return false;
+        case gl::Internal_format::rgba16f                                   : return false;
+        case gl::Internal_format::rgba16i                                   : return true;
+        case gl::Internal_format::rgba16ui                                  : return true;
+        case gl::Internal_format::rgba32f                                   : return false;
+        case gl::Internal_format::rgba32i                                   : return true;
+        case gl::Internal_format::rgba32ui                                  : return true;
+        case gl::Internal_format::rgba4                                     : return false;
+        case gl::Internal_format::rgba8                                     : return false;
+        case gl::Internal_format::rgba8_snorm                               : return false;
+        case gl::Internal_format::rgba8i                                    : return true;
+        case gl::Internal_format::rgba8ui                                   : return true;
+        case gl::Internal_format::srgb                                      : return false;
+        case gl::Internal_format::srgb8                                     : return false;
+        case gl::Internal_format::srgb8_alpha8                              : return false;
+        case gl::Internal_format::srgb_alpha                                : return false;
+        case gl::Internal_format::stencil_index                             : return false;
+        case gl::Internal_format::stencil_index1                            : return false;
+        case gl::Internal_format::stencil_index16                           : return false;
+        case gl::Internal_format::stencil_index4                            : return false;
+        case gl::Internal_format::stencil_index8                            : return false;
+        default: return false;
+    }
+}
+
+auto is_unsigned_integer(const gl::Internal_format format) -> bool
+{
+    switch (format) {
+        case gl::Internal_format::compressed_r11_eac                        : return false;
+        case gl::Internal_format::compressed_red                            : return false;
+        case gl::Internal_format::compressed_red_rgtc1                      : return false;
+        case gl::Internal_format::compressed_rg                             : return false;
+        case gl::Internal_format::compressed_rg11_eac                       : return false;
+        case gl::Internal_format::compressed_rg_rgtc2                       : return false;
+        case gl::Internal_format::compressed_rgb                            : return false;
+        case gl::Internal_format::compressed_rgb8_etc2                      : return false;
+        case gl::Internal_format::compressed_rgb8_punchthrough_alpha1_etc2  : return false;
+        case gl::Internal_format::compressed_rgb_bptc_signed_float          : return false;
+        case gl::Internal_format::compressed_rgb_bptc_unsigned_float        : return false;
+        case gl::Internal_format::compressed_rgba                           : return false;
+        case gl::Internal_format::compressed_rgba8_etc2_eac                 : return false;
+        case gl::Internal_format::compressed_rgba_bptc_unorm                : return false;
+        case gl::Internal_format::compressed_signed_r11_eac                 : return false;
+        case gl::Internal_format::compressed_signed_red_rgtc1               : return false;
+        case gl::Internal_format::compressed_signed_rg11_eac                : return false;
+        case gl::Internal_format::compressed_signed_rg_rgtc2                : return false;
+        case gl::Internal_format::compressed_srgb                           : return false;
+        case gl::Internal_format::compressed_srgb8_alpha8_etc2_eac          : return false;
+        case gl::Internal_format::compressed_srgb8_etc2                     : return false;
+        case gl::Internal_format::compressed_srgb8_punchthrough_alpha1_etc2 : return false;
+        case gl::Internal_format::compressed_srgb_alpha                     : return false;
+        case gl::Internal_format::compressed_srgb_alpha_bptc_unorm          : return false;
+        case gl::Internal_format::depth24_stencil8                          : return false;
+        case gl::Internal_format::depth32f_stencil8                         : return false;
+        case gl::Internal_format::depth_component                           : return false;
+        case gl::Internal_format::depth_component16                         : return false;
+        case gl::Internal_format::depth_component32f                        : return false;
+        case gl::Internal_format::depth_stencil                             : return false;
+        case gl::Internal_format::r11f_g11f_b10f                            : return false;
+        case gl::Internal_format::r16                                       : return false;
+        case gl::Internal_format::r16_snorm                                 : return false;
+        case gl::Internal_format::r16f                                      : return false;
+        case gl::Internal_format::r16i                                      : return true;
         case gl::Internal_format::r16ui                                     : return true;
         case gl::Internal_format::r32f                                      : return false;
         case gl::Internal_format::r32i                                      : return true;
@@ -779,4 +888,130 @@ auto has_stencil(const gl::Internal_format format) -> bool
     }
 }
 
+[[nodiscard]] auto convert_to_gl(erhe::dataformat::Format format) -> std::optional<gl::Internal_format>
+{
+    switch (format) {
+        case erhe::dataformat::Format::format_8_scalar_unorm:           return gl::Internal_format::r8;
+        case erhe::dataformat::Format::format_8_scalar_snorm:           return gl::Internal_format::r8_snorm;
+        case erhe::dataformat::Format::format_8_scalar_uint:            return gl::Internal_format::r8ui;
+        case erhe::dataformat::Format::format_8_scalar_sint:            return gl::Internal_format::r8i;
+        case erhe::dataformat::Format::format_8_vec2_unorm:             return gl::Internal_format::rg8;
+        case erhe::dataformat::Format::format_8_vec2_snorm:             return gl::Internal_format::rg8_snorm;
+        case erhe::dataformat::Format::format_8_vec2_uint:              return gl::Internal_format::rg8ui;
+        case erhe::dataformat::Format::format_8_vec2_sint:              return gl::Internal_format::rg8i;
+        case erhe::dataformat::Format::format_8_vec3_unorm:             return gl::Internal_format::rgb8;
+        case erhe::dataformat::Format::format_8_vec3_snorm:             return gl::Internal_format::rgb8_snorm;
+        case erhe::dataformat::Format::format_8_vec3_uint:              return gl::Internal_format::rgb8ui;
+        case erhe::dataformat::Format::format_8_vec3_sint:              return gl::Internal_format::rgb8i;
+        case erhe::dataformat::Format::format_8_vec4_unorm:             return gl::Internal_format::rgba8;
+        case erhe::dataformat::Format::format_8_vec4_snorm:             return gl::Internal_format::rgba8_snorm;
+        case erhe::dataformat::Format::format_8_vec4_uint:              return gl::Internal_format::rgba8ui;
+        case erhe::dataformat::Format::format_8_vec4_sint:              return gl::Internal_format::rgba8i;
+        case erhe::dataformat::Format::format_16_scalar_unorm:          return gl::Internal_format::r16;
+        case erhe::dataformat::Format::format_16_scalar_snorm:          return gl::Internal_format::r16_snorm;
+        case erhe::dataformat::Format::format_16_scalar_uint:           return gl::Internal_format::r16ui;
+        case erhe::dataformat::Format::format_16_scalar_sint:           return gl::Internal_format::r16i;
+        case erhe::dataformat::Format::format_16_scalar_float:          return gl::Internal_format::r16f;
+        case erhe::dataformat::Format::format_16_vec2_unorm:            return gl::Internal_format::rg16;
+        case erhe::dataformat::Format::format_16_vec2_snorm:            return gl::Internal_format::rg16_snorm;
+        case erhe::dataformat::Format::format_16_vec2_uint:             return gl::Internal_format::rg16ui;
+        case erhe::dataformat::Format::format_16_vec2_sint:             return gl::Internal_format::rg16i;
+        case erhe::dataformat::Format::format_16_vec2_float:            return gl::Internal_format::rg16f;
+        case erhe::dataformat::Format::format_16_vec3_unorm:            return gl::Internal_format::rgb16;
+        case erhe::dataformat::Format::format_16_vec3_snorm:            return gl::Internal_format::rgb16_snorm;
+        case erhe::dataformat::Format::format_16_vec3_uint:             return gl::Internal_format::rgb16ui;
+        case erhe::dataformat::Format::format_16_vec3_sint:             return gl::Internal_format::rgb16i;
+        case erhe::dataformat::Format::format_16_vec3_float:            return gl::Internal_format::rgb16f;
+        case erhe::dataformat::Format::format_16_vec4_unorm:            return gl::Internal_format::rgba16;
+        case erhe::dataformat::Format::format_16_vec4_snorm:            return gl::Internal_format::rgba16_snorm;
+        case erhe::dataformat::Format::format_16_vec4_uint:             return gl::Internal_format::rgba16ui;
+        case erhe::dataformat::Format::format_16_vec4_sint:             return gl::Internal_format::rgba16i;
+        case erhe::dataformat::Format::format_16_vec4_float:            return gl::Internal_format::rgba16f;
+        case erhe::dataformat::Format::format_32_scalar_uint:           return gl::Internal_format::r32ui;
+        case erhe::dataformat::Format::format_32_scalar_sint:           return gl::Internal_format::r32i;
+        case erhe::dataformat::Format::format_32_scalar_float:          return gl::Internal_format::r32f;
+        case erhe::dataformat::Format::format_32_vec2_uint:             return gl::Internal_format::rg32ui;
+        case erhe::dataformat::Format::format_32_vec2_sint:             return gl::Internal_format::rg32i;
+        case erhe::dataformat::Format::format_32_vec2_float:            return gl::Internal_format::rg32f;
+        case erhe::dataformat::Format::format_32_vec3_uint:             return gl::Internal_format::rgb32ui;
+        case erhe::dataformat::Format::format_32_vec3_sint:             return gl::Internal_format::rgb32i;
+        case erhe::dataformat::Format::format_32_vec3_float:            return gl::Internal_format::rgb32f;
+        case erhe::dataformat::Format::format_32_vec4_uint:             return gl::Internal_format::rgba32ui;
+        case erhe::dataformat::Format::format_32_vec4_sint:             return gl::Internal_format::rgba32i;    
+        case erhe::dataformat::Format::format_32_vec4_float:            return gl::Internal_format::rgba32f;
+        case erhe::dataformat::Format::format_packed1010102_vec4_unorm: return gl::Internal_format::rgb10_a2;
+        case erhe::dataformat::Format::format_packed1010102_vec4_uint:  return gl::Internal_format::rgb10_a2ui;
+        case erhe::dataformat::Format::format_d16_unorm:                return gl::Internal_format::depth_component16;
+        case erhe::dataformat::Format::format_x8_d24_unorm_pack32:      return gl::Internal_format::depth32f_stencil8;
+        case erhe::dataformat::Format::format_d32_sfloat:               return gl::Internal_format::depth_component32f;
+        case erhe::dataformat::Format::format_s8_uint:                  return gl::Internal_format::stencil_index8;
+        case erhe::dataformat::Format::format_d24_unorm_s8_uint:        return gl::Internal_format::depth24_stencil8;
+        case erhe::dataformat::Format::format_d32_sfloat_s8_uint:       return gl::Internal_format::depth32f_stencil8;
+        default: return {};
+    }
+}
+
+
+[[nodiscard]] auto convert_from_gl(gl::Internal_format format) -> erhe::dataformat::Format
+{
+    switch (format) {
+        case gl::Internal_format::r8                : return erhe::dataformat::Format::format_8_scalar_unorm;
+        case gl::Internal_format::r8_snorm          : return erhe::dataformat::Format::format_8_scalar_snorm;
+        case gl::Internal_format::r8ui              : return erhe::dataformat::Format::format_8_scalar_uint;
+        case gl::Internal_format::r8i               : return erhe::dataformat::Format::format_8_scalar_sint;
+        case gl::Internal_format::rg8               : return erhe::dataformat::Format::format_8_vec2_unorm;
+        case gl::Internal_format::rg8_snorm         : return erhe::dataformat::Format::format_8_vec2_snorm;
+        case gl::Internal_format::rg8ui             : return erhe::dataformat::Format::format_8_vec2_uint;
+        case gl::Internal_format::rg8i              : return erhe::dataformat::Format::format_8_vec2_sint;
+        case gl::Internal_format::rgb8              : return erhe::dataformat::Format::format_8_vec3_unorm;
+        case gl::Internal_format::rgb8_snorm        : return erhe::dataformat::Format::format_8_vec3_snorm;
+        case gl::Internal_format::rgb8ui            : return erhe::dataformat::Format::format_8_vec3_uint;
+        case gl::Internal_format::rgb8i             : return erhe::dataformat::Format::format_8_vec3_sint;
+        case gl::Internal_format::rgba8             : return erhe::dataformat::Format::format_8_vec4_unorm;
+        case gl::Internal_format::rgba8_snorm       : return erhe::dataformat::Format::format_8_vec4_snorm;
+        case gl::Internal_format::rgba8ui           : return erhe::dataformat::Format::format_8_vec4_uint;
+        case gl::Internal_format::rgba8i            : return erhe::dataformat::Format::format_8_vec4_sint;
+        case gl::Internal_format::r16               : return erhe::dataformat::Format::format_16_scalar_unorm;
+        case gl::Internal_format::r16_snorm         : return erhe::dataformat::Format::format_16_scalar_snorm;
+        case gl::Internal_format::r16ui             : return erhe::dataformat::Format::format_16_scalar_uint;
+        case gl::Internal_format::r16i              : return erhe::dataformat::Format::format_16_scalar_sint;
+        case gl::Internal_format::r16f              : return erhe::dataformat::Format::format_16_scalar_float;
+        case gl::Internal_format::rg16              : return erhe::dataformat::Format::format_16_vec2_unorm;
+        case gl::Internal_format::rg16_snorm        : return erhe::dataformat::Format::format_16_vec2_snorm;
+        case gl::Internal_format::rg16ui            : return erhe::dataformat::Format::format_16_vec2_uint;
+        case gl::Internal_format::rg16i             : return erhe::dataformat::Format::format_16_vec2_sint;
+        case gl::Internal_format::rg16f             : return erhe::dataformat::Format::format_16_vec2_float;
+        case gl::Internal_format::rgb16             : return erhe::dataformat::Format::format_16_vec3_unorm;
+        case gl::Internal_format::rgb16_snorm       : return erhe::dataformat::Format::format_16_vec3_snorm;
+        case gl::Internal_format::rgb16ui           : return erhe::dataformat::Format::format_16_vec3_uint;
+        case gl::Internal_format::rgb16i            : return erhe::dataformat::Format::format_16_vec3_sint;
+        case gl::Internal_format::rgb16f            : return erhe::dataformat::Format::format_16_vec3_float;
+        case gl::Internal_format::rgba16            : return erhe::dataformat::Format::format_16_vec4_unorm;
+        case gl::Internal_format::rgba16_snorm      : return erhe::dataformat::Format::format_16_vec4_snorm;
+        case gl::Internal_format::rgba16ui          : return erhe::dataformat::Format::format_16_vec4_uint;
+        case gl::Internal_format::rgba16i           : return erhe::dataformat::Format::format_16_vec4_sint;
+        case gl::Internal_format::rgba16f           : return erhe::dataformat::Format::format_16_vec4_float;
+        case gl::Internal_format::r32ui             : return erhe::dataformat::Format::format_32_scalar_uint;
+        case gl::Internal_format::r32i              : return erhe::dataformat::Format::format_32_scalar_sint;
+        case gl::Internal_format::r32f              : return erhe::dataformat::Format::format_32_scalar_float;
+        case gl::Internal_format::rg32ui            : return erhe::dataformat::Format::format_32_vec2_uint;
+        case gl::Internal_format::rg32i             : return erhe::dataformat::Format::format_32_vec2_sint;
+        case gl::Internal_format::rg32f             : return erhe::dataformat::Format::format_32_vec2_float;
+        case gl::Internal_format::rgb32ui           : return erhe::dataformat::Format::format_32_vec3_uint;
+        case gl::Internal_format::rgb32i            : return erhe::dataformat::Format::format_32_vec3_sint;
+        case gl::Internal_format::rgb32f            : return erhe::dataformat::Format::format_32_vec3_float;
+        case gl::Internal_format::rgba32ui          : return erhe::dataformat::Format::format_32_vec4_uint;
+        case gl::Internal_format::rgba32i           : return erhe::dataformat::Format::format_32_vec4_sint;
+        case gl::Internal_format::rgba32f           : return erhe::dataformat::Format::format_32_vec4_float;
+        case gl::Internal_format::rgb10_a2          : return erhe::dataformat::Format::format_packed1010102_vec4_unorm;
+        case gl::Internal_format::rgb10_a2ui        : return erhe::dataformat::Format::format_packed1010102_vec4_uint;
+        case gl::Internal_format::depth_component16 : return erhe::dataformat::Format::format_d16_unorm;
+        //case gl::Internal_format::depth32f_stencil8 : return erhe::dataformat::Format::format_x8_d24_unorm_pack32;
+        case gl::Internal_format::depth_component32f: return erhe::dataformat::Format::format_d32_sfloat;
+        case gl::Internal_format::stencil_index8    : return erhe::dataformat::Format::format_s8_uint;
+        case gl::Internal_format::depth24_stencil8  : return erhe::dataformat::Format::format_d24_unorm_s8_uint;
+        case gl::Internal_format::depth32f_stencil8 : return erhe::dataformat::Format::format_d32_sfloat_s8_uint;
+        default: return erhe::dataformat::Format::format_undefined;
+    }
+}
 } // namespace gl

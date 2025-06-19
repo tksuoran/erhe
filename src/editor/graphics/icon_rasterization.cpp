@@ -95,7 +95,7 @@ void Icon_load_data::upload(int size, erhe::graphics::Texture& texture)
             static_cast<size_t>(bitmap.stride()) * static_cast<size_t>(bitmap.height())
         };
 
-        texture.upload(gl::Internal_format::rgba8, span, bitmap.width(), bitmap.height(), 1, 0, x_offset, y_offset, 0);
+        texture.upload(erhe::dataformat::Format::format_8_vec4_unorm, span, bitmap.width(), bitmap.height(), 1, 0, x_offset, y_offset, 0);
     }
 }
 
@@ -161,13 +161,13 @@ Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::gra
         std::make_shared<erhe::graphics::Texture>(
             graphics_device,
             erhe::graphics::Texture_create_info{
-                .device          = graphics_device,
-                .target          = gl::Texture_target::texture_2d,
-                .internal_format = gl::Internal_format::rgba8,
-                .use_mipmaps     = true,
-                .width           = Icon_set::s_column_count * size,
-                .height          = Icon_set::s_row_count * size,
-                .debug_label     = "Icons"
+                .device      = graphics_device,
+                .target      = gl::Texture_target::texture_2d,
+                .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm, // TODO sRGB?
+                .use_mipmaps = true,
+                .width       = Icon_set::s_column_count * size,
+                .height      = Icon_set::s_row_count * size,
+                .debug_label = "Icons"
             }
         )
     }
@@ -180,10 +180,7 @@ Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::gra
         }
     }
     , m_texture_handle{
-        graphics_device.get_handle(
-            *m_texture.get(),
-            m_linear_sampler
-        )
+        graphics_device.get_handle(*m_texture.get(), m_linear_sampler)
     }
     , m_icon_width    {size}
     , m_icon_height   {size}

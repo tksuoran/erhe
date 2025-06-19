@@ -25,6 +25,7 @@ target_link_libraries(
     PUBLIC
         glm::glm-header-only
     PRIVATE
+        erhe::dataformat
         erhe::log
         erhe::profile
         erhe::verify

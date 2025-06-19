@@ -36,24 +36,7 @@ void Textures::initialize_component()
     background = load(std::filesystem::path("res") / "images" / "background.png");
 }
 
-gl::Internal_format to_gl(erhe::graphics::Image_format format)
-{
-    switch (format)
-    {
-        //using enum erhe::graphics::Image_format;
-        case erhe::graphics::Image_format::rgb8:  return gl::Internal_format::rgb8;
-        case erhe::graphics::Image_format::rgba8: return gl::Internal_format::rgba8;
-        default:
-        {
-            ERHE_FATAL("Bad image format %04x\n", static_cast<unsigned int>(format));
-        }
-    }
-    // std::unreachable() return gl::Internal_format::rgba8;
-}
-
-auto Textures::load(
-    const std::filesystem::path& path
-) -> shared_ptr<Texture>
+auto Textures::load(const std::filesystem::path& path) -> shared_ptr<Texture>
 {
     if (
         !std::filesystem::exists(path) ||

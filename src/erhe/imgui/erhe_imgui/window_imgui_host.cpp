@@ -13,7 +13,7 @@
 
 namespace erhe::imgui {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 Window_imgui_host::Window_imgui_host(

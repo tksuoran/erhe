@@ -451,20 +451,18 @@ void Font::post_process()
     };
     m_bitmap->post_process(bm, m_gamma);
 
-    auto internal_format = gl::Internal_format::rg8;
-
     const Texture::Create_info create_info{
-        .device          = m_graphics_device,
-        .target          = gl::Texture_target::texture_2d,
-        .internal_format = internal_format,
-        .use_mipmaps     = false,
-        .width           = m_texture_width,
-        .height          = m_texture_height,
-        .debug_label     = "Font"
+        .device      = m_graphics_device,
+        .target      = gl::Texture_target::texture_2d,
+        .pixelformat = erhe::dataformat::Format::format_8_vec2_unorm,
+        .use_mipmaps = false,
+        .width       = m_texture_width,
+        .height      = m_texture_height,
+        .debug_label = "Font"
     };
 
     m_texture = std::make_unique<Texture>(m_graphics_device, create_info);
-    m_texture->upload(create_info.internal_format, bm.as_span(), create_info.width, create_info.height);
+    m_texture->upload(create_info.pixelformat, bm.as_span(), create_info.width, create_info.height);
     m_texture->set_debug_label(m_path.filename().generic_string());
 }
 

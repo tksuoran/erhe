@@ -198,12 +198,12 @@ void Rendergraph_window::imgui()
             const auto& texture = node->get_producer_output_texture(output.resource_routing, output.key);
             if (
                 texture &&
-                (texture->target() == gl::Texture_target::texture_2d) &&
-                (texture->width () >= 1) &&
-                (texture->height() >= 1) &&
-                (gl_helpers::has_color(texture->internal_format()))
+                (texture->get_target() == gl::Texture_target::texture_2d) &&
+                (texture->get_width () >= 1) &&
+                (texture->get_height() >= 1) &&
+                (erhe::dataformat::has_color(texture->get_pixelformat()))
             ) {
-                const float aspect = static_cast<float>(texture->width()) / static_cast<float>(texture->height());
+                const float aspect = static_cast<float>(texture->get_width()) / static_cast<float>(texture->get_height());
                 m_imgui_renderer.image(
                     texture,
                     static_cast<int>(zoom * aspect * m_image_size),

@@ -17,6 +17,9 @@ namespace erhe::window {
 
 namespace erhe::graphics {
 
+class Render_pass;
+class Render_command_encoder;
+
 class Format_properties
 {
 public:
@@ -196,6 +199,8 @@ public:
     [[nodiscard]] auto get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture() -> std::shared_ptr<Texture>;
 
+    // [[nodiscard]] auto make_render_command_encoder(const std::shared_ptr<Render_pass>& framebuffer) -> std::shared_ptr<Render_command_encoder>&;
+
     // Texture unit cache for bindless emulation
     void texture_unit_cache_reset   (unsigned int base_texture_unit);
     auto texture_unit_cache_allocate(uint64_t handle) -> std::optional<std::size_t>;
@@ -210,6 +215,7 @@ public:
     // dsa
     void named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height);
 
+    [[nodiscard]] auto make_render_command_encoder(Render_pass& render_pass) -> std::unique_ptr<Render_command_encoder>;
 
     // multi draw indirect
     void multi_draw_elements_indirect(
@@ -222,9 +228,9 @@ public:
 
     // auto binding_point(unsigned int binding_point) -> unsigned int;
 
-    auto get_format_properties(gl::Internal_format format) const -> Format_properties;
+    auto get_format_properties(erhe::dataformat::Format format) const -> Format_properties;
 
-    auto choose_depth_stencil_format(unsigned int flags, int sample_count) const -> gl::Internal_format;
+    auto choose_depth_stencil_format(unsigned int flags, int sample_count) const -> erhe::dataformat::Format;
 
     class Info
     {

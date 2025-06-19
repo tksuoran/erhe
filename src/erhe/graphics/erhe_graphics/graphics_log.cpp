@@ -18,6 +18,7 @@ std::shared_ptr<spdlog::logger> log_texture_frame            ;
 std::shared_ptr<spdlog::logger> log_threads                  ;
 std::shared_ptr<spdlog::logger> log_vertex_attribute_mappings;
 std::shared_ptr<spdlog::logger> log_vertex_stream            ;
+std::shared_ptr<spdlog::logger> log_render_pass              ;
 std::shared_ptr<spdlog::logger> log_startup                  ;
 
 void initialize_logging()
@@ -38,6 +39,7 @@ void initialize_logging()
     log_threads                   = make_logger      ("erhe.graphics.threads"         );
     log_vertex_attribute_mappings = make_logger      ("erhe.graphics.vertex_attribute");
     log_vertex_stream             = make_logger      ("erhe.graphics.vertex_stream"   );
+    log_render_pass               = make_frame_logger("erhe.graphics.render_pass"     );
     log_startup                   = make_logger      ("erhe.graphics.startup"         );
 }
 

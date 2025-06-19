@@ -14,6 +14,7 @@ class Basic_viewport_windows
 {
 public:
     Basic_viewport_windows();
+    ~Basic_viewport_windows() override;
 
 private:
     std::vector<std::shared_ptr<Basic_viewport_window>> m_viewport_windows;

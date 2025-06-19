@@ -7,10 +7,11 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -22,7 +23,7 @@
 
 namespace erhe::scene_renderer {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 using erhe::graphics::Vertex_input_state;
@@ -146,7 +147,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     log_render->debug("Shadow_renderer::render()");
     log_shadow_renderer->trace(
         "Making light projections using texture '{}' sampler '{}' / '{}' handle '{}' / '{}'",
-        parameters.texture->debug_label(),
+        parameters.texture->get_debug_label(),
         m_shadow_sampler_compare.debug_label(),
         m_shadow_sampler_no_compare.debug_label(),
         erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle_compare),
@@ -168,22 +169,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
     m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
 
-    gl::viewport(
-        parameters.light_camera_viewport.x,
-        parameters.light_camera_viewport.y,
-        parameters.light_camera_viewport.width,
-        parameters.light_camera_viewport.height
-    );
-
-    if ((parameters.light_camera_viewport.width > 2) && (parameters.light_camera_viewport.height > 2)) {
-        gl::scissor(
-            parameters.light_camera_viewport.x + 1,
-            parameters.light_camera_viewport.y + 1,
-            parameters.light_camera_viewport.width - 2,
-            parameters.light_camera_viewport.height - 2
-        );
-    }
-
     erhe::Item_filter shadow_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
@@ -202,7 +187,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     m_joint_buffer.bind(joint_range);
     m_light_buffer.bind_light_buffer(light_range);
 
-    log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->debug_label());
+    log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label());
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 
@@ -217,14 +202,32 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             continue;
         }
         const std::size_t light_index = light_projection_transform->index;
-        if (light_index >= parameters.framebuffers.size()) {
+        if (light_index >= parameters.render_passes.size()) {
             continue;
         }
 
-        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, parameters.framebuffers[light_index]->gl_name());
-        gl::disable(gl::Enable_cap::scissor_test);
-        gl::clear_buffer_fv(gl::Buffer::depth, 0, m_graphics_device.depth_clear_value_pointer());
-        gl::enable(gl::Enable_cap::scissor_test);
+        std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*parameters.render_passes[light_index].get());
+
+        //// gl::disable(gl::Enable_cap::scissor_test);
+        //// gl::clear_buffer_fv(gl::Buffer::depth, 0, m_graphics_device.depth_clear_value_pointer());
+        //// gl::enable(gl::Enable_cap::scissor_test);
+
+        //// gl::viewport(
+        ////     parameters.light_camera_viewport.x,
+        ////     parameters.light_camera_viewport.y,
+        ////     parameters.light_camera_viewport.width,
+        ////     parameters.light_camera_viewport.height
+        //// );
+
+        if ((parameters.light_camera_viewport.width > 2) && (parameters.light_camera_viewport.height > 2)) {
+            gl::enable(gl::Enable_cap::scissor_test);
+            gl::scissor(
+                parameters.light_camera_viewport.x + 1,
+                parameters.light_camera_viewport.y + 1,
+                parameters.light_camera_viewport.width - 2,
+                parameters.light_camera_viewport.height - 2
+            );
+        }
 
         Buffer_range control_range = m_light_buffer.update_control(light_index);
         m_light_buffer.bind_control_buffer(control_range);
@@ -265,13 +268,13 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         }
 
         control_range.release();
+
+        gl::disable(gl::Enable_cap::scissor_test);
     }
 
     material_range.release();
     joint_range.release();
     light_range.release();
-
-    gl::disable(gl::Enable_cap::scissor_test);
 
     return true;
 }

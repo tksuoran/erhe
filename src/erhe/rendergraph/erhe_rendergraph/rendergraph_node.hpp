@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace erhe::graphics {
-    class Framebuffer;
+    class Render_pass;
     class Texture;
 }
 
@@ -115,11 +115,11 @@ public:
 
     [[nodiscard]] virtual auto get_consumer_input_node        (Routing resource_routing, int key, int depth = 0) const -> Rendergraph_node*;
     [[nodiscard]] virtual auto get_consumer_input_texture     (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] virtual auto get_consumer_input_framebuffer (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer>;
+    [[nodiscard]] virtual auto get_consumer_input_render_pass (Routing resource_routing, int key, int depth = 0) const -> erhe::graphics::Render_pass*;
     [[nodiscard]] virtual auto get_consumer_input_viewport    (Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport;
     [[nodiscard]] virtual auto get_producer_output_node       (Routing resource_routing, int key, int depth = 0) const -> Rendergraph_node*;
     [[nodiscard]] virtual auto get_producer_output_texture    (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] virtual auto get_producer_output_framebuffer(Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer>;
+    [[nodiscard]] virtual auto get_producer_output_render_pass(Routing resource_routing, int key, int depth = 0) const -> erhe::graphics::Render_pass*;
     [[nodiscard]] virtual auto get_producer_output_viewport   (Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport;
 
 protected:

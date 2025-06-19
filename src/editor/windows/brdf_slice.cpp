@@ -9,9 +9,9 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_profile/profile.hpp"
@@ -32,13 +32,13 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
             .rendergraph          = rendergraph,
             .name                 = std::string{"Brdf_slice_rendergraph_node"},
             .output_key           = erhe::rendergraph::Rendergraph_node_key::texture_for_gui,
-            .color_format         = gl::Internal_format::rgba16f,
-            .depth_stencil_format = gl::Internal_format{0}
+            .color_format         = erhe::dataformat::Format::format_16_vec4_float,
+            .depth_stencil_format = erhe::dataformat::Format::format_undefined
         }
     }
     , m_forward_renderer  {forward_renderer}
     , m_brdf_slice        {brdf_slice}
-    , m_empty_vertex_input{rendergraph.get_graphics_instance(), erhe::graphics::Vertex_input_state_data{}}
+    , m_empty_vertex_input{rendergraph.get_graphics_device(), erhe::graphics::Vertex_input_state_data{}}
     , m_renderpass{ 
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
@@ -80,7 +80,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
     // Execute base class in order to update texture and framebuffer
     Texture_rendergraph_node::execute_rendergraph_node();
 
-    if (!m_framebuffer) {
+    if (!m_render_pass) {
         // Likely because output ImGui window has no viewport size yet.
         return;
     }
@@ -94,8 +94,9 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
     erhe::graphics::Scoped_debug_group pass_scope{"BRDF Slice"};
 
     const auto& output_viewport = get_producer_output_viewport(erhe::rendergraph::Routing::Resource_provided_by_consumer, m_output_key);
+    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
+    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
 
     erhe::scene_renderer::Light_projections light_projections;
     light_projections.brdf_phi          = m_brdf_slice.phi;
@@ -121,7 +122,6 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
         nullptr
     );
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::render() - done");
 }
 
@@ -192,8 +192,8 @@ void Brdf_slice::show_brdf_slice(int area_size)
         return;
     }
 
-    const int texture_width  = texture->width();
-    const int texture_height = texture->height();
+    const int texture_width  = texture->get_width();
+    const int texture_height = texture->get_height();
 
     if (
         (texture_width  > 0) &&

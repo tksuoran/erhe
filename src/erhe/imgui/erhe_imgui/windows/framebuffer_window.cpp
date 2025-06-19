@@ -3,7 +3,9 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -12,7 +14,7 @@
 
 namespace erhe::imgui {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 Framebuffer_window::Framebuffer_window(
@@ -26,6 +28,10 @@ Framebuffer_window::Framebuffer_window(
     , m_graphics_device{graphics_device}
     , m_debug_label    {ini_label}
     , m_vertex_input   {graphics_device, erhe::graphics::Vertex_input_state_data{}}
+{
+}
+
+Framebuffer_window::~Framebuffer_window()
 {
 }
 
@@ -44,13 +50,14 @@ auto Framebuffer_window::to_content(const glm::vec2 position_in_root) const -> g
     return glm::vec2{content_x, content_y};
 }
 
-void Framebuffer_window::bind_framebuffer()
+auto Framebuffer_window::make_render_command_encoder() -> std::unique_ptr<erhe::graphics::Render_command_encoder>
 {
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-    gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
+    return m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+    //gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_render_pass->gl_name());
+    //gl::viewport(m_viewport.x, m_viewport.y, m_viewport.width, m_viewport.height);
 }
 
-void Framebuffer_window::update_framebuffer()
+void Framebuffer_window::update_render_pass()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -82,7 +89,7 @@ void Framebuffer_window::update_framebuffer()
     const glm::vec2  texture_size = source_size * ratio_min;
     const glm::ivec2 size{texture_size};
 
-    if (m_texture && (m_texture->width() == size.x) && (m_texture->height() == size.y)) {
+    if (m_texture && (m_texture->get_width() == size.x) && (m_texture->get_height() == size.y)) {
         return;
     }
 
@@ -92,13 +99,13 @@ void Framebuffer_window::update_framebuffer()
     m_texture = std::make_shared<Texture>(
         m_graphics_device,
         Texture::Create_info{
-            .device          = m_graphics_device,
-            .target          = gl::Texture_target::texture_2d,
-            .internal_format = gl::Internal_format::srgb8_alpha8,
-            .sample_count    = 0,
-            .width           = m_viewport.width,
-            .height          = m_viewport.height,
-            .debug_label     = "Framebuffer_window"
+            .device       = m_graphics_device,
+            .target       = gl::Texture_target::texture_2d,
+            .pixelformat  = erhe::dataformat::Format::format_8_vec4_srgb,
+            .sample_count = 0,
+            .width        = m_viewport.width,
+            .height       = m_viewport.height,
+            .debug_label  = "Framebuffer_window"
         }
     );
     m_texture->set_debug_label(m_debug_label);
@@ -109,17 +116,17 @@ void Framebuffer_window::update_framebuffer()
         // TODO
     }
 
-    Framebuffer::Create_info create_info;
-    create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
-    m_framebuffer = std::make_unique<Framebuffer>(m_graphics_device, create_info);
-    m_framebuffer->set_debug_label(m_debug_label);
+    erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+    render_pass_descriptor.color_attachments[0].texture = m_texture.get();
+    render_pass_descriptor.debug_label                  = m_debug_label;
+    m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
 }
 
 void Framebuffer_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (m_texture && (m_texture->width() > 0) && (m_texture->height() > 0)) {
+    if (m_texture && (m_texture->get_width() > 0) && (m_texture->get_height() > 0)) {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
         draw_image(m_texture, m_viewport.width, m_viewport.height);
         set_is_window_hovered(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem));

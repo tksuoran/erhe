@@ -1,5 +1,6 @@
 ﻿#include "erhe_xr/xr_session.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
@@ -41,8 +42,8 @@ Xr_session::Xr_session(Xr_instance& instance, erhe::window::Context_window& cont
     , m_context_window                {context_window}
     , m_xr_session                    {XR_NULL_HANDLE}
     , m_mirror_mode                   {mirror_mode}
-    , m_swapchain_color_format        {gl::Internal_format::srgb8_alpha8}
-    , m_swapchain_depth_stencil_format{gl::Internal_format::depth24_stencil8}
+    , m_swapchain_color_format        {erhe::dataformat::Format::format_8_vec4_srgb}
+    , m_swapchain_depth_stencil_format{erhe::dataformat::Format::format_d32_sfloat_s8_uint}
     , m_xr_reference_space_local      {XR_NULL_HANDLE}
     , m_xr_reference_space_stage      {XR_NULL_HANDLE}
     , m_xr_reference_space_view       {XR_NULL_HANDLE}
@@ -232,16 +233,16 @@ auto Xr_session::get_xr_frame_state() const -> const XrFrameState&
     return m_xr_frame_state;
 }
 
-auto Xr_session::color_format_score(const gl::Internal_format image_format) const -> int
+auto Xr_session::color_format_score(const erhe::dataformat::Format pixelformat) const -> int
 {
-    switch (image_format) {
+    switch (pixelformat) {
         //using enum gl::Internal_format;
-        case gl::Internal_format::rgba8:          return 1;
-        case gl::Internal_format::srgb8_alpha8:   return 2 + m_mirror_mode ? 10 : 0;
-        case gl::Internal_format::rgb10_a2:       return 3;
-        case gl::Internal_format::r11f_g11f_b10f: return 4;
-        case gl::Internal_format::rgba16f:        return 5;
-        default:                                  return 0;
+        case erhe::dataformat::Format::format_8_vec4_unorm:             return 1;
+        case erhe::dataformat::Format::format_8_vec4_srgb:              return 2 + m_mirror_mode ? 10 : 0;
+        case erhe::dataformat::Format::format_packed1010102_vec4_unorm: return 3;
+        case erhe::dataformat::Format::format_packed111110_vec3_unorm:  return 4;
+        case erhe::dataformat::Format::format_16_vec4_float:            return 5;
+        default:                                                        return 0;
     }
 }
 
@@ -263,17 +264,19 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
 
     log_xr->info("Swapchain formats:");
     int best_color_format_score{0};
-    m_swapchain_color_format = gl::Internal_format::srgb8_alpha8;
+    m_swapchain_color_format = erhe::dataformat::Format::format_8_vec4_srgb;
     for (const auto swapchain_format : swapchain_formats) {
-        const auto gl_internal_format = static_cast<gl::Internal_format>(swapchain_format);
-        log_xr->info("    {}", gl::c_str(gl_internal_format));
-        const int color_score = color_format_score(gl_internal_format);
+        const gl::Internal_format      gl_internal_format = static_cast<gl::Internal_format>(swapchain_format);
+        const erhe::dataformat::Format pixelformat        = gl_helpers::convert_from_gl(gl_internal_format);
+        ERHE_VERIFY(pixelformat != erhe::dataformat::Format::format_undefined);
+        log_xr->info("    {}", erhe::dataformat::c_str(pixelformat));
+        const int color_score = color_format_score(pixelformat);
         if (color_score > best_color_format_score) {
             best_color_format_score = color_score;
-            m_swapchain_color_format = gl_internal_format;
+            m_swapchain_color_format = pixelformat;
         }
     }
-    log_xr->info("Selected swapchain color format {}", gl::c_str(m_swapchain_color_format));
+    log_xr->info("Selected swapchain color format {}", erhe::dataformat::c_str(m_swapchain_color_format));
 
     return true;
 }

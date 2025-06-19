@@ -32,8 +32,8 @@ public:
     auto get_producer_output_viewport   (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> erhe::math::Viewport override;
     auto get_consumer_input_texture     (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
     auto get_producer_output_texture    (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
-    auto get_consumer_input_framebuffer (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
-    auto get_producer_output_framebuffer(erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_consumer_input_render_pass (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> erhe::graphics::Render_pass* override;
+    auto get_producer_output_render_pass(erhe::rendergraph::Routing routing, int key, int depth = 0) const -> erhe::graphics::Render_pass* override;
 
     // Public API
     [[nodiscard]] auto get_viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>;

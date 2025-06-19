@@ -120,7 +120,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         log_forward_renderer->trace(
             "render({}) shadow T '{}' handle {} / {}",
             safe_str(parameters.passes.front()->pipeline.data.name),
-            enable_shadows ? parameters.shadow_texture->debug_label() : "",
+            enable_shadows ? parameters.shadow_texture->get_debug_label() : "",
             erhe::graphics::format_texture_handle(parameters.light_projections->shadow_map_texture_handle_compare),
             erhe::graphics::format_texture_handle(parameters.light_projections->shadow_map_texture_handle_no_compare)
         );

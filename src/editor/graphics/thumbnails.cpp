@@ -3,9 +3,10 @@
 
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_profile/profile.hpp"
@@ -14,50 +15,64 @@
 namespace editor {
 
 Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, const unsigned int capacity, const unsigned int size_pixels)
-    : m_color_sampler{
+    : m_graphics_device{graphics_device}
+    , m_color_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
+            .min_filter  = gl::Texture_min_filter::linear,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Thumbnail sampler"
         }
     }
 {
-    m_capacity_root = static_cast<unsigned int>(std::sqrt(capacity) + 0.5);
-    m_capacity = m_capacity_root * m_capacity_root;
+    m_capacity = capacity;
     m_in_use.resize(m_capacity);
     std::fill(m_in_use.begin(), m_in_use.end(), false);
     m_size_pixels = size_pixels;
-    const int viewport_size = static_cast<int>(m_capacity_root * m_size_pixels);
-
     m_color_texture = std::make_shared<erhe::graphics::Texture>(
         graphics_device,
         erhe::graphics::Texture_create_info{
-            .device          = graphics_device,
-            .target          = gl::Texture_target::texture_2d,
-            .internal_format = gl::Internal_format::rgba8,
-            .use_mipmaps     = true,
-            .width           = viewport_size,
-            .height          = viewport_size,
-            .debug_label     = "Thumbnails"
+            .device            = graphics_device,
+            .target            = gl::Texture_target::texture_2d_array,
+            .pixelformat       = erhe::dataformat::Format::format_8_vec4_unorm, // TODO sRGB?
+            .use_mipmaps       = true,
+            .width             = m_size_pixels,
+            .height            = m_size_pixels,
+            .array_layer_count = m_capacity,
+            .debug_label       = "Thumbnails"
         }
     );
 
     m_depth_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
         graphics_device,
-        gl::Internal_format::depth_component32f,
-        viewport_size,
-        viewport_size
+        erhe::dataformat::Format::format_d32_sfloat,
+        m_size_pixels,
+        m_size_pixels
     );
     m_depth_renderbuffer->set_debug_label("Thumbnail depth renderbuffer");
 
-    erhe::graphics::Framebuffer::Create_info framebuffer_create_info;
-    framebuffer_create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
-    framebuffer_create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_renderbuffer.get());
-    m_framebuffer = std::make_unique<erhe::graphics::Framebuffer>(graphics_device, framebuffer_create_info);
-    m_framebuffer->set_debug_label("Thumbnail framebuffer");
+    m_texture_views.resize(m_capacity);
+    m_color_texture_handles.resize(m_capacity);
+    for (int i = 0; i < m_capacity; ++i) {
+        erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, m_color_texture);
+        texture_create_info.view_base_level       = 0;
+        texture_create_info.level_count           = 1;
+        texture_create_info.view_base_array_layer = i;
+        texture_create_info.debug_label           = fmt::format("Thumbnail layer {}", i);
+        m_texture_views[i] = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
 
-    m_color_texture_handle = graphics_device.get_handle(*m_color_texture.get(), m_color_sampler);
+        erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+        render_pass_descriptor.color_attachments[0].texture     = m_texture_views[i].get();
+        render_pass_descriptor.color_attachments[0].load_action = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment.renderbuffer    = m_depth_renderbuffer.get();
+        render_pass_descriptor.depth_attachment.load_action     = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment.clear_value[0]  = 0.0f; // Reverse Z clear value is 0.0
+        render_pass_descriptor.debug_label                      = fmt::format("Thumbnail render pass layer {}", i);
+        render_pass_descriptor.render_target_width              = m_size_pixels;
+        render_pass_descriptor.render_target_height             = m_size_pixels;
+        m_render_pass = std::make_unique<erhe::graphics::Render_pass>(graphics_device, render_pass_descriptor);
+        m_color_texture_handles[i] = graphics_device.get_handle(*m_texture_views[i].get(), m_color_sampler);
+    }
 }
 
 auto Thumbnails::allocate() -> uint32_t
@@ -78,22 +93,9 @@ void Thumbnails::free(uint32_t slot)
     m_in_use[slot] = true;
 }
 
-void Thumbnails::begin_capture(uint32_t slot) const
+auto Thumbnails::begin_capture(uint32_t slot) -> std::unique_ptr<erhe::graphics::Render_command_encoder>
 {
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-
-#if !defined(NDEBUG)
-    const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
-    ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
-#endif
-
-    const uint32_t slot_x = slot % m_capacity_root;
-    const uint32_t slot_y = slot / m_capacity_root;
-    const uint32_t x0     = slot_x * m_size_pixels;
-    const uint32_t y0     = slot_y * m_size_pixels;
-    gl::viewport   (x0, y0, m_size_pixels, m_size_pixels);
-    gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-    gl::clear      (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
+    return m_graphics_device.make_render_command_encoder(*m_render_passes[slot].get());
 }
 
 void Thumbnails::draw(uint32_t slot) const

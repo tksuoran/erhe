@@ -27,7 +27,7 @@
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -50,7 +50,7 @@ using erhe::graphics::Input_assembly_state;
 using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 

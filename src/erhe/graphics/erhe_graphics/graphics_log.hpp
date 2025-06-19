@@ -21,6 +21,7 @@ extern std::shared_ptr<spdlog::logger> log_texture_frame;
 extern std::shared_ptr<spdlog::logger> log_threads;
 extern std::shared_ptr<spdlog::logger> log_vertex_attribute_mappings;
 extern std::shared_ptr<spdlog::logger> log_vertex_stream;
+extern std::shared_ptr<spdlog::logger> log_render_pass;
 extern std::shared_ptr<spdlog::logger> log_startup;
 
 void initialize_logging();

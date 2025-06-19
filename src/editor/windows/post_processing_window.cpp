@@ -85,7 +85,7 @@ void Post_processing_window::imgui()
     for (size_t source_level : node->downsample_source_levels) {
         size_t destination_level = source_level + 1;
         auto& texture = node->downsample_texture_views.at(destination_level);
-        if (!texture || (texture->width() < 1) || (texture->height() < 1)) {
+        if (!texture || (texture->get_width() < 1) || (texture->get_height() < 1)) {
             continue;
         }
 
@@ -94,14 +94,14 @@ void Post_processing_window::imgui()
         draw_image(texture, width, height, m_linear_filter);
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted(texture->debug_label().c_str());
+            ImGui::TextUnformatted(texture->get_debug_label().c_str());
             ImGui::EndTooltip();
         }
     }
     for (size_t source_level : node->upsample_source_levels) {
         size_t destination_level = source_level - 1;
         auto& texture = node->upsample_texture_views.at(destination_level);
-        if (!texture || (texture->width() < 1) || (texture->height() < 1)) {
+        if (!texture || (texture->get_width() < 1) || (texture->get_height() < 1)) {
             continue;
         }
     
@@ -110,7 +110,7 @@ void Post_processing_window::imgui()
         draw_image(texture, width, height, m_linear_filter);
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted(texture->debug_label().c_str());
+            ImGui::TextUnformatted(texture->get_debug_label().c_str());
             ImGui::EndTooltip();
         }
         ImGui::SameLine();

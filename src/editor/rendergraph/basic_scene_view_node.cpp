@@ -4,7 +4,7 @@
 
 namespace editor {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 Basic_scene_view_node::Basic_scene_view_node(
@@ -65,14 +65,14 @@ auto Basic_scene_view_node::get_producer_output_texture(erhe::rendergraph::Routi
     return {};
 }
 
-auto Basic_scene_view_node::get_consumer_input_framebuffer(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Basic_scene_view_node::get_consumer_input_render_pass(erhe::rendergraph::Routing, int, int) const -> erhe::graphics::Render_pass*
 {
-    return {};
+    return nullptr;
 }
 
-auto Basic_scene_view_node::get_producer_output_framebuffer(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Basic_scene_view_node::get_producer_output_render_pass(erhe::rendergraph::Routing, int, int) const -> erhe::graphics::Render_pass*
 {
-    return {};
+    return nullptr;
 }
 
 auto Basic_scene_view_node::get_viewport() const -> const erhe::math::Viewport&

@@ -2572,7 +2572,7 @@ typedef unsigned int GLhandleARB;
             <!-- Base internal format: GL_DEPTH_COMPONENT -->
             <enum name="GL_DEPTH_COMPONENT"/>
             <enum name="GL_DEPTH_COMPONENT16"/>
-            <enum name="GL_DEPTH_COMPONENT16_ARB"/>
+            <enum name="GL_4ARB"/>
             <enum name="GL_DEPTH_COMPONENT16_OES"/>
             <enum name="GL_DEPTH_COMPONENT16_SGIX"/>
             <enum name="GL_DEPTH_COMPONENT24_ARB"/>
@@ -9573,7 +9573,7 @@ typedef unsigned int GLhandleARB;
             <unused start="0x8CB0" end="0x8CCF" vendor="ZiiLabs"/>
     </enums>
 
-    <enums namespace="GL" start="0x8CD0" end="0x8D5F" vendor="ARB" comment="Framebuffer object specification + headroom">
+    <enums namespace="GL" start="0x8CD0" end="0x8D5F" vendor="ARB" comment="Render_pass object specification + headroom">
         <enum value="0x8CD0" name="GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE" group="FramebufferAttachmentParameterName"/>
         <enum value="0x8CD0" name="GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE_EXT" group="FramebufferAttachmentParameterName"/>
         <enum value="0x8CD0" name="GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE_OES" group="FramebufferAttachmentParameterName"/>
@@ -12904,7 +12904,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto group="FramebufferStatus"><ptype>GLenum</ptype> <name>glCheckNamedFramebufferStatusEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferTarget"><ptype>GLenum</ptype> <name>target</name></param>
         </command>
         <command>
@@ -16917,12 +16917,12 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glFramebufferDrawBufferEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="DrawBufferMode"><ptype>GLenum</ptype> <name>mode</name></param>
         </command>
         <command>
             <proto>void <name>glFramebufferDrawBuffersEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param><ptype>GLsizei</ptype> <name>n</name></param>
             <param group="DrawBufferMode" len="n">const <ptype>GLenum</ptype> *<name>bufs</name></param>
         </command>
@@ -16934,7 +16934,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glFramebufferFoveationConfigQCOM</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param><ptype>GLuint</ptype> <name>numLayers</name></param>
             <param><ptype>GLuint</ptype> <name>focalPointsPerLayer</name></param>
             <param><ptype>GLuint</ptype> <name>requestedFeatures</name></param>
@@ -16942,7 +16942,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glFramebufferFoveationParametersQCOM</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param><ptype>GLuint</ptype> <name>layer</name></param>
             <param><ptype>GLuint</ptype> <name>focalPoint</name></param>
             <param group="CheckedFloat32"><ptype>GLfloat</ptype> <name>focalX</name></param>
@@ -16964,7 +16964,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glFramebufferReadBufferEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="ReadBufferMode"><ptype>GLenum</ptype> <name>mode</name></param>
         </command>
         <command>
@@ -18245,7 +18245,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glGetFramebufferParameterivEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="GetFramebufferParameter"><ptype>GLenum</ptype> <name>pname</name></param>
             <param len="COMPSIZE(pname)"><ptype>GLint</ptype> *<name>params</name></param>
         </command>
@@ -18853,7 +18853,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glGetNamedFramebufferAttachmentParameterivEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferAttachment"><ptype>GLenum</ptype> <name>attachment</name></param>
             <param group="FramebufferAttachmentParameterName"><ptype>GLenum</ptype> <name>pname</name></param>
             <param len="COMPSIZE(pname)"><ptype>GLint</ptype> *<name>params</name></param>
@@ -18866,7 +18866,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glGetNamedFramebufferParameterivEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="GetFramebufferParameter"><ptype>GLenum</ptype> <name>pname</name></param>
             <param len="COMPSIZE(pname)"><ptype>GLint</ptype> *<name>params</name></param>
         </command>
@@ -23845,7 +23845,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glNamedFramebufferParameteriEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferParameterName"><ptype>GLenum</ptype> <name>pname</name></param>
             <param><ptype>GLint</ptype> <name>param</name></param>
         </command>
@@ -23863,7 +23863,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glNamedFramebufferRenderbufferEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferAttachment"><ptype>GLenum</ptype> <name>attachment</name></param>
             <param group="RenderbufferTarget"><ptype>GLenum</ptype> <name>renderbuffertarget</name></param>
             <param class="renderbuffer" group="Renderbuffer"><ptype>GLuint</ptype> <name>renderbuffer</name></param>
@@ -23898,7 +23898,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glNamedFramebufferTexture1DEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferAttachment"><ptype>GLenum</ptype> <name>attachment</name></param>
             <param group="TextureTarget"><ptype>GLenum</ptype> <name>textarget</name></param>
             <param class="texture" group="Texture"><ptype>GLuint</ptype> <name>texture</name></param>
@@ -23906,7 +23906,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glNamedFramebufferTexture2DEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferAttachment"><ptype>GLenum</ptype> <name>attachment</name></param>
             <param group="TextureTarget"><ptype>GLenum</ptype> <name>textarget</name></param>
             <param class="texture" group="Texture"><ptype>GLuint</ptype> <name>texture</name></param>
@@ -23914,7 +23914,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glNamedFramebufferTexture3DEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferAttachment"><ptype>GLenum</ptype> <name>attachment</name></param>
             <param group="TextureTarget"><ptype>GLenum</ptype> <name>textarget</name></param>
             <param class="texture" group="Texture"><ptype>GLuint</ptype> <name>texture</name></param>
@@ -23923,14 +23923,14 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glNamedFramebufferTextureEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferAttachment"><ptype>GLenum</ptype> <name>attachment</name></param>
             <param class="texture" group="Texture"><ptype>GLuint</ptype> <name>texture</name></param>
             <param group="CheckedInt32"><ptype>GLint</ptype> <name>level</name></param>
         </command>
         <command>
             <proto>void <name>glNamedFramebufferTextureFaceEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferAttachment"><ptype>GLenum</ptype> <name>attachment</name></param>
             <param class="texture" group="Texture"><ptype>GLuint</ptype> <name>texture</name></param>
             <param group="CheckedInt32"><ptype>GLint</ptype> <name>level</name></param>
@@ -23946,7 +23946,7 @@ typedef unsigned int GLhandleARB;
         </command>
         <command>
             <proto>void <name>glNamedFramebufferTextureLayerEXT</name></proto>
-            <param class="framebuffer" group="Framebuffer"><ptype>GLuint</ptype> <name>framebuffer</name></param>
+            <param class="framebuffer" group="Render_pass"><ptype>GLuint</ptype> <name>framebuffer</name></param>
             <param group="FramebufferAttachment"><ptype>GLenum</ptype> <name>attachment</name></param>
             <param class="texture" group="Texture"><ptype>GLuint</ptype> <name>texture</name></param>
             <param group="CheckedInt32"><ptype>GLint</ptype> <name>level</name></param>
@@ -41630,7 +41630,7 @@ typedef unsigned int GLhandleARB;
                 <command name="glGetNamedBufferPointerv"/>
                 <command name="glGetNamedBufferSubData"/>
             </require>
-            <require comment="Framebuffer object functions">
+            <require comment="Render_pass object functions">
                 <command name="glCreateFramebuffers"/>
                 <command name="glNamedFramebufferRenderbuffer"/>
                 <command name="glNamedFramebufferParameteri"/>

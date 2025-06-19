@@ -18,7 +18,8 @@
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_profile/profile.hpp"
@@ -40,13 +41,13 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
             .name                 = std::string{"Depth_to_color_rendergraph_node"},
             .input_key            = erhe::rendergraph::Rendergraph_node_key::shadow_maps,
             .output_key           = erhe::rendergraph::Rendergraph_node_key::depth_visualization,
-            .color_format         = gl::Internal_format::rgba8,
-            .depth_stencil_format = gl::Internal_format{0}
+            .color_format         = erhe::dataformat::Format::format_8_vec4_srgb,
+            .depth_stencil_format = erhe::dataformat::Format::format_undefined
         }
     }
     , m_forward_renderer  {forward_renderer}
     , m_mesh_memory       {mesh_memory}
-    , m_empty_vertex_input{rendergraph.get_graphics_instance()}
+    , m_empty_vertex_input{rendergraph.get_graphics_device()}
     , m_renderpass{ 
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
@@ -74,7 +75,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     // Execute base class in order to update texture and framebuffer
     Texture_rendergraph_node::execute_rendergraph_node();
 
-    if (!m_framebuffer) {
+    if (!m_render_pass) {
         // Likely because output ImGui window has no viewport size yet.
         return;
     }
@@ -94,8 +95,8 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    const int input_texture_width  = shadow_texture->width ();
-    const int input_texture_height = shadow_texture->height();
+    const int input_texture_width  = shadow_texture->get_width ();
+    const int input_texture_height = shadow_texture->get_height();
 
     if ((input_texture_width  < 1) || (input_texture_height < 1)) {
         SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: no shadow renderer or empty viewport");
@@ -130,13 +131,14 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
+    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
+    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
 
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
     const auto& layers = scene_root->layers();
     auto texture = shadow_render_node->get_texture();
 
-    log_render->trace("Depth to color from texture '{}'", texture->debug_label());
+    log_render->trace("Depth to color from texture '{}'", texture->get_debug_label());
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
@@ -157,7 +159,6 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         light_projection_transforms.light
     );
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::render() - done");
 }
 
@@ -182,6 +183,10 @@ Debug_view_node::Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph)
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(erhe::rendergraph::Routing::None, "window", erhe::rendergraph::Rendergraph_node_key::window);
+}
+
+Debug_view_node::~Debug_view_node()
+{
 }
 
 void Debug_view_node::execute_rendergraph_node()
@@ -418,8 +423,8 @@ void Debug_view_window::imgui()
         return;
     }
 
-    const int texture_width  = texture->width();
-    const int texture_height = texture->height();
+    const int texture_width  = texture->get_width();
+    const int texture_height = texture->get_height();
 
     if ((texture_width > 0) && (texture_height > 0)) {
         auto cursor_position = ImGui::GetCursorPos();

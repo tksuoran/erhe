@@ -22,7 +22,7 @@
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_hash/xxhash.hpp"
@@ -32,7 +32,7 @@
 #include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_rendergraph/multisample_resolve.hpp"
+////#include "erhe_rendergraph/multisample_resolve.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
@@ -50,7 +50,7 @@ using erhe::graphics::Input_assembly_state;
 using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
@@ -102,12 +102,14 @@ void Scene_views::on_message(Editor_message& message)
 
 void Scene_views::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    static_cast<void>(graphics_preset);
+    //// TODO
+    //// std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
-    const int msaa_sample_count = graphics_preset != nullptr ? graphics_preset->msaa_sample_count : 1;
-    for (const auto& viewport_scene_view : m_viewport_scene_views) {
-        viewport_scene_view->reconfigure(msaa_sample_count);
-    }
+    //// const int msaa_sample_count = graphics_preset != nullptr ? graphics_preset->msaa_sample_count : 1;
+    //// for (const auto& viewport_scene_view : m_viewport_scene_views) {
+    ////     viewport_scene_view->reconfigure(msaa_sample_count);
+    //// }
 }
 
 void Scene_views::erase(Viewport_scene_view* viewport_scene_view)
@@ -191,22 +193,23 @@ auto Scene_views::create_viewport_scene_view(
 
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> previous_node;
     log_post_processing->trace("Scene_views::create_viewport_scene_view(): msaa_sample_count = {}", msaa_sample_count);
-    if (msaa_sample_count > 1) {
-        log_post_processing->trace("Adding Multisample_resolve_node to rendergraph");
-        auto multisample_resolve_node = std::make_shared<erhe::rendergraph::Multisample_resolve_node>(
-            rendergraph,
-            fmt::format("MSAA for {}", name),
-            msaa_sample_count,
-            fmt::format("MSAA resolve node for Viewport_scene_view {}", name),
-            erhe::rendergraph::Rendergraph_node_key::viewport
-        );
-        new_viewport_window->link_to(multisample_resolve_node);
-        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport, new_viewport_window.get(), multisample_resolve_node.get());
-        previous_node = multisample_resolve_node;
-    } else {
-        log_post_processing->trace("Multisample is disabled (not added to rendergraph)");
-        previous_node = new_viewport_window;
-    }
+    //// TODO
+    //// if (msaa_sample_count > 1) {
+    ////     //// log_post_processing->trace("Adding Multisample_resolve_node to rendergraph");
+    ////     //// auto multisample_resolve_node = std::make_shared<erhe::rendergraph::Multisample_resolve_node>(
+    ////     ////     rendergraph,
+    ////     ////     fmt::format("MSAA for {}", name),
+    ////     ////     msaa_sample_count,
+    ////     ////     fmt::format("MSAA resolve node for Viewport_scene_view {}", name),
+    ////     ////     erhe::rendergraph::Rendergraph_node_key::viewport
+    ////     //// );
+    ////     //// new_viewport_window->link_to(multisample_resolve_node);
+    ////     //// rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport, new_viewport_window.get(), multisample_resolve_node.get());
+    ////     //// previous_node = multisample_resolve_node;
+    //// } else {
+    ////     log_post_processing->trace("Multisample is disabled (not added to rendergraph)");
+    ////     previous_node = new_viewport_window;
+    //// }
 
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> viewport_producer;
     if (enable_post_processing) {
@@ -419,7 +422,7 @@ void Scene_views::debug_imgui()
                 if (camera) {
                     ImGui::Text("Camera: %s", camera->get_name().c_str());
                 }
-                const erhe::math::Viewport& viewport = viewport_scene_view->window_viewport();
+                const erhe::math::Viewport& viewport = viewport_scene_view->get_window_viewport();
                 ImGui::Text("Viewport: %d, %d, %d, %d", viewport.x, viewport.y, viewport.width, viewport.height);
                 ImGui::TreePop();
             }
@@ -537,7 +540,7 @@ void Scene_views::update_pointer_from_basic_viewport_windows()
         viewport_scene_view->set_is_scene_view_hovered(is_hoverered);
 
         if (is_hoverered) {
-            const glm::vec2 viewport_position = viewport_scene_view->viewport_from_window(pointer_window_position);
+            const glm::vec2 viewport_position = viewport_scene_view->get_viewport_from_window(pointer_window_position);
             // log_pointer->info(
             //     "window position {} hovers Viewport_scene_view {} @ {}",
             //     pointer_window_position,

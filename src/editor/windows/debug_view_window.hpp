@@ -61,6 +61,7 @@ class Debug_view_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     explicit Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph);
+    ~Debug_view_node() override;
 
     // Implements Rendergraph_node
     auto get_type_name() const -> std::string_view override { return "Debug_view_node"; }

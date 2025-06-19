@@ -6,9 +6,11 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_graphics/align.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
@@ -61,6 +63,10 @@ Post_processing_node::Post_processing_node(
     register_output(erhe::rendergraph::Routing::Resource_provided_by_consumer, "viewport", erhe::rendergraph::Rendergraph_node_key::viewport);
 }
 
+Post_processing_node::~Post_processing_node()
+{
+}
+
 auto Post_processing_node::update_size() -> bool
 {
     constexpr bool downsample_nodes_unchanged = true;
@@ -76,8 +82,8 @@ auto Post_processing_node::update_size() -> bool
 
     downsample_texture.reset();
     upsample_texture.reset();
-    downsample_framebuffers.clear();
-    upsample_framebuffers.clear();
+    downsample_render_passes.clear();
+    upsample_render_passes.clear();
     level0_width  = viewport.width;
     level0_height = viewport.height;
     if (level0_width < 1 || level0_height < 1) {
@@ -88,27 +94,27 @@ auto Post_processing_node::update_size() -> bool
     downsample_texture = std::make_shared<erhe::graphics::Texture>(
         m_graphics_device,
         erhe::graphics::Texture::Create_info{
-            .device          = m_graphics_device,
-            .target          = gl::Texture_target::texture_2d,
-            .internal_format = gl::Internal_format::rgba16f, // TODO other formats
-            .use_mipmaps     = true,
-            .sample_count    = 0,
-            .width           = level0_width,
-            .height          = level0_height,
-            .debug_label     = fmt::format("{} downsample", get_name())
+            .device       = m_graphics_device,
+            .target       = gl::Texture_target::texture_2d,
+            .pixelformat  = erhe::dataformat::Format::format_16_vec4_float, // TODO other formats
+            .use_mipmaps  = true,
+            .sample_count = 0,
+            .width        = level0_width,
+            .height       = level0_height,
+            .debug_label  = fmt::format("{} downsample", get_name())
         }
     );
     upsample_texture = std::make_shared<erhe::graphics::Texture>(
         m_graphics_device,
         erhe::graphics::Texture::Create_info{
-            .device          = m_graphics_device,
-            .target          = gl::Texture_target::texture_2d,
-            .internal_format = gl::Internal_format::rgba16f, // TODO other formats
-            .use_mipmaps     = true,
-            .sample_count    = 0,
-            .width           = level0_width,
-            .height          = level0_height,
-            .debug_label     = fmt::format("{} upsample", get_name())
+            .device       = m_graphics_device,
+            .target       = gl::Texture_target::texture_2d,
+            .pixelformat  = erhe::dataformat::Format::format_16_vec4_float, // TODO other formats
+            .use_mipmaps  = true,
+            .sample_count = 0,
+            .width        = level0_width,
+            .height       = level0_height,
+            .debug_label  = fmt::format("{} upsample", get_name())
         }
     );
 
@@ -127,35 +133,45 @@ auto Post_processing_node::update_size() -> bool
         level_widths.push_back(level_width);
         level_heights.push_back(level_height);
         {
-            erhe::graphics::Framebuffer::Create_info create_info{};
-            create_info.attach(gl::Framebuffer_attachment::color_attachment0, downsample_texture.get(), level, 0);
-            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(m_graphics_device, create_info);
-            framebuffer->set_debug_label(fmt::format("{} downsample level {}", get_name(), level));
-            downsample_framebuffers.push_back(framebuffer);
+            erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+            render_pass_descriptor.color_attachments[0].texture       = downsample_texture.get();
+            render_pass_descriptor.color_attachments[0].texture_level = level;
+            render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Dont_care;
+            render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.render_target_width                = downsample_texture->get_width(level);
+            render_pass_descriptor.render_target_height               = downsample_texture->get_height(level);
+            render_pass_descriptor.debug_label                        = fmt::format("{} downsample level {}", get_name(), level);
+            std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
+            downsample_render_passes.push_back(std::move(render_pass));
 
             erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, downsample_texture);
-            texture_create_info.view_min_level = level;
-            texture_create_info.level_count    = 1;
-            texture_create_info.view_min_layer = 0;
-            texture_create_info.width          = level_width;
-            texture_create_info.height         = level_height;
-            texture_create_info.debug_label    = fmt::format("Downsample level {}", level);
+            texture_create_info.view_base_level       = level;
+            texture_create_info.level_count           = 1;
+            texture_create_info.view_base_array_layer = 0;
+            texture_create_info.width                 = level_width;
+            texture_create_info.height                = level_height;
+            texture_create_info.debug_label           = fmt::format("Downsample level {}", level);
             downsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
         }
         {
-            erhe::graphics::Framebuffer::Create_info create_info{};
-            create_info.attach(gl::Framebuffer_attachment::color_attachment0, upsample_texture.get(), level, 0);
-            std::shared_ptr<erhe::graphics::Framebuffer> framebuffer = std::make_shared<erhe::graphics::Framebuffer>(m_graphics_device, create_info);
-            framebuffer->set_debug_label(fmt::format("{} upsample level {}", get_name(), level));
-            upsample_framebuffers.push_back(framebuffer);
+            erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+            render_pass_descriptor.color_attachments[0].texture       = upsample_texture.get();
+            render_pass_descriptor.color_attachments[0].texture_level = level;
+            render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Dont_care;
+            render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.render_target_width                = downsample_texture->get_width(level);
+            render_pass_descriptor.render_target_height               = downsample_texture->get_height(level);
+            render_pass_descriptor.debug_label                        = fmt::format("{} upsample level {}", get_name(), level);
+            std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
+            upsample_render_passes.push_back(std::move(render_pass));
 
             erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, upsample_texture);
-            texture_create_info.view_min_level = level;
-            texture_create_info.level_count    = 1;
-            texture_create_info.view_min_layer = 0;
-            texture_create_info.width          = level_width;
-            texture_create_info.height         = level_height;
-            texture_create_info.debug_label    = fmt::format("Upsample level {}", level);
+            texture_create_info.view_base_level       = level;
+            texture_create_info.level_count           = 1;
+            texture_create_info.view_base_array_layer = 0;
+            texture_create_info.width                 = level_width;
+            texture_create_info.height                = level_height;
+            texture_create_info.debug_label           = fmt::format("Upsample level {}", level);
             upsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
         }
         if ((level_width == 1) && (level_height == 1)) {
@@ -262,9 +278,9 @@ auto Post_processing_node::get_consumer_input_texture(erhe::rendergraph::Routing
 }
 
 // Overridden to provide framebuffer from the first downsample node
-auto Post_processing_node::get_consumer_input_framebuffer(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Post_processing_node::get_consumer_input_render_pass(erhe::rendergraph::Routing, int, int) const -> erhe::graphics::Render_pass*
 {
-    return downsample_framebuffers.empty() ? std::shared_ptr<erhe::graphics::Framebuffer>{} : downsample_framebuffers.front();
+    return downsample_render_passes.empty() ? nullptr : downsample_render_passes.front().get();
 }
 
 auto Post_processing_node::get_consumer_input_viewport(const erhe::rendergraph::Routing resource_routing, const int key, const int depth) const -> erhe::math::Viewport
@@ -299,7 +315,7 @@ void Post_processing_node::execute_rendergraph_node()
 /// //////////////////////////////////////////
 
 auto Post_processing::make_program(
-    erhe::graphics::Device&    graphics_device,
+    erhe::graphics::Device&      graphics_device,
     const char*                  name,
     const std::filesystem::path& fs_path
 ) -> erhe::graphics::Shader_stages_create_info
@@ -449,12 +465,14 @@ void Post_processing::post_process(Post_processing_node& node)
 
     // Downsample passes
     for (const size_t source_level : node.downsample_source_levels) {
-        const size_t       destination_level = source_level + 1;
-        const auto&        framebuffer       = node.downsample_framebuffers.at(destination_level);
-        const unsigned int binding_point     = m_parameter_block.binding_point();
+        const size_t                 destination_level = source_level + 1;
+        erhe::graphics::Render_pass* render_pass       = node.downsample_render_passes.at(destination_level).get();
+        const unsigned int           binding_point     = m_parameter_block.binding_point();
 
-        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
-        gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
+        std::unique_ptr<erhe::graphics::Render_command_encoder> encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
+
+        //gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_render_pass->gl_name());
+        //gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
         gl::bind_buffer_range(
             node.parameter_buffer.target(),
             static_cast<GLuint>    (binding_point),
@@ -475,7 +493,7 @@ void Post_processing::post_process(Post_processing_node& node)
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
-    const auto& output_framebuffer = node.get_producer_output_framebuffer(
+    auto* output_render_pass = node.get_producer_output_render_pass(
         erhe::rendergraph::Routing::Resource_provided_by_consumer,
         erhe::rendergraph::Rendergraph_node_key::viewport
     );
@@ -484,13 +502,16 @@ void Post_processing::post_process(Post_processing_node& node)
     m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.upsample);
     for (const size_t source_level : node.upsample_source_levels) {
         const size_t destination_level = source_level - 1;
-        const auto&  framebuffer = destination_level == 0
-            ? output_framebuffer
-            : node.upsample_framebuffers.at(destination_level);
+        erhe::graphics::Render_pass* render_pass = (destination_level == 0)
+            ? output_render_pass
+            : node.upsample_render_passes.at(destination_level).get();
         const unsigned int binding_point = m_parameter_block.binding_point();
 
-        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
-        gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
+        std::unique_ptr<erhe::graphics::Render_command_encoder> encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
+
+        ERHE_VERIFY(render_pass->get_render_target_width() == node.level_widths.at(destination_level));
+        ERHE_VERIFY(render_pass->get_render_target_height() == node.level_heights.at(destination_level));
+        // gl::viewport(0, 0, node.level_widths.at(destination_level), node.level_heights.at(destination_level));
         gl::bind_buffer_range(
             node.parameter_buffer.target(),
             static_cast<GLuint>    (binding_point),
@@ -501,6 +522,7 @@ void Post_processing::post_process(Post_processing_node& node)
         gl::draw_arrays(gl::Primitive_type::triangles, 0, 3);
     }
 
+    // TODO Strictly speaking this is redundant
     {
         ERHE_PROFILE_SCOPE("bind fbo");
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);

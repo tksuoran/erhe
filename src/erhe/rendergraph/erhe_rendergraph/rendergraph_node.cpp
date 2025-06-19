@@ -85,12 +85,12 @@ auto Rendergraph_node::get_consumer_input_texture(const Routing resource_routing
         : std::shared_ptr<erhe::graphics::Texture>{};
 }
 
-auto Rendergraph_node::get_consumer_input_framebuffer(const Routing resource_routing, const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Rendergraph_node::get_consumer_input_render_pass(const Routing resource_routing, const int key, const int depth) const -> erhe::graphics::Render_pass*
 {
     auto* producer = get_consumer_input_node(resource_routing, key, depth);
     return (producer != nullptr)
-        ? producer->get_producer_output_framebuffer(resource_routing, key, depth + 1)
-        : std::shared_ptr<erhe::graphics::Framebuffer>{};
+        ? producer->get_producer_output_render_pass(resource_routing, key, depth + 1)
+        : nullptr;
 }
 
 auto Rendergraph_node::get_consumer_input_viewport(const Routing resource_routing, const int key, const int depth) const -> erhe::math::Viewport
@@ -161,12 +161,12 @@ auto Rendergraph_node::get_producer_output_texture(const Routing resource_routin
         : std::shared_ptr<erhe::graphics::Texture>{};
 }
 
-auto Rendergraph_node::get_producer_output_framebuffer(const Routing resource_routing, const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Rendergraph_node::get_producer_output_render_pass(const Routing resource_routing, const int key, const int depth) const -> erhe::graphics::Render_pass*
 {
     auto* consumer = get_producer_output_node(resource_routing, key, depth);
     return (consumer != nullptr)
-        ? consumer->get_consumer_input_framebuffer(resource_routing, key, depth + 1)
-        : std::shared_ptr<erhe::graphics::Framebuffer>{};
+        ? consumer->get_consumer_input_render_pass(resource_routing, key, depth + 1)
+        : nullptr;
 }
 
 auto Rendergraph_node::get_producer_output_viewport(const Routing resource_routing, const int key, const int depth) const -> erhe::math::Viewport
@@ -207,17 +207,19 @@ auto Rendergraph_node::get_size() const -> std::optional<glm::vec2>
         }
 
         const auto& texture = get_producer_output_texture(output.resource_routing, output.key);
+
+        // TODO Should multisample target be considered here?
         if (
             texture &&
-            (texture->target() == gl::Texture_target::texture_2d) &&
-            (texture->width () >= 1) &&
-            (texture->height() >= 1) &&
-            (gl_helpers::has_color(texture->internal_format()))
+            (texture->get_target() == gl::Texture_target::texture_2d) &&
+            (texture->get_width () >= 1) &&
+            (texture->get_height() >= 1) &&
+            (erhe::dataformat::has_color(texture->get_pixelformat()))
         ) {
             if (!size.has_value()) {
-                size = glm::vec2{texture->width(), texture->height()};
+                size = glm::vec2{texture->get_width(), texture->get_height()};
             } else {
-                size = glm::max(size.value(), glm::vec2{texture->width(), texture->height()});
+                size = glm::max(size.value(), glm::vec2{texture->get_width(), texture->get_height()});
             }
         }
     }

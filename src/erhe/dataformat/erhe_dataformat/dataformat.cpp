@@ -1,10 +1,40 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <glm/gtc/packing.hpp>
+
 #include <algorithm>
 #include <cstring>
 #include <limits>
 
 namespace erhe::dataformat {
+
+auto srgb_to_linear(const float cs) -> float
+{
+    const float cs_clamped = std::min(std::max(0.0f, cs), 1.0f);
+    return
+        (cs_clamped <= 0.04045f)
+            ? cs_clamped / 12.92f
+            : std::pow(
+                (cs_clamped + 0.055f) / 1.055f,
+                2.4f
+            );
+}
+
+auto linear_rgb_to_srgb(const float cl) -> float
+{
+    float res;
+    if (cl > 1.0f) {
+        res = 1.0f;
+    } else if (cl < 0.0) {
+        res = 0.0f;
+    } else if (cl < 0.0031308f) {
+        res = 12.92f * cl;
+    } else {
+        res = 1.055f * std::pow(cl, 0.41666f) - 0.055f;
+    }
+    return res;
+}
 
 auto float_to_snorm16(float v) -> int16_t
 {
@@ -155,24 +185,28 @@ auto pack_int2x16(int x, int y) -> uint32_t
 auto c_str(Format format) -> const char*
 {
     switch (format) {
+        case Format::format_8_scalar_srgb:            return "format_8_scalar_srgb";
         case Format::format_8_scalar_unorm:           return "format_8_scalar_unorm";
         case Format::format_8_scalar_snorm:           return "format_8_scalar_snorm";
         case Format::format_8_scalar_uscaled:         return "format_8_scalar_uscaled";
         case Format::format_8_scalar_sscaled:         return "format_8_scalar_sscaled";
         case Format::format_8_scalar_uint:            return "format_8_scalar_uint";
         case Format::format_8_scalar_sint:            return "format_8_scalar_sint";
+        case Format::format_8_vec2_srgb:              return "format_8_vec2_srgb";
         case Format::format_8_vec2_unorm:             return "format_8_vec2_unorm";
         case Format::format_8_vec2_snorm:             return "format_8_vec2_snorm";
         case Format::format_8_vec2_uscaled:           return "format_8_vec2_uscaled";
         case Format::format_8_vec2_sscaled:           return "format_8_vec2_sscaled";
         case Format::format_8_vec2_uint:              return "format_8_vec2_uint";
         case Format::format_8_vec2_sint:              return "format_8_vec2_sint";
+        case Format::format_8_vec3_srgb:              return "format_8_vec3_srgb";
         case Format::format_8_vec3_unorm:             return "format_8_vec3_unorm";
         case Format::format_8_vec3_snorm:             return "format_8_vec3_snorm";
         case Format::format_8_vec3_uscaled:           return "format_8_vec3_uscaled";
         case Format::format_8_vec3_sscaled:           return "format_8_vec3_sscaled";
         case Format::format_8_vec3_uint:              return "format_8_vec3_uint";
         case Format::format_8_vec3_sint:              return "format_8_vec3_sint";
+        case Format::format_8_vec4_srgb:              return "format_8_vec4_srgb";
         case Format::format_8_vec4_unorm:             return "format_8_vec4_unorm";
         case Format::format_8_vec4_snorm:             return "format_8_vec4_snorm";
         case Format::format_8_vec4_uscaled:           return "format_8_vec4_uscaled";
@@ -185,47 +219,43 @@ auto c_str(Format format) -> const char*
         case Format::format_16_scalar_sscaled:        return "format_16_scalar_sscaled";
         case Format::format_16_scalar_uint:           return "format_16_scalar_uint";
         case Format::format_16_scalar_sint:           return "format_16_scalar_sint";
+        case Format::format_16_scalar_float:          return "format_16_scalar_float";
         case Format::format_16_vec2_unorm:            return "format_16_vec2_unorm";
         case Format::format_16_vec2_snorm:            return "format_16_vec2_snorm";
         case Format::format_16_vec2_uscaled:          return "format_16_vec2_uscaled";
         case Format::format_16_vec2_sscaled:          return "format_16_vec2_sscaled";
         case Format::format_16_vec2_uint:             return "format_16_vec2_uint";
         case Format::format_16_vec2_sint:             return "format_16_vec2_sint";
+        case Format::format_16_vec2_float:            return "format_16_vec2_float";
         case Format::format_16_vec3_unorm:            return "format_16_vec3_unorm";
         case Format::format_16_vec3_snorm:            return "format_16_vec3_snorm";
         case Format::format_16_vec3_uscaled:          return "format_16_vec3_uscaled";
         case Format::format_16_vec3_sscaled:          return "format_16_vec3_sscaled";
         case Format::format_16_vec3_uint:             return "format_16_vec3_uint";
         case Format::format_16_vec3_sint:             return "format_16_vec3_sint";
+        case Format::format_16_vec3_float:            return "format_16_vec3_float";
         case Format::format_16_vec4_unorm:            return "format_16_vec4_unorm";
         case Format::format_16_vec4_snorm:            return "format_16_vec4_snorm";
         case Format::format_16_vec4_uscaled:          return "format_16_vec4_uscaled";
         case Format::format_16_vec4_sscaled:          return "format_16_vec4_sscaled";
         case Format::format_16_vec4_uint:             return "format_16_vec4_uint";
         case Format::format_16_vec4_sint:             return "format_16_vec4_sint";
-        case Format::format_32_scalar_unorm:          return "format_32_scalar_unorm";
-        case Format::format_32_scalar_snorm:          return "format_32_scalar_snorm";
+        case Format::format_16_vec4_float:            return "format_16_vec4_float";
         case Format::format_32_scalar_uscaled:        return "format_32_scalar_uscaled";
         case Format::format_32_scalar_sscaled:        return "format_32_scalar_sscaled";
         case Format::format_32_scalar_uint:           return "format_32_scalar_uint";
         case Format::format_32_scalar_sint:           return "format_32_scalar_sint";
         case Format::format_32_scalar_float:          return "format_32_scalar_float";
-        case Format::format_32_vec2_unorm:            return "format_32_vec2_unorm";
-        case Format::format_32_vec2_snorm:            return "format_32_vec2_snorm";
         case Format::format_32_vec2_uscaled:          return "format_32_vec2_uscaled";
         case Format::format_32_vec2_sscaled:          return "format_32_vec2_sscaled";
         case Format::format_32_vec2_uint:             return "format_32_vec2_uint";
         case Format::format_32_vec2_sint:             return "format_32_vec2_sint";
         case Format::format_32_vec2_float:            return "format_32_vec2_float";
-        case Format::format_32_vec3_unorm:            return "format_32_vec3_unorm";
-        case Format::format_32_vec3_snorm:            return "format_32_vec3_snorm";
         case Format::format_32_vec3_uscaled:          return "format_32_vec3_uscaled";
         case Format::format_32_vec3_sscaled:          return "format_32_vec3_sscaled";
         case Format::format_32_vec3_uint:             return "format_32_vec3_uint";
         case Format::format_32_vec3_sint:             return "format_32_vec3_sint";
         case Format::format_32_vec3_float:            return "format_32_vec3_float";
-        case Format::format_32_vec4_unorm:            return "format_32_vec4_unorm";
-        case Format::format_32_vec4_snorm:            return "format_32_vec4_snorm";
         case Format::format_32_vec4_uscaled:          return "format_32_vec4_uscaled";
         case Format::format_32_vec4_sscaled:          return "format_32_vec4_sscaled";
         case Format::format_32_vec4_uint:             return "format_32_vec4_uint";
@@ -235,6 +265,7 @@ auto c_str(Format format) -> const char*
         case Format::format_packed1010102_vec4_snorm: return "format_packed1010102_vec4_snorm";
         case Format::format_packed1010102_vec4_uint:  return "format_packed1010102_vec4_uint";
         case Format::format_packed1010102_vec4_sint:  return "format_packed1010102_vec4_sint";
+        case Format::format_packed111110_vec3_unorm:  return "format_packed111110_vec3_unorm";
         default:                                      return "?";
     }
 }
@@ -242,24 +273,28 @@ auto c_str(Format format) -> const char*
 auto get_format_kind(Format format) -> Format_kind
 {
     switch (format) {
+        case Format::format_8_scalar_srgb:            return Format_kind::format_kind_float;
         case Format::format_8_scalar_unorm:           return Format_kind::format_kind_float;
         case Format::format_8_scalar_snorm:           return Format_kind::format_kind_float;
         case Format::format_8_scalar_uscaled:         return Format_kind::format_kind_float;
         case Format::format_8_scalar_sscaled:         return Format_kind::format_kind_float;
         case Format::format_8_scalar_uint:            return Format_kind::format_kind_unsigned_integer;
         case Format::format_8_scalar_sint:            return Format_kind::format_kind_signed_integer;
+        case Format::format_8_vec2_srgb:              return Format_kind::format_kind_float;
         case Format::format_8_vec2_unorm:             return Format_kind::format_kind_float;
         case Format::format_8_vec2_snorm:             return Format_kind::format_kind_float;
         case Format::format_8_vec2_uscaled:           return Format_kind::format_kind_float;
         case Format::format_8_vec2_sscaled:           return Format_kind::format_kind_float;
         case Format::format_8_vec2_uint:              return Format_kind::format_kind_unsigned_integer;
         case Format::format_8_vec2_sint:              return Format_kind::format_kind_signed_integer;
+        case Format::format_8_vec3_srgb:              return Format_kind::format_kind_float;
         case Format::format_8_vec3_unorm:             return Format_kind::format_kind_float;
         case Format::format_8_vec3_snorm:             return Format_kind::format_kind_float;
         case Format::format_8_vec3_uscaled:           return Format_kind::format_kind_float;
         case Format::format_8_vec3_sscaled:           return Format_kind::format_kind_float;
         case Format::format_8_vec3_uint:              return Format_kind::format_kind_unsigned_integer;
         case Format::format_8_vec3_sint:              return Format_kind::format_kind_signed_integer;
+        case Format::format_8_vec4_srgb:              return Format_kind::format_kind_float;
         case Format::format_8_vec4_unorm:             return Format_kind::format_kind_float;
         case Format::format_8_vec4_snorm:             return Format_kind::format_kind_float;
         case Format::format_8_vec4_uscaled:           return Format_kind::format_kind_float;
@@ -272,47 +307,43 @@ auto get_format_kind(Format format) -> Format_kind
         case Format::format_16_scalar_sscaled:        return Format_kind::format_kind_float;
         case Format::format_16_scalar_uint:           return Format_kind::format_kind_unsigned_integer;
         case Format::format_16_scalar_sint:           return Format_kind::format_kind_signed_integer;
+        case Format::format_16_scalar_float:          return Format_kind::format_kind_float;
         case Format::format_16_vec2_unorm:            return Format_kind::format_kind_float;
         case Format::format_16_vec2_snorm:            return Format_kind::format_kind_float;
         case Format::format_16_vec2_uscaled:          return Format_kind::format_kind_float;
         case Format::format_16_vec2_sscaled:          return Format_kind::format_kind_float;
         case Format::format_16_vec2_uint:             return Format_kind::format_kind_unsigned_integer;
         case Format::format_16_vec2_sint:             return Format_kind::format_kind_signed_integer;
+        case Format::format_16_vec2_float:            return Format_kind::format_kind_float;
         case Format::format_16_vec3_unorm:            return Format_kind::format_kind_float;
         case Format::format_16_vec3_snorm:            return Format_kind::format_kind_float;
         case Format::format_16_vec3_uscaled:          return Format_kind::format_kind_float;
         case Format::format_16_vec3_sscaled:          return Format_kind::format_kind_float;
         case Format::format_16_vec3_uint:             return Format_kind::format_kind_unsigned_integer;
         case Format::format_16_vec3_sint:             return Format_kind::format_kind_signed_integer;
+        case Format::format_16_vec3_float:            return Format_kind::format_kind_float;
         case Format::format_16_vec4_unorm:            return Format_kind::format_kind_float;
         case Format::format_16_vec4_snorm:            return Format_kind::format_kind_float;
         case Format::format_16_vec4_uscaled:          return Format_kind::format_kind_float;
         case Format::format_16_vec4_sscaled:          return Format_kind::format_kind_float;
         case Format::format_16_vec4_uint:             return Format_kind::format_kind_unsigned_integer;
         case Format::format_16_vec4_sint:             return Format_kind::format_kind_signed_integer;
-        case Format::format_32_scalar_unorm:          return Format_kind::format_kind_float;
-        case Format::format_32_scalar_snorm:          return Format_kind::format_kind_float;
+        case Format::format_16_vec4_float:            return Format_kind::format_kind_float;
         case Format::format_32_scalar_uscaled:        return Format_kind::format_kind_float;
         case Format::format_32_scalar_sscaled:        return Format_kind::format_kind_float;
         case Format::format_32_scalar_uint:           return Format_kind::format_kind_unsigned_integer;
         case Format::format_32_scalar_sint:           return Format_kind::format_kind_signed_integer;
         case Format::format_32_scalar_float:          return Format_kind::format_kind_float;
-        case Format::format_32_vec2_unorm:            return Format_kind::format_kind_float;
-        case Format::format_32_vec2_snorm:            return Format_kind::format_kind_float;
         case Format::format_32_vec2_uscaled:          return Format_kind::format_kind_float;
         case Format::format_32_vec2_sscaled:          return Format_kind::format_kind_float;
         case Format::format_32_vec2_uint:             return Format_kind::format_kind_unsigned_integer;
         case Format::format_32_vec2_sint:             return Format_kind::format_kind_signed_integer;
         case Format::format_32_vec2_float:            return Format_kind::format_kind_float;
-        case Format::format_32_vec3_unorm:            return Format_kind::format_kind_float;
-        case Format::format_32_vec3_snorm:            return Format_kind::format_kind_float;
         case Format::format_32_vec3_uscaled:          return Format_kind::format_kind_float;
         case Format::format_32_vec3_sscaled:          return Format_kind::format_kind_float;
         case Format::format_32_vec3_uint:             return Format_kind::format_kind_unsigned_integer;
         case Format::format_32_vec3_sint:             return Format_kind::format_kind_signed_integer;
         case Format::format_32_vec3_float:            return Format_kind::format_kind_float;
-        case Format::format_32_vec4_unorm:            return Format_kind::format_kind_float;
-        case Format::format_32_vec4_snorm:            return Format_kind::format_kind_float;
         case Format::format_32_vec4_uscaled:          return Format_kind::format_kind_float;
         case Format::format_32_vec4_sscaled:          return Format_kind::format_kind_float;
         case Format::format_32_vec4_uint:             return Format_kind::format_kind_unsigned_integer;
@@ -322,7 +353,14 @@ auto get_format_kind(Format format) -> Format_kind
         case Format::format_packed1010102_vec4_snorm: return Format_kind::format_kind_float;
         case Format::format_packed1010102_vec4_uint:  return Format_kind::format_kind_unsigned_integer;
         case Format::format_packed1010102_vec4_sint:  return Format_kind::format_kind_signed_integer;
+        case Format::format_packed111110_vec3_unorm:  return Format_kind::format_kind_float;
 
+        case Format::format_d16_unorm:           return Format_kind::format_kind_depth_stencil;
+        case Format::format_x8_d24_unorm_pack32: return Format_kind::format_kind_depth_stencil;
+        case Format::format_d32_sfloat:          return Format_kind::format_kind_depth_stencil;
+        case Format::format_s8_uint:             return Format_kind::format_kind_depth_stencil;
+        case Format::format_d24_unorm_s8_uint:   return Format_kind::format_kind_depth_stencil;
+        case Format::format_d32_sfloat_s8_uint:  return Format_kind::format_kind_depth_stencil;
         default: {
             ERHE_FATAL("Bad format");
         }
@@ -332,24 +370,28 @@ auto get_format_kind(Format format) -> Format_kind
 auto get_component_count(Format format) -> std::size_t
 {
     switch (format) {
+        case Format::format_8_scalar_srgb:            return 1;
         case Format::format_8_scalar_unorm:           return 1;
         case Format::format_8_scalar_snorm:           return 1;
         case Format::format_8_scalar_uscaled:         return 1;
         case Format::format_8_scalar_sscaled:         return 1;
         case Format::format_8_scalar_uint:            return 1;
         case Format::format_8_scalar_sint:            return 1;
+        case Format::format_8_vec2_srgb:              return 2;
         case Format::format_8_vec2_unorm:             return 2;
         case Format::format_8_vec2_snorm:             return 2;
         case Format::format_8_vec2_uscaled:           return 2;
         case Format::format_8_vec2_sscaled:           return 2;
         case Format::format_8_vec2_uint:              return 2;
         case Format::format_8_vec2_sint:              return 2;
+        case Format::format_8_vec3_srgb:              return 3;
         case Format::format_8_vec3_unorm:             return 3;
         case Format::format_8_vec3_snorm:             return 3;
         case Format::format_8_vec3_uscaled:           return 3;
         case Format::format_8_vec3_sscaled:           return 3;
         case Format::format_8_vec3_uint:              return 3;
         case Format::format_8_vec3_sint:              return 3;
+        case Format::format_8_vec4_srgb:              return 4;
         case Format::format_8_vec4_unorm:             return 4;
         case Format::format_8_vec4_snorm:             return 4;
         case Format::format_8_vec4_uscaled:           return 4;
@@ -362,56 +404,61 @@ auto get_component_count(Format format) -> std::size_t
         case Format::format_16_scalar_sscaled:        return 1;
         case Format::format_16_scalar_uint:           return 1;
         case Format::format_16_scalar_sint:           return 1;
+        case Format::format_16_scalar_float:          return 1;
         case Format::format_16_vec2_unorm:            return 2;
         case Format::format_16_vec2_snorm:            return 2;
         case Format::format_16_vec2_uscaled:          return 2;
         case Format::format_16_vec2_sscaled:          return 2;
         case Format::format_16_vec2_uint:             return 2;
         case Format::format_16_vec2_sint:             return 2;
+        case Format::format_16_vec2_float:            return 2;
         case Format::format_16_vec3_unorm:            return 3;
         case Format::format_16_vec3_snorm:            return 3;
         case Format::format_16_vec3_uscaled:          return 3;
         case Format::format_16_vec3_sscaled:          return 3;
         case Format::format_16_vec3_uint:             return 3;
         case Format::format_16_vec3_sint:             return 3;
+        case Format::format_16_vec3_float:            return 3;
         case Format::format_16_vec4_unorm:            return 4;
         case Format::format_16_vec4_snorm:            return 4;
         case Format::format_16_vec4_uscaled:          return 4;
         case Format::format_16_vec4_sscaled:          return 4;
         case Format::format_16_vec4_uint:             return 4;
         case Format::format_16_vec4_sint:             return 4;
-        case Format::format_32_scalar_unorm:          return 1;
-        case Format::format_32_scalar_snorm:          return 1;
+        case Format::format_16_vec4_float:            return 4;
         case Format::format_32_scalar_uscaled:        return 1;
         case Format::format_32_scalar_sscaled:        return 1;
         case Format::format_32_scalar_uint:           return 1;
         case Format::format_32_scalar_sint:           return 1;
         case Format::format_32_scalar_float:          return 1;
-        case Format::format_32_vec2_unorm:            return 2;
-        case Format::format_32_vec2_snorm:            return 2;
         case Format::format_32_vec2_uscaled:          return 2;
         case Format::format_32_vec2_sscaled:          return 2;
         case Format::format_32_vec2_uint:             return 2;
         case Format::format_32_vec2_sint:             return 2;
         case Format::format_32_vec2_float:            return 2;
-        case Format::format_32_vec3_unorm:            return 3;
-        case Format::format_32_vec3_snorm:            return 3;
         case Format::format_32_vec3_uscaled:          return 3;
         case Format::format_32_vec3_sscaled:          return 3;
         case Format::format_32_vec3_uint:             return 3;
         case Format::format_32_vec3_sint:             return 3;
         case Format::format_32_vec3_float:            return 3;
-        case Format::format_32_vec4_unorm:            return 4;
-        case Format::format_32_vec4_snorm:            return 4;
         case Format::format_32_vec4_uscaled:          return 4;
         case Format::format_32_vec4_sscaled:          return 4;
         case Format::format_32_vec4_uint:             return 4;
         case Format::format_32_vec4_sint:             return 4;
         case Format::format_32_vec4_float:            return 4;
+
         case Format::format_packed1010102_vec4_unorm: return 4;
         case Format::format_packed1010102_vec4_snorm: return 4;
         case Format::format_packed1010102_vec4_uint:  return 4;
         case Format::format_packed1010102_vec4_sint:  return 4;
+        case Format::format_packed111110_vec3_unorm:  return 3;
+
+        case Format::format_d16_unorm:           return 1;
+        case Format::format_x8_d24_unorm_pack32: return 1;
+        case Format::format_d32_sfloat:          return 1;
+        case Format::format_s8_uint:             return 1;
+        case Format::format_d24_unorm_s8_uint:   return 2;
+        case Format::format_d32_sfloat_s8_uint:  return 2;
 
         default: {
             ERHE_FATAL("Bad format");
@@ -422,24 +469,28 @@ auto get_component_count(Format format) -> std::size_t
 auto get_component_byte_size(Format format) -> std::size_t
 {
     switch (format) {
+        case Format::format_8_scalar_srgb:            return 1;
         case Format::format_8_scalar_unorm:           return 1;
         case Format::format_8_scalar_snorm:           return 1;
         case Format::format_8_scalar_uscaled:         return 1;
         case Format::format_8_scalar_sscaled:         return 1;
         case Format::format_8_scalar_uint:            return 1;
         case Format::format_8_scalar_sint:            return 1;
+        case Format::format_8_vec2_srgb:              return 1;
         case Format::format_8_vec2_unorm:             return 1;
         case Format::format_8_vec2_snorm:             return 1;
         case Format::format_8_vec2_uscaled:           return 1;
         case Format::format_8_vec2_sscaled:           return 1;
         case Format::format_8_vec2_uint:              return 1;
         case Format::format_8_vec2_sint:              return 1;
+        case Format::format_8_vec3_srgb:              return 1;
         case Format::format_8_vec3_unorm:             return 1;
         case Format::format_8_vec3_snorm:             return 1;
         case Format::format_8_vec3_uscaled:           return 1;
         case Format::format_8_vec3_sscaled:           return 1;
         case Format::format_8_vec3_uint:              return 1;
         case Format::format_8_vec3_sint:              return 1;
+        case Format::format_8_vec4_srgb:              return 1;
         case Format::format_8_vec4_unorm:             return 1;
         case Format::format_8_vec4_snorm:             return 1;
         case Format::format_8_vec4_uscaled:           return 1;
@@ -452,56 +503,160 @@ auto get_component_byte_size(Format format) -> std::size_t
         case Format::format_16_scalar_sscaled:        return 2;
         case Format::format_16_scalar_uint:           return 2;
         case Format::format_16_scalar_sint:           return 2;
+        case Format::format_16_scalar_float:          return 2;
         case Format::format_16_vec2_unorm:            return 2;
         case Format::format_16_vec2_snorm:            return 2;
         case Format::format_16_vec2_uscaled:          return 2;
         case Format::format_16_vec2_sscaled:          return 2;
         case Format::format_16_vec2_uint:             return 2;
         case Format::format_16_vec2_sint:             return 2;
+        case Format::format_16_vec2_float:            return 2;
         case Format::format_16_vec3_unorm:            return 2;
         case Format::format_16_vec3_snorm:            return 2;
         case Format::format_16_vec3_uscaled:          return 2;
         case Format::format_16_vec3_sscaled:          return 2;
         case Format::format_16_vec3_uint:             return 2;
         case Format::format_16_vec3_sint:             return 2;
+        case Format::format_16_vec3_float:            return 2;
         case Format::format_16_vec4_unorm:            return 2;
         case Format::format_16_vec4_snorm:            return 2;
         case Format::format_16_vec4_uscaled:          return 2;
         case Format::format_16_vec4_sscaled:          return 2;
         case Format::format_16_vec4_uint:             return 2;
         case Format::format_16_vec4_sint:             return 2;
-        case Format::format_32_scalar_unorm:          return 4;
-        case Format::format_32_scalar_snorm:          return 4;
+        case Format::format_16_vec4_float:            return 2;
         case Format::format_32_scalar_uscaled:        return 4;
         case Format::format_32_scalar_sscaled:        return 4;
         case Format::format_32_scalar_uint:           return 4;
         case Format::format_32_scalar_sint:           return 4;
         case Format::format_32_scalar_float:          return 4;
-        case Format::format_32_vec2_unorm:            return 4;
-        case Format::format_32_vec2_snorm:            return 4;
         case Format::format_32_vec2_uscaled:          return 4;
         case Format::format_32_vec2_sscaled:          return 4;
         case Format::format_32_vec2_uint:             return 4;
         case Format::format_32_vec2_sint:             return 4;
         case Format::format_32_vec2_float:            return 4;
-        case Format::format_32_vec3_unorm:            return 4;
-        case Format::format_32_vec3_snorm:            return 4;
         case Format::format_32_vec3_uscaled:          return 4;
         case Format::format_32_vec3_sscaled:          return 4;
         case Format::format_32_vec3_uint:             return 4;
         case Format::format_32_vec3_sint:             return 4;
         case Format::format_32_vec3_float:            return 4;
-        case Format::format_32_vec4_unorm:            return 4;
-        case Format::format_32_vec4_snorm:            return 4;
         case Format::format_32_vec4_uscaled:          return 4;
         case Format::format_32_vec4_sscaled:          return 4;
         case Format::format_32_vec4_uint:             return 4;
         case Format::format_32_vec4_sint:             return 4;
         case Format::format_32_vec4_float:            return 4;
-        case Format::format_packed1010102_vec4_unorm: return 4;
-        case Format::format_packed1010102_vec4_snorm: return 4;
-        case Format::format_packed1010102_vec4_uint:  return 4;
-        case Format::format_packed1010102_vec4_sint:  return 4;
+
+        case Format::format_packed1010102_vec4_unorm: return 0;
+        case Format::format_packed1010102_vec4_snorm: return 0;
+        case Format::format_packed1010102_vec4_uint:  return 0;
+        case Format::format_packed1010102_vec4_sint:  return 0;
+        case Format::format_packed111110_vec3_unorm:  return 0;
+
+        case Format::format_d16_unorm:           return 0;
+        case Format::format_x8_d24_unorm_pack32: return 0;
+        case Format::format_d32_sfloat:          return 0;
+        case Format::format_s8_uint:             return 0;
+        case Format::format_d24_unorm_s8_uint:   return 0;
+        case Format::format_d32_sfloat_s8_uint:  return 0;
+
+        default: {
+            ERHE_FATAL("Bad format");
+        }
+    }
+}
+
+auto has_color(Format format) -> bool
+{
+    switch (format) {
+        case Format::format_8_scalar_srgb:            return true;
+        case Format::format_8_scalar_unorm:           return true;
+        case Format::format_8_scalar_snorm:           return true;
+        case Format::format_8_scalar_uscaled:         return true;
+        case Format::format_8_scalar_sscaled:         return true;
+        case Format::format_8_scalar_uint:            return true;
+        case Format::format_8_scalar_sint:            return true;
+        case Format::format_8_vec2_srgb:              return true;
+        case Format::format_8_vec2_unorm:             return true;
+        case Format::format_8_vec2_snorm:             return true;
+        case Format::format_8_vec2_uscaled:           return true;
+        case Format::format_8_vec2_sscaled:           return true;
+        case Format::format_8_vec2_uint:              return true;
+        case Format::format_8_vec2_sint:              return true;
+        case Format::format_8_vec3_srgb:              return true;
+        case Format::format_8_vec3_unorm:             return true;
+        case Format::format_8_vec3_snorm:             return true;
+        case Format::format_8_vec3_uscaled:           return true;
+        case Format::format_8_vec3_sscaled:           return true;
+        case Format::format_8_vec3_uint:              return true;
+        case Format::format_8_vec3_sint:              return true;
+        case Format::format_8_vec4_srgb:              return true;
+        case Format::format_8_vec4_unorm:             return true;
+        case Format::format_8_vec4_snorm:             return true;
+        case Format::format_8_vec4_uscaled:           return true;
+        case Format::format_8_vec4_sscaled:           return true;
+        case Format::format_8_vec4_uint:              return true;
+        case Format::format_8_vec4_sint:              return true;
+        case Format::format_16_scalar_unorm:          return true;
+        case Format::format_16_scalar_snorm:          return true;
+        case Format::format_16_scalar_uscaled:        return true;
+        case Format::format_16_scalar_sscaled:        return true;
+        case Format::format_16_scalar_uint:           return true;
+        case Format::format_16_scalar_sint:           return true;
+        case Format::format_16_scalar_float:          return true;
+        case Format::format_16_vec2_unorm:            return true;
+        case Format::format_16_vec2_snorm:            return true;
+        case Format::format_16_vec2_uscaled:          return true;
+        case Format::format_16_vec2_sscaled:          return true;
+        case Format::format_16_vec2_uint:             return true;
+        case Format::format_16_vec2_sint:             return true;
+        case Format::format_16_vec2_float:            return true;
+        case Format::format_16_vec3_unorm:            return true;
+        case Format::format_16_vec3_snorm:            return true;
+        case Format::format_16_vec3_uscaled:          return true;
+        case Format::format_16_vec3_sscaled:          return true;
+        case Format::format_16_vec3_uint:             return true;
+        case Format::format_16_vec3_sint:             return true;
+        case Format::format_16_vec3_float:            return true;
+        case Format::format_16_vec4_unorm:            return true;
+        case Format::format_16_vec4_snorm:            return true;
+        case Format::format_16_vec4_uscaled:          return true;
+        case Format::format_16_vec4_sscaled:          return true;
+        case Format::format_16_vec4_uint:             return true;
+        case Format::format_16_vec4_sint:             return true;
+        case Format::format_16_vec4_float:            return true;
+        case Format::format_32_scalar_uscaled:        return true;
+        case Format::format_32_scalar_sscaled:        return true;
+        case Format::format_32_scalar_uint:           return true;
+        case Format::format_32_scalar_sint:           return true;
+        case Format::format_32_scalar_float:          return true;
+        case Format::format_32_vec2_uscaled:          return true;
+        case Format::format_32_vec2_sscaled:          return true;
+        case Format::format_32_vec2_uint:             return true;
+        case Format::format_32_vec2_sint:             return true;
+        case Format::format_32_vec2_float:            return true;
+        case Format::format_32_vec3_uscaled:          return true;
+        case Format::format_32_vec3_sscaled:          return true;
+        case Format::format_32_vec3_uint:             return true;
+        case Format::format_32_vec3_sint:             return true;
+        case Format::format_32_vec3_float:            return true;
+        case Format::format_32_vec4_uscaled:          return true;
+        case Format::format_32_vec4_sscaled:          return true;
+        case Format::format_32_vec4_uint:             return true;
+        case Format::format_32_vec4_sint:             return true;
+        case Format::format_32_vec4_float:            return true;
+
+        case Format::format_packed1010102_vec4_unorm: return true;
+        case Format::format_packed1010102_vec4_snorm: return true;
+        case Format::format_packed1010102_vec4_uint:  return true;
+        case Format::format_packed1010102_vec4_sint:  return true;
+        case Format::format_packed111110_vec3_unorm:  return true;
+
+        case Format::format_d16_unorm:           return false;
+        case Format::format_x8_d24_unorm_pack32: return false;
+        case Format::format_d32_sfloat:          return false;
+        case Format::format_s8_uint:             return false;
+        case Format::format_d24_unorm_s8_uint:   return false;
+        case Format::format_d32_sfloat_s8_uint:  return false;
 
         default: {
             ERHE_FATAL("Bad format");
@@ -512,24 +667,28 @@ auto get_component_byte_size(Format format) -> std::size_t
 auto get_format_size(Format format) -> std::size_t
 {
     switch (format) {
+        case Format::format_8_scalar_srgb:            return 1 * 1;
         case Format::format_8_scalar_unorm:           return 1 * 1;
         case Format::format_8_scalar_snorm:           return 1 * 1;
         case Format::format_8_scalar_uscaled:         return 1 * 1;
         case Format::format_8_scalar_sscaled:         return 1 * 1;
         case Format::format_8_scalar_uint:            return 1 * 1;
         case Format::format_8_scalar_sint:            return 1 * 1;
+        case Format::format_8_vec2_srgb:              return 2 * 1;
         case Format::format_8_vec2_unorm:             return 2 * 1;
         case Format::format_8_vec2_snorm:             return 2 * 1;
         case Format::format_8_vec2_uscaled:           return 2 * 1;
         case Format::format_8_vec2_sscaled:           return 2 * 1;
         case Format::format_8_vec2_uint:              return 2 * 1;
         case Format::format_8_vec2_sint:              return 2 * 1;
+        case Format::format_8_vec3_srgb:              return 3 * 1;
         case Format::format_8_vec3_unorm:             return 3 * 1;
         case Format::format_8_vec3_snorm:             return 3 * 1;
         case Format::format_8_vec3_uscaled:           return 3 * 1;
         case Format::format_8_vec3_sscaled:           return 3 * 1;
         case Format::format_8_vec3_uint:              return 3 * 1;
         case Format::format_8_vec3_sint:              return 3 * 1;
+        case Format::format_8_vec4_srgb:              return 4 * 1;
         case Format::format_8_vec4_unorm:             return 4 * 1;
         case Format::format_8_vec4_snorm:             return 4 * 1;
         case Format::format_8_vec4_uscaled:           return 4 * 1;
@@ -542,60 +701,91 @@ auto get_format_size(Format format) -> std::size_t
         case Format::format_16_scalar_sscaled:        return 1 * 2;
         case Format::format_16_scalar_uint:           return 1 * 2;
         case Format::format_16_scalar_sint:           return 1 * 2;
+        case Format::format_16_scalar_float:          return 1 * 2;
         case Format::format_16_vec2_unorm:            return 2 * 2;
         case Format::format_16_vec2_snorm:            return 2 * 2;
         case Format::format_16_vec2_uscaled:          return 2 * 2;
         case Format::format_16_vec2_sscaled:          return 2 * 2;
         case Format::format_16_vec2_uint:             return 2 * 2;
         case Format::format_16_vec2_sint:             return 2 * 2;
+        case Format::format_16_vec2_float:            return 2 * 2;
         case Format::format_16_vec3_unorm:            return 3 * 2;
         case Format::format_16_vec3_snorm:            return 3 * 2;
         case Format::format_16_vec3_uscaled:          return 3 * 2;
         case Format::format_16_vec3_sscaled:          return 3 * 2;
         case Format::format_16_vec3_uint:             return 3 * 2;
         case Format::format_16_vec3_sint:             return 3 * 2;
+        case Format::format_16_vec3_float:            return 3 * 2;
         case Format::format_16_vec4_unorm:            return 4 * 2;
         case Format::format_16_vec4_snorm:            return 4 * 2;
         case Format::format_16_vec4_uscaled:          return 4 * 2;
         case Format::format_16_vec4_sscaled:          return 4 * 2;
         case Format::format_16_vec4_uint:             return 4 * 2;
         case Format::format_16_vec4_sint:             return 4 * 2;
-        case Format::format_32_scalar_unorm:          return 1 * 4;
-        case Format::format_32_scalar_snorm:          return 1 * 4;
+        case Format::format_16_vec4_float:            return 4 * 2;
         case Format::format_32_scalar_uscaled:        return 1 * 4;
         case Format::format_32_scalar_sscaled:        return 1 * 4;
         case Format::format_32_scalar_uint:           return 1 * 4;
         case Format::format_32_scalar_sint:           return 1 * 4;
         case Format::format_32_scalar_float:          return 1 * 4;
-        case Format::format_32_vec2_unorm:            return 2 * 4;
-        case Format::format_32_vec2_snorm:            return 2 * 4;
         case Format::format_32_vec2_uscaled:          return 2 * 4;
         case Format::format_32_vec2_sscaled:          return 2 * 4;
         case Format::format_32_vec2_uint:             return 2 * 4;
         case Format::format_32_vec2_sint:             return 2 * 4;
         case Format::format_32_vec2_float:            return 2 * 4;
-        case Format::format_32_vec3_unorm:            return 3 * 4;
-        case Format::format_32_vec3_snorm:            return 3 * 4;
         case Format::format_32_vec3_uscaled:          return 3 * 4;
         case Format::format_32_vec3_sscaled:          return 3 * 4;
         case Format::format_32_vec3_uint:             return 3 * 4;
         case Format::format_32_vec3_sint:             return 3 * 4;
         case Format::format_32_vec3_float:            return 3 * 4;
-        case Format::format_32_vec4_unorm:            return 4 * 4;
-        case Format::format_32_vec4_snorm:            return 4 * 4;
         case Format::format_32_vec4_uscaled:          return 4 * 4;
         case Format::format_32_vec4_sscaled:          return 4 * 4;
         case Format::format_32_vec4_uint:             return 4 * 4;
         case Format::format_32_vec4_sint:             return 4 * 4;
         case Format::format_32_vec4_float:            return 4 * 4;
+
         case Format::format_packed1010102_vec4_unorm: return 4;
         case Format::format_packed1010102_vec4_snorm: return 4;
         case Format::format_packed1010102_vec4_uint:  return 4;
         case Format::format_packed1010102_vec4_sint:  return 4;
+        case Format::format_packed111110_vec3_unorm:  return 4;
+
+        case Format::format_d16_unorm:           return 2;
+        case Format::format_x8_d24_unorm_pack32: return 4;
+        case Format::format_d32_sfloat:          return 4;
+        case Format::format_s8_uint:             return 1;
+        case Format::format_d24_unorm_s8_uint:   return 4;
+        case Format::format_d32_sfloat_s8_uint:  return 8; // ?
 
         default: {
             ERHE_FATAL("Bad format");
         }
+    }
+}
+
+auto get_depth_size(Format format) -> std::size_t
+{
+    switch (format) {
+        case Format::format_d16_unorm:           return 2;
+        case Format::format_x8_d24_unorm_pack32: return 4;
+        case Format::format_d32_sfloat:          return 4;
+        case Format::format_s8_uint:             return 0;
+        case Format::format_d24_unorm_s8_uint:   return 3;
+        case Format::format_d32_sfloat_s8_uint:  return 4;
+        default:                                 return 0;
+    }
+}
+
+auto get_stencil_size(Format format) -> std::size_t
+{
+    switch (format) {
+        case Format::format_d16_unorm:           return 0;
+        case Format::format_x8_d24_unorm_pack32: return 0;
+        case Format::format_d32_sfloat:          return 0;
+        case Format::format_s8_uint:             return 1;
+        case Format::format_d24_unorm_s8_uint:   return 1;
+        case Format::format_d32_sfloat_s8_uint:  return 1;
+        default:                                 return 0;
     }
 }
 
@@ -722,6 +912,34 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             ui_value[1] = ui_src[1];
             ui_value[2] = ui_src[2];
             ui_value[3] = ui_src[3];
+            break;
+        }
+
+        case Format::format_8_scalar_srgb: {
+            const int8_t* i_src = reinterpret_cast<const int8_t*>(src);
+            f_value[0] = srgb_to_linear(snorm8_to_float(i_src[0]));
+            f_value[1] = srgb_to_linear(snorm8_to_float(i_src[1]));
+            break;
+        }
+        case Format::format_8_vec2_srgb: {
+            const int8_t* i_src = reinterpret_cast<const int8_t*>(src);
+            f_value[0] = srgb_to_linear(snorm8_to_float(i_src[0]));
+            f_value[1] = srgb_to_linear(snorm8_to_float(i_src[1]));
+            break;
+        }
+        case Format::format_8_vec3_srgb: {
+            const int8_t* i_src = reinterpret_cast<const int8_t*>(src);
+            f_value[0] = srgb_to_linear(snorm8_to_float(i_src[0]));
+            f_value[1] = srgb_to_linear(snorm8_to_float(i_src[1]));
+            f_value[2] = srgb_to_linear(snorm8_to_float(i_src[2]));
+            break;
+        }
+        case Format::format_8_vec4_srgb: {
+            const int8_t* i_src = reinterpret_cast<const int8_t*>(src);
+            f_value[0] = srgb_to_linear(snorm8_to_float(i_src[0]));
+            f_value[1] = srgb_to_linear(snorm8_to_float(i_src[1]));
+            f_value[2] = srgb_to_linear(snorm8_to_float(i_src[2]));
+            f_value[3] = snorm8_to_float(i_src[3]);
             break;
         }
 
@@ -1191,6 +1409,56 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
 
+        case Format::format_8_scalar_srgb: {
+            float fx = f_value[0] / scale;
+            float srgb_x = linear_rgb_to_srgb(fx);
+            uint8_t ui[1];
+            ui[0] = float_to_unorm8(srgb_x);
+            memcpy(dst, &ui[0], 1 * sizeof(uint8_t));
+            break;
+        }
+        case Format::format_8_vec2_srgb: {
+            float fx = f_value[0] / scale;
+            float fy = f_value[1] / scale;
+            float srgb_x = linear_rgb_to_srgb(fx);
+            float srgb_y = linear_rgb_to_srgb(fy);
+            uint8_t ui[2];
+            ui[0] = float_to_unorm8(srgb_x);
+            ui[1] = float_to_unorm8(srgb_y);
+            memcpy(dst, &ui[0], 2 * sizeof(uint8_t));
+            break;
+        }
+        case Format::format_8_vec3_srgb: {
+            float fx = f_value[0] / scale;
+            float fy = f_value[1] / scale;
+            float fz = f_value[2] / scale;
+            float srgb_x = linear_rgb_to_srgb(fx);
+            float srgb_y = linear_rgb_to_srgb(fy);
+            float srgb_z = linear_rgb_to_srgb(fz);
+            uint8_t ui[3];
+            ui[0] = float_to_unorm8(srgb_x);
+            ui[1] = float_to_unorm8(srgb_y);
+            ui[2] = float_to_unorm8(srgb_z);
+            memcpy(dst, &ui[0], 3 * sizeof(uint8_t));
+            break;
+        }
+        case Format::format_8_vec4_srgb: {
+            float fx = f_value[0] / scale;
+            float fy = f_value[1] / scale;
+            float fz = f_value[2] / scale;
+            float fw = f_value[2] / scale;
+            float srgb_x = linear_rgb_to_srgb(fx);
+            float srgb_y = linear_rgb_to_srgb(fy);
+            float srgb_z = linear_rgb_to_srgb(fz);
+            uint8_t ui[4];
+            ui[0] = float_to_unorm8(srgb_x);
+            ui[1] = float_to_unorm8(srgb_y);
+            ui[2] = float_to_unorm8(srgb_z);
+            ui[3] = float_to_unorm8(fw);
+            memcpy(dst, &ui[0], 4 * sizeof(uint8_t));
+            break;
+        }
+
         case Format::format_8_scalar_unorm: {
             float fx = f_value[0] / scale;
             ERHE_VERIFY(fx <= 1.001f);
@@ -1442,6 +1710,47 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             ui[1] = float_to_unorm16(fy);
             ui[2] = float_to_unorm16(fz);
             ui[3] = float_to_unorm16(fw);
+            memcpy(dst, &ui[0], 4 * sizeof(uint16_t));
+            break;
+        }
+
+        case Format::format_16_scalar_float: {
+            float fx = f_value[0] / scale;
+            uint16_t ui[1];
+            ui[0] = glm::packHalf1x16(fx);
+            memcpy(dst, &ui[0], 1 * sizeof(uint16_t));
+            break;
+        }
+        case Format::format_16_vec2_float: {
+            float fx = f_value[0] / scale;
+            float fy = f_value[1] / scale;
+            uint16_t ui[2];
+            ui[0] = glm::packHalf1x16(fx);
+            ui[1] = glm::packHalf1x16(fy);
+            memcpy(dst, &ui[0], 2 * sizeof(uint16_t));
+            break;
+        }
+        case Format::format_16_vec3_float: {
+            float fx = f_value[0] / scale;
+            float fy = f_value[1] / scale;
+            float fz = f_value[2] / scale;
+            uint16_t ui[3];
+            ui[0] = glm::packHalf1x16(fx);
+            ui[1] = glm::packHalf1x16(fy);
+            ui[2] = glm::packHalf1x16(fz);
+            memcpy(dst, &ui[0], 3 * sizeof(uint16_t));
+            break;
+        }
+        case Format::format_16_vec4_float: {
+            float fx = f_value[0] / scale;
+            float fy = f_value[1] / scale;
+            float fz = f_value[2] / scale;
+            float fw = f_value[3] / scale;
+            uint16_t ui[4];
+            ui[0] = glm::packHalf1x16(fx);
+            ui[1] = glm::packHalf1x16(fy);
+            ui[2] = glm::packHalf1x16(fz);
+            ui[3] = glm::packHalf1x16(fw);
             memcpy(dst, &ui[0], 4 * sizeof(uint16_t));
             break;
         }

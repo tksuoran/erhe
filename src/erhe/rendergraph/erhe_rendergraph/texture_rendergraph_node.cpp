@@ -6,7 +6,7 @@
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"
@@ -56,7 +56,7 @@ auto Texture_rendergraph_node::get_consumer_input_texture(const Routing resource
     return get_producer_output_texture(resource_routing, m_output_key, depth + 1);
 }
 
-auto Texture_rendergraph_node::get_consumer_input_framebuffer(const Routing resource_routing, const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Texture_rendergraph_node::get_consumer_input_render_pass(const Routing resource_routing, const int key, const int depth) const -> erhe::graphics::Render_pass*
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
     if (key != m_input_key) {
@@ -67,14 +67,14 @@ auto Texture_rendergraph_node::get_consumer_input_framebuffer(const Routing reso
             depth,
             m_input_key
         );
-        return std::shared_ptr<erhe::graphics::Framebuffer>{};
+        return nullptr;
     }
 
     if (m_enabled) {
-        return m_framebuffer;
+        return m_render_pass.get();
     }
 
-    return get_producer_output_framebuffer(resource_routing, m_output_key, depth + 1);
+    return get_producer_output_render_pass(resource_routing, m_output_key, depth + 1);
 }
 
 auto Texture_rendergraph_node::get_producer_output_texture(Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
@@ -82,14 +82,14 @@ auto Texture_rendergraph_node::get_producer_output_texture(Routing, int, int) co
     return m_color_texture;
 }
 
-auto Texture_rendergraph_node::get_producer_output_framebuffer(Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Texture_rendergraph_node::get_producer_output_render_pass(Routing, int, int) const -> erhe::graphics::Render_pass*
 {
-    return m_framebuffer;
+    return m_render_pass.get();
 }
 
 void Texture_rendergraph_node::execute_rendergraph_node()
 {
-    using erhe::graphics::Framebuffer;
+    using erhe::graphics::Render_pass;
     using erhe::graphics::Texture;
 
     // TODO Figure out exactly what to do here.
@@ -102,8 +102,8 @@ void Texture_rendergraph_node::execute_rendergraph_node()
     // Resize framebuffer if necessary
     if (
         !m_color_texture ||
-        (m_color_texture->width () != output_viewport.width ) ||
-        (m_color_texture->height() != output_viewport.height)
+        (m_color_texture->get_width () != output_viewport.width ) ||
+        (m_color_texture->get_height() != output_viewport.height)
     ) {
         log_tail->trace(
             "Resizing Texture_rendergraph_node '{}' to {} x {}",
@@ -112,21 +112,18 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             output_viewport.height
         );
 
-        //// TODO
-        ////    .internal_format = m_configuration->graphics.low_hdr
-        ////        ? gl::Internal_format::r11f_g11f_b10f
-        ////        : gl::Internal_format::rgba16f,
-        erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_instance();
+        //// TODO Consider m_configuration->graphics.low_hdr
+        erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
         m_color_texture = std::make_shared<Texture>(
             graphics_device,
             Texture::Create_info{
-                .device          = graphics_device,
-                .target          = gl::Texture_target::texture_2d,
-                .internal_format = m_color_format,
-                .width           = output_viewport.width,
-                .height          = output_viewport.height,
-                .debug_label     = fmt::format("{} Texture_rendergraph_node color texture", get_name())
+                .device      = graphics_device,
+                .target      = gl::Texture_target::texture_2d,
+                .pixelformat = m_color_format,
+                .width       = output_viewport.width,
+                .height      = output_viewport.height,
+                .debug_label = fmt::format("{} Texture_rendergraph_node color texture", get_name())
             }
         );
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
@@ -136,7 +133,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             // TODO
         }
 
-        if (m_depth_stencil_format == gl::Internal_format{0}) {
+        if (m_depth_stencil_format == erhe::dataformat::Format::format_undefined) {
             m_depth_stencil_renderbuffer.reset();
         } else {
             m_depth_stencil_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
@@ -152,35 +149,23 @@ void Texture_rendergraph_node::execute_rendergraph_node()
         }
 
         {
-            Framebuffer::Create_info create_info;
-            create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
+            erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+            render_pass_descriptor.color_attachments[0].texture = m_color_texture.get();
+            render_pass_descriptor.debug_label                  = fmt::format("{} Texture_rendergraph_node framebuffer", get_name());
 
             if (m_depth_stencil_renderbuffer) {
-                if (gl_helpers::has_depth(m_depth_stencil_format)) {
-                    create_info.attach(
-                        gl::Framebuffer_attachment::depth_attachment,
-                        m_depth_stencil_renderbuffer.get()
-                    );
+                if (erhe::dataformat::get_depth_size(m_depth_stencil_format) > 0) {
+                    render_pass_descriptor.depth_attachment.renderbuffer = m_depth_stencil_renderbuffer.get();
                 }
-                if (gl_helpers::has_stencil(m_depth_stencil_format)) {
-                    create_info.attach(
-                        gl::Framebuffer_attachment::stencil_attachment,
-                        m_depth_stencil_renderbuffer.get()
-                    );
+                if (erhe::dataformat::get_stencil_size(m_depth_stencil_format) > 0) {
+                    render_pass_descriptor.stencil_attachment.renderbuffer = m_depth_stencil_renderbuffer.get();
                 }
             }
-            m_framebuffer = std::make_unique<Framebuffer>(graphics_device, create_info);
-            m_framebuffer->set_debug_label(
-                fmt::format("{} Texture_rendergraph_node framebuffer", get_name())
-            );
+            m_render_pass = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);
 
-            gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
-            gl::named_framebuffer_draw_buffers(m_framebuffer->gl_name(), 1, &draw_buffers[0]);
-            gl::named_framebuffer_read_buffer(m_framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
-
-            if (!m_framebuffer->check_status()) {
+            if (!m_render_pass->check_status()) {
                 log_tail->error("{} Texture_rendergraph_node framebuffer not complete", get_name());
-                m_framebuffer.reset();
+                m_render_pass.reset();
             }
         }
 

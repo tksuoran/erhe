@@ -1,13 +1,13 @@
 #pragma once
 
 #include "erhe_rendergraph/rendergraph_node.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include <memory>
 #include <mutex>
 #include <string_view>
 
 namespace erhe::graphics {
-    class Framebuffer;
+    class Render_pass;
     class Device;
     class Renderbuffer;
     class Texture;
@@ -18,12 +18,13 @@ namespace erhe::rendergraph {
 class Texture_rendergraph_node_create_info
 {
 public:
-    Rendergraph&        rendergraph;
-    std::string         name;
-    int                 input_key           {Rendergraph_node_key::none};
-    int                 output_key          {Rendergraph_node_key::none};
-    gl::Internal_format color_format        {0};
-    gl::Internal_format depth_stencil_format{0};
+    Rendergraph&             rendergraph;
+    std::string              name;
+    int                      input_key           {Rendergraph_node_key::none};
+    int                      output_key          {Rendergraph_node_key::none};
+    erhe::dataformat::Format color_format        {erhe::dataformat::Format::format_undefined};
+    erhe::dataformat::Format depth_stencil_format{erhe::dataformat::Format::format_undefined};
+    // TODO multisample count
 };
 
 /// <summary>
@@ -47,19 +48,19 @@ public:
 
     // TODO Think if we want to provide here both consumer input and producer output
     auto get_consumer_input_texture     (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
-    auto get_consumer_input_framebuffer (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_consumer_input_render_pass (Routing resource_routing, int key, int depth = 0) const -> erhe::graphics::Render_pass* override;
     auto get_producer_output_texture    (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
-    auto get_producer_output_framebuffer(Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_producer_output_render_pass(Routing resource_routing, int key, int depth = 0) const -> erhe::graphics::Render_pass* override;
     void execute_rendergraph_node       () override;
 
 protected:
     int                                           m_input_key;
     int                                           m_output_key;
-    gl::Internal_format                           m_color_format;
-    gl::Internal_format                           m_depth_stencil_format;
+    erhe::dataformat::Format                      m_color_format;
+    erhe::dataformat::Format                      m_depth_stencil_format;
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_stencil_renderbuffer;
-    std::shared_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
+    std::unique_ptr<erhe::graphics::Render_pass>  m_render_pass;
 };
 
 } // namespace erhe::rendergraph

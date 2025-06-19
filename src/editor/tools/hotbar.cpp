@@ -285,8 +285,6 @@ void Hotbar::init_hotbar()
         "Hotbar imgui host",
         false
     );
-    m_rendertarget_imgui_host->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
-
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
     m_rendertarget_node->attach(m_rendertarget_mesh);
 
@@ -536,8 +534,8 @@ auto Hotbar::flags() -> ImGuiWindowFlags
 void Hotbar::on_begin()
 {
     if (m_rendertarget_mesh) {
-        m_min_size[0] = static_cast<float>(m_rendertarget_mesh->width());
-        m_min_size[1] = static_cast<float>(m_rendertarget_mesh->height());
+        m_min_size[0] = static_cast<float>(m_rendertarget_mesh->get_width());
+        m_min_size[1] = static_cast<float>(m_rendertarget_mesh->get_height());
         m_max_size[0] = m_min_size[0];
         m_max_size[1] = m_min_size[1];
     }

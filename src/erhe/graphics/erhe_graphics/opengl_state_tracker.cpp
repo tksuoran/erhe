@@ -2,7 +2,7 @@
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_profile/profile.hpp"
@@ -16,14 +16,14 @@ void OpenGL_state_tracker::on_thread_exit()
     vertex_input .reset();
     shader_stages.reset();
 
-    Framebuffer       ::on_thread_exit();
+    Render_pass       ::on_thread_exit();
     Vertex_input_state::on_thread_exit();
     Gpu_timer         ::on_thread_exit();
 }
 
 void OpenGL_state_tracker::on_thread_enter()
 {
-    Framebuffer       ::on_thread_enter();
+    Render_pass       ::on_thread_enter();
     Vertex_input_state::on_thread_enter();
     Gpu_timer         ::on_thread_enter();
 }

@@ -16,6 +16,7 @@
 #include "windows/imgui_window_scene_view_node.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -255,9 +256,12 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         2048,
         600.0f
     );
-    mesh->bind();
-    mesh->clear(glm::vec4{0.0f, 0.5f, 0.5f, 0.5f});
-    mesh->render_done(m_context);
+
+    {
+        // Clear once
+        std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_context.graphics_device->make_render_command_encoder(*mesh->get_render_pass());
+        mesh->render_done(m_context);
+    }
 
     mesh->layer_id = scene_root->layers().rendertarget()->id;
     mesh->enable_flag_bits(

@@ -206,7 +206,7 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
     log_tail->trace("Unregistered Rendergraph_node {}", node->get_name());
 }
 
-auto Rendergraph::get_graphics_instance() -> erhe::graphics::Device&
+auto Rendergraph::get_graphics_device() -> erhe::graphics::Device&
 {
     return m_graphics_device;
 }

@@ -31,6 +31,7 @@ public:
         int                             resolution,
         int                             light_count
     );
+    ~Shadow_render_node() override;
 
     // Implements Rendergraph_node
     auto get_type_name() const -> std::string_view override { return "Shadow_render_node"; }
@@ -53,7 +54,7 @@ private:
     Editor_context&                                           m_context;
     Scene_view&                                               m_scene_view;
     std::shared_ptr<erhe::graphics::Texture>                  m_texture;
-    std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
+    std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_render_passes;
     erhe::math::Viewport                                      m_viewport{0, 0, 0, 0, true};
     erhe::scene_renderer::Light_projections                   m_light_projections;
 };

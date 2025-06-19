@@ -45,7 +45,7 @@ public:
         bool                            imgui_ini,
         ImFontAtlas*                    font_atlas
     );
-    virtual ~Imgui_host();
+    ~Imgui_host() override;
 
     virtual void begin_imgui_frame  () = 0;
     virtual void process_events     (float dt_s, int64_t time_ns) = 0;
