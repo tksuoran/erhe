@@ -352,31 +352,7 @@ Device::Device(erhe::window::Context_window& context_window)
         limits.max_fragment_shader_storage_blocks
     );
 
-    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
-        info.use_bindless_texture = true;
-    }
-    if (info.vendor == Vendor::Intel) {
-        info.use_bindless_texture = false;
-    }
-    log_startup->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
-
-    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
-        ERHE_PROFILE_SCOPE("Sparse texture");
-
-        info.use_sparse_texture = true;
-        gl::get_integer_v(gl::Get_p_name::max_sparse_texture_size_arb, &limits.max_sparse_texture_size);
-        log_startup->info("max sparse texture size : {}", limits.max_sparse_texture_size);
-    }
-    log_startup->info("GL_ARB_sparse_texture supported : {}", info.use_sparse_texture);
-
-    info.use_persistent_buffers = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
-    info.use_direct_state_access = (info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
-    info.use_multi_draw_indirect = (info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_multi_draw_indirect);
-    log_startup->info("Persistent Buffers supported:  {}", info.use_sparse_texture);
-    log_startup->info("Direct State Access supported: {}", info.use_direct_state_access);
-    log_startup->info("Multi Draw Indirect supported: {}", info.use_multi_draw_indirect);
-
-    bool force_no_bindless           {false};
+    bool force_bindless_textures_off {false};
     bool force_no_persistent_buffers {false};
     bool force_no_direct_state_access{false};
     bool force_no_multi_draw_indirect{false};
@@ -388,7 +364,7 @@ Device::Device(erhe::window::Context_window& context_window)
         const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "graphics");
         ini.get("post_processing",              configuration.post_processing);
         ini.get("use_time_query",               configuration.use_time_query );
-        ini.get("force_no_bindless",            force_no_bindless);
+        ini.get("force_bindless_textures_off",  force_bindless_textures_off);
         ini.get("force_no_persistent_buffers",  force_no_persistent_buffers);
         ini.get("force_no_direct_state_access", force_no_direct_state_access);
         ini.get("force_no_multi_draw_indirect", force_no_multi_draw_indirect);
@@ -396,6 +372,51 @@ Device::Device(erhe::window::Context_window& context_window)
         ini.get("force_glsl_version",           force_glsl_version);
         ini.get("initial_clear",                initial_clear);
     }
+
+    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
+        info.use_bindless_texture = true;
+    }
+    if (info.vendor == Vendor::Intel) {
+        info.use_bindless_texture = false;
+    }
+    log_startup->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
+    if (info.use_bindless_texture) {
+#if defined(ERHE_SPIRV)
+        // 'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes
+        info.use_bindless_texture = false;
+        log_startup->warn("Force disabled GL_ARB_bindless_texture due to ERHE_SPIRV cmake setting");
+#else
+        if (force_bindless_textures_off) {
+            info.use_bindless_texture = false;
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting force_bindless_textures_off");
+        }
+        else
+        if (capture_support) {
+            info.use_bindless_texture = false;
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini enabling RenderDoc capture");
+        }
+#endif
+    }
+
+    const bool use_direct_state_access = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access) || (info.glsl_version >= 450);
+    if (!use_direct_state_access) {
+        log_startup->error("Your graphics driver does not support OpenGL direct state access: OpenGL version 4.5 or GL_ARB_direct_state_access is required. This is a fatal error.");
+    }
+
+    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
+        ERHE_PROFILE_SCOPE("Sparse texture");
+
+        info.use_sparse_texture = true;
+        gl::get_integer_v(gl::Get_p_name::max_sparse_texture_size_arb, &limits.max_sparse_texture_size);
+        log_startup->info("max sparse texture size : {}", limits.max_sparse_texture_size);
+    }
+    log_startup->info("GL_ARB_sparse_texture supported : {}", info.use_sparse_texture);
+
+    info.use_persistent_buffers = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
+    info.use_multi_draw_indirect = (info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_multi_draw_indirect);
+    log_startup->info("Persistent Buffers supported:  {}", info.use_sparse_texture);
+    log_startup->info("Multi Draw Indirect supported: {}", info.use_multi_draw_indirect);
+
     if (force_gl_version > 0) {
         info.gl_version = force_gl_version;
         log_startup->warn("Forced GL version to be {} due to erhe.ini setting", force_gl_version);
@@ -405,23 +426,12 @@ Device::Device(erhe::window::Context_window& context_window)
         log_startup->warn("Forced GLSL version to be {} due to erhe.ini setting", force_glsl_version);
     }
 
-    if (info.use_bindless_texture) {
-#if defined(ERHE_SPIRV)
-        // 'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes
-        info.use_bindless_texture = false;
-        log_startup->warn("Force disabled GL_ARB_bindless_texture due to ERHE_SPIRV cmake setting");
-#else
-        if (force_no_bindless || capture_support) {
-            info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting");
-        }
-#endif
-    }
-
-    if (!info.use_direct_state_access) { 
-        ERHE_FATAL("OpenGL driver does not support irect state access, required by erhe. This is a fatal error.");
-    }
-    // if (info.use_direct_state_access) { 
+    // info.use_direct_state_access = (info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
+    //
+    // if (!info.use_direct_state_access) {
+    //     ERHE_FATAL("OpenGL driver does not support irect state access, required by erhe. This is a fatal error.");
+    // }
+    // if (info.use_direct_state_access) {
     //     if (force_no_direct_state_access) {
     //         info.use_direct_state_access = false;
     //         log_startup->warn("Force disabled direct state access due to erhe.ini setting");
@@ -1458,15 +1468,16 @@ auto Device::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_bu
 
 void Device::named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height)
 {
-    if (info.use_direct_state_access) {
-        gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
-    } else {
-        int current_renderbuffer = 0;
-        gl::get_integer_v(gl::Get_p_name::renderbuffer_binding, &current_renderbuffer);
-        gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, renderbuffer);
-        gl::renderbuffer_storage_multisample(gl::Renderbuffer_target::renderbuffer, samples, internalformat, width, height);
-        gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, current_renderbuffer);
-    }
+    gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
+    // if (info.use_direct_state_access) {
+    //     gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
+    // } else {
+    //     int current_renderbuffer = 0;
+    //     gl::get_integer_v(gl::Get_p_name::renderbuffer_binding, &current_renderbuffer);
+    //     gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, renderbuffer);
+    //     gl::renderbuffer_storage_multisample(gl::Renderbuffer_target::renderbuffer, samples, internalformat, width, height);
+    //     gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, current_renderbuffer);
+    // }
 }
 
 void Device::multi_draw_elements_indirect(

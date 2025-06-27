@@ -59,7 +59,6 @@ void initialize_frame_capture()
 
         // Enable capturing callstacks
         renderdoc_api->SetCaptureOptionU32(eRENDERDOC_Option_CaptureCallstacks, 1);
-
     }
 #elif __unix__
     // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so

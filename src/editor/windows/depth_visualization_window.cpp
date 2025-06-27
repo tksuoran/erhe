@@ -13,10 +13,8 @@
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -63,8 +61,6 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     }
 {
     // Registered in Texture_rendergraph_node constructor:
-    // - viewport input
-    // - texture output
     register_input ("shadow_maps",         erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     register_output("depth_visualization", erhe::rendergraph::Rendergraph_node_key::depth_visualization);
 }

@@ -246,9 +246,10 @@ public:
         bool use_bindless_texture   {false};
         bool use_sparse_texture     {false};
         bool use_persistent_buffers {false};
-        bool use_direct_state_access{false};
         bool use_multi_draw_indirect{false};
         bool use_compute_shader     {false};
+
+        // bool use_direct_state_access{false};
     };
 
     class Limits

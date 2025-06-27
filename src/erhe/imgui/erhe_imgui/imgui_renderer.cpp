@@ -282,7 +282,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
     , m_nearest_sampler{
         graphics_device,
         {
-            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
+            .min_filter  = gl::Texture_min_filter::nearest, // nearest_mipmap_nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Imgui_renderer nearest"
         }
