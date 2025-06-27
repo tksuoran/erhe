@@ -2,16 +2,10 @@
 
 #include "erhe_rendergraph/sink_rendergraph_node.hpp"
 
-#include <glm/glm.hpp>
-
 #include <memory>
 
-namespace erhe::rendergraph {
-    class Rendergraph;
-}
-namespace erhe::window {
-    class Window;
-}
+namespace erhe::rendergraph { class Rendergraph;}
+namespace erhe::window { class Window; }
 
 namespace editor {
 
@@ -28,12 +22,8 @@ public:
     );
 
     // Implements Rendergraph_node
-    auto get_consumer_input_viewport    (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> erhe::math::Viewport override;
-    auto get_producer_output_viewport   (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> erhe::math::Viewport override;
-    auto get_consumer_input_texture     (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
-    auto get_producer_output_texture    (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
-    auto get_consumer_input_framebuffer (erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
-    auto get_producer_output_framebuffer(erhe::rendergraph::Routing routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+    auto get_consumer_input_texture (int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
+    auto get_producer_output_texture(int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
 
     // Public API
     [[nodiscard]] auto get_viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>;
@@ -45,7 +35,6 @@ private:
     // Does *not* directly point to window,
     // because layout is done by Scene_views.
     std::weak_ptr<Viewport_scene_view> m_viewport_scene_view;
-    //Scene_views*                     m_viewport_scene_views;
     erhe::math::Viewport               m_viewport;
 };
 

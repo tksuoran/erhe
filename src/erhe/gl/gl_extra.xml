@@ -4,7 +4,6 @@
     <group name="QueryTarget">
       <enum name="GL_TIMESTAMP"/>
     </group>
-
     <group name="BufferPNameARB">
       <enum name="GL_BUFFER_SIZE"/>
       <enum name="GL_BUFFER_USAGE"/>
@@ -14,26 +13,21 @@
       <enum name="GL_BUFFER_MAP_LENGTH"/>
       <enum name="GL_BUFFER_MAPPED"/>
     </group>
-
     <group name="BufferPointerNameARB">
       <enum name="GL_BUFFER_MAP_POINTER"/>
     </group>
-
     <group name="GetPName">
       <enum name="GL_CLIP_ORIGIN"/>
       <enum name="GL_MAX_SAMPLES"/>
       <enum name="GL_MAX_TEXTURE_MAX_ANISOTROPY"/>
       <enum name="GL_MAX_COMPUTE_SHARED_MEMORY_SIZE"/>
     </group>
-
     <group name="GetMultisamplePNameNV">
       <enum name="GL_SAMPLE_POSITION"/>
     </group>
-
     <group name="VertexAttribPointerPropertyARB">
       <enum name="GL_VERTEX_ATTRIB_ARRAY_POINTER"/>
     </group>
-
     <group name="BufferPNameARB">
       <enum name="GL_BUFFER_SIZE"/>
       <enum name="GL_BUFFER_USAGE"/>
@@ -43,48 +37,42 @@
       <enum name="GL_BUFFER_MAP_LENGTH"/>
       <enum name="GL_BUFFER_MAPPED"/>
     </group>
-
     <group name="BufferPointerNameARB">
       <enum name="GL_BUFFER_MAP_POINTER"/>
     </group>
-
     <group name="ProgramInterface">
       <enum name="GL_ATOMIC_COUNTER_BUFFER"/>
     </group>
-
     <group name="GetMultisamplePNameNV">
       <enum name="GL_SAMPLE_POSITION"/>
     </group>
-
+    <group name="FramebufferAttachment">
+      <enum name="GL_BACK"/>
+    </group>
     <group name="TextureParameterName">
       <enum name="GL_TEXTURE_SPARSE_ARB"/>
       <enum name="GL_VIRTUAL_PAGE_SIZE_INDEX_ARB"/>
     </group>
-
     <group name="GetTextureParameter">
       <enum name="GL_NUM_SPARSE_LEVELS_ARB"/>
       <enum name="GL_TEXTURE_SPARSE_ARB"/>
       <enum name="GL_VIRTUAL_PAGE_SIZE_INDEX_ARB"/>
     </group>
-
     <group name="InternalFormatPName">
       <enum name="GL_NUM_VIRTUAL_PAGE_SIZES_ARB"/>
       <enum name="GL_VIRTUAL_PAGE_SIZE_X_ARB"/>
       <enum name="GL_VIRTUAL_PAGE_SIZE_Y_ARB"/>
       <enum name="GL_VIRTUAL_PAGE_SIZE_Z_ARB"/>
     </group>
-
     <group name="GetPName">
       <enum name="GL_MAX_SPARSE_TEXTURE_SIZE_ARB"/>
       <enum name="GL_MAX_SPARSE_3D_TEXTURE_SIZE_ARB"/>
       <enum name="GL_MAX_SPARSE_ARRAY_TEXTURE_LAYERS_ARB"/>
       <enum name="GL_SPARSE_TEXTURE_FULL_ARRAY_CUBE_MIPMAPS_ARB"/>
     </group>
-
     <group name="UniformType" comment="Deprecated, use the group attributes instead.">
       <enum name="GL_UNSIGNED_INT64_ARB"/>
     </group>
-
     <group name="VertexAttribLType" comment="Deprecated, use the group attributes instead.">
       <enum name="GL_UNSIGNED_INT64_ARB"/>
       <enum name="GL_DOUBLE_VEC2"/>
@@ -100,11 +88,9 @@
       <enum name="GL_DOUBLE_MAT4X2"/>
       <enum name="GL_DOUBLE_MAT4X3"/>
     </group>
-
     <group name="VertexAttribPointerPropertyARB">
       <enum name="GL_VERTEX_ATTRIB_ARRAY_POINTER"/>
     </group>
-
     <group name="VertexAttribPropertyARB">
       <enum name="GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING"/>
       <enum name="GL_VERTEX_ATTRIB_ARRAY_ENABLED"/>
@@ -118,7 +104,36 @@
       <enum name="GL_VERTEX_ATTRIB_RELATIVE_OFFSET"/>
       <enum name="GL_CURRENT_VERTEX_ATTRIB"/>
     </group>
+    <group name="InvalidateFramebufferAttachment">
+      <enum name="GL_STENCIL_ATTACHMENT"/>
+    </group>
+    <group name="InternalFormat">
+      <enum name="GL_RGBA16_SNORM"/>
+      <enum name="GL_DEPTH_COMPONENT24"/>
+      <enum name="GL_DEPTH_COMPONENT32"/>
+    </group>
+    <group name="Buffer">
+      <enum name="GL_DEPTH_STENCIL"/>
+    </group>
+    <group name="GetTextureParameter">
+      <enum name="GL_TEXTURE_DEPTH"/>
+      <enum name="GL_TEXTURE_SAMPLES"/>
+      <enum name="GL_TEXTURE_FIXED_SAMPLE_LOCATIONS"/>
+      <enum name="GL_TEXTURE_DEPTH"/>
+    </group>
+    <group name="GetTextureParameter">
+      <enum name="GL_TEXTURE_DEPTH_SIZE"/>
+      <enum name="GL_TEXTURE_STENCIL_SIZE"/>
+      <enum name="GL_TEXTURE_RED_TYPE"/>
+      <enum name="GL_TEXTURE_GREEN_TYPE"/>
+      <enum name="GL_TEXTURE_BLUE_TYPE"/>
+      <enum name="GL_TEXTURE_ALPHA_TYPE"/>
+      <enum name="GL_TEXTURE_DEPTH_TYPE"/>
+      <enum name="GL_TEXTURE_IMMUTABLE_FORMAT"/>
+      <enum name="GL_TEXTURE_IMMUTABLE_LEVELS"/>
+    </group>
   </groups>
+
   <!-- Hack in glTexturePageCommitmentEXT. In reality in is in GL_EXT_direct_state_access
        but we don't wan't to pull all non-core parts it would bring. -->
   <extensions>

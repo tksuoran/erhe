@@ -12,14 +12,14 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/input_arguments.hpp"
-#include "erhe_graphics/gl_context_provider.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
@@ -180,7 +180,7 @@ Map_window::Map_window(
 
 void Map_window::imgui()
 {
-    update_framebuffer();
+    update_render_pass();
     render();
     Framebuffer_window::imgui();
 }
@@ -298,8 +298,8 @@ auto Map_window::normalize(Pixel_coordinate pixel_coordinate) const -> Pixel_coo
     if (!m_texture) {
         return {};
     }
-    const float extent_x       = static_cast<float>(m_texture->width ());
-    const float extent_y       = static_cast<float>(m_texture->height());
+    const float extent_x       = static_cast<float>(m_texture->get_width ());
+    const float extent_y       = static_cast<float>(m_texture->get_height());
     const float center_pixel_x = std::floor(extent_x / 2.0f);
     const float center_pixel_y = std::floor(extent_y / 2.0f);
     const float normalized_x   = pixel_coordinate.x - center_pixel_x + m_pixel_offset.x;
@@ -358,12 +358,12 @@ auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> boo
     const auto&     texel           = terrain_shapes.at(terrain_tile);
     const auto&     tileset_texture = m_tile_renderer.tileset_texture();
     const glm::vec2 uv0{
-        static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
-        static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
+        static_cast<float>(texel.x) / static_cast<float>(tileset_texture->get_width()),
+        static_cast<float>(texel.y) / static_cast<float>(tileset_texture->get_height()),
     };
     const glm::vec2 uv1 = uv0 + glm::vec2{
-        static_cast<float>(Tile_shape::full_width) / static_cast<float>(tileset_texture->width()),
-        static_cast<float>(Tile_shape::height) / static_cast<float>(tileset_texture->height()),
+        static_cast<float>(Tile_shape::full_width) / static_cast<float>(tileset_texture->get_width()),
+        static_cast<float>(Tile_shape::height    ) / static_cast<float>(tileset_texture->get_height()),
     };
 
     return m_imgui_renderer.image(
@@ -387,8 +387,8 @@ auto Map_window::tile_position(const Tile_coordinate absolute_tile) const -> glm
 {
     ERHE_VERIFY(m_texture);
 
-    const float extent_x       = static_cast<float>(m_texture->width ());
-    const float extent_y       = static_cast<float>(m_texture->height());
+    const float extent_x       = static_cast<float>(m_texture->get_width ());
+    const float extent_y       = static_cast<float>(m_texture->get_height());
     const float center_pixel_x = std::floor(extent_x / 2.0f);
     const float center_pixel_y = std::floor(extent_y / 2.0f);
 
@@ -418,8 +418,8 @@ void Map_window::render()
         return;
     }
 
-    const float extent_x = static_cast<float>(m_texture->width ());
-    const float extent_y = static_cast<float>(m_texture->height());
+    const float extent_x = static_cast<float>(m_texture->get_width ());
+    const float extent_y = static_cast<float>(m_texture->get_height());
 
     if ((extent_x < 1.0f) || (extent_y < 1.0f)) {
         return;
@@ -432,9 +432,7 @@ void Map_window::render()
     const auto& terrain_shapes = m_tile_renderer.get_terrain_shapes();
     const auto& unit_shapes    = m_tile_renderer.get_unit_shapes();
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-    gl::clear_color     (0.2f, 0.0f, 0.2f, 1.0f);
-    gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
+    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
 
     std::size_t width_in_tiles  = static_cast<size_t>(std::ceil(extent_x / (Tile_shape::interleave_width * m_zoom)));
     std::size_t height_in_tiles = static_cast<size_t>(std::ceil(extent_y / (Tile_shape::height           * m_zoom)));

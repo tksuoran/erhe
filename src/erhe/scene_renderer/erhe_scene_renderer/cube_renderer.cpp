@@ -99,7 +99,7 @@ void Cube_renderer::render(const Render_parameters& parameters)
     const auto& viewport = parameters.viewport;
     const auto* camera   = parameters.camera;
 
-    erhe::graphics::Scoped_debug_group pass_scope{"render cubes"};
+    erhe::graphics::Scoped_debug_group pass_scope{"Cube_renderer::render()"};
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 

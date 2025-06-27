@@ -1,8 +1,13 @@
 layout(location = 0) in vec2 v_texcoord;
 
+// Must have one of these
+//  - #define SOURCE s_input
+//  - #define SOURCE s_downsample
+
 void main()
 {
 #if defined(ERHE_BINDLESS_TEXTURE)
+    sampler2D s_input      = sampler2D(post_processing.input_texture);
     sampler2D s_downsample = sampler2D(post_processing.downsample_texture);
 #endif
 
@@ -23,19 +28,19 @@ void main()
     const float weight11 = 2.0 / 32.0;
     const float weight12 = 1.0 / 32.0;
 
-    vec3 sample0  = weight0  * textureLod(s_downsample, v_texcoord + texel_scale * vec2(-2.0, -2.0), post_processing.source_lod).rgb;
-    vec3 sample1  = weight1  * textureLod(s_downsample, v_texcoord + texel_scale * vec2( 0.0, -2.0), post_processing.source_lod).rgb;
-    vec3 sample2  = weight2  * textureLod(s_downsample, v_texcoord + texel_scale * vec2( 2.0, -2.0), post_processing.source_lod).rgb;
-    vec3 sample3  = weight3  * textureLod(s_downsample, v_texcoord + texel_scale * vec2(-1.0, -1.0), post_processing.source_lod).rgb;
-    vec3 sample4  = weight4  * textureLod(s_downsample, v_texcoord + texel_scale * vec2( 1.0, -1.0), post_processing.source_lod).rgb;
-    vec3 sample5  = weight5  * textureLod(s_downsample, v_texcoord + texel_scale * vec2(-2.0,  0.0), post_processing.source_lod).rgb;
-    vec3 sample6  = weight6  * textureLod(s_downsample, v_texcoord + texel_scale * vec2( 0.0,  0.0), post_processing.source_lod).rgb;
-    vec3 sample7  = weight7  * textureLod(s_downsample, v_texcoord + texel_scale * vec2( 2.0,  0.0), post_processing.source_lod).rgb;
-    vec3 sample8  = weight8  * textureLod(s_downsample, v_texcoord + texel_scale * vec2(-1.0,  1.0), post_processing.source_lod).rgb;
-    vec3 sample9  = weight9  * textureLod(s_downsample, v_texcoord + texel_scale * vec2( 1.0,  1.0), post_processing.source_lod).rgb;
-    vec3 sample10 = weight10 * textureLod(s_downsample, v_texcoord + texel_scale * vec2(-2.0,  2.0), post_processing.source_lod).rgb;
-    vec3 sample11 = weight11 * textureLod(s_downsample, v_texcoord + texel_scale * vec2( 0.0,  2.0), post_processing.source_lod).rgb;
-    vec3 sample12 = weight12 * textureLod(s_downsample, v_texcoord + texel_scale * vec2( 2.0,  2.0), post_processing.source_lod).rgb;
+    vec3 sample0  = weight0  * textureLod(SOURCE, v_texcoord + texel_scale * vec2(-2.0, -2.0), post_processing.source_lod).rgb;
+    vec3 sample1  = weight1  * textureLod(SOURCE, v_texcoord + texel_scale * vec2( 0.0, -2.0), post_processing.source_lod).rgb;
+    vec3 sample2  = weight2  * textureLod(SOURCE, v_texcoord + texel_scale * vec2( 2.0, -2.0), post_processing.source_lod).rgb;
+    vec3 sample3  = weight3  * textureLod(SOURCE, v_texcoord + texel_scale * vec2(-1.0, -1.0), post_processing.source_lod).rgb;
+    vec3 sample4  = weight4  * textureLod(SOURCE, v_texcoord + texel_scale * vec2( 1.0, -1.0), post_processing.source_lod).rgb;
+    vec3 sample5  = weight5  * textureLod(SOURCE, v_texcoord + texel_scale * vec2(-2.0,  0.0), post_processing.source_lod).rgb;
+    vec3 sample6  = weight6  * textureLod(SOURCE, v_texcoord + texel_scale * vec2( 0.0,  0.0), post_processing.source_lod).rgb;
+    vec3 sample7  = weight7  * textureLod(SOURCE, v_texcoord + texel_scale * vec2( 2.0,  0.0), post_processing.source_lod).rgb;
+    vec3 sample8  = weight8  * textureLod(SOURCE, v_texcoord + texel_scale * vec2(-1.0,  1.0), post_processing.source_lod).rgb;
+    vec3 sample9  = weight9  * textureLod(SOURCE, v_texcoord + texel_scale * vec2( 1.0,  1.0), post_processing.source_lod).rgb;
+    vec3 sample10 = weight10 * textureLod(SOURCE, v_texcoord + texel_scale * vec2(-2.0,  2.0), post_processing.source_lod).rgb;
+    vec3 sample11 = weight11 * textureLod(SOURCE, v_texcoord + texel_scale * vec2( 0.0,  2.0), post_processing.source_lod).rgb;
+    vec3 sample12 = weight12 * textureLod(SOURCE, v_texcoord + texel_scale * vec2( 2.0,  2.0), post_processing.source_lod).rgb;
 
     out_color      = vec4(0.0, 0.0, 0.0, 1.0);
     out_color.rgb += sample0;

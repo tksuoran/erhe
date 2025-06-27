@@ -1,5 +1,6 @@
 ﻿#include "erhe_xr/xr_session.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
@@ -41,19 +42,13 @@ Xr_session::Xr_session(Xr_instance& instance, erhe::window::Context_window& cont
     , m_context_window                {context_window}
     , m_xr_session                    {XR_NULL_HANDLE}
     , m_mirror_mode                   {mirror_mode}
-    , m_swapchain_color_format        {gl::Internal_format::srgb8_alpha8}
-    , m_swapchain_depth_stencil_format{gl::Internal_format::depth24_stencil8}
+    , m_swapchain_color_format        {erhe::dataformat::Format::format_undefined}
+    , m_swapchain_depth_stencil_format{erhe::dataformat::Format::format_undefined}
     , m_xr_reference_space_local      {XR_NULL_HANDLE}
     , m_xr_reference_space_stage      {XR_NULL_HANDLE}
     , m_xr_reference_space_view       {XR_NULL_HANDLE}
     , m_xr_session_state              {XR_SESSION_STATE_UNKNOWN}
-    , m_xr_frame_state{
-        XR_TYPE_FRAME_STATE,
-        nullptr,
-        0,
-        0,
-        XR_FALSE
-    }
+    , m_xr_frame_state                {XR_TYPE_FRAME_STATE, nullptr, 0, 0, XR_FALSE}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -232,16 +227,30 @@ auto Xr_session::get_xr_frame_state() const -> const XrFrameState&
     return m_xr_frame_state;
 }
 
-auto Xr_session::color_format_score(const gl::Internal_format image_format) const -> int
+auto Xr_session::color_format_score(const erhe::dataformat::Format pixelformat) const -> int
 {
-    switch (image_format) {
+    switch (pixelformat) {
         //using enum gl::Internal_format;
-        case gl::Internal_format::rgba8:          return 1;
-        case gl::Internal_format::srgb8_alpha8:   return 2 + m_mirror_mode ? 10 : 0;
-        case gl::Internal_format::rgb10_a2:       return 3;
-        case gl::Internal_format::r11f_g11f_b10f: return 4;
-        case gl::Internal_format::rgba16f:        return 5;
-        default:                                  return 0;
+        case erhe::dataformat::Format::format_8_vec4_unorm:             return 1 + (m_mirror_mode ? 10 : 0);
+        case erhe::dataformat::Format::format_8_vec4_srgb:              return 2;
+        case erhe::dataformat::Format::format_packed1010102_vec4_unorm: return 3;
+        case erhe::dataformat::Format::format_packed111110_vec3_unorm:  return 4;
+        case erhe::dataformat::Format::format_16_vec4_float:            return 5;
+        default:                                                        return 0;
+    }
+}
+
+auto Xr_session::depth_stencil_format_score(const erhe::dataformat::Format pixelformat) const -> int
+{
+    switch (pixelformat) {
+        //using enum gl::Internal_format;
+        case erhe::dataformat::Format::format_s8_uint:             return 0;
+        case erhe::dataformat::Format::format_d16_unorm:           return 1;
+        case erhe::dataformat::Format::format_x8_d24_unorm_pack32: return 2;
+        case erhe::dataformat::Format::format_d32_sfloat:          return 3;
+        case erhe::dataformat::Format::format_d24_unorm_s8_uint:   return 4;
+        case erhe::dataformat::Format::format_d32_sfloat_s8_uint:  return 5;
+        default:                                                   return 0;
     }
 }
 
@@ -263,17 +272,25 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
 
     log_xr->info("Swapchain formats:");
     int best_color_format_score{0};
-    m_swapchain_color_format = gl::Internal_format::srgb8_alpha8;
+    int best_depth_stencil_score{0};
     for (const auto swapchain_format : swapchain_formats) {
-        const auto gl_internal_format = static_cast<gl::Internal_format>(swapchain_format);
-        log_xr->info("    {}", gl::c_str(gl_internal_format));
-        const int color_score = color_format_score(gl_internal_format);
+        const gl::Internal_format      gl_internal_format = static_cast<gl::Internal_format>(swapchain_format);
+        const erhe::dataformat::Format pixelformat        = gl_helpers::convert_from_gl(gl_internal_format);
+        ERHE_VERIFY(pixelformat != erhe::dataformat::Format::format_undefined);
+        log_xr->info("    {} = {}", gl::c_str(gl_internal_format), erhe::dataformat::c_str(pixelformat));
+        const int color_score         = color_format_score(pixelformat);
+        const int depth_stencil_score = depth_stencil_format_score(pixelformat);
         if (color_score > best_color_format_score) {
             best_color_format_score = color_score;
-            m_swapchain_color_format = gl_internal_format;
+            m_swapchain_color_format = pixelformat;
+        }
+        if (depth_stencil_score > best_depth_stencil_score) {
+            best_depth_stencil_score = depth_stencil_score;
+            m_swapchain_depth_stencil_format = pixelformat;
         }
     }
-    log_xr->info("Selected swapchain color format {}", gl::c_str(m_swapchain_color_format));
+    log_xr->info("Selected swapchain color format {}", erhe::dataformat::c_str(m_swapchain_color_format));
+    log_xr->info("Selected swapchain depth stencil format {}", erhe::dataformat::c_str(m_swapchain_depth_stencil_format));
 
     return true;
 }
@@ -310,12 +327,16 @@ auto Xr_session::create_swapchains() -> bool
     const auto& views = m_instance.get_xr_view_configuration_views();
     m_view_swapchains.clear();
     for (const auto& view : views) {
+        std::optional<gl::Internal_format> color_internal_format = gl_helpers::convert_to_gl(m_swapchain_color_format);
+        std::optional<gl::Internal_format> depth_stencil_format  = gl_helpers::convert_to_gl(m_swapchain_depth_stencil_format);
+        ERHE_VERIFY(color_internal_format.has_value());
+        ERHE_VERIFY(depth_stencil_format.has_value());
         const XrSwapchainCreateInfo color_swapchain_create_info{
             .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
             .next        = nullptr,
             .createFlags = 0,
             .usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
-            .format      = static_cast<int64_t>(m_swapchain_color_format),
+            .format      = static_cast<int64_t>(color_internal_format.value()),
             .sampleCount = view.recommendedSwapchainSampleCount,
             .width       = view.recommendedImageRectWidth,
             .height      = view.recommendedImageRectHeight,
@@ -327,7 +348,11 @@ auto Xr_session::create_swapchains() -> bool
         XrSwapchain color_swapchain{XR_NULL_HANDLE};
 
         check_gl_context_in_current_in_this_thread();
-        ERHE_XR_CHECK(xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_swapchain));
+        XrResult color_result = xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_swapchain);
+        if (color_result != XR_SUCCESS) {
+            log_xr->error("xrCreateSwapchain() failed with error {}", c_str(color_result));
+            return false;
+        }
 
         const XrSwapchainCreateInfo depth_stencil_swapchain_create_info{
             .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
@@ -335,7 +360,7 @@ auto Xr_session::create_swapchains() -> bool
             .createFlags = 0,
             //.usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
             .usageFlags  = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-            .format      = static_cast<int64_t>(m_swapchain_depth_stencil_format),
+            .format      = static_cast<int64_t>(depth_stencil_format.value()),
             .sampleCount = view.recommendedSwapchainSampleCount,
             .width       = view.recommendedImageRectWidth,
             .height      = view.recommendedImageRectHeight,
@@ -347,7 +372,12 @@ auto Xr_session::create_swapchains() -> bool
         XrSwapchain depth_stencil_swapchain{XR_NULL_HANDLE};
 
         check_gl_context_in_current_in_this_thread();
-        ERHE_XR_CHECK(xrCreateSwapchain(m_xr_session, &depth_stencil_swapchain_create_info, &depth_stencil_swapchain));
+        XrResult depth_stencil_result = xrCreateSwapchain(m_xr_session, &depth_stencil_swapchain_create_info, &depth_stencil_swapchain);
+        if (depth_stencil_result != XR_SUCCESS) {
+            log_xr->error("xrCreateSwapchain() failed with error {}", c_str(depth_stencil_result));
+            return false;
+        }
+
         m_view_swapchains.emplace_back(color_swapchain, depth_stencil_swapchain);
     }
 
@@ -560,10 +590,11 @@ void Xr_session::update_view_pose()
         m_xr_frame_state.predictedDisplayTime,
         &location
     );
-    if (result == XR_SUCCESS) {
+
+    if ((result == XR_SUCCESS) || (result == XR_SESSION_LOSS_PENDING)) {
         m_view_location = location;
     } else {
-        log_xr->warn("xrLocateSpace() failed");
+        log_xr->warn("xrLocateSpace() failed with error {}", c_str(result));
     }
 }
 
@@ -840,25 +871,6 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             log_xr->warn("invalid color / depth image for view {}", i);
             return false;
         }
-
-        // GLint color_internal_format_i{0};
-        // GLint depth_internal_format_i{0};
-        // gl::Error_code start_error_code = gl::get_error();
-        // gl::get_texture_level_parameter_iv(color_texture, 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_INTERNAL_FORMAT), &color_internal_format_i);
-        // gl::Error_code color_error_code = gl::get_error();
-        // gl::get_texture_level_parameter_iv(depth_texture, 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_INTERNAL_FORMAT), &depth_internal_format_i);
-        // gl::Error_code depth_error_code = gl::get_error();
-        // static_cast<void>(start_error_code);
-        // static_cast<void>(color_error_code);
-        // static_cast<void>(depth_error_code);
-        // gl::Internal_format color_internal_format = static_cast<gl::Internal_format>(color_internal_format_i);
-        // gl::Internal_format depth_internal_format = static_cast<gl::Internal_format>(depth_internal_format_i);
-        // if (color_internal_format != m_swapchain_color_format) {
-        //     log_xr->warn("swapchain color format = {}, expected format = {}", gl::c_str(color_internal_format), gl::c_str(m_swapchain_color_format));
-        // }
-        // if (depth_internal_format != m_swapchain_depth_format) {
-        //     log_xr->warn("swapchain depth format = {}, expected format = {}", gl::c_str(depth_internal_format), gl::c_str(m_swapchain_depth_format));
-        // }
  
         Render_view render_view{
             .slot      = i,
@@ -935,7 +947,8 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     }
 
     if (m_xr_composition_layer_projection_views.empty()) {
-        log_xr->warn("no layer views");
+        // This can happen
+        log_xr->debug("no layer views");
     }
 
     //XrCompositionLayerDepthTestVARJO layer_depth;

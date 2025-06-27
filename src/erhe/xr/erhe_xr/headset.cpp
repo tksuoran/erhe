@@ -98,12 +98,17 @@ auto Headset::is_active() const -> bool
     return is_valid() && m_xr_session->is_session_running();
 }
 
-auto Headset::update_events() const -> bool
+auto Headset::poll_events() const -> bool
 {
     if (!m_xr_instance || !m_xr_session) {
         return false;
     }
-    if (!m_xr_instance->poll_xr_events(*m_xr_session.get())) {
+    return m_xr_instance->poll_xr_events(*m_xr_session.get());
+}
+
+auto Headset::update_actions() const -> bool
+{
+    if (!m_xr_instance || !m_xr_session) {
         return false;
     }
     if (!m_xr_session->is_session_running()) {
@@ -137,6 +142,7 @@ auto Headset::begin_frame_() -> Frame_timing
     }
 
     if (!m_xr_session->begin_frame()) {
+        result.should_render = false;
         return result;
     }
 

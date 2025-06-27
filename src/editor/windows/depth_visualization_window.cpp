@@ -1,6 +1,6 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "windows/debug_view_window.hpp"
+#include "windows/depth_visualization_window.hpp"
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
@@ -13,12 +13,11 @@
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_profile/profile.hpp"
@@ -40,13 +39,13 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
             .name                 = std::string{"Depth_to_color_rendergraph_node"},
             .input_key            = erhe::rendergraph::Rendergraph_node_key::shadow_maps,
             .output_key           = erhe::rendergraph::Rendergraph_node_key::depth_visualization,
-            .color_format         = gl::Internal_format::rgba8,
-            .depth_stencil_format = gl::Internal_format{0}
+            .color_format         = erhe::dataformat::Format::format_8_vec4_srgb,
+            .depth_stencil_format = erhe::dataformat::Format::format_undefined
         }
     }
     , m_forward_renderer  {forward_renderer}
     , m_mesh_memory       {mesh_memory}
-    , m_empty_vertex_input{rendergraph.get_graphics_instance()}
+    , m_empty_vertex_input{rendergraph.get_graphics_device()}
     , m_renderpass{ 
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Pipeline_data{
@@ -61,9 +60,9 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
         }
     }
 {
-    // register_input() & register_output() is done by Texture_rendergraph_node constructor
-    register_input(erhe::rendergraph::Routing::Resource_provided_by_producer, "shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
-    register_output(erhe::rendergraph::Routing::Resource_provided_by_producer, "depth_visualization", erhe::rendergraph::Rendergraph_node_key::depth_visualization);
+    // Registered in Texture_rendergraph_node constructor:
+    register_input ("shadow_maps",         erhe::rendergraph::Rendergraph_node_key::shadow_maps);
+    register_output("depth_visualization", erhe::rendergraph::Rendergraph_node_key::depth_visualization);
 }
 
 // Implements erhe::rendergraph::Rendergraph_node
@@ -71,17 +70,14 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 {
     SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node()");
 
-    // Execute base class in order to update texture and framebuffer
-    Texture_rendergraph_node::execute_rendergraph_node();
-
-    if (!m_framebuffer) {
+    if (!m_render_pass) {
         // Likely because output ImGui window has no viewport size yet.
         return;
     }
 
     ERHE_PROFILE_FUNCTION();
 
-    Rendergraph_node* input_node = get_consumer_input_node(erhe::rendergraph::Routing::Resource_provided_by_producer, erhe::rendergraph::Rendergraph_node_key::shadow_maps);
+    Rendergraph_node* input_node = get_consumer_input_node(erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     if (input_node == nullptr) {
         SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: shadow_maps input is not connected");
         return;
@@ -94,8 +90,8 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    const int input_texture_width  = shadow_texture->width ();
-    const int input_texture_height = shadow_texture->height();
+    const int input_texture_width  = shadow_texture->get_width ();
+    const int input_texture_height = shadow_texture->get_height();
 
     if ((input_texture_width  < 1) || (input_texture_height < 1)) {
         SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: no shadow renderer or empty viewport");
@@ -119,24 +115,30 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Debug View"};
+    erhe::graphics::Scoped_debug_group pass_scope{"Depth_to_color_rendergraph_node::execute_rendergraph_node()"};
 
-    const auto& output_viewport = get_producer_output_viewport(erhe::rendergraph::Routing::Resource_provided_by_consumer, m_output_key);
-    ERHE_VERIFY(output_viewport.width >= 0);
-    ERHE_VERIFY(output_viewport.height >= 0);
-    ERHE_VERIFY(output_viewport.width < 32768);
-    ERHE_VERIFY(output_viewport.height < 32768);
-    if ((output_viewport.width == 0) || (output_viewport.height == 0)) {
+    erhe::math::Viewport viewport{
+        .x      = 0,
+        .y      = 0,
+        .width  = m_render_pass->get_render_target_width(),
+        .height = m_render_pass->get_render_target_height()
+    };
+    ERHE_VERIFY(viewport.width >= 0);
+    ERHE_VERIFY(viewport.height >= 0);
+    ERHE_VERIFY(viewport.width < 32768);
+    ERHE_VERIFY(viewport.height < 32768);
+    if ((viewport.width == 0) || (viewport.height == 0)) {
         return;
     }
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
+    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
+    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
 
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
     const auto& layers = scene_root->layers();
     auto texture = shadow_render_node->get_texture();
 
-    log_render->trace("Depth to color from texture '{}'", texture->debug_label());
+    log_render->trace("Depth to color from texture '{}'", texture->get_debug_label());
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
@@ -151,14 +153,13 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
             .non_mesh_vertex_count = 3, // Full-screen triangle
             .passes                = { &m_renderpass },
             .shadow_texture        = texture.get(),
-            .viewport              = output_viewport,
+            .viewport              = viewport,
             .debug_label           = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
         },
         light_projection_transforms.light
     );
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-    SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::render() - done");
+    SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::render() - done");
 }
 
 auto Depth_to_color_rendergraph_node::get_light_index() -> int&
@@ -166,46 +167,7 @@ auto Depth_to_color_rendergraph_node::get_light_index() -> int&
     return m_light_index;
 }
 
-Debug_view_node::Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph)
-    : erhe::rendergraph::Rendergraph_node{rendergraph, "Debug View"}
-{
-    register_input(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        "depth_visualization",
-        erhe::rendergraph::Rendergraph_node_key::depth_visualization
-    );
-
-    // "window" is slot / pseudo-resource which allows use rendergraph connection
-    // to make Debug_view_window a dependency for Imgui_host, forcing
-    // correct rendering order (Imgui_window_scene_view must be rendered before
-    // Imgui_host).
-    //
-    // TODO Imgui_renderer should carry dependencies using Rendergraph.
-    register_output(erhe::rendergraph::Routing::None, "window", erhe::rendergraph::Rendergraph_node_key::window);
-}
-
-void Debug_view_node::execute_rendergraph_node()
-{
-    // NOP
-}
-
-void Debug_view_node::set_area_size(const int size)
-{
-    ERHE_VERIFY(size >= 0);
-    m_area_size = size;
-}
-
-auto Debug_view_node::get_consumer_input_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
-{
-    return erhe::math::Viewport{
-        .x      = 0,
-        .y      = 0,
-        .width  = m_area_size,
-        .height = m_area_size
-    };
-}
-
-Debug_view_window::Debug_view_window(
+Depth_visualization_window::Depth_visualization_window(
     erhe::imgui::Imgui_renderer&            imgui_renderer,
     erhe::imgui::Imgui_windows&             imgui_windows,
     erhe::rendergraph::Rendergraph&         rendergraph,
@@ -215,9 +177,8 @@ Debug_view_window::Debug_view_window(
     Mesh_memory&                            mesh_memory,
     Programs&                               programs
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Debug View", "debug_view"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Depth Visualization", "depth_visualization"}
     , m_context                {editor_context}
-    , m_node                   {rendergraph}
 {
     if (editor_context.OpenXR || !editor_context.developer_mode) {
         hide_window();
@@ -226,42 +187,33 @@ Debug_view_window::Debug_view_window(
     }
 
     m_depth_to_color_node = std::make_unique<Depth_to_color_rendergraph_node>(rendergraph, forward_renderer, mesh_memory, programs);
-    rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::depth_visualization, m_depth_to_color_node.get(), &m_node);
 
-    const auto& window_imgui_host = imgui_windows.get_window_imgui_host();
-    if (window_imgui_host) {
-        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::window, &m_node, window_imgui_host.get());
-    }
-
-    const auto& nodes = editor_rendering.get_all_shadow_nodes();
-    if (!nodes.empty()) {
-        const auto& node = nodes.front();
-        set_shadow_renderer_node(rendergraph, node.get());
+    const auto& shadow_nodes = editor_rendering.get_all_shadow_nodes();
+    if (!shadow_nodes.empty()) {
+        const std::shared_ptr<Shadow_render_node>& shadow_node = shadow_nodes.front();
+        set_shadow_renderer_node(shadow_node);
     }
 }
 
-void Debug_view_window::set_shadow_renderer_node(erhe::rendergraph::Rendergraph& rendergraph, Shadow_render_node* node)
+void Depth_visualization_window::set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node)
 {
-    if (m_context.OpenXR) {
-        return; // TODO
-    }
     if (!m_depth_to_color_node) {
         return;
     }
 
-    if (m_shadow_renderer_node) {
-        m_context.rendergraph->disconnect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_renderer_node, m_depth_to_color_node.get());
+    erhe::rendergraph::Rendergraph& rendergraph = m_depth_to_color_node->get_rendergraph();
+
+    std::shared_ptr<Shadow_render_node> old_shadow_renderer_node = m_shadow_renderer_node.lock();
+    if (old_shadow_renderer_node) {
+        rendergraph.disconnect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, old_shadow_renderer_node.get(), m_depth_to_color_node.get());
     }
 
-    m_shadow_renderer_node = node;
-
-    if (node) {
-        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_renderer_node, m_depth_to_color_node.get());
+    m_shadow_renderer_node = shadow_node;
+    if (shadow_node) {
+        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, shadow_node.get(), m_depth_to_color_node.get());
         m_depth_to_color_node->set_enabled(true);
-        m_node.set_enabled(true);
     } else {
         m_depth_to_color_node->set_enabled(true);
-        m_node.set_enabled(false);
     }
 }
 
@@ -271,81 +223,42 @@ template <typename T>
     return std::span<const T>(&value, 1);
 }
 
-void Debug_view_window::hidden()
+void Depth_visualization_window::hidden()
 {
-    if (m_context.OpenXR) {
-        return; // TODO
-    }
-
-    m_node.set_enabled(false);
-
-    // TODO
-    const auto* input = m_node.get_input(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        erhe::rendergraph::Rendergraph_node_key::depth_visualization
-    );
-    if ((input == nullptr) || input->producer_nodes.empty()) {
-        return;
-    }
-
-    auto* producer_node = input->producer_nodes.front();
-    if (!producer_node) {
-        return;
-    }
-    producer_node->set_enabled(false);
+    m_depth_to_color_node->set_enabled(false);
 }
 
-void Debug_view_window::imgui()
+void Depth_visualization_window::imgui()
 {
-    if (m_context.OpenXR) {
-        return; // TODO
-    }
-    SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui()");
+    ERHE_PROFILE_FUNCTION();
 
-    //// Rendergraph_node::set_enabled(true);
-    const auto& nodes = m_context.editor_rendering->get_all_shadow_nodes();
-    if (!nodes.empty()) {
-        int last_node_index = static_cast<int>(nodes.size() - 1);
-        const bool node_set = ImGui::SliderInt("Node", &m_selected_node, 0, last_node_index);
-        if (node_set && (m_selected_node >= 0) && (m_selected_node < nodes.size())) {
-            const auto node = nodes.at(m_selected_node);
-            set_shadow_renderer_node(*m_context.rendergraph, node.get());
+    const auto& shadow_nodes = m_context.editor_rendering->get_all_shadow_nodes();
+    if (!shadow_nodes.empty()) {
+        int last_index = static_cast<int>(shadow_nodes.size() - 1);
+        const bool edited = ImGui::SliderInt("Viewport", &m_selected_shadow_node, 0, last_index);
+        if (edited && (m_selected_shadow_node >= 0) && (m_selected_shadow_node < shadow_nodes.size())) {
+            const std::shared_ptr<Shadow_render_node> shadow_node = shadow_nodes.at(m_selected_shadow_node);
+            set_shadow_renderer_node(shadow_node);
         }
     }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION();
-
-    const auto* input = m_node.get_input(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        erhe::rendergraph::Rendergraph_node_key::depth_visualization
-    );
+    const auto* input = m_depth_to_color_node->get_input(erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     if (input == nullptr) {
-        log_render->error("Debug_view_window has no input registered.");
+        log_render->error("Depth_visualization_window has no input pin registered.");
         return;
     }
 
     if (input->producer_nodes.empty()) {
-        log_render->error("Debug_view_window input producer is not connected.");
+        log_render->error("Depth_visualization_window input producer is not connected.");
         return;
     }
-
-    auto* producer_node = input->producer_nodes.front();
-    if (producer_node == nullptr) {
-        log_render->error("Debug_view_window input producer is expired or not set.");
-        return;
-    }
-    producer_node->set_enabled(true);
 
     // TODO add safety?
-    auto* input_texture_node = static_cast<Depth_to_color_rendergraph_node*>(producer_node);
     auto* shadow_render_node = static_cast<Shadow_render_node*>(
-        producer_node->get_consumer_input_node(
-            erhe::rendergraph::Routing::Resource_provided_by_producer,
-            erhe::rendergraph::Rendergraph_node_key::shadow_maps
-        )
+        m_depth_to_color_node->get_consumer_input_node(erhe::rendergraph::Rendergraph_node_key::shadow_maps)
     );
     if (shadow_render_node == nullptr) {
+        log_render->error("Depth_visualization_window input producer is expired or not set.");
         return;
     }
 
@@ -357,7 +270,7 @@ void Debug_view_window::imgui()
     ImGui::SliderFloat("Shadow Max Bias", &erhe::scene_renderer::Light_projections::s_shadow_max_bias,     0.0f, 1.0f, "%.5f", ImGuiSliderFlags_Logarithmic);
 
     const int count = static_cast<int>(light_projection_transforms.size());
-    int& light_index = input_texture_node->get_light_index();
+    int& light_index = m_depth_to_color_node->get_light_index();
     ImGui::Text("Light");
     ImGui::SameLine();
     for (int i = 0; i < count; ++i) {
@@ -378,6 +291,8 @@ void Debug_view_window::imgui()
         }
     }
 
+    m_depth_to_color_node->set_enabled(true);
+
     const uint32_t shadow_map_texture_handle_compare_uvec2[2] = {
         static_cast<uint32_t>((light_projections.shadow_map_texture_handle_compare & 0xffffffffu)),
         static_cast<uint32_t>( light_projections.shadow_map_texture_handle_compare >> 32u)
@@ -387,10 +302,7 @@ void Debug_view_window::imgui()
         static_cast<uint32_t>( light_projections.shadow_map_texture_handle_no_compare >> 32u)
     };
 
-    const auto& texture = m_node.get_consumer_input_texture(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        erhe::rendergraph::Rendergraph_node_key::depth_visualization
-    );
+    const auto& texture = m_depth_to_color_node->get_producer_output_texture(erhe::rendergraph::Rendergraph_node_key::depth_visualization);
 
 #if 0
     ImGui::Text("Shadow Texture Handle Compare: 0x%08x 0x%08x", shadow_map_texture_handle_compare_uvec2[1], shadow_map_texture_handle_compare_uvec2[0]);
@@ -411,15 +323,15 @@ void Debug_view_window::imgui()
     if (area_size <= 0) {
         return; // Not visible
     }
-    m_node.set_area_size(area_size);
+    m_depth_to_color_node->update_render_pass(area_size, area_size, false);
 
     if (!texture) {
-        log_render->warn("Debug_view_window has no input render graph node");
+        log_render->warn("Depth_visualization_window has no input render graph node");
         return;
     }
 
-    const int texture_width  = texture->width();
-    const int texture_height = texture->height();
+    const int texture_width  = texture->get_width();
+    const int texture_height = texture->get_height();
 
     if ((texture_width > 0) && (texture_height > 0)) {
         auto cursor_position = ImGui::GetCursorPos();
@@ -427,15 +339,14 @@ void Debug_view_window::imgui()
         cursor_position.y += (available_size.y - image_size) / 2.0f;
         ImGui::SetCursorPos(cursor_position);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-        SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui() - drawing image using texture {}", m_texture->gl_name());
+        SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::imgui() - drawing image using texture {}", m_texture->gl_name());
         draw_image(texture, area_size, area_size);
         // bool is_hovered = ImGui::IsItemHovered();
         ImGui::PopStyleVar();
     } else {
-        SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui() - skipped - no texture or empty size");
+        SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::imgui() - skipped - no texture or empty size");
     }
-    SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui() - done");
-#endif
+    SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::imgui() - done");
 }
 
 } // namespace editor

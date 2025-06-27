@@ -311,19 +311,18 @@ void Tile_renderer::compose_tileset_texture()
 
     // Texture will be created with additional per-player colored unit tiles
     erhe::graphics::Texture_create_info texture_create_info{
-        .device          = m_graphics_device,
-        .target          = gl::Texture_target::texture_2d,
-        .internal_format = to_gl(m_tileset_image.info.format),
-        .use_mipmaps     = false,
-        .width           = m_tileset_image.info.width,
-        .height          = ty_offset * Tile_shape::height,
-        .depth           = 1,
-        .level_count     = 1,
-        .debug_label     = "tiles"
+        .device      = m_graphics_device,
+        .target      = gl::Texture_target::texture_2d,
+        .pixelformat = m_tileset_image.info.format,
+        .use_mipmaps = false,
+        .width       = m_tileset_image.info.width,
+        .height      = ty_offset * Tile_shape::height,
+        .depth       = 1,
+        .level_count = 1,
+        .debug_label = fmt::format("Tile_renderer::m_tileset_texture {}", texture_path.string())
     };
 
     m_tileset_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
-    m_tileset_texture->set_debug_label(texture_path.string());
     float clear_rgba[4] = { 1.0f, 0.0f, 1.0f, 1.0f};
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
         gl::clear_tex_image(m_tileset_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_rgba);
@@ -333,7 +332,7 @@ void Tile_renderer::compose_tileset_texture()
 
     // Upload everything before single unit tiles
     m_tileset_texture->upload_subimage(
-        to_gl(m_tileset_image.info.format),
+        m_tileset_image.info.format,
         m_tileset_image.data,
         m_tileset_image.info.width,
         0,
@@ -394,7 +393,7 @@ void Tile_renderer::compose_tileset_texture()
                 }
             }
             m_tileset_texture->upload(
-                to_gl(scratch.info.format),
+                scratch.info.format,
                 scratch.data,
                 scratch.info.width,
                 scratch.info.height,
@@ -435,7 +434,7 @@ void Tile_renderer::compose_tileset_texture()
                             (ty0_single_unit_tiles + 6) * Tile_shape::height
                         );
                         m_tileset_texture->upload(
-                            to_gl(scratch.info.format),  // internal format
+                            scratch.info.format,         // pixelformat
                             scratch.data,                // data span
                             scratch.info.width,          // width
                             scratch.info.height,         // height
@@ -620,10 +619,10 @@ void Tile_renderer::blit(
 {
     ERHE_VERIFY(m_can_blit == true);
 
-    const float u0 = static_cast<float>(src_x         ) / static_cast<float>(m_tileset_texture->width());
-    const float v0 = static_cast<float>(src_y         ) / static_cast<float>(m_tileset_texture->height());
-    const float u1 = static_cast<float>(src_x + width ) / static_cast<float>(m_tileset_texture->width());
-    const float v1 = static_cast<float>(src_y + height) / static_cast<float>(m_tileset_texture->height());
+    const float u0 = static_cast<float>(src_x         ) / static_cast<float>(m_tileset_texture->get_width());
+    const float v0 = static_cast<float>(src_y         ) / static_cast<float>(m_tileset_texture->get_height());
+    const float u1 = static_cast<float>(src_x + width ) / static_cast<float>(m_tileset_texture->get_width());
+    const float v1 = static_cast<float>(src_y + height) / static_cast<float>(m_tileset_texture->get_height());
 
     const float& x0 = dst_x0;
     const float& y0 = dst_y0;
@@ -671,8 +670,6 @@ void Tile_renderer::end()
     m_can_blit = false;
 }
 
-static constexpr std::string_view c_tile_renderer_render{"Tile_renderer::render()"};
-
 void Tile_renderer::render(erhe::math::Viewport viewport)
 {
     if (m_index_count == 0) {
@@ -685,7 +682,7 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{c_tile_renderer_render};
+    erhe::graphics::Scoped_debug_group pass_scope{"Tile_renderer::render()"};
 
     const auto handle = m_graphics_device.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
 
@@ -766,12 +763,12 @@ auto Tile_renderer::terrain_image(const terrain_tile_t terrain_tile, const int s
 {
     const Pixel_coordinate& texel = get_terrain_shape(terrain_tile);
     const glm::vec2 uv0{
-        static_cast<float>(texel.x) / static_cast<float>(m_tileset_texture->width()),
-        static_cast<float>(texel.y) / static_cast<float>(m_tileset_texture->height()),
+        static_cast<float>(texel.x) / static_cast<float>(m_tileset_texture->get_width()),
+        static_cast<float>(texel.y) / static_cast<float>(m_tileset_texture->get_height()),
     };
     const glm::vec2 uv1 = uv0 + glm::vec2{
-        static_cast<float>(Tile_shape::full_width) / static_cast<float>(m_tileset_texture->width()),
-        static_cast<float>(Tile_shape::height) / static_cast<float>(m_tileset_texture->height()),
+        static_cast<float>(Tile_shape::full_width) / static_cast<float>(m_tileset_texture->get_width()),
+        static_cast<float>(Tile_shape::height    ) / static_cast<float>(m_tileset_texture->get_height()),
     };
 
     return m_imgui_renderer.image(
@@ -790,12 +787,12 @@ auto Tile_renderer::unit_image(const unit_tile_t unit_tile, const int scale) -> 
 {
     const auto&     texel = get_unit_shape(unit_tile);
     const glm::vec2 uv0{
-        static_cast<float>(texel.x) / static_cast<float>(m_tileset_texture->width()),
-        static_cast<float>(texel.y) / static_cast<float>(m_tileset_texture->height()),
+        static_cast<float>(texel.x) / static_cast<float>(m_tileset_texture->get_width()),
+        static_cast<float>(texel.y) / static_cast<float>(m_tileset_texture->get_height()),
     };
     const glm::vec2 uv1 = uv0 + glm::vec2{
-        static_cast<float>(Tile_shape::full_width) / static_cast<float>(m_tileset_texture->width()),
-        static_cast<float>(Tile_shape::height    ) / static_cast<float>(m_tileset_texture->height()),
+        static_cast<float>(Tile_shape::full_width) / static_cast<float>(m_tileset_texture->get_width()),
+        static_cast<float>(Tile_shape::height    ) / static_cast<float>(m_tileset_texture->get_height()),
     };
 
     return m_imgui_renderer.image(
@@ -817,8 +814,8 @@ void Tile_renderer::show_texture()
 
     m_imgui_renderer.image(
         m_tileset_texture,
-        m_tileset_texture->width(),
-        m_tileset_texture->height(),
+        m_tileset_texture->get_width(),
+        m_tileset_texture->get_height(),
         uv0,
         uv1,
         glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},

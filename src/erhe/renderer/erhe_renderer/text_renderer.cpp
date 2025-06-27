@@ -92,7 +92,7 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
             .vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangles,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.configuration.reverse_depth),
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
         }
     }
@@ -107,8 +107,6 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
         log_startup->info("Text renderer disabled due to erhe.ini setting");
         return;
     }
-
-    erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_initialize_component};
 
     // Init font
     m_font = std::make_unique<erhe::ui::Font>(
@@ -191,8 +189,6 @@ auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rect
     return m_font ? m_font->measure(text) : erhe::ui::Rectangle{};
 }
 
-static constexpr std::string_view c_text_renderer_render{"Text_renderer::render()"};
-
 void Text_renderer::render(erhe::math::Viewport viewport)
 {
     ERHE_PROFILE_FUNCTION();
@@ -202,7 +198,7 @@ void Text_renderer::render(erhe::math::Viewport viewport)
     }
 
     const uint64_t handle = m_graphics_device.get_handle(*m_font->texture(), m_nearest_sampler);
-    erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
+    erhe::graphics::Scoped_debug_group pass_scope{"Text_renderer::render()"};
 
     erhe::graphics::Buffer_range projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
     {

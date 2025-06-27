@@ -296,7 +296,7 @@ auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, I
     m_info.depth       = 1;
     m_info.level_count = 1;
     m_info.row_stride  = width * 4;
-    m_info.format      = Image_format::srgb8_alpha8;
+    m_info.format      = erhe::dataformat::Format::format_8_vec4_srgb;
 
     info = m_info;
 

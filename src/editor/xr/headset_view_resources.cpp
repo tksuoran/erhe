@@ -4,14 +4,14 @@
 
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/gl_helpers.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
 
 namespace editor {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 Headset_view_resources::Headset_view_resources(
@@ -45,46 +45,60 @@ Headset_view_resources::Headset_view_resources(
         Texture::Create_info{
             .device            = graphics_device,
             .target            = gl::Texture_target::texture_2d,
-            .internal_format   = render_view.color_format,
             .width             = m_width,
             .height            = m_height,
-            .wrap_texture_name = render_view.color_texture
+            .wrap_texture_name = render_view.color_texture,
+            .debug_label       = fmt::format("XR color {}", slot)
         }
     );
-    m_color_texture->set_debug_label(fmt::format("XR color {}", slot));
 
     m_depth_stencil_texture = std::make_shared<Texture>(
         graphics_device,
         Texture::Create_info{
             .device            = graphics_device,
             .target            = gl::Texture_target::texture_2d,
-            .internal_format   = render_view.depth_stencil_format,
             .width             = m_width,
             .height            = m_height,
             .wrap_texture_name = render_view.depth_stencil_texture,
+            .debug_label       = fmt::format("XR depth stencil {}", slot)
         }
     );
-    m_depth_stencil_texture->set_debug_label(fmt::format("XR depth stencil {}", slot));
 
-    Framebuffer::Create_info create_info{};
-    create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
-    if (gl_helpers::has_depth(render_view.depth_stencil_format)) {
-        create_info.attach(gl::Framebuffer_attachment::depth_attachment, m_depth_stencil_texture.get());
+    const erhe::dataformat::Format color_format         = m_color_texture->get_pixelformat();
+    const erhe::dataformat::Format depth_stencil_format = m_depth_stencil_texture->get_pixelformat();
+    if (color_format != render_view.color_format) {
+        log_xr->warn("swapchain color format = {}, expected format = {}", erhe::dataformat::c_str(color_format), erhe::dataformat::c_str(render_view.color_format));
+        render_view.color_format = color_format;
     }
-    if (gl_helpers::has_stencil(render_view.depth_stencil_format)) {
-        create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_texture.get());
+    if (depth_stencil_format != render_view.depth_stencil_format) {
+        log_xr->warn("swapchain depth format = {}, expected format = {}", erhe::dataformat::c_str(depth_stencil_format), erhe::dataformat::c_str(render_view.depth_stencil_format));
+        render_view.depth_stencil_format = depth_stencil_format;
     }
-    m_framebuffer = std::make_shared<Framebuffer>(graphics_device, create_info);
-    m_framebuffer->set_debug_label(fmt::format("XR {}", slot));
 
-    if (!m_framebuffer->check_status()) {
+
+    erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+    render_pass_descriptor.color_attachments[0].texture      = m_color_texture.get();
+    render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
+    if (erhe::dataformat::get_depth_size(render_view.depth_stencil_format) > 0) {
+        render_pass_descriptor.depth_attachment.texture      = m_depth_stencil_texture.get();
+        render_pass_descriptor.depth_attachment.load_action  = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment.store_action = erhe::graphics::Store_action::Dont_care; // TODO
+    }
+    if (erhe::dataformat::get_stencil_size(render_view.depth_stencil_format) > 0) {
+        render_pass_descriptor.stencil_attachment.texture      = m_depth_stencil_texture.get();
+        render_pass_descriptor.stencil_attachment.load_action  = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care; // TODO
+    }
+    render_pass_descriptor.render_target_width  = m_width;
+    render_pass_descriptor.render_target_height = m_height;
+    render_pass_descriptor.debug_label = fmt::format("XR {}", slot);
+    m_render_pass = std::make_shared<Render_pass>(graphics_device, render_pass_descriptor);
+
+    if (!m_render_pass->check_status()) {
         log_headset->warn("Invalid framebuffer for headset - disabling headset");
         return;
     }
-
-    const gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
-    gl::named_framebuffer_draw_buffers(m_framebuffer->gl_name(), 1, &draw_buffers[0]);
-    gl::named_framebuffer_read_buffer (m_framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
 
     m_camera = std::make_shared<erhe::scene::Camera>(
         fmt::format("Headset Camera slot {}", slot)
@@ -105,9 +119,9 @@ auto Headset_view_resources::is_valid() const -> bool
     return m_is_valid;
 }
 
-auto Headset_view_resources::get_framebuffer() const -> erhe::graphics::Framebuffer*
+auto Headset_view_resources::get_render_pass() const -> erhe::graphics::Render_pass*
 {
-    return m_framebuffer.get();
+    return m_render_pass.get();
 }
 
 auto Headset_view_resources::get_camera() const -> erhe::scene::Camera*

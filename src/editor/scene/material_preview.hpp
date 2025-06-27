@@ -8,7 +8,7 @@
 #include "erhe_scene_renderer/light_buffer.hpp"
 
 namespace erhe::graphics {
-    class Framebuffer;
+    class Render_pass;
     class Device;
     class Renderbuffer;
     class Texture;
@@ -70,30 +70,29 @@ private:
     void make_preview_scene (Mesh_memory& mesh_memory);
     //// void generate_torus_geometry();
 
+    erhe::graphics::Device&                       m_graphics_device;
     int                                           m_width{0};
     int                                           m_height{0};
-    gl::Internal_format                           m_color_format;
-    gl::Internal_format                           m_depth_format;
+    erhe::dataformat::Format                      m_color_format;
+    erhe::dataformat::Format                      m_depth_format;
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
-    std::shared_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
+    std::shared_ptr<erhe::graphics::Render_pass>  m_render_pass;
     erhe::scene_renderer::Light_projections       m_light_projections;
     erhe::renderer::Pipeline_renderpass           m_pipeline_renderpass;
     Composer                                      m_composer;
 
-    std::shared_ptr<Scene_root>          m_scene_root;
-    std::shared_ptr<Content_library>     m_content_library;
-    std::shared_ptr<erhe::scene::Node>   m_node;
-    std::shared_ptr<erhe::scene::Mesh>   m_mesh;
-    std::shared_ptr<erhe::scene::Node>   m_key_light_node;
-    std::shared_ptr<erhe::scene::Light>  m_key_light;
-    std::shared_ptr<erhe::scene::Node>   m_camera_node;
-    std::shared_ptr<erhe::scene::Camera> m_camera;
+    std::shared_ptr<Scene_root>                   m_scene_root;
+    std::shared_ptr<Content_library>              m_content_library;
+    std::shared_ptr<erhe::scene::Node>            m_node;
+    std::shared_ptr<erhe::scene::Mesh>            m_mesh;
+    std::shared_ptr<erhe::scene::Node>            m_key_light_node;
+    std::shared_ptr<erhe::scene::Light>           m_key_light;
+    std::shared_ptr<erhe::scene::Node>            m_camera_node;
+    std::shared_ptr<erhe::scene::Camera>          m_camera;
 
-    std::shared_ptr<erhe::graphics::Texture>   m_shadow_texture;
-    std::shared_ptr<erhe::primitive::Material> m_last_material;
-
-    glm::vec4 m_clear_color{0.0f, 0.0f, 0.0f, 0.333f};
+    std::shared_ptr<erhe::graphics::Texture>      m_shadow_texture;
+    std::shared_ptr<erhe::primitive::Material>    m_last_material;
 
     int       m_slice_count{40};
     int       m_stack_count{22};

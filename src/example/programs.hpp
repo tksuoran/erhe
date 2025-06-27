@@ -36,14 +36,16 @@ public:
         erhe::scene_renderer::Program_interface& program_interface
     );
 
-    static constexpr std::size_t s_texture_unit_count = 15; // one reserved for shadows
+    static constexpr int         s_texture_unit_base  =  2; // First two are reserved for shadow samplers
+    static constexpr std::size_t s_texture_unit_count = 14; // For non bindless textures
 
     // Public members
-    int                              shadow_texture_unit{15};
-    int                              base_texture_unit{0};
+    int                              shadow_texture_unit_compare{0};
+    int                              shadow_texture_unit_no_compare{1};
     std::filesystem::path            shader_path;
     erhe::graphics::Shader_resource  default_uniform_block;   // for non-bindless textures
     erhe::graphics::Shader_resource* shadow_sampler_compare;
+    erhe::graphics::Shader_resource* shadow_sampler_no_compare;
     erhe::graphics::Shader_resource* texture_sampler;
     erhe::graphics::Sampler          nearest_sampler;
     erhe::graphics::Sampler          linear_sampler;

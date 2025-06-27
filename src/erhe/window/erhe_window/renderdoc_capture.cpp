@@ -57,6 +57,8 @@ void initialize_frame_capture()
             renderdoc_api->MaskOverlayBits(eRENDERDOC_Overlay_None, eRENDERDOC_Overlay_None);
         }
 
+        // Enable capturing callstacks
+        renderdoc_api->SetCaptureOptionU32(eRENDERDOC_Option_CaptureCallstacks, 1);
     }
 #elif __unix__
     // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so
@@ -93,9 +95,25 @@ void end_frame_capture(const erhe::window::Context_window& context_window)
     log_renderdoc->info("RenderDoc: EndFrameCapture()");
     const auto device = context_window.get_device_pointer();
     const auto window = context_window.get_window_handle();
-    renderdoc_api->EndFrameCapture(device, window);
-    renderdoc_api->LaunchReplayUI(1, nullptr);
-    renderdoc_api->ShowReplayUI();
+    const uint32_t end_capture_ok = renderdoc_api->EndFrameCapture(device, window);
+    if (end_capture_ok == 0) {
+        log_renderdoc->warn("RenderDoc: EndFrameCapture() failed");
+        return;
+    }
+    const uint32_t is_connected = renderdoc_api->IsTargetControlConnected();
+    if (is_connected) {
+        const uint32_t show_ok = renderdoc_api->ShowReplayUI();
+        if (show_ok == 1) {
+            return;
+        } else {
+            log_renderdoc->warn("RenderDoc: ShowReplayUI() failed while IsTargetControlConnected() returned 1");
+        }
+    }
+
+    const uint32_t launch_pid = renderdoc_api->LaunchReplayUI(1, nullptr);
+    if (launch_pid == 0) {
+        log_renderdoc->warn("RenderDoc: LaunchReplayUI() failed");
+    }
 }
 
 }

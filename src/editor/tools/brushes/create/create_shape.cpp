@@ -15,8 +15,7 @@ auto Create_shape::get_line_renderer(const Create_preview_settings& preview_sett
         .primitive_type    = gl::Primitive_type::lines,
         .stencil_reference = 2,
         .draw_visible      = true,
-        .draw_hidden       = true,
-        .reverse_depth     = true
+        .draw_hidden       = true
     };
     return preview_settings.render_context.editor_context.debug_renderer->get(config);
 }

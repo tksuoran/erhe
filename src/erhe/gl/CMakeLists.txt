@@ -57,12 +57,6 @@ set(GEN_DEPENDS
     templates/wrapper_functions.cpp
 )
 
-#add_custom_command(
-#    COMMAND ${GEN_COMMAND}
-#    DEPENDS ${GEN_DEPENDS}
-#    OUTPUT  ${GENERATED_SOURCES}
-#)
-
 # Run the Python script to generate sources at configure time
 execute_process(
     COMMAND ${GEN_COMMAND}
@@ -107,6 +101,7 @@ target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
         OpenGL::GL
+        erhe::dataformat
     PRIVATE
         erhe::log
         erhe::verify

@@ -13,7 +13,7 @@
 
 namespace erhe::imgui {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 Window_imgui_host::Window_imgui_host(
@@ -159,14 +159,13 @@ void Window_imgui_host::execute_rendergraph_node()
     m_imgui_renderer.render_draw_data();
 }
 
-auto Window_imgui_host::get_producer_output_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
+auto Window_imgui_host::get_viewport() const -> erhe::math::Viewport
 {
     return erhe::math::Viewport{
         .x      = 0,
         .y      = 0,
         .width  = m_context_window.get_width(),
-        .height = m_context_window.get_height(),
-        // .reverse_depth = false // unused
+        .height = m_context_window.get_height()
     };
 }
 

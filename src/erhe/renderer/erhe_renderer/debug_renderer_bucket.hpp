@@ -19,7 +19,6 @@ public:
     unsigned int       stencil_reference{0};
     bool               draw_visible     {true};
     bool               draw_hidden      {false};
-    bool               reverse_depth    {true};
 };
 
 auto operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& rhs) -> bool;
@@ -45,7 +44,7 @@ public:
     auto make_draw       (std::size_t vertex_byte_count, std::size_t primitive_count) -> std::span<std::byte>;
 
 private:
-    [[nodiscard]] auto make_pipeline(bool visible) -> erhe::graphics::Render_pipeline_state;
+    [[nodiscard]] auto make_pipeline(bool visible, const bool reverse_depth = true) -> erhe::graphics::Render_pipeline_state;
 
     erhe::graphics::Device&                m_graphics_device;
     Debug_renderer&                        m_debug_renderer;

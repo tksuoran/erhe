@@ -523,14 +523,13 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     std::size_t index = 0;
     for (const auto& view_configuration_view : m_xr_view_configuration_views) {
         log_xr->info(
-            "    View {}: Size recommended = {} x {}, Max = {} x {}, sample count = {}, image count recommended = {}, max = {}",
+            "    View {}: Size recommended = {} x {}, Max = {} x {}, recommended sample count = {}, max sample count = {}",
             index++,
             view_configuration_view.recommendedImageRectWidth,
             view_configuration_view.recommendedImageRectHeight,
             view_configuration_view.maxImageRectWidth,
             view_configuration_view.maxImageRectHeight,
             view_configuration_view.recommendedSwapchainSampleCount,
-            view_configuration_view.maxSwapchainSampleCount,
             view_configuration_view.maxSwapchainSampleCount
         );
     }

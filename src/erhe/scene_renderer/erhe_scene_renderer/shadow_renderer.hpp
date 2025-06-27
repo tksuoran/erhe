@@ -16,7 +16,7 @@
 #include <initializer_list>
 
 namespace erhe::graphics {
-    class Framebuffer;
+    class Render_pass;
     class Gpu_timer;
     class Device;
     class Sampler;
@@ -59,8 +59,8 @@ public:
         const erhe::math::Viewport                                 light_camera_viewport;
         std::shared_ptr<erhe::graphics::Texture>                   texture;
         const std::vector<
-            std::unique_ptr<erhe::graphics::Framebuffer>
-        >&                                                         framebuffers;
+            std::unique_ptr<erhe::graphics::Render_pass>
+        >&                                                         render_passes;
         const std::initializer_list<
             const std::span<
                 const std::shared_ptr<erhe::scene::Mesh>

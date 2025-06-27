@@ -13,9 +13,10 @@
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
-#include "windows/imgui_window_scene_view_node.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -255,9 +256,12 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         2048,
         600.0f
     );
-    mesh->bind();
-    mesh->clear(glm::vec4{0.0f, 0.5f, 0.5f, 0.5f});
-    mesh->render_done(m_context);
+
+    {
+        // Clear once
+        std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_context.graphics_device->make_render_command_encoder(*mesh->get_render_pass());
+        mesh->render_done(m_context);
+    }
 
     mesh->layer_id = scene_root->layers().rendertarget()->id;
     mesh->enable_flag_bits(
@@ -327,6 +331,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
     );
 
     // Viewport_scene_view is a Scene_view and rendergraph node, rendering scene view to connnected consumer node
+    std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node;
     std::shared_ptr<Viewport_scene_view> scene_view = m_context.scene_views->create_viewport_scene_view(
         *m_context.graphics_device,
         *m_context.rendergraph,
@@ -338,27 +343,22 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         scene_root->shared_from_this(),
         camera,
         4,
+        rendergraph_output_node,
         false
     );
 
-    // Imgui_window_scene_view_node is rendergraph node, acting as consumer for scene_view, and Imgui_window, showing the rendered texture
-    std::shared_ptr<Imgui_window_scene_view_node> imgui_window_node = m_context.scene_views->create_imgui_window_scene_view_node(
+    // Viewport_window is ImGui window showing contents of scene_view rendered texture
+    std::shared_ptr<Viewport_window> viewport_window = m_context.scene_views->create_viewport_window(
         *m_context.imgui_renderer,
         *m_context.imgui_windows,
-        *m_context.rendergraph,
         scene_view,
-        "rt scene view node",
+        rendergraph_output_node,
+        "Viewport ",
         ""
     );
 
     // Make imgui window show in rendertarget imgui host 
-    imgui_window_node->set_imgui_host(rendertarget_imgui_host.get());
-
-    m_context.rendergraph->connect(
-        erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
-        rendertarget_imgui_host.get(),
-        imgui_window_node.get()
-    );
+    viewport_window->set_imgui_host(rendertarget_imgui_host.get());
 
     return mesh;
 }

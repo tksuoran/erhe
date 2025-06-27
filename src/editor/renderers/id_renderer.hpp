@@ -17,7 +17,7 @@
 typedef struct __GLsync *GLsync;
 
 namespace erhe::graphics {
-    class Framebuffer;
+    class Render_pass;
     class Gpu_timer;
     class Device;
     class Renderbuffer;
@@ -117,7 +117,7 @@ private:
     void update_framebuffer       (const erhe::math::Viewport viewport);
 
     bool                                          m_enabled{true};
-    erhe::math::Viewport                          m_viewport{0, 0, 0, 0, true};
+    erhe::math::Viewport                          m_viewport{0, 0, 0, 0};
 
     // TODO Do not store these here?
     erhe::graphics::Device&                       m_graphics_device;
@@ -133,7 +133,7 @@ private:
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
     std::unique_ptr<erhe::graphics::Texture>      m_color_texture;
     std::unique_ptr<erhe::graphics::Texture>      m_depth_texture;
-    std::unique_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
+    std::unique_ptr<erhe::graphics::Render_pass>  m_render_pass;
     std::vector<Id_frame_resources>               m_id_frame_resources;
     std::size_t                                   m_current_id_frame_resource_slot{0};
     erhe::graphics::Gpu_timer                     m_gpu_timer;

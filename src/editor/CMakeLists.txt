@@ -296,12 +296,10 @@ erhe_target_sources_grouped(
     windows/commands_window.hpp
     windows/composer_window.cpp
     windows/composer_window.hpp
-    windows/debug_view_window.cpp
-    windows/debug_view_window.hpp
+    windows/depth_visualization_window.cpp
+    windows/depth_visualization_window.hpp
     windows/icon_browser.cpp
     windows/icon_browser.hpp
-    windows/imgui_window_scene_view_node.cpp
-    windows/imgui_window_scene_view_node.hpp
     windows/item_tree_window.cpp
     windows/item_tree_window.hpp
     windows/gradient_editor.cpp
@@ -334,6 +332,8 @@ erhe_target_sources_grouped(
     windows/timeline_window.hpp
     windows/viewport_config_window.cpp
     windows/viewport_config_window.hpp
+    windows/viewport_window.cpp
+    windows/viewport_window.hpp
 )
 
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")

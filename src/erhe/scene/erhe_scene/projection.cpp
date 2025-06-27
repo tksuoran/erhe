@@ -8,7 +8,7 @@ namespace erhe::scene {
 auto Projection::clip_from_node_transform(const erhe::math::Viewport viewport) const -> Transform
 {
     const auto aspect_ratio = viewport.aspect_ratio();
-    const auto m = get_projection_matrix(aspect_ratio, viewport.reverse_depth);
+    const auto m = get_projection_matrix(aspect_ratio);
     return Transform{
         m,
         glm::inverse(m)

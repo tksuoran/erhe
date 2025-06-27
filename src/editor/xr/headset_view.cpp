@@ -1,15 +1,12 @@
 #include "xr/headset_view.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
-#include "time.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "rendergraph/shadow_render_node.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 #include "xr/controller_visualization.hpp"
@@ -17,23 +14,18 @@
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
-#include "erhe_configuration/configuration.hpp"
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_log/log_glm.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
-#include "erhe_window/window.hpp"
 #include "erhe_xr/headset.hpp"
 #include "erhe_xr/xr_instance.hpp"
 #include "erhe_xr/xr_session.hpp"
@@ -64,8 +56,12 @@ Headset_view_node::Headset_view_node(erhe::rendergraph::Rendergraph& rendergraph
     : erhe::rendergraph::Rendergraph_node{rendergraph, "Headset"}
     , m_headset_view                     {headset_view}
 {
-    register_input(erhe::rendergraph::Routing::Resource_provided_by_producer, "shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
-    register_input(erhe::rendergraph::Routing::Resource_provided_by_producer, "rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
+    register_input("shadow_maps",          erhe::rendergraph::Rendergraph_node_key::shadow_maps);
+    register_input("rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
+}
+
+Headset_view_node::~Headset_view_node()
+{
 }
 
 void Headset_view_node::execute_rendergraph_node()
@@ -124,6 +120,20 @@ Headset_view::Headset_view(
 
     m_shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(graphics_device, rendergraph, editor_settings, *this);
     rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_render_node.get(), m_rendergraph_node.get());
+
+    if (m_context.OpenXR_mirror) {
+        erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+        render_pass_descriptor.color_attachments[0].use_default_framebuffer = true;
+        render_pass_descriptor.color_attachments[0].load_action             = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment    .use_default_framebuffer = true;
+        render_pass_descriptor.depth_attachment    .load_action             = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.stencil_attachment  .use_default_framebuffer = true;
+        render_pass_descriptor.stencil_attachment  .load_action             = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.render_target_width  = context_window.get_width();
+        render_pass_descriptor.render_target_height = context_window.get_height();
+        render_pass_descriptor.debug_label          = "OpenXR mirror window Render_pass";
+        m_mirror_mode_window_render_pass = std::make_unique<erhe::graphics::Render_pass>(graphics_device, render_pass_descriptor);
+    }
 }
 
 void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, Mesh_memory& mesh_memory)
@@ -325,35 +335,55 @@ void Headset_view::update_pointer_context_from_controller()
     this->Scene_view::update_grid_hover();
 }
 
-void Headset_view::render_headset()
+auto Headset_view::begin_frame() -> bool
+{
+    m_frame_timing = erhe::xr::Frame_timing{};
+    if (!m_context.OpenXR || (m_headset == nullptr)) {
+        return false;
+    }
+
+    if (!is_active()) {
+        return false;
+    }
+
+    m_frame_timing = m_headset->begin_frame_();
+    return m_frame_timing.begin_ok;
+}
+
+auto Headset_view::render_headset() -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
     if (!m_context.OpenXR || (m_headset == nullptr)) {
-        return;
+        return false;
     }
 
-    auto frame_timing = m_headset->begin_frame_();
-    if (!frame_timing.begin_ok) {
-        return;
+    if (!m_poll_events_ok) {
+        return false; // TODO Is this correct?
+    }
+    if (!m_frame_timing.begin_ok) {
+        return false;
+    }
+    if (!m_update_actions_ok) {
+        return false; // TODO Is this correct?
     }
 
-    if (frame_timing.should_render) {
+    if (m_request_renderdoc_capture) {
+        erhe::window::start_frame_capture(m_context_window);
+        m_renderdoc_capture_started = true;
+        m_request_renderdoc_capture = false;
+    }
+
+    if (m_frame_timing.should_render) {
         bool first_view = true;
         auto callback = [this, &first_view](erhe::xr::Render_view& render_view) -> bool {
-            const auto& view_resources = get_headset_view_resources(render_view);
+            const std::shared_ptr<Headset_view_resources>& view_resources = get_headset_view_resources(render_view);
             if (!view_resources->is_valid()) {
                 return false;
             }
 
-            if (m_request_renderdoc_capture) {
-                erhe::window::start_frame_capture(m_context_window);
-                m_renderdoc_capture_started = true;
-                m_request_renderdoc_capture = false;
-            }
-
             erhe::scene::Projection::Fov_sides fov_sides{render_view.fov_left, render_view.fov_right, render_view.fov_up, render_view.fov_down};
-            if (m_context.OpenXR_mirror) {
+            if (m_context.OpenXR_mirror && first_view) {
                 erhe::window::Context_window* window = m_context.context_window;
                 //constexpr float near_value = 1.0f;
                 float left_over_near  = std::tan(render_view.fov_left );
@@ -403,38 +433,23 @@ void Headset_view::render_headset()
             }
 
             auto& graphics_device = *m_context.graphics_device;
-            auto* openxr_framebuffer = view_resources->get_framebuffer();
-            erhe::math::Viewport viewport;
+            erhe::graphics::Render_pass* mirror_render_pass = m_mirror_mode_window_render_pass.get();
+            erhe::graphics::Render_pass* view_render_pass   = view_resources->get_render_pass();
+            erhe::graphics::Render_pass* render_pass        = (m_context.OpenXR_mirror && first_view) ? mirror_render_pass : view_render_pass;
+            erhe::math::Viewport viewport{
+                .x      = 0,
+                .y      = 0,
+                .width  = static_cast<int>(render_view.width),
+                .height = static_cast<int>(render_view.height)
+            };
 
-            if (m_context.OpenXR_mirror) {
-                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-                viewport = erhe::math::Viewport{
-                    .x             = 0,
-                    .y             = 0,
-                    .width         = m_context.context_window->get_width(),
-                    .height        = m_context.context_window->get_height(),
-                    .reverse_depth = graphics_device.configuration.reverse_depth
-                };
-            } else {
-                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, openxr_framebuffer->gl_name());
-
-                auto status = gl::check_named_framebuffer_status(openxr_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
-                if (status != gl::Framebuffer_status::framebuffer_complete) {
-                    log_headset->error("OpenXR framebuffer status = {}", gl::c_str(status));
-                }
-                viewport = erhe::math::Viewport{
-                    .x             = 0,
-                    .y             = 0,
-                    .width         = static_cast<int>(render_view.width),
-                    .height        = static_cast<int>(render_view.height),
-                    .reverse_depth = graphics_device.configuration.reverse_depth
-                };
-            }
+            std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder;
+            render_encoder = graphics_device.make_render_command_encoder(*render_pass);
+            ERHE_VERIFY(render_view.width  == static_cast<uint32_t>(render_pass->get_render_target_width()));
+            ERHE_VERIFY(render_view.height == static_cast<uint32_t>(render_pass->get_render_target_height()));
 
             graphics_device.opengl_state_tracker.shader_stages.reset();
             graphics_device.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
-
-            bool render = !m_context.OpenXR_mirror || first_view;
 
             // TODO Meta link with Quest 3 does not seem to support camera video passthrough :(
             //      Also, this conflicts with hud grab
@@ -450,16 +465,8 @@ void Headset_view::render_headset()
             //     render = false;
             // }
 
-            if (render) {
-                gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-                gl::enable(gl::Enable_cap::framebuffer_srgb);
-
-                gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-                gl::clear_depth_f(*graphics_device.depth_clear_value_pointer());
-                gl::clear_stencil(0);
-                gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit | gl::Clear_buffer_mask::stencil_buffer_bit);
-
-                //Viewport_config viewport_config;
+            // When in mirror mode, speed up rendering by only rendering first view
+            if (!m_context.OpenXR_mirror || first_view) {
                 const erhe::graphics::Shader_stages* override_shader_stages = m_context.programs->get_variant_shader_stages(m_shader_stages_variant);
                 Render_context render_context {
                     .editor_context         = m_context,
@@ -474,44 +481,54 @@ void Headset_view::render_headset()
                 m_context.tools           ->render_viewport_tools(render_context);
                 m_context.editor_rendering->render_viewport_renderables(render_context);
                 m_context.debug_renderer  ->render(render_context.viewport, *render_context.camera);
+            }
 
-                if (m_renderdoc_capture_started) {
-                    erhe::window::end_frame_capture(m_context_window);
-                    m_renderdoc_capture_started = false;
-                }
+            render_encoder.reset();
 
-                if (m_context.OpenXR_mirror) {
-                    int src_width  = m_context.context_window->get_width();
-                    int src_height = m_context.context_window->get_height();
-                    int dst_width  = view_resources->get_width();
-                    int dst_height = view_resources->get_height();
+            if (m_context.OpenXR_mirror && first_view) {
+                // This mode copies from default framebuffer (window) to OpenXR
+                int src_width  = m_context.context_window->get_width();
+                int src_height = m_context.context_window->get_height();
+                int dst_width  = view_resources->get_width();
+                int dst_height = view_resources->get_height();
 
-                    // - fit all one to one if possible
-                    // - pad if not enough in src
-                    // - crop if too much in src
-                    int width_diff = std::abs(src_width - dst_width);
-                    int src_x0 = (src_width > dst_width ) ? width_diff / 2     : 0;
-                    int src_x1 = (src_width > dst_width ) ? src_x0 + dst_width : src_width;
-                    int dst_x0 = (src_width > dst_width ) ? 0                  : width_diff / 2;
-                    int dst_x1 = (src_width > dst_width ) ? dst_width          : dst_x0 + src_width;
+                // - fit all one to one if possible
+                // - pad if not enough in src
+                // - crop if too much in src
+                int width_diff = std::abs(src_width - dst_width);
+                int src_x0 = (src_width > dst_width ) ? width_diff / 2     : 0;
+                int src_x1 = (src_width > dst_width ) ? src_x0 + dst_width : src_width;
+                int dst_x0 = (src_width > dst_width ) ? 0                  : width_diff / 2;
+                int dst_x1 = (src_width > dst_width ) ? dst_width          : dst_x0 + src_width;
 
-                    int height_diff = std::abs(src_height - dst_height);
-                    int src_y0 = (src_height > dst_height) ? height_diff / 2     : 0;
-                    int src_y1 = (src_height > dst_height) ? src_y0 + dst_height : src_height;
-                    int dst_y0 = (src_height > dst_height) ? 0                   : height_diff / 2;
-                    int dst_y1 = (src_height > dst_height) ? dst_height          : dst_y0 + src_height;
-                    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
-                    gl::read_buffer(gl::Read_buffer_mode::back);
-                    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, openxr_framebuffer->gl_name());
-                    gl::disable(gl::Enable_cap::framebuffer_srgb);
+                int height_diff = std::abs(src_height - dst_height);
+                int src_y0 = (src_height > dst_height) ? height_diff / 2     : 0;
+                int src_y1 = (src_height > dst_height) ? src_y0 + dst_height : src_height;
+                int dst_y0 = (src_height > dst_height) ? 0                   : height_diff / 2;
+                int dst_y1 = (src_height > dst_height) ? dst_height          : dst_y0 + src_height;
+                gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, mirror_render_pass->gl_name());
+                gl::read_buffer(gl::Read_buffer_mode::back);
+                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, view_render_pass->gl_name());
+                {
+                    // TODO This query does not seem to work
+                    // GLint read_color_encoding{0};
+                    // gl::get_named_framebuffer_attachment_parameter_iv(
+                    //     mirror_render_pass->gl_name(),
+                    //     gl::Framebuffer_attachment::back,
+                    //     gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_color_encoding,
+                    //     &read_color_encoding
+                    // );
+                    // gl::disable(gl::Enable_cap::framebuffer_srgb);
                     gl::blit_framebuffer(
                         src_x0, src_y0, src_x1, src_y1, 
                         dst_x0, dst_y0, dst_x1, dst_y1,
                         gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
                     );
-                    gl::enable(gl::Enable_cap::framebuffer_srgb);
-                    m_context_window.swap_buffers();
+                    // gl::enable(gl::Enable_cap::framebuffer_srgb);
+                }
+                m_context_window.swap_buffers();
 #if 0
+                    // This mode copies from OpenXR to default framebuffer (window)
                     int src_width  = view_resources->get_width();
                     int src_height = view_resources->get_height();
                     int dst_width  = m_context.context_window->get_width();
@@ -542,9 +559,8 @@ void Headset_view::render_headset()
                     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
                     m_context_window.swap_buffers();
 #endif
-                }
-                first_view = false;
             }
+            first_view = false;
 
             return true;
         };
@@ -552,7 +568,17 @@ void Headset_view::render_headset()
         ++m_frame_number;
     }
 
-    m_headset->end_frame(frame_timing.should_render);
+    if (m_renderdoc_capture_started) {
+        erhe::window::end_frame_capture(m_context_window);
+        m_renderdoc_capture_started = false;
+    }
+
+    m_headset->end_frame(m_frame_timing.should_render);
+
+    // Paranoid
+    m_frame_timing = erhe::xr::Frame_timing{};
+
+    return true;
 }
 
 void Headset_view::setup_root_camera()
@@ -650,17 +676,35 @@ auto Headset_view::get_headset() const -> erhe::xr::Headset*
     return m_headset;
 }
 
-auto Headset_view::update_events() -> bool
+auto Headset_view::poll_events() -> bool
+{
+    if (!m_context.OpenXR || (m_headset == nullptr)) {
+        return false;
+    }
+    m_poll_events_ok = m_headset->poll_events();
+    return m_poll_events_ok;
+}
+
+auto Headset_view::update_actions() -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
+    m_update_actions_ok = false;
     if (!m_context.OpenXR || (m_headset == nullptr)) {
+        return false;
+    }
+
+    if (!m_poll_events_ok) {
         return false;
     }
 
     m_finger_inputs.clear();
 
-    if (!m_headset->update_events()) {
+    if (!m_frame_timing.begin_ok) {
+        return false;
+    }
+
+    if (!m_headset->update_actions()) {
         return false;
     }
 
@@ -746,6 +790,7 @@ auto Headset_view::update_events() -> bool
     //{
     //    m_hand_tracker->update_hands(*m_headset.get());
     //}
+    m_update_actions_ok = true;
     return true;
 }
 

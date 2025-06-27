@@ -47,7 +47,8 @@ public:
     [[nodiscard]] auto get_state               () const -> XrSessionState;
 
 private:
-    [[nodiscard]] auto color_format_score(const gl::Internal_format image_format) const -> int;
+    [[nodiscard]] auto color_format_score         (const erhe::dataformat::Format pixelformat) const -> int;
+    [[nodiscard]] auto depth_stencil_format_score (const erhe::dataformat::Format pixelformat) const -> int;
     [[nodiscard]] auto create_session             () -> bool;
     [[nodiscard]] auto enumerate_swapchain_formats() -> bool;
     [[nodiscard]] auto enumerate_reference_spaces () -> bool;
@@ -83,8 +84,8 @@ private:
     erhe::window::Context_window&                 m_context_window;
     XrSession                                     m_xr_session;
     bool                                          m_mirror_mode{false};
-    gl::Internal_format                           m_swapchain_color_format;
-    gl::Internal_format                           m_swapchain_depth_stencil_format;
+    erhe::dataformat::Format                      m_swapchain_color_format;
+    erhe::dataformat::Format                      m_swapchain_depth_stencil_format;
     std::vector<Swapchains>                       m_view_swapchains;
     std::vector<XrView>                           m_xr_views;
     std::vector<XrCompositionLayerProjectionView> m_xr_composition_layer_projection_views;

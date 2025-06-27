@@ -1,15 +1,12 @@
 #include "editor_windows.hpp"
 #include "editor_context.hpp"
-#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#include "xr/headset_view.hpp"
+#   include "xr/headset_view.hpp"
 #endif
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/menu_binding.hpp"
-#include "editor.hpp"
-#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -35,15 +32,12 @@ Editor_windows::Editor_windows(
 void Editor_windows::renderdoc_capture()
 {
     if (m_context.renderdoc) {
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-        if (m_context.OpenXR && m_context.headset_view->is_active()) {
-            m_context.editor_rendering->request_renderdoc_capture();
-        }
-        else
-#endif
-        {
-            m_context.editor_rendering->trigger_capture();
-        }
+//  #if defined(ERHE_XR_LIBRARY_OPENXR)
+//          if (m_context.OpenXR && m_context.headset_view->is_active()) {
+//              m_context.editor_rendering->request_renderdoc_capture();
+//          }
+//  #endif
+        m_context.editor_rendering->trigger_capture();
     }
 }
 

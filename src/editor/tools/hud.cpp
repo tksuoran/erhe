@@ -13,12 +13,10 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -226,8 +224,8 @@ auto Hud::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& r
     }
     const glm::vec3 position_in_node = ray_origin_in_hud + intersection.value() * ray_direction_in_hud;
 
-    const auto half_width  = 0.5f * m_rendertarget_mesh->width();
-    const auto half_height = 0.5f * m_rendertarget_mesh->height();
+    const auto half_width  = 0.5f * m_rendertarget_mesh->get_width();
+    const auto half_height = 0.5f * m_rendertarget_mesh->get_height();
 
     if (
         (position_in_node.x < -half_width ) ||

@@ -17,7 +17,7 @@ Editor_settings::Editor_settings()
 
 void Editor_settings::apply_limits(erhe::graphics::Device& instance, Editor_message_bus& editor_message_bus)
 {
-    graphics.get_limits(instance, gl::Internal_format::depth_component32f); // TODO Do not hard code depth format
+    graphics.get_limits(instance, erhe::dataformat::Format::format_d32_sfloat); // TODO Do not hard code depth format
     graphics.select_active_graphics_preset(editor_message_bus);
 }
 
@@ -26,7 +26,7 @@ auto Editor_settings::get_ui_scale() const -> float
     return imgui.font_size / 16.0f;
 }
 
-void Graphics_settings::get_limits(const erhe::graphics::Device& instance, gl::Internal_format format)
+void Graphics_settings::get_limits(const erhe::graphics::Device& instance, erhe::dataformat::Format format)
 {
     msaa_sample_count_entry_s_strings.clear();
     msaa_sample_count_entry_strings.clear();
@@ -40,10 +40,12 @@ void Graphics_settings::get_limits(const erhe::graphics::Device& instance, gl::I
     const std::size_t num_sample_counts = format_properties.texture_2d_sample_counts.size();
     msaa_sample_count_entry_s_strings.resize(num_sample_counts);
     msaa_sample_count_entry_strings  .resize(num_sample_counts);
+    msaa_sample_count_entry_values   .resize(num_sample_counts);
     for (std::size_t i = 0; i < num_sample_counts; ++i) {
         const int sample_count = format_properties.texture_2d_sample_counts.at(i);
-        msaa_sample_count_entry_strings  .at(i) = fmt::format("{}", sample_count);
-        msaa_sample_count_entry_s_strings.at(i) = msaa_sample_count_entry_strings.at(i).c_str();
+        msaa_sample_count_entry_strings  [i] = fmt::format("{}", sample_count);
+        msaa_sample_count_entry_s_strings[i] = msaa_sample_count_entry_strings.at(i).c_str();
+        msaa_sample_count_entry_values   [i] = sample_count;
     }
     max_shadow_resolution = std::min(
         format_properties.texture_2d_array_max_width,

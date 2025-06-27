@@ -100,7 +100,7 @@ Buffer::Buffer(Device& device, const Buffer_create_info& create_info) noexcept
     constexpr const std::size_t sanity_threshold{2'000'000'000};
     ERHE_VERIFY(create_info.debug_label != nullptr);
     ERHE_VERIFY(m_capacity_byte_count < sanity_threshold); // sanity check, can raise limit when needed
-    log_buffer->info(
+    log_buffer->debug(
         "Buffer::Buffer() target = {}, capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {} debug_label = {}",
         gl::c_str(m_target),
         m_capacity_byte_count,

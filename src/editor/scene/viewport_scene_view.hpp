@@ -3,7 +3,7 @@
 #include "renderers/programs.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_scene/camera.hpp"
@@ -17,7 +17,7 @@ namespace erhe::geometry {
     class Geometry;
 }
 namespace erhe::graphics {
-    class Framebuffer;
+    class Render_pass;
     class Texture;
     class Renderbuffer;
 }
@@ -64,14 +64,11 @@ class Scene_views;
 //   consumer rendergraph node, which provides viewport and framebuffer
 // 
 // Typical output rendergraph nodes are:
-//  - Multisample_resolve_node
 //  - Post_processing_node
 //  - default Rendergraph_node representing default framebuffer
-// Inputs:  "shadow_maps"
-// Outputs: "viewport"
 class Viewport_scene_view
     : public Scene_view
-    , public erhe::rendergraph::Rendergraph_node
+    , public erhe::rendergraph::Texture_rendergraph_node
     , public std::enable_shared_from_this<Viewport_scene_view>
 {
 public:
@@ -82,7 +79,8 @@ public:
         const std::string_view                      name,
         const char*                                 ini_label,
         const std::shared_ptr<Scene_root>&          scene_root,
-        const std::shared_ptr<erhe::scene::Camera>& camera
+        const std::shared_ptr<erhe::scene::Camera>& camera,
+        int                                         msaa_sample_count
     );
     ~Viewport_scene_view() noexcept override;
 
@@ -101,7 +99,6 @@ public:
     void execute_rendergraph_node() override;
 
     // Public API
-    void reconfigure               (int sample_count);
     void set_window_viewport       (erhe::math::Viewport viewport);
     void set_is_scene_view_hovered (bool is_hovered);
     void set_camera                (const std::shared_ptr<erhe::scene::Camera>& camera);
@@ -109,23 +106,21 @@ public:
     void update_hover              (bool ray_only = false);
     void link_to                   (std::shared_ptr<erhe::rendergraph::Multisample_resolve_node> node);
     void link_to                   (std::shared_ptr<Post_processing_node> node);
-    void set_final_output          (std::shared_ptr<Rendergraph_node> node);
 
     void set_shader_stages_variant(Shader_stages_variant variant);
     auto get_shader_stages_variant() const -> Shader_stages_variant;
 
-    [[nodiscard]] auto ini_label                       () const -> const char* { return m_ini_label; }
-    [[nodiscard]] auto viewport_from_window            (const glm::vec2 position_in_window) const -> glm::vec2;
-    [[nodiscard]] auto project_to_viewport             (const glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto unproject_to_world              (const glm::vec3 position_in_window) const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto is_scene_view_hovered           () const -> bool;
-    [[nodiscard]] auto window_viewport                 () const -> const erhe::math::Viewport&;
-    [[nodiscard]] auto projection_viewport             () const -> const erhe::math::Viewport&;
-    [[nodiscard]] auto get_position_in_viewport        () const -> std::optional<glm::vec2>;
-    [[nodiscard]] auto position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto viewport_toolbar                () -> bool;
-    [[nodiscard]] auto get_post_processing_node        () -> Post_processing_node*;
-    [[nodiscard]] auto get_final_output                () -> Rendergraph_node*;
+    [[nodiscard]] auto get_ini_label                       () const -> const char* { return m_ini_label; }
+    [[nodiscard]] auto get_viewport_from_window            (const glm::vec2 position_in_window) const -> glm::vec2;
+    [[nodiscard]] auto project_to_viewport                 (const glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto unproject_to_world                  (const glm::vec3 position_in_window) const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto is_scene_view_hovered               () const -> bool;
+    [[nodiscard]] auto get_window_viewport                 () const -> const erhe::math::Viewport&;
+    [[nodiscard]] auto get_projection_viewport             () const -> const erhe::math::Viewport&;
+    [[nodiscard]] auto get_position_in_viewport            () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto get_position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto viewport_toolbar                    () -> bool;
+    [[nodiscard]] auto get_post_processing_node            () -> Post_processing_node*;
 
 private:
     [[nodiscard]] auto get_override_shader_stages() const -> const erhe::graphics::Shader_stages*;
@@ -134,20 +129,20 @@ private:
 
     static int s_serial;
 
-    // TODO Consider if this is the right place for ownership
-    std::shared_ptr<erhe::rendergraph::Multisample_resolve_node> m_multisample_resolve_node;
-    std::shared_ptr<Post_processing_node>                        m_post_processing_node    ;
-    std::shared_ptr<Rendergraph_node>                            m_final_output            ;
+    std::optional<glm::vec2>           m_position_in_viewport {};
 
-    std::optional<glm::vec2>           m_position_in_viewport;
-
-    std::string                        m_name;
-    const char*                        m_ini_label{nullptr};
-    std::weak_ptr<Scene_root>          m_scene_root;
-    std::weak_ptr<Scene_root>          m_tool_scene_root;
+    std::string                        m_name                 {};
+    const char*                        m_ini_label            {nullptr};
+    std::weak_ptr<Scene_root>          m_scene_root           {};
+    std::weak_ptr<Scene_root>          m_tool_scene_root      {};
     std::weak_ptr<erhe::scene::Camera> m_camera               {};
-    erhe::math::Viewport               m_window_viewport      {0, 0, 0, 0, true};
-    erhe::math::Viewport               m_projection_viewport  {0, 0, 0, 0, true};
+
+    // Host window bounds in host space (ImGui window, ImGui viewport / Context_window)
+    erhe::math::Viewport               m_window_viewport      {0, 0, 0, 0};
+
+    // viewport for 3d camera
+    erhe::math::Viewport               m_projection_viewport  {0, 0, 0, 0};
+
     //Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::standard};
     Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::circular_brushed_metal};
     bool                               m_is_scene_view_hovered{false};

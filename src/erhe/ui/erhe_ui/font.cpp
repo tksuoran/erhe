@@ -63,14 +63,8 @@ Font::Font(
     ERHE_PROFILE_FUNCTION();
 
     const auto current_path = std::filesystem::current_path();
-    log_font->info("current path = {}", current_path.string());
-
-    log_font->info(
-        "Font::Font(path = {}, size = {}, outline_thickness = {})",
-        path.string(),
-        size,
-        outline_thickness
-    );
+    log_font->debug("current path = {}", current_path.string());
+    log_font->debug("Font::Font(path = {}, size = {}, outline_thickness = {})", path.string(), size, outline_thickness);
 
     if (m_hinting) {
         //m_hint_mode = FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT;
@@ -451,21 +445,18 @@ void Font::post_process()
     };
     m_bitmap->post_process(bm, m_gamma);
 
-    auto internal_format = gl::Internal_format::rg8;
-
     const Texture::Create_info create_info{
-        .device          = m_graphics_device,
-        .target          = gl::Texture_target::texture_2d,
-        .internal_format = internal_format,
-        .use_mipmaps     = false,
-        .width           = m_texture_width,
-        .height          = m_texture_height,
-        .debug_label     = "Font"
+        .device      = m_graphics_device,
+        .target      = gl::Texture_target::texture_2d,
+        .pixelformat = erhe::dataformat::Format::format_8_vec2_unorm,
+        .use_mipmaps = false,
+        .width       = m_texture_width,
+        .height      = m_texture_height,
+        .debug_label = fmt::format("Font::m_texture {}", m_path.filename().generic_string())
     };
 
     m_texture = std::make_unique<Texture>(m_graphics_device, create_info);
-    m_texture->upload(create_info.internal_format, bm.as_span(), create_info.width, create_info.height);
-    m_texture->set_debug_label(m_path.filename().generic_string());
+    m_texture->upload(create_info.pixelformat, bm.as_span(), create_info.width, create_info.height);
 }
 
 // https://en.wikipedia.org/wiki/List_of_typographic_features

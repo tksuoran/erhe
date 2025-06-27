@@ -12,9 +12,10 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -26,7 +27,7 @@
 
 namespace editor {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 using erhe::graphics::Input_assembly_state;
@@ -97,18 +98,13 @@ Id_renderer::Id_renderer(
     , m_camera_buffers       {graphics_device, program_interface.camera_interface}
     , m_draw_indirect_buffers{graphics_device}
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
-    //{
-    //const auto reverse_depth = graphics_device.configuration.reverse_depth;
-
-#define REVERSE_DEPTH graphics_device.configuration.reverse_depth
-
     , m_pipeline{erhe::graphics::Pipeline_data{
         .name           = "ID Renderer",
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
 
@@ -122,8 +118,6 @@ Id_renderer::Id_renderer(
         .color_blend    = Color_blend_state::color_writes_disabled,
     }}
     , m_gpu_timer{graphics_device, "Id_renderer"}
-
-#undef REVERSE_DEPTH
 {
     create_id_frame_resources();
 
@@ -171,43 +165,49 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
     if (m_use_renderbuffers) {
         if (
             !m_color_renderbuffer ||
-            (m_color_renderbuffer->width()  != static_cast<unsigned int>(viewport.width)) ||
-            (m_color_renderbuffer->height() != static_cast<unsigned int>(viewport.height))
+            (m_color_renderbuffer->get_width()  != static_cast<unsigned int>(viewport.width)) ||
+            (m_color_renderbuffer->get_height() != static_cast<unsigned int>(viewport.height))
         ) {
             m_color_renderbuffer = std::make_unique<Renderbuffer>(
                 m_graphics_device,
-                gl::Internal_format::rgba8,
+                erhe::dataformat::Format::format_8_vec4_unorm,
                 viewport.width,
                 viewport.height
             );
             m_depth_renderbuffer = std::make_unique<Renderbuffer>(
                 m_graphics_device,
-                gl::Internal_format::depth_component32f,
+                erhe::dataformat::Format::format_d32_sfloat,
                 viewport.width,
                 viewport.height
             );
             m_color_renderbuffer->set_debug_label("ID Color");
             m_depth_renderbuffer->set_debug_label("ID Depth");
-            Framebuffer::Create_info create_info;
-            create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_renderbuffer.get());
-            create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_renderbuffer.get());
-            m_framebuffer = std::make_unique<Framebuffer>(m_graphics_device, create_info);
-            m_framebuffer->set_debug_label("ID");
+            erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+            render_pass_descriptor.color_attachments[0].renderbuffer = m_color_renderbuffer.get();
+            render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.depth_attachment.renderbuffer     = m_depth_renderbuffer.get();
+            render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.render_target_width               = viewport.width;
+            render_pass_descriptor.render_target_height              = viewport.height;
+            render_pass_descriptor.debug_label                       = "ID";
+            m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
         }
     }
 
     if (m_use_textures) {
         if (
             !m_color_texture ||
-            (m_color_texture->width()  != viewport.width) ||
-            (m_color_texture->height() != viewport.height)
+            (m_color_texture->get_width()  != viewport.width) ||
+            (m_color_texture->get_height() != viewport.height)
         ) {
             m_color_texture = std::make_unique<Texture>(
                 m_graphics_device,
                 Texture::Create_info{
                     .device          = m_graphics_device,
                     .target          = gl::Texture_target::texture_2d,
-                    .internal_format = gl::Internal_format::rgba8,
+                    .pixelformat     = erhe::dataformat::Format::format_8_vec4_unorm,
                     .use_mipmaps     = false,
                     .width           = viewport.width,
                     .height          = viewport.height,
@@ -219,32 +219,25 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
                 Texture::Create_info{
                     .device          = m_graphics_device,
                     .target          = gl::Texture_target::texture_2d,
-                    .internal_format = gl::Internal_format::depth_component32f,
+                    .pixelformat     = erhe::dataformat::Format::format_d32_sfloat,
                     .use_mipmaps     = false,
                     .width           = viewport.width,
                     .height          = viewport.height,
                     .debug_label     = "ID Render depth"
                 }
             );
-            m_color_texture->set_debug_label("ID Color");
-            m_depth_texture->set_debug_label("ID Depth");
-            Framebuffer::Create_info create_info;
-            create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_color_texture.get());
-            create_info.attach(gl::Framebuffer_attachment::depth_attachment,  m_depth_texture.get());
-            m_framebuffer = std::make_unique<Framebuffer>(m_graphics_device, create_info);
-            m_framebuffer->set_debug_label("ID");
+            erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+            render_pass_descriptor.color_attachments[0].texture      = m_color_texture.get();
+            render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.depth_attachment.texture          = m_depth_texture.get();
+            render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.render_target_width               = viewport.width;
+            render_pass_descriptor.render_target_height              = viewport.height;
+            render_pass_descriptor.debug_label                       = "ID";
+            m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
             constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
-            if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-                gl::clear_tex_image(
-                    m_color_texture->gl_name(),
-                    0,
-                    gl::Pixel_format::rgba,
-                    gl::Pixel_type::float_,
-                    &clear_value[0]
-                );
-            } else {
-                // TODO
-            }
         }
     }
 }
@@ -294,11 +287,6 @@ void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh
     draw_indirect_buffer_range.range.release();
 }
 
-static constexpr std::string_view c_id_renderer_render_clear  {"Id_renderer::render() clear"  };
-static constexpr std::string_view c_id_renderer_render_content{"Id_renderer::render() content"};
-static constexpr std::string_view c_id_renderer_render_tool   {"Id_renderer::render() tool"   };
-static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::render() read"   };
-
 void Id_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION();
@@ -320,7 +308,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         return;
     }
 
-    erhe::graphics::Scoped_debug_group debug_group{c_id_renderer_render_content};
+    erhe::graphics::Scoped_debug_group debug_group{"Id_renderer::render()"};
     erhe::graphics::Scoped_gpu_timer   timer      {m_gpu_timer};
 
     update_framebuffer(viewport);
@@ -345,39 +333,18 @@ void Id_renderer::render(const Render_parameters& parameters)
     m_camera_buffers.bind(camera_range);
 
     {
-        //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear)
+        std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
 
         m_graphics_device.opengl_state_tracker.shader_stages.reset();
         m_graphics_device.opengl_state_tracker.color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
-        {
-            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
 
-#if !defined(NDEBUG)
-            const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
-            if (status != gl::Framebuffer_status::framebuffer_complete)
-            {
-                log_framebuffer->error("draw framebuffer status = {}", c_str(status));
-            }
-            ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
-#endif
-        }
-
-        {
-            gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer->gl_name());
-#if !defined(NDEBUG)
-            const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
-            if (status != gl::Framebuffer_status::framebuffer_complete) {
-                log_framebuffer->error("read framebuffer status = {}", c_str(status));
-            }
-            ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
-#endif
-        }
-        gl::disable    (gl::Enable_cap::framebuffer_srgb);
         gl::viewport   (viewport.x, viewport.y, viewport.width, viewport.height);
         if (m_use_scissor) {
             gl::scissor(idr.x_offset, idr.y_offset, s_extent, s_extent);
             gl::enable (gl::Enable_cap::scissor_test);
         }
+
+        // TODO Abstraction for partial clear
         gl::clear_color(1.0f, 1.0f, 1.0f, 0.1f);
         gl::clear      (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
     }
@@ -389,13 +356,11 @@ void Id_renderer::render(const Render_parameters& parameters)
     m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
 
     for (auto meshes : content_mesh_spans) {
-        //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_content)
         render(meshes);
     }
 
     // Clear depth for tool pixels
     {
-        //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
         m_graphics_device.opengl_state_tracker.execute_(m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
         for (auto mesh_spans : tool_mesh_spans) {
@@ -419,8 +384,6 @@ void Id_renderer::render(const Render_parameters& parameters)
     }
 
     {
-        //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_read)
-
         if (m_use_scissor) {
             gl::disable(gl::Enable_cap::scissor_test);
         }
@@ -449,8 +412,6 @@ void Id_renderer::render(const Render_parameters& parameters)
         idr.sync = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0);
         idr.state = Id_frame_resources::State::Waiting_for_read;
     }
-
-    gl::enable(gl::Enable_cap::framebuffer_srgb);
 }
 
 template<typename T>

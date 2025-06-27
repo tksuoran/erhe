@@ -29,16 +29,25 @@ void Post_processing_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    const auto viewport_scene_view = m_context.scene_views->last_scene_view();
-    if (!viewport_scene_view) {
-        return;
-    }
-    Post_processing_node* node = viewport_scene_view->get_post_processing_node();
-    if (node == nullptr) {
-        return;
-    }
     bool edited = false;
-    if (ImGui::IsItemEdited()) edited = true;
+    const std::vector<std::shared_ptr<Post_processing_node>>& nodes = m_context.scene_views->get_post_processing_nodes();
+    if (!nodes.empty()) {
+        if (m_post_processing_node.expired()) {
+            m_post_processing_node = nodes.front();
+            m_selection = 0;
+        }
+        int last_index = static_cast<int>(nodes.size() - 1);
+        edited = ImGui::SliderInt("Viewport", &m_selection, 0, last_index);
+        if (edited && (m_selection >= 0) && (m_selection < nodes.size())) {
+            m_post_processing_node = nodes.at(m_selection);
+        }
+    }
+
+    std::shared_ptr<Post_processing_node> node = m_post_processing_node.lock();
+    if (!node) {
+        return;
+    }
+
     ImGui::SliderFloat("Size", &m_size, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_NoRoundToFormat);
     if (ImGui::RadioButton("Nearest", !m_linear_filter)) { m_linear_filter = false; }
     if (ImGui::RadioButton("Linear", m_linear_filter)) { m_linear_filter = true; }
@@ -85,7 +94,7 @@ void Post_processing_window::imgui()
     for (size_t source_level : node->downsample_source_levels) {
         size_t destination_level = source_level + 1;
         auto& texture = node->downsample_texture_views.at(destination_level);
-        if (!texture || (texture->width() < 1) || (texture->height() < 1)) {
+        if (!texture || (texture->get_width() < 1) || (texture->get_height() < 1)) {
             continue;
         }
 
@@ -94,14 +103,14 @@ void Post_processing_window::imgui()
         draw_image(texture, width, height, m_linear_filter);
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted(texture->debug_label().c_str());
+            ImGui::TextUnformatted(texture->get_debug_label().c_str());
             ImGui::EndTooltip();
         }
     }
     for (size_t source_level : node->upsample_source_levels) {
         size_t destination_level = source_level - 1;
         auto& texture = node->upsample_texture_views.at(destination_level);
-        if (!texture || (texture->width() < 1) || (texture->height() < 1)) {
+        if (!texture || (texture->get_width() < 1) || (texture->get_height() < 1)) {
             continue;
         }
     
@@ -110,7 +119,7 @@ void Post_processing_window::imgui()
         draw_image(texture, width, height, m_linear_filter);
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted(texture->debug_label().c_str());
+            ImGui::TextUnformatted(texture->get_debug_label().c_str());
             ImGui::EndTooltip();
         }
         ImGui::SameLine();

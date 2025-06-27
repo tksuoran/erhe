@@ -4,7 +4,7 @@
 
 namespace erhe::graphics {
 
-class Framebuffer;
+class Render_pass;
 
 class Render_command_encoder;
 

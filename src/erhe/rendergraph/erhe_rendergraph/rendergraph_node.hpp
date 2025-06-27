@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace erhe::graphics {
-    class Framebuffer;
+    class Render_pass;
     class Texture;
 }
 
@@ -32,18 +32,12 @@ public:
 class Rendergraph_producer_connector : public Rendergraph_id
 {
 public:
-    Rendergraph_producer_connector(
-        Routing     resource_routing,
-        std::string label,
-        int         key
-    )
-        : resource_routing{resource_routing}
-        , label           {label}
+    Rendergraph_producer_connector(std::string label, int key)
+        : label           {label}
         , key             {key}
     {
     }
 
-    Routing                        resource_routing{Routing::None};
     std::string                    label           {};
     int                            key             {0};
     std::vector<Rendergraph_node*> consumer_nodes  {};
@@ -52,21 +46,15 @@ public:
 class Rendergraph_consumer_connector : public Rendergraph_id
 {
 public:
-    Rendergraph_consumer_connector(
-        Routing     resource_routing,
-        std::string label,
-        int         key
-    )
-        : resource_routing{resource_routing}
-        , label           {label}
+    Rendergraph_consumer_connector(std::string label, int key)
+        : label           {label}
         , key             {key}
     {
     }
 
-    Routing                        resource_routing{Routing::None};
-    std::string                    label           {};
-    int                            key             {0};
-    std::vector<Rendergraph_node*> producer_nodes  {};
+    std::string                    label         {};
+    int                            key           {0};
+    std::vector<Rendergraph_node*> producer_nodes{};
 };
 
 constexpr int rendergraph_max_depth = 10;
@@ -85,16 +73,18 @@ public:
 
     [[nodiscard]] virtual auto get_type_name() const -> std::string_view { return "Rendergraph_node"; }
 
-    [[nodiscard]] auto get_name   () const -> const std::string&;
-    [[nodiscard]] auto get_inputs () const -> const std::vector<Rendergraph_consumer_connector>&;
-    [[nodiscard]] auto get_inputs ()       ->       std::vector<Rendergraph_consumer_connector>&;
-    [[nodiscard]] auto get_outputs() const -> const std::vector<Rendergraph_producer_connector>&;
-    [[nodiscard]] auto get_outputs()       ->       std::vector<Rendergraph_producer_connector>&;
-    [[nodiscard]] auto get_size   () const -> std::optional<glm::vec2>;
-    [[nodiscard]] auto is_enabled () const -> bool;
+    [[nodiscard]] auto get_rendergraph() -> Rendergraph&;
+    [[nodiscard]] auto get_rendergraph() const -> const Rendergraph&;
+    [[nodiscard]] auto get_name       () const -> const std::string&;
+    [[nodiscard]] auto get_inputs     () const -> const std::vector<Rendergraph_consumer_connector>&;
+    [[nodiscard]] auto get_inputs     ()       ->       std::vector<Rendergraph_consumer_connector>&;
+    [[nodiscard]] auto get_outputs    () const -> const std::vector<Rendergraph_producer_connector>&;
+    [[nodiscard]] auto get_outputs    ()       ->       std::vector<Rendergraph_producer_connector>&;
+    [[nodiscard]] auto get_size       () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto is_enabled     () const -> bool;
 
-    [[nodiscard]] auto get_input   (Routing resource_routing, int key, int depth = 0) const -> const Rendergraph_consumer_connector*;
-    [[nodiscard]] auto get_output  (Routing resource_routing, int key, int depth = 0) const -> const Rendergraph_producer_connector*;
+    [[nodiscard]] auto get_input   (int key, int depth = 0) const -> const Rendergraph_consumer_connector*;
+    [[nodiscard]] auto get_output  (int key, int depth = 0) const -> const Rendergraph_producer_connector*;
     [[nodiscard]] auto get_depth   () const -> int;
     [[nodiscard]] auto get_position() const -> glm::vec2;
     [[nodiscard]] auto get_selected() const -> bool;
@@ -103,8 +93,8 @@ public:
     void set_position     (glm::vec2 position);
     void set_selected     (bool selected);
     void set_enabled      (bool value);
-    auto register_input   (Routing resource_routing, const std::string_view label, int key) -> bool;
-    auto register_output  (Routing resource_routing, const std::string_view label, int key) -> bool;
+    auto register_input   (const std::string_view label, int key) -> bool;
+    auto register_output  (const std::string_view label, int key) -> bool;
     auto connect_input    (int key, Rendergraph_node* producer_node) -> bool;
     auto connect_output   (int key, Rendergraph_node* consumer_node) -> bool;
     auto disconnect_input (int key, Rendergraph_node* producer_node) -> bool;
@@ -113,14 +103,11 @@ public:
 
     virtual void execute_rendergraph_node() = 0;
 
-    [[nodiscard]] virtual auto get_consumer_input_node        (Routing resource_routing, int key, int depth = 0) const -> Rendergraph_node*;
-    [[nodiscard]] virtual auto get_consumer_input_texture     (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] virtual auto get_consumer_input_framebuffer (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer>;
-    [[nodiscard]] virtual auto get_consumer_input_viewport    (Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport;
-    [[nodiscard]] virtual auto get_producer_output_node       (Routing resource_routing, int key, int depth = 0) const -> Rendergraph_node*;
-    [[nodiscard]] virtual auto get_producer_output_texture    (Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] virtual auto get_producer_output_framebuffer(Routing resource_routing, int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Framebuffer>;
-    [[nodiscard]] virtual auto get_producer_output_viewport   (Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport;
+    [[nodiscard]] virtual auto get_consumer_input_node    (int key, int depth = 0) const -> Rendergraph_node*;
+    [[nodiscard]] virtual auto get_producer_output_node   (int key, int depth = 0) const -> Rendergraph_node*;
+
+    [[nodiscard]] virtual auto get_consumer_input_texture (int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture>;
+    [[nodiscard]] virtual auto get_producer_output_texture(int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture>;
 
 protected:
     virtual auto inputs_allowed () const -> bool;

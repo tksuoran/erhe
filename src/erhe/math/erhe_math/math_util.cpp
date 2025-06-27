@@ -1,6 +1,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/sphere.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -416,48 +417,21 @@ void rgb_to_hsv(const float r, const float g, const float b, float& h, float& s,
     }
 }
 
-auto srgb_to_linear(const float cs) -> float
-{
-    const float cs_clamped = std::min(std::max(0.0f, cs), 1.0f);
-    return
-        (cs_clamped <= 0.04045f)
-            ? cs_clamped / 12.92f
-            : std::pow(
-                (cs_clamped + 0.055f) / 1.055f,
-                2.4f
-            );
-}
-
-auto linear_rgb_to_srgb(const float cl) -> float
-{
-    float res;
-    if (cl > 1.0f) {
-        res = 1.0f;
-    } else if (cl < 0.0) {
-        res = 0.0f;
-    } else if (cl < 0.0031308f) {
-        res = 12.92f * cl;
-    } else {
-        res = 1.055f * std::pow(cl, 0.41666f) - 0.055f;
-    }
-    return res;
-}
-
-auto srgb_to_linear_rgb(const vec3 srgb) -> vec3
+auto srgb_to_linear_rgb(const glm::vec3 srgb) -> glm::vec3
 {
     return vec3{
-        srgb_to_linear(srgb.x),
-        srgb_to_linear(srgb.y),
-        srgb_to_linear(srgb.z)
+        erhe::dataformat::srgb_to_linear(srgb.x),
+        erhe::dataformat::srgb_to_linear(srgb.y),
+        erhe::dataformat::srgb_to_linear(srgb.z)
     };
 }
 
-auto linear_rgb_to_srgb(const vec3 linear_rgb) -> vec3
+auto linear_rgb_to_srgb(const glm::vec3 linear_rgb) -> glm::vec3
 {
     return vec3{
-        linear_rgb_to_srgb(linear_rgb.x),
-        linear_rgb_to_srgb(linear_rgb.y),
-        linear_rgb_to_srgb(linear_rgb.z)
+        erhe::dataformat::linear_rgb_to_srgb(linear_rgb.x),
+        erhe::dataformat::linear_rgb_to_srgb(linear_rgb.y),
+        erhe::dataformat::linear_rgb_to_srgb(linear_rgb.z)
     };
 }
 

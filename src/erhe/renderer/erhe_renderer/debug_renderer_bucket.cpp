@@ -18,16 +18,15 @@ bool operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& r
         (lhs.primitive_type    == rhs.primitive_type   ) &&
         (lhs.stencil_reference == rhs.stencil_reference) &&
         (lhs.draw_visible      == rhs.draw_visible     ) &&
-        (lhs.draw_hidden       == rhs.draw_hidden      ) &&
-        (lhs.reverse_depth     == rhs.reverse_depth    );
+        (lhs.draw_hidden       == rhs.draw_hidden      );
 }
 
-auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible) -> erhe::graphics::Render_pipeline_state
+auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible, const bool reverse_depth) -> erhe::graphics::Render_pipeline_state
 {
     erhe::graphics::Shader_stages* const graphics_shader_stages = m_debug_renderer.get_program_interface().graphics_shader_stages.get();
 
     const gl::Depth_function depth_compare_op0 = visible ? gl::Depth_function::less : gl::Depth_function::gequal;
-    const gl::Depth_function depth_compare_op  = m_config.reverse_depth ? erhe::graphics::reverse(depth_compare_op0) : depth_compare_op0;
+    const gl::Depth_function depth_compare_op  = reverse_depth ? erhe::graphics::reverse(depth_compare_op0) : depth_compare_op0;
     return erhe::graphics::Render_pipeline_state{
         erhe::graphics::Pipeline_data{
             .name           = "Line Renderer",

@@ -2,6 +2,7 @@
 
 #include <openxr/openxr.h>
 
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 
 #include <spdlog/spdlog.h>
@@ -24,21 +25,21 @@ public:
 class Render_view
 {
 public:
-    uint32_t            slot;
-    Pose                view_pose;
-    float               fov_left;
-    float               fov_right;
-    float               fov_up;
-    float               fov_down;
-    uint32_t            color_texture;
-    uint32_t            depth_stencil_texture;
-    gl::Internal_format color_format;
-    gl::Internal_format depth_stencil_format;
-    uint32_t            width;
-    uint32_t            height;
-    bool                composition_alpha;
-    float               near_depth;
-    float               far_depth;
+    uint32_t                 slot;
+    Pose                     view_pose;
+    float                    fov_left;
+    float                    fov_right;
+    float                    fov_up;
+    float                    fov_down;
+    uint32_t                 color_texture;
+    uint32_t                 depth_stencil_texture;
+    erhe::dataformat::Format color_format;
+    erhe::dataformat::Format depth_stencil_format;
+    uint32_t                 width;
+    uint32_t                 height;
+    bool                     composition_alpha;
+    float                    near_depth;
+    float                    far_depth;
 };
 
 inline auto to_glm(const XrQuaternionf& q) -> glm::quat

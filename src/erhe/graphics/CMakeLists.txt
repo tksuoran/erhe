@@ -13,8 +13,8 @@ erhe_target_sources_grouped(
     erhe_graphics/fragment_output.hpp
     erhe_graphics/fragment_outputs.cpp
     erhe_graphics/fragment_outputs.hpp
-    erhe_graphics/framebuffer.cpp
-    erhe_graphics/framebuffer.hpp
+    erhe_graphics/render_pass.cpp
+    erhe_graphics/render_pass.hpp
     erhe_graphics/gl_context_provider.cpp
     erhe_graphics/gl_context_provider.hpp
     erhe_graphics/gl_objects.cpp

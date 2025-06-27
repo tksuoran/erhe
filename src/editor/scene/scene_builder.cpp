@@ -194,9 +194,7 @@ void Scene_builder::setup_cameras(
     //// camera_b->set_wireframe_color(glm::vec4{0.3f, 0.6f, 1.00f, 1.0f});
 #endif
 
-    //// TODO Read these from ini
     const bool enable_post_processing = graphics_device.configuration.post_processing;
-    const bool window_viewport        = true;
     bool imgui_window_scene_view = true;
     {
         const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
@@ -208,6 +206,7 @@ void Scene_builder::setup_cameras(
     }
 
     const int msaa_sample_count = editor_settings.graphics.current_graphics_preset.msaa_sample_count;
+    std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
     m_primary_viewport_window = scene_views.create_viewport_scene_view(
         graphics_device,
         rendergraph,
@@ -215,18 +214,23 @@ void Scene_builder::setup_cameras(
         editor_settings,
         post_processing,
         tools,
-        "Primary Viewport_scene_view",
+        "Default Viewport",
         m_scene_root,
         camera_a,
         std::max(2, msaa_sample_count), //// TODO Fix rendergraph
+        rendergraph_output_node,
         enable_post_processing
     );
-    
-    if (window_viewport) {
-        scene_views.create_imgui_window_scene_view_node(imgui_renderer, imgui_windows, rendergraph, m_primary_viewport_window, "Scene", "");
-    } else {
-        scene_views.create_basic_viewport_scene_view_node(rendergraph, m_primary_viewport_window, "Scene");
-    }
+
+    scene_views.create_viewport_window(
+        imgui_renderer,
+        imgui_windows,
+        m_primary_viewport_window,
+        rendergraph_output_node,
+        "Default Viewport",
+        ""
+    );
+    // scene_views.create_basic_viewport_scene_view_node(rendergraph, m_primary_viewport_window, "Scene");
 }
 
 auto Scene_builder::make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>

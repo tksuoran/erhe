@@ -37,7 +37,7 @@
 #include "windows/clipboard_window.hpp"
 #include "windows/commands_window.hpp"
 #include "windows/composer_window.hpp"
-#include "windows/debug_view_window.hpp"
+#include "windows/depth_visualization_window.hpp"
 #include "windows/gradient_editor.hpp"
 #include "windows/icon_browser.hpp"
 #include "windows/layers_window.hpp"
@@ -209,8 +209,10 @@ public:
         // - updates controller visualization nodes
         if (m_editor_context.OpenXR) {
             ERHE_PROFILE_SCOPE("OpenXR update events");
-            bool headset_update_ok = m_headset_view->update_events();
-            if (headset_update_ok && m_headset_view->is_active()) {
+            bool headset_poll_ok           = m_headset_view->poll_events();
+            bool headset_begin_frame_ok    = headset_poll_ok        && m_headset_view->begin_frame();
+            bool headset_update_actions_ok = headset_begin_frame_ok && m_headset_view->update_actions();
+            if (headset_update_actions_ok) {
                 m_viewport_config_window->set_edit_data(&m_headset_view->get_config());
             } else{
                 ERHE_PROFILE_SCOPE("OpenXR sleep");
@@ -782,7 +784,7 @@ public:
                     m_editor_context,
                     *m_programs.get()
                 );
-                m_debug_view_window = std::make_unique<Debug_view_window>(
+                m_debug_view_window = std::make_unique<Depth_visualization_window>(
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
                     *m_rendergraph.get(),
@@ -1179,7 +1181,7 @@ public:
     std::unique_ptr<Hover_tool          >                    m_hover_tool;
     std::unique_ptr<Brdf_slice          >                    m_brdf_slice;
     std::unique_ptr<Debug_draw          >                    m_debug_draw;
-    std::unique_ptr<Debug_view_window   >                    m_debug_view_window;
+    std::unique_ptr<Depth_visualization_window>              m_debug_view_window;
     std::unique_ptr<Debug_visualizations>                    m_debug_visualizations;
     std::unique_ptr<Material_preview    >                    m_material_preview;
 #if defined(ERHE_XR_LIBRARY_OPENXR)

@@ -107,8 +107,8 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_scalar_unorm  : Format::format_8_scalar_uint;
                 case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_scalar_snorm : Format::format_16_scalar_sint;
                 case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_scalar_unorm : Format::format_16_scalar_uint;
-                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_scalar_snorm : Format::format_32_scalar_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_scalar_unorm : Format::format_32_scalar_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_scalar_float : Format::format_32_scalar_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_scalar_float : Format::format_32_scalar_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_scalar_float;
                 default: break;
             }
@@ -119,8 +119,8 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_vec2_unorm  : Format::format_8_vec2_uint;
                 case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_vec2_snorm : Format::format_16_vec2_sint;
                 case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_vec2_unorm : Format::format_16_vec2_uint;
-                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec2_snorm : Format::format_32_vec2_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec2_unorm : Format::format_32_vec2_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec2_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec2_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec2_float;
                 default: break;
             }
@@ -131,8 +131,8 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_vec3_unorm  : Format::format_8_vec3_uint;
                 case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_vec3_snorm : Format::format_16_vec3_sint;
                 case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_vec3_unorm : Format::format_16_vec3_uint;
-                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec3_snorm : Format::format_32_vec3_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec3_unorm : Format::format_32_vec3_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec3_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec3_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec3_float;
                 default: break;
             }
@@ -143,8 +143,8 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_vec4_unorm  : Format::format_8_vec4_uint;
                 case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_vec4_snorm : Format::format_16_vec4_sint;
                 case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_vec4_unorm : Format::format_16_vec4_uint;
-                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec4_snorm : Format::format_32_vec4_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec4_unorm : Format::format_32_vec4_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec4_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec4_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec4_float;
                 default: break;
             }
@@ -460,29 +460,21 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
         case erhe::dataformat::Format::format_16_vec4_sscaled         : return fastgltf::ComponentType::Short;
         case erhe::dataformat::Format::format_16_vec4_uint            : return fastgltf::ComponentType::UnsignedShort;
         case erhe::dataformat::Format::format_16_vec4_sint            : return fastgltf::ComponentType::Short;
-        case erhe::dataformat::Format::format_32_scalar_unorm         : return fastgltf::ComponentType::UnsignedInt;
-        case erhe::dataformat::Format::format_32_scalar_snorm         : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_scalar_uscaled       : return fastgltf::ComponentType::UnsignedInt;
         case erhe::dataformat::Format::format_32_scalar_sscaled       : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_scalar_uint          : return fastgltf::ComponentType::UnsignedInt;
         case erhe::dataformat::Format::format_32_scalar_sint          : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_scalar_float         : return fastgltf::ComponentType::Float;
-        case erhe::dataformat::Format::format_32_vec2_unorm           : return fastgltf::ComponentType::UnsignedInt;
-        case erhe::dataformat::Format::format_32_vec2_snorm           : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_vec2_uscaled         : return fastgltf::ComponentType::UnsignedInt;
         case erhe::dataformat::Format::format_32_vec2_sscaled         : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_vec2_uint            : return fastgltf::ComponentType::UnsignedInt;
         case erhe::dataformat::Format::format_32_vec2_sint            : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_vec2_float           : return fastgltf::ComponentType::Float;
-        case erhe::dataformat::Format::format_32_vec3_unorm           : return fastgltf::ComponentType::UnsignedInt;
-        case erhe::dataformat::Format::format_32_vec3_snorm           : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_vec3_uscaled         : return fastgltf::ComponentType::UnsignedInt;
         case erhe::dataformat::Format::format_32_vec3_sscaled         : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_vec3_uint            : return fastgltf::ComponentType::UnsignedInt;
         case erhe::dataformat::Format::format_32_vec3_sint            : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_vec3_float           : return fastgltf::ComponentType::Float;
-        case erhe::dataformat::Format::format_32_vec4_unorm           : return fastgltf::ComponentType::UnsignedInt;
-        case erhe::dataformat::Format::format_32_vec4_snorm           : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_vec4_uscaled         : return fastgltf::ComponentType::UnsignedInt;
         case erhe::dataformat::Format::format_32_vec4_sscaled         : return fastgltf::ComponentType::Int;
         case erhe::dataformat::Format::format_32_vec4_uint            : return fastgltf::ComponentType::UnsignedInt;
@@ -530,47 +522,43 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
         case erhe::dataformat::Format::format_16_scalar_sscaled       : return false;
         case erhe::dataformat::Format::format_16_scalar_uint          : return false;
         case erhe::dataformat::Format::format_16_scalar_sint          : return false;
+        case erhe::dataformat::Format::format_16_scalar_float         : return false;
         case erhe::dataformat::Format::format_16_vec2_unorm           : return true;
         case erhe::dataformat::Format::format_16_vec2_snorm           : return true;
         case erhe::dataformat::Format::format_16_vec2_uscaled         : return false;
         case erhe::dataformat::Format::format_16_vec2_sscaled         : return false;
         case erhe::dataformat::Format::format_16_vec2_uint            : return false;
         case erhe::dataformat::Format::format_16_vec2_sint            : return false;
+        case erhe::dataformat::Format::format_16_vec2_float           : return false;
         case erhe::dataformat::Format::format_16_vec3_unorm           : return true;
         case erhe::dataformat::Format::format_16_vec3_snorm           : return true;
         case erhe::dataformat::Format::format_16_vec3_uscaled         : return false;
         case erhe::dataformat::Format::format_16_vec3_sscaled         : return false;
         case erhe::dataformat::Format::format_16_vec3_uint            : return false;
         case erhe::dataformat::Format::format_16_vec3_sint            : return false;
+        case erhe::dataformat::Format::format_16_vec3_float           : return false;
         case erhe::dataformat::Format::format_16_vec4_unorm           : return true;
         case erhe::dataformat::Format::format_16_vec4_snorm           : return true;
         case erhe::dataformat::Format::format_16_vec4_uscaled         : return false;
         case erhe::dataformat::Format::format_16_vec4_sscaled         : return false;
         case erhe::dataformat::Format::format_16_vec4_uint            : return false;
         case erhe::dataformat::Format::format_16_vec4_sint            : return false;
-        case erhe::dataformat::Format::format_32_scalar_unorm         : return true;
-        case erhe::dataformat::Format::format_32_scalar_snorm         : return true;
+        case erhe::dataformat::Format::format_16_vec4_float           : return false;
         case erhe::dataformat::Format::format_32_scalar_uscaled       : return false;
         case erhe::dataformat::Format::format_32_scalar_sscaled       : return false;
         case erhe::dataformat::Format::format_32_scalar_uint          : return false;
         case erhe::dataformat::Format::format_32_scalar_sint          : return false;
         case erhe::dataformat::Format::format_32_scalar_float         : return false;
-        case erhe::dataformat::Format::format_32_vec2_unorm           : return true;
-        case erhe::dataformat::Format::format_32_vec2_snorm           : return true;
         case erhe::dataformat::Format::format_32_vec2_uscaled         : return false;
         case erhe::dataformat::Format::format_32_vec2_sscaled         : return false;
         case erhe::dataformat::Format::format_32_vec2_uint            : return false;
         case erhe::dataformat::Format::format_32_vec2_sint            : return false;
         case erhe::dataformat::Format::format_32_vec2_float           : return false;
-        case erhe::dataformat::Format::format_32_vec3_unorm           : return true;
-        case erhe::dataformat::Format::format_32_vec3_snorm           : return true;
         case erhe::dataformat::Format::format_32_vec3_uscaled         : return false;
         case erhe::dataformat::Format::format_32_vec3_sscaled         : return false;
         case erhe::dataformat::Format::format_32_vec3_uint            : return false;
         case erhe::dataformat::Format::format_32_vec3_sint            : return false;
         case erhe::dataformat::Format::format_32_vec3_float           : return false;
-        case erhe::dataformat::Format::format_32_vec4_unorm           : return true;
-        case erhe::dataformat::Format::format_32_vec4_snorm           : return true;
         case erhe::dataformat::Format::format_32_vec4_uscaled         : return false;
         case erhe::dataformat::Format::format_32_vec4_sscaled         : return false;
         case erhe::dataformat::Format::format_32_vec4_uint            : return false;
@@ -580,24 +568,12 @@ auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
         case erhe::dataformat::Format::format_packed1010102_vec4_snorm: return true;
         case erhe::dataformat::Format::format_packed1010102_vec4_uint : return false;
         case erhe::dataformat::Format::format_packed1010102_vec4_sint : return false;
+        case erhe::dataformat::Format::format_packed111110_vec3_unorm : return false;
         default: return false;
     }
 }
 
 using Item_flags = erhe::Item_flags;
-
-[[nodiscard]] auto to_gl(const erhe::graphics::Image_format format) -> gl::Internal_format
-{
-    switch (format) {
-        //using enum erhe::graphics::Image_format;
-        case erhe::graphics::Image_format::srgb8:        return gl::Internal_format::srgb8;
-        case erhe::graphics::Image_format::srgb8_alpha8: return gl::Internal_format::srgb8_alpha8;
-        default: {
-            ERHE_FATAL("Bad image format %04x", static_cast<unsigned int>(format));
-        }
-    }
-    // std::unreachable() return gl::Internal_format::rgba8;
-}
 
 void accessor_read_floats(
     const fastgltf::Asset&    asset,
@@ -1009,25 +985,27 @@ private:
             return {};
         }
 
+        ERHE_VERIFY(!image_name.empty());
+
         auto& slot = m_arguments.image_transfer.get_slot();
 
         erhe::graphics::Texture_create_info texture_create_info{
-            .device          = m_arguments.graphics_device,
-            .internal_format = to_gl(image_info.format),
-            .use_mipmaps     = true, //(image_info.level_count > 1),
-            .width           = image_info.width,
-            .height          = image_info.height,
-            .depth           = image_info.depth,
-            .level_count     = image_info.level_count,
-            .row_stride      = image_info.row_stride,
-            .debug_label     = std::string{image_name} // path.filename().string()
+            .device      = m_arguments.graphics_device,
+            .pixelformat = image_info.format,
+            .use_mipmaps = true, //(image_info.level_count > 1),
+            .width       = image_info.width,
+            .height      = image_info.height,
+            .depth       = image_info.depth,
+            .level_count = image_info.level_count,
+            .row_stride  = image_info.row_stride,
+            .debug_label = std::string{image_name} // path.filename().string()
         };
         const int  mipmap_count    = texture_create_info.calculate_level_count();
         const bool generate_mipmap = mipmap_count != image_info.level_count;
         if (generate_mipmap) {
             texture_create_info.level_count = mipmap_count;
         }
-        std::span<std::uint8_t> span = slot.begin_span_for(image_info.width, image_info.height, texture_create_info.internal_format);
+        std::span<std::uint8_t> span = slot.begin_span_for(image_info.width, image_info.height, texture_create_info.pixelformat);
 
         const bool ok = loader.load(span);
         loader.close();
@@ -1038,11 +1016,10 @@ private:
 
         auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
         texture->set_source_path(path);
-        texture->set_debug_label(image_name.empty() ? erhe::file::to_string(path) : image_name);
 
         gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
-        texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
+        texture->upload(texture_create_info.pixelformat, texture_create_info.width, texture_create_info.height);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
 
         if (generate_mipmap) {
@@ -1092,21 +1069,21 @@ private:
                         return;
                     }
 
-                    texture_create_info.internal_format = to_gl(image_info.format);
-                    texture_create_info.use_mipmaps     = true; //(image_info.level_count > 1),
-                    texture_create_info.width           = image_info.width;
-                    texture_create_info.height          = image_info.height;
-                    texture_create_info.depth           = image_info.depth;
-                    texture_create_info.level_count     = image_info.level_count;
-                    texture_create_info.row_stride      = image_info.row_stride;
-                    texture_create_info.debug_label     = name;
+                    texture_create_info.pixelformat = image_info.format;
+                    texture_create_info.use_mipmaps = true; //(image_info.level_count > 1),
+                    texture_create_info.width       = image_info.width;
+                    texture_create_info.height      = image_info.height;
+                    texture_create_info.depth       = image_info.depth;
+                    texture_create_info.level_count = image_info.level_count;
+                    texture_create_info.row_stride  = image_info.row_stride;
+                    texture_create_info.debug_label = name;
 
                     mipmap_count    = texture_create_info.calculate_level_count();
                     generate_mipmap = mipmap_count != image_info.level_count;
                     if (generate_mipmap) {
                         texture_create_info.level_count = mipmap_count;
                     }
-                    std::span<std::uint8_t> span = slot.begin_span_for(image_info.width, image_info.height, texture_create_info.internal_format);
+                    std::span<std::uint8_t> span = slot.begin_span_for(image_info.width, image_info.height, texture_create_info.pixelformat);
 
                     load_ok = loader.load(span);
                     loader.close();
@@ -1130,10 +1107,9 @@ private:
 
         auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
         texture->set_source_path(m_arguments.path);
-        texture->set_debug_label(name);
         gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
-        texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
+        texture->upload(texture_create_info.pixelformat, texture_create_info.width, texture_create_info.height);
         gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
 
         if (generate_mipmap) {
@@ -1167,7 +1143,6 @@ private:
         );
 
         if (erhe_texture) {
-            erhe_texture->set_debug_label(image_name);
             m_data_out.images.push_back(erhe_texture);
         }
         m_data_out.images[image_index] = erhe_texture;

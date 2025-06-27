@@ -7,18 +7,10 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::graphics {
-    class Device;
-}
-namespace erhe::imgui {
-    class Imgui_renderer;
-}
-namespace erhe::rendergraph {
-    class Rendergraph;
-}
-namespace erhe::scene {
-    class Node;
-};
+namespace erhe::graphics    { class Device; }
+namespace erhe::imgui       { class Imgui_renderer; }
+namespace erhe::rendergraph { class Rendergraph; }
+namespace erhe::scene       { class Node; };
 
 namespace editor {
 

@@ -10,10 +10,10 @@
 
 namespace erhe::graphics {
 
-[[nodiscard]] auto from_spng(const enum ::spng_format format) -> Image_format
+[[nodiscard]] auto from_spng(const enum ::spng_format format) -> erhe::dataformat::Format
 {
     if (format == SPNG_FMT_RGB8) {
-        return Image_format::srgb8; // gl::Internal_format::rgb8;
+        return erhe::dataformat::Format:: ; // gl::Internal_format::rgb8;
     }
 
     if (format == SPNG_FMT_RGBA8) {

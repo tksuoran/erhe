@@ -7,7 +7,7 @@
 
 namespace erhe::graphics
 {
-    class Framebuffer;
+    class Render_pass;
     class Gpu_timer;
     class OpenGL_state_tracker;
     class Texture;

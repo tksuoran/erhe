@@ -45,8 +45,7 @@ namespace {
 auto get_connection_color(const int key) -> ImVec4
 {
     switch (key) {
-        case erhe::rendergraph::Rendergraph_node_key::window:              return ImVec4{0.4f, 0.5f, 0.8f, 1.0f};
-        case erhe::rendergraph::Rendergraph_node_key::viewport:            return ImVec4{0.8f, 1.0f, 0.2f, 1.0f};
+        case erhe::rendergraph::Rendergraph_node_key::viewport_texture:    return ImVec4{0.4f, 0.5f, 0.8f, 1.0f};
         case erhe::rendergraph::Rendergraph_node_key::shadow_maps:         return ImVec4{0.6f, 0.6f, 0.6f, 1.0f};
         case erhe::rendergraph::Rendergraph_node_key::depth_visualization: return ImVec4{0.1f, 0.8f, 0.8f, 1.0f};
         default: return ImVec4{1.0f, 0.0f, 1.0f, 1.0f};
@@ -195,15 +194,15 @@ void Rendergraph_window::imgui()
         // Content
         ImGui::SameLine();
         for (const auto& output : outputs) {
-            const auto& texture = node->get_producer_output_texture(output.resource_routing, output.key);
+            const auto& texture = node->get_producer_output_texture(output.key);
             if (
                 texture &&
-                (texture->target() == gl::Texture_target::texture_2d) &&
-                (texture->width () >= 1) &&
-                (texture->height() >= 1) &&
-                (gl_helpers::has_color(texture->internal_format()))
+                (texture->get_target() == gl::Texture_target::texture_2d) &&
+                (texture->get_width () >= 1) &&
+                (texture->get_height() >= 1) &&
+                (erhe::dataformat::has_color(texture->get_pixelformat()))
             ) {
-                const float aspect = static_cast<float>(texture->width()) / static_cast<float>(texture->height());
+                const float aspect = static_cast<float>(texture->get_width()) / static_cast<float>(texture->get_height());
                 m_imgui_renderer.image(
                     texture,
                     static_cast<int>(zoom * aspect * m_image_size),
@@ -273,7 +272,7 @@ void Rendergraph_window::imgui()
                 if (consumer == nullptr) {
                     continue;
                 }
-                const erhe::rendergraph::Rendergraph_consumer_connector* consumer_input = consumer->get_input(output.resource_routing, output.key);
+                const erhe::rendergraph::Rendergraph_consumer_connector* consumer_input = consumer->get_input(output.key);
 
                 const ax::NodeEditor::LinkId link_id{consumer_input};
                 const ax::NodeEditor::PinId input_pin_id{consumer_input->id.get_id()};

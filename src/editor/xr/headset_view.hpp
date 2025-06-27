@@ -59,6 +59,7 @@ class Headset_view_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     Headset_view_node(erhe::rendergraph::Rendergraph& rendergraph, Headset_view& headset_view);
+    ~Headset_view_node() override;
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;
@@ -104,9 +105,11 @@ public:
     void attach_to_scene(std::shared_ptr<Scene_root> scene_root, Mesh_memory& mesh_memory);
 
     // Public API
-    [[nodiscard]] auto update_events() -> bool;
+    auto begin_frame   () -> bool;
+    auto poll_events   () -> bool;
+    auto update_actions() -> bool;
+    auto render_headset() -> bool;
 
-    void render_headset           ();
     void end_frame                ();
     void request_renderdoc_capture();
 
@@ -154,6 +157,7 @@ private:
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*                                   m_headset;
 #endif
+    std::unique_ptr<erhe::graphics::Render_pass>         m_mirror_mode_window_render_pass;
     std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node
     std::shared_ptr<erhe::scene::Node>                   m_headset_node; // transform set by headset
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
@@ -164,8 +168,11 @@ private:
 
     float                                                m_finger_to_viewport_distance_threshold{0.1f};
 
+    bool                                                 m_poll_events_ok{false};
+    bool                                                 m_update_actions_ok{false};
     bool                                                 m_request_renderdoc_capture{false};
     bool                                                 m_renderdoc_capture_started{false};
+    erhe::xr::Frame_timing                               m_frame_timing{};
     uint64_t                                             m_frame_number{0};
 };
 

@@ -8,7 +8,7 @@ namespace erhe::xr {
     class Render_view;
 }
 namespace erhe::graphics {
-    class Framebuffer;
+    class Render_pass;
     class Device;
     class Texture;
 }
@@ -37,7 +37,7 @@ public:
     void update(erhe::xr::Render_view& render_view, erhe::scene::Projection::Fov_sides fov_sides);
 
     [[nodiscard]] auto is_valid                 () const -> bool;
-    [[nodiscard]] auto get_framebuffer          () const -> erhe::graphics::Framebuffer*;
+    [[nodiscard]] auto get_render_pass          () const -> erhe::graphics::Render_pass*;
     [[nodiscard]] auto get_camera               () const -> erhe::scene::Camera*;
     [[nodiscard]] auto get_width                () const -> int;
     [[nodiscard]] auto get_height               () const -> int;
@@ -50,7 +50,7 @@ private:
     int                                          m_height;
     std::shared_ptr<erhe::graphics::Texture>     m_color_texture;
     std::shared_ptr<erhe::graphics::Texture>     m_depth_stencil_texture;
-    std::shared_ptr<erhe::graphics::Framebuffer> m_framebuffer;
+    std::shared_ptr<erhe::graphics::Render_pass> m_render_pass;
     std::shared_ptr<erhe::scene::Node>           m_node;
     std::shared_ptr<erhe::scene::Camera>         m_camera;
     bool                                         m_is_valid{false};

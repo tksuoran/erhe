@@ -40,10 +40,10 @@ public:
         return m_handle.gl_name();
     }
 
-    void set_debug_label(const std::string& value);
+    void set_debug_label(const std::string& value); // TODO Remove
 
-    [[nodiscard]] auto debug_label () const -> const std::string&;
-    [[nodiscard]] auto uses_mipmaps() const -> bool;
+    [[nodiscard]] auto get_debug_label() const -> const std::string&;
+    [[nodiscard]] auto uses_mipmaps   () const -> bool;
 
     auto get_lod_bias() const -> float { return m_lod_bias; }
 

@@ -161,14 +161,6 @@ Imgui_host::Imgui_host(
     ImGuiIO& io = m_imgui_context->IO;
     io.IniFilename = imgui_ini ? m_imgui_ini_path.c_str() : nullptr;
 
-    // "window" is slot / pseudo-resource which allows use rendergraph connection
-    // to make Imgui_window_scene_view a dependency for Imgui_host, forcing
-    // correct rendering order (Imgui_window_scene_view must be rendered before
-    // Imgui_host).
-    //
-    // TODO Imgui_renderer should carry dependencies using Rendergraph.
-    register_input(erhe::rendergraph::Routing::None, "window", erhe::rendergraph::Rendergraph_node_key::window);
-
     imgui_renderer.register_imgui_host(this);
 }
 

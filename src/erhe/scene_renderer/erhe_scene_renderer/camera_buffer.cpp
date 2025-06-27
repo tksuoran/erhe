@@ -91,7 +91,7 @@ auto Camera_buffer::update(
         fov_sides.up,
         fov_sides.down
     };
-    const float clip_depth_direction = viewport.reverse_depth ? -1.0f : 1.0f;
+    const float clip_depth_direction = -1.0f; // Reverse Z
     const float view_depth_near      = camera_projection.z_near;
     const float view_depth_far       = camera_projection.z_far;
     using erhe::graphics::as_span;

@@ -16,6 +16,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/depth_stencil_state.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_window/window.hpp"
@@ -351,6 +352,27 @@ Device::Device(erhe::window::Context_window& context_window)
         limits.max_fragment_shader_storage_blocks
     );
 
+    bool force_bindless_textures_off {false};
+    bool force_no_persistent_buffers {false};
+    bool force_no_direct_state_access{false};
+    bool force_no_multi_draw_indirect{false};
+    int  force_gl_version            {false};
+    int  force_glsl_version          {false};
+    bool capture_support             {false};
+    bool initial_clear               {false};
+    {
+        const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "graphics");
+        ini.get("post_processing",              configuration.post_processing);
+        ini.get("use_time_query",               configuration.use_time_query );
+        ini.get("force_bindless_textures_off",  force_bindless_textures_off);
+        ini.get("force_no_persistent_buffers",  force_no_persistent_buffers);
+        ini.get("force_no_direct_state_access", force_no_direct_state_access);
+        ini.get("force_no_multi_draw_indirect", force_no_multi_draw_indirect);
+        ini.get("force_gl_version",             force_gl_version);
+        ini.get("force_glsl_version",           force_glsl_version);
+        ini.get("initial_clear",                initial_clear);
+    }
+
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
         info.use_bindless_texture = true;
     }
@@ -358,6 +380,28 @@ Device::Device(erhe::window::Context_window& context_window)
         info.use_bindless_texture = false;
     }
     log_startup->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
+    if (info.use_bindless_texture) {
+#if defined(ERHE_SPIRV)
+        // 'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes
+        info.use_bindless_texture = false;
+        log_startup->warn("Force disabled GL_ARB_bindless_texture due to ERHE_SPIRV cmake setting");
+#else
+        if (force_bindless_textures_off) {
+            info.use_bindless_texture = false;
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting force_bindless_textures_off");
+        }
+        else
+        if (capture_support) {
+            info.use_bindless_texture = false;
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini enabling RenderDoc capture");
+        }
+#endif
+    }
+
+    const bool use_direct_state_access = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access) || (info.glsl_version >= 450);
+    if (!use_direct_state_access) {
+        log_startup->error("Your graphics driver does not support OpenGL direct state access: OpenGL version 4.5 or GL_ARB_direct_state_access is required. This is a fatal error.");
+    }
 
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
         ERHE_PROFILE_SCOPE("Sparse texture");
@@ -369,33 +413,10 @@ Device::Device(erhe::window::Context_window& context_window)
     log_startup->info("GL_ARB_sparse_texture supported : {}", info.use_sparse_texture);
 
     info.use_persistent_buffers = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
-    info.use_direct_state_access = (info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
     info.use_multi_draw_indirect = (info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_multi_draw_indirect);
     log_startup->info("Persistent Buffers supported:  {}", info.use_sparse_texture);
-    log_startup->info("Direct State Access supported: {}", info.use_direct_state_access);
     log_startup->info("Multi Draw Indirect supported: {}", info.use_multi_draw_indirect);
 
-    bool force_no_bindless           {false};
-    bool force_no_persistent_buffers {false};
-    bool force_no_direct_state_access{false};
-    bool force_no_multi_draw_indirect{false};
-    int  force_gl_version            {false};
-    int  force_glsl_version          {false};
-    bool capture_support             {false};
-    bool initial_clear               {false};
-    {
-        const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "graphics");
-        ini.get("reverse_depth",                configuration.reverse_depth  );
-        ini.get("post_processing",              configuration.post_processing);
-        ini.get("use_time_query",               configuration.use_time_query );
-        ini.get("force_no_bindless",            force_no_bindless);
-        ini.get("force_no_persistent_buffers",  force_no_persistent_buffers);
-        ini.get("force_no_direct_state_access", force_no_direct_state_access);
-        ini.get("force_no_multi_draw_indirect", force_no_multi_draw_indirect);
-        ini.get("force_gl_version",             force_gl_version);
-        ini.get("force_glsl_version",           force_glsl_version);
-        ini.get("initial_clear",                initial_clear);
-    }
     if (force_gl_version > 0) {
         info.gl_version = force_gl_version;
         log_startup->warn("Forced GL version to be {} due to erhe.ini setting", force_gl_version);
@@ -405,23 +426,12 @@ Device::Device(erhe::window::Context_window& context_window)
         log_startup->warn("Forced GLSL version to be {} due to erhe.ini setting", force_glsl_version);
     }
 
-    if (info.use_bindless_texture) {
-#if defined(ERHE_SPIRV)
-        // 'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes
-        info.use_bindless_texture = false;
-        log_startup->warn("Force disabled GL_ARB_bindless_texture due to ERHE_SPIRV cmake setting");
-#else
-        if (force_no_bindless || capture_support) {
-            info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting");
-        }
-#endif
-    }
-
-    if (!info.use_direct_state_access) { 
-        ERHE_FATAL("OpenGL driver does not support irect state access, required by erhe. This is a fatal error.");
-    }
-    // if (info.use_direct_state_access) { 
+    // info.use_direct_state_access = (info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
+    //
+    // if (!info.use_direct_state_access) {
+    //     ERHE_FATAL("OpenGL driver does not support irect state access, required by erhe. This is a fatal error.");
+    // }
+    // if (info.use_direct_state_access) {
     //     if (force_no_direct_state_access) {
     //         info.use_direct_state_access = false;
     //         log_startup->warn("Force disabled direct state access due to erhe.ini setting");
@@ -473,6 +483,9 @@ Device::Device(erhe::window::Context_window& context_window)
         gl::Internal_format::depth24_stencil8,
         gl::Internal_format::depth_stencil,
         gl::Internal_format::stencil_index8,
+        gl::Internal_format::depth_component16,
+        gl::Internal_format::depth_component24,
+        gl::Internal_format::depth_component32,
         gl::Internal_format::depth_component32f,
         gl::Internal_format::depth_component,
         gl::Internal_format::depth_component16
@@ -482,6 +495,7 @@ Device::Device(erhe::window::Context_window& context_window)
     for (const gl::Internal_format format : formats) {
         Format_properties properties{};
 
+        std::stringstream ss;
         GLint supported{};
         gl::get_internalformat_iv(gl::Texture_target::texture_2d, format, gl::Internal_format_p_name::internalformat_supported, 1, &supported);
         properties.supported = (supported == GL_TRUE);
@@ -489,7 +503,7 @@ Device::Device(erhe::window::Context_window& context_window)
             continue;
         }
 
-        log_startup->info("    {}", gl::c_str(format));
+        ss << "    " << gl::c_str(format) << ": ";
 
         auto get_int = [format](gl::Internal_format_p_name p_name, gl::Texture_target target = gl::Texture_target::texture_2d) -> int
         {
@@ -543,23 +557,26 @@ Device::Device(erhe::window::Context_window& context_window)
                 static_cast<GLsizei>(num_virtual_page_sizes),
                 properties.sparse_tile_z_sizes.data()
             );
-            std::stringstream ss;
-            for (GLint i = 0; i < num_virtual_page_sizes; ++i) {
-                ss << fmt::format(
-                    " {} x {} x {}",
-                    properties.sparse_tile_x_sizes[i],
-                    properties.sparse_tile_y_sizes[i],
-                    properties.sparse_tile_z_sizes[i]
-                );
+            if (num_virtual_page_sizes > 0) {
+                ss << "page sizes:";
+                for (GLint i = 0; i < num_virtual_page_sizes; ++i) {
+                    ss << fmt::format(
+                        " {} x {} x {}",
+                        properties.sparse_tile_x_sizes[i],
+                        properties.sparse_tile_y_sizes[i],
+                        properties.sparse_tile_z_sizes[i]
+                    );
+                }
             }
-            log_startup->info("    {} : num page sizes {} :{}", gl::c_str(format), num_virtual_page_sizes, ss.str());
         }
 
         {
             int num_sample_counts = get_int(gl::Internal_format_p_name::num_sample_counts, gl::Texture_target::texture_2d_multisample);
-            std::stringstream ss;
-            ss << fmt::format("    {} sample counts:", c_str(format));
             if (num_sample_counts > 0) {
+                if (num_virtual_page_sizes > 0) {
+                    ss << ", ";
+                }
+                ss << fmt::format("sample counts:", c_str(format));
                 properties.texture_2d_sample_counts.resize(num_sample_counts);
                 gl::get_internalformat_iv(
                     gl::Texture_target::texture_2d_multisample,
@@ -573,8 +590,8 @@ Device::Device(erhe::window::Context_window& context_window)
                     ss << fmt::format(" {}", count);
                 }
             }
-            log_startup->info(ss.str());
         }
+        log_startup->info(ss.str());
 
         properties.texture_2d_array_max_width  = get_int(gl::Internal_format_p_name::max_width, gl::Texture_target::texture_2d_array);
         properties.texture_2d_array_max_height = get_int(gl::Internal_format_p_name::max_height, gl::Texture_target::texture_2d_array);
@@ -598,14 +615,14 @@ Device::Device(erhe::window::Context_window& context_window)
     );
 }
 
-auto Device::depth_clear_value_pointer() const -> const float*
+auto Device::depth_clear_value_pointer(const bool reverse_depth) const -> const float*
 {
-    return configuration.reverse_depth ? &float_zero_value : &float_one_value;
+    return reverse_depth ? &float_zero_value : &float_one_value;
 }
 
-auto Device::depth_function(const gl::Depth_function depth_function) const -> gl::Depth_function
+auto Device::depth_function(const gl::Depth_function depth_function, const bool reverse_depth) const -> gl::Depth_function
 {
-    return configuration.reverse_depth ? reverse(depth_function) : depth_function;
+    return reverse_depth ? reverse(depth_function) : depth_function;
 }
 
 auto Device::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
@@ -620,26 +637,25 @@ auto Device::get_handle(const Texture& texture, const Sampler& sampler) const ->
     }
 }
 
-auto Device::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> gl::Internal_format
+auto Device::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> erhe::dataformat::Format
 {
     using namespace erhe::bit;
     const bool require_depth     = test_all_rhs_bits_set(flags, format_flag_require_depth    );
     const bool require_stencil   = test_all_rhs_bits_set(flags, format_flag_require_stencil  );
     const bool prefer_accuracy   = test_all_rhs_bits_set(flags, format_flag_prefer_accuracy  );
     const bool prefer_filterable = test_all_rhs_bits_set(flags, format_flag_prefer_filterable);
-    gl::Internal_format formats[] = {
-        gl::Internal_format::depth32f_stencil8,
-        gl::Internal_format::depth24_stencil8,
-        gl::Internal_format::depth_stencil,
-        gl::Internal_format::stencil_index8,
-        gl::Internal_format::depth_component32f,
-        gl::Internal_format::depth_component,
-        gl::Internal_format::depth_component16
+    erhe::dataformat::Format formats[] = {
+        erhe::dataformat::Format::format_d16_unorm,
+        erhe::dataformat::Format::format_x8_d24_unorm_pack32,
+        erhe::dataformat::Format::format_d32_sfloat,
+        erhe::dataformat::Format::format_s8_uint,
+        erhe::dataformat::Format::format_d24_unorm_s8_uint,
+        erhe::dataformat::Format::format_d32_sfloat_s8_uint
     };
 
-    gl::Internal_format best_format = gl::Internal_format{0};
+    erhe::dataformat::Format best_format = erhe::dataformat::Format::format_undefined;
     float best_score = 0.0f;
-    for (const auto format : formats) {
+    for (const erhe::dataformat::Format format : formats) {
         Format_properties properties = get_format_properties(format);
         if (!properties.supported) {
             continue;
@@ -687,7 +703,6 @@ auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
     };
 
     auto texture = std::make_shared<Texture>(*this, create_info);
-    texture->set_debug_label("dummy");
     const std::array<uint8_t, 16> dummy_pixel{
         0xee, 0x11, 0xdd, 0xff,
         0xcc, 0x11, 0xbb, 0xff,
@@ -696,7 +711,7 @@ auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
     };
     const std::span<const std::uint8_t> image_data{&dummy_pixel[0], dummy_pixel.size()};
 
-    texture->upload(create_info.internal_format, image_data, create_info.width, create_info.height);
+    texture->upload(create_info.pixelformat, image_data, create_info.width, create_info.height);
 
     return texture;
 }
@@ -1290,17 +1305,22 @@ void Device::end_of_frame()
     }
 
     // Find available frame sync slot and make new pending frame sync record
-    for (Frame_sync& frame_sync : m_frame_syncs) {
-        if (frame_sync.fence_sync == nullptr) {
-            frame_sync.frame_number = m_frame_number,
-            frame_sync.fence_sync   = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0),
-            frame_sync.result       = gl::Sync_status::timeout_expired;
-            m_pending_frames.push_back(m_frame_number);
-            ++m_frame_number;
-            return;
+    if (m_need_sync) {
+        for (Frame_sync& frame_sync : m_frame_syncs) {
+            if (frame_sync.fence_sync == nullptr) {
+                frame_sync.frame_number = m_frame_number,
+                frame_sync.fence_sync   = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0),
+                frame_sync.result       = gl::Sync_status::timeout_expired;
+                m_pending_frames.push_back(m_frame_number);
+                ++m_frame_number;
+                m_need_sync = false;
+                return;
+            }
         }
+        log_context->warn("Out of frame sync slots");
+    } else {
+        ++m_frame_number;
     }
-    ERHE_FATAL("Not enough frame sync slots");
 }
 
 void GPU_ring_buffer::wrap_write()
@@ -1418,6 +1438,7 @@ auto Device::get_frame_number() const -> uint64_t
 
 auto Device::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
 {
+    m_need_sync = true;
     std::size_t required_alignment = get_buffer_alignment(buffer_target);
     std::size_t alignment_byte_count_without_wrap{0};
     std::size_t available_byte_count_without_wrap{0};
@@ -1460,15 +1481,16 @@ auto Device::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_bu
 
 void Device::named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height)
 {
-    if (info.use_direct_state_access) {
-        gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
-    } else {
-        int current_renderbuffer = 0;
-        gl::get_integer_v(gl::Get_p_name::renderbuffer_binding, &current_renderbuffer);
-        gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, renderbuffer);
-        gl::renderbuffer_storage_multisample(gl::Renderbuffer_target::renderbuffer, samples, internalformat, width, height);
-        gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, current_renderbuffer);
-    }
+    gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
+    // if (info.use_direct_state_access) {
+    //     gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
+    // } else {
+    //     int current_renderbuffer = 0;
+    //     gl::get_integer_v(gl::Get_p_name::renderbuffer_binding, &current_renderbuffer);
+    //     gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, renderbuffer);
+    //     gl::renderbuffer_storage_multisample(gl::Renderbuffer_target::renderbuffer, samples, internalformat, width, height);
+    //     gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, current_renderbuffer);
+    // }
 }
 
 void Device::multi_draw_elements_indirect(
@@ -1482,13 +1504,21 @@ void Device::multi_draw_elements_indirect(
     gl::multi_draw_elements_indirect(mode, type, indirect, drawcount, stride);
 }
 
-auto Device::get_format_properties(gl::Internal_format format) const -> Format_properties
+auto Device::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
-    auto i = format_properties.find(format);
+    std::optional<gl::Internal_format> gl_format_opt = gl_helpers::convert_to_gl(format);
+    ERHE_VERIFY(gl_format_opt.has_value());
+    gl::Internal_format gl_format = gl_format_opt.value();
+    auto i = format_properties.find(gl_format);
     if (i == format_properties.end()) {
         return {};
     }
     return i->second;
+}
+
+auto Device::make_render_command_encoder(Render_pass& render_pass) -> std::unique_ptr<Render_command_encoder>
+{
+    return std::make_unique<Render_command_encoder>(*this, render_pass);
 }
 
 } // namespace erhe::graphics
