@@ -230,17 +230,26 @@ auto Post_processing_node::update_size() -> bool
 void Post_processing_node::update_parameters()
 {
     // Prepare parameter buffer
-    const erhe::graphics::Sampler&  sampler    = m_post_processing.get_sampler();
-    const std::size_t               entry_size = m_post_processing.get_parameter_block().size_bytes();
-    const Post_processing::Offsets& offsets    = m_post_processing.get_offsets();
+    const erhe::graphics::Sampler&  sampler_linear                = m_post_processing.get_sampler_linear();
+    const erhe::graphics::Sampler&  sampler_linear_mipmap_nearest = m_post_processing.get_sampler_linear_mipmap_nearest();
+    const std::size_t               entry_size                    = m_post_processing.get_parameter_block().size_bytes();
+    const Post_processing::Offsets& offsets                       = m_post_processing.get_offsets();
 
     const std::size_t level_offset_size = erhe::graphics::align_offset(
         entry_size,
         m_graphics_device.get_buffer_alignment(parameter_buffer.target())
     );
 
-    const uint64_t downsample_handle = m_graphics_device.get_handle(*downsample_texture, sampler);
-    const uint64_t upsample_handle   = m_graphics_device.get_handle(*upsample_texture,   sampler);
+    const std::shared_ptr<erhe::graphics::Texture> input_texture = get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    ERHE_VERIFY(input_texture);
+
+    const uint64_t input_handle      = m_graphics_device.get_handle(*input_texture.get(), sampler_linear);
+    const uint64_t downsample_handle = m_graphics_device.get_handle(*downsample_texture,  sampler_linear_mipmap_nearest);
+    const uint64_t upsample_handle   = m_graphics_device.get_handle(*upsample_texture,    sampler_linear_mipmap_nearest);
+    const uint32_t input_texture_handle[2] = {
+        static_cast<uint32_t>((input_handle & 0xffffffffu)),
+        static_cast<uint32_t>(input_handle >> 32u)
+    };
     const uint32_t downsample_texture_handle[2] = {
         static_cast<uint32_t>((downsample_handle & 0xffffffffu)),
         static_cast<uint32_t>(downsample_handle >> 32u)
@@ -249,8 +258,9 @@ void Post_processing_node::update_parameters()
         static_cast<uint32_t>((upsample_handle & 0xffffffffu)),
         static_cast<uint32_t>(upsample_handle >> 32u)
     };
+    const std::span<const uint32_t> input_texture_handle_cpu_data     {&input_texture_handle     [0], 2};
     const std::span<const uint32_t> downsample_texture_handle_cpu_data{&downsample_texture_handle[0], 2};
-    const std::span<const uint32_t> upsample_texture_handle_cpu_data  {&upsample_texture_handle[0], 2};
+    const std::span<const uint32_t> upsample_texture_handle_cpu_data  {&upsample_texture_handle  [0], 2};
 
     size_t                    level_count        = level_widths.size();
     std::size_t               write_offset       = 0;
@@ -267,6 +277,7 @@ void Post_processing_node::update_parameters()
             1.0f / static_cast<float>(level_widths.at(source_level)),
             1.0f / static_cast<float>(level_heights.at(source_level))
         };
+        write<uint32_t>(gpu_uint_data,  write_offset + offsets.input_texture,         input_texture_handle_cpu_data);
         write<uint32_t>(gpu_uint_data,  write_offset + offsets.downsample_texture,    downsample_texture_handle_cpu_data);
         write<uint32_t>(gpu_uint_data,  write_offset + offsets.upsample_texture,      upsample_texture_handle_cpu_data);
         write<float   >(gpu_float_data, write_offset + offsets.texel_scale,           std::span<float>{&texel_scale[0], 2});
@@ -369,11 +380,19 @@ Post_processing::Post_processing(erhe::graphics::Device& d, Editor_context& edit
     : m_context         {editor_context}
     , m_fragment_outputs{erhe::graphics::Fragment_output{.name = "out_color", .type = gl::Fragment_shader_output_type::float_vec4, .location = 0}}
     , m_dummy_texture   {d.create_dummy_texture()}
-    , m_linear_mipmap_nearest_sampler{
+    , m_sampler_linear{
         d,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
+            .min_filter  = gl::Texture_min_filter::linear,
             .mag_filter  = gl::Texture_mag_filter::linear,
+            .debug_label = "linear"
+        }
+    }
+    , m_sampler_linear_mipmap_nearest{
+        d,
+        erhe::graphics::Sampler_create_info{
+            .min_filter = gl::Texture_min_filter::linear_mipmap_nearest,
+            .mag_filter = gl::Texture_mag_filter::linear,
             .debug_label = "linear_mipmap_nearest"
         }
     }
@@ -504,9 +523,9 @@ void Post_processing::post_process(Post_processing_node& node)
         )
     );
 
-    const uint64_t input_handle      = graphics_device.get_handle(*input_texture.get(),     m_linear_mipmap_nearest_sampler);
-    const uint64_t downsample_handle = graphics_device.get_handle(*node.downsample_texture, m_linear_mipmap_nearest_sampler);
-    const uint64_t upsample_handle   = graphics_device.get_handle(*node.upsample_texture,   m_linear_mipmap_nearest_sampler);
+    const uint64_t input_handle      = graphics_device.get_handle(*input_texture.get(),     m_sampler_linear);
+    const uint64_t downsample_handle = graphics_device.get_handle(*node.downsample_texture, m_sampler_linear_mipmap_nearest);
+    const uint64_t upsample_handle   = graphics_device.get_handle(*node.upsample_texture,   m_sampler_linear_mipmap_nearest);
     if (m_context.graphics_device->info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make post processing textures resident");
         gl::make_texture_handle_resident_arb(input_handle);
@@ -517,11 +536,11 @@ void Post_processing::post_process(Post_processing_node& node)
         ERHE_VERIFY(m_downsample_texture_resource->get_texture_unit() == s_downsample_texture);
         ERHE_VERIFY(m_upsample_texture_resource  ->get_texture_unit() == s_upsample_texture);
         gl::bind_texture_unit(s_input_texture,      input_texture->gl_name());
-        gl::bind_sampler     (s_input_texture,      m_linear_mipmap_nearest_sampler.gl_name());
+        gl::bind_sampler     (s_input_texture,      m_sampler_linear.gl_name());
         gl::bind_texture_unit(s_downsample_texture, node.downsample_texture->gl_name());
-        gl::bind_sampler     (s_downsample_texture, m_linear_mipmap_nearest_sampler.gl_name());
+        gl::bind_sampler     (s_downsample_texture, m_sampler_linear_mipmap_nearest.gl_name());
         gl::bind_texture_unit(s_upsample_texture,   node.upsample_texture->gl_name());
-        gl::bind_sampler     (s_upsample_texture,   m_linear_mipmap_nearest_sampler.gl_name());
+        gl::bind_sampler     (s_upsample_texture,   m_sampler_linear_mipmap_nearest.gl_name());
     }
 
     // Downsample passes

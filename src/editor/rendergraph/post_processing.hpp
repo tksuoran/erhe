@@ -110,9 +110,10 @@ public:
     [[nodiscard]] auto get_nodes() -> const std::vector<std::shared_ptr<Post_processing_node>>&;
     void post_process(Post_processing_node& node);
 
-    auto get_offsets        () const -> const Offsets&                         { return m_offsets; }
-    auto get_parameter_block() const -> const erhe::graphics::Shader_resource& { return m_parameter_block; }
-    auto get_sampler        () const -> const erhe::graphics::Sampler&         { return m_linear_mipmap_nearest_sampler; }
+    auto get_offsets                      () const -> const Offsets&                         { return m_offsets; }
+    auto get_parameter_block              () const -> const erhe::graphics::Shader_resource& { return m_parameter_block; }
+    auto get_sampler_linear               () const -> const erhe::graphics::Sampler&         { return m_sampler_linear; }
+    auto get_sampler_linear_mipmap_nearest() const -> const erhe::graphics::Sampler&         { return m_sampler_linear_mipmap_nearest; }
 
 private:
     [[nodiscard]] auto make_program(
@@ -147,7 +148,8 @@ private:
     std::vector<std::shared_ptr<Post_processing_node>> m_nodes;
     erhe::graphics::Fragment_outputs                   m_fragment_outputs;
     std::shared_ptr<erhe::graphics::Texture>           m_dummy_texture;
-    erhe::graphics::Sampler                            m_linear_mipmap_nearest_sampler;
+    erhe::graphics::Sampler                            m_sampler_linear;
+    erhe::graphics::Sampler                            m_sampler_linear_mipmap_nearest;
     erhe::graphics::Shader_resource                    m_parameter_block;
     Offsets                                            m_offsets;
     erhe::graphics::Vertex_input_state                 m_empty_vertex_input;
