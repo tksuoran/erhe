@@ -7,22 +7,14 @@
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_math/viewport.hpp"
 
-namespace erhe::graphics {
-    class Device;
-}
-namespace erhe::imgui {
-    class Imgui_windows;
-}
-namespace erhe::rendergraph {
-    class Rendergraph;
-}
-namespace erhe::scene_renderer {
-    class Forward_renderer;
-}
+namespace erhe::graphics       { class Device; }
+namespace erhe::imgui          { class Imgui_windows; }
+namespace erhe::rendergraph    { class Rendergraph; }
+namespace erhe::scene_renderer { class Forward_renderer; }
 
 namespace editor {
 
-class Debug_view_window;
+class Depth_visualization_window;
 class Depth_to_color_rendergraph_node;
 class Editor_context;
 class Editor_rendering;
@@ -57,27 +49,11 @@ private:
     int                                 m_light_index{};
 };
 
-class Debug_view_node : public erhe::rendergraph::Rendergraph_node
-{
-public:
-    explicit Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph);
-
-    // Implements Rendergraph_node
-    auto get_type_name() const -> std::string_view override { return "Debug_view_node"; }
-    void execute_rendergraph_node() override;
-    auto get_consumer_input_viewport(erhe::rendergraph::Routing resource_routing, int key, int depth = 0) const -> erhe::math::Viewport override;
-
-    void set_area_size(int size);
-
-private:
-    int m_area_size{0};
-};
-
 /// Rendergraph sink node for showing texture in ImGui window
-class Debug_view_window : public erhe::imgui::Imgui_window
+class Depth_visualization_window : public erhe::imgui::Imgui_window
 {
 public:
-    Debug_view_window(
+    Depth_visualization_window(
         erhe::imgui::Imgui_renderer&            imgui_renderer,
         erhe::imgui::Imgui_windows&             imgui_windows,
         erhe::rendergraph::Rendergraph&         rendergraph,
@@ -93,13 +69,12 @@ public:
     void hidden() override;
 
 private:
-    void set_shadow_renderer_node(erhe::rendergraph::Rendergraph& rendergraph, Shadow_render_node* node);
+    void set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node);
 
     Editor_context&                                  m_context;
-    std::unique_ptr<Depth_to_color_rendergraph_node> m_depth_to_color_node;
-    Debug_view_node                                  m_node;
-    Shadow_render_node*                              m_shadow_renderer_node{nullptr};
-    int                                              m_selected_node{0};
+    std::unique_ptr<Depth_to_color_rendergraph_node> m_depth_to_color_node{};
+    std::weak_ptr<Shadow_render_node>                m_shadow_renderer_node{};
+    int                                              m_selected_shadow_node{0};
 };
 
 } // namespace editor

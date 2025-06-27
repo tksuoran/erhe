@@ -128,10 +128,14 @@ constexpr std::array INTERNAL_FORMAT_INFO =
     InternalFormatFormatType{ gl::Internal_format::depth_component16, gl::Pixel_format::depth_component, gl::Pixel_type::unsigned_int   }
 };
 
-auto get_upload_pixel_byte_count(const gl::Internal_format internalformat)-> size_t
+auto get_upload_pixel_byte_count(const erhe::dataformat::Format pixelformat)-> size_t
 {
+    const std::optional<gl::Internal_format> gl_internal_format_opt = gl_helpers::convert_to_gl(pixelformat);
+    ERHE_VERIFY(gl_internal_format_opt.has_value());
+    const gl::Internal_format internal_format = gl_internal_format_opt.value();
+
     for (const auto& entry : INTERNAL_FORMAT_INFO) {
-        if (entry.internal_format == internalformat) {
+        if (entry.internal_format == internal_format) {
             // For now, there are no packed entries
             return component_count(entry.format) * byte_count(entry.type);
         }
@@ -139,10 +143,14 @@ auto get_upload_pixel_byte_count(const gl::Internal_format internalformat)-> siz
     ERHE_FATAL("Bad internal format");
 }
 
-auto get_format_and_type(const gl::Internal_format internalformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool
+auto get_format_and_type(erhe::dataformat::Format pixelformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool
 {
+    const std::optional<gl::Internal_format> gl_internal_format_opt = gl_helpers::convert_to_gl(pixelformat);
+    ERHE_VERIFY(gl_internal_format_opt.has_value());
+    const gl::Internal_format internal_format = gl_internal_format_opt.value();
+
     for (const auto& entry : INTERNAL_FORMAT_INFO) {
-        if (entry.internal_format == internalformat) {
+        if (entry.internal_format == internal_format) {
             format = entry.format;
             type   = entry.type;
             return true;
@@ -151,7 +159,220 @@ auto get_format_and_type(const gl::Internal_format internalformat, gl::Pixel_for
     return false;
 }
 
-auto Texture::storage_dimensions(const gl::Texture_target target) -> int
+auto Texture::is_array_target(gl::Texture_target target) -> bool
+{
+    switch (target) {
+        case gl::Texture_target::texture_1d_array:
+        case gl::Texture_target::texture_2d_array:
+        case gl::Texture_target::texture_2d_multisample_array:
+        case gl::Texture_target::texture_cube_map_array: {
+            return true;
+        }
+        default: {
+            return false;
+        }
+    }
+}
+
+void convert_texture_dimensions_from_gl(const gl::Texture_target target, int& width, int& height, int& depth, int& array_layer_count)
+{
+    switch (target) {
+        //using enum gl::Texture_target;
+        case gl::Texture_target::texture_buffer: {
+            array_layer_count = 1;
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height == 1);
+            ERHE_VERIFY(depth == 1);
+            return;
+        }
+
+        case gl::Texture_target::texture_1d: {
+            array_layer_count = 1;
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height == 1);
+            ERHE_VERIFY(depth == 1);
+            return;
+        }
+
+        case gl::Texture_target::texture_1d_array: {
+            ERHE_VERIFY(height >= 1);
+            array_layer_count = height;
+            height = 1;
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(depth == 1);
+            return;
+        }
+        case gl::Texture_target::texture_2d:
+        case gl::Texture_target::texture_2d_multisample:
+        case gl::Texture_target::texture_rectangle:
+        {
+            array_layer_count = 1;
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            ERHE_VERIFY(depth == 1);
+            return;
+        }
+        case gl::Texture_target::texture_cube_map: {
+            array_layer_count = 1;
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            ERHE_VERIFY(depth == 6);
+            return;
+        }
+
+        case gl::Texture_target::texture_2d_array:
+        case gl::Texture_target::texture_2d_multisample_array: {
+            ERHE_VERIFY(depth >= 1);
+            array_layer_count = depth;
+            depth = 1;
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            return;
+        }
+        case gl::Texture_target::texture_3d: {
+            array_layer_count = 1;
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            ERHE_VERIFY(depth >= 1);
+            return;
+        }
+        case gl::Texture_target::texture_cube_map_array: {
+            ERHE_VERIFY(depth % 6 == 0);
+            array_layer_count = depth / 6;
+            depth = 1;
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            return;
+        }
+
+        default: {
+            ERHE_FATAL("Bad texture target");
+        }
+    }
+}
+
+void convert_texture_dimensions_to_gl(const gl::Texture_target target, int& width, int& height, int& depth, int array_layer_count)
+{
+    switch (target) {
+        //using enum gl::Texture_target;
+        case gl::Texture_target::texture_buffer: {
+            ERHE_VERIFY(width == 0);
+            ERHE_VERIFY(height == 0);
+            ERHE_VERIFY(depth == 0);
+            ERHE_VERIFY(array_layer_count == 0);
+            return;
+        }
+
+        case gl::Texture_target::texture_1d: {
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height == 1);
+            ERHE_VERIFY(depth == 1);
+            ERHE_VERIFY(array_layer_count == 0);
+            return;
+        }
+
+        case gl::Texture_target::texture_1d_array: {
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height == 1);
+            ERHE_VERIFY(depth == 1);
+            ERHE_VERIFY(array_layer_count >= 1);
+            height = array_layer_count;
+            return;
+        }
+        case gl::Texture_target::texture_2d:
+        case gl::Texture_target::texture_2d_multisample:
+        case gl::Texture_target::texture_rectangle: {
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            ERHE_VERIFY(depth == 1);
+            ERHE_VERIFY(array_layer_count == 0);
+            return;
+        }
+        case gl::Texture_target::texture_cube_map: {
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            ERHE_VERIFY(depth == 6); // TODO Is this correct?
+            ERHE_VERIFY(array_layer_count == 0);
+            return;
+        }
+
+        case gl::Texture_target::texture_2d_array:
+        case gl::Texture_target::texture_2d_multisample_array: {
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            ERHE_VERIFY(array_layer_count >= 1);
+            depth = array_layer_count;
+            return;
+        }
+        case gl::Texture_target::texture_3d: {
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            ERHE_VERIFY(depth >= 1);
+            ERHE_VERIFY(array_layer_count == 0);
+            return;
+        }
+        case gl::Texture_target::texture_cube_map_array: {
+            ERHE_VERIFY(width >= 1);
+            ERHE_VERIFY(height >= 1);
+            ERHE_VERIFY(depth == 6);
+            ERHE_VERIFY(array_layer_count >= 1);
+            depth = 6 * array_layer_count;
+            return;
+        }
+
+        default: {
+            ERHE_FATAL("Bad texture target");
+        }
+    }
+}
+
+void convert_texture_offset_to_gl(const gl::Texture_target target, int& x, int& y, int& z, int array_layer)
+{
+    static_cast<void>(x);
+    static_cast<void>(y);
+    switch (target) {
+        //using enum gl::Texture_target;
+        case gl::Texture_target::texture_buffer: {
+            return;
+        }
+
+        case gl::Texture_target::texture_1d: {
+            return;
+        }
+
+        case gl::Texture_target::texture_1d_array: {
+            z = array_layer;
+            return;
+        }
+        case gl::Texture_target::texture_2d:
+        case gl::Texture_target::texture_2d_multisample:
+        case gl::Texture_target::texture_rectangle: {
+            return;
+        }
+        case gl::Texture_target::texture_cube_map: {
+            return;
+        }
+
+        case gl::Texture_target::texture_2d_array:
+        case gl::Texture_target::texture_2d_multisample_array: {
+            z = array_layer;
+            return;
+        }
+        case gl::Texture_target::texture_3d: {
+            return;
+        }
+        case gl::Texture_target::texture_cube_map_array: {
+            z = 6 * array_layer;
+            return;
+        }
+
+        default: {
+            ERHE_FATAL("Bad texture target");
+        }
+    }
+}
+
+auto Texture::get_storage_dimensions(const gl::Texture_target target) -> int
 {
     switch (target) {
         //using enum gl::Texture_target;
@@ -184,7 +405,7 @@ auto Texture::storage_dimensions(const gl::Texture_target target) -> int
     }
 }
 
-auto Texture::mipmap_dimensions(const gl::Texture_target target) -> int
+auto Texture::get_mipmap_dimensions(const gl::Texture_target target) -> int
 {
     switch (target) {
         //using enum gl::Texture_target;
@@ -259,7 +480,7 @@ auto get_sampler_from_handle(uint64_t handle) -> GLuint
     return static_cast<GLuint>((handle & 0xffffffff00000000u) >> 32);
 }
 
-auto Texture::size_level_count(int size) -> int
+auto Texture::get_size_level_count(int size) -> int
 {
     int level_count = size > 0 ? 1 : 0;
 
@@ -272,15 +493,15 @@ auto Texture::size_level_count(int size) -> int
 
 auto Texture_create_info::calculate_level_count(const int width, const int height, const int depth) -> int
 {
-    const auto x_level_count = Texture::size_level_count(width);
-    const auto y_level_count = Texture::size_level_count(height);
-    const auto z_level_count = Texture::size_level_count(depth);
+    const auto x_level_count = Texture::get_size_level_count(width);
+    const auto y_level_count = Texture::get_size_level_count(height);
+    const auto z_level_count = Texture::get_size_level_count(depth);
     return std::max(std::max(x_level_count, y_level_count), z_level_count);
 }
 
 auto Texture_create_info::calculate_level_count() const -> int
 {
-    const auto dimensions = Texture::mipmap_dimensions(target);
+    const auto dimensions = Texture::get_mipmap_dimensions(target);
 
     if (dimensions >= 1) {
         if (width == 0) {
@@ -312,17 +533,18 @@ auto Texture_create_info::calculate_level_count() const -> int
 auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Texture>& view_source) -> Texture_create_info
 {
     Texture_create_info create_info{device};
-    create_info.target                 = view_source->target();
-    create_info.internal_format        = view_source->internal_format();
-    create_info.use_mipmaps            = view_source->level_count() > 1;
-    create_info.fixed_sample_locations = view_source->fixed_sample_locations();
+    create_info.target                 = view_source->get_target();
+    create_info.pixelformat            = view_source->get_pixelformat();
+    create_info.use_mipmaps            = view_source->get_level_count() > 1;
+    create_info.fixed_sample_locations = view_source->get_fixed_sample_locations();
     create_info.sparse                 = view_source->is_sparse();
-    create_info.sample_count           = view_source->sample_count();
-    create_info.width                  = view_source->width(); // TODO view_min_level
-    create_info.height                 = view_source->height();
-    create_info.depth                  = view_source->depth();
-    create_info.level_count            = view_source->level_count();
-    create_info.debug_label            = fmt::format("View of {}", view_source->debug_label());
+    create_info.sample_count           = view_source->get_sample_count();
+    create_info.width                  = view_source->get_width(); // TODO view_min_level
+    create_info.height                 = view_source->get_height();
+    create_info.depth                  = view_source->get_depth();
+    create_info.array_layer_count      = view_source->get_array_layer_count();
+    create_info.level_count            = view_source->get_level_count();
+    create_info.debug_label            = fmt::format("View of {}", view_source->get_debug_label());
     create_info.view_source            = view_source;
     return create_info;
 }
@@ -331,63 +553,106 @@ Texture::Texture(Device& device, const Create_info& create_info)
     : Item                    {create_info.debug_label}
     , m_handle                {device, create_info.target, create_info.wrap_texture_name, create_info.view_source ? Gl_texture::texture_view : Gl_texture::not_texture_view}
     , m_target                {create_info.target}
-    , m_internal_format       {create_info.internal_format}
+    , m_pixelformat           {create_info.pixelformat}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
     , m_sample_count          {create_info.sample_count}
+    , m_width                 {create_info.width}
+    , m_height                {create_info.height}
+    , m_depth                 {create_info.depth}
+    , m_array_layer_count     {create_info.array_layer_count}
     , m_level_count           {
         (create_info.level_count != 0)
             ? create_info.level_count
             : create_info.calculate_level_count()
     }
-    , m_width                 {create_info.width}
-    , m_height                {create_info.height}
-    , m_depth                 {create_info.depth}
     , m_buffer                {create_info.buffer}
+    , m_debug_label           {create_info.debug_label}
 {
     ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(
-        log_texture,
-        "New texture {} {}x{} {} sample count = {}",
-        gl_name(),
-        m_width,
-        m_height,
-        gl::c_str(m_internal_format),
-        m_sample_count
+        log_texture, "New texture {} {}x{}x{} [{}] {} sample count = {}",
+        gl_name(), m_width, m_height, m_depth, m_array_count,
+        gl::c_str(m_internal_format), m_sample_count
     );
 
     enable_flag_bits(erhe::Item_flags::show_in_ui);
     if (!create_info.view_source) {
-        set_debug_label(create_info.debug_label);
+        std::string debug_label = fmt::format("(T:{}) {}", gl_name(), m_debug_label);
+        //std::string debug_label{"abcd"};
+        // label contains a string used to label an object.
+        // length contains the number of characters in label.
+        // If length is negative, then label contains a null-terminated string.
+        // If label is NULL, any debug label is effectively removed from the object.
+        gl::object_label(
+            gl::Object_identifier::texture, // identifier
+            gl_name(),                      // name
+            -1,                             // length
+            debug_label.c_str()             // label
+        );
+
+        std::string debug_label_check{};
+        GLsizei length{0};
+        // label will be null-terminated.
+        // The actual number of characters written into label, excluding the null terminator, is returned in length.
+        // If length is NULL, no length is returned.
+        // The maximum number of characters that may be written into label, including the null terminator, is specified by bufSize.
+        // If no debug label was specified for the object then label will contain a null-terminated empty string, and zero will be returned in length.
+        // If label is NULL and length is non-NULL then no string will be returned and the length of the label will be returned in length.
+
+        // First, query length
+        gl::get_object_label(
+            gl::Object_identifier::texture, // identifier
+            gl_name(),                      // name
+            0,                              // bufSize
+            &length,                        // length
+            nullptr                         // label
+        );
+        if (length > 0) {
+            // Second, query label
+            debug_label_check.resize(length + 1); // length excluding nul terminator
+            gl::get_object_label(
+                gl::Object_identifier::texture, // identifier
+                gl_name(),                      // name
+                length + 1,                     // bufSize
+                nullptr,                        // length
+                debug_label_check.data()        // label
+            );
+        }
+        const int compare_result = debug_label.compare(debug_label_check) == 0;
+        ERHE_VERIFY(compare_result == 0);
     }
 
-    //// TODO Device& device = create_info.device;
-    m_sample_count = std::min(m_sample_count, device.limits.max_samples);
-    if (gl_helpers::has_color(m_internal_format) || gl_helpers::has_alpha(m_internal_format)) {
-        m_sample_count = std::min(m_sample_count, device.limits.max_color_texture_samples);
-    }
-    if (gl_helpers::has_depth(m_internal_format) || gl_helpers::has_stencil(m_internal_format)) {
-        m_sample_count = std::min(m_sample_count, device.limits.max_depth_texture_samples);
-    }
-    if (gl_helpers::is_integer(m_internal_format)) {
-        m_sample_count = std::min(m_sample_count, device.limits.max_integer_samples);
+    // TODO consider different texture targets
+    if (create_info.sample_count > 0) {
+        const Format_properties format_properties = device.get_format_properties(create_info.pixelformat);
+        for (int sample_count : format_properties.texture_2d_sample_counts) {
+            m_sample_count = sample_count;
+            if (sample_count >= create_info.sample_count) {
+                break;
+            }
+        }
     }
 
-    const auto dimensions = storage_dimensions(m_target);
+    const auto dimensions = get_storage_dimensions(m_target);
 
     if (create_info.sparse && device.info.use_sparse_texture) {
         gl::texture_parameter_i(m_handle.gl_name(), gl::Texture_parameter_name::texture_sparse_arb, GL_TRUE);
         m_is_sparse = true;
     }
 
-    if (create_info.wrap_texture_name != 0) {
-        // Current limitation
-        ERHE_VERIFY(create_info.target == gl::Texture_target::texture_2d);
+    std::optional<gl::Internal_format> internal_format_opt = gl_helpers::convert_to_gl(m_pixelformat);
+    ERHE_VERIFY(internal_format_opt.has_value());
+    gl::Internal_format internal_format = internal_format_opt.value();
 
-        //// Store original texture 2d binding
-        //GLint original_texture_2d_binding{0};
-        //gl::get_integer_v(gl::Get_p_name::texture_binding_2d, &original_texture_2d_binding);
-        //gl::bind_texture(gl::Texture_target::texture_2d, gl_name());
+    if (create_info.wrap_texture_name != 0) {
+        // Current limitation TODO is this still correct?
+        ERHE_VERIFY(create_info.target == gl::Texture_target::texture_2d);
+        GLint target_i{0};
+        gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_TARGET), &target_i);
+        gl::Texture_target texture_target = static_cast<gl::Texture_target>(target_i);
+        m_target = texture_target;
+
         ERHE_VERIFY(gl::is_texture(gl_name()));
         GLint max_framebuffer_width {0};
         GLint max_framebuffer_height{0};
@@ -403,24 +668,24 @@ Texture::Texture(Device& device, const Create_info& create_info)
         GLint internal_format_i {0};
         gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_width,  &width);
         gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_height, &height);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_DEPTH),                  &depth);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_depth,  &depth);
         gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES),                &samples);
         gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_FIXED_SAMPLE_LOCATIONS), &fixed_sample_locations);
         gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_internal_format, &internal_format_i);
-        gl::Internal_format internal_format = static_cast<gl::Internal_format>(internal_format_i);
-        ERHE_VERIFY(width == create_info.width);
-        ERHE_VERIFY(height == create_info.height);
-        m_width           = width;
-        m_height          = height;
-        m_depth           = depth;
+        internal_format = static_cast<gl::Internal_format>(internal_format_i);
+
+        m_width  = width;
+        m_height = height;
+        m_depth  = depth;
+        convert_texture_dimensions_from_gl(m_target, m_width, m_height, m_depth, m_array_layer_count);
+
+        ERHE_VERIFY(m_width == create_info.width);
+        ERHE_VERIFY(m_height == create_info.height);
+
         m_sample_count    = samples;
-        m_internal_format = internal_format;
-        GLint target_i          {0};
+        m_pixelformat     = gl_helpers::convert_from_gl(internal_format);
         GLint immutable_format_i{0};
         GLint immutable_levels  {0};
-        gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_TARGET),           &target_i);
-        gl::Texture_target texture_target = static_cast<gl::Texture_target>(target_i);
-        m_target       = texture_target;
         gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_IMMUTABLE_FORMAT), &immutable_format_i);
         gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_IMMUTABLE_LEVELS), &immutable_levels);
         GLint red_size{0};
@@ -434,17 +699,17 @@ Texture::Texture(Device& device, const Create_info& create_info)
         GLint blue_type{0};
         GLint alpha_type{0};
         GLint depth_type{0};
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_RED_SIZE), &red_size);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_GREEN_SIZE), &green_size);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_BLUE_SIZE), &blue_size);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_ALPHA_SIZE), &alpha_size);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_DEPTH_SIZE), &depth_size);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_STENCIL_SIZE), &stencil_size);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_RED_TYPE), &red_type);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_GREEN_TYPE), &green_type);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_BLUE_TYPE), &blue_type);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_ALPHA_TYPE), &alpha_type);
-        gl::get_texture_level_parameter_iv(gl_name(), 0, static_cast<gl::Get_texture_parameter>(GL_TEXTURE_DEPTH_TYPE), &depth_type);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_red_size,     &red_size);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_green_size,   &green_size);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_blue_size,    &blue_size);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_alpha_size,   &alpha_size);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_depth_size,   &depth_size);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_stencil_size, &stencil_size);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_red_type,     &red_type);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_green_type,   &green_type);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_blue_type,    &blue_type);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_alpha_type,   &alpha_type);
+        gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_depth_type,   &depth_type);
         static_cast<void>(red_size);
         static_cast<void>(green_size);
         static_cast<void>(blue_size);
@@ -460,40 +725,51 @@ Texture::Texture(Device& device, const Create_info& create_info)
         //gl::Internal_format immutable_internal_format = static_cast<gl::Internal_format>(immutable_format_i);
         gl::texture_parameter_i(gl_name(), gl::Texture_parameter_name::texture_min_filter, GL_NEAREST);
         gl::texture_parameter_i(gl_name(), gl::Texture_parameter_name::texture_mag_filter, GL_NEAREST);
+        m_level_count = Texture_create_info::calculate_level_count(m_width, m_height, m_depth);
         return;
     }
 
     if (create_info.view_source) {
         gl::texture_view(
-            gl_name(), m_target, create_info.view_source->gl_name(), m_internal_format,
-            create_info.view_min_level, create_info.level_count, create_info.view_min_layer, 1 // TODO layer count
+            gl_name(), m_target, create_info.view_source->gl_name(), internal_format,
+            create_info.view_base_level, create_info.level_count, create_info.view_base_array_layer, 1 // TODO layer count
         );
-        set_debug_label(create_info.debug_label);
+        std::string debug_label = fmt::format("(T:{}) {} (texture view)", gl_name(), m_debug_label);
+        gl::object_label(
+            gl::Object_identifier::texture,
+            gl_name(),
+            -1, //static_cast<GLsizei>(debug_label.length()),
+            debug_label.c_str()
+        );
     } else {
+        int gl_width  = m_width;
+        int gl_height = m_height;
+        int gl_depth  = m_depth;
+        convert_texture_dimensions_to_gl(m_target, gl_width, gl_height, gl_depth, m_array_layer_count);
         switch (dimensions) {
             case 0: {
                 ERHE_VERIFY(m_buffer != nullptr);
                 ERHE_VERIFY(m_sample_count == 0);
-                gl::texture_buffer(gl_name(), m_internal_format, m_buffer->gl_name());
+                gl::texture_buffer(gl_name(), internal_format, m_buffer->gl_name());
                 break;
             }
 
             case 1: {
                 ERHE_VERIFY(m_sample_count == 0);
-                gl::texture_storage_1d(gl_name(), m_level_count, m_internal_format, m_width);
+                gl::texture_storage_1d(gl_name(), m_level_count, internal_format, gl_width);
                 break;
             }
 
             case 2: {
                 if (m_sample_count == 0) {
-                    gl::texture_storage_2d(gl_name(), m_level_count, m_internal_format, m_width, m_height);
+                    gl::texture_storage_2d(gl_name(), m_level_count, internal_format, gl_width, gl_height);
                 } else {
                     gl::texture_storage_2d_multisample(
                         gl_name(),
                         m_sample_count,
-                        m_internal_format,
-                        m_width,
-                        m_height,
+                        internal_format,
+                        gl_width,
+                        gl_height,
                         m_fixed_sample_locations ? GL_TRUE : GL_FALSE
                     );
                 }
@@ -501,7 +777,7 @@ Texture::Texture(Device& device, const Create_info& create_info)
             }
 
             case 3: {
-                gl::texture_storage_3d(gl_name(), m_level_count, m_internal_format, m_width, m_height, m_depth);
+                gl::texture_storage_3d(gl_name(), m_level_count, internal_format, gl_width, gl_height, gl_depth);
                 break;
             }
 
@@ -513,11 +789,12 @@ Texture::Texture(Device& device, const Create_info& create_info)
 
     SPDLOG_LOGGER_TRACE(
         log_texture,
-        "Created texture {} {}x{} {} sample count = {}",
+        "Created texture {} / {} {}x{} {} sample count = {}",
+        m_debug_label,
         gl_name(),
         m_width,
         m_height,
-        gl::c_str(m_internal_format),
+        erhe::dataformat::c_str(m_pixelformat),
         m_sample_count
     );
 }
@@ -545,21 +822,23 @@ auto Texture::is_shown_in_ui() const -> bool
 ////     return i->second;
 //// }
 
-void Texture::upload(const gl::Internal_format internal_format, const int width, const int height, const int depth)
+void Texture::upload(const erhe::dataformat::Format pixelformat, int width, int height, int depth, int array_layer_count)
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(internal_format == m_internal_format);
+    ERHE_VERIFY(pixelformat == m_pixelformat);
     ERHE_VERIFY(width  >= 1);
     ERHE_VERIFY(height >= 1);
     ERHE_VERIFY(width  <= m_width);
     ERHE_VERIFY(height <= m_height);
     ERHE_VERIFY(m_sample_count == 0);
 
+    convert_texture_dimensions_to_gl(m_target, width, height, depth, array_layer_count);
+
     gl::Pixel_format format;
     gl::Pixel_type   type;
-    ERHE_VERIFY(get_format_and_type(m_internal_format, format, type));
-    switch (storage_dimensions(m_target)) {
+    ERHE_VERIFY(get_format_and_type(pixelformat, format, type));
+    switch (get_storage_dimensions(m_target)) {
         case 1: {
             gl::texture_sub_image_1d(gl_name(), 0, 0, width, format, type, nullptr);
             break;
@@ -582,47 +861,51 @@ void Texture::upload(const gl::Internal_format internal_format, const int width,
 }
 
 void Texture::upload(
-    const gl::Internal_format           internal_format,
+    const erhe::dataformat::Format      pixelformat,
     const std::span<const std::uint8_t> data,
-    const int                           width,
-    const int                           height,
-    const int                           depth,
+    int                                 width,
+    int                                 height,
+    int                                 depth,
+    const int                           array_layer,
     const int                           level,
-    const int                           x,
-    const int                           y,
-    const int                           z
+    int                                 x,
+    int                                 y,
+    int                                 z
 )
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(internal_format == m_internal_format);
+    ERHE_VERIFY(pixelformat == m_pixelformat);
     ERHE_VERIFY(width  >= 1);
     ERHE_VERIFY(height >= 1);
     ERHE_VERIFY(width  <= m_width);
     ERHE_VERIFY(height <= m_height);
 
-    gl::Pixel_format format;
-    gl::Pixel_type   type;
-    ERHE_VERIFY(get_format_and_type(m_internal_format, format, type));
+    convert_texture_dimensions_to_gl(m_target, width, height, depth, array_layer);
+    convert_texture_offset_to_gl    (m_target, x, y, z, array_layer);
 
-    const auto row_stride = width * get_upload_pixel_byte_count(internal_format);
+    gl::Pixel_format gl_format;
+    gl::Pixel_type   gl_type;
+    ERHE_VERIFY(get_format_and_type(pixelformat, gl_format, gl_type));
+
+    const auto row_stride = width * get_upload_pixel_byte_count(pixelformat);
     const auto byte_count = row_stride * height;
     ERHE_VERIFY(data.size_bytes() >= byte_count);
     const auto* data_pointer = static_cast<const void*>(data.data());
 
-    switch (storage_dimensions(m_target)) {
+    switch (get_storage_dimensions(m_target)) {
         case 1: {
-            gl::texture_sub_image_1d(gl_name(), level, x, width, format, type, data_pointer);
+            gl::texture_sub_image_1d(gl_name(), level, x, width, gl_format, gl_type, data_pointer);
             break;
         }
 
         case 2: {
-            gl::texture_sub_image_2d(gl_name(), level, x, y, width, height, format, type, data_pointer);
+            gl::texture_sub_image_2d(gl_name(), level, x, y, width, height, gl_format, gl_type, data_pointer);
             break;
         }
 
         case 3: {
-            gl::texture_sub_image_3d(gl_name(), level, x, y, z, width, height, depth, format, type, data_pointer);
+            gl::texture_sub_image_3d(gl_name(), level, x, y, z, width, height, depth, gl_format, gl_type, data_pointer);
             break;
         }
 
@@ -633,32 +916,37 @@ void Texture::upload(
 }
 
 void Texture::upload_subimage(
-    const gl::Internal_format           internal_format,
+    const erhe::dataformat::Format      pixelformat,
     const std::span<const std::uint8_t> data,
     const int                           src_row_length,
     const int                           src_x,
     const int                           src_y,
-    const int                           width,
-    const int                           height,
+    int                                 width,
+    int                                 height,
     const int                           level,
-    const int                           x,
-    const int                           y,
-    const int                           z
+    int                                 x,
+    int                                 y,
+    int                                 z
 )
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(internal_format == m_internal_format);
+    ERHE_VERIFY(pixelformat == m_pixelformat);
     ERHE_VERIFY(width  >= 1);
     ERHE_VERIFY(height >= 1);
     ERHE_VERIFY(width  <= m_width);
     ERHE_VERIFY(height <= m_height);
 
+    int depth = 1;
+    int array_layer = 1;
+    convert_texture_dimensions_to_gl(m_target, width, height, depth, array_layer);
+    convert_texture_offset_to_gl    (m_target, x, y, z, array_layer);
+
     gl::Pixel_format format;
     gl::Pixel_type   type;
-    ERHE_VERIFY(get_format_and_type(m_internal_format, format, type));
+    ERHE_VERIFY(get_format_and_type(pixelformat, format, type));
 
-    const auto pixel_stride = get_upload_pixel_byte_count(internal_format);;
+    const auto pixel_stride = get_upload_pixel_byte_count(pixelformat);;
     const auto row_stride   = src_row_length * pixel_stride;
     const auto byte_count   = row_stride * height;
     ERHE_VERIFY(data.size_bytes() >= byte_count);
@@ -667,7 +955,7 @@ void Texture::upload_subimage(
     const char* data_pointer = reinterpret_cast<const char*>(data.data()) + src_x_offset + src_y_offset;
     gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, src_row_length);
 
-    switch (storage_dimensions(m_target)) {
+    switch (get_storage_dimensions(m_target)) {
         case 1: {
             gl::texture_sub_image_1d(gl_name(), level, x, width, format, type, data_pointer);
             break;
@@ -690,20 +978,12 @@ void Texture::upload_subimage(
     gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, 0);
 }
 
-void Texture::set_debug_label(std::string_view value)
-{
-    SPDLOG_LOGGER_TRACE(log_texture, "Texture {} name set to {}", gl_name(), value);
-
-    m_debug_label = fmt::format("(T:{}) {}", gl_name(), value);
-    gl::object_label(gl::Object_identifier::texture, gl_name(), static_cast<GLsizei>(m_debug_label.length()), m_debug_label.c_str());
-}
-
-auto Texture::debug_label() const -> const std::string&
+auto Texture::get_debug_label() const -> const std::string&
 {
     return m_debug_label;
 }
 
-auto Texture::target() const -> gl::Texture_target
+auto Texture::get_target() const -> gl::Texture_target
 {
     return m_target;
 }
@@ -735,37 +1015,54 @@ auto Texture::is_layered() const -> bool
     }
 }
 
-auto Texture::width() const -> int
+auto Texture::get_width(unsigned int level) const -> int
 {
-    return m_width;
+    int size = m_width;
+    for (unsigned int i = 0; i < level; i++) {
+        size = std::max(1, size / 2);
+    }
+    return size;
 }
 
-auto Texture::height() const -> int
+auto Texture::get_height(unsigned int level) const -> int
 {
-    return m_height;
+    int size = m_height;
+    for (unsigned int i = 0; i < level; i++) {
+        size = std::max(1, size / 2);
+    }
+    return size;
 }
 
-auto Texture::depth() const -> int
+auto Texture::get_depth(unsigned int level) const -> int
 {
-    return m_depth;
+    int size = m_depth;
+    for (unsigned int i = 0; i < level; i++) {
+        size = std::max(1, size / 2);
+    }
+    return size;
 }
 
-auto Texture::level_count() const -> int
+auto Texture::get_array_layer_count() const -> int
+{
+    return m_array_layer_count;
+}
+
+auto Texture::get_level_count() const -> int
 {
     return m_level_count;
 }
 
-auto Texture::fixed_sample_locations() const -> int
+auto Texture::get_fixed_sample_locations() const -> int
 {
     return m_fixed_sample_locations;
 }
 
-auto Texture::internal_format() const -> gl::Internal_format
+auto Texture::get_pixelformat() const -> erhe::dataformat::Format
 {
-    return m_internal_format;
+    return m_pixelformat;
 }
 
-auto Texture::sample_count() const -> int
+auto Texture::get_sample_count() const -> int
 {
     return m_sample_count;
 }

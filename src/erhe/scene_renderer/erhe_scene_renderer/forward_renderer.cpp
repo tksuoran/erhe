@@ -75,11 +75,6 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
         }
     }
 {
-    static constexpr std::string_view c_forward_renderer_initialize_component{"Forward_renderer::initialize_component()"};
-    ERHE_PROFILE_FUNCTION();
-
-    erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
-
     m_dummy_texture = graphics_device.create_dummy_texture();
 }
 
@@ -120,7 +115,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         log_forward_renderer->trace(
             "render({}) shadow T '{}' handle {} / {}",
             safe_str(parameters.passes.front()->pipeline.data.name),
-            enable_shadows ? parameters.shadow_texture->debug_label() : "",
+            enable_shadows ? parameters.shadow_texture->get_debug_label() : "",
             erhe::graphics::format_texture_handle(parameters.light_projections->shadow_map_texture_handle_compare),
             erhe::graphics::format_texture_handle(parameters.light_projections->shadow_map_texture_handle_no_compare)
         );
@@ -197,7 +192,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             pass->begin();
         }
 
-        erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
+        const std::string debug_group_name = fmt::format("Forward_renderer::render() pass: {}", pipeline.data.name);
+        erhe::graphics::Scoped_debug_group pass_scope{debug_group_name};
 
         if (use_override_shader_stages) {
             m_graphics_device.opengl_state_tracker.shader_stages.execute(used_shader_stages);
@@ -282,8 +278,6 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         (parameters.light_projections->shadow_map_texture_handle_compare != erhe::graphics::invalid_texture_handle) &&
         (parameters.light_projections->shadow_map_texture_handle_no_compare != erhe::graphics::invalid_texture_handle);
 
-    erhe::graphics::Scoped_debug_group forward_renderer_render{c_forward_renderer_render};
-
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
     using Buffer_range = erhe::graphics::Buffer_range;
@@ -342,7 +336,8 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
             pass->begin();
         }
 
-        erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
+        const std::string debug_group_name = fmt::format("Forward_renderer::draw_primitives() pass: {}", pipeline.data.name);
+        erhe::graphics::Scoped_debug_group pass_scope{debug_group_name};
 
         m_graphics_device.opengl_state_tracker.execute_(pipeline);
         gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, static_cast<GLsizei>(parameters.non_mesh_vertex_count));

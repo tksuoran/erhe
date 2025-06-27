@@ -33,7 +33,7 @@ public:
     Viewport_config&                     viewport_config;
     erhe::scene::Camera*                 camera                {nullptr};
     Viewport_scene_view*                 viewport_scene_view   {nullptr};
-    erhe::math::Viewport                 viewport              {0, 0, 0, 0, true};
+    erhe::math::Viewport                 viewport              {0, 0, 0, 0};
     const erhe::graphics::Shader_stages* override_shader_stages{nullptr};
 };
 

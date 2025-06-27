@@ -29,7 +29,6 @@ class Debug_renderer_program_interface
 public:
     explicit Debug_renderer_program_interface(erhe::graphics::Device& graphics_device);
 
-    bool                                             reverse_depth{false};
     erhe::graphics::Fragment_outputs                 fragment_outputs;
     erhe::dataformat::Vertex_format                  triangle_vertex_format;
     std::unique_ptr<erhe::graphics::Shader_resource> line_vertex_struct;

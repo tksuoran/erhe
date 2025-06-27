@@ -24,12 +24,7 @@ public:
     std::vector<std::uint8_t>  data;
 };
 
-auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format;
-
 auto load_png    (const std::filesystem::path& path) -> Image;
-auto load_texture(
-    erhe::graphics::Device&      graphics_device,
-    const std::filesystem::path& path
-) -> std::shared_ptr<erhe::graphics::Texture>;
+auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
 
 }

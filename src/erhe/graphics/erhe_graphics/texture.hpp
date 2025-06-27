@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/gl_objects.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_item/item.hpp"
 
 #include <span>
@@ -25,7 +26,7 @@ public:
 
     Device&                  device;
     gl::Texture_target       target                {gl::Texture_target::texture_2d};
-    gl::Internal_format      internal_format       {gl::Internal_format::rgba8};
+    erhe::dataformat::Format pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
     bool                     use_mipmaps           {false};
     bool                     fixed_sample_locations{true};
     bool                     sparse                {false};
@@ -33,14 +34,15 @@ public:
     int                      width                 {1};
     int                      height                {1};
     int                      depth                 {1};
+    int                      array_layer_count     {0};
     int                      level_count           {0};
     int                      row_stride            {0};
     Buffer*                  buffer                {nullptr};
     GLuint                   wrap_texture_name     {0};
     std::string              debug_label           {};
     std::shared_ptr<Texture> view_source           {};
-    int                      view_min_level        {0};
-    int                      view_min_layer        {0};
+    int                      view_base_level       {0};
+    int                      view_base_array_layer {0};
     // TODO layer_count?
 };
 
@@ -63,25 +65,27 @@ public:
 
     using Create_info = Texture_create_info;
 
-    static auto storage_dimensions(gl::Texture_target target) -> int;
-    static auto mipmap_dimensions (gl::Texture_target target) -> int;
-    static auto size_level_count  (int size) -> int;
+    static [[nodiscard]] auto is_array_target       (gl::Texture_target target) -> bool;
+    static [[nodiscard]] auto get_storage_dimensions(gl::Texture_target target) -> int;
+    static [[nodiscard]] auto get_mipmap_dimensions (gl::Texture_target target) -> int;
+    static [[nodiscard]] auto get_size_level_count  (int size) -> int;
 
-    void upload(gl::Internal_format internal_format, int width, int height = 1, int depth = 1);
+    void upload(erhe::dataformat::Format internal_format, int width, int height = 1, int depth = 1, int array_layer_count = 0);
 
     void upload(
-        gl::Internal_format                 internal_format,
+        const erhe::dataformat::Format      format,
         const std::span<const std::uint8_t> data,
         int                                 width,
         int                                 height = 1,
         int                                 depth = 1,
+        int                                 array_layer = 0,
         int                                 level = 0,
         int                                 x = 0,
         int                                 y = 0,
         int                                 z = 0
     );
     void upload_subimage(
-        gl::Internal_format                 internal_format,
+        const erhe::dataformat::Format      format,
         const std::span<const std::uint8_t> data,
         int                                 src_row_length,
         int                                 src_x,
@@ -94,38 +98,38 @@ public:
         int                                 z = 0
     );
 
-    void set_debug_label(std::string_view value);
-
-    [[nodiscard]] auto debug_label           () const -> const std::string&;
-    [[nodiscard]] auto width                 () const -> int;
-    [[nodiscard]] auto height                () const -> int;
-    [[nodiscard]] auto internal_format       () const -> gl::Internal_format;
-    [[nodiscard]] auto depth                 () const -> int;
-    [[nodiscard]] auto level_count           () const -> int;
-    [[nodiscard]] auto fixed_sample_locations() const -> int;
-    [[nodiscard]] auto sample_count          () const -> int;
-    [[nodiscard]] auto target                () const -> gl::Texture_target;
-    [[nodiscard]] auto is_layered            () const -> bool;
-    [[nodiscard]] auto gl_name               () const -> GLuint;
-    [[nodiscard]] auto get_handle            () const -> uint64_t;
-    [[nodiscard]] auto is_sparse             () const -> bool;
+    [[nodiscard]] auto get_debug_label           () const -> const std::string&;
+    [[nodiscard]] auto get_pixelformat           () const -> erhe::dataformat::Format;
+    [[nodiscard]] auto get_width                 (unsigned int level = 0) const -> int;
+    [[nodiscard]] auto get_height                (unsigned int level = 0) const -> int;
+    [[nodiscard]] auto get_depth                 (unsigned int level = 0) const -> int;
+    [[nodiscard]] auto get_array_layer_count     () const -> int;
+    [[nodiscard]] auto get_level_count           () const -> int;
+    [[nodiscard]] auto get_fixed_sample_locations() const -> int;
+    [[nodiscard]] auto get_sample_count          () const -> int;
+    [[nodiscard]] auto get_target                () const -> gl::Texture_target;
+    [[nodiscard]] auto is_layered                () const -> bool;
+    [[nodiscard]] auto gl_name                   () const -> GLuint;
+    [[nodiscard]] auto get_handle                () const -> uint64_t;
+    [[nodiscard]] auto is_sparse                 () const -> bool;
     //// [[nodiscard]] auto get_sparse_tile_size() const -> Tile_size;
 
     [[nodiscard]] auto is_shown_in_ui() const -> bool;
 
 private:
-    Gl_texture          m_handle;
-    std::string         m_debug_label;
-    gl::Texture_target  m_target                {gl::Texture_target::texture_2d};
-    gl::Internal_format m_internal_format       {gl::Internal_format::rgba8};
-    bool                m_fixed_sample_locations{true};
-    bool                m_is_sparse             {false};
-    int                 m_sample_count          {0};
-    int                 m_level_count           {0};
-    int                 m_width                 {0};
-    int                 m_height                {0};
-    int                 m_depth                 {0};
-    Buffer*             m_buffer                {nullptr};
+    Gl_texture               m_handle;
+    gl::Texture_target       m_target                {gl::Texture_target::texture_2d};
+    erhe::dataformat::Format m_pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
+    bool                     m_fixed_sample_locations{true};
+    bool                     m_is_sparse             {false};
+    int                      m_sample_count          {0};
+    int                      m_width                 {0};
+    int                      m_height                {0};
+    int                      m_depth                 {0};
+    int                      m_array_layer_count     {0};
+    int                      m_level_count           {0};
+    Buffer*                  m_buffer                {nullptr};
+    std::string              m_debug_label;
 };
 
 [[nodiscard]] auto get_texture_from_handle(uint64_t handle) -> GLuint;
@@ -145,10 +149,15 @@ public:
 [[nodiscard]] auto operator==(const Texture& lhs, const Texture& rhs) noexcept -> bool;
 [[nodiscard]] auto operator!=(const Texture& lhs, const Texture& rhs) noexcept -> bool;
 
+void convert_texture_dimensions_from_gl(const gl::Texture_target target, int& width, int& height, int& depth, int& array_layer_count);
+void convert_texture_dimensions_to_gl  (const gl::Texture_target target, int& width, int& height, int& depth, int array_layer_count);
+void convert_texture_offset_to_gl      (const gl::Texture_target target, int& x, int& y, int& z, int array_layer);
+
+
 [[nodiscard]] auto component_count(gl::Pixel_format pixel_format) -> size_t;
 [[nodiscard]] auto byte_count(gl::Pixel_type pixel_type) -> size_t;
-[[nodiscard]] auto get_upload_pixel_byte_count(gl::Internal_format internalformat) -> size_t;
-[[nodiscard]] auto get_format_and_type(gl::Internal_format internalformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool;
+[[nodiscard]] auto get_upload_pixel_byte_count(const erhe::dataformat::Format pixelformat) -> size_t;
+[[nodiscard]] auto get_format_and_type(const erhe::dataformat::Format pixelformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool;
 [[nodiscard]] auto format_texture_handle(uint64_t handle) -> std::string;
 
 constexpr uint64_t invalid_texture_handle = 0xffffffffu;

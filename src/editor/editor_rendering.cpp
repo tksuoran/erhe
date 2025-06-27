@@ -23,7 +23,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_profile/profile.hpp"
@@ -352,9 +352,6 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory&mesh_memory, Programs& programs)
-
-#define REVERSE_DEPTH graphics_device.configuration.reverse_depth
-
     : m_empty_vertex_input{graphics_device}
     , polygon_fill_standard_opaque{erhe::graphics::Render_pipeline_state{{
         .name           = "Polygon Fill Opaque",
@@ -362,7 +359,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_fill_standard_opaque_selected{erhe::graphics::Render_pipeline_state{{
@@ -403,7 +400,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_none,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , line_hidden_blend{erhe::graphics::Render_pipeline_state{{
@@ -457,7 +454,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_front_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , brush_front{erhe::graphics::Render_pipeline_state{{
@@ -466,7 +463,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , edge_lines{erhe::graphics::Render_pipeline_state{{
@@ -539,7 +536,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::points,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_centroids{erhe::graphics::Render_pipeline_state{{
@@ -548,7 +545,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::points,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , rendertarget_meshes{erhe::graphics::Render_pipeline_state{{
@@ -559,7 +556,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .rasterization  = Rasterization_state::cull_mode_back_ccw, 
         // Useful for debugging rendertarget meshes
         // .rasterization  = Rasterization_state::cull_mode_none,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , sky{
@@ -608,12 +605,11 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
                 .vertex_input   = &mesh_memory.vertex_input,
                 .input_assembly = Input_assembly_state::triangles,
                 .rasterization  = Rasterization_state::cull_mode_none_depth_clamp,
-                .depth_stencil  = Depth_stencil_state::depth_test_enabled_less_or_equal_stencil_test_disabled(REVERSE_DEPTH),
+                .depth_stencil  = Depth_stencil_state::depth_test_enabled_less_or_equal_stencil_test_disabled(),
                 .color_blend    = Color_blend_state::color_blend_premultiplied
             }
         }
     }
-#undef REVERSE_DEPTH
 {
 }
 
@@ -746,16 +742,6 @@ void Editor_rendering::render_viewport_main(const Render_context& context)
     opengl_state_tracker.shader_stages.reset();
     opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
 
-    const auto& clear_color = context.viewport_config.clear_color;
-    gl::clear_color(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-    gl::clear_stencil(0);
-    gl::clear_depth_f(*m_context.graphics_device->depth_clear_value_pointer());
-    gl::clear(
-        gl::Clear_buffer_mask::color_buffer_bit |
-        gl::Clear_buffer_mask::depth_buffer_bit |
-        gl::Clear_buffer_mask::stencil_buffer_bit
-    );
-
     render_composer(context);
 }
 
@@ -773,7 +759,7 @@ void Editor_rendering::render_composer(const Render_context& context)
     static constexpr std::string_view c_id_main{"Main"};
     //ERHE_PROFILE_GPU_SCOPE(c_id_main);
     erhe::graphics::Scoped_gpu_timer timer{m_content_timer};
-    erhe::graphics::Scoped_debug_group pass_scope{c_id_main};
+    erhe::graphics::Scoped_debug_group pass_scope{"Editor_rendering::render_composer()"};
 
     m_composer.render(context);
 

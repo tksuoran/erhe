@@ -463,8 +463,6 @@ template <typename T>
 void hsv_to_rgb(float h, float s, float v, float& r, float& g, float& b);
 void rgb_to_hsv(float r, float g, float b, float& h, float& s, float& v);
 
-[[nodiscard]] auto srgb_to_linear(float cs) -> float;
-[[nodiscard]] auto linear_rgb_to_srgb(float cl) -> float;
 [[nodiscard]] auto srgb_to_linear_rgb(glm::vec3 srgb) -> glm::vec3;
 [[nodiscard]] auto linear_rgb_to_srgb(glm::vec3 linear_rgb) -> glm::vec3;
 

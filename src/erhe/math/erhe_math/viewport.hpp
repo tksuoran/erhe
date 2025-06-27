@@ -27,11 +27,10 @@ public:
 
     [[nodiscard]] auto hit_test(int px, int py) const -> bool;
 
-    int  x     {0};
-    int  y     {0};
-    int  width {0};
-    int  height{0};
-    bool reverse_depth{true};
+    int x     {0};
+    int y     {0};
+    int width {0};
+    int height{0};
 };
 
 } // namespace erhe::math

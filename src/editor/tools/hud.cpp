@@ -226,8 +226,8 @@ auto Hud::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& r
     }
     const glm::vec3 position_in_node = ray_origin_in_hud + intersection.value() * ray_direction_in_hud;
 
-    const auto half_width  = 0.5f * m_rendertarget_mesh->width();
-    const auto half_height = 0.5f * m_rendertarget_mesh->height();
+    const auto half_width  = 0.5f * m_rendertarget_mesh->get_width();
+    const auto half_height = 0.5f * m_rendertarget_mesh->get_height();
 
     if (
         (position_in_node.x < -half_width ) ||

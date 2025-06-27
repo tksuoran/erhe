@@ -16,6 +16,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/depth_stencil_state.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_window/window.hpp"
@@ -385,7 +386,6 @@ Device::Device(erhe::window::Context_window& context_window)
     bool initial_clear               {false};
     {
         const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "graphics");
-        ini.get("reverse_depth",                configuration.reverse_depth  );
         ini.get("post_processing",              configuration.post_processing);
         ini.get("use_time_query",               configuration.use_time_query );
         ini.get("force_no_bindless",            force_no_bindless);
@@ -598,14 +598,14 @@ Device::Device(erhe::window::Context_window& context_window)
     );
 }
 
-auto Device::depth_clear_value_pointer() const -> const float*
+auto Device::depth_clear_value_pointer(const bool reverse_depth) const -> const float*
 {
-    return configuration.reverse_depth ? &float_zero_value : &float_one_value;
+    return reverse_depth ? &float_zero_value : &float_one_value;
 }
 
-auto Device::depth_function(const gl::Depth_function depth_function) const -> gl::Depth_function
+auto Device::depth_function(const gl::Depth_function depth_function, const bool reverse_depth) const -> gl::Depth_function
 {
-    return configuration.reverse_depth ? reverse(depth_function) : depth_function;
+    return reverse_depth ? reverse(depth_function) : depth_function;
 }
 
 auto Device::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
@@ -620,26 +620,25 @@ auto Device::get_handle(const Texture& texture, const Sampler& sampler) const ->
     }
 }
 
-auto Device::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> gl::Internal_format
+auto Device::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> erhe::dataformat::Format
 {
     using namespace erhe::bit;
     const bool require_depth     = test_all_rhs_bits_set(flags, format_flag_require_depth    );
     const bool require_stencil   = test_all_rhs_bits_set(flags, format_flag_require_stencil  );
     const bool prefer_accuracy   = test_all_rhs_bits_set(flags, format_flag_prefer_accuracy  );
     const bool prefer_filterable = test_all_rhs_bits_set(flags, format_flag_prefer_filterable);
-    gl::Internal_format formats[] = {
-        gl::Internal_format::depth32f_stencil8,
-        gl::Internal_format::depth24_stencil8,
-        gl::Internal_format::depth_stencil,
-        gl::Internal_format::stencil_index8,
-        gl::Internal_format::depth_component32f,
-        gl::Internal_format::depth_component,
-        gl::Internal_format::depth_component16
+    erhe::dataformat::Format formats[] = {
+        erhe::dataformat::Format::format_d16_unorm,
+        erhe::dataformat::Format::format_x8_d24_unorm_pack32,
+        erhe::dataformat::Format::format_d32_sfloat,
+        erhe::dataformat::Format::format_s8_uint,
+        erhe::dataformat::Format::format_d24_unorm_s8_uint,
+        erhe::dataformat::Format::format_d32_sfloat_s8_uint
     };
 
-    gl::Internal_format best_format = gl::Internal_format{0};
+    erhe::dataformat::Format best_format = erhe::dataformat::Format::format_undefined;
     float best_score = 0.0f;
-    for (const auto format : formats) {
+    for (const erhe::dataformat::Format format : formats) {
         Format_properties properties = get_format_properties(format);
         if (!properties.supported) {
             continue;
@@ -687,7 +686,6 @@ auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
     };
 
     auto texture = std::make_shared<Texture>(*this, create_info);
-    texture->set_debug_label("dummy");
     const std::array<uint8_t, 16> dummy_pixel{
         0xee, 0x11, 0xdd, 0xff,
         0xcc, 0x11, 0xbb, 0xff,
@@ -696,7 +694,7 @@ auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
     };
     const std::span<const std::uint8_t> image_data{&dummy_pixel[0], dummy_pixel.size()};
 
-    texture->upload(create_info.internal_format, image_data, create_info.width, create_info.height);
+    texture->upload(create_info.pixelformat, image_data, create_info.width, create_info.height);
 
     return texture;
 }
@@ -1482,13 +1480,21 @@ void Device::multi_draw_elements_indirect(
     gl::multi_draw_elements_indirect(mode, type, indirect, drawcount, stride);
 }
 
-auto Device::get_format_properties(gl::Internal_format format) const -> Format_properties
+auto Device::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
-    auto i = format_properties.find(format);
+    std::optional<gl::Internal_format> gl_format_opt = gl_helpers::convert_to_gl(format);
+    ERHE_VERIFY(gl_format_opt.has_value());
+    gl::Internal_format gl_format = gl_format_opt.value();
+    auto i = format_properties.find(gl_format);
     if (i == format_properties.end()) {
         return {};
     }
     return i->second;
+}
+
+auto Device::make_render_command_encoder(Render_pass& render_pass) -> std::unique_ptr<Render_command_encoder>
+{
+    return std::make_unique<Render_command_encoder>(*this, render_pass);
 }
 
 } // namespace erhe::graphics

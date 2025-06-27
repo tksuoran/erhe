@@ -2,13 +2,13 @@
 
 namespace erhe::graphics {
 
-class Framebuffer;
+class Render_pass;
 
 class Render_command_encoder;
 class Render_pass_descriptor
 {
 public:
-    std::shared_ptr<Framebuffer> framebuffer;
+    std::shared_ptr<Render_pass> framebuffer;
 };
 
 class Command_buffer final

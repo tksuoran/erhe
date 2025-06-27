@@ -59,6 +59,7 @@ class Headset_view_node : public erhe::rendergraph::Rendergraph_node
 {
 public:
     Headset_view_node(erhe::rendergraph::Rendergraph& rendergraph, Headset_view& headset_view);
+    ~Headset_view_node() override;
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;

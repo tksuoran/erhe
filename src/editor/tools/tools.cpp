@@ -26,8 +26,6 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs)
-#define REVERSE_DEPTH graphics_device.configuration.reverse_depth
-
     // Tool pass one: For hidden tool parts, set stencil to s_stencil_tool_mesh_hidden.
     // Only reads depth buffer, only writes stencil buffer.
     : tool1_hidden_stencil{erhe::graphics::Render_pipeline_state{{
@@ -124,7 +122,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_writes_disabled
     }}}
 
@@ -210,7 +208,6 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
             .constant               = { 0.0f, 0.0f, 0.0f, 0.6f }
         }
     }}}
-#undef REVERSE_DEPTH
 {
 }
 

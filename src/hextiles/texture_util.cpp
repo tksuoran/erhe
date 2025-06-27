@@ -5,40 +5,16 @@
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace hextiles
-{
+namespace hextiles {
 
-auto to_gl(const erhe::graphics::Image_format format) -> gl::Internal_format
-{
-    switch (format) {
-        //using enum erhe::graphics::Image_format;
-        case erhe::graphics::Image_format::srgb8:        return gl::Internal_format::srgb;
-        case erhe::graphics::Image_format::srgb8_alpha8: return gl::Internal_format::srgb8_alpha8;
-        default: {
-            ERHE_FATAL("Bad image format %04x", static_cast<unsigned int>(format));
-        }
-    }
-    // std::unreachable() return gl::Internal_format::rgba8;
-}
-
-namespace
-{
-
-auto pixel_size(const erhe::graphics::Image_format format) -> size_t
-{
-    switch (format) {
-        case erhe::graphics::Image_format::srgb8:        return 3;
-        case erhe::graphics::Image_format::srgb8_alpha8: return 4;
-        default: return 0;
-    }
-}
+namespace {
 
 auto get_buffer_size(const erhe::graphics::Image_info& info) -> size_t
 {
     ERHE_VERIFY(info.width >= 1);
     ERHE_VERIFY(info.height >= 1);
 
-    return static_cast<size_t>(info.width) * static_cast<size_t>(info.height) * pixel_size(info.format);
+    return static_cast<size_t>(info.width) * static_cast<size_t>(info.height) * erhe::dataformat::get_format_size(info.format);
 }
 
 } // anonymous namespce
@@ -105,21 +81,20 @@ auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem
         return {};
     }
     erhe::graphics::Texture_create_info texture_create_info{
-        .device          = graphics_device,
-        .internal_format = to_gl(image.info.format),
-        .use_mipmaps     = (image.info.level_count > 1),
-        .width           = image.info.width,
-        .height          = image.info.height,
-        .depth           = image.info.depth,
-        .level_count     = image.info.level_count,
-        .row_stride      = image.info.row_stride,
-        .debug_label     = path.string()
+        .device      = graphics_device,
+        .pixelformat = image.info.format,
+        .use_mipmaps = (image.info.level_count > 1),
+        .width       = image.info.width,
+        .height      = image.info.height,
+        .depth       = image.info.depth,
+        .level_count = image.info.level_count,
+        .row_stride  = image.info.row_stride,
+        .debug_label = path.string()
     };
 
     auto texture = std::make_shared<erhe::graphics::Texture>(graphics_device, texture_create_info);
-    texture->set_debug_label(path.string());
     texture->upload(
-        texture_create_info.internal_format,
+        texture_create_info.pixelformat,
         image.data,
         texture_create_info.width,
         texture_create_info.height

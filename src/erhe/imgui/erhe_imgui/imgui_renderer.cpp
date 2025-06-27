@@ -198,9 +198,9 @@ auto make_font_texture_create_info(erhe::graphics::Device& graphics_device, ImFo
 
     // Build texture atlas
     Texture::Create_info create_info{
-        .device          = graphics_device,
-        .internal_format = gl::Internal_format::rgba8,
-        .debug_label     = "ImGui Font texture"
+        .device      = graphics_device,
+        .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm, // TODO sRGB?
+        .debug_label = "ImGui Font texture"
     };
 
     unsigned char* pixels = nullptr;
@@ -423,8 +423,7 @@ void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
 
     const auto pixel_data = get_font_atlas_pixel_data(m_font_atlas);
     const std::span<const std::uint8_t> image_data{pixel_data.data(), pixel_data.size()};
-    m_font_texture->upload(gl::Internal_format::rgba8, image_data, m_font_texture->width(), m_font_texture->height());
-    m_font_texture->set_debug_label("ImGui Font");
+    m_font_texture->upload(erhe::dataformat::Format::format_8_vec4_unorm, image_data, m_font_texture->get_width(), m_font_texture->get_height());
 
     // Store our handle
     const uint64_t handle = m_graphics_device.get_handle(*m_font_texture.get(), m_linear_sampler);
@@ -755,7 +754,7 @@ void Imgui_renderer::render_draw_data()
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{c_imgui_render};
+    erhe::graphics::Scoped_debug_group pass_scope{"Imgui_renderer::render_draw_data()"};
     erhe::graphics::Scoped_gpu_timer   timer     {m_gpu_timer};
 
     // Make font texture handle resident

@@ -37,22 +37,7 @@ void Textures::initialize_component()
     background = load(std::filesystem::path("res") / "images" / "background.png");
 }
 
-auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
-{
-    switch (format) {
-        //using enum erhe::graphics::Image_format;
-        case erhe::graphics::Image_format::srgb8:        return gl::Internal_format::srgb8;
-        case erhe::graphics::Image_format::srgb8_alpha8: return gl::Internal_format::srgb8_alpha8;
-        default: {
-            ERHE_FATAL("Bad image format %04x", static_cast<unsigned int>(format));
-        }
-    }
-    // std::unreachable() return gl::Internal_format::rgba8;
-}
-
-auto Textures::load(
-    const std::filesystem::path& path
-) -> shared_ptr<Texture>
+auto Textures::load(const std::filesystem::path& path) -> shared_ptr<Texture>
 {
     if (
         !std::filesystem::exists(path) ||
@@ -78,6 +63,7 @@ auto Textures::load(
         .depth           = image_info.depth,
         .level_count     = image_info.level_count,
         .row_stride      = image_info.row_stride,
+        .debug_label     = path.string()
     };
     std::span<std::byte> span = slot.begin_span_for(
         image_info.width,
@@ -93,7 +79,6 @@ auto Textures::load(
     }
 
     auto texture = std::make_shared<Texture>(texture_create_info);
-    texture->set_debug_label(path.string());
 
     gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
     gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);

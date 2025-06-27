@@ -12,7 +12,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
@@ -55,33 +55,28 @@ auto Rendertarget_mesh::get_type_name() const -> std::string_view
 
 void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, const int width, const int height)
 {
-    if (m_texture && m_texture->width() == width && m_texture->height() == height) {
+    if (m_texture && m_texture->get_width() == width && m_texture->get_height() == height) {
         return;
     }
 
     using Texture     = erhe::graphics::Texture;
-    using Framebuffer = erhe::graphics::Framebuffer;
+    using Render_pass = erhe::graphics::Render_pass;
 
     m_texture = std::make_shared<Texture>(
         graphics_device,
         Texture::Create_info{
-            .device          = graphics_device,
-            .target          = gl::Texture_target::texture_2d,
-            .internal_format = gl::Internal_format::srgb8_alpha8,
-            .use_mipmaps     = true,
-            .sample_count    = 0,
-            .width           = width,
-            .height          = height,
-            .debug_label     = "Rendertarget"
+            .device       = graphics_device,
+            .target       = gl::Texture_target::texture_2d,
+            .pixelformat  = erhe::dataformat::Format::format_8_vec4_srgb,
+            .use_mipmaps  = true,
+            .sample_count = 0,
+            .width        = width,
+            .height       = height,
+            .debug_label  = "Rendertarget_mesh::m_texture"
         }
     );
-    m_texture->set_debug_label("Rendertarget Node");
     const float clear_value[4] = { 0.0f, 0.0f, 0.0f, 0.85f };
-    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-        gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
-    } else {
-        // TODO
-    }
+    gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
 
     m_sampler = std::make_shared<erhe::graphics::Sampler>(
         graphics_device,
@@ -93,27 +88,26 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
         }
     );
 
-    Framebuffer::Create_info create_info;
-    create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
-    m_framebuffer = std::make_shared<Framebuffer>(graphics_device, create_info);
-    m_framebuffer->set_debug_label("Rendertarget Node");
+    // TODO Use multisample resolve
+    erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+    render_pass_descriptor.color_attachments[0].texture      = m_texture.get();
+    render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
+    render_pass_descriptor.render_target_width               = width;
+    render_pass_descriptor.render_target_height              = height;
+    render_pass_descriptor.debug_label                       = "Rendertarget Node";
+    m_render_pass = std::make_shared<Render_pass>(graphics_device, render_pass_descriptor);
 
     m_material = std::make_shared<erhe::primitive::Material>("Rendertarget Node", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
     m_material->textures.base_color = m_texture;
     m_material->samplers.base_color = m_sampler;
     m_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
 
-    m_local_width  = static_cast<float>(m_texture->width ()) / m_pixels_per_meter;
-    m_local_height = static_cast<float>(m_texture->height()) / m_pixels_per_meter;
+    m_local_width  = static_cast<float>(m_texture->get_width ()) / m_pixels_per_meter;
+    m_local_height = static_cast<float>(m_texture->get_height()) / m_pixels_per_meter;
 
     std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>();
-    erhe::geometry::shapes::make_rectangle(
-        geometry->get_mesh(),
-        m_local_width,
-        m_local_height,
-        true,
-        false
-    );
+    erhe::geometry::shapes::make_rectangle(geometry->get_mesh(), m_local_width, m_local_height, true, false);
 
     erhe::primitive::Primitive primitive{
         geometry,
@@ -140,14 +134,14 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
     );
 }
 
-auto Rendertarget_mesh::texture() const -> std::shared_ptr<erhe::graphics::Texture>
+auto Rendertarget_mesh::get_texture() const -> std::shared_ptr<erhe::graphics::Texture>
 {
     return m_texture;
 }
 
-auto Rendertarget_mesh::framebuffer() const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Rendertarget_mesh::get_render_pass() const -> erhe::graphics::Render_pass*
 {
-    return m_framebuffer;
+    return m_render_pass.get();
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -256,8 +250,8 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
         return false;
     }
     const glm::vec2 hit_position_in_viewport{
-        m_texture->width()  * b.x,
-        m_texture->height() * b.y
+        m_texture->get_width()  * b.x,
+        m_texture->get_height() * b.y
     };
 
     SPDLOG_LOGGER_TRACE(log_pointer, "rt ray hit position {}", hit_position_in_viewport);
@@ -267,7 +261,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
     return true;
 }
 
-auto Rendertarget_mesh::world_to_window(const glm::vec3 position_in_world) const -> std::optional<glm::vec2>
+auto Rendertarget_mesh::get_world_to_window(const glm::vec3 position_in_world) const -> std::optional<glm::vec2>
 {
     auto const* node = get_node();
     if (node == nullptr) {
@@ -292,30 +286,15 @@ auto Rendertarget_mesh::world_to_window(const glm::vec3 position_in_world) const
         return {};
     }
     return glm::vec2{
-        m_texture->width() * b.x,
-        m_texture->height() * b.y
+        m_texture->get_width() * b.x,
+        m_texture->get_height() * b.y
     };
-}
-
-void Rendertarget_mesh::bind()
-{
-    m_framebuffer->check_status();
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-    gl::viewport(0, 0, m_texture->width(), m_texture->height());
 }
 
 void Rendertarget_mesh::clear(const glm::vec4 clear_color)
 {
-    //m_pipeline_state_tracker->shader_stages.reset();
-    //m_pipeline_state_tracker->color_blend.execute(
-    //    erhe::graphics::Color_blend_state::color_blend_disabled
-    //);
-
-    // TODO Should probably restore m_pipeline_state_tracker code above instead
-    gl::color_mask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
-    gl::clear_color(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
-    gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
+    const float clear_value[4] = { clear_color.r, clear_color.g, clear_color.b, clear_color.a };
+    gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
 }
 
 void Rendertarget_mesh::render_done(Editor_context& context)
@@ -341,17 +320,17 @@ auto Rendertarget_mesh::get_pointer() const -> std::optional<glm::vec2>
     return m_pointer;
 }
 
-auto Rendertarget_mesh::width() const -> float
+auto Rendertarget_mesh::get_width() const -> float
 {
-    return static_cast<float>(m_texture->width());
+    return static_cast<float>(m_texture->get_width());
 }
 
-auto Rendertarget_mesh::height() const -> float
+auto Rendertarget_mesh::get_height() const -> float
 {
-    return static_cast<float>(m_texture->height());
+    return static_cast<float>(m_texture->get_height());
 }
 
-auto Rendertarget_mesh::pixels_per_meter() const -> float
+auto Rendertarget_mesh::get_pixels_per_meter() const -> float
 {
     return m_pixels_per_meter;
 }

@@ -45,7 +45,7 @@ namespace editor {
 class Brush;
 class Brush_data;
 class Content_library_node;
-class Debug_view_window;
+class Depth_visualization_window;
 class Editor_context;
 class Editor_message_bus;
 class Editor_rendering;

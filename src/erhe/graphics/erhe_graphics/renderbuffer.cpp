@@ -11,42 +11,48 @@
 namespace erhe::graphics {
 
 Renderbuffer::Renderbuffer(
-    Device&                   device,
-    const gl::Internal_format internal_format,
-    const unsigned int        width,
-    const unsigned int        height
+    Device&                        device,
+    const erhe::dataformat::Format pixelformat,
+    const unsigned int             width,
+    const unsigned int             height
 )
-    : m_device         {device}
-    , m_handle         {device}
-    , m_internal_format{internal_format}
-    , m_sample_count   {0}
-    , m_width          {width}
-    , m_height         {height}
+    : m_device      {device}
+    , m_handle      {device}
+    , m_pixelformat {pixelformat}
+    , m_sample_count{0}
+    , m_width       {width}
+    , m_height      {height}
 {
     ERHE_VERIFY(gl_name() != 0);
     ERHE_VERIFY(m_width  > 0);
     ERHE_VERIFY(m_height > 0);
 
-    device.named_renderbuffer_storage_multisample(gl_name(), 0, internal_format, width, height);
+    std::optional<gl::Internal_format> gl_internal_format = gl_helpers::convert_to_gl(pixelformat);
+    ERHE_VERIFY(gl_internal_format.has_value());
+    device.named_renderbuffer_storage_multisample(gl_name(), 0, gl_internal_format.value(), width, height);
 }
 
 Renderbuffer::Renderbuffer(
-    Device&                   device,
-    const gl::Internal_format internal_format,
-    const unsigned int        sample_count,
-    const unsigned int        width,
-    const unsigned int        height
+    Device&                        device,
+    const erhe::dataformat::Format pixelformat,
+    const unsigned int             sample_count,
+    const unsigned int             width,
+    const unsigned int             height
 )
-    : m_device         {device}
-    , m_handle         {device}
-    , m_internal_format{internal_format}
-    , m_sample_count   {sample_count}
-    , m_width          {width}
-    , m_height         {height}
+    : m_device      {device}
+    , m_handle      {device}
+    , m_pixelformat {pixelformat}
+    , m_sample_count{sample_count}
+    , m_width       {width}
+    , m_height      {height}
 {
     ERHE_VERIFY(gl_name() != 0);
     ERHE_VERIFY(m_width  > 0);
     ERHE_VERIFY(m_height > 0);
+
+    const std::optional<gl::Internal_format> gl_internal_format = gl_helpers::convert_to_gl(pixelformat);
+    ERHE_VERIFY(gl_internal_format.has_value());
+    const gl::Internal_format internal_format = gl_internal_format.value();
 
     if (sample_count > 0) {
         // int num_sample_counts = 0;
@@ -75,13 +81,14 @@ Renderbuffer::Renderbuffer(
         // else
         {
             m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_samples));
-            if (gl_helpers::has_color(m_internal_format) || gl_helpers::has_alpha(m_internal_format)) {
+            // TODO Format_properties
+            if (gl_helpers::has_color(internal_format) || gl_helpers::has_alpha(internal_format)) {
                 m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_color_texture_samples));
             }
-            if (gl_helpers::has_depth(m_internal_format) || gl_helpers::has_stencil(m_internal_format)) {
+            if (gl_helpers::has_depth(internal_format) || gl_helpers::has_stencil(internal_format)) {
                 m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_depth_texture_samples));
             }
-            if (gl_helpers::is_integer(m_internal_format)) {
+            if (gl_helpers::is_integer(internal_format)) {
                 m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_integer_samples));
             }
         }
@@ -115,13 +122,13 @@ Renderbuffer::Renderbuffer(
             "Format {} has framebuffer renderable support none",
             c_str(internal_format)
         );
-        m_internal_format = gl::Internal_format::rgba8; // TODO what should be done?
+        ERHE_FATAL("format is not renderable");
     }
 
     device.named_renderbuffer_storage_multisample(
         gl_name(),
         m_sample_count,
-        m_internal_format,
+        internal_format,
         m_width,
         m_height
     );
@@ -137,27 +144,27 @@ void Renderbuffer::set_debug_label(std::string_view label)
     gl::object_label(
         gl::Object_identifier::renderbuffer,
         gl_name(),
-        static_cast<GLsizei>(m_debug_label.length()),
+        -1, // static_cast<GLsizei>(m_debug_label.length()),
         m_debug_label.c_str()
     );
 }
 
-auto Renderbuffer::internal_format() const -> gl::Internal_format
+auto Renderbuffer::get_pixelformat() const -> erhe::dataformat::Format
 {
-    return m_internal_format;
+    return m_pixelformat;
 }
 
-auto Renderbuffer::sample_count() const -> unsigned int
+auto Renderbuffer::get_sample_count() const -> unsigned int
 {
     return m_sample_count;
 }
 
-auto Renderbuffer::width() const -> unsigned int
+auto Renderbuffer::get_width() const -> unsigned int
 {
     return m_width;
 }
 
-auto Renderbuffer::height() const -> unsigned int
+auto Renderbuffer::get_height() const -> unsigned int
 {
     return m_height;
 }

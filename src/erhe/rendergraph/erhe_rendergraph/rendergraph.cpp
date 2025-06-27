@@ -129,13 +129,13 @@ void Rendergraph::execute()
 
     sort();
 
-    static constexpr std::string_view c_render_graph{"Render graph"};
-    erhe::graphics::Scoped_debug_group render_graph_scope{c_render_graph};
+    erhe::graphics::Scoped_debug_group render_graph_scope{"Rendergraph::execute()"};
 
     for (const auto& node : m_nodes) {
         if (node->is_enabled()) {
             SPDLOG_LOGGER_TRACE(log_frame, "Execute render graph node '{}'", node->get_name());
-            erhe::graphics::Scoped_debug_group render_graph_node_scope{node->get_name()};
+            std::string debug_group_name = fmt::format("Rendergraph node: {}", node->get_name());
+            erhe::graphics::Scoped_debug_group render_graph_node_scope{debug_group_name};
             node->execute_rendergraph_node();
         }
     }
@@ -206,7 +206,7 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
     log_tail->trace("Unregistered Rendergraph_node {}", node->get_name());
 }
 
-auto Rendergraph::get_graphics_instance() -> erhe::graphics::Device&
+auto Rendergraph::get_graphics_device() -> erhe::graphics::Device&
 {
     return m_graphics_device;
 }

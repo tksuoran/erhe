@@ -17,6 +17,9 @@ namespace erhe::window {
 
 namespace erhe::graphics {
 
+class Render_pass;
+class Render_command_encoder;
+
 class Format_properties
 {
 public:
@@ -210,6 +213,7 @@ public:
     // dsa
     void named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height);
 
+    [[nodiscard]] auto make_render_command_encoder(Render_pass& render_pass) -> std::unique_ptr<Render_command_encoder>;
 
     // multi draw indirect
     void multi_draw_elements_indirect(
@@ -220,11 +224,9 @@ public:
         GLsizei                stride
     );
 
-    // auto binding_point(unsigned int binding_point) -> unsigned int;
+    auto get_format_properties(erhe::dataformat::Format format) const -> Format_properties;
 
-    auto get_format_properties(gl::Internal_format format) const -> Format_properties;
-
-    auto choose_depth_stencil_format(unsigned int flags, int sample_count) const -> gl::Internal_format;
+    auto choose_depth_stencil_format(unsigned int flags, int sample_count) const -> erhe::dataformat::Format;
 
     class Info
     {
@@ -306,14 +308,13 @@ public:
     class Configuration
     {
     public:
-        bool reverse_depth  {true};  // TODO move to editor
         bool post_processing{true};  // TODO move to editor
         bool use_time_query {true};
     };
 
     // Public API
-    [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
-    [[nodiscard]] auto depth_function           (gl::Depth_function depth_function) const -> gl::Depth_function;
+    [[nodiscard]] auto depth_clear_value_pointer(bool reverse_depth = true ) const -> const float *; // reverse_depth ? 0.0f : 1.0f;
+    [[nodiscard]] auto depth_function           (gl::Depth_function depth_function, bool reverse_depth = true) const -> gl::Depth_function;
 
     Shader_monitor         shader_monitor;
     OpenGL_state_tracker   opengl_state_tracker;

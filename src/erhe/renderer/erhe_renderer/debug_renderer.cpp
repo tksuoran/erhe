@@ -175,8 +175,7 @@ auto Debug_renderer::get(unsigned int stencil, bool visible, bool hidden) -> Pri
         Debug_renderer_config{
             .stencil_reference = stencil,
             .draw_visible      = visible,
-            .draw_hidden       = hidden,
-            .reverse_depth     = true,
+            .draw_hidden       = hidden
         }
     );
 }
@@ -235,7 +234,7 @@ void Debug_renderer::render(const erhe::math::Viewport viewport, const erhe::sce
 
     ERHE_VERIFY(m_graphics_device.info.use_compute_shader);
 
-    erhe::graphics::Scoped_debug_group scoped_debug_group{c_line_renderer_render};
+    erhe::graphics::Scoped_debug_group scoped_debug_group{"Debug_renderer::render()"};
 
     gl::enable  (gl::Enable_cap::sample_alpha_to_coverage);
     gl::enable  (gl::Enable_cap::sample_alpha_to_one);

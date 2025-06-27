@@ -285,8 +285,6 @@ void Hotbar::init_hotbar()
         "Hotbar imgui host",
         false
     );
-    m_rendertarget_imgui_host->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
-
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
     m_rendertarget_node->attach(m_rendertarget_mesh);
 
@@ -415,13 +413,15 @@ void Hotbar::on_message(Editor_message& message)
                 using Rendergraph_node = erhe::rendergraph::Rendergraph_node;
                 auto old_node = (old_scene_view     != nullptr) ? old_scene_view    ->get_rendergraph_node() : nullptr;
                 auto new_node = (message.scene_view != nullptr) ? message.scene_view->get_rendergraph_node() : nullptr;
+
+                erhe::rendergraph::Rendergraph& rendergraph = *m_context.rendergraph;
                 if (old_node != new_node) {
                     if (old_node) {
-                        m_context.rendergraph->disconnect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), old_node);
+                        rendergraph.disconnect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), old_node);
                     }
                     set_mesh_visibility(static_cast<bool>(new_node));
                     if (new_node) {
-                        m_context.rendergraph->connect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), new_node);
+                        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), new_node);
                     }
                 }
             }
@@ -536,8 +536,8 @@ auto Hotbar::flags() -> ImGuiWindowFlags
 void Hotbar::on_begin()
 {
     if (m_rendertarget_mesh) {
-        m_min_size[0] = static_cast<float>(m_rendertarget_mesh->width());
-        m_min_size[1] = static_cast<float>(m_rendertarget_mesh->height());
+        m_min_size[0] = static_cast<float>(m_rendertarget_mesh->get_width());
+        m_min_size[1] = static_cast<float>(m_rendertarget_mesh->get_height());
         m_max_size[0] = m_min_size[0];
         m_max_size[1] = m_min_size[1];
     }

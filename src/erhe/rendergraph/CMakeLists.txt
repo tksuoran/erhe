@@ -3,8 +3,6 @@ add_library(${_target})
 add_library(erhe::rendergraph ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe_rendergraph/multisample_resolve.cpp
-    erhe_rendergraph/multisample_resolve.hpp
     erhe_rendergraph/rendergraph.cpp
     erhe_rendergraph/rendergraph.hpp
     erhe_rendergraph/rendergraph_log.cpp

@@ -27,7 +27,7 @@ auto Rendergraph_node::get_id() const -> std::size_t
     return id.get_id();
 }
 
-auto Rendergraph_node::get_input(Routing, const int key, const int depth) const -> const Rendergraph_consumer_connector*
+auto Rendergraph_node::get_input(const int key, const int depth) const -> const Rendergraph_consumer_connector*
 {
     SPDLOG_LOGGER_TRACE(
         log_tail,
@@ -56,14 +56,14 @@ auto Rendergraph_node::get_input(Routing, const int key, const int depth) const 
     return nullptr;
 }
 
-auto Rendergraph_node::get_consumer_input_node(const Routing resource_routing, const int key, const int depth) const -> Rendergraph_node*
+auto Rendergraph_node::get_consumer_input_node(const int key, const int depth) const -> Rendergraph_node*
 {
     if (!inputs_allowed()) {
         log_tail->error("Node '{}' inputs are not allowed ('{}')", get_name(), key);
         return nullptr;
     }
 
-    const auto* input = get_input(resource_routing, key, depth + 1);
+    const auto* input = get_input(key, depth + 1);
     if (input == nullptr) {
         log_tail->error("Node '{}' input for key '{}' is not registered", get_name(), key);
         return nullptr;
@@ -77,39 +77,20 @@ auto Rendergraph_node::get_consumer_input_node(const Routing resource_routing, c
     return input->producer_nodes.front();
 }
 
-auto Rendergraph_node::get_consumer_input_texture(const Routing resource_routing, const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Rendergraph_node::get_consumer_input_texture(const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    auto* producer = get_consumer_input_node(resource_routing, key, depth);
+    auto* producer = get_consumer_input_node(key, depth);
     return (producer != nullptr)
-        ? producer->get_producer_output_texture(resource_routing, key, depth + 1)
+        ? producer->get_producer_output_texture(key, depth + 1)
         : std::shared_ptr<erhe::graphics::Texture>{};
 }
 
-auto Rendergraph_node::get_consumer_input_framebuffer(const Routing resource_routing, const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Rendergraph_node::get_output(const int key, const int depth) const -> const Rendergraph_producer_connector*
 {
-    auto* producer = get_consumer_input_node(resource_routing, key, depth);
-    return (producer != nullptr)
-        ? producer->get_producer_output_framebuffer(resource_routing, key, depth + 1)
-        : std::shared_ptr<erhe::graphics::Framebuffer>{};
-}
-
-auto Rendergraph_node::get_consumer_input_viewport(const Routing resource_routing, const int key, const int depth) const -> erhe::math::Viewport
-{
-    auto* producer = get_consumer_input_node(resource_routing, key, depth);
-    return (producer != nullptr)
-        ? producer->get_producer_output_viewport(resource_routing, key, depth + 1)
-        : erhe::math::Viewport{};
-}
-
-auto Rendergraph_node::get_output(const Routing resource_routing, const int key, const int depth) const -> const Rendergraph_producer_connector*
-{
-    static_cast<void>(resource_routing);
-
     SPDLOG_LOGGER_TRACE(
         log_tail,
-        "{} Rendergraph_node::get_output(resource_routing = {}, key = {}, depth = {})",
+        "{} Rendergraph_node::get_output(key = {}, depth = {})",
         get_name(),
-        c_str(resource_routing),
         key,
         depth
     );
@@ -132,14 +113,14 @@ auto Rendergraph_node::get_output(const Routing resource_routing, const int key,
     return nullptr;
 }
 
-auto Rendergraph_node::get_producer_output_node(const Routing resource_routing, const int key, const int depth) const -> Rendergraph_node*
+auto Rendergraph_node::get_producer_output_node(const int key, const int depth) const -> Rendergraph_node*
 {
     if (!outputs_allowed()) {
         log_tail->error("Node '{}' outputs are not allowed ('{}')", get_name(), key);
         return nullptr;
     }
 
-    const auto* output = get_output(resource_routing, key, depth + 1);
+    const auto* output = get_output(key, depth + 1);
     if (output == nullptr) {
         log_tail->error("Node '{}' output for key '{}' is not registered", get_name(), key);
         return nullptr;
@@ -153,28 +134,9 @@ auto Rendergraph_node::get_producer_output_node(const Routing resource_routing, 
     return output->consumer_nodes.front();
 }
 
-auto Rendergraph_node::get_producer_output_texture(const Routing resource_routing, const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Rendergraph_node::get_producer_output_texture(int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    auto* consumer = get_producer_output_node(resource_routing, key, depth);
-    return (consumer != nullptr)
-        ? consumer->get_consumer_input_texture(resource_routing, key, depth + 1)
-        : std::shared_ptr<erhe::graphics::Texture>{};
-}
-
-auto Rendergraph_node::get_producer_output_framebuffer(const Routing resource_routing, const int key, const int depth) const -> std::shared_ptr<erhe::graphics::Framebuffer>
-{
-    auto* consumer = get_producer_output_node(resource_routing, key, depth);
-    return (consumer != nullptr)
-        ? consumer->get_consumer_input_framebuffer(resource_routing, key, depth + 1)
-        : std::shared_ptr<erhe::graphics::Framebuffer>{};
-}
-
-auto Rendergraph_node::get_producer_output_viewport(const Routing resource_routing, const int key, const int depth) const -> erhe::math::Viewport
-{
-    auto* consumer = get_producer_output_node(resource_routing, key, depth);
-    return (consumer != nullptr)
-        ? consumer->get_consumer_input_viewport(resource_routing, key, depth + 1)
-        : erhe::math::Viewport{};
+    return {};
 }
 
 auto Rendergraph_node::get_inputs() const -> const std::vector<Rendergraph_consumer_connector>&
@@ -202,22 +164,18 @@ auto Rendergraph_node::get_size() const -> std::optional<glm::vec2>
     std::optional<glm::vec2> size;
 
     for (const auto& output : m_outputs) {
-        if (output.resource_routing == Routing::None) {
-            continue;
-        }
-
-        const auto& texture = get_producer_output_texture(output.resource_routing, output.key);
+        const auto& texture = get_producer_output_texture(output.key);
         if (
             texture &&
-            (texture->target() == gl::Texture_target::texture_2d) &&
-            (texture->width () >= 1) &&
-            (texture->height() >= 1) &&
-            (gl_helpers::has_color(texture->internal_format()))
+            (texture->get_target() == gl::Texture_target::texture_2d) &&
+            (texture->get_width () >= 1) &&
+            (texture->get_height() >= 1) &&
+            (erhe::dataformat::has_color(texture->get_pixelformat()))
         ) {
             if (!size.has_value()) {
-                size = glm::vec2{texture->width(), texture->height()};
+                size = glm::vec2{texture->get_width(), texture->get_height()};
             } else {
-                size = glm::max(size.value(), glm::vec2{texture->width(), texture->height()});
+                size = glm::max(size.value(), glm::vec2{texture->get_width(), texture->get_height()});
             }
         }
     }
@@ -227,6 +185,16 @@ auto Rendergraph_node::get_size() const -> std::optional<glm::vec2>
 auto Rendergraph_node::is_enabled() const -> bool
 {
     return m_enabled;
+}
+
+auto Rendergraph_node::get_rendergraph() -> Rendergraph&
+{
+    return m_rendergraph;
+}
+
+auto Rendergraph_node::get_rendergraph() const -> const Rendergraph&
+{
+    return m_rendergraph;
 }
 
 auto Rendergraph_node::get_name() const -> const std::string&
@@ -239,7 +207,7 @@ void Rendergraph_node::set_enabled(bool value)
     m_enabled = value;
 }
 
-auto Rendergraph_node::register_input(const Routing resource_routing, const std::string_view label, const int key) -> bool
+auto Rendergraph_node::register_input(const std::string_view label, const int key) -> bool
 {
     if (!inputs_allowed()) {
         log_tail->error("Node '{}' inputs are not allowed (label = {}, key = {})", get_name(), label, key);
@@ -259,11 +227,11 @@ auto Rendergraph_node::register_input(const Routing resource_routing, const std:
         log_tail->error("Node '{}' input key '{}' is already registered", get_name(), key);
         return false;
     }
-    m_inputs.push_back(Rendergraph_consumer_connector{resource_routing, std::string{label}, key});
+    m_inputs.push_back(Rendergraph_consumer_connector{std::string{label}, key});
     return true;
 }
 
-auto Rendergraph_node::register_output(const Routing resource_routing, const std::string_view label, const int key) -> bool
+auto Rendergraph_node::register_output(const std::string_view label, const int key) -> bool
 {
     if (!outputs_allowed()) {
         log_tail->error("Node '{}' outputs are not allowed (label = {}, key = {})", get_name(), label, key);
@@ -283,7 +251,7 @@ auto Rendergraph_node::register_output(const Routing resource_routing, const std
         log_tail->error("Node '{}' output key '{}' is already registered", get_name(), key);
         return false;
     }
-    m_outputs.push_back(Rendergraph_producer_connector{resource_routing, std::string{label}, key,});
+    m_outputs.push_back(Rendergraph_producer_connector{std::string{label}, key,});
     return true;
 }
 
@@ -310,11 +278,8 @@ auto Rendergraph_node::connect_input(const int key, Rendergraph_node* producer) 
 
     auto& producer_nodes = i->producer_nodes;
 
-    // Only single input with 'Resource_provided_by_producer' allowed
-    if (
-        (!producer_nodes.empty()) &&
-        (i->resource_routing == Routing::Resource_provided_by_producer)
-    ) {
+    // Only single input with allowed
+    if (!producer_nodes.empty()) {
         log_tail->warn(
             "Node '{}' input key {} already has {} producer{} registered",
             get_name(),
@@ -371,19 +336,14 @@ auto Rendergraph_node::connect_output(const int key, Rendergraph_node* consumer)
 
     auto& consumer_nodes = i->consumer_nodes;
 
-    // Only single output with 'Resource_provided_by_consumer' allowed
-    if (
-        (!consumer_nodes.empty()) &&
-        (i->resource_routing == Routing::Resource_provided_by_consumer)
-    ) {
-        log_tail->warn(
-            "Node '{}' output key {} already has {} consumer{} registered",
+    if (!consumer_nodes.empty()) {
+        log_tail->trace(
+            "Node '{}' output key {} already has {} consumer{} registered - this is OK",
             get_name(),
             key,
             consumer_nodes.size(),
             consumer_nodes.size() > 1 ? "s" : ""
         );
-        return false;
     }
 
     auto j = std::find_if(

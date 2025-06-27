@@ -16,9 +16,11 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/scoped_imgui_context.hpp"
 #include "erhe_math/math_util.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
@@ -46,14 +48,14 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     , m_context          {editor_context}
     , m_rendertarget_mesh{rendertarget_mesh}
 {
-    register_output(erhe::rendergraph::Routing::Resource_provided_by_producer, "rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
+    register_output("rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
 
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);
 
     ImGuiIO& io = m_imgui_context->IO;
     IM_ASSERT(io.BackendPlatformUserData == NULL && "Already initialized a platform backend!");
     io.ConfigFlags             = io.ConfigFlags & ~ImGuiConfigFlags_DockingEnable;
-    io.DisplaySize             = ImVec2{m_rendertarget_mesh->width(), m_rendertarget_mesh->height()};
+    io.DisplaySize             = ImVec2{m_rendertarget_mesh->get_width(), m_rendertarget_mesh->get_height()};
     io.FontDefault             = imgui_renderer.vr_primary_font();
     io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
     io.MouseDrawCursor         = editor_context.OpenXR;
@@ -345,7 +347,7 @@ void Rendertarget_imgui_host::begin_imgui_frame()
             // TODO Duplication with Rendertarget_mesh::update_pointer()
             if (intersection.has_value() && intersection.value() > 0.0f) {
                 const auto world_position      = ray_origin + intersection.value() * controller_direction;
-                const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
+                const auto window_position_opt = m_rendertarget_mesh->get_world_to_window(world_position);
                 if (window_position_opt.has_value()) {
                     if (!has_cursor()) {
                         on_cursor_enter_event(
@@ -481,11 +483,6 @@ void Rendertarget_imgui_host::stop_text_input()
     //// m_context_window.stop_text_input();
 }
 
-void Rendertarget_imgui_host::set_clear_color(const glm::vec4& value)
-{
-    m_clear_color = value;
-}
-
 void Rendertarget_imgui_host::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION();
@@ -499,47 +496,22 @@ void Rendertarget_imgui_host::execute_rendergraph_node()
     erhe::imgui::Imgui_host& imgui_host = *this;
     erhe::imgui::Scoped_imgui_context imgui_context{imgui_host};
 
-    m_rendertarget_mesh->bind();
-    m_rendertarget_mesh->clear(m_clear_color);
+    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
+    erhe::graphics::Render_pass* render_pass = m_rendertarget_mesh->get_render_pass();
+    ERHE_VERIFY(render_pass != nullptr);
+    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = graphics_device.make_render_command_encoder(*render_pass);
     m_context.imgui_renderer->render_draw_data();
     m_rendertarget_mesh->render_done(m_context);
 }
 
-auto Rendertarget_imgui_host::get_consumer_input_texture(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Rendertarget_imgui_host::get_consumer_input_texture(int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    return m_rendertarget_mesh->texture();
+    return m_rendertarget_mesh->get_texture();
 }
 
-auto Rendertarget_imgui_host::get_producer_output_texture(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Rendertarget_imgui_host::get_producer_output_texture(int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    return m_rendertarget_mesh->texture();
-}
-
-auto Rendertarget_imgui_host::get_consumer_input_framebuffer(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
-{
-    return m_rendertarget_mesh->framebuffer();
-}
-
-auto Rendertarget_imgui_host::get_consumer_input_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
-{
-    return erhe::math::Viewport{
-        .x      = 0,
-        .y      = 0,
-        .width  = static_cast<int>(m_rendertarget_mesh->width()),
-        .height = static_cast<int>(m_rendertarget_mesh->height())
-        // .reverse_depth = false // unused
-    };
-}
-
-auto Rendertarget_imgui_host::get_producer_output_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
-{
-    return erhe::math::Viewport{
-        .x      = 0,
-        .y      = 0,
-        .width  = static_cast<int>(m_rendertarget_mesh->width()),
-        .height = static_cast<int>(m_rendertarget_mesh->height())
-        // .reverse_depth = false // unused
-    };
+    return m_rendertarget_mesh->get_texture();
 }
 
 }  // namespace editor

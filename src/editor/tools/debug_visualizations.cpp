@@ -629,10 +629,10 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
         return;
     }
     const float aspect_ratio         = render_context.viewport.aspect_ratio();
-    const mat4  view_clip_from_node  = view_camera->projection()->get_projection_matrix(aspect_ratio, render_context.viewport.reverse_depth);
+    const mat4  view_clip_from_node  = view_camera->projection()->get_projection_matrix(aspect_ratio);
     const mat4  view_clip_from_world = view_clip_from_node * view_camera_node->node_from_world();
 
-    const mat4 clip_from_node  = camera->projection()->get_projection_matrix(1.0f, render_context.viewport.reverse_depth);
+    const mat4 clip_from_node  = camera->projection()->get_projection_matrix(1.0f);
     const mat4 clip_from_world = clip_from_node * camera_node->node_from_world();
     const mat4 node_from_clip  = inverse(clip_from_node);
     const mat4 world_from_clip = camera_node->world_from_node() * node_from_clip;
@@ -973,7 +973,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         std::shared_ptr<erhe::scene::Camera> selected_camera = get_selected_camera(context);
         if (m_selection_convex_hull_projected && selected_camera) {
             erhe::scene::Node* camera_node     = selected_camera->get_node();
-            const mat4         clip_from_node  = selected_camera->projection()->get_projection_matrix(1.0f, context.viewport.reverse_depth);
+            const mat4         clip_from_node  = selected_camera->projection()->get_projection_matrix(1.0f);
             const mat4         clip_from_world = clip_from_node * camera_node->node_from_world();
             const mat4         node_from_clip  = inverse(clip_from_node);
             const mat4         world_from_clip = camera_node->world_from_node() * node_from_clip;

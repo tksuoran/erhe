@@ -4,7 +4,7 @@
 
 namespace editor {
 
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 Basic_scene_view_node::Basic_scene_view_node(
@@ -20,24 +20,6 @@ Basic_scene_view_node::Basic_scene_view_node(
     m_viewport.y      = 0;
     m_viewport.width  = 0;
     m_viewport.height = 0;
-
-    register_input(
-        erhe::rendergraph::Routing::Resource_provided_by_consumer,
-        "viewport",
-        erhe::rendergraph::Rendergraph_node_key::viewport
-    );
-
-    // "window" is slot / pseudo-resource which allows use rendergraph connection
-    // to make Imgui_window_scene_view a dependency for Imgui_host, forcing
-    // correct rendering order (Imgui_window_scene_view must be rendered before
-    // Imgui_host).
-    //
-    // TODO Imgui_renderer should carry dependencies using Rendergraph.
-    register_output(
-        erhe::rendergraph::Routing::None,
-        "window",
-        erhe::rendergraph::Rendergraph_node_key::window
-    );
 }
 
 auto Basic_scene_view_node::get_viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>
@@ -45,32 +27,12 @@ auto Basic_scene_view_node::get_viewport_scene_view() const -> std::shared_ptr<V
     return m_viewport_scene_view.lock();
 }
 
-auto Basic_scene_view_node::get_consumer_input_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
-{
-    return get_viewport();
-}
-
-auto Basic_scene_view_node::get_producer_output_viewport(erhe::rendergraph::Routing, int, int) const -> erhe::math::Viewport
-{
-    return get_viewport();
-}
-
-auto Basic_scene_view_node::get_consumer_input_texture(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
+auto Basic_scene_view_node::get_consumer_input_texture(int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     return {};
 }
 
-auto Basic_scene_view_node::get_producer_output_texture(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Texture>
-{
-    return {};
-}
-
-auto Basic_scene_view_node::get_consumer_input_framebuffer(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
-{
-    return {};
-}
-
-auto Basic_scene_view_node::get_producer_output_framebuffer(erhe::rendergraph::Routing, int, int) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Basic_scene_view_node::get_producer_output_texture(int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     return {};
 }

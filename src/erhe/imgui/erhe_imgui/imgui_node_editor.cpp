@@ -1447,6 +1447,7 @@ void ed::EditorContext::End()
 
         m_DrawList->ChannelsSetCurrent(c_UserChannel_Grid);
 
+        /// TODO this can end up in infinite loop
         ImVec2 offset    = m_Canvas.ViewOrigin() * (1.0f / m_Canvas.ViewScale());
         ImU32 GRID_COLOR = GetColor(StyleColor_Grid, ImClamp(m_Canvas.ViewScale() * m_Canvas.ViewScale(), 0.0f, 1.0f));
         float GRID_SX    = 32.0f;// * m_Canvas.ViewScale();

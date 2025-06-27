@@ -1,25 +1,15 @@
 #pragma once
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
-#include "erhe_imgui/imgui_window.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
-#include "erhe_math/viewport.hpp"
 
 #include <memory>
 
-namespace erhe::imgui {
-    class Imgui_windows;
-}
-namespace erhe::primitive {
-    class Material;
-}
-namespace erhe::rendergraph {
-    class Rendergraph;
-}
-namespace erhe::scene_renderer {
-    class Forward_renderer;
-}
+namespace erhe::imgui          { class Imgui_windows; }
+namespace erhe::primitive      { class Material; }
+namespace erhe::rendergraph    { class Rendergraph; }
+namespace erhe::scene_renderer { class Forward_renderer; }
 
 namespace editor {
 
@@ -41,12 +31,6 @@ public:
     void execute_rendergraph_node() override;
 
     void set_area_size(int size);
-
-    [[nodiscard]] auto get_producer_output_viewport(
-        erhe::rendergraph::Routing resource_routing,
-        int                        key,
-        int                        depth = 0
-    ) const -> erhe::math::Viewport override;
 
     // Public API
     void set_material(const std::shared_ptr<erhe::primitive::Material>& material);

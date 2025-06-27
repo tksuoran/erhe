@@ -6,6 +6,7 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
+#include "editor_settings.hpp"
 #include "editor_scenes.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
@@ -18,13 +19,15 @@
 #include "tools/tools.hpp"
 #include "tools/transform/transform_tool.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
-#include "erhe_rendergraph/multisample_resolve.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_log/log_glm.hpp"
@@ -33,7 +36,6 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -52,7 +54,7 @@ using erhe::graphics::Input_assembly_state;
 using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
-using erhe::graphics::Framebuffer;
+using erhe::graphics::Render_pass;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
@@ -65,31 +67,32 @@ Viewport_scene_view::Viewport_scene_view(
     const std::string_view                      name,
     const char*                                 ini_label,
     const std::shared_ptr<Scene_root>&          scene_root,
-    const std::shared_ptr<erhe::scene::Camera>& camera
+    const std::shared_ptr<erhe::scene::Camera>& camera,
+    int                                         msaa_sample_count
 )
-    : Scene_view       {editor_context, Viewport_config::default_config()}
-    , Rendergraph_node {rendergraph, name}
-    , m_name           {name}
-    , m_ini_label      {ini_label}
-    , m_scene_root     {scene_root}
-    , m_tool_scene_root{tools.get_tool_scene_root()}
-    , m_camera         {camera}
+    : Scene_view              {editor_context, Viewport_config::default_config()}
+    , Texture_rendergraph_node{
+        erhe::rendergraph::Texture_rendergraph_node_create_info{
+            .rendergraph          = rendergraph,
+            .name                 = fmt::format("Texture_rendergraph_node for Viewport_scene_view {}", name),
+            .input_key            = erhe::rendergraph::Rendergraph_node_key::none,
+            .output_key           = erhe::rendergraph::Rendergraph_node_key::viewport_texture,
+            .color_format         = erhe::dataformat::Format::format_16_vec4_float,
+            .depth_stencil_format = erhe::dataformat::Format::format_d32_sfloat_s8_uint,
+            .sample_count         = msaa_sample_count
+        }
+    }
+    , m_name                  {name}
+    , m_ini_label             {ini_label}
+    , m_scene_root            {scene_root}
+    , m_tool_scene_root       {tools.get_tool_scene_root()}
+    , m_camera                {camera}
 {
-    register_input(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        "shadow_maps",
-        erhe::rendergraph::Rendergraph_node_key::shadow_maps
-    );
-    register_input(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        "rendertarget texture",
-        erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
-    );
-    register_output(
-        erhe::rendergraph::Routing::Resource_provided_by_consumer,
-        "viewport",
-        erhe::rendergraph::Rendergraph_node_key::viewport
-    );
+    // We need shadows rendered before
+    register_input("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
+
+    // We need rendertarget texture(s) rendered before
+    register_input("rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
 }
 
 Viewport_scene_view::~Viewport_scene_view() noexcept
@@ -101,12 +104,7 @@ void Viewport_scene_view::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& output_viewport = get_producer_output_viewport(erhe::rendergraph::Routing::Resource_provided_by_consumer, erhe::rendergraph::Rendergraph_node_key::viewport);
-    const auto& output_framebuffer = get_producer_output_framebuffer(erhe::rendergraph::Routing::Resource_provided_by_consumer, erhe::rendergraph::Rendergraph_node_key::viewport);
-
-    const GLint output_framebuffer_name = output_framebuffer ? output_framebuffer->gl_name() : 0;
-
-    if ((output_viewport.width < 1) || (output_viewport.height < 1)) {
+    if ((m_projection_viewport.width < 1) || (m_projection_viewport.height < 1)) {
         return;
     }
 
@@ -119,13 +117,14 @@ void Viewport_scene_view::execute_rendergraph_node()
     if (!camera) {
         do_render = false;
     }
+
     const Render_context context{
         .editor_context         = m_context,
         .scene_view             = *this,
         .viewport_config        = m_viewport_config,
         .camera                 = camera.get(),
         .viewport_scene_view    = this,
-        .viewport               = output_viewport,
+        .viewport               = m_projection_viewport,
         .override_shader_stages = get_override_shader_stages()
     };
 
@@ -133,22 +132,28 @@ void Viewport_scene_view::execute_rendergraph_node()
         m_context.editor_rendering->render_id(context);
     }
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, output_framebuffer_name);
-    if (output_framebuffer) {
-        if (!output_framebuffer->check_status()) {
-            return;
-        }
+    Rendergraph_node* output_node = get_producer_output_node(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    bool render_to_texture = output_node != nullptr;
+    if (render_to_texture) {
+        update_render_pass(m_projection_viewport.width, m_projection_viewport.height);
+    } else {
+        update_render_pass(m_projection_viewport.width, m_projection_viewport.height, true);
     }
 
-    gl::enable(gl::Enable_cap::scissor_test);
-    gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
-
+    ERHE_VERIFY(m_render_pass);
+    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
+    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder;
+    render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
+    // Starting render encoder clears render target texture(s)
     if (!do_render) {
-        gl::clear_color(0.1f, 0.1f, 0.1f, 1.0f);
-        gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
-        gl::disable    (gl::Enable_cap::scissor_test);
+        // ending render encoder applies multisample resolve, if applicabale
         return;
     }
+
+    // TODO This would be? needed for basic (non-ImGui) viewports?
+    //// gl::enable(gl::Enable_cap::scissor_test);
+    //// gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
+    //// ERHE_DEFER( gl::disable(gl::Enable_cap::scissor_test); );
 
     scene_root->get_scene().update_node_transforms();
 
@@ -162,20 +167,10 @@ void Viewport_scene_view::execute_rendergraph_node()
     );
 
     m_context.editor_rendering->render_viewport_main(context);
-
     m_context.tools           ->render_viewport_tools(context);
     m_context.editor_rendering->render_viewport_renderables(context);
     m_context.debug_renderer  ->render(context.viewport, *context.camera);
-
-    m_context.text_renderer->render(context.viewport);
-    gl::disable(gl::Enable_cap::scissor_test);
-}
-
-void Viewport_scene_view::reconfigure(const int sample_count)
-{
-    if (m_multisample_resolve_node != nullptr) {
-        m_multisample_resolve_node->reconfigure(sample_count);
-    }
+    m_context.text_renderer   ->render(context.viewport);
 }
 
 void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
@@ -210,12 +205,12 @@ auto Viewport_scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
     return m_scene_root.lock();
 }
 
-auto Viewport_scene_view::window_viewport() const -> const erhe::math::Viewport&
+auto Viewport_scene_view::get_window_viewport() const -> const erhe::math::Viewport&
 {
     return m_window_viewport;
 }
 
-auto Viewport_scene_view::projection_viewport() const -> const erhe::math::Viewport&
+auto Viewport_scene_view::get_projection_viewport() const -> const erhe::math::Viewport&
 {
     return m_projection_viewport;
 }
@@ -240,7 +235,7 @@ auto Viewport_scene_view::as_viewport_scene_view() const -> const Viewport_scene
     return this;
 }
 
-auto Viewport_scene_view::viewport_from_window(const glm::vec2 window_position) const -> glm::vec2
+auto Viewport_scene_view::get_viewport_from_window(const glm::vec2 window_position) const -> glm::vec2
 {
     const float content_x      = static_cast<float>(window_position.x) - m_window_viewport.x;
     const float content_y      = static_cast<float>(window_position.y) - m_window_viewport.y;
@@ -299,9 +294,9 @@ void Viewport_scene_view::update_pointer_2d_position(const glm::vec2 position_in
 
 void Viewport_scene_view::update_hover(bool ray_only)
 {
-    const bool reverse_depth          = projection_viewport().reverse_depth;
-    const auto near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
-    const auto far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
+    // Note: Using reverse Z
+    const auto near_position_in_world = get_position_in_world_viewport_depth(1.0f);
+    const auto far_position_in_world  = get_position_in_world_viewport_depth(0.0f);
 
     // log_input_frame->info("Viewport_scene_view::update_hover");
 
@@ -353,7 +348,7 @@ void Viewport_scene_view::update_hover_with_id_render()
         .valid                      = id_query.valid,
         .scene_mesh_weak            = id_query.mesh,
         .scene_mesh_primitive_index = id_query.primitive_index,
-        .position                   = position_in_world_viewport_depth(id_query.depth),
+        .position                   = get_position_in_world_viewport_depth(id_query.depth),
         .triangle                   = static_cast<uint32_t>(id_query.triangle_id) // TODO Consider these types
     };
 
@@ -414,7 +409,7 @@ auto Viewport_scene_view::get_position_in_viewport() const -> std::optional<glm:
     return m_position_in_viewport;
 }
 
-auto Viewport_scene_view::position_in_world_viewport_depth(const float viewport_depth) const -> std::optional<glm::vec3>
+auto Viewport_scene_view::get_position_in_world_viewport_depth(const float viewport_depth) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
     if (!m_position_in_viewport.has_value() || !camera) {
@@ -428,9 +423,9 @@ auto Viewport_scene_view::position_in_world_viewport_depth(const float viewport_
         m_position_in_viewport.value().y,
         viewport_depth
     };
-    const auto      vp                    = projection_viewport();
-    const auto      projection_transforms = camera->projection_transforms(vp);
-    const glm::mat4 world_from_clip       = projection_transforms.clip_from_world.get_inverse_matrix();
+    const erhe::math::Viewport&                     vp                    = get_projection_viewport();
+    const erhe::scene::Camera_projection_transforms projection_transforms = camera->projection_transforms(vp);
+    const glm::mat4                                 world_from_clip       = projection_transforms.clip_from_world.get_inverse_matrix();
 
     return erhe::math::unproject<float>(
         glm::mat4{world_from_clip},
@@ -446,10 +441,7 @@ auto Viewport_scene_view::position_in_world_viewport_depth(const float viewport_
 
 auto Viewport_scene_view::get_shadow_render_node() const -> Shadow_render_node*
 {
-    Rendergraph_node* input_node = get_consumer_input_node(
-        erhe::rendergraph::Routing::Resource_provided_by_producer,
-        erhe::rendergraph::Rendergraph_node_key::shadow_maps
-    );
+    Rendergraph_node*   input_node         = get_consumer_input_node(erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     Shadow_render_node* shadow_render_node = static_cast<Shadow_render_node*>(input_node);
     return shadow_render_node;
 }
@@ -545,31 +537,6 @@ auto Viewport_scene_view::viewport_toolbar() -> bool
     return hovered;
 }
 
-void Viewport_scene_view::link_to(std::shared_ptr<erhe::rendergraph::Multisample_resolve_node> node)
-{
-    m_multisample_resolve_node = node;
-}
-
-void Viewport_scene_view::link_to(std::shared_ptr<Post_processing_node> node)
-{
-    m_post_processing_node = node;
-}
-
-auto Viewport_scene_view::get_post_processing_node() -> Post_processing_node*
-{
-    return m_post_processing_node.get();
-}
-
-void Viewport_scene_view::set_final_output(std::shared_ptr<erhe::rendergraph::Rendergraph_node> node)
-{
-    m_final_output = node;
-}
-
-auto Viewport_scene_view::get_final_output() -> erhe::rendergraph::Rendergraph_node*
-{
-    return m_final_output.get();
-}
-
 void Viewport_scene_view::set_shader_stages_variant(Shader_stages_variant variant)
 {
     m_shader_stages_variant = variant;
@@ -626,8 +593,8 @@ auto Viewport_scene_view::get_closest_point_on_line(const glm::vec3 P0, const gl
             }
         }
     } else {
-        const auto Q0_opt = position_in_world_viewport_depth(1.0);
-        const auto Q1_opt = position_in_world_viewport_depth(0.0);
+        const auto Q0_opt = get_position_in_world_viewport_depth(1.0);
+        const auto Q1_opt = get_position_in_world_viewport_depth(0.0);
         if (Q0_opt.has_value() && Q1_opt.has_value()) {
             const auto Q0 = Q0_opt.value();
             const auto Q1 = Q1_opt.value();
@@ -647,8 +614,8 @@ auto Viewport_scene_view::get_closest_point_on_plane(const glm::vec3 N, const gl
 
     using vec3 = glm::vec3;
 
-    const auto Q0_opt = position_in_world_viewport_depth(1.0);
-    const auto Q1_opt = position_in_world_viewport_depth(0.0);
+    const auto Q0_opt = get_position_in_world_viewport_depth(1.0);
+    const auto Q1_opt = get_position_in_world_viewport_depth(0.0);
     if (
         !Q0_opt.has_value() ||
         !Q1_opt.has_value()

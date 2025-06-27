@@ -542,6 +542,13 @@ auto Shader_resource::binding_point() const -> unsigned int
     return static_cast<unsigned int>(m_binding_point);
 }
 
+auto Shader_resource::get_texture_unit() const -> int
+{
+    ERHE_VERIFY(m_type == Type::sampler);
+    ERHE_VERIFY(m_binding_point >= 0);
+    return m_binding_point;
+}
+
 auto Shader_resource::get_binding_target() const->gl::Buffer_target
 {
     switch (m_type) {

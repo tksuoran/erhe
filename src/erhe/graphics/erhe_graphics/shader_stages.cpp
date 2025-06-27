@@ -92,11 +92,16 @@ Shader_stages::Shader_stages(Device& device, const std::string& failed_name)
 {
     std::string label = fmt::format("(P:{}) {} - compilation failed", gl_name(), failed_name);
     ERHE_VERIFY(!failed_name.empty());
-    gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+    gl::object_label(
+        gl::Object_identifier::program,
+        gl_name(),
+        -1, //static_cast<GLsizei>(label.length()),
+        label.c_str()
+    );
 }
 
 Shader_stages::Shader_stages(Shader_stages&& from)
-    : m_device        {from.m_device                   }
+    : m_device          {from.m_device                     }
     , m_handle          {std::move(from.m_handle)          }
     , m_name            {std::move(from.m_name)            }
     , m_is_valid        {from.m_is_valid                   }
@@ -147,7 +152,12 @@ void Shader_stages::reload(Shader_stages_prototype&& prototype)
     m_is_valid = true;
 
     const std::string label = fmt::format("(P:{}) {}{}", gl_name(), m_name, prototype.is_valid() ? "" : " (Failed)");
-    gl::object_label(gl::Object_identifier::program, gl_name(), static_cast<GLsizei>(label.length()), label.c_str());
+    gl::object_label(
+        gl::Object_identifier::program,
+        gl_name(),
+        -1, //static_cast<GLsizei>(label.length()),
+        label.c_str()
+    );
 }
 
 auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool

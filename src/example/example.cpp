@@ -176,18 +176,16 @@ public:
         gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 
         erhe::math::Viewport viewport{
-            .x             = 0,
-            .y             = 0,
-            .width         = m_window.get_width(),
-            .height        = m_window.get_height(),
-            .reverse_depth = m_graphics_device.configuration.reverse_depth
+            .x      = 0,
+            .y      = 0,
+            .width  = m_window.get_width(),
+            .height = m_window.get_height()
         };
 
         m_scene.update_node_transforms();
 
         std::vector<erhe::renderer::Pipeline_renderpass*> passes;
 
-        const bool reverse_depth = m_graphics_device.configuration.reverse_depth;
         erhe::renderer::Pipeline_renderpass standard_pipeline_renderpass{ 
             erhe::graphics::Render_pipeline_state{
                 erhe::graphics::Pipeline_data{
@@ -196,7 +194,7 @@ public:
                     .vertex_input   = &m_mesh_memory.vertex_input,
                     .input_assembly = erhe::graphics::Input_assembly_state::triangles,
                     .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
-                    .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+                    .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
                     .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
                 }
             }

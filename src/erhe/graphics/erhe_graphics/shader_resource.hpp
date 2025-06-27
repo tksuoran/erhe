@@ -127,6 +127,7 @@ public:
     [[nodiscard]] auto member            (const std::string_view name) const -> Shader_resource*;
     [[nodiscard]] auto binding_point     () const -> unsigned int;
     [[nodiscard]] auto get_binding_target() const -> gl::Buffer_target;
+    [[nodiscard]] auto get_texture_unit  () const -> int;
 
     // Returns size of block.
     // For arrays, size of one element is returned.
@@ -250,7 +251,7 @@ private:
     // Interface blocks (aggregate type declaration)
     std::string       m_block_name;
 
-    // Blocks and samplers in default uniform block
+    // For default uniform block hosted blocks and texture samplers (texture unit)
     int               m_binding_point{-1};
 
     bool m_readonly {false};

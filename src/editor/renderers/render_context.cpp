@@ -36,8 +36,7 @@ auto Render_context::get_line_renderer(unsigned int stencil, bool visible, bool 
         .primitive_type    = gl::Primitive_type::lines,
         .stencil_reference = stencil,
         .draw_visible      = visible,
-        .draw_hidden       = hidden,
-        .reverse_depth     = true
+        .draw_hidden       = hidden
     };
     return editor_context.debug_renderer->get(config);
 }
