@@ -12,6 +12,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 namespace editor {
 
 Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, const unsigned int capacity, const unsigned int size_pixels)

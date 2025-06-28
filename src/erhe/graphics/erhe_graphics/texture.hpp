@@ -65,10 +65,10 @@ public:
 
     using Create_info = Texture_create_info;
 
-    static [[nodiscard]] auto is_array_target       (gl::Texture_target target) -> bool;
-    static [[nodiscard]] auto get_storage_dimensions(gl::Texture_target target) -> int;
-    static [[nodiscard]] auto get_mipmap_dimensions (gl::Texture_target target) -> int;
-    static [[nodiscard]] auto get_size_level_count  (int size) -> int;
+    [[nodiscard]] static auto is_array_target       (gl::Texture_target target) -> bool;
+    [[nodiscard]] static auto get_storage_dimensions(gl::Texture_target target) -> int;
+    [[nodiscard]] static auto get_mipmap_dimensions (gl::Texture_target target) -> int;
+    [[nodiscard]] static auto get_size_level_count  (int size) -> int;
 
     void upload(erhe::dataformat::Format internal_format, int width, int height = 1, int depth = 1, int array_layer_count = 0);
 

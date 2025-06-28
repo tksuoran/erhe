@@ -9,6 +9,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <fmt/format.h>
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
