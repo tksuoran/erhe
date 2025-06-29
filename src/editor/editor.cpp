@@ -1,5 +1,5 @@
 // Using llvm pipe appears to have broken GL context sharing at least with what I do here.
-// #define ERHE_SERIAL_INIT 1
+#define ERHE_SERIAL_INIT 1
 
 #include "editor.hpp"
 
