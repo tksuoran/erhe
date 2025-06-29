@@ -119,7 +119,10 @@
         "ranges": "cpp",
         "execution": "cpp",
         "scoped_allocator": "cpp",
-        "text_encoding": "cpp"
+        "text_encoding": "cpp",
+        "expected": "cpp",
+        "latch": "cpp",
+        "stdfloat": "cpp"
     },
     "workbench.colorCustomizations": {
         "titleBar.activeBackground":   "#402292",

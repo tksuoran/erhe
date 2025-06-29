@@ -531,7 +531,10 @@ Device::Device(erhe::window::Context_window& context_window)
         properties.filter             = get_bool(gl::Internal_format_p_name::filter);
         properties.framebuffer_blend  = get_bool(gl::Internal_format_p_name::framebuffer_blend);
 
-        int num_virtual_page_sizes = get_int(gl::Internal_format_p_name::num_virtual_page_sizes_arb);
+        int num_virtual_page_sizes = 0;
+        if (info.gl_version >= 460) {
+            num_virtual_page_sizes = get_int(gl::Internal_format_p_name::num_virtual_page_sizes_arb);
+        }
         if (num_virtual_page_sizes > 0) {
             properties.sparse_tile_x_sizes.resize(num_virtual_page_sizes);
             properties.sparse_tile_y_sizes.resize(num_virtual_page_sizes);

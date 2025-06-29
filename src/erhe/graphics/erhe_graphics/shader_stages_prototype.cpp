@@ -356,6 +356,11 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
 
     {
         ERHE_PROFILE_SCOPE("glCompileShader");
+        // For debugging issues reported by llvm pipe
+        // const std::string source = get_final_source(shader, gl_name);
+        // const std::string f_source = format_source(source);
+        // log_program->info("Shader_source for glCompileShader:");
+        // log_program->info("\n{}", f_source);
         gl::shader_source(gl_name, static_cast<GLsizei>(sources.size()), sources.data(), nullptr);
         gl::compile_shader(gl_name);
     }

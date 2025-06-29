@@ -24,6 +24,14 @@
             "program": "${command:cmake.launchTargetPath}",
         },
         {
+            "name":    "erhe editor LLDB software GL",
+            "type":    "lldb",
+            "request": "launch",
+            "cwd":     "${workspaceFolder}/src/editor",
+            "env":     {"LIBGL_ALWAYS_SOFTWARE": "1"},
+            "program": "${command:cmake.launchTargetPath}",
+        },
+        {
             "name":    "hextiles LLDB",
             "type":    "lldb",
             "request": "launch",

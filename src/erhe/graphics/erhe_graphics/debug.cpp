@@ -94,7 +94,7 @@ void erhe_opengl_callback(
 #if defined(WIN32)
         DebugBreak();
 #else
-        //raise(SIGTRAP);
+        raise(SIGTRAP);
 #endif
     }
 #endif

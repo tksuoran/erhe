@@ -170,15 +170,20 @@ auto Shader_stages_create_info::final_source(
 
     sb << "#define ERHE_GLSL_VERSION " << graphics_device.info.glsl_version << "\n";
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
+        sb << "#extension GL_ARB_bindless_texture : enable\n";
         sb << "#define ERHE_HAS_ARB_BINDLESS_TEXTURE 1\n";
     }
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shading_language_packing)) {
+        sb << "#extension GL_ARB_shading_language_packing : enable\n";
         sb << "#define ERHE_HAS_ARB_SHADING_LANGUAGE_PACKING 1\n";
     }
     if (graphics_device.info.gl_version < 460) {
         if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
+            sb << "#extension GL_ARB_shader_draw_parameters : enable\n";
             sb << "#define ERHE_HAS_ARB_SHADER_DRAW_PARAMETERS 1\n";
-            //sb << "#define gl_DrawID gl_DrawIDARB\n";
+            sb << "#define gl_DrawID gl_DrawIDARB\n";
+        } else {
+            log_glsl->warn("gl_DrawID is not supported and GL_ARB_shader_draw_parameters is not supported");
         }
     }
     sb << "\n";
