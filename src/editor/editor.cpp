@@ -431,7 +431,8 @@ public:
                 ini.get("visibility_mask",   configuration.visibility_mask);
                 ini.get("hand_tracking",     configuration.hand_tracking);
                 ini.get("composition_alpha", configuration.composition_alpha);
-                ini.get("mirror_mode",       configuration.mirror_mode);
+                ini.get("passthrough_fb",    configuration.passthrough_fb);
+                configuration.mirror_mode = m_editor_context.OpenXR_mirror;
                 m_headset = std::make_unique<erhe::xr::Headset>(*m_context_window.get(), configuration);
                 if (!m_headset->is_valid()) {
                     log_headset->info("Headset initialization failed. Disabling OpenXR.");

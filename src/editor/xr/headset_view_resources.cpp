@@ -83,12 +83,12 @@ Headset_view_resources::Headset_view_resources(
     if (erhe::dataformat::get_depth_size(render_view.depth_stencil_format) > 0) {
         render_pass_descriptor.depth_attachment.texture      = m_depth_stencil_texture.get();
         render_pass_descriptor.depth_attachment.load_action  = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.depth_attachment.store_action = erhe::graphics::Store_action::Dont_care; // TODO
+        render_pass_descriptor.depth_attachment.store_action = erhe::graphics::Store_action::Store;
     }
     if (erhe::dataformat::get_stencil_size(render_view.depth_stencil_format) > 0) {
         render_pass_descriptor.stencil_attachment.texture      = m_depth_stencil_texture.get();
         render_pass_descriptor.stencil_attachment.load_action  = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care; // TODO
+        render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care;
     }
     render_pass_descriptor.render_target_width  = m_width;
     render_pass_descriptor.render_target_height = m_height;

@@ -40,6 +40,7 @@ public:
     bool hand_tracking    {false};
     bool composition_alpha{false};
     bool mirror_mode      {false};
+    bool passthrough_fb   {false};
 };
 
 class Xr_instance
@@ -106,6 +107,19 @@ public:
 
     Paths                                  paths;
 
+    struct Extensions {
+        bool KHR_composition_layer_depth       {false};
+        bool KHR_visibility_mask               {false};
+        bool EXT_debug_utils                   {false};
+        bool EXT_hand_tracking                 {false};
+        bool FB_passthrough                    {false};
+        bool FB_color_space                    {false};
+        bool FB_display_refresh_rate           {false};
+        bool VARJO_quad_views                  {false};
+        bool VARJO_environment_depth_estimation{false};
+    };
+    Extensions extensions{};
+
     PFN_xrCreateDebugUtilsMessengerEXT     xrCreateDebugUtilsMessengerEXT    {nullptr};
     PFN_xrGetVisibilityMaskKHR             xrGetVisibilityMaskKHR            {nullptr};
     PFN_xrGetOpenGLGraphicsRequirementsKHR xrGetOpenGLGraphicsRequirementsKHR{nullptr};
@@ -113,6 +127,28 @@ public:
     PFN_xrCreateHandTrackerEXT             xrCreateHandTrackerEXT            {nullptr};
     PFN_xrDestroyHandTrackerEXT            xrDestroyHandTrackerEXT           {nullptr};
     PFN_xrLocateHandJointsEXT              xrLocateHandJointsEXT             {nullptr};
+
+    PFN_xrEnumerateColorSpacesFB           xrEnumerateColorSpacesFB          {nullptr};
+    PFN_xrSetColorSpaceFB                  xrSetColorSpaceFB                 {nullptr};
+
+    PFN_xrCreatePassthroughFB              xrCreatePassthroughFB             {nullptr};
+    PFN_xrDestroyPassthroughFB             xrDestroyPassthroughFB            {nullptr};
+    PFN_xrPassthroughStartFB               xrPassthroughStartFB              {nullptr};
+    PFN_xrPassthroughPauseFB               xrPassthroughPauseFB              {nullptr};
+    PFN_xrCreatePassthroughLayerFB         xrCreatePassthroughLayerFB        {nullptr};
+    PFN_xrDestroyPassthroughLayerFB        xrDestroyPassthroughLayerFB       {nullptr};
+    PFN_xrPassthroughLayerPauseFB          xrPassthroughLayerPauseFB         {nullptr};
+    PFN_xrPassthroughLayerResumeFB         xrPassthroughLayerResumeFB        {nullptr};
+    PFN_xrPassthroughLayerSetStyleFB       xrPassthroughLayerSetStyleFB      {nullptr};
+    PFN_xrCreateGeometryInstanceFB         xrCreateGeometryInstanceFB        {nullptr};
+    PFN_xrDestroyGeometryInstanceFB        xrDestroyGeometryInstanceFB       {nullptr};
+    PFN_xrGeometryInstanceSetTransformFB   xrGeometryInstanceSetTransformFB  {nullptr};
+
+    [[nodiscard]] auto debug_utils_messenger_callback(
+        XrDebugUtilsMessageSeverityFlagsEXT         message_severity,
+        XrDebugUtilsMessageTypeFlagsEXT             message_types,
+        const XrDebugUtilsMessengerCallbackDataEXT* callback_data
+    ) -> XrBool32;
 
 private:
     [[nodiscard]] auto get_proc_addr(const char* function) const -> PFN_xrVoidFunction;
@@ -122,6 +158,8 @@ private:
     {
         return reinterpret_cast<T>(get_proc_addr(function));
     }
+
+    [[nodiscard]] auto has_extension(const char* extension_name) const -> bool;
 
     auto enumerate_layers               () -> bool;
     auto enumerate_extensions           () -> bool;
@@ -146,7 +184,8 @@ private:
     std::vector<XrExtensionProperties>   m_xr_extensions;
     std::vector<XrApiLayerProperties>    m_xr_api_layer_properties;
     std::vector<XrEnvironmentBlendMode>  m_xr_environment_blend_modes;
-    XrDebugUtilsMessengerEXT             m_debug_utils_messenger;
+    XrDebugUtilsMessengerEXT             m_debug_utils_messenger{XR_NULL_HANDLE};
+    std::vector<const char*>             m_enabled_extensions;
 
     XrActionSet                                       m_action_set{};
     etl::vector<Xr_action_boolean,  max_action_count> m_boolean_actions;

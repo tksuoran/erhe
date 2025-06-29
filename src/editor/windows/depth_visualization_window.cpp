@@ -225,12 +225,18 @@ template <typename T>
 
 void Depth_visualization_window::hidden()
 {
-    m_depth_to_color_node->set_enabled(false);
+    if (m_depth_to_color_node) {
+        m_depth_to_color_node->set_enabled(false);
+    }
 }
 
 void Depth_visualization_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (!m_depth_to_color_node) {
+        return;
+    }
 
     const auto& shadow_nodes = m_context.editor_rendering->get_all_shadow_nodes();
     if (!shadow_nodes.empty()) {

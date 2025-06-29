@@ -111,6 +111,67 @@ auto Xr_instance::debug_utils_messenger_callback(
     return XR_FALSE;
 }
 
+XrBool32 erhe_xrDebugUtilsMessengerCallbackEXT(
+    XrDebugUtilsMessageSeverityFlagsEXT         message_severity,
+    XrDebugUtilsMessageTypeFlagsEXT             message_types,
+    const XrDebugUtilsMessengerCallbackDataEXT* callback_data,
+    void*                                       user_data
+)
+{
+    Xr_instance* instance = static_cast<Xr_instance*>(user_data);
+    return instance->debug_utils_messenger_callback(message_severity, message_types, callback_data);
+}
+
+[[nodiscard]] auto Xr_instance::debug_utils_messenger_callback(
+    XrDebugUtilsMessageSeverityFlagsEXT         message_severity,
+    XrDebugUtilsMessageTypeFlagsEXT             message_types,
+    const XrDebugUtilsMessengerCallbackDataEXT* callback_data
+) -> XrBool32
+{
+    spdlog::level::level_enum level = spdlog::level::level_enum::info;
+    if (message_severity & XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) { level = spdlog::level::level_enum::trace; }
+    if (message_severity & XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT   ) { level = spdlog::level::level_enum::info; }
+    if (message_severity & XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) { level = spdlog::level::level_enum::warn; }
+    if (message_severity & XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  ) { level = spdlog::level::level_enum::err; }
+
+    std::stringstream type_ss;
+    if (message_types & XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT    ) { type_ss << " general"; }
+    if (message_types & XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT ) { type_ss << " validation"; }
+    if (message_types & XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) { type_ss << " performance"; }
+    if (message_types & XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT) { type_ss << " validation"; }
+
+    std::stringstream objects_ss;
+    if (callback_data->objectCount > 0) {
+        objects_ss << "\nObjects:";
+        for (uint32_t i = 0; i < callback_data->objectCount; ++i) {
+            XrDebugUtilsObjectNameInfoEXT& object = callback_data->objects[i];
+            objects_ss << fmt::format("\n    [{}] {} handle = {} name = {}", i, c_str(object.objectType), object.objectHandle, object.objectName);
+        }
+    }
+    std::stringstream labels_ss;
+    if (callback_data->sessionLabelCount > 0) {
+        labels_ss << "\nSession labels:";
+        for (uint32_t i = 0; i < callback_data->sessionLabelCount; ++i) {
+            XrDebugUtilsLabelEXT& label = callback_data->sessionLabels[i];
+            labels_ss << fmt::format("\n    [{}] {}", i, label.labelName);
+        }
+    }
+
+    log_xr->log(
+        level,
+        fmt::format(
+            "OpenXR debug message: type ={}, id = {}, function = {}, message = {}{}{}",
+            type_ss.str(),
+            callback_data->messageId,
+            (callback_data->functionName != nullptr) ? callback_data->functionName : "",
+            callback_data->message,
+            objects_ss.str(),
+            labels_ss.str()
+        )
+    );
+    return XR_TRUE;
+}
+
 auto Xr_instance::create_instance() -> bool
 {
     ERHE_PROFILE_FUNCTION();
@@ -120,23 +181,51 @@ auto Xr_instance::create_instance() -> bool
     std::vector<const char*> required_extensions;
     required_extensions.push_back(XR_KHR_OPENGL_ENABLE_EXTENSION_NAME);
 
-    if (m_configuration.debug) {
+    if (m_configuration.debug && has_extension(XR_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
+        extensions.EXT_debug_utils = true;
         required_extensions.push_back(XR_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
-    if (m_configuration.quad_view) {
+
+    if (m_configuration.quad_view && has_extension(XR_VARJO_QUAD_VIEWS_EXTENSION_NAME)) {
+        extensions.VARJO_quad_views = true;
         required_extensions.push_back(XR_VARJO_QUAD_VIEWS_EXTENSION_NAME);
     }
     if (m_configuration.depth) {
-        required_extensions.push_back(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
-        required_extensions.push_back(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME);
+        if (has_extension(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME)) {
+            extensions.KHR_composition_layer_depth = true;
+            required_extensions.push_back(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
+        }
+        if (has_extension(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME)) {
+            extensions.VARJO_environment_depth_estimation = true;
+            required_extensions.push_back(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME);
+        }
         //XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME,
     }
-    if (m_configuration.visibility_mask) {
+    if (m_configuration.visibility_mask && has_extension(XR_KHR_VISIBILITY_MASK_EXTENSION_NAME)) {
+        extensions.KHR_visibility_mask = true;
         required_extensions.push_back(XR_KHR_VISIBILITY_MASK_EXTENSION_NAME);
     }
-    if (m_configuration.hand_tracking) {
+    if (m_configuration.hand_tracking && has_extension(XR_EXT_HAND_TRACKING_EXTENSION_NAME)) {
+        extensions.EXT_hand_tracking = true;
         required_extensions.push_back(XR_EXT_HAND_TRACKING_EXTENSION_NAME);
     }
+    if (m_configuration.passthrough_fb && has_extension(XR_FB_PASSTHROUGH_EXTENSION_NAME)) {
+        extensions.FB_passthrough = true;
+        required_extensions.push_back(XR_FB_PASSTHROUGH_EXTENSION_NAME);
+    }
+    // XR_OCULUS_recenter_event
+    if (has_extension(XR_FB_COLOR_SPACE_EXTENSION_NAME)) {
+        extensions.FB_color_space = true;
+        required_extensions.push_back(XR_FB_COLOR_SPACE_EXTENSION_NAME);
+    }
+    if (has_extension(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME)) {
+        extensions.FB_display_refresh_rate = true;
+        required_extensions.push_back(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
+    }
+
+    // XR_META_passthrough_layer_resumed_event
+    // XR_META_passthrough_color_lut
+    // XR_META_passthrough_preferences
 
     const XrInstanceCreateInfo create_info {
         .type                   = XR_TYPE_INSTANCE_CREATE_INFO,
@@ -147,7 +236,7 @@ auto Xr_instance::create_instance() -> bool
             .applicationVersion = 1,
             .engineName         = { 'e', 'r', 'h', 'e', '\0' },
             .engineVersion      = 1,
-            .apiVersion         = XR_API_VERSION_1_1 // XR_API_VERSION_1_0
+            .apiVersion         = XR_API_VERSION_1_1
         },
         .enabledApiLayerCount   = 0,
         .enabledApiLayerNames   = nullptr,
@@ -183,13 +272,32 @@ auto Xr_instance::create_instance() -> bool
         .userData          = this
     };
 
-    if (m_configuration.debug) {
+    if (extensions.EXT_debug_utils) {
         xrCreateDebugUtilsMessengerEXT = get_proc_addr<PFN_xrCreateDebugUtilsMessengerEXT>("xrCreateDebugUtilsMessengerEXT");
+        XrDebugUtilsMessageSeverityFlagsEXT severities =
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT    |
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        XrDebugUtilsMessageTypeFlagsEXT types =
+            XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT     |
+            XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT  |
+            XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+            XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT;
+        XrDebugUtilsMessengerCreateInfoEXT debug_utils_create_info{
+            .type              = XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            .next              = nullptr,
+            .messageSeverities = severities,
+            .messageTypes      = types,  
+            .userCallback      = erhe_xrDebugUtilsMessengerCallbackEXT,
+            .userData          = this
+        };
+        XrResult result = xrCreateDebugUtilsMessengerEXT(m_xr_instance, &debug_utils_create_info, &m_debug_utils_messenger);
+        if (result != XR_SUCCESS) {
+            log_xr->warn("OpenXR: xrCreateDebugUtilsMessengerEXT() failed");
+        }
     }
 
-    if (m_configuration.visibility_mask) {
-        xrGetVisibilityMaskKHR = get_proc_addr<PFN_xrGetVisibilityMaskKHR>("xrGetVisibilityMaskKHR");
-    }
     xrGetOpenGLGraphicsRequirementsKHR = get_proc_addr<PFN_xrGetOpenGLGraphicsRequirementsKHR>("xrGetOpenGLGraphicsRequirementsKHR");
 
     XrInstanceProperties instance_properties {
@@ -202,6 +310,30 @@ auto Xr_instance::create_instance() -> bool
     const uint16_t patch = (instance_properties.runtimeVersion >>  0) & uint64_t{0xffffffffu};
     log_xr->info("OpenXR runtime version: {}.{}.{}", major, minor, patch);
     log_xr->info("OpenXR runtime: {}", instance_properties.runtimeName);
+
+    if (extensions.KHR_visibility_mask) {
+        xrGetVisibilityMaskKHR = get_proc_addr<PFN_xrGetVisibilityMaskKHR>("xrGetVisibilityMaskKHR");
+    }
+
+    if (extensions.FB_passthrough) {
+        xrCreatePassthroughFB            = get_proc_addr<PFN_xrCreatePassthroughFB           >("xrCreatePassthroughFB");
+        xrDestroyPassthroughFB           = get_proc_addr<PFN_xrDestroyPassthroughFB          >("xrDestroyPassthroughFB");
+        xrPassthroughStartFB             = get_proc_addr<PFN_xrPassthroughStartFB            >("xrPassthroughStartFB");
+        xrPassthroughPauseFB             = get_proc_addr<PFN_xrPassthroughPauseFB            >("xrPassthroughPauseFB");
+        xrCreatePassthroughLayerFB       = get_proc_addr<PFN_xrCreatePassthroughLayerFB      >("xrCreatePassthroughLayerFB");
+        xrDestroyPassthroughLayerFB      = get_proc_addr<PFN_xrDestroyPassthroughLayerFB     >("xrDestroyPassthroughLayerFB");
+        xrPassthroughLayerPauseFB        = get_proc_addr<PFN_xrPassthroughLayerPauseFB       >("xrPassthroughLayerPauseFB");
+        xrPassthroughLayerResumeFB       = get_proc_addr<PFN_xrPassthroughLayerResumeFB      >("xrPassthroughLayerResumeFB");
+        xrPassthroughLayerSetStyleFB     = get_proc_addr<PFN_xrPassthroughLayerSetStyleFB    >("xrPassthroughLayerSetStyleFB");
+        xrCreateGeometryInstanceFB       = get_proc_addr<PFN_xrCreateGeometryInstanceFB      >("xrCreateGeometryInstanceFB");
+        xrDestroyGeometryInstanceFB      = get_proc_addr<PFN_xrDestroyGeometryInstanceFB     >("xrDestroyGeometryInstanceFB");
+        xrGeometryInstanceSetTransformFB = get_proc_addr<PFN_xrGeometryInstanceSetTransformFB>("xrGeometryInstanceSetTransformFB");
+    }
+
+    if (extensions.FB_color_space) {
+        xrEnumerateColorSpacesFB         = get_proc_addr<PFN_xrEnumerateColorSpacesFB>("xrEnumerateColorSpacesFB");
+        xrSetColorSpaceFB                = get_proc_addr<PFN_xrSetColorSpaceFB       >("xrSetColorSpaceFB");
+    }
 
     return true;
 }
@@ -314,11 +446,21 @@ auto Xr_instance::enumerate_extensions() -> bool
     );
 
     log_xr->info("Supported extensions:");
-    for (const auto& extension : m_xr_extensions) {
+    for (const XrExtensionProperties& extension : m_xr_extensions) {
         log_xr->info("    {}, {}", extension.extensionName, extension.extensionVersion);
     }
 
     return true;
+}
+
+auto Xr_instance::has_extension(const char* extension_name) const -> bool
+{
+    for (const XrExtensionProperties& extension : m_xr_extensions) {
+        if (strcmp(extension.extensionName, extension_name) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 auto Xr_instance::get_system_info() -> bool
@@ -359,7 +501,7 @@ auto Xr_instance::get_system_info() -> bool
         .next                 = nullptr,
         .supportsHandTracking = false
     };
-    if (m_configuration.hand_tracking) {
+    if (extensions.EXT_hand_tracking) {
         system_properties.next = &system_hand_tracking_properties;
     }
 
@@ -373,11 +515,56 @@ auto Xr_instance::get_system_info() -> bool
     log_xr->info("OpenXR Position Tracking: {}",       (system_properties.trackingProperties.positionTracking == XR_TRUE) ? "yes" : "no");
     log_xr->info("OpenXR Hand Tracking {}",            m_configuration.hand_tracking && (system_hand_tracking_properties.supportsHandTracking == XR_TRUE) ? "yes" : "no");
 
-    if (m_configuration.hand_tracking) {
+    if (extensions.EXT_hand_tracking) {
         if (system_hand_tracking_properties.supportsHandTracking) {
-            xrCreateHandTrackerEXT  = reinterpret_cast<PFN_xrCreateHandTrackerEXT >(get_proc_addr("xrCreateHandTrackerEXT" ));
-            xrDestroyHandTrackerEXT = reinterpret_cast<PFN_xrDestroyHandTrackerEXT>(get_proc_addr("xrDestroyHandTrackerEXT"));
-            xrLocateHandJointsEXT   = reinterpret_cast<PFN_xrLocateHandJointsEXT  >(get_proc_addr("xrLocateHandJointsEXT"  ));
+            xrCreateHandTrackerEXT  = get_proc_addr<PFN_xrCreateHandTrackerEXT >("xrCreateHandTrackerEXT" );
+            xrDestroyHandTrackerEXT = get_proc_addr<PFN_xrDestroyHandTrackerEXT>("xrDestroyHandTrackerEXT");
+            xrLocateHandJointsEXT   = get_proc_addr<PFN_xrLocateHandJointsEXT  >("xrLocateHandJointsEXT"  );
+        }
+    }
+
+    if (extensions.FB_color_space) {
+        XrSystemColorSpacePropertiesFB color_space_properties{
+            .type = XR_TYPE_SYSTEM_COLOR_SPACE_PROPERTIES_FB,
+            .next = nullptr
+        };
+        XrSystemProperties system_properties_{
+            .type = XR_TYPE_SYSTEM_PROPERTIES,
+            .next = &color_space_properties
+        };
+        ERHE_XR_CHECK(xrGetSystemProperties(m_xr_instance, m_xr_system_id, &system_properties_));
+        log_xr->info("OpenXR Native Color Space: {}", c_str(color_space_properties.colorSpace));
+    }
+
+    if (extensions.FB_passthrough) {
+        XrSystemPassthroughProperties2FB passthrough_properties2{
+            .type = XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES2_FB,
+            .next = nullptr,
+        };
+        XrSystemPassthroughPropertiesFB passthrough_properties{
+            .type = XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES_FB,
+            .next = &passthrough_properties2,
+        };
+        XrSystemProperties system_properties_{
+            .type = XR_TYPE_SYSTEM_PROPERTIES,
+            .next = &passthrough_properties
+        };
+        ERHE_XR_CHECK(xrGetSystemProperties(m_xr_instance, m_xr_system_id, &system_properties_));
+
+        log_xr->info("OpenXR FB_passthrough supported: {}", passthrough_properties.supportsPassthrough == XR_TRUE);
+        if (passthrough_properties.supportsPassthrough != XR_TRUE) {
+            extensions.FB_passthrough = false;
+        }
+        if (extensions.FB_passthrough) {
+            if (passthrough_properties2.capabilities & XR_PASSTHROUGH_CAPABILITY_BIT_FB) {
+                log_xr->info("OpenXR FB_passthrough supports capability");
+            }
+            if (passthrough_properties2.capabilities & XR_PASSTHROUGH_CAPABILITY_COLOR_BIT_FB) {
+                log_xr->info("OpenXR FB_passthrough supports capability color");
+            }
+            if (passthrough_properties2.capabilities & XR_PASSTHROUGH_CAPABILITY_LAYER_DEPTH_BIT_FB) {
+                log_xr->info("OpenXR FB_passthrough supports capability layer depth");
+            }
         }
     }
 
@@ -420,12 +607,15 @@ auto Xr_instance::enumerate_blend_modes() -> bool
     m_xr_environment_blend_modes.resize(environment_blend_mode_count);
     ERHE_XR_CHECK(xrEnumerateEnvironmentBlendModes(m_xr_instance, m_xr_system_id, m_xr_view_configuration_type, environment_blend_mode_count, &environment_blend_mode_count, m_xr_environment_blend_modes.data()));
 
+    log_xr->info("Environment blend modes:");
+
     int best_score = 0;
     m_xr_environment_blend_mode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-    for (auto mode : m_xr_environment_blend_modes) {
-        auto mode_score = blend_mode_score(mode);
+    for (XrEnvironmentBlendMode blend_mode : m_xr_environment_blend_modes) {
+        log_xr->info("    {}", c_str(blend_mode));
+        auto mode_score = blend_mode_score(blend_mode);
         if (mode_score > best_score) {
-            m_xr_environment_blend_mode = mode;
+            m_xr_environment_blend_mode = blend_mode;
             best_score = mode_score;
         }
     }
@@ -486,10 +676,10 @@ auto Xr_instance::enumerate_view_configurations() -> bool
         log_xr->error("No working view configuration types found");
         return false;
     }
-    if (primary_quad_supported && m_configuration.quad_view) {
-        m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+    if (primary_quad_supported && extensions.VARJO_quad_views) {
+        m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET;
     }
-    if (primary_stereo_supported && !m_configuration.quad_view) {
+    if (primary_stereo_supported && !(m_configuration.quad_view && extensions.VARJO_quad_views)) {
         m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
     }
     log_xr->info("Selected view configuration type: {}", c_str(m_xr_view_configuration_type));

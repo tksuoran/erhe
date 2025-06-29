@@ -1,5 +1,6 @@
 #include "erhe_window/sdl_window.hpp"
 #include "erhe_gl/dynamic_load.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_window/window_log.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_time/sleep.hpp"
@@ -365,6 +366,24 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     if (primary) {
         SDL_GL_MakeCurrent(sdl_window, sdl_context);
         get_extensions();
+        // TODO Is is a bug in RenderDoc? The query should be valid according to Table 9.1,
+        //      but returns invalid operation.
+        //
+        // gl::Error_code error_code_before = gl::get_error();
+        // ERHE_VERIFY(error_code_before == gl::Error_code::no_error);
+        // GLint color_encoding = 0;
+        // gl::get_named_framebuffer_attachment_parameter_iv(
+        //     0,
+        //     gl::Framebuffer_attachment::back_left,
+        //     gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_color_encoding,
+        //     &color_encoding
+        // );
+        // gl::Error_code error_code_after = gl::get_error();
+        // ERHE_VERIFY(error_code_after == gl::Error_code::no_error);
+        // const bool is_linear = color_encoding == GL_LINEAR;
+        // const bool is_srgb   = color_encoding == GL_SRGB;
+        // ERHE_VERIFY(is_linear != is_srgb);
+
         SDL_ShowWindow(sdl_window);
     }
 

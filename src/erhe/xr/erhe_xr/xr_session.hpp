@@ -47,6 +47,7 @@ public:
     [[nodiscard]] auto get_state               () const -> XrSessionState;
 
 private:
+    [[nodiscard]] auto color_space_score          (const XrColorSpaceFB color_space) const -> int;
     [[nodiscard]] auto color_format_score         (const erhe::dataformat::Format pixelformat) const -> int;
     [[nodiscard]] auto depth_stencil_format_score (const erhe::dataformat::Format pixelformat) const -> int;
     [[nodiscard]] auto create_session             () -> bool;
@@ -82,7 +83,7 @@ private:
 
     Xr_instance&                                  m_instance;
     erhe::window::Context_window&                 m_context_window;
-    XrSession                                     m_xr_session;
+    XrSession                                     m_xr_session{XR_NULL_HANDLE};
     bool                                          m_mirror_mode{false};
     erhe::dataformat::Format                      m_swapchain_color_format;
     erhe::dataformat::Format                      m_swapchain_depth_stencil_format;
@@ -91,15 +92,17 @@ private:
     std::vector<XrCompositionLayerProjectionView> m_xr_composition_layer_projection_views;
     std::vector<XrCompositionLayerDepthInfoKHR>   m_xr_composition_layer_depth_infos;
     std::vector<XrReferenceSpaceType>             m_xr_reference_space_types;
-    XrSpace                                       m_xr_reference_space_local;
-    XrSpace                                       m_xr_reference_space_stage;
-    XrSpace                                       m_xr_reference_space_view;
+    XrSpace                                       m_xr_reference_space_local{XR_NULL_HANDLE};
+    XrSpace                                       m_xr_reference_space_stage{XR_NULL_HANDLE};
+    XrSpace                                       m_xr_reference_space_view {XR_NULL_HANDLE};
     XrSpaceLocation                               m_view_location;
-    XrSessionState                                m_xr_session_state;
+    XrSessionState                                m_xr_session_state{XR_SESSION_STATE_UNKNOWN};
     XrFrameState                                  m_xr_frame_state;
     Hand_tracker                                  m_hand_tracker_left;
     Hand_tracker                                  m_hand_tracker_right;
-    bool                                          m_session_running{false};
+    XrPassthroughFB                               m_passthrough_fb      {XR_NULL_HANDLE};
+    XrPassthroughLayerFB                          m_passthrough_layer_fb{XR_NULL_HANDLE};
+    bool                                          m_session_running     {false};
 };
 
 } // namespace erhe::xr

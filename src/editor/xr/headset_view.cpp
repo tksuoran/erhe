@@ -435,7 +435,7 @@ auto Headset_view::render_headset() -> bool
             auto& graphics_device = *m_context.graphics_device;
             erhe::graphics::Render_pass* mirror_render_pass = m_mirror_mode_window_render_pass.get();
             erhe::graphics::Render_pass* view_render_pass   = view_resources->get_render_pass();
-            erhe::graphics::Render_pass* render_pass        = (m_context.OpenXR_mirror && first_view) ? mirror_render_pass : view_render_pass;
+            erhe::graphics::Render_pass* render_pass        = view_render_pass;
             erhe::math::Viewport viewport{
                 .x      = 0,
                 .y      = 0,
@@ -451,8 +451,7 @@ auto Headset_view::render_headset() -> bool
             graphics_device.opengl_state_tracker.shader_stages.reset();
             graphics_device.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
 
-            // TODO Meta link with Quest 3 does not seem to support camera video passthrough :(
-            //      Also, this conflicts with hud grab
+            // TODO This conflicts with hud grab - proper command for this?
             //
             // const auto* squeeze_click = m_headset->get_actions_right().squeeze_click;
             // const auto* squeeze_value = m_headset->get_actions_right().squeeze_value;
@@ -482,15 +481,19 @@ auto Headset_view::render_headset() -> bool
                 m_context.editor_rendering->render_viewport_renderables(render_context);
                 m_context.debug_renderer  ->render(render_context.viewport, *render_context.camera);
             }
+            if (m_context.OpenXR_mirror && !first_view) {
+                gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
+                gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
+            }
 
             render_encoder.reset();
 
             if (m_context.OpenXR_mirror && first_view) {
-                // This mode copies from default framebuffer (window) to OpenXR
-                int src_width  = m_context.context_window->get_width();
-                int src_height = m_context.context_window->get_height();
-                int dst_width  = view_resources->get_width();
-                int dst_height = view_resources->get_height();
+                // Copy from OpenXR to default framebuffer (window)
+                int src_width  = view_resources->get_width();
+                int src_height = view_resources->get_height();
+                int dst_width  = m_context.context_window->get_width();
+                int dst_height = m_context.context_window->get_height();
 
                 // - fit all one to one if possible
                 // - pad if not enough in src
@@ -505,60 +508,34 @@ auto Headset_view::render_headset() -> bool
                 int src_y0 = (src_height > dst_height) ? height_diff / 2     : 0;
                 int src_y1 = (src_height > dst_height) ? src_y0 + dst_height : src_height;
                 int dst_y0 = (src_height > dst_height) ? 0                   : height_diff / 2;
-                int dst_y1 = (src_height > dst_height) ? dst_height          : dst_y0 + src_height;
-                gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, mirror_render_pass->gl_name());
-                gl::read_buffer(gl::Read_buffer_mode::back);
-                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, view_render_pass->gl_name());
-                {
-                    // TODO This query does not seem to work
-                    // GLint read_color_encoding{0};
-                    // gl::get_named_framebuffer_attachment_parameter_iv(
-                    //     mirror_render_pass->gl_name(),
-                    //     gl::Framebuffer_attachment::back,
-                    //     gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_color_encoding,
-                    //     &read_color_encoding
-                    // );
-                    // gl::disable(gl::Enable_cap::framebuffer_srgb);
-                    gl::blit_framebuffer(
-                        src_x0, src_y0, src_x1, src_y1, 
-                        dst_x0, dst_y0, dst_x1, dst_y1,
-                        gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
+                int dst_y1 = (src_height > dst_height) ? dst_height          : src_y0 + src_height;
+
+                const GLint src_fbo = view_render_pass->gl_name();
+                const GLint dst_fbo = mirror_render_pass->gl_name();
+
+                auto get = [&mirror_render_pass](gl::Framebuffer_attachment_parameter_name parameter) -> GLint {
+                    GLint value{0};
+                    gl::get_named_framebuffer_attachment_parameter_iv(
+                        mirror_render_pass->gl_name(),
+                        gl::Framebuffer_attachment::back_left,
+                        parameter,
+                        &value
                     );
-                    // gl::enable(gl::Enable_cap::framebuffer_srgb);
-                }
+                    return value;
+                };
+
+                gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, src_fbo);
+                gl::named_framebuffer_read_buffer(src_fbo, gl::Color_buffer::color_attachment0);
+                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, dst_fbo);
+                const gl::Color_buffer draw_buffer = gl::Color_buffer::back;
+                gl::named_framebuffer_draw_buffers(dst_fbo, 1, &draw_buffer);
+
+                gl::blit_framebuffer(
+                    src_x0, src_y0, src_x1, src_y1,
+                    dst_x0, dst_y0, dst_x1, dst_y1,
+                    gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
+                );
                 m_context_window.swap_buffers();
-#if 0
-                    // This mode copies from OpenXR to default framebuffer (window)
-                    int src_width  = view_resources->get_width();
-                    int src_height = view_resources->get_height();
-                    int dst_width  = m_context.context_window->get_width();
-                    int dst_height = m_context.context_window->get_height();
-
-                    // - fit all one to one if possible
-                    // - pad if not enough in src
-                    // - crop if too much in src
-                    int width_diff = std::abs(src_width - dst_width);
-                    int src_x0 = (src_width > dst_width ) ? width_diff / 2     : 0;
-                    int src_x1 = (src_width > dst_width ) ? src_x0 + dst_width : src_width;
-                    int dst_x0 = (src_width > dst_width ) ? 0                  : width_diff / 2;
-                    int dst_x1 = (src_width > dst_width ) ? dst_width          : dst_x0 + src_width;
-
-                    int height_diff = std::abs(src_height - dst_height);
-                    int src_y0 = (src_height > dst_height) ? height_diff / 2     : 0;
-                    int src_y1 = (src_height > dst_height) ? src_y0 + dst_height : src_height;
-                    int dst_y0 = (src_height > dst_height) ? 0                   : height_diff / 2;
-                    int dst_y1 = (src_height > dst_height) ? dst_height          : src_y0 + src_height;
-                    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, openxr_framebuffer->gl_name());
-                    gl::read_buffer(gl::Read_buffer_mode::color_attachment0);
-                    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-                    gl::blit_framebuffer(
-                        src_x0, src_y0, src_x1, src_y1, 
-                        dst_x0, dst_y0, dst_x1, dst_y1,
-                        gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
-                    );
-                    gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
-                    m_context_window.swap_buffers();
-#endif
             }
             first_view = false;
 
@@ -825,3 +802,83 @@ void Headset_view::end_frame()
 
 } // namespace editor
 
+
+
+#if 0
+                    //GLint red_size       = get(gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_red_size);
+                    //GLint green_size     = get(gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_green_size);
+                    //GLint blue_size      = get(gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_blue_size);
+                    //GLint alpha_size     = get(gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_alpha_size);
+                    //GLint depth_size     = get(gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_depth_size);
+                    //GLint stencil_size   = get(gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_stencil_size);
+                    //GLint component_type = get(gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_component_type);
+                    GLint color_encoding = get(gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_color_encoding);
+                    //static_cast<void>(red_size      );
+                    //static_cast<void>(green_size    );
+                    //static_cast<void>(blue_size     );
+                    //static_cast<void>(alpha_size    );
+                    //static_cast<void>(depth_size    );
+                    //static_cast<void>(stencil_size  );
+                    //static_cast<void>(component_type);
+                    static_cast<void>(color_encoding);
+                    //switch (component_type) {
+                    //    case GL_FLOAT:
+                    //    case GL_INT:
+                    //    case GL_UNSIGNED_INT:
+                    //    case GL_SIGNED_NORMALIZED:
+                    //    case GL_UNSIGNED_NORMALIZED:
+                    //    default:
+                    //        break;
+                    //}
+                    //const bool is_linear = color_encoding == GL_LINEAR;
+                    //const bool is_srgb   = color_encoding == GL_SRGB;
+                    //ERHE_VERIFY(is_linear != is_srgb);
+                    //gl::enable(gl::Enable_cap::framebuffer_srgb);
+#endif
+#if 0
+                // This mode copies from default framebuffer (window) to OpenXR
+                int src_width  = m_context.context_window->get_width();
+                int src_height = m_context.context_window->get_height();
+                int dst_width  = view_resources->get_width();
+                int dst_height = view_resources->get_height();
+
+                // - fit all one to one if possible
+                // - pad if not enough in src
+                // - crop if too much in src
+                int width_diff = std::abs(src_width - dst_width);
+                int src_x0 = (src_width > dst_width ) ? width_diff / 2     : 0;
+                int src_x1 = (src_width > dst_width ) ? src_x0 + dst_width : src_width;
+                int dst_x0 = (src_width > dst_width ) ? 0                  : width_diff / 2;
+                int dst_x1 = (src_width > dst_width ) ? dst_width          : dst_x0 + src_width;
+
+                int height_diff = std::abs(src_height - dst_height);
+                int src_y0 = (src_height > dst_height) ? height_diff / 2     : 0;
+                int src_y1 = (src_height > dst_height) ? src_y0 + dst_height : src_height;
+                int dst_y0 = (src_height > dst_height) ? 0                   : height_diff / 2;
+                int dst_y1 = (src_height > dst_height) ? dst_height          : dst_y0 + src_height;
+                const GLint src_fbo = mirror_render_pass->gl_name();
+                const GLint dst_fbo = view_render_pass->gl_name();
+                gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, src_fbo);
+                gl::named_framebuffer_read_buffer(src_fbo, gl::Color_buffer::back);
+                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, dst_fbo);
+                const gl::Color_buffer draw_buffer = gl::Color_buffer::color_attachment0;
+                gl::named_framebuffer_draw_buffers(dst_fbo, 1, &draw_buffer);
+                {
+                    auto get = [&mirror_render_pass](gl::Framebuffer_attachment_parameter_name parameter) -> GLint {
+                        GLint value{0};
+                        gl::get_named_framebuffer_attachment_parameter_iv(
+                            mirror_render_pass->gl_name(),
+                            gl::Framebuffer_attachment::back,
+                            parameter,
+                            &value
+                        );
+                        return value;
+                    };
+                    gl::blit_framebuffer(
+                        src_x0, src_y0, src_x1, src_y1, 
+                        dst_x0, dst_y0, dst_x1, dst_y1,
+                        gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
+                    );
+                    // gl::enable(gl::Enable_cap::framebuffer_srgb);
+                }
+#endif

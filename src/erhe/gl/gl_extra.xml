@@ -47,7 +47,7 @@
       <enum name="GL_SAMPLE_POSITION"/>
     </group>
     <group name="FramebufferAttachment">
-      <enum name="GL_BACK"/>
+      <enum name="GL_BACK_LEFT"/>
     </group>
     <group name="TextureParameterName">
       <enum name="GL_TEXTURE_SPARSE_ARB"/>

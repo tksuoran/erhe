@@ -40,19 +40,12 @@ namespace erhe::xr {
 Xr_session::Xr_session(Xr_instance& instance, erhe::window::Context_window& context_window, bool mirror_mode)
     : m_instance                      {instance}
     , m_context_window                {context_window}
-    , m_xr_session                    {XR_NULL_HANDLE}
     , m_mirror_mode                   {mirror_mode}
     , m_swapchain_color_format        {erhe::dataformat::Format::format_undefined}
     , m_swapchain_depth_stencil_format{erhe::dataformat::Format::format_undefined}
-    , m_xr_reference_space_local      {XR_NULL_HANDLE}
-    , m_xr_reference_space_stage      {XR_NULL_HANDLE}
-    , m_xr_reference_space_view       {XR_NULL_HANDLE}
-    , m_xr_session_state              {XR_SESSION_STATE_UNKNOWN}
     , m_xr_frame_state                {XR_TYPE_FRAME_STATE, nullptr, 0, 0, XR_FALSE}
 {
     ERHE_PROFILE_FUNCTION();
-
-    log_xr->trace("{}", __func__);
 
     if (instance.get_xr_instance() == XR_NULL_HANDLE) {
         log_xr->error("No XR Instance");
@@ -65,7 +58,7 @@ Xr_session::Xr_session(Xr_instance& instance, erhe::window::Context_window& cont
             .type = XR_TYPE_VIEW,
             .next = nullptr,
             .pose = {
-                . orientation = {
+                .orientation = {
                     .x = 0.0f,
                     .y = 0.0f,
                     .z = 0.0f,
@@ -167,6 +160,47 @@ auto Xr_session::create_session() -> bool
         return false;
     }
 
+    if (m_instance.extensions.FB_color_space) {
+        uint32_t count{0};
+        XrResult enumerate_color_spaces_result = m_instance.xrEnumerateColorSpacesFB(m_xr_session, 0, &count, nullptr);
+        if ((enumerate_color_spaces_result == XR_SUCCESS) && (count > 0)) {
+            std::vector<XrColorSpaceFB> color_spaces(count);
+            uint32_t count2 = count;
+            enumerate_color_spaces_result = m_instance.xrEnumerateColorSpacesFB(m_xr_session, count, &count2, color_spaces.data());
+            if (enumerate_color_spaces_result == XR_SUCCESS) {
+                log_xr->info("Session color spaces:");
+                XrColorSpaceFB best_color_space = color_spaces.front();
+                int best_score = 0;
+                for (uint32_t i = 0; i < count; ++i) {
+                    const XrColorSpaceFB color_space = color_spaces[i];
+                    log_xr->info("    {}", c_str(color_space));
+                    int score = color_space_score(color_space);
+                    if (score > best_score) {
+                        best_score = score;
+                        best_color_space = color_space;
+                    }
+                }
+                //best_color_space = XR_COLOR_SPACE_UNMANAGED_FB;
+                //best_color_space = XR_COLOR_SPACE_REC2020_FB;
+                //best_color_space = XR_COLOR_SPACE_REC709_FB;
+                //best_color_space = XR_COLOR_SPACE_RIFT_CV1_FB;
+                //best_color_space = XR_COLOR_SPACE_RIFT_S_FB;
+                //best_color_space = XR_COLOR_SPACE_QUEST_FB;
+                //best_color_space = XR_COLOR_SPACE_P3_FB;
+                //best_color_space = XR_COLOR_SPACE_ADOBE_RGB_FB;
+                XrResult set_color_space_result = m_instance.xrSetColorSpaceFB(m_xr_session, best_color_space);
+                if (set_color_space_result == XR_SUCCESS) {
+                    log_xr->info("Selected session color space: {}", c_str(best_color_space));
+                } else {
+                    log_xr->warn("xrSetColorSpaceFB({}) failed with error {}", c_str(best_color_space), c_str(set_color_space_result));
+                }
+            }
+        }
+        if (enumerate_color_spaces_result != XR_SUCCESS) {
+            log_xr->warn("xrEnumerateColorSpacesFB() failed with error {}", c_str(enumerate_color_spaces_result));
+        }
+    }
+
     return true;
 }
 
@@ -227,14 +261,31 @@ auto Xr_session::get_xr_frame_state() const -> const XrFrameState&
     return m_xr_frame_state;
 }
 
+auto Xr_session::color_space_score(const XrColorSpaceFB color_space) const -> int
+{
+    // TODO
+    switch (color_space) {
+        case XR_COLOR_SPACE_UNMANAGED_FB: return 1;
+        case XR_COLOR_SPACE_REC2020_FB:   return 1;
+        case XR_COLOR_SPACE_REC709_FB:    return 1;
+        case XR_COLOR_SPACE_RIFT_CV1_FB:  return 2;
+        case XR_COLOR_SPACE_RIFT_S_FB:    return 1;
+        case XR_COLOR_SPACE_QUEST_FB:     return 1;
+        case XR_COLOR_SPACE_P3_FB:        return 1;
+        case XR_COLOR_SPACE_ADOBE_RGB_FB: return 1;
+        default:                          return 0;
+    }
+}
+
 auto Xr_session::color_format_score(const erhe::dataformat::Format pixelformat) const -> int
 {
     switch (pixelformat) {
         //using enum gl::Internal_format;
-        case erhe::dataformat::Format::format_8_vec4_unorm:             return 1 + (m_mirror_mode ? 10 : 0);
-        case erhe::dataformat::Format::format_8_vec4_srgb:              return 2;
+        case erhe::dataformat::Format::format_8_vec4_unorm:             return 1;
+        case erhe::dataformat::Format::format_8_vec4_srgb:              return 0; // wrong color space in quest
         case erhe::dataformat::Format::format_packed1010102_vec4_unorm: return 3;
         case erhe::dataformat::Format::format_packed111110_vec3_unorm:  return 4;
+        case erhe::dataformat::Format::format_16_vec3_float:            return 6;
         case erhe::dataformat::Format::format_16_vec4_float:            return 5;
         default:                                                        return 0;
     }
@@ -289,7 +340,7 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
             m_swapchain_depth_stencil_format = pixelformat;
         }
     }
-    log_xr->info("Selected swapchain color format {}", erhe::dataformat::c_str(m_swapchain_color_format));
+    log_xr->info("Selected swapchain color format {}{}", erhe::dataformat::c_str(m_swapchain_color_format), m_mirror_mode ? " (mirror mode enabled)" : "");
     log_xr->info("Selected swapchain depth stencil format {}", erhe::dataformat::c_str(m_swapchain_depth_stencil_format));
 
     return true;
@@ -379,6 +430,46 @@ auto Xr_session::create_swapchains() -> bool
         }
 
         m_view_swapchains.emplace_back(color_swapchain, depth_stencil_swapchain);
+    }
+
+    if (m_instance.extensions.FB_passthrough) {
+        XrPassthroughCreateInfoFB passthrough_create_info{
+            .type  = XR_TYPE_PASSTHROUGH_CREATE_INFO_FB,
+            .next  = nullptr,
+            .flags = XR_PASSTHROUGH_IS_RUNNING_AT_CREATION_BIT_FB
+        };
+
+        XrResult passthrough_result = m_instance.xrCreatePassthroughFB(m_xr_session, &passthrough_create_info, &m_passthrough_fb);
+        if (passthrough_result != XR_SUCCESS) {
+            log_xr->warn("xrCreatePassthroughFB() failed with error {}", c_str(passthrough_result));
+        } else {
+            XrPassthroughLayerCreateInfoFB layer_create_info{
+                .type        = XR_TYPE_PASSTHROUGH_LAYER_CREATE_INFO_FB,
+                .next        = nullptr,
+                .passthrough = m_passthrough_fb,
+                .flags       = XR_PASSTHROUGH_IS_RUNNING_AT_CREATION_BIT_FB,
+                .purpose     = XR_PASSTHROUGH_LAYER_PURPOSE_RECONSTRUCTION_FB
+            };
+            passthrough_result = m_instance.xrCreatePassthroughLayerFB(m_xr_session, &layer_create_info, &m_passthrough_layer_fb);
+        }
+
+        if (passthrough_result != XR_SUCCESS) {
+            log_xr->warn("xrCreatePassthroughLayerFB() failed with error {}", c_str(passthrough_result));
+        } else {
+            passthrough_result = m_instance.xrPassthroughStartFB(m_passthrough_fb);
+        }
+
+        // if (passthrough_result != XR_SUCCESS) {
+        //     log_xr->warn("xrPassthroughStartFB() failed with error {}", c_str(passthrough_result));
+        // } else {
+        //     m_instance.xrPassthroughLayerResumeFB(m_passthrough_layer_fb);
+        // }
+        // 
+        // if (passthrough_result != XR_SUCCESS) {
+        //     log_xr->warn("xrPassthroughLayerResumeFB() failed with error {}", c_str(passthrough_result));
+        // } else {
+        //     log_xr->info("Initialized XR_FB_passthrough");
+        // }
     }
 
     return true;
@@ -957,7 +1048,15 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     //layer_depth.depthTestRangeNearZ = 0.1f;
     //layer_depth.depthTestRangeFarZ  = 0.5f;
 
-    XrCompositionLayerProjection layer{
+    XrCompositionLayerPassthroughFB passthrough_fb_layer{
+        .type        = XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB,
+        .next        = nullptr,
+        .flags       = 0,
+        .space       = XR_NULL_HANDLE,
+        .layerHandle = m_passthrough_layer_fb
+    };
+
+    XrCompositionLayerProjection projection_layer{
         .type       = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
         .next       = nullptr,
         .layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
@@ -967,17 +1066,21 @@ auto Xr_session::end_frame(const bool rendered) -> bool
         .views      = m_xr_composition_layer_projection_views.data()
     };
 
-    XrCompositionLayerBaseHeader* layers[] = {
-        reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer)
-    };
+    std::vector<XrCompositionLayerBaseHeader*> layers;
+    if (rendered) {
+        if (m_instance.extensions.FB_passthrough) {
+            layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&passthrough_fb_layer));
+        }
+        layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&projection_layer));
+    }
 
     XrFrameEndInfo frame_end_info{
         .type                 = XR_TYPE_FRAME_END_INFO,
         .next                 = nullptr,
         .displayTime          = m_xr_frame_state.predictedDisplayTime,
         .environmentBlendMode = m_instance.get_xr_environment_blend_mode(),
-        .layerCount           = rendered ? uint32_t{1} : uint32_t{0},
-        .layers               = rendered ? layers : nullptr
+        .layerCount           = static_cast<uint32_t>(layers.size()),
+        .layers               = layers.empty() ? nullptr : layers.data()
     };
 
     if (rendered) {

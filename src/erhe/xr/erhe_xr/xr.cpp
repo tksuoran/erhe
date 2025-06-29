@@ -29,6 +29,7 @@ GEN_C_STR(XrSessionState         )
 GEN_C_STR(XrStructureType        )
 GEN_C_STR(XrViewConfigurationType)
 GEN_C_STR(XrHandJointEXT         )
+GEN_C_STR(XrColorSpaceFB         )
 
 auto to_string_message_severity(XrDebugUtilsMessageSeverityFlagsEXT severity) -> std::string
 {

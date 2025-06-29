@@ -87,5 +87,6 @@ extern const char* c_str(::XrSessionState          e) noexcept;
 extern const char* c_str(::XrStructureType         e) noexcept;
 extern const char* c_str(::XrViewConfigurationType e) noexcept;
 extern const char* c_str(::XrHandJointEXT          e) noexcept;
+extern const char* c_str(::XrColorSpaceFB          e) noexcept;
 
 }
