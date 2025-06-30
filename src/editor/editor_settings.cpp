@@ -1,5 +1,6 @@
 #include "editor_settings.hpp"
 #include "editor_message_bus.hpp"
+#include "editor_log.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
@@ -75,6 +76,7 @@ void Graphics_settings::read_presets()
 
 void Graphics_settings::write_presets()
 {
+    log_startup->debug("Graphics_settings::write_presets()");
     mINI::INIFile file("graphics_presets.ini");
     mINI::INIStructure ini;
     for (const auto& graphics_preset : graphics_presets) {
@@ -98,6 +100,8 @@ void Graphics_settings::apply_limits(Graphics_preset& graphics_preset)
 
 void Graphics_settings::select_active_graphics_preset(Editor_message_bus& editor_message_bus)
 {
+    log_startup->debug("Graphics_settings::select_active_graphics_preset()");
+
     for (auto& graphics_preset : graphics_presets) {
         apply_limits(graphics_preset);
     }
@@ -107,6 +111,7 @@ void Graphics_settings::select_active_graphics_preset(Editor_message_bus& editor
         const auto& graphics_preset = graphics_presets.at(i);
         if (graphics_preset.name == current_graphics_preset.name) {
             current_graphics_preset = graphics_preset;
+            log_startup->info("Using graphics preset {}", graphics_preset.name);
             // Queue instead of instant send
             editor_message_bus.queue_message(
                 Editor_message{
@@ -121,6 +126,8 @@ void Graphics_settings::select_active_graphics_preset(Editor_message_bus& editor
 
 void Editor_settings::read()
 {
+    log_startup->debug("Editor_settings::read()");
+
     graphics.read_presets();
 
     auto& settings_ini = erhe::configuration::get_ini_file("settings.ini");
@@ -142,6 +149,8 @@ void Editor_settings::read()
 
 void Editor_settings::write()
 {
+    log_startup->debug("Editor_settings::write()");
+
     graphics.write_presets();
 
     mINI::INIFile file("settings.ini");
