@@ -9,19 +9,17 @@
 #include "scene/viewport_scene_view.hpp"
 #include "tools/grid.hpp"
 #include "tools/tools.hpp"
+#include "windows/viewport_window.hpp"
 
 #include "erhe_geometry_renderer/geometry_debug_renderer.hpp"
+#include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_renderer/debug_renderer.hpp"
+#include "erhe_log/log_glm.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
-#include "erhe_log/log_glm.hpp"
-#include "erhe_physics/irigid_body.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_profile/profile.hpp"
-
-#include <fmt/core.h>
 #include <fmt/format.h>
 
 #include <string>
@@ -51,14 +49,39 @@ Hover_tool::Hover_tool(
 
 void Hover_tool::imgui()
 {
+    erhe::imgui::Imgui_host* imgui_host = get_imgui_host();
+    glm::vec2 mouse_position{0.0f, 0.0f};
+    if (imgui_host != nullptr) {
+        mouse_position = imgui_host->get_mouse_position();
+        ImGui::Text("ImGui Host Mouse position: %f, %f", mouse_position.x, mouse_position.y);
+    }
+
     ImGui::Checkbox("Geometry Debug Facet Hover Only", &m_geometry_debug_hover_facet_only);
     ImGui::Checkbox("Show Hover Normal",               &m_show_hover_normal);
     ImGui::Checkbox("Show Snapped Grid Position",      &m_show_snapped_grid_position);
 
     // Rest requires scene_view so we can early out here
-    auto* scene_view = get_hover_scene_view();
+    Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
         return;
+    }
+
+    Viewport_scene_view* viewport_scene_view = scene_view->as_viewport_scene_view();
+    if (viewport_scene_view != nullptr) {
+        const erhe::math::Viewport& window_viewport = viewport_scene_view->get_window_viewport();
+        ImGui::Text("Window viewport: %d, %d | %d x %d", window_viewport.x, window_viewport.y, window_viewport.width, window_viewport.height);
+
+        // const float content_x      = static_cast<float>(mouse_position.x) - window_viewport.x;
+        // const float content_y      = static_cast<float>(mouse_position.y) - window_viewport.y;
+        // const float content_flip_y = window_viewport.height - content_y;
+        // ImGui::Text("Content x = %f y = %f", content_x, content_y);
+        // ImGui::Text("Y flipped x = %f y = %f", content_x, content_flip_y);
+
+        const std::optional<glm::vec2> position_in_viewport_opt = viewport_scene_view->get_position_in_viewport();
+        if (position_in_viewport_opt.has_value()) {
+            const glm::vec2 position_in_viewport = position_in_viewport_opt.value();
+            ImGui::Text("Mouse position in Viewport scene view: %f, %f", position_in_viewport.x, position_in_viewport.y);
+        }
     }
 
     const auto& hover        = scene_view->get_hover(Hover_entry::content_slot);

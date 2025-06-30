@@ -1,44 +1,32 @@
 #include "scene/scene_builder.hpp"
 
 #include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
 #include "editor_settings.hpp"
 
 #include "tools/brushes/brush.hpp"
-#include "parsers/gltf.hpp"
 #include "parsers/json_polyhedron.hpp"
-#include "parsers/wavefront_obj.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/content_library.hpp"
-#include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
-#include "windows/item_tree_window.hpp"
-#include "windows/settings_window.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
-#include "erhe_geometry/shapes/box.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
 #include "erhe_geometry/shapes/torus.hpp"
+#include "erhe_geometry/shapes/box.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_physics/icollision_shape.hpp"
-#include "erhe_physics/iworld.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/material.hpp"
-#include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_raytrace/iscene.hpp"
-#include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -57,22 +45,10 @@
 
 namespace editor {
 
-using erhe::geometry::shapes::make_dodecahedron;
-using erhe::geometry::shapes::make_icosahedron;
-using erhe::geometry::shapes::make_octahedron;
-using erhe::geometry::shapes::make_tetrahedron;
-using erhe::geometry::shapes::make_cuboctahedron;
-using erhe::geometry::shapes::make_cube;
-using erhe::geometry::shapes::make_cone;
-using erhe::geometry::shapes::make_sphere;
-using erhe::geometry::shapes::make_torus;
-//using erhe::geometry::shapes::torus_volume;
-using erhe::geometry::shapes::make_cylinder;
 using erhe::scene::Light;
 using erhe::scene::Node;
 using erhe::scene::Projection;
 using erhe::Item_flags;
-using erhe::geometry::shapes::make_box;
 using erhe::primitive::Normal_style;
 using glm::mat3;
 using glm::mat4;
@@ -134,6 +110,10 @@ Scene_builder::Scene_builder(
     setup_lights();
     make_brushes(editor_settings, mesh_memory, executor);
     add_room    ();
+}
+
+Scene_builder::~Scene_builder()
+{
 }
 
 auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_at) -> std::shared_ptr<erhe::scene::Camera>
@@ -292,32 +272,32 @@ void Scene_builder::make_platonic_solid_brushes(Editor_settings& editor_settings
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
 
     auto dodecahedron = std::make_shared<erhe::geometry::Geometry>("dodecahedron");
-    make_dodecahedron(dodecahedron->get_mesh(), scale);
+    erhe::geometry::shapes::make_dodecahedron(dodecahedron->get_mesh(), scale);
     dodecahedron->process(flags);
     m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, dodecahedron));
 
     auto icosahedron = std::make_shared<erhe::geometry::Geometry>("icosahedron");
-    make_icosahedron(icosahedron->get_mesh(), scale);
+    erhe::geometry::shapes::make_icosahedron(icosahedron->get_mesh(), scale);
     icosahedron->process(flags);
     m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, icosahedron));
 
     auto octahedron = std::make_shared<erhe::geometry::Geometry>("octahedron");
-    make_octahedron(octahedron->get_mesh(), scale);
+    erhe::geometry::shapes::make_octahedron(octahedron->get_mesh(), scale);
     octahedron->process(flags);
     m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, octahedron));
 
     auto cuboctahedron = std::make_shared<erhe::geometry::Geometry>("cuboctahedron");
-    make_cuboctahedron(cuboctahedron->get_mesh(), scale);
+    erhe::geometry::shapes::make_cuboctahedron(cuboctahedron->get_mesh(), scale);
     cuboctahedron->process(flags);
     m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, cuboctahedron));
 
     auto tetrahedron = std::make_shared<erhe::geometry::Geometry>("tetrahedron");
-    make_tetrahedron(tetrahedron->get_mesh(), scale);
+    erhe::geometry::shapes::make_tetrahedron(tetrahedron->get_mesh(), scale);
     tetrahedron->process(flags);
     m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, tetrahedron));
 
     auto cube = std::make_shared<erhe::geometry::Geometry>("cube");
-    make_cube(cube->get_mesh(), scale);
+    erhe::geometry::shapes::make_cube(cube->get_mesh(), scale);
     cube->process(flags);
     m_platonic_solids.push_back(make_brush(
         folder,
@@ -339,7 +319,7 @@ void Scene_builder::make_sphere_brushes(Editor_settings& editor_settings, Mesh_m
 
     Content_library_node& brushes = get_brushes();
     std::shared_ptr<erhe::geometry::Geometry> sphere = std::make_shared<erhe::geometry::Geometry>("sphere");
-    make_sphere(
+    erhe::geometry::shapes::make_sphere(
         sphere->get_mesh(),
         1.0f, //config.object_scale,
         8 * std::max(1, m_config.detail), // slice count
@@ -423,7 +403,7 @@ void Scene_builder::make_torus_brushes(Editor_settings& editor_settings, Mesh_me
         return erhe::physics::ICollision_shape::create_compound_shape_shared(torus_shape_create_info);
     };
     std::shared_ptr<erhe::geometry::Geometry> torus_geometry = std::make_shared<erhe::geometry::Geometry>("torus");
-    make_torus(
+    erhe::geometry::shapes::make_torus(
         torus_geometry->get_mesh(),
         major_radius,
         minor_radius,
@@ -460,7 +440,7 @@ void Scene_builder::make_cylinder_brushes(Editor_settings& editor_settings, Mesh
     std::size_t index = 0;
     for (float h = 0.1f; h < 1.1f; h += 0.9f) {
         std::shared_ptr<erhe::geometry::Geometry> cylinder_geometry = std::make_shared<erhe::geometry::Geometry>("cylinder");
-        make_cylinder(
+        erhe::geometry::shapes::make_cylinder(
             cylinder_geometry->get_mesh(),
             -h * scale,
              h * scale,
@@ -501,7 +481,7 @@ void Scene_builder::make_cone_brushes(Editor_settings& editor_settings, Mesh_mem
     Content_library_node& brushes = get_brushes();
 
     std::shared_ptr<erhe::geometry::Geometry> cone_geometry = std::make_shared<erhe::geometry::Geometry>("cone");
-    make_cone( // always axis = x
+    erhe::geometry::shapes::make_cone( // always axis = x
         cone_geometry->get_mesh(),
         -1.0f, // * config.object_scale,    // min x
          1.0f, // * config.object_scale,    // max x
@@ -607,7 +587,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
 
             std::shared_ptr<erhe::geometry::Geometry> floor_geometry = std::make_shared<erhe::geometry::Geometry>("floor");
 
-            make_box(floor_geometry->get_mesh(), m_config.floor_size, 1.0f, m_config.floor_size);
+            erhe::geometry::shapes::make_box(floor_geometry->get_mesh(), m_config.floor_size, 1.0f, m_config.floor_size);
 
             const uint64_t flags =
                 erhe::geometry::Geometry::process_flag_connect |
@@ -932,7 +912,7 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
 
     GEO::Mesh cube_geo_mesh;
-    make_cube(cube_geo_mesh, scale);
+    erhe::geometry::shapes::make_cube(cube_geo_mesh, scale);
 
     Mesh_memory& mesh_memory = *m_context.mesh_memory;
 

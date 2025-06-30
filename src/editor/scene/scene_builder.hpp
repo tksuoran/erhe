@@ -72,7 +72,7 @@ public:
     int                                        detail        {4};
 };
 
-class Scene_builder
+class Scene_builder final
 {
 public:
     Scene_builder(
@@ -90,6 +90,7 @@ public:
         Tools&                          tools,
         Scene_views&                    scene_views
     );
+    ~Scene_builder();
 
     // Public API
     [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root>;

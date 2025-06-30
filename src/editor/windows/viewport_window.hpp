@@ -22,7 +22,6 @@ class Editor_context;
 class Post_processing_node;
 class Viewport_scene_view;
 
-// Rendergraph sink node for showing contents originating from Viewport_scene_view
 class Viewport_window : public erhe::imgui::Imgui_window
 {
 public:
@@ -59,7 +58,6 @@ private:
     Editor_context&                                    m_editor_context;
     std::weak_ptr<Viewport_scene_view>                 m_viewport_scene_view;
     std::weak_ptr<erhe::rendergraph::Rendergraph_node> m_rendergraph_output_node;
-    erhe::math::Viewport                               m_viewport;
     bool                                               m_brush_drag_and_drop_active{false};
 };
 

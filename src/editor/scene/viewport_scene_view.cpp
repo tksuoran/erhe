@@ -6,13 +6,11 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
-#include "editor_settings.hpp"
 #include "editor_scenes.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "rendergraph/shadow_render_node.hpp"
-#include "rendergraph/post_processing.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
@@ -20,17 +18,14 @@
 #include "tools/transform/transform_tool.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
-#include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_log/log_glm.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene/camera.hpp"
@@ -38,8 +33,6 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
-
-#include <geogram/mesh/mesh_geometry.h>
 
 #include <glm/gtx/matrix_operation.hpp>
 

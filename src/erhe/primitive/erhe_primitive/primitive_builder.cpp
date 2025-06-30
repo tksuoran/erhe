@@ -1,11 +1,9 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_primitive/primitive_builder.hpp"
-#include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/buffer_writer.hpp"
-#include "erhe_primitive/format_info.hpp"
 #include "erhe_primitive/index_range.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_geometry/geometry.hpp"

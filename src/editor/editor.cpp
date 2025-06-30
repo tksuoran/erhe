@@ -471,7 +471,8 @@ public:
                         { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0},
                         { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color,     0},
                         { erhe::dataformat::Format::format_8_vec2_unorm,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_aniso_control},
-                        { erhe::dataformat::Format::format_16_vec2_uint,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_valency_edge_count}
+                        { erhe::dataformat::Format::format_16_vec2_uint,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_valency_edge_count},
+                        { erhe::dataformat::Format::format_8_vec3_unorm,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_id}
                     }
                 }
             };

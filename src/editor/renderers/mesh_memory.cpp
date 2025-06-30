@@ -94,4 +94,8 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
 {
 }
 
+Mesh_memory::~Mesh_memory()
+{
+}
+
 } // namespace editor

@@ -104,8 +104,6 @@ public:
     void set_camera                (const std::shared_ptr<erhe::scene::Camera>& camera);
     void update_pointer_2d_position(glm::vec2 position_in_viewport);
     void update_hover              (bool ray_only = false);
-    void link_to                   (std::shared_ptr<erhe::rendergraph::Multisample_resolve_node> node);
-    void link_to                   (std::shared_ptr<Post_processing_node> node);
 
     void set_shader_stages_variant(Shader_stages_variant variant);
     auto get_shader_stages_variant() const -> Shader_stages_variant;
@@ -120,7 +118,6 @@ public:
     [[nodiscard]] auto get_position_in_viewport            () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto get_position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto viewport_toolbar                    () -> bool;
-    [[nodiscard]] auto get_post_processing_node            () -> Post_processing_node*;
 
 private:
     [[nodiscard]] auto get_override_shader_stages() const -> const erhe::graphics::Shader_stages*;

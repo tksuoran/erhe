@@ -36,7 +36,7 @@ namespace editor {
 class Programs;
 class Mesh_memory;
 
-class Id_renderer
+class Id_renderer final
 {
 public:
     bool enabled{true};
@@ -64,9 +64,6 @@ public:
     class Render_parameters
     {
     public:
-        erhe::graphics::Buffer*      index_buffer        {nullptr};
-        erhe::graphics::Buffer*      vertex_buffer       {nullptr};
-        std::size_t                  vertex_buffer_offset{0};
         const erhe::math::Viewport&  viewport;
         const erhe::scene::Camera&   camera;
         const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
@@ -104,7 +101,7 @@ private:
         auto operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources&;
 
         erhe::graphics::Buffer                pixel_pack_buffer;
-        std::array<uint8_t, s_id_buffer_size> data;
+        std::array<uint8_t, s_id_buffer_size> data           {};
         GLsync                                sync           {0};
         glm::mat4                             clip_from_world{1.0f};
         int                                   x_offset       {0};

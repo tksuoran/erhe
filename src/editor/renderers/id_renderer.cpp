@@ -5,10 +5,8 @@
 #include "renderers/programs.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_gl/command_info.hpp"
 #include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
@@ -168,6 +166,9 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             (m_color_renderbuffer->get_width()  != static_cast<unsigned int>(viewport.width)) ||
             (m_color_renderbuffer->get_height() != static_cast<unsigned int>(viewport.height))
         ) {
+            m_color_renderbuffer.reset();
+            m_depth_renderbuffer.reset();
+            m_render_pass.reset();
             m_color_renderbuffer = std::make_unique<Renderbuffer>(
                 m_graphics_device,
                 erhe::dataformat::Format::format_8_vec4_unorm,
@@ -202,6 +203,9 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             (m_color_texture->get_width()  != viewport.width) ||
             (m_color_texture->get_height() != viewport.height)
         ) {
+            m_color_texture.reset();
+            m_depth_texture.reset();
+            m_render_pass.reset();
             m_color_texture = std::make_unique<Texture>(
                 m_graphics_device,
                 Texture::Create_info{
@@ -321,7 +325,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     idr.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
     idr.clip_from_world = clip_from_world;
 
-    const auto camera_range = m_camera_buffers.update(
+    erhe::graphics::Buffer_range camera_range = m_camera_buffers.update(
         *camera.projection(),
         *camera.get_node(),
         viewport,
@@ -332,28 +336,23 @@ void Id_renderer::render(const Render_parameters& parameters)
     );
     m_camera_buffers.bind(camera_range);
 
-    {
-        std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+    m_graphics_device.opengl_state_tracker.shader_stages.reset();
+    m_graphics_device.opengl_state_tracker.color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
 
-        m_graphics_device.opengl_state_tracker.shader_stages.reset();
-        m_graphics_device.opengl_state_tracker.color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
-
-        gl::viewport   (viewport.x, viewport.y, viewport.width, viewport.height);
-        if (m_use_scissor) {
-            gl::scissor(idr.x_offset, idr.y_offset, s_extent, s_extent);
-            gl::enable (gl::Enable_cap::scissor_test);
-        }
-
-        // TODO Abstraction for partial clear
-        gl::clear_color(1.0f, 1.0f, 1.0f, 0.1f);
-        gl::clear      (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
+    gl::viewport   (viewport.x, viewport.y, viewport.width, viewport.height);
+    if (m_use_scissor) {
+        gl::scissor(idr.x_offset, idr.y_offset, s_extent, s_extent);
+        gl::enable (gl::Enable_cap::scissor_test);
     }
+
+    //// TODO Abstraction for partial clear
+    //gl::clear_color(1.0f, 1.0f, 1.0f, 0.1f);
+    //gl::clear      (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 
     m_primitive_buffers.reset_id_ranges();
 
     m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
-    m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
-    m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
 
     for (auto meshes : content_mesh_spans) {
         render(meshes);
@@ -373,8 +372,6 @@ void Id_renderer::render(const Render_parameters& parameters)
         //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
 
         m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
-        m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
-        m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
 
         gl::depth_range(0.0f, 1.0f);
 
@@ -390,6 +387,9 @@ void Id_renderer::render(const Render_parameters& parameters)
         gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, idr.pixel_pack_buffer.gl_name());
         void* const color_offset = nullptr;
         void* const depth_offset = reinterpret_cast<void*>(s_extent * s_extent * 4);
+        const unsigned int fbo = m_render_pass->gl_name();
+        gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, fbo);
+        gl::named_framebuffer_read_buffer(fbo, gl::Color_buffer::color_attachment0);
         gl::read_pixels(
             idr.x_offset,
             idr.y_offset,
@@ -412,6 +412,8 @@ void Id_renderer::render(const Render_parameters& parameters)
         idr.sync = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0);
         idr.state = Id_frame_resources::State::Waiting_for_read;
     }
+
+    camera_range.release();
 }
 
 template<typename T>

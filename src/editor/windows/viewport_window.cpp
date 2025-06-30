@@ -37,10 +37,6 @@ Viewport_window::Viewport_window(
     , m_viewport_scene_view{viewport_scene_view}
     , m_rendergraph_output_node{rendergraph_output_node}
 {
-    m_viewport.x      = 0;
-    m_viewport.y      = 0;
-    m_viewport.width  = 0;
-    m_viewport.height = 0;
     show_window();
 }
 
@@ -171,21 +167,6 @@ void Viewport_window::imgui()
     viewport_scene_view->set_enabled(true);
 
     const ImVec2 size = ImGui::GetContentRegionAvail();
-
-    m_viewport.width  = std::max(1, static_cast<int>(size.x));
-    m_viewport.height = std::max(1, static_cast<int>(size.y));
-
-    const ImVec2 rect_min = ImGui::GetItemRectMin();
-    const ImVec2 rect_max = ImGui::GetItemRectMax();
-    viewport_scene_view->set_window_viewport(
-        erhe::math::Viewport{
-            static_cast<int>(rect_min.x),
-            static_cast<int>(rect_min.y),
-            m_viewport.width,
-            m_viewport.height
-        }
-    );
-
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node = m_rendergraph_output_node.lock();
     const std::shared_ptr<erhe::graphics::Texture>& color_texture = 
         rendergraph_output_node 
@@ -203,6 +184,17 @@ void Viewport_window::imgui()
                 color_texture->debug_label()
             );
             draw_image(color_texture, static_cast<int>(size.x), static_cast<int>(size.y));
+            const ImVec2 rect_min = ImGui::GetItemRectMin();
+            const ImVec2 rect_max = ImGui::GetItemRectMax();
+            viewport_scene_view->set_window_viewport(
+                erhe::math::Viewport{
+                    static_cast<int>(rect_min.x),
+                    static_cast<int>(rect_min.y),
+                    static_cast<int>(rect_max.x - rect_min.x + 1.0f),
+                    static_cast<int>(rect_max.y - rect_min.y + 1.0f)
+                }
+            );
+
             const bool is_hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup);
             SPDLOG_LOGGER_TRACE(log_scene_view, "{} ImGui::IsItemHovered() = {}", get_name(), is_hovered);
             set_is_window_hovered(is_hovered);
@@ -210,6 +202,18 @@ void Viewport_window::imgui()
             drag_and_drop_target(rect_min.x, rect_min.y, rect_max.x, rect_max.y);
         }
     } else {
+        ImGui::Dummy(size);
+        const ImVec2 rect_min = ImGui::GetItemRectMin();
+        const ImVec2 rect_max = ImGui::GetItemRectMax();
+        viewport_scene_view->set_window_viewport(
+            erhe::math::Viewport{
+                static_cast<int>(rect_min.x),
+                static_cast<int>(rect_min.y),
+                static_cast<int>(rect_max.x - rect_min.x + 1.0f),
+                static_cast<int>(rect_max.y - rect_min.y + 1.0f)
+            }
+        );
+
         SPDLOG_LOGGER_TRACE(log_scene_view, "{} no color texture", get_name());
         set_is_window_hovered(false);
         viewport_scene_view->set_is_scene_view_hovered(false);

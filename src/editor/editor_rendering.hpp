@@ -91,7 +91,6 @@ public:
     [[nodiscard]] auto get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>;
     [[nodiscard]] auto get_all_shadow_nodes    () -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
 
-    void set_tool_scene_root        (Scene_root* tool_scene_root);
     void trigger_capture            ();
     void render_viewport_main       (const Render_context& context);
     void render_viewport_renderables(const Render_context& context);
@@ -102,8 +101,6 @@ public:
 
     void add   (Renderable* renderable);
     void remove(Renderable* renderable);
-
-    Scene_root* tool_scene_root{nullptr};
 
     auto make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>;
 

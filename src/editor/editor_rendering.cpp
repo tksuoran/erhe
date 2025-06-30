@@ -4,6 +4,7 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_settings.hpp"
+#include "tools/tools.hpp"
 #include "renderable.hpp"
 #include "renderers/composer.hpp"
 #include "renderers/id_renderer.hpp"
@@ -613,11 +614,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
 {
 }
 
-void Editor_rendering::set_tool_scene_root(Scene_root* in_tool_scene_root)
-{
-    this->tool_scene_root = in_tool_scene_root;
-}
-
 void Editor_rendering::trigger_capture()
 {
     m_trigger_capture = true;
@@ -782,11 +778,12 @@ void Editor_rendering::render_id(const Render_context& context)
     const auto position = position_opt.value();
 
     const auto& layers = scene_root->layers();
+    Scene_root* tool_scene_root = m_context.tools->get_tool_scene_root().get();
     if ((tool_scene_root == nullptr) || (context.camera == nullptr)) {
         return;
     }
 
-    const auto& tool_layers = tool_scene_root->layers();
+    const Scene_layers& tool_layers = tool_scene_root->layers();
 
     // TODO listen to viewport changes in msg bus?
     m_context.id_renderer->render(
