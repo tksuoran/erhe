@@ -2,6 +2,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_verify/verify.hpp"
+
 #include <fmt/format.h>
 
 namespace erhe::graphics {

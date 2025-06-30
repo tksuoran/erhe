@@ -1,7 +1,6 @@
 #include "erhe_graphics/shader_stages.hpp"
 
 #include "erhe_graphics/device.hpp"
-#include "erhe_gl/command_info.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_profile/profile.hpp"

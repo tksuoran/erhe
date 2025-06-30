@@ -1,7 +1,6 @@
 #include "erhe_geometry/operation/union.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
-#include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_intersection.h>
 
 namespace erhe::geometry::operation {

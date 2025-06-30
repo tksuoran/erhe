@@ -3,7 +3,6 @@
 #include "erhe_geometry/shapes/cone.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_verify/verify.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <map>
 

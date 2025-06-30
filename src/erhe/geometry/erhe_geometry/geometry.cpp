@@ -8,7 +8,6 @@
 #include <geogram/basic/matrix.h>
 #include <geogram/delaunay/delaunay.h>
 #include <geogram/mesh/mesh.h>
-#include <geogram/mesh/mesh_geometry.h>
 
 #include <fmt/format.h>
 

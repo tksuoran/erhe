@@ -1,5 +1,4 @@
 #include "erhe_primitive/buffer_mesh.hpp"
-#include "erhe_verify/verify.hpp"
 
 namespace erhe::primitive {
 

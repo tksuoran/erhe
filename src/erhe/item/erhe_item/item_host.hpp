@@ -2,7 +2,6 @@
 
 #include "erhe_profile/profile.hpp"
 
-#include <memory>
 #include <mutex>
 
 namespace erhe {

@@ -1,7 +1,6 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"

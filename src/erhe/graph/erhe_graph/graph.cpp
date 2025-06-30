@@ -3,6 +3,7 @@
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/node.hpp"
 #include "erhe_graph/pin.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <spdlog/spdlog.h>
 

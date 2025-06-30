@@ -3,7 +3,6 @@
 #include "erhe_profile/profile.hpp"
 
 #include <functional>
-#include <memory>
 #include <mutex>
 #include <queue>
 #include <vector>

@@ -1,15 +1,11 @@
 #include "erhe_item/item.hpp"
-#include "erhe_item/item_log.hpp"
 #include "erhe_bit/bit_helpers.hpp"
-#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
 #include <sstream>
 
 namespace erhe {
-
-using namespace erhe::item;
 
 auto Item_flags::to_string(const uint64_t flags) -> std::string
 {

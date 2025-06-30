@@ -1,9 +1,6 @@
 #pragma once
 
 #include "erhe_item/unique_id.hpp"
-#include "erhe_verify/verify.hpp"
-
-#include <glm/glm.hpp>
 
 #include <cstdint>
 #include <filesystem>

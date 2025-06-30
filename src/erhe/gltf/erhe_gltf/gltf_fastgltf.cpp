@@ -14,7 +14,6 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_log/log_glm.hpp"
-#include "erhe_log/log_geogram.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
@@ -30,28 +29,25 @@
 #include "erhe_scene/skin.hpp"
 #include "erhe_time/timer.hpp"
 
-#include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
 
-#include <fmt/chrono.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <numeric>
+#include <string_view>
+#include <string>
 #include <string>
 #include <variant>
 #include <vector>
-
-#include <filesystem>
-#include <fstream>
-#include <string>
-#include <string_view>
 
 namespace erhe::gltf {
 

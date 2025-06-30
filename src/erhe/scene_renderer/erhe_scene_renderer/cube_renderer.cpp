@@ -2,17 +2,15 @@
 #include "erhe_scene_renderer/cube_instance_buffer.hpp"
 
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
-#include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_graphics/scoped_buffer_mapping.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::scene_renderer {
 

@@ -1,6 +1,5 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_verify/verify.hpp"
 

@@ -3,7 +3,7 @@
 
 #include <bitset>
 
-// #define DISABLE_CACHE 1
+#define DISABLE_CACHE 0
 
 namespace erhe::graphics {
 

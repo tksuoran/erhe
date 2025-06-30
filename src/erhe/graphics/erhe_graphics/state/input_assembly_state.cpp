@@ -1,7 +1,5 @@
 #include "erhe_graphics/state/input_assembly_state.hpp"
 
-// #define DISABLE_CACHE 1
-
 namespace erhe::graphics {
 
 void Input_assembly_state_tracker::reset()

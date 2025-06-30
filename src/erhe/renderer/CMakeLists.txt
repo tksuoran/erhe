@@ -3,8 +3,6 @@ add_library(${_target})
 add_library(erhe::renderer ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe_renderer/buffer_writer.cpp
-    erhe_renderer/buffer_writer.hpp
     erhe_renderer/debug_renderer.cpp
     erhe_renderer/debug_renderer.hpp
     erhe_renderer/debug_renderer_bucket.cpp

@@ -1,6 +1,4 @@
 #include "erhe_primitive/material.hpp"
-#include "erhe_primitive/primitive_log.hpp"
-#include "erhe_item/unique_id.hpp"
 
 namespace erhe::primitive {
 

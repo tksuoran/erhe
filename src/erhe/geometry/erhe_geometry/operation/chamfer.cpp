@@ -5,8 +5,6 @@
 
 #include <fmt/format.h>
 
-#include <geogram/mesh/mesh_geometry.h>
-
 namespace erhe::geometry::operation {
 
 class Chamfer : public Geometry_operation

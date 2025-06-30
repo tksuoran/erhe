@@ -1,6 +1,5 @@
 #include "erhe_graphics/render_pipeline_state.hpp"
 
-#include <algorithm>
 #include <vector>
 
 namespace erhe::graphics {

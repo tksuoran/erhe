@@ -1,13 +1,11 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
-#include "erhe_item/unique_id.hpp"
 
 #include <glm/glm.hpp>
 
 #include <memory>
 #include <optional>
-#include <string>
 #include <string_view>
 
 namespace erhe::graphics {

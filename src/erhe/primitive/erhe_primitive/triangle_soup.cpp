@@ -1,9 +1,7 @@
 #include "erhe_primitive/triangle_soup.hpp"
-#include "erhe_primitive/primitive_log.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
-#include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <geogram/mesh/mesh.h>

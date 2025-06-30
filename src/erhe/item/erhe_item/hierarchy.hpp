@@ -2,13 +2,11 @@
 
 #include "erhe_item/item.hpp"
 
-#include "erhe_item/unique_id.hpp"
-
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
-#include <string>
+#include <string_view>
 #include <vector>
 
 namespace erhe {

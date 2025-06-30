@@ -1,8 +1,6 @@
 #include "erhe_graphics/gl_objects.hpp"
-#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <new>

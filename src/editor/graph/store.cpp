@@ -1,7 +1,7 @@
 #include "graph/store.hpp"
 #include "graph/shader_graph.hpp"
-
 #include "erhe_graph/pin.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 

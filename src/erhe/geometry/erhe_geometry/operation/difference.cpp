@@ -2,8 +2,7 @@
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
 #include <geogram/mesh/mesh_intersection.h>
-#include <geogram/mesh/mesh_CSG.h>
-
+//#include <geogram/mesh/mesh_CSG.h>
 
 namespace erhe::geometry::operation {
 

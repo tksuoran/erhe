@@ -2,9 +2,9 @@
 #include "erhe_geometry/geometry_log.hpp"
 
 #include <geogram/mesh/mesh.h>
-#include <geogram/mesh/mesh_repair.h>
-#include <geogram/mesh/mesh_fill_holes.h>
-#include <geogram/mesh/mesh_surface_intersection.h>
+//#include <geogram/mesh/mesh_repair.h>
+//#include <geogram/mesh/mesh_fill_holes.h>
+//#include <geogram/mesh/mesh_surface_intersection.h>
 
 #include <geogram/basic/command_line.h>
 #include <geogram/delaunay/delaunay.h>

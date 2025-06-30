@@ -7,13 +7,11 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_file/file.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
-#include <map>
 #include <sstream>
 #include <string>
 

@@ -3,7 +3,6 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 
-#include <deque>
 #include <memory>
 #include <optional>
 #include <sstream>

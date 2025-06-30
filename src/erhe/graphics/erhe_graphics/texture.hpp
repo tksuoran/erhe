@@ -3,9 +3,9 @@
 #include "erhe_graphics/gl_objects.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <span>
-
 #include <string>
 
 namespace erhe::graphics {

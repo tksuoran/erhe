@@ -1,10 +1,6 @@
 #include "erhe_geometry/operation/truncate.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
-#include <fmt/format.h>
-
-#include <geogram/mesh/mesh_geometry.h>
-
 namespace erhe::geometry::operation {
 
 class Truncate : public Geometry_operation

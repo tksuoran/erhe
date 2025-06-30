@@ -19,6 +19,7 @@
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_log/log_glm.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -36,9 +37,7 @@
 
 #include <glm/gtx/matrix_operation.hpp>
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 namespace editor {
 
@@ -168,6 +167,7 @@ void Viewport_scene_view::execute_rendergraph_node()
 
 void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
 {
+    // Needed for get_viewport_from_window()
     m_window_viewport = viewport;
     m_projection_viewport.x      = 0;
     m_projection_viewport.y      = 0;
@@ -345,7 +345,7 @@ void Viewport_scene_view::update_hover_with_id_render()
         .triangle                   = static_cast<uint32_t>(id_query.triangle_id) // TODO Consider these types
     };
 
-    SPDLOG_LOGGER_TRACE(log_controller_ray, "position in world = {}", entry.position.value());
+    log_controller_ray->trace("position in world = {}", entry.position.value());
 
     std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry.scene_mesh_weak.lock();
     if (scene_mesh) {
@@ -359,7 +359,7 @@ void Viewport_scene_view::update_hover_with_id_render()
                 const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
                 const GEO::index_t facet = shape->get_mesh_facet_from_triangle(entry.triangle);
                 ERHE_VERIFY(facet < geo_mesh.facets.nb());
-                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover facet = {}", facet);
+                log_controller_ray->trace("hover facet = {}", facet);
                 const GEO::vec3f facet_normal           = mesh_facet_normalf(geo_mesh, facet);
                 const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
                 const glm::mat4  world_from_node        = node->world_from_node();
@@ -367,7 +367,7 @@ void Viewport_scene_view::update_hover_with_id_render()
                 const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
                 const glm::vec3  unit_normal            = glm::normalize(normal_in_world);
                 entry.normal = unit_normal;
-                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
+                log_controller_ray->trace("hover normal = {}", entry.normal.value());
             }
         }
     }

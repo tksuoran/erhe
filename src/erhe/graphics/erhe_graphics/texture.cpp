@@ -1,7 +1,6 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_graphics/texture.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
@@ -11,8 +10,6 @@
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
-
-#include <algorithm>
 
 namespace erhe::graphics {
 

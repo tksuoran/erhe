@@ -4,7 +4,6 @@
 
 #include <geogram/mesh/mesh.h>
 
-#include <map>
 #include <vector>
 
 namespace erhe::geometry::shapes {

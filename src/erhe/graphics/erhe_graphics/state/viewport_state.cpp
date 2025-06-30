@@ -2,7 +2,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_verify/verify.hpp"
 
-//#define DISABLE_CACHE 1
+#define DISABLE_CACHE 0
 
 namespace erhe::graphics {
 

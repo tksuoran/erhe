@@ -1,6 +1,5 @@
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item_log.hpp"
-#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>

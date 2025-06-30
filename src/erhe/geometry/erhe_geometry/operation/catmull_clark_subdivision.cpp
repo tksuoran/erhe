@@ -1,8 +1,6 @@
 #include "erhe_geometry/operation/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_geometry/geometry_log.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::geometry::operation {
