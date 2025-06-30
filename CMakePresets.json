@@ -7,6 +7,7 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
+                "CMAKE_POLICY_VERSION_MINIMUM":    "3.5",
                 "CMAKE_EXPORT_COMPILE_COMMAND":    "ON",
                 "ERHE_USE_PRECOMPILED_HEADERS":    "OFF",
                 "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
