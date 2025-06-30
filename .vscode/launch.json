@@ -9,6 +9,14 @@
             "program": "${command:cmake.launchTargetPath}",
         },
         {
+            "name":    "erhe editor GBD software GL",
+            "type":    "cppdbg",
+            "request": "launch",
+            "cwd":     "${workspaceFolder}/src/editor",
+            "program": "${command:cmake.launchTargetPath}",
+            "environment": [ {"name": "LIBGL_ALWAYS_SOFTWARE", "value": "1"}],
+        },
+        {
             "name":        "erhe editor GBD Remote",
             "type":        "cppdbg",
             "request":     "launch",
@@ -28,7 +36,12 @@
             "type":    "lldb",
             "request": "launch",
             "cwd":     "${workspaceFolder}/src/editor",
-            "env":     {"LIBGL_ALWAYS_SOFTWARE": "1"},
+            "env":     {
+                "LIBGL_ALWAYS_SOFTWARE": "1",
+                "MESA_DEBUG": "verbose",
+                "LIBGL_DEBUG": "verbose",
+                "MESA_LOG_FILE": "mesa_log.txt"
+            },
             "program": "${command:cmake.launchTargetPath}",
         },
         {

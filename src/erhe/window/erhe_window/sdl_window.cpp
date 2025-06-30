@@ -323,8 +323,13 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     SDL_Window* sdl_window = SDL_CreateWindow(configuration.title.c_str(), configuration.width, configuration.height, window_flags);
     m_sdl_window = sdl_window;
 
-    if (m_sdl_window == nullptr) {
-        log_window->error("Failed to open SDL window for GL {}.{}.", configuration.gl_major, configuration.gl_minor);
+    if (sdl_window == nullptr) {
+        log_window->error("Failed to open SDL window");
+        const char* const sdl_error = SDL_GetError();
+        if (sdl_error != nullptr) {
+            log_window->error("SDL error: {}", sdl_error);
+        }
+
         if (s_window_count == 0) {
             SDL_Quit();
         }
@@ -337,6 +342,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,     8);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,     configuration.use_depth   ? 24 : 0);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE,   configuration.use_stencil ?  8 : 0);
+    //SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 0);
 
     SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1);
     if (configuration.msaa_sample_count > 0) {
@@ -361,6 +367,18 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     }
 
     SDL_GLContext sdl_context = SDL_GL_CreateContext(sdl_window);
+    if (sdl_context == nullptr) {
+        log_window->error("Failed to open GL context for GL {}.{}.", configuration.gl_major, configuration.gl_minor);
+        const char* const sdl_error = SDL_GetError();
+        if (sdl_error != nullptr) {
+            log_window->error("SDL error: {}", sdl_error);
+        }
+
+        if (s_window_count == 0) {
+            SDL_Quit();
+        }
+        return false;
+    }
 
     m_sdl_gl_context = sdl_context;
     if (primary) {

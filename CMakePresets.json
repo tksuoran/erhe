@@ -37,6 +37,12 @@
             }
         },
         {
+            "name": "Configure_ASAN",
+            "cacheVariables": {
+                "ERHE_USE_ASAN": "ON"
+            }
+        },
+        {
             "name": "Configure_Release",
             "inherits": "Configure_Base",
             "cacheVariables": {
@@ -95,6 +101,10 @@
             "inherits": [ "Configure_Debug", "Configure_Clang" ]
         },
         {
+            "name": "Configure_Clang_Debug_ASAN",
+            "inherits": [ "Configure_Debug", "Configure_Clang", "Configure_ASAN" ]
+        },
+        {
             "name": "Configure_Clang_Release",
             "inherits": [ "Configure_Release", "Configure_Clang" ]
         },
@@ -110,6 +120,10 @@
         {
             "name": "Configure_GCC_Debug",
             "inherits": [ "Configure_Debug", "Configure_GCC" ]
+        },
+        {
+            "name": "Configure_GCC_Debug_ASAN",
+            "inherits": [ "Configure_Debug", "Configure_GCC", "Configure_ASAN" ]
         },
         {
             "name": "Configure_GCC_Release",
@@ -144,6 +158,10 @@
         {
             "name": "Configure_GCC_15_Debug",
             "inherits": [ "Configure_Debug", "Configure_GCC_15" ]
+        },
+        {
+            "name": "Configure_GCC_15_Debug_ASAN",
+            "inherits": [ "Configure_Debug", "Configure_GCC_15", "Configure_ASAN" ]
         },
         {
             "name": "Configure_GCC_15_Release",
@@ -237,6 +255,12 @@
             "configuration": "Debug"
         },
         {
+            "name": "Build_Debug_ASAN",
+            "displayName": "Build_Debug_ASAN",
+            "configurePreset": "Configure_Debug",
+            "configuration": "Debug"
+        },
+        {
             "name": "Build_Release",
             "displayName": "Build_Release",
             "configurePreset": "Configure_Release",
@@ -248,6 +272,11 @@
             "configurePreset": "Configure_Clang_Debug"
         },
         {
+            "name": "Build_Clang_Debug_ASAN",
+            "inherits": "Build_Debug_ASAN",
+            "configurePreset": "Configure_Clang_Debug_ASAN"
+        },
+        {
             "name": "Build_Clang_Release",
             "inherits": "Build_Release",
             "configurePreset": "Configure_Clang_Release"
@@ -257,6 +286,11 @@
             "name": "Build_GCC_Debug",
             "inherits": "Build_Debug",
             "configurePreset": "Configure_GCC_Debug"
+        },
+        {
+            "name": "Build_GCC_Debug_ASAN",
+            "inherits": "Build_Debug_ASAN",
+            "configurePreset": "Configure_GCC_Debug_ASAN"
         },
         {
             "name": "Build_GCC_Release",
@@ -279,6 +313,11 @@
             "name": "Build_GCC_15_Debug",
             "inherits": "Build_Debug",
             "configurePreset": "Configure_GCC_15_Debug"
+        },
+        {
+            "name": "Build_GCC_15_Debug_ASAN",
+            "inherits": "Build_Debug_ASAN",
+            "configurePreset": "Configure_GCC_15_Debug_ASAN"
         },
         {
             "name": "Build_GCC_15_Release",

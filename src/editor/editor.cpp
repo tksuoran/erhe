@@ -1,6 +1,10 @@
 // Using llvm pipe appears to have broken GL context sharing at least with what I do here.
 #define ERHE_SERIAL_INIT 1
 
+#if !defined(ERHE_SERIAL_INIT)
+# define ERHE_PARALLEL_INIT 1
+#endif
+
 #include "editor.hpp"
 
 #include "editor_context.hpp"
@@ -132,6 +136,9 @@
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/command_line_args.h>
 #include <geogram/basic/logger.h>
+
+#include <stdexcept>
+#include <cstdlib>
 
 namespace editor {
 
@@ -366,6 +373,13 @@ public:
         window_section.get("swap_interval",    configuration.swap_interval);
         window_section.get("enable_joystick",  configuration.enable_joystick);
 
+        const char* const env_value = std::getenv("LIBGL_ALWAYS_SOFTWARE");
+        if (env_value != nullptr) {
+            log_startup->info("Detected LIBGL_ALWAYS_SOFTWARE = {}", env_value);
+        } else {
+            log_startup->info("Detected LIBGL_ALWAYS_SOFTWARE is not set");
+        }
+
         return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
@@ -373,15 +387,20 @@ public:
     {
         int init_thread_count = 1;
         auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");
+
+        // Note: m_executor is also used at runtime, so it cannot be
+        //       skipped even if parallel init is not used.
         const auto& threading_section = erhe_ini.get_section("threading");
         threading_section.get("init_thread_count", init_thread_count);
 
         m_executor = std::make_unique<tf::Executor>(init_thread_count);
 
         try {
+#if defined(ERHE_PARALLEL_INIT)
             tf::Taskflow taskflow;
-#if defined(ERHE_PROFILE_LIBRARY_TRACY)
+# if defined(ERHE_PROFILE_LIBRARY_TRACY)
             std::shared_ptr<Tracy_observer> observer = m_executor->make_observer<Tracy_observer>();
+# endif
 #endif
 
             m_commands           = std::make_unique<erhe::commands::Commands      >();
@@ -393,17 +412,31 @@ public:
             auto& commands           = *m_commands          .get();
             auto& editor_message_bus = *m_editor_message_bus.get();
 
+#if defined(ERHE_PARALLEL_INIT)
+#   define ERHE_GET_GL_CONTEXT erhe::graphics::Scoped_gl_context ctx{m_graphics_device->context_provider};
+#   define ERHE_TASK_HEADER(var) auto var = taskflow.emplace([&, this]()
+#   define ERHE_TASK_FOOTER(ops) ) ops
+#else
+#   define ERHE_GET_GL_CONTEXT
+#   define ERHE_TASK_HEADER(var)
+#   define ERHE_TASK_FOOTER(ops)
+#endif
+
             // Icon rasterization is slow task that can be run in parallel with
             // GL context creation and Joystick scanning which are two other slow tasks
             Icons icons;
             Icon_loader icon_loader{m_editor_settings->icon_settings};
             // TODO compare with Icon_set::load_icons()
             icons.queue_load_icons(icon_loader);
-            auto icon_rasterization_task = taskflow.emplace([this, &icon_loader](){
+            ERHE_TASK_HEADER(icon_rasterization_task)
+            {
                 icon_loader.execute_rasterization_queue();
-            })  .name("Icon rasterization");
+            }
+            ERHE_TASK_FOOTER( .name("Icon rasterization") );
 
+#if defined(ERHE_PARALLEL_INIT)
             m_executor->run(taskflow);
+#endif
 
             // Window and graphics context creation - in main thread
             m_context_window = create_window();
@@ -447,11 +480,13 @@ public:
 
             // It seems to be faster to create the worker thread here instead of between
             // executor run and wait.
+#if defined(ERHE_PARALLEL_INIT)
             m_graphics_device->context_provider.provide_worker_contexts(
                 m_context_window.get(),
                 8u,
                 []() -> bool { return true; }
             );
+#endif
 
             m_vertex_format = erhe::dataformat::Vertex_format{
                 {
@@ -486,16 +521,6 @@ public:
             m_debug_draw           = std::make_unique<Debug_draw    >(m_editor_context);
             m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(*m_graphics_device.get(), m_vertex_format);
             m_programs             = std::make_unique<Programs>(*m_graphics_device.get());
-
-#if defined(ERHE_SERIAL_INIT)
-#   define ERHE_GET_GL_CONTEXT
-#   define ERHE_TASK_HEADER(var)
-#   define ERHE_TASK_FOOTER(ops)
-#else
-#   define ERHE_GET_GL_CONTEXT erhe::graphics::Scoped_gl_context ctx{m_graphics_device->context_provider};
-#   define ERHE_TASK_HEADER(var) auto var = taskflow.emplace([&, this]()
-#   define ERHE_TASK_FOOTER(ops) ) ops
-#endif
 
             ERHE_TASK_HEADER(programs_load_task)
             {
@@ -956,9 +981,11 @@ public:
                 .succeed(imgui_renderer_task, imgui_windows_task, icon_set_task, tools_task, headset_task)
             );
 
+#if defined(ERHE_PARALLEL_INIT)
             std::string graph_dump = taskflow.dump();
             erhe::file::write_file("erhe_init_graph.dot", graph_dump);
             m_executor->run(taskflow).wait();
+#endif
         } catch (std::runtime_error& e) {
             log_startup->error("exception: {}", e.what());
         }
