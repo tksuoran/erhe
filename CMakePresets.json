@@ -3,7 +3,7 @@
     "configurePresets": [
         {
             "hidden": true,
-            "name": "Configure Base",
+            "name": "Configure_Base",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
@@ -22,29 +22,29 @@
             }
         },
         {
-            "name": "Configure Empty",
+            "name": "Configure_Empty",
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
-            "name": "Configure Debug",
-            "inherits": "Configure Base",
+            "name": "Configure_Debug",
+            "inherits": "Configure_Base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
-            "name": "Configure Release",
-            "inherits": "Configure Base",
+            "name": "Configure_Release",
+            "inherits": "Configure_Base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {
             "hidden": true,
-            "name": "Configure Embree",
+            "name": "Configure_Embree",
             "cacheVariables": {
                 "ERHE_RAYTRACE_LIBRARY":       "Embree",
                 "EMBREE_ISPC_SUPPORT":         "FALSE",
@@ -70,90 +70,107 @@
         },
         {
             "hidden": true,
-            "name": "Configure Embree SSE",
-            "inherits": [ "Configure Embree" ],
+            "name": "Configure_Embree_SSE",
+            "inherits": [ "Configure_Embree" ],
             "cacheVariables": { "EMBREE_ISA_SSE42": "ON" }
         },
         {
             "hidden": true,
-            "name": "Configure Embree Neon",
-            "inherits": [ "Configure Embree" ],
+            "name": "Configure_Embree_Neon",
+            "inherits": [ "Configure_Embree" ],
             "cacheVariables": { "EMBREE_ISA_NEON": "ON" }
         },
 
         {
             "hidden": true,
-            "name": "Configure Clang",
+            "name": "Configure_Clang",
             "cacheVariables": {
                 "CMAKE_C_COMPILER":   "clang",
                 "CMAKE_CXX_COMPILER": "clang++"
             }
         },
         {
-            "name": "Configure Clang Debug",
-            "inherits": [ "Configure Debug", "Configure Clang" ]
+            "name": "Configure_Clang_Debug",
+            "inherits": [ "Configure_Debug", "Configure_Clang" ]
         },
         {
-            "name": "Configure Clang Release",
-            "inherits": [ "Configure Release", "Configure Clang" ]
+            "name": "Configure_Clang_Release",
+            "inherits": [ "Configure_Release", "Configure_Clang" ]
         },
 
         {
             "hidden": true,
-            "name": "Configure GCC",
+            "name": "Configure_GCC",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_C_COMPILER":   "gcc",
                 "CMAKE_CXX_COMPILER": "g++"
             }
         },
         {
-            "name": "Configure GCC Debug",
-            "inherits": [ "Configure Debug", "Configure GCC" ]
+            "name": "Configure_GCC_Debug",
+            "inherits": [ "Configure_Debug", "Configure_GCC" ]
         },
         {
-            "name": "Configure GCC Release",
-            "inherits": [ "Configure Release", "Configure GCC" ]
+            "name": "Configure_GCC_Release",
+            "inherits": [ "Configure_Release", "Configure_GCC" ]
         },
 
         {
             "hidden": true,
-            "name": "Configure GCC 14",
+            "name": "Configure_GCC_14",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc-14",
+                "CMAKE_C_COMPILER":   "gcc-14",
                 "CMAKE_CXX_COMPILER": "g++-14"
             }
         },
         {
-            "name": "Configure GCC 14 Debug",
-            "inherits": [ "Configure Debug", "Configure GCC 14" ]
+            "name": "Configure_GCC_14_Debug",
+            "inherits": [ "Configure_Debug", "Configure_GCC_14" ]
         },
         {
-            "name": "Configure GCC 14 Release",
-            "inherits": [ "Configure Release", "Configure GCC 14" ]
+            "name": "Configure_GCC_14_Release",
+            "inherits": [ "Configure_Release", "Configure_GCC_14" ]
         },
 
         {
-            "name": "Configure Windows",
             "hidden": true,
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Windows"
+            "name": "Configure_GCC_15",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER":   "gcc-15",
+                "CMAKE_CXX_COMPILER": "g++-15"
             }
         },
         {
-            "name": "Configure Visual Studio 2022",
+            "name": "Configure_GCC_15_Debug",
+            "inherits": [ "Configure_Debug", "Configure_GCC_15" ]
+        },
+        {
+            "name": "Configure_GCC_15_Release",
+            "inherits": [ "Configure_Release", "Configure_GCC_15" ]
+        },
+
+        {
+            "name": "Configure_Windows",
+            "hidden": true,
+            "condition": {
+                "type": "equals",
+                "lhs":  "${hostSystemName}",
+                "rhs":  "Windows"
+            }
+        },
+        {
+            "name": "Configure_Visual_Studio_2022",
             "inherits": [
-                "Configure Base",
-                "Configure Windows"
+                "Configure_Base",
+                "Configure_Windows"
             ],
-            "generator": "Visual Studio 17 2022"
+            "generator": "Visual_Studio_17_2022"
         },
 
 
 
         {
-            "name": "Configure Clang Windows Ninja",
+            "name": "Configure_Clang_Windows_Ninja",
             "hidden": false,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
@@ -167,7 +184,7 @@
                 "CMAKE_INSTALL_PREFIX":          "${sourceDir}/out/install/${presetName}"
             },
             "architecture": {
-                "value": "x64",
+                "value":    "x64",
                 "strategy": "external"
             },
             "vendor": {
@@ -177,14 +194,14 @@
             },
             "condition": {
                 "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Windows"
+                "lhs":  "${hostSystemName}",
+                "rhs":  "Windows"
             }
         },
 
 
         {
-            "name": "Configure Clang 20",
+            "name": "Configure_Clang_20",
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
@@ -193,100 +210,111 @@
             }
         },
         {
-            "name": "Configure Clang 20 Debug",
-            "inherits": [ "Configure Debug", "Configure Clang 20" ]
+            "name": "Configure_Clang_20_Debug",
+            "inherits": [ "Configure_Debug", "Configure_Clang_20" ]
         },
         {
-            "name": "Configure Clang 20 Release",
-            "inherits": [ "Configure Release", "Configure Clang 20" ]
+            "name": "Configure_Clang_20_Release",
+            "inherits": [ "Configure_Release", "Configure_Clang_20" ]
         }
     ],
     "buildPresets": [
         {
-            "name": "Build Base",
-            "hidden": true,
-            "verbose": false,
-            "configurePreset": "Configure Base"
+            "name":            "Build_Base",
+            "hidden":          true,
+            "verbose":         false,
+            "configurePreset": "Configure_Base"
         },
         {
-            "name": "Build Empty",
-            "configurePreset": "Configure Empty"
+            "name": "Build_Empty",
+            "configurePreset": "Configure_Empty"
         },
         {
-            "name": "Build Debug",
-            "displayName": "Build Debug",
-            "configurePreset": "Configure Debug",
+            "name": "Build_Debug",
+            "displayName": "Build_Debug",
+            "configurePreset": "Configure_Debug",
             "configuration": "Debug"
         },
         {
-            "name": "Build Release",
-            "displayName": "Build Release",
-            "configurePreset": "Configure Release",
+            "name": "Build_Release",
+            "displayName": "Build_Release",
+            "configurePreset": "Configure_Release",
             "configuration": "Release"
         },
         {
-            "name": "Build Clang Debug",
-            "inherits": "Build Debug",
-            "configurePreset": "Configure Clang Debug"
+            "name": "Build_Clang_Debug",
+            "inherits": "Build_Debug",
+            "configurePreset": "Configure_Clang_Debug"
         },
         {
-            "name": "Build Clang Release",
-            "inherits": "Build Release",
-            "configurePreset": "Configure Clang Release"
-        },
-
-        {
-            "name": "Build GCC Debug",
-            "inherits": "Build Debug",
-            "configurePreset": "Configure GCC Debug"
-        },
-        {
-            "name": "Build GCC Release",
-            "inherits": "Build Release",
-            "configurePreset": "Configure GCC Release"
+            "name": "Build_Clang_Release",
+            "inherits": "Build_Release",
+            "configurePreset": "Configure_Clang_Release"
         },
 
         {
-            "name": "Build GCC 14 Debug",
-            "inherits": "Build Debug",
-            "configurePreset": "Configure GCC 14 Debug"
+            "name": "Build_GCC_Debug",
+            "inherits": "Build_Debug",
+            "configurePreset": "Configure_GCC_Debug"
         },
         {
-            "name": "Build GCC 14 Release",
-            "inherits": "Build Release",
-            "configurePreset": "Configure GCC 14 Release"
-        },
-
-        {
-            "name": "Build Visual Studio 2022 Debug",
-            "inherits": "Build Debug",
-            "configurePreset": "Configure Visual Studio 2022"
-        },
-        {
-            "name": "Build Visual Studio 2022 Release",
-            "inherits": "Build Release",
-            "configurePreset": "Configure Visual Studio 2022"
+            "name": "Build_GCC_Release",
+            "inherits": "Build_Release",
+            "configurePreset": "Configure_GCC_Release"
         },
 
         {
-            "name": "Build Clang 20 Debug",
-            "configurePreset": "Configure Clang 20 Debug",
+            "name": "Build_GCC_14_Debug",
+            "inherits": "Build_Debug",
+            "configurePreset": "Configure_GCC_14_Debug"
+        },
+        {
+            "name": "Build_GCC_14_Release",
+            "inherits": "Build_Release",
+            "configurePreset": "Configure_GCC_14_Release"
+        },
+
+        {
+            "name": "Build_GCC_15_Debug",
+            "inherits": "Build_Debug",
+            "configurePreset": "Configure_GCC_15_Debug"
+        },
+        {
+            "name": "Build_GCC_15_Release",
+            "inherits": "Build_Release",
+            "configurePreset": "Configure_GCC_15_Release"
+        },
+
+        {
+            "name": "Build_Visual_Studio_2022_Debug",
+            "inherits": "Build_Debug",
+            "configurePreset": "Configure_Visual_Studio_2022"
+        },
+        {
+            "name": "Build_Visual_Studio_2022_Release",
+            "inherits": "Build_Release",
+            "configurePreset": "Configure_Visual_Studio_2022"
+        },
+
+        {
+            "name": "Build_Clang_20_Debug",
+            "configurePreset": "Configure_Clang_20_Debug",
             "configuration": "Debug"
         },
         {
-            "name": "Build Clang 20 Release",
-            "configurePreset": "Configure Clang 20 Release",
+            "name": "Build_Clang_20_Release",
+            "configurePreset": "Configure_Clang_20_Release",
             "configuration": "Release"
         },
 
         {
-            "name": "Build Clang Windows Ninja Debug",
-            "configurePreset": "Configure Clang Windows Ninja",
+            "name": "Build_Clang_Windows_Ninja_Debug",
+            "configurePreset": "Configure_Clang_Windows_Ninja",
             "configuration": "Debug"
         },
         {
-            "name": "Build Clang Windows Ninja Release",
-            "configurePreset": "Configure Clang Windows Ninja",
+            "name": "Build_Clang_Windows_Ninja_Release",
+            "configurePreset": "Configure_Clang_Windows_Ninja",
             "configuration": "Release"
         }
     ]
