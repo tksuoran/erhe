@@ -143,7 +143,7 @@ Device::Device(erhe::window::Context_window& context_window)
     gl::get_integer_v(gl::Get_p_name::max_vertex_attribs, &limits.max_vertex_attribs);
     log_startup->info("max vertex attribs: {}", limits.max_vertex_attribs);
 
-    log_startup->info("GL Extensions:");
+    log_startup->debug("GL Extensions:");
     {
         ERHE_PROFILE_SCOPE("Extensions");
 
@@ -155,7 +155,7 @@ Device::Device(erhe::window::Context_window& context_window)
             for (unsigned int i = 0; i < static_cast<unsigned int>(num_extensions); ++i) {
                 const auto* extension_str = gl::get_string_i(gl::String_name::extensions, i);
                 auto e = std::string(reinterpret_cast<const char*>(extension_str));
-                log_startup->info("    {}", e);
+                log_startup->debug("    {}", e);
                 extensions.push_back(e);
             }
         }

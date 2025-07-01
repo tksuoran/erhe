@@ -392,7 +392,7 @@ void Jolt_rigid_body::set_damping(const float linear_damping, const float angula
         return;
     }
 
-    SPDLOG_LOGGER_INFO(log_physics, "{} set damping linear = {}, angular = {}", m_debug_label, linear_damping, angular_damping);
+    log_physics->trace("{} set damping linear = {}, angular = {}", m_debug_label, linear_damping, angular_damping);
 
     auto* motion_properties = m_body->GetMotionProperties();
     if (motion_properties == nullptr) {

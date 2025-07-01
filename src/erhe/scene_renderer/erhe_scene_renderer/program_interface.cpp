@@ -108,7 +108,7 @@ auto Program_interface::make_prototype(
     bool found = false;
     auto process_shader = [&create_info, &found](gl::Shader_type shader_type, const std::filesystem::path& path) -> void
     {
-        if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", path, false)) {
+        if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", path, true)) {
             create_info.shaders.emplace_back(shader_type, path);
             found = true;
         }

@@ -2,6 +2,8 @@
 
 #include "erhe_item/item.hpp"
 
+#include <glm/glm.hpp>
+
 #include <optional>
 
 namespace erhe::geometry {
