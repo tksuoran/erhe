@@ -4,6 +4,7 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <array>
 #include <mutex>
 #include <optional>
 #include <thread>

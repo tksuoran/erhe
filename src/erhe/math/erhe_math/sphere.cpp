@@ -3,6 +3,8 @@
 
 #include <glm/gtx/norm.hpp>
 
+#include <algorithm>
+
 // Adapted from https://github.com/juj/MathGeoLib
 
 namespace erhe::math {
