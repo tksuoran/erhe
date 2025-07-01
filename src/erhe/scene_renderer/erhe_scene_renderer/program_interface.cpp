@@ -105,15 +105,12 @@ auto Program_interface::make_prototype(
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
-    auto process_shader = [&create_info](gl::Shader_type shader_type, const std::filesystem::path& path)
+    bool found = false;
+    auto process_shader = [&create_info, &found](gl::Shader_type shader_type, const std::filesystem::path& path) -> void
     {
         if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", path, false)) {
             create_info.shaders.emplace_back(shader_type, path);
-        } else {
-            log_program_interface->error("Could not load shader source file {}", path.string());
-            log_program_interface->error("current directory is {}", std::filesystem::current_path().string());
-            log_program_interface->flush();
-            ERHE_FATAL("Missing resource file");
+            found = true;
         }
     };
 
@@ -122,6 +119,12 @@ auto Program_interface::make_prototype(
     process_shader(gl::Shader_type::geometry_shader, gs_path);
     process_shader(gl::Shader_type::vertex_shader,   vs_path);
 
+    if (!found) {
+        log_program_interface->error("Could not load shader source file {} (.vert / .frag / .comp / .geom)", create_info.name);
+        log_program_interface->error("current directory is {}", std::filesystem::current_path().string());
+        log_program_interface->flush();
+        ERHE_FATAL("Missing resource file");
+    }
     return erhe::graphics::Shader_stages_prototype{graphics_device, create_info};
 }
 

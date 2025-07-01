@@ -53,7 +53,7 @@ auto Shader_stages_create_info::attributes_source() const -> std::string
         Vertex_input_state_data vertex_input = Vertex_input_state_data::make(*vertex_format);
         sb << "// Attributes\n";
         for (const auto& attribute : vertex_input.attributes) {
-            sb << "in layout(location = " << attribute.layout_location << ") ";
+            sb << "layout(location = " << attribute.layout_location << ") in ";
             sb << glsl_token(attribute.gl_attribute_type) << " ";
             sb << attribute.name,
             sb << ";\n";
