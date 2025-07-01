@@ -115,7 +115,22 @@ public:
 
         std::string levelname;
         ini.get(basename.c_str(), levelname);
-        const spdlog::level::level_enum level_parsed = spdlog::level::from_str(levelname);
+
+        // Forked from spdlog::level::from_str(levelname) because it defaults to off if parse fails,
+        // while we want to set the default to err.
+        auto from_str = [](const std::string &name) -> spdlog::level::level_enum {
+            auto it = std::find(std::begin(spdlog::level::level_string_views), std::end(spdlog::level::level_string_views), name);
+            if (it != std::end(spdlog::level::level_string_views))
+                return static_cast<spdlog::level::level_enum>(std::distance(std::begin(spdlog::level::level_string_views), it));
+            if (name == "warn") {
+                return spdlog::level::warn;
+            }
+            if (name == "err") {
+                return spdlog::level::err;
+            }
+            return spdlog::level::err;
+        };
+        const spdlog::level::level_enum level_parsed = from_str(levelname);
 
         std::shared_ptr<spdlog::logger> logger = std::make_shared<spdlog::logger>(
             name,

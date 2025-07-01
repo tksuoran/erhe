@@ -3,6 +3,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/glsl_format_source.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/debug.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -361,6 +362,8 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
         // const std::string f_source = format_source(source);
         // log_program->info("Shader_source for glCompileShader:");
         // log_program->info("\n{}", f_source);
+        std::string shader_source = get_final_source(shader, gl_name);
+        set_shader_source(shader_source);
         gl::shader_source(gl_name, static_cast<GLsizei>(sources.size()), sources.data(), nullptr);
         gl::compile_shader(gl_name);
     }

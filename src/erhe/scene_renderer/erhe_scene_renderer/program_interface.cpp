@@ -1,4 +1,5 @@
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_scene_renderer/scene_renderer_log.hpp"
 
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
@@ -104,18 +105,22 @@ auto Program_interface::make_prototype(
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
-    if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", cs_path, true)) {
-        create_info.shaders.emplace_back(gl::Shader_type::compute_shader,  cs_path);
-    }
-    if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", fs_path, true)) {
-        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
-    }
-    if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", gs_path, true)) {
-        create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
-    }
-    if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", vs_path, true)) {
-        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-    }
+    auto process_shader = [&create_info](gl::Shader_type shader_type, const std::filesystem::path& path)
+    {
+        if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", path, false)) {
+            create_info.shaders.emplace_back(shader_type, path);
+        } else {
+            log_program_interface->error("Could not load shader source file {}", path.string());
+            log_program_interface->error("current directory is {}", std::filesystem::current_path().string());
+            log_program_interface->flush();
+            ERHE_FATAL("Missing resource file");
+        }
+    };
+
+    process_shader(gl::Shader_type::compute_shader,  cs_path);
+    process_shader(gl::Shader_type::fragment_shader, fs_path);
+    process_shader(gl::Shader_type::geometry_shader, gs_path);
+    process_shader(gl::Shader_type::vertex_shader,   vs_path);
 
     return erhe::graphics::Shader_stages_prototype{graphics_device, create_info};
 }

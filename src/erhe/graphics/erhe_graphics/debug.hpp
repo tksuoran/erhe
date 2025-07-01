@@ -30,4 +30,6 @@ private:
     std::string m_debug_label;
 };
 
+void set_shader_source(const std::string& shader_source);
+
 } // namespace erhe::graphics

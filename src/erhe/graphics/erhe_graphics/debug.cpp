@@ -5,6 +5,7 @@
 
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/glsl_format_source.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 
 #if !defined(WIN32)
@@ -19,6 +20,12 @@ namespace gl {
 }
 
 namespace erhe::graphics {
+
+thread_local std::string t_current_shader_source{};
+
+void set_shader_source(const std::string& shader_source) {
+    t_current_shader_source = shader_source;
+}
 
 void erhe_opengl_callback(
     GLenum        gl_source,
@@ -75,6 +82,11 @@ void erhe_opengl_callback(
         return;
     }
 
+    if (source == gl::Debug_source::debug_source_shader_compiler) {
+        const std::string f_source = format_source(t_current_shader_source);
+        log_debug->warn("{}\n{}", (message != nullptr) ? message : "", f_source);
+    }
+
     log_debug->info(
         "GL debug message:\n"
         "source:   {}\n"
@@ -94,7 +106,8 @@ void erhe_opengl_callback(
 #if defined(WIN32)
         DebugBreak();
 #else
-        raise(SIGTRAP);
+        static int counter = 0;
+        ++counter; // breakpoint placeholder
 #endif
     }
 #endif
