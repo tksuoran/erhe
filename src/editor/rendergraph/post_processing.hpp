@@ -11,6 +11,7 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 
+#include <string>
 #include <string_view>
 
 namespace erhe::graphics {
@@ -116,18 +117,23 @@ public:
     auto get_sampler_linear_mipmap_nearest() const -> const erhe::graphics::Sampler&         { return m_sampler_linear_mipmap_nearest; }
 
 private:
+    static constexpr unsigned int flag_source_input      = 0x01u;
+    static constexpr unsigned int flag_source_downsample = 0x02u;
+    static constexpr unsigned int flag_source_upsample   = 0x04u;
+    static constexpr unsigned int flag_first_pass        = 0x10u;
+    static constexpr unsigned int flag_last_pass         = 0x20u;
     [[nodiscard]] auto make_program(
-        erhe::graphics::Device&      graphics_device,
-        const char*                  name,
-        const std::filesystem::path& fs_path,
-        const bool                   last_output,
-        const int                    input = 0
+        erhe::graphics::Device& graphics_device,
+        const char*             name,
+        const std::string&      fs_path,
+        const unsigned int      flags
     ) -> erhe::graphics::Shader_stages_create_info;
 
     struct Shader_stages {
         erhe::graphics::Reloadable_shader_stages downsample_with_lowpass_input;
         erhe::graphics::Reloadable_shader_stages downsample_with_lowpass;
         erhe::graphics::Reloadable_shader_stages downsample;
+        erhe::graphics::Reloadable_shader_stages upsample_first;
         erhe::graphics::Reloadable_shader_stages upsample;
         erhe::graphics::Reloadable_shader_stages upsample_last;
     };
@@ -135,6 +141,7 @@ private:
         erhe::graphics::Render_pipeline_state downsample_with_lowpass_input;
         erhe::graphics::Render_pipeline_state downsample_with_lowpass;
         erhe::graphics::Render_pipeline_state downsample;
+        erhe::graphics::Render_pipeline_state upsample_first;
         erhe::graphics::Render_pipeline_state upsample;
         erhe::graphics::Render_pipeline_state upsample_last;
     };

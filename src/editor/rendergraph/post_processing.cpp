@@ -337,11 +337,10 @@ void Post_processing_node::execute_rendergraph_node()
 /// //////////////////////////////////////////
 
 auto Post_processing::make_program(
-    erhe::graphics::Device&      graphics_device,
-    const char*                  name,
-    const std::filesystem::path& fs_path,
-    const bool                   last_output,
-    const int                    source
+    erhe::graphics::Device& graphics_device,
+    const char*             name,
+    const std::string&      fs_path,
+    const unsigned int      flags
 ) -> erhe::graphics::Shader_stages_create_info
 {
     ERHE_PROFILE_FUNCTION();
@@ -353,15 +352,11 @@ auto Post_processing::make_program(
         extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
         defines.push_back({"ERHE_BINDLESS_TEXTURE", "1"});
     }
-    switch (source) {
-        case s_input_texture:      defines.push_back({"SOURCE", "s_input"}); break;
-        case s_downsample_texture: defines.push_back({"SOURCE", "s_downsample"}); break;
-        case s_upsample_texture:   defines.push_back({"SOURCE", "s_upsample"}); break;
-        default:                   ERHE_FATAL("bad source"); break;
-    }
-    if (last_output) {
-        defines.push_back({"LAST_OUTPUT", "1"});
-    }
+    if (flags & flag_first_pass       ) { defines.push_back({"FIRST_PASS", "1"}); }
+    if (flags & flag_last_pass        ) { defines.push_back({"LAST_PASS",  "1"}); }
+    if (flags & flag_source_input     ) { defines.push_back({"SOURCE", "s_input"}); }
+    if (flags & flag_source_downsample) { defines.push_back({"SOURCE", "s_downsample"}); }
+    if (flags & flag_source_upsample  ) { defines.push_back({"SOURCE", "s_upsample"}); }
 
     return
         erhe::graphics::Shader_stages_create_info{
@@ -421,11 +416,12 @@ Post_processing::Post_processing(erhe::graphics::Device& d, Editor_context& edit
     }
     , m_shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , m_shader_stages{
-        .downsample_with_lowpass_input{d, make_program(d, "downsample_lowpass", std::filesystem::path("downsample_lowpass.frag"), false, s_input_texture)},
-        .downsample_with_lowpass      {d, make_program(d, "downsample_lowpass", std::filesystem::path("downsample_lowpass.frag"), false, s_downsample_texture)},
-        .downsample                   {d, make_program(d, "downsample",         std::filesystem::path("downsample.frag"),         false, s_downsample_texture)},
-        .upsample                     {d, make_program(d, "upsample",           std::filesystem::path("upsample.frag"),           false, s_downsample_texture)},
-        .upsample_last                {d, make_program(d, "upsample",           std::filesystem::path("upsample.frag"),           true,  s_upsample_texture)}
+        .downsample_with_lowpass_input{d, make_program(d, "downsample_lowpass", "downsample_lowpass.frag", flag_source_input)},
+        .downsample_with_lowpass      {d, make_program(d, "downsample_lowpass", "downsample_lowpass.frag", flag_source_downsample)},
+        .downsample                   {d, make_program(d, "downsample",         "downsample.frag",         flag_source_downsample)},
+        .upsample_first               {d, make_program(d, "upsample",           "upsample.frag",           flag_first_pass | flag_source_downsample)},
+        .upsample                     {d, make_program(d, "upsample",           "upsample.frag",           flag_source_upsample)},
+        .upsample_last                {d, make_program(d, "upsample",           "upsample.frag",           flag_last_pass | flag_source_upsample)}
     }
     , m_pipelines{
         .downsample_with_lowpass_input = erhe::graphics::Render_pipeline_state{
@@ -454,6 +450,17 @@ Post_processing::Post_processing(erhe::graphics::Device& d, Editor_context& edit
             erhe::graphics::Pipeline_data{
                 .name           = "Post Processing Downsample",
                 .shader_stages  = &m_shader_stages.downsample.shader_stages,
+                .vertex_input   = &m_empty_vertex_input,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+                .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+            }
+        },
+        .upsample_first = erhe::graphics::Render_pipeline_state{
+            erhe::graphics::Pipeline_data{
+                .name           = "Post Processing Upsample first",
+                .shader_stages  = &m_shader_stages.upsample_first.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
@@ -581,7 +588,9 @@ void Post_processing::post_process(Post_processing_node& node)
     // Upsample passes
     for (const size_t source_level : node.upsample_source_levels) {
         const size_t destination_level = source_level - 1;
-        if (destination_level == 0) {
+        if (source_level == node.upsample_source_levels.front()) {
+            m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.upsample_first);
+        } else if (source_level == node.upsample_source_levels.back()) {
             m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.upsample_last);
         } else {
             m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.upsample);

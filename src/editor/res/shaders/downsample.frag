@@ -11,7 +11,7 @@ void main()
     sampler2D s_downsample = sampler2D(post_processing.downsample_texture);
 #endif
 
-    ivec2 texture_size = textureSize(s_downsample, int(post_processing.source_lod));
+    ivec2 texture_size = textureSize(SOURCE, int(post_processing.source_lod));
     vec2 texel_scale = vec2(1.0) / vec2(texture_size);
 
     const float weight0  = 1.0 / 32.0;
