@@ -26,15 +26,14 @@ class Imgui_renderer;
 class View;
 class Window;
 
-/// <summary>
-/// Base class for derived Imgui_host classes - where ImGui windows can be hosted.
-/// </summary>
-/// - Current Imgui_host classes are Window_imgui_host and Rendertarget_imgui_host.
-/// - Every Imgui_window must be hosted in exactly one Imgui_host.
-/// - Each Imgui_host maintains a separate ImGui context.
-/// - Each Imgui_host is a Rendergraph_node and as such must implement
-///   execute_rendergraph_node() method for rendering ImGui data with
-///   Imgui_renderer::render_draw_data().
+// Base class for derived Imgui_host classes - where ImGui windows can be hosted.
+//
+// - Current Imgui_host classes are Window_imgui_host and Rendertarget_imgui_host.
+// - Every Imgui_window must be hosted in exactly one Imgui_host.
+// - Each Imgui_host maintains a separate ImGui context.
+// - Each Imgui_host is a Rendergraph_node and as such must implement
+//   execute_rendergraph_node() method for rendering ImGui data with
+//   Imgui_renderer::render_draw_data().
 class Imgui_host : public erhe::rendergraph::Rendergraph_node, public erhe::window::Input_event_handler
 {
 public:

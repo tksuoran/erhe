@@ -135,6 +135,7 @@ void Scene_views::erase(Basic_scene_view_node* basic_viewport_window)
 auto Scene_views::create_viewport_scene_view(
     erhe::graphics::Device&                               graphics_device,
     erhe::rendergraph::Rendergraph&                       rendergraph,
+    erhe::imgui::Imgui_windows&                           imgui_windows,
     Editor_rendering&                                     editor_rendering,
     Editor_settings&                                      editor_settings,
     Post_processing&                                      post_processing,
@@ -189,8 +190,15 @@ auto Scene_views::create_viewport_scene_view(
         m_post_processing_nodes.push_back(post_processing_node);
         rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport_texture, new_viewport.get(), post_processing_node.get());
     } else {
-        out_rendergraph_output_node  = new_viewport;
+        out_rendergraph_output_node = new_viewport;
     }
+
+    rendergraph.connect(
+        erhe::rendergraph::Rendergraph_node_key::dependency,
+        out_rendergraph_output_node.get(),
+        imgui_windows.get_window_imgui_host().get()
+    );
+
     return new_viewport;
 }
 
@@ -277,6 +285,7 @@ auto Scene_views::open_new_viewport_scene_view(
                 return create_viewport_scene_view(
                     *m_context.graphics_device,
                     *m_context.rendergraph,
+                    *m_context.imgui_windows,
                     *m_context.editor_rendering,
                     *m_context.editor_settings,
                     *m_context.post_processing,
@@ -295,6 +304,7 @@ auto Scene_views::open_new_viewport_scene_view(
             return create_viewport_scene_view(
                 *m_context.graphics_device,
                 *m_context.rendergraph,
+                *m_context.imgui_windows,
                 *m_context.editor_rendering,
                 *m_context.editor_settings,
                 *m_context.post_processing,
@@ -312,6 +322,7 @@ auto Scene_views::open_new_viewport_scene_view(
     return create_viewport_scene_view(
         *m_context.graphics_device,
         *m_context.rendergraph,
+        *m_context.imgui_windows,
         *m_context.editor_rendering,
         *m_context.editor_settings,
         *m_context.post_processing,

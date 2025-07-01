@@ -335,6 +335,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
     std::shared_ptr<Viewport_scene_view> scene_view = m_context.scene_views->create_viewport_scene_view(
         *m_context.graphics_device,
         *m_context.rendergraph,
+        *m_context.imgui_windows,
         *m_context.editor_rendering,
         *m_context.editor_settings,
         *m_context.post_processing,

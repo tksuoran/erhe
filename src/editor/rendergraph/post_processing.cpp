@@ -299,12 +299,15 @@ void Post_processing_node::viewport_toolbar()
 
 auto Post_processing_node::get_producer_output_texture(const int key, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::viewport_texture);
-    if (upsample_texture_views.empty()) {
-        return {};
-    } else {
-        return upsample_texture_views.at(0);
+    if (key == erhe::rendergraph::Rendergraph_node_key::viewport_texture) {
+        if (upsample_texture_views.empty()) {
+            return {};
+        } else {
+            return upsample_texture_views.at(0);
+        }
     }
+
+    return {};
 }
 
 void Post_processing_node::execute_rendergraph_node()

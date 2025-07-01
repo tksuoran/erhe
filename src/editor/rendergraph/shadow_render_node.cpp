@@ -149,8 +149,10 @@ void Shadow_render_node::execute_rendergraph_node()
 
 auto Shadow_render_node::get_producer_output_texture(const int key, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::shadow_maps);
-    return m_texture;
+    if (key == erhe::rendergraph::Rendergraph_node_key::shadow_maps) {
+        return m_texture;
+    }
+    return std::shared_ptr<erhe::graphics::Texture>{};
 }
 
 auto Shadow_render_node::get_scene_view() -> Scene_view&

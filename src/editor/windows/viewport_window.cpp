@@ -33,8 +33,8 @@ Viewport_window::Viewport_window(
     const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, name, ini_label}
-    , m_editor_context{editor_context}
-    , m_viewport_scene_view{viewport_scene_view}
+    , m_editor_context         {editor_context}
+    , m_viewport_scene_view    {viewport_scene_view}
     , m_rendergraph_output_node{rendergraph_output_node}
 {
     show_window();

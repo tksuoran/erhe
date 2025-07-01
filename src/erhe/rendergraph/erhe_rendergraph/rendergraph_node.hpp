@@ -33,8 +33,8 @@ class Rendergraph_producer_connector : public Rendergraph_id
 {
 public:
     Rendergraph_producer_connector(std::string label, int key)
-        : label           {label}
-        , key             {key}
+        : label{label}
+        , key  {key}
     {
     }
 
@@ -47,8 +47,8 @@ class Rendergraph_consumer_connector : public Rendergraph_id
 {
 public:
     Rendergraph_consumer_connector(std::string label, int key)
-        : label           {label}
-        , key             {key}
+        : label{label}
+        , key  {key}
     {
     }
 
@@ -59,12 +59,11 @@ public:
 
 constexpr int rendergraph_max_depth = 10;
 
-/// <summary>
-/// Node for rendergraph
-/// </summary>
-/// Rendergraph nodes have inputs and outputs (often both, but at least either input(s) or output(s).
-/// Rendergraph nodes have named input and output slots.
-/// Rendergraph nodes must have their inputs and outputs connected to other rendergraph nodes.
+// Node for rendergraph
+//
+// Rendergraph nodes have inputs and outputs (often both, but at least either input(s) or output(s).
+// Rendergraph nodes have named input and output slots.
+// Rendergraph nodes must have their inputs and outputs connected to other rendergraph nodes.
 class Rendergraph_node : public Rendergraph_id
 {
 public:

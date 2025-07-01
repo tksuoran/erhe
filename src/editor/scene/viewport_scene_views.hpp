@@ -76,6 +76,7 @@ public:
     auto create_viewport_scene_view(
         erhe::graphics::Device&                               graphics_device,
         erhe::rendergraph::Rendergraph&                       rendergraph,
+        erhe::imgui::Imgui_windows&                           imgui_windows,
         Editor_rendering&                                     editor_rendering,
         Editor_settings&                                      editor_settings,
         Post_processing&                                      post_processing,

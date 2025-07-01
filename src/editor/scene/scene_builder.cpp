@@ -190,6 +190,7 @@ void Scene_builder::setup_cameras(
     m_primary_viewport_window = scene_views.create_viewport_scene_view(
         graphics_device,
         rendergraph,
+        imgui_windows,
         editor_rendering,
         editor_settings,
         post_processing,

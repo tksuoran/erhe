@@ -14,6 +14,9 @@ Rendergraph_node::Rendergraph_node(Rendergraph& rendergraph, const std::string_v
     , m_name       {name}
 {
     m_rendergraph.register_node(this);
+
+    register_input ("dependency", erhe::rendergraph::Rendergraph_node_key::dependency);
+    register_output("dependency", erhe::rendergraph::Rendergraph_node_key::dependency);
 }
 
 Rendergraph_node::~Rendergraph_node() noexcept
