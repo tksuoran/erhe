@@ -50,6 +50,7 @@ public:
         std::size_t                        primitive_index{0};
         std::size_t                        triangle_id    {std::numeric_limits<std::size_t>::max()};
         bool                               valid          {false};
+        uint64_t                           frame_number   {0};
     };
 
     Id_renderer(
@@ -74,13 +75,13 @@ public:
     void render(const Render_parameters& parameters);
     void next_frame();
 
-    [[nodiscard]] auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
+    [[nodiscard]] auto get(const int x, const int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool;
     [[nodiscard]] auto get(const int x, const int y) -> Id_query_result;
 
 
 private:
     static constexpr std::size_t s_frame_resources_count = 4;
-    static constexpr std::size_t s_extent                = 256;
+    static constexpr std::size_t s_extent                = 64;
     static constexpr std::size_t s_id_buffer_size        = s_extent * s_extent * 8; // RGBA + depth
 
     class Id_frame_resources
@@ -106,6 +107,7 @@ private:
         glm::mat4                             clip_from_world{1.0f};
         int                                   x_offset       {0};
         int                                   y_offset       {0};
+        uint64_t                              frame_number   {0};
         State                                 state          {State::Unused};
     };
 

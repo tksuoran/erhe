@@ -385,15 +385,15 @@ public:
 
     Editor()
     {
-        int init_thread_count = 1;
+        int thread_count = 1;
         auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");
 
         // Note: m_executor is also used at runtime, so it cannot be
         //       skipped even if parallel init is not used.
         const auto& threading_section = erhe_ini.get_section("threading");
-        threading_section.get("init_thread_count", init_thread_count);
+        threading_section.get("thread_count", thread_count);
 
-        m_executor = std::make_unique<tf::Executor>(init_thread_count);
+        m_executor = std::make_unique<tf::Executor>(thread_count);
 
         try {
 #if defined(ERHE_PARALLEL_INIT)

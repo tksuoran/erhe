@@ -409,8 +409,9 @@ void Id_renderer::render(const Render_parameters& parameters)
             depth_offset
         );
         gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, 0);
-        idr.sync = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0);
-        idr.state = Id_frame_resources::State::Waiting_for_read;
+        idr.sync         = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0);
+        idr.state        = Id_frame_resources::State::Waiting_for_read;
+        idr.frame_number = m_graphics_device.get_frame_number();
     }
 
     camera_range.release();
@@ -425,7 +426,7 @@ inline T read_as(uint8_t const* raw_memory)
     return result;
 }
 
-auto Id_renderer::get(const int x, const int y, uint32_t& id, float& depth) -> bool
+auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool
 {
     if (m_id_frame_resources.empty()) {
         return false;
@@ -459,13 +460,19 @@ auto Id_renderer::get(const int x, const int y, uint32_t& id, float& depth) -> b
                 const int x_ = x - idr.x_offset;
                 const int y_ = y - idr.y_offset;
                 if ((static_cast<size_t>(x_) < s_extent) && (static_cast<size_t>(y_) < s_extent)) {
-                    const uint32_t       stride    = s_extent * 4;
-                    const uint8_t        r         = idr.data[x_ * 4 + y_ * stride + 0];
-                    const uint8_t        g         = idr.data[x_ * 4 + y_ * stride + 1];
-                    const uint8_t        b         = idr.data[x_ * 4 + y_ * stride + 2];
+                    const uint32_t stride = s_extent * 4;
+                    const uint8_t  r      = idr.data[x_ * 4 + y_ * stride + 0];
+                    const uint8_t  g      = idr.data[x_ * 4 + y_ * stride + 1];
+                    const uint8_t  b      = idr.data[x_ * 4 + y_ * stride + 2];
+                    // if ((r == 255u) && (g == 255u) && (b == 255u)) { // overflow detected in id.vert
+                    //     static int counter = 0;
+                    //     ++counter; // breakpoint placeholder
+                    // }
                     const uint8_t* const depth_ptr = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
-                    id                             = (r << 16) | (g << 8) | b;
-                    depth                          = read_as<float>(depth_ptr);
+                    out_id           = (r << 16u) | (g << 8u) | b;
+                    out_depth        = read_as<float>(depth_ptr);
+                    out_frame_number = idr.frame_number;
+                    // log_id_render->debug("id: r = {:>3} g = {:>3} b = {:>3} id = {} depth = {} frame = {}", r, g, b, out_id, out_depth, out_frame_number);
                     return true;
                 }
             }
@@ -476,18 +483,18 @@ auto Id_renderer::get(const int x, const int y, uint32_t& id, float& depth) -> b
 
 auto Id_renderer::get(const int x, const int y) -> Id_query_result
 {
-    Id_query_result result;
-    const bool ok = get(x, y, result.id, result.depth);
+    Id_query_result result{};
+    const bool ok = get(x, y, result.id, result.depth, result.frame_number);
     if (!ok) {
         return result;
     }
-    result.valid = true;
 
     for (auto& r : m_primitive_buffers.id_ranges()) {
         if (
             (result.id >= r.offset) &&
             (result.id < (r.offset + r.length))
         ) {
+            result.valid           = true;
             result.mesh            = std::dynamic_pointer_cast<erhe::scene::Mesh>(r.mesh->shared_from_this());
             result.primitive_index = r.primitive_index;
             result.triangle_id     = result.id - r.offset;

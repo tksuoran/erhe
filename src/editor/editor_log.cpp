@@ -59,7 +59,7 @@ void initialize_logging()
     log_framebuffer                = make_frame_logger("editor.framebuffer"               );
     log_headset                    = make_logger      ("editor.headset"                   );
     log_hud                        = make_logger      ("editor.hud"                       );
-    log_id_render                  = make_logger      ("editor.id_render"                 );
+    log_id_render                  = make_frame_logger("editor.id_render"                 );
     log_materials                  = make_logger      ("editor.materials"                 );
     log_net                        = make_logger      ("editor.net"                       );
     log_node_properties            = make_logger      ("editor.node_properties"           );

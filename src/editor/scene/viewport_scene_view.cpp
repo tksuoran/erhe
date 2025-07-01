@@ -344,6 +344,7 @@ void Viewport_scene_view::update_hover_with_id_render()
         .position                   = get_position_in_world_viewport_depth(id_query.depth),
         .triangle                   = static_cast<uint32_t>(id_query.triangle_id) // TODO Consider these types
     };
+    log_controller_ray->trace("id_query.triangle_id = {}", id_query.triangle_id);
 
     log_controller_ray->trace("position in world = {}", entry.position.value());
 
