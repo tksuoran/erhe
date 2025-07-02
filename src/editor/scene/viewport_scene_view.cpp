@@ -358,17 +358,20 @@ void Viewport_scene_view::update_hover_with_id_render()
             entry.geometry = shape->get_geometry();
             if (entry.geometry) {
                 const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
-                const GEO::index_t facet = shape->get_mesh_facet_from_triangle(entry.triangle);
-                ERHE_VERIFY(facet < geo_mesh.facets.nb());
-                log_controller_ray->trace("hover facet = {}", facet);
-                const GEO::vec3f facet_normal           = mesh_facet_normalf(geo_mesh, facet);
-                const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
-                const glm::mat4  world_from_node        = node->world_from_node();
-                const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
-                const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
-                const glm::vec3  unit_normal            = glm::normalize(normal_in_world);
-                entry.normal = unit_normal;
-                log_controller_ray->trace("hover normal = {}", entry.normal.value());
+                entry.facet = shape->get_mesh_facet_from_triangle(entry.triangle);
+                if (entry.facet != GEO::NO_INDEX) {
+                    log_controller_ray->trace("hover facet = {}", entry.facet);
+                    const GEO::vec3f facet_normal           = mesh_facet_normalf(geo_mesh, entry.facet);
+                    const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
+                    const glm::mat4  world_from_node        = node->world_from_node();
+                    const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
+                    const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
+                    const glm::vec3  unit_normal            = glm::normalize(normal_in_world);
+                    entry.normal = unit_normal;
+                    log_controller_ray->trace("hover normal = {}", entry.normal.value());
+                } else {
+                    log_controller_ray->trace("hover facet = invalid");
+                }
             }
         }
     }
