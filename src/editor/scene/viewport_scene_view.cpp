@@ -370,7 +370,7 @@ void Viewport_scene_view::update_hover_with_id_render()
                     entry.normal = unit_normal;
                     log_controller_ray->trace("hover normal = {}", entry.normal.value());
                 } else {
-                    log_controller_ray->trace("hover facet = invalid");
+                    log_controller_ray->trace("hover facet = missing triangle to facet mapping");
                 }
             }
         }
