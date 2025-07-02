@@ -10,8 +10,9 @@ erhe is a C++ library for modern OpenGL experiments.
 -   Uses persistently mapped buffers (can be disabled)
 -   Uses multi draw indirect
 -   Uses latest OpenGL and GLSL versions
--   Uses multiple threads and OpenGL contexts
+-   Uses multiple threads and OpenGL contexts (disabled by default due to issues with some drivers)
 -   Uses abstraction for OpenGL pipeline state a bit similar to Vulkan (see `erhe::graphics`)
+-   Uses render pass abstraction for eventual support for vulkan and metal
 -   Simple type safe(r) wrapper for GL API (see `erhe::gl`)
 -   Supports Windows and Linux
 
@@ -48,6 +49,8 @@ CPM during CMake configure step.
     -   clang and GCC which is not older than couple of years should be ok
 -   python 3
 -   packages such `libwayland-dev libxkbcommon-dev xorg-dev`
+-   arch packages: `gcc ninja cmake git less openssh libx11 libxrandr libxi libxinerama libxcursor mesa wayland wayland-protocols python`
+
 
 For IDE:
 
