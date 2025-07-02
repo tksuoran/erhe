@@ -137,8 +137,9 @@
 #include <geogram/basic/command_line_args.h>
 #include <geogram/basic/logger.h>
 
-#include <stdexcept>
 #include <cstdlib>
+#include <filesystem>
+#include <stdexcept>
 
 namespace editor {
 
@@ -1301,6 +1302,22 @@ void run_editor()
         ERHE_PROFILE_SCOPE("erhe::log::initialize_log_sinks()");
         erhe::log::initialize_log_sinks();
     }
+
+    // Workaround for
+    // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
+    {
+        std::error_code error_code{};
+        bool found = std::filesystem::exists("erhe.ini", error_code);
+        if (!found) {
+            std::filesystem::path path = std::filesystem::current_path();
+            path = path.parent_path();
+            path = path.parent_path();
+            path = path.parent_path();
+            path = path / std::filesystem::path("src/editor");
+            std::filesystem::current_path(path, error_code);
+        }
+    }
+
     {
         ERHE_PROFILE_SCOPE("initialize logging");
         gl::initialize_logging();
