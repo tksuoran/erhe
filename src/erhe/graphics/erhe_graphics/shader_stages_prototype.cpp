@@ -526,9 +526,9 @@ void Shader_stages_prototype::post_link()
     int active_uniform_max_length            {128};
     int active_uniform_blocks                {0};
     int active_uniform_block_max_name_length {128};
-    int transform_feedback_buffer_mode       {static_cast<int>(gl::Transform_feedback_buffer_mode::interleaved_attribs)};
-    int transform_feedback_varyings          {0};
-    int transform_feedback_varying_max_length{0};
+    //int transform_feedback_buffer_mode       {static_cast<int>(gl::Transform_feedback_buffer_mode::interleaved_attribs)};
+    //int transform_feedback_varyings          {0};
+    //int transform_feedback_varying_max_length{0};
 
     const auto gl_name = m_handle.gl_name();
 
