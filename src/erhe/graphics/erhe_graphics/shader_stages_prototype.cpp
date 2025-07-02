@@ -542,9 +542,9 @@ void Shader_stages_prototype::post_link()
     gl::get_program_iv(gl_name, gl::Program_property::active_uniform_max_length,             &active_uniform_max_length);
     gl::get_program_iv(gl_name, gl::Program_property::active_uniform_blocks,                 &active_uniform_blocks);
     gl::get_program_iv(gl_name, gl::Program_property::active_uniform_block_max_name_length,  &active_uniform_block_max_name_length);
-    gl::get_program_iv(gl_name, gl::Program_property::transform_feedback_buffer_mode,        &transform_feedback_buffer_mode);
-    gl::get_program_iv(gl_name, gl::Program_property::transform_feedback_varyings,           &transform_feedback_varyings);
-    gl::get_program_iv(gl_name, gl::Program_property::transform_feedback_varying_max_length, &transform_feedback_varying_max_length);
+    // gl::get_program_iv(gl_name, gl::Program_property::transform_feedback_buffer_mode,        &transform_feedback_buffer_mode);
+    // gl::get_program_iv(gl_name, gl::Program_property::transform_feedback_varyings,           &transform_feedback_varyings);
+    // gl::get_program_iv(gl_name, gl::Program_property::transform_feedback_varying_max_length, &transform_feedback_varying_max_length);
 
     // Only if there is compute shader
     //int compute_work_group_size[3]          = {0, 0, 0};
