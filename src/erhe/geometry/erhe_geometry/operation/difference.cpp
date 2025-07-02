@@ -48,7 +48,9 @@ void Difference::build()
     geometry_from_geogram(destination, *out_mesh.get());
 #endif
 
-    post_processing();
+    // This will not work as we are not in single precision
+    // post_processing();
+    interpolate_mesh_attributes();
 }
 
 void difference(const Geometry& lhs, const Geometry& rhs, Geometry& destination)

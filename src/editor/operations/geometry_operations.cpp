@@ -335,26 +335,35 @@ auto Binary_mesh_operation::make_operations(
     const auto scene_root_node = scene->get_root_node();
 
     // Merge lhs and rhs inputs
-    //// TODO Deal with this
-    //// GEO::Mesh lhs_mesh;
-    //// for (const Entry& entry : lhs_entries) {
-    ////     GEO::Mesh entry_transformed{};
-    ////     transform_mesh(entry.geometry->get_mesh(), entry_transformed, to_geo_mat4(entry.transform));
-    ////     merge_mesh(lhs_mesh, entry_transformed);
-    //// }
-    //// GEO::Mesh rhs_mesh;
-    //// for (const Entry& entry : rhs_entries) {
-    ////     GEO::Mesh entry_transformed{};
-    ////     transform_mesh(entry.geometry->get_mesh(), entry_transformed, to_geo_mat4(entry.transform));
-    ////     merge_mesh(rhs_mesh, entry_transformed);
-    //// }
+    erhe::geometry::Geometry transformed_lhs{};
+    erhe::geometry::Geometry transformed_rhs{};
+    for (const Entry& entry : lhs_entries) {
+        transformed_lhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.transform));
+    }
+    for (const Entry& entry : rhs_entries) {
+        transformed_rhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.transform));
+    }
+
     // Perform operation
     std::shared_ptr<erhe::geometry::Geometry> out_geometry = std::make_shared<erhe::geometry::Geometry>();
+    transformed_lhs.get_mesh().vertices.set_double_precision();
+    transformed_rhs.get_mesh().vertices.set_double_precision();
+    out_geometry->get_mesh().vertices.set_double_precision();
     operation(
-        *lhs_entries.front().geometry.get(),
-        *rhs_entries.front().geometry.get(),
+        transformed_lhs,
+        transformed_rhs,
         *out_geometry.get()
     );
+
+    out_geometry->get_mesh().vertices.set_single_precision();
+
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_facet_centroids |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+    out_geometry->process(flags);
 
     // Create new Primitive
     constexpr uint64_t mesh_flags =
