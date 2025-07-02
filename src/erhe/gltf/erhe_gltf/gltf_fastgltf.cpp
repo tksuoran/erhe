@@ -1796,24 +1796,27 @@ private:
         const std::size_t index_data_size = index_count * sizeof(uint32_t);
 
         entry.index_buffer = m_gltf_asset.buffers.size();
-        fastgltf::Buffer gltf_index_buffer{
-            .byteLength = index_data_size,
-            .data = fastgltf::sources::Vector{
-                .bytes    = std::vector<std::byte>{index_data_source.begin(), index_data_source.end()},
-                .mimeType = fastgltf::MimeType::GltfBuffer
-            },
-            .name = {}
-        };
-
-        m_gltf_asset.buffers.emplace_back(std::move(gltf_index_buffer));
+        {
+            fastgltf::Buffer gltf_index_buffer{
+                .byteLength = index_data_size,
+                .data = fastgltf::sources::Vector{
+                    .bytes    = std::vector<std::byte>{index_data_source.begin(), index_data_source.end()},
+                    .mimeType = fastgltf::MimeType::GltfBuffer
+                },
+                .name = {}
+            };
+            m_gltf_asset.buffers.emplace_back(std::move(gltf_index_buffer));
+        }
 
         entry.index_buffer_view = m_gltf_asset.bufferViews.size();
-        fastgltf::BufferView buffer_view{};
-        buffer_view.bufferIndex = entry.index_buffer;
-        buffer_view.byteOffset  = 0;
-        buffer_view.byteLength  = index_data_size;
-        buffer_view.target      = fastgltf::BufferTarget::ElementArrayBuffer;
-        m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+        {
+            fastgltf::BufferView buffer_view{};
+            buffer_view.bufferIndex = entry.index_buffer;
+            buffer_view.byteOffset  = 0;
+            buffer_view.byteLength  = index_data_size;
+            buffer_view.target      = fastgltf::BufferTarget::ElementArrayBuffer;
+            m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+        }
 
         fastgltf::AccessorBoundsArray min_value{1, fastgltf::AccessorBoundsArray::BoundsType::int64};
         fastgltf::AccessorBoundsArray max_value{1, fastgltf::AccessorBoundsArray::BoundsType::int64};
@@ -1851,25 +1854,29 @@ private:
     )
     {
         entry.vertex_buffer = m_gltf_asset.buffers.size();
-        fastgltf::Buffer gltf_vertex_buffer{
-            .byteLength = vertex_data_source.size_bytes(),
-            .data = fastgltf::sources::Vector{
-                .bytes    = std::vector<std::byte>{vertex_data_source.begin(), vertex_data_source.end()},
-                .mimeType = fastgltf::MimeType::GltfBuffer
-            },
-            .name = {}
-        };
-        m_gltf_asset.buffers.emplace_back(std::move(gltf_vertex_buffer));
+        {
+            fastgltf::Buffer gltf_vertex_buffer{
+                .byteLength = vertex_data_source.size_bytes(),
+                .data = fastgltf::sources::Vector{
+                    .bytes    = std::vector<std::byte>{vertex_data_source.begin(), vertex_data_source.end()},
+                    .mimeType = fastgltf::MimeType::GltfBuffer
+                },
+                .name = {}
+            };
+            m_gltf_asset.buffers.emplace_back(std::move(gltf_vertex_buffer));
+        }
 
         entry.vertex_buffer_view = m_gltf_asset.bufferViews.size();
 
-        fastgltf::BufferView buffer_view{};
-        buffer_view.bufferIndex = entry.vertex_buffer;
-        buffer_view.byteOffset  = 0;
-        buffer_view.byteLength  = vertex_data_source.size_bytes();
-        buffer_view.byteStride  = vertex_format.streams.front().stride,
-        buffer_view.target      = fastgltf::BufferTarget::ArrayBuffer;
-        m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+        {
+            fastgltf::BufferView buffer_view{};
+            buffer_view.bufferIndex = entry.vertex_buffer;
+            buffer_view.byteOffset  = 0;
+            buffer_view.byteLength  = vertex_data_source.size_bytes();
+            buffer_view.byteStride  = vertex_format.streams.front().stride,
+            buffer_view.target      = fastgltf::BufferTarget::ArrayBuffer;
+            m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+        }
 
         const std::vector<erhe::dataformat::Attribute_stream>& erhe_attributes = vertex_format.get_attributes();
         //const std::size_t vertex_stride = vertex_format.stride();
@@ -2287,16 +2294,18 @@ auto Gltf_exporter::export_gltf() -> std::string
     };
     m_gltf_asset.defaultScene = std::size_t{0};
 
-    fastgltf::Scene scene{};
-    m_erhe_root_node.for_each_child_const<erhe::scene::Node>(
-        [this, &scene](const erhe::scene::Node& erhe_node) -> bool
-        {
-            size_t node_index = process_node(erhe_node);
-            scene.nodeIndices.push_back(node_index);
-            return true;
-        }
-    );
-    m_gltf_asset.scenes.push_back(std::move(scene));
+    {
+        fastgltf::Scene scene{};
+        m_erhe_root_node.for_each_child_const<erhe::scene::Node>(
+            [this, &scene](const erhe::scene::Node& erhe_node) -> bool
+            {
+                size_t node_index = process_node(erhe_node);
+                scene.nodeIndices.push_back(node_index);
+                return true;
+            }
+        );
+        m_gltf_asset.scenes.push_back(std::move(scene));
+    }
 
     combine_buffers();
 

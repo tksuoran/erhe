@@ -436,9 +436,11 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     }
 
     // Copy indices to buffer
-    std::vector<uint8_t> sink_index_data(index_count * index_range.element_size);
-    memcpy(sink_index_data.data(), triangle_soup.index_data.data(), index_count * index_range.element_size);
-    buffer_info.buffer_sink.enqueue_index_data(index_range.byte_offset, std::move(sink_index_data));
+    {
+        std::vector<uint8_t> sink_index_data(index_count * index_range.element_size);
+        memcpy(sink_index_data.data(), triangle_soup.index_data.data(), index_count * index_range.element_size);
+        buffer_info.buffer_sink.enqueue_index_data(index_range.byte_offset, std::move(sink_index_data));
+    }
 
     // Copy and convert vertices to buffer
     for (size_t stream_index = 0, stream_end = buffer_info.vertex_format.streams.size(); stream_index < stream_end; ++stream_index) {
@@ -469,7 +471,11 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
                 }
             }
         }
-        buffer_info.buffer_sink.enqueue_vertex_data(stream_index, buffer_mesh.vertex_buffer_ranges[stream_index].byte_offset, std::move(sink_vertex_data));
+        buffer_info.buffer_sink.enqueue_vertex_data(
+            stream_index,
+            buffer_mesh.vertex_buffer_ranges[stream_index].byte_offset,
+            std::move(sink_vertex_data)
+        );
     }
 
     const erhe::dataformat::Attribute_stream position = triangle_soup.vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::position);

@@ -176,8 +176,10 @@ auto Post_processing_node::update_size() -> bool
             ERHE_VERIFY(render_pass_descriptor.render_target_width == level_width);
             ERHE_VERIFY(render_pass_descriptor.render_target_height == level_height);
 
-            std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
-            upsample_render_passes.push_back(std::move(render_pass));
+            {
+                std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
+                upsample_render_passes.push_back(std::move(render_pass));
+            }
 
             erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, upsample_texture);
             texture_create_info.view_base_level       = level;

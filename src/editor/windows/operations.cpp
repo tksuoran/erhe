@@ -20,7 +20,6 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_imgui/file_dialog.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_profile/profile.hpp"
