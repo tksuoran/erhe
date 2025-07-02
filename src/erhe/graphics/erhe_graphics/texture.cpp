@@ -889,7 +889,7 @@ void Texture::upload_subimage(
     ERHE_VERIFY(height <= m_height);
 
     int depth = 1;
-    int array_layer = 1;
+    int array_layer = 0;
     convert_texture_dimensions_to_gl(m_target, width, height, depth, array_layer);
     convert_texture_offset_to_gl    (m_target, x, y, z, array_layer);
 
