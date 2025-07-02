@@ -340,7 +340,7 @@ void Viewport_scene_view::update_hover_with_id_render()
     Hover_entry entry{
         .valid                      = id_query.valid,
         .scene_mesh_weak            = id_query.mesh,
-        .scene_mesh_primitive_index = id_query.primitive_index,
+        .scene_mesh_primitive_index = id_query.index_of_gltf_primitive_in_mesh,
         .position                   = get_position_in_world_viewport_depth(id_query.depth),
         .triangle                   = static_cast<uint32_t>(id_query.triangle_id) // TODO Consider these types
     };
