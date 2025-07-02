@@ -1,6 +1,5 @@
 
-namespace hextiles
-{
+namespace hextiles {
 
 [[nodiscard]] auto clamp(float x, const float lowerlimit, const float upperlimit) -> float
 {

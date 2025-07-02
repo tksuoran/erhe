@@ -5,39 +5,29 @@
 #include "map_editor/map_editor.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
-#include "new_game_window.hpp"
 #include "tile_renderer.hpp"
 #include "tiles.hpp"
-#include "type_editors/type_editor.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
-#include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/gl_log.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_imgui/imgui_log.hpp"
-#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/windows/log_window.hpp"
 #include "erhe_imgui/windows/performance_window.hpp"
 #include "erhe_imgui/scoped_imgui_context.hpp"
 #include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_log/log.hpp"
-#include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window_log.hpp"
-#include "erhe_verify/verify.hpp"
-#include "erhe_window/window.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
 #include "erhe_ui/ui_log.hpp"
@@ -64,7 +54,7 @@ public:
         , m_text_renderer       {m_graphics_device}
         , m_rendergraph         {m_graphics_device}
         , m_imgui_renderer      {m_graphics_device, m_settings.imgui}
-        , m_imgui_windows       {m_imgui_renderer, &m_context_window, m_rendergraph, ""}
+        , m_imgui_windows       {m_imgui_renderer, &m_context_window, m_rendergraph, "windows.ini"}
         , m_logs                {m_commands, m_imgui_renderer}
         , m_log_settings_window {m_imgui_renderer, m_imgui_windows, m_logs}
         , m_tail_log_window     {m_imgui_renderer, m_imgui_windows, m_logs}

@@ -8,8 +8,7 @@
 
 #include <imgui/imgui.h>
 
-namespace hextiles
-{
+namespace hextiles {
 
 Terrain_editor_window::Terrain_editor_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,

@@ -10,8 +10,7 @@
 
 #include <imgui/imgui.h>
 
-namespace hextiles
-{
+namespace hextiles {
 
 void Fbm_noise::prepare()
 {

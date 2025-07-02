@@ -1,6 +1,5 @@
 #pragma once
 
-#include "coordinate.hpp"
 #include "game/game.hpp"
 #include "new_game_window.hpp"
 #include "map_editor/map_editor.hpp"
@@ -8,21 +7,11 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
-namespace erhe::commands {
-    class Commands;
-}
-namespace erhe::graphics {
-    class Device;
-}
-namespace erhe::imgui {
-    class Imgui_windows;
-}
-namespace erhe::renderer {
-    class Text_renderer;
-}
-namespace erhe::window {
-    class Input_event_handler;
-}
+namespace erhe::commands { class Commands; }
+namespace erhe::graphics { class Device; }
+namespace erhe::imgui    { class Imgui_windows; }
+namespace erhe::renderer { class Text_renderer; }
+namespace erhe::window   { class Input_event_handler; }
 
 namespace hextiles {
 

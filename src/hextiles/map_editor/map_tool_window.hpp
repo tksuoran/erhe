@@ -4,8 +4,6 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
-#include <string>
-
 namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;

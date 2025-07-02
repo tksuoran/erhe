@@ -1,9 +1,7 @@
 #pragma once
 
-#include "hextiles.hpp"
 #include "coordinate.hpp"
 
-#include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 
 #include "etl/vector.h"

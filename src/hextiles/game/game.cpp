@@ -5,17 +5,14 @@
 #include "menu_window.hpp"
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
-#include "game/game.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
-#include <imgui/misc/cpp/imgui_stdlib.h>
 
-namespace hextiles
-{
+namespace hextiles {
 
 auto Move_unit_command::try_call() -> bool
 {

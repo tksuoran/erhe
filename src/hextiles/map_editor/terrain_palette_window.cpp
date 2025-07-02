@@ -4,8 +4,7 @@
 
 #include "erhe_imgui/imgui_windows.hpp"
 
-namespace hextiles
-{
+namespace hextiles {
 
 Terrain_palette_window::Terrain_palette_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,

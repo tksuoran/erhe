@@ -7,7 +7,6 @@
 
 #include "etl/vector.h"
 
-#include <memory>
 #include <optional>
 #include <string>
 

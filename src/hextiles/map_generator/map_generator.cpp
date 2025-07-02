@@ -6,12 +6,10 @@
 #include "tiles.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 
-namespace hextiles
-{
+namespace hextiles {
 
 Map_generator::Map_generator(
     erhe::imgui::Imgui_renderer& imgui_renderer,

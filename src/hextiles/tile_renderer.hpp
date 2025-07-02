@@ -12,7 +12,6 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/sampler.hpp"
-#include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_math/viewport.hpp"
@@ -98,6 +97,8 @@ private:
     std::span<uint32_t> m_gpu_uint_data;
     size_t              m_word_offset{0};
     bool                m_can_blit   {false};
+    size_t              m_tile_blit_count{0};
+    size_t              m_reserved_tile_count{0};
 
     static constexpr size_t player_color_shade_count = 4;
     struct Player_unit_colors
@@ -140,7 +141,6 @@ private:
     erhe::graphics::Render_pipeline_state     m_pipeline;
 
     std::optional<erhe::graphics::Buffer_range> m_vertex_buffer_range;
-    size_t                                      m_vertex_write_offset{0};
     size_t                                      m_index_count        {0};
 
     // Tile layout:

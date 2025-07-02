@@ -1,7 +1,6 @@
 #include "unit_type.hpp"
 
-namespace hextiles
-{
+namespace hextiles {
 
 auto Unit_flags::c_char(const uint32_t value) -> char
 {

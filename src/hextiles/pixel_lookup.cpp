@@ -10,8 +10,7 @@
 #include <limits>
 #include <map>
 
-namespace hextiles
-{
+namespace hextiles {
 
 using tile_mask_t = std::bitset<Tile_shape::full_size>;
 

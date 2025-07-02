@@ -16,7 +16,6 @@
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_log/log_glm.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
@@ -332,16 +331,17 @@ void Tile_renderer::compose_tileset_texture()
 
     // Upload everything before single unit tiles
     m_tileset_texture->upload_subimage(
-        m_tileset_image.info.format,
-        m_tileset_image.data,
-        m_tileset_image.info.width,
-        0,
-        0,
-        m_tileset_image.info.width,
-        ty0_single_unit_tiles * Tile_shape::height,
-        0,    // mipmap level
-        0,    // x
-        0     // y
+        m_tileset_image.info.format,                // pixelformat
+        m_tileset_image.data,                       // data
+        m_tileset_image.info.width,                 // src_row_legth
+        0,                                          // src_x
+        0,                                          // src_y
+        m_tileset_image.info.width,                 // width
+        ty0_single_unit_tiles * Tile_shape::height, // height
+        0,                                          // mipmap level
+        0,                                          // x
+        0,                                          // y
+        0                                           // z
     );
 
     // Scan player colors
@@ -393,14 +393,16 @@ void Tile_renderer::compose_tileset_texture()
                 }
             }
             m_tileset_texture->upload(
-                scratch.info.format,
-                scratch.data,
-                scratch.info.width,
-                scratch.info.height,
-                1,    // depth
-                0,    // mipmap level
-                0,    // x
-                (ty0_single_unit_tiles + i * Unit_group::height) * Tile_shape::height // y
+                scratch.info.format,    // pixelformat
+                scratch.data,           // data
+                scratch.info.width,     // width
+                scratch.info.height,    // height
+                1,                      // depth
+                0,                      // array layer
+                0,                      // mipmap level
+                0,                      // x
+                (ty0_single_unit_tiles + i * Unit_group::height) * Tile_shape::height, // y
+                0                       // Z
             );
         }
     }
@@ -439,6 +441,7 @@ void Tile_renderer::compose_tileset_texture()
                             scratch.info.width,          // width
                             scratch.info.height,         // height
                             1,                           // depth
+                            0,                           // array layer
                             0,                           // mipmap level
                             tx * Tile_shape::full_width, // destination x
                             ty * Tile_shape::height      // destination y
@@ -580,7 +583,6 @@ void Tile_renderer::begin(std::size_t tile_count)
 
     const std::size_t byte_count = tile_count * 5 * 4 * sizeof(uint32_t); // 20 words per tile
     m_vertex_buffer_range = m_vertex_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-    m_vertex_write_offset = 0;
     m_index_count = 0;
 
     // TODO byte_count?
@@ -593,6 +595,8 @@ void Tile_renderer::begin(std::size_t tile_count)
     m_word_offset    = 0;
 
     m_can_blit = true;
+    m_tile_blit_count = 0;
+    m_reserved_tile_count = tile_count;
 }
 
 auto Tile_renderer::tileset_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
@@ -618,6 +622,8 @@ void Tile_renderer::blit(
 )
 {
     ERHE_VERIFY(m_can_blit == true);
+
+    ERHE_VERIFY(m_tile_blit_count < m_reserved_tile_count);
 
     const float u0 = static_cast<float>(src_x         ) / static_cast<float>(m_tileset_texture->get_width());
     const float v0 = static_cast<float>(src_y         ) / static_cast<float>(m_tileset_texture->get_height());
@@ -653,11 +659,8 @@ void Tile_renderer::blit(
     m_gpu_float_data[m_word_offset++] = u0;
     m_gpu_float_data[m_word_offset++] = v1;
 
-    size_t new_offset = m_word_offset * sizeof(float);
-    ERHE_VERIFY(m_vertex_write_offset < new_offset);
-    m_vertex_write_offset = new_offset;
-
     m_index_count += 5;
+    ++m_tile_blit_count;
 }
 
 void Tile_renderer::end()
@@ -665,7 +668,8 @@ void Tile_renderer::end()
     ERHE_VERIFY(m_can_blit == true);
 
     ERHE_VERIFY(m_vertex_buffer_range.has_value());
-    m_vertex_buffer_range.value().bytes_written(m_vertex_write_offset);
+    size_t byte_count = m_word_offset * sizeof(float);
+    m_vertex_buffer_range.value().bytes_written(byte_count);
     m_vertex_buffer_range.value().close();
     m_can_blit = false;
 }
@@ -673,9 +677,6 @@ void Tile_renderer::end()
 void Tile_renderer::render(erhe::math::Viewport viewport)
 {
     if (m_index_count == 0) {
-        return;
-    }
-    if (m_vertex_write_offset == 0) {
         return;
     }
     if (!m_vertex_buffer_range.has_value()) {

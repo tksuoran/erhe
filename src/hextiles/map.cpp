@@ -3,8 +3,7 @@
 #include "hextiles.hpp"
 #include "tiles.hpp"
 
-namespace hextiles
-{
+namespace hextiles {
 
 auto Map::width() const -> int
 {
@@ -16,10 +15,7 @@ auto Map::height() const -> int
     return m_height;
 }
 
-void Map::reset(
-    const int width,
-    const int height
-)
+void Map::reset(const int width, const int height)
 {
     ERHE_VERIFY(width > 0);
     ERHE_VERIFY(height > 0);

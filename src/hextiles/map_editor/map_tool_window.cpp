@@ -1,8 +1,6 @@
 #include "map_editor/map_tool_window.hpp"
 
-#include "hextiles_log.hpp"
 #include "map_editor/map_editor.hpp"
-#include "map_editor/terrain_palette_window.hpp"
 #include "map_generator/map_generator.hpp"
 #include "map.hpp"
 #include "map_window.hpp"
@@ -13,10 +11,8 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_file/file.hpp"
-#include "erhe_verify/verify.hpp"
 
-namespace hextiles
-{
+namespace hextiles {
 
 Map_tool_window::Map_tool_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,

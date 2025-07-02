@@ -5,12 +5,10 @@
 #include "type_editors/type_editor.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 
-namespace hextiles
-{
+namespace hextiles {
 
 Unit_editor_window::Unit_editor_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,

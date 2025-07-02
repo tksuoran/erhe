@@ -5,8 +5,7 @@
 #include <algorithm>
 #include <limits>
 
-namespace hextiles
-{
+namespace hextiles {
 
 void Variations::reset(size_t count)
 {

@@ -1,25 +1,13 @@
 #include "menu_window.hpp"
 
-#include "hextiles_log.hpp"
-#include "map.hpp"
-#include "new_game_window.hpp"
 #include "map_window.hpp"
 #include "tiles.hpp"
 #include "game/game.hpp"
 #include "map_editor/map_editor.hpp"
-#include "map_editor/map_tool_window.hpp"
-#include "map_editor/terrain_palette_window.hpp"
-#include "map_generator/map_generator.hpp"
-#include "type_editors/terrain_editor_window.hpp"
-#include "type_editors/terrain_group_editor_window.hpp"
-#include "type_editors/terrain_replacement_rule_editor_window.hpp"
-#include "type_editors/unit_editor_window.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
-#include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace hextiles {
 

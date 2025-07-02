@@ -8,11 +8,10 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/input_arguments.hpp"
-#include "erhe_verify/verify.hpp"
-
-#include <imgui/imgui.h>
 
 #include <fmt/format.h>
+
+#include <imgui/imgui.h>
 
 namespace hextiles {
 

@@ -3,15 +3,11 @@
 #include "hextiles.hpp"
 #include "coordinate.hpp"
 #include "pixel_lookup.hpp"
-#include "terrain_type.hpp"
-#include "tile_shape.hpp"
 #include "types.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_imgui/windows/framebuffer_window.hpp"
-
-#include <numeric>
 
 namespace erhe::commands {
     class Commands;
@@ -166,7 +162,7 @@ private:
 
     Map*                          m_map         {nullptr};
     Pixel_lookup                  m_pixel_lookup;
-    int                           m_grid        {2};
+    int                           m_grid        {0}; // 2
     float                         m_zoom        {1.0f};
     glm::vec2                     m_pixel_offset{0.0f, 0.0f};
     Tile_coordinate               m_center_tile {0, 0};

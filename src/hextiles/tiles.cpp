@@ -14,8 +14,7 @@
 #include <cassert>
 #include <sstream>
 
-namespace hextiles
-{
+namespace hextiles {
 
 Tiles::Tiles()
 {

@@ -2,20 +2,15 @@
 
 #include "hextiles_log.hpp"
 #include "map.hpp"
-#include "menu_window.hpp"
 #include "pixel_lookup.hpp"
-#include "stream.hpp" // map loading
-#include "tiles.hpp"
 #include "tile_renderer.hpp"
 
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -436,15 +431,19 @@ void Map_window::render()
 
     std::size_t width_in_tiles  = static_cast<size_t>(std::ceil(extent_x / (Tile_shape::interleave_width * m_zoom)));
     std::size_t height_in_tiles = static_cast<size_t>(std::ceil(extent_y / (Tile_shape::height           * m_zoom)));
-    std::size_t tile_count      = (width_in_tiles + 2) * (height_in_tiles + 2);
 
+    coordinate_t half_width_in_tiles  = static_cast<coordinate_t>(2 + (width_in_tiles / 2));
+    coordinate_t half_height_in_tiles = static_cast<coordinate_t>(2 + (height_in_tiles / 2));
+    std::size_t tile_count      = (half_width_in_tiles * 2) * (half_height_in_tiles * 2);
+
+    // TODO units should have fixed max count <1000
     if (m_grid) {
-        tile_count = 2 * tile_count;
+        tile_count = 3 * tile_count; // add unit and grid
+    } else {
+        tile_count = 2 * tile_count; // add unit
     }
 
     m_tile_renderer.begin(tile_count + max_unit_count * max_player_count);
-    coordinate_t half_width_in_tiles  = 2 + static_cast<coordinate_t>(std::ceil(extent_x / (Tile_shape::interleave_width * m_zoom)));
-    coordinate_t half_height_in_tiles = 2 + static_cast<coordinate_t>(std::ceil(extent_y / (Tile_shape::height           * m_zoom)));
     for (coordinate_t vx = -half_width_in_tiles; vx < half_width_in_tiles; ++vx) {
         for (coordinate_t vy = -half_height_in_tiles; vy < half_height_in_tiles; ++vy) {
             const auto  absolute_tile        = wrap(m_center_tile + Tile_coordinate{vx, vy});

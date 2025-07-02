@@ -105,14 +105,10 @@ private:
 } // namespace hextiles
 
 
-namespace hextiles
-{
+namespace hextiles {
 
 template<typename T>
-void Type_editor::make_combo_def(
-    const char* tooltip_text,
-    uint32_t&   value
-)
+void Type_editor::make_combo_def(const char* tooltip_text, uint32_t& value)
 {
     if (ImGui::TableNextColumn()) {
         //char label_buffer[200];

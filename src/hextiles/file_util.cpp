@@ -2,8 +2,7 @@
 
 #include "hextiles_log.hpp"
 
-namespace hextiles
-{
+namespace hextiles {
 
 auto read_file(const char* const path) -> std::vector<unsigned char>
 {
