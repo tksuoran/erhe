@@ -123,10 +123,10 @@ public:
     class Id_range
     {
     public:
-        uint32_t           offset         {0};
-        uint32_t           length         {0};
-        erhe::scene::Mesh* mesh           {nullptr};
-        std::size_t        primitive_index{0};
+        uint32_t           offset                         {0};
+        uint32_t           length                         {0};
+        erhe::scene::Mesh* mesh                           {nullptr};
+        std::size_t        index_of_gltf_primitive_in_mesh{0};
     };
 
     void reset_id_ranges();

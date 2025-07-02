@@ -206,10 +206,10 @@ auto Primitive_buffer::update(
             if (use_id_ranges) {
                 m_id_ranges.push_back(
                     Id_range{
-                        .offset          = m_id_offset,
-                        .length          = count,
-                        .mesh            = mesh.get(),
-                        .primitive_index = mesh_primitive_index++
+                        .offset                          = m_id_offset,
+                        .length                          = count,
+                        .mesh                            = mesh.get(),
+                        .index_of_gltf_primitive_in_mesh = mesh_primitive_index++
                     }
                 );
 

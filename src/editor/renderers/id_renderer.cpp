@@ -494,10 +494,10 @@ auto Id_renderer::get(const int x, const int y) -> Id_query_result
             (result.id >= r.offset) &&
             (result.id < (r.offset + r.length))
         ) {
-            result.valid           = true;
-            result.mesh            = std::dynamic_pointer_cast<erhe::scene::Mesh>(r.mesh->shared_from_this());
-            result.primitive_index = r.primitive_index;
-            result.triangle_id     = result.id - r.offset;
+            result.valid                           = true;
+            result.mesh                            = std::dynamic_pointer_cast<erhe::scene::Mesh>(r.mesh->shared_from_this());
+            result.index_of_gltf_primitive_in_mesh = r.index_of_gltf_primitive_in_mesh;
+            result.triangle_id                     = result.id - r.offset;
             return result;
         }
     }
