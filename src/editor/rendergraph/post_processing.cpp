@@ -330,6 +330,9 @@ void Post_processing_node::execute_rendergraph_node()
         return;
     }
 
+    // Input texture may have changed
+    update_parameters();
+
     m_post_processing.post_process(*this);
 }
 
