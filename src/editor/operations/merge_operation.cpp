@@ -58,7 +58,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
     m_selection_before = m_parameters.context.selection->get_selection();
 
-    if (!parameters.operation) {
+    if (!m_parameters.operation) {
         // Sorting nodes ensures first node is not child of some other node.
         // Other nodes will be detached from the scene.
 
@@ -144,7 +144,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             if (geometry) {
                 geometries.push_back(geometry);
                 transforms.push_back(transform);
-                if (!parameters.operation) {
+                if (!m_parameters.operation) {
                     combined_geometry->merge_with_transform(*geometry.get(), to_geo_mat4f(transform));
                 }
                 if (normal_style == Normal_style::none) {
@@ -170,7 +170,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             compound_shape_create_info
         );
 
-        if (parameters.context.editor_settings->physics.static_enable) {
+        if (m_parameters.context.editor_settings->physics.static_enable) {
             const erhe::physics::IRigid_body_create_info rigid_body_create_info{
                 .collision_shape = combined_collision_shape,
                 .debug_label     = "merged", // TODO
@@ -189,7 +189,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     combined_geometry->process(flags);
 
     erhe::primitive::Primitive after_primitive{combined_geometry, material};
-    const bool renderable_ok = after_primitive.make_renderable_mesh(parameters.build_info, normal_style);
+    const bool renderable_ok = after_primitive.make_renderable_mesh(m_parameters.build_info, normal_style);
     const bool raytrace_ok   = after_primitive.make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);
 
