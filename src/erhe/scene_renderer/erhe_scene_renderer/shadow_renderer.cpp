@@ -126,9 +126,12 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     ERHE_VERIFY(parameters.index_buffer != nullptr);
     ERHE_VERIFY(parameters.vertex_buffer != nullptr);
     ERHE_VERIFY(parameters.view_camera != nullptr);
+    ERHE_VERIFY(parameters.texture);
 
-    const uint64_t shadow_texture_handle_compare    = m_graphics_device.get_handle(*parameters.texture.get(), m_shadow_sampler_compare);
-    const uint64_t shadow_texture_handle_no_compare = m_graphics_device.get_handle(*parameters.texture.get(), m_shadow_sampler_no_compare);
+    const Texture& texture = *parameters.texture.get();
+
+    const uint64_t shadow_texture_handle_compare    = m_graphics_device.get_handle(texture, m_shadow_sampler_compare);
+    const uint64_t shadow_texture_handle_no_compare = m_graphics_device.get_handle(texture, m_shadow_sampler_no_compare);
 
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections = Light_projections{

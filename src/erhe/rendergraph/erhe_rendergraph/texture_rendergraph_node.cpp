@@ -48,6 +48,7 @@ void Texture_rendergraph_node::reconfigure(int sample_count)
 {
     m_sample_count = sample_count;
     m_color_texture.reset();
+    m_render_pass.reset();
 }
 
 void Texture_rendergraph_node::update_render_pass(int width, int height, bool use_default_framebuffer)

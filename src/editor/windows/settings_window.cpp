@@ -194,7 +194,7 @@ void Settings_window::imgui()
         ImGui::SameLine();
         if (ImGui::Button("Use", button_size)) {
             m_context.editor_settings->graphics.current_graphics_preset = graphics_presets.at(m_graphics_preset_index);
-            m_context.editor_message_bus->send_message(
+            m_context.editor_message_bus->queue_message(
                 Editor_message{
                     .update_flags    = Message_flag_bit::c_flag_bit_graphics_settings,
                     .graphics_preset = &m_context.editor_settings->graphics.current_graphics_preset

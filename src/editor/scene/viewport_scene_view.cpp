@@ -124,13 +124,9 @@ void Viewport_scene_view::execute_rendergraph_node()
         m_context.editor_rendering->render_id(context);
     }
 
-    Rendergraph_node* output_node = get_producer_output_node(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
-    bool render_to_texture = output_node != nullptr;
-    if (render_to_texture) {
-        update_render_pass(m_projection_viewport.width, m_projection_viewport.height);
-    } else {
-        update_render_pass(m_projection_viewport.width, m_projection_viewport.height, true);
-    }
+    update_render_pass(m_projection_viewport.width, m_projection_viewport.height);
+    // TODO If we ever have non-ImGui viewport, this might be an option:
+    // update_render_pass(m_projection_viewport.width, m_projection_viewport.height, true);
 
     ERHE_VERIFY(m_render_pass);
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();

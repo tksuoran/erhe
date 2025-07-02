@@ -50,7 +50,17 @@ Shadow_render_node::~Shadow_render_node()
 
 void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, const int resolution, const int light_count)
 {
-    log_render->trace("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
+    if (
+        m_texture &&
+        (m_texture->get_width() == resolution) &&
+        (m_texture->get_height() == resolution) &&
+        (m_texture->get_array_layer_count() == std::max(1, light_count))
+    ) {
+        log_render->debug("Reconfigure shadow resolution = {}, light count = {} - match old settings, skip", resolution, light_count);
+        return;
+    }
+    log_render->debug("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
+    gl::finish();
 
     {
         ERHE_PROFILE_SCOPE("allocating shadow map array texture");
@@ -76,6 +86,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         }
     }
 
+    log_render->debug("updating render passes");
     m_render_passes.clear();
     for (int i = 0; i < light_count; ++i) {
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
@@ -98,6 +109,9 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         .width  = resolution,
         .height = resolution
     };
+
+    // Invalidate m_light_projections which at this point has stale texture handles
+    m_light_projections = erhe::scene_renderer::Light_projections{};
 }
 
 void Shadow_render_node::execute_rendergraph_node()
