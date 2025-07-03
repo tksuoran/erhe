@@ -141,6 +141,11 @@
 #include <filesystem>
 #include <stdexcept>
 
+#if defined(ERHE_OS_LINUX)
+#include <unistd.h>
+#include <limits.h>
+#endif
+
 namespace editor {
 
 #if defined(ERHE_PROFILE_LIBRARY_TRACY)
@@ -1310,11 +1315,35 @@ void run_editor()
         bool found = std::filesystem::exists("erhe.ini", error_code);
         if (!found) {
             std::filesystem::path path = std::filesystem::current_path();
+            fprintf(stdout, "erhe.ini not found.\nCurrent working directory is %s\n", path.c_str());
+#if defined(ERHE_OS_LINUX)
+            char self_path[PATH_MAX];
+            ssize_t length = readlink("/proc/self/exe", self_path, PATH_MAX - 1);
+            if (length > 0) {
+                self_path[length] = '\0';
+                fprintf(stdout, "Executable is %s\n", self_path);
+            }
+#endif
+
             path = path.parent_path();
+            std::filesystem::current_path(path, error_code);
+            path = std::filesystem::current_path();
+            fprintf(stdout, "Current working directory is %s\n", path.c_str());
+
             path = path.parent_path();
+            std::filesystem::current_path(path, error_code);
+            path = std::filesystem::current_path();
+            fprintf(stdout, "Current working directory is %s\n", path.c_str());
+
             path = path.parent_path();
+            std::filesystem::current_path(path, error_code);
+            path = std::filesystem::current_path();
+            fprintf(stdout, "Current working directory is %s\n", path.c_str());
+
             path = path / std::filesystem::path("src/editor");
             std::filesystem::current_path(path, error_code);
+            path = std::filesystem::current_path();
+            fprintf(stdout, "Current working directory is %s\n", path.c_str());
         }
     }
 
