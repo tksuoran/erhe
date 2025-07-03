@@ -1314,8 +1314,10 @@ void run_editor()
         std::error_code error_code{};
         bool found = std::filesystem::exists("erhe.ini", error_code);
         if (!found) {
+            std::string path_string{};
             std::filesystem::path path = std::filesystem::current_path();
-            fprintf(stdout, "erhe.ini not found.\nCurrent working directory is %s\n", path.c_str());
+            path_string = path.string();
+            fprintf(stdout, "erhe.ini not found.\nCurrent working directory is %s\n", path_string.c_str());
 #if defined(ERHE_OS_LINUX)
             char self_path[PATH_MAX];
             ssize_t length = readlink("/proc/self/exe", self_path, PATH_MAX - 1);
@@ -1328,22 +1330,26 @@ void run_editor()
             path = path.parent_path();
             std::filesystem::current_path(path, error_code);
             path = std::filesystem::current_path();
-            fprintf(stdout, "Current working directory is %s\n", path.c_str());
+            path_string = path.string();
+            fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
 
             path = path.parent_path();
             std::filesystem::current_path(path, error_code);
             path = std::filesystem::current_path();
-            fprintf(stdout, "Current working directory is %s\n", path.c_str());
+            path_string = path.string();
+            fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
 
             path = path.parent_path();
             std::filesystem::current_path(path, error_code);
             path = std::filesystem::current_path();
-            fprintf(stdout, "Current working directory is %s\n", path.c_str());
+            path_string = path.string();
+            fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
 
             path = path / std::filesystem::path("src/editor");
             std::filesystem::current_path(path, error_code);
             path = std::filesystem::current_path();
-            fprintf(stdout, "Current working directory is %s\n", path.c_str());
+            path_string = path.string();
+            fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
         }
     }
 
