@@ -9,19 +9,19 @@ Headset_view::Headset_view(
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
     erhe::window::Context_window&   context_window,
-    Editor_context&                 editor_context,
-    Editor_rendering&               editor_rendering,
-    Editor_settings&                editor_settings
+    App_context&                    app_context,
+    App_rendering&                  app_rendering,
+    App_settings&                   app_settings
 )
-    : Scene_view{editor_context, Viewport_config{}}
+    : Scene_view{app_context, Viewport_config{}}
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset"}
 {
     static_cast<void>(commands);
     static_cast<void>(graphics_device);
     static_cast<void>(rendergraph);
     static_cast<void>(context_window);
-    static_cast<void>(editor_rendering);
-    static_cast<void>(editor_settings);
+    static_cast<void>(app_rendering);
+    static_cast<void>(app_settings);
 }
 
 void Headset_view::render(const Render_context&)

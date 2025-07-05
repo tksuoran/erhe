@@ -1,8 +1,8 @@
 #include "renderers/renderpass.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_rendering.hpp"
+#include "app_rendering.hpp"
 #include "time.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
@@ -62,12 +62,12 @@ void Renderpass::render(const Render_context& context) const
     }
 
     // TODO This is a bit hacky, route this better.
-    const int64_t t0_ns  = context.editor_context.time->get_host_system_time_ns();
+    const int64_t t0_ns  = context.app_context.time->get_host_system_time_ns();
     const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
     const float   period = 1.0f / context.viewport_config.selection_highlight_frequency;
     const float   t1     = static_cast<float>(::fmod(t0, period));
     const float   t2     = static_cast<float>(0.5f + triangle_wave(t1, period) * 0.5f);
-    context.editor_context.editor_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+    context.app_context.app_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
         .color_source   = erhe::scene_renderer::Primitive_color_source::constant_color,
         .constant_color = glm::mix(
             context.viewport_config.selection_highlight_low,
@@ -122,11 +122,11 @@ void Renderpass::render(const Render_context& context) const
 
     if (this->mesh_layers.empty()) {
         log_composer->debug("render_fullscreen");
-        context.editor_context.forward_renderer->draw_primitives(
+        context.app_context.forward_renderer->draw_primitives(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .index_buffer           = &context.editor_context.mesh_memory->index_buffer,
-                .vertex_buffer0         = &context.editor_context.mesh_memory->position_vertex_buffer,
-                .vertex_buffer1         = &context.editor_context.mesh_memory->non_position_vertex_buffer,
+                .index_buffer           = &context.app_context.mesh_memory->index_buffer,
+                .vertex_buffer0         = &context.app_context.mesh_memory->position_vertex_buffer,
+                .vertex_buffer1         = &context.app_context.mesh_memory->non_position_vertex_buffer,
                 .camera                 = context.camera,
                 .light_projections      = nullptr,
                 .lights                 = {},
@@ -145,7 +145,7 @@ void Renderpass::render(const Render_context& context) const
                 .shadow_texture         = nullptr,
                 .viewport               = context.viewport,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
-                .error_shader_stages    = &context.editor_context.programs->error.shader_stages,
+                .error_shader_stages    = &context.app_context.programs->error.shader_stages,
                 .debug_label            = get_name()
             },
             nullptr
@@ -173,12 +173,12 @@ void Renderpass::render(const Render_context& context) const
         log_composer->trace("primitive_mode = {}", c_str(primitive_mode));
         log_composer->trace("filter = {}", filter.describe());
 
-        context.editor_context.forward_renderer->render(
+        context.app_context.forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .index_type             = context.editor_context.mesh_memory->buffer_info.index_type,
-                .index_buffer           = &context.editor_context.mesh_memory->index_buffer,
-                .vertex_buffer0         = &context.editor_context.mesh_memory->position_vertex_buffer,
-                .vertex_buffer1         = &context.editor_context.mesh_memory->non_position_vertex_buffer,
+                .index_type             = context.app_context.mesh_memory->buffer_info.index_type,
+                .index_buffer           = &context.app_context.mesh_memory->index_buffer,
+                .vertex_buffer0         = &context.app_context.mesh_memory->position_vertex_buffer,
+                .vertex_buffer1         = &context.app_context.mesh_memory->non_position_vertex_buffer,
                 .ambient_light          = layers.light()->ambient_light,
                 .camera                 = context.camera,
                 .light_projections      = context.scene_view.get_light_projections(),
@@ -198,9 +198,9 @@ void Renderpass::render(const Render_context& context) const
                 .viewport               = context.viewport,
                 .filter                 = this->filter,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
-                .error_shader_stages    = &context.editor_context.programs->error.shader_stages,
-                .debug_joint_indices    = context.editor_context.editor_rendering->debug_joint_indices,
-                .debug_joint_colors     = context.editor_context.editor_rendering->debug_joint_colors,
+                .error_shader_stages    = &context.app_context.programs->error.shader_stages,
+                .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
+                .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
                 .debug_label            = get_name()
             }
         );

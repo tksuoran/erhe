@@ -1,6 +1,6 @@
 #include "windows/clipboard_window.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "graphics/icon_set.hpp"
 #include "tools/clipboard.hpp"
 
@@ -14,10 +14,10 @@ namespace editor
 Clipboard_window::Clipboard_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
+    App_context&                 app_context
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Clipboard", "clipboard"}
-    , m_context                {editor_context}
+    , m_context                {app_context}
 {
 }
 

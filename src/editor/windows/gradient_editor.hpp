@@ -9,7 +9,7 @@ namespace ImGG { class GradientWidget; }
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 
 class Gradient_editor : public erhe::imgui::Imgui_window
 {

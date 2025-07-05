@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor_message.hpp"
+#include "app_message.hpp"
 #include "renderers/viewport_config.hpp"
 
 #include "erhe_rendergraph/rendergraph_node.hpp"
@@ -28,11 +28,11 @@ namespace erhe::scene_renderer {
 namespace editor {
 
 class Basic_scene_view_node;
-class Editor_context;
-class Editor_message;
-class Editor_message_bus;
-class Editor_rendering;
-class Editor_settings;
+class App_context;
+class App_message;
+class App_message_bus;
+class App_rendering;
+class App_settings;
 class Viewport_window;
 class Post_processing;
 class Post_processing_node;
@@ -45,11 +45,11 @@ class Scene_views;
 class Open_new_viewport_scene_view_command : public erhe::commands::Command
 {
 public:
-    Open_new_viewport_scene_view_command(erhe::commands::Commands& commands, Editor_context& editor_context);
+    Open_new_viewport_scene_view_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 
@@ -61,7 +61,7 @@ private:
 class Scene_views : erhe::commands::Command_host
 {
 public:
-    Scene_views(erhe::commands::Commands& commands, Editor_context& editor_context, Editor_message_bus& editor_message_bus);
+    Scene_views(erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus);
 
     // Public API
 
@@ -77,8 +77,8 @@ public:
         erhe::graphics::Device&                               graphics_device,
         erhe::rendergraph::Rendergraph&                       rendergraph,
         erhe::imgui::Imgui_windows&                           imgui_windows,
-        Editor_rendering&                                     editor_rendering,
-        Editor_settings&                                      editor_settings,
+        App_rendering&                                        app_rendering,
+        App_settings&                                         app_settings,
         Post_processing&                                      post_processing,
         Tools&                                                tools,
         const std::string_view                                name,
@@ -134,14 +134,14 @@ public:
     [[nodiscard]] auto get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&;
 
 private:
-    void on_message                      (Editor_message& message);
+    void on_message                      (App_message& message);
     void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
 
     void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
     void update_pointer_from_basic_viewport_windows();
     void layout_basic_viewport_windows           ();
 
-    Editor_context& m_context;
+    App_context& m_app_context;
 
     // Commands
     Open_new_viewport_scene_view_command m_open_new_viewport_scene_view_command;

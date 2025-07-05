@@ -43,9 +43,9 @@ namespace erhe::scene_renderer {
 
 namespace editor {
 
-class Editor_message_bus;
-class Editor_rendering;
-class Editor_scenes;
+class App_message_bus;
+class App_rendering;
+class App_scenes;
 class Physics_window;
 class Post_processing;
 class Post_processing_node;
@@ -73,7 +73,7 @@ class Viewport_scene_view
 {
 public:
     Viewport_scene_view(
-        Editor_context&                             editor_context,
+        App_context&                                context,
         erhe::rendergraph::Rendergraph&             rendergraph,
         Tools&                                      tools,
         const std::string_view                      name,

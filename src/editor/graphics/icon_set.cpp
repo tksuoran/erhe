@@ -1,7 +1,7 @@
 #include "graphics/icon_set.hpp"
 #include "graphics/icon_rasterization.hpp"
-#include "editor_context.hpp"
-#include "editor_settings.hpp"
+#include "app_context.hpp"
+#include "app_settings.hpp"
 #include "scene/content_library.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
@@ -68,13 +68,13 @@ void Icons::queue_load_icons(Icon_loader& loader)
 }
 
 Icon_set::Icon_set(
-    Editor_context&         editor_context,
+    App_context&            context,
     erhe::graphics::Device& graphics_device,
     Icon_settings&          icon_settings,
     Icons&                  icons_in,
     Icon_loader&            loader
 )
-    : m_context{editor_context}
+    : m_context{context}
 {
     load_icons(graphics_device, icon_settings, icons_in, loader);
 }
@@ -216,6 +216,7 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     const auto& material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
     if (material) {
         tint_color = material->base_color;
+        icon = icons.material;
     }
     const auto& light = std::dynamic_pointer_cast<erhe::scene::Light>(item);
     if (light) {

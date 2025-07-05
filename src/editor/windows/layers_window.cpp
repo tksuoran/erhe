@@ -1,8 +1,8 @@
 #include "windows/layers_window.hpp"
 
-#include "editor_context.hpp"
-#include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
+#include "app_context.hpp"
+#include "app_rendering.hpp"
+#include "app_scenes.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -25,9 +25,9 @@ namespace editor {
 
 using Light_type = erhe::scene::Light_type;
 
-Layers_window::Layers_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
+Layers_window::Layers_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Layers", "layers"}
-    , m_context                {editor_context}
+    , m_context                {app_context}
 {
     set_developer();
 }
@@ -54,7 +54,7 @@ void Layers_window::imgui()
         ImGuiTreeNodeFlags_Leaf
     };
 
-    const auto& scene_roots        = m_context.editor_scenes->get_scene_roots();
+    const auto& scene_roots        = m_context.app_scenes->get_scene_roots();
     const auto  mesh_icon          = m_context.icon_set->icons.mesh;
     const auto& icon_rasterization = get_scale_value() < 1.5f
         ? m_context.icon_set->get_small_rasterization()
@@ -104,7 +104,7 @@ void Layers_window::imgui()
         }
     }
 
-    //m_context.editor_scenes->imgui();
+    //m_context.app_scenes->imgui();
 
     m_context.scene_views->debug_imgui();
 
@@ -129,7 +129,7 @@ void Layers_window::imgui()
         }
     }
 
-    //m_context.editor_rendering->imgui();
+    //m_context.app_rendering->imgui();
 
     if (ImGui::TreeNodeEx("Hud")) {
         auto& hud = *m_context.hud;

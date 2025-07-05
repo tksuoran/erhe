@@ -19,7 +19,7 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_rendering;
+class App_rendering;
 class Headset_view;
 class Scene_root;
 class Viewport_scene_view;

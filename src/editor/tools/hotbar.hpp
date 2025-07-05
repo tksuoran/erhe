@@ -29,8 +29,8 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_context;
-class Editor_message_bus;
+class App_context;
+class App_message_bus;
 class Hotbar;
 class Icon_set;
 class Mesh_memory;
@@ -45,42 +45,42 @@ class Headset_view;
 class Toggle_menu_visibility_command : public erhe::commands::Command
 {
 public:
-    Toggle_menu_visibility_command(erhe::commands::Commands& commands, Editor_context& context);
+    Toggle_menu_visibility_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Hotbar_trackpad_command : public erhe::commands::Command
 {
 public:
-    Hotbar_trackpad_command(erhe::commands::Commands& commands, Editor_context& context);
+    Hotbar_trackpad_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Hotbar_rotate_tool_command : public erhe::commands::Command
 {
 public:
-    Hotbar_rotate_tool_command(erhe::commands::Commands& commands, Editor_context& context, int rotate_direction);
+    Hotbar_rotate_tool_command(erhe::commands::Commands& commands, App_context& context, int rotate_direction);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
     int m_rotate_direction;
 };
 
 class Hotbar_thumbstick_command : public erhe::commands::Command
 {
 public:
-    Hotbar_thumbstick_command(erhe::commands::Commands& commands, Editor_context& context);
+    Hotbar_thumbstick_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
     glm::vec2       m_last_value          {0.0f, 0.0f};
     float           m_activate_threshold  {0.6f};
     float           m_deactivate_threshold{0.4f};
@@ -99,8 +99,8 @@ public:
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
-        Editor_message_bus&          editor_message_bus,
+        App_context&                 context,
+        App_message_bus&             app_message_bus,
         Headset_view&                headset_view,
         Mesh_memory&                 mesh_memory,
         Scene_builder&               scene_builder,
@@ -127,7 +127,7 @@ public:
     void set_locked            (bool value);
 
 private:
-    void on_message            (Editor_message& message);
+    void on_message            (App_message& message);
     void update_node_transform ();
     void tool_button           (uint32_t id, Tool* tool);
     void handle_slot_update    ();

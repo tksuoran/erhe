@@ -25,8 +25,8 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_scenes;
-class Editor_settings;
+class App_scenes;
+class App_settings;
 class Icon_set;
 class Operation;
 class Operation_stack;
@@ -54,7 +54,7 @@ public:
 class Item_tree
 {
 public:
-    Item_tree(Editor_context& context);
+    Item_tree(App_context& context);
 
     void set_root          (const std::shared_ptr<erhe::Hierarchy>& root);
     void set_item_filter   (const erhe::Item_filter& filter);
@@ -111,7 +111,7 @@ private:
     );
     void drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& node);
 
-    Editor_context&                                              m_context;
+    App_context&                                              m_context;
     erhe::Item_filter                                            m_filter;
     ImGuiTextFilter                                              m_text_filter;
     std::shared_ptr<erhe::Hierarchy>                             m_root;
@@ -137,7 +137,7 @@ public:
     Item_tree_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              context,
+        App_context&              context,
         const std::string_view       window_title,
         const std::string_view       ini_label
     );

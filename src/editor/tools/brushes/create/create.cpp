@@ -1,8 +1,8 @@
 
 #include "tools/tool.hpp"
 
-#include "editor_context.hpp"
-#include "editor_settings.hpp"
+#include "app_context.hpp"
+#include "app_settings.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -39,11 +39,11 @@ using Trs_transform = erhe::scene::Trs_transform;
 Create::Create(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
+    App_context&                 context,
     Tools&                       tools
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Create", "create"}
-    , Tool{editor_context}
+    , Tool{context}
 {
     set_base_priority  (c_priority);
     set_description    ("Create");
@@ -54,7 +54,7 @@ Create::Create(
 
 auto Create::get_button_size() -> ImVec2
 {
-    const float ui_scale = m_context.editor_settings->get_ui_scale();
+    const float ui_scale = m_context.app_settings->get_ui_scale();
     return ImVec2{110.0f * ui_scale, 0.0f};
 }
 
@@ -149,15 +149,15 @@ void Create::imgui()
         const bool create_brush    = ImGui::Button("Create Brush", button_size);
         if (create_instance || create_brush) {
             Brush_data brush_create_info{
-                .context         = m_context,
-                .editor_settings = *m_context.editor_settings,
-                .name            = m_brush_name,
-                .build_info      = erhe::primitive::Build_info{
+                .context      = m_context,
+                .app_settings = *m_context.app_settings,
+                .name         = m_brush_name,
+                .build_info   = erhe::primitive::Build_info{
                     .primitive_types = { .fill_triangles = true, .edge_lines = true, .corner_points = true, .centroid_points = true },
                     .buffer_info     = m_context.mesh_memory->buffer_info
                 },
-                .normal_style    = m_normal_style,
-                .density         = m_density,
+                .normal_style = m_normal_style,
+                .density      = m_density,
             };
 
             m_brush = m_create_shape->create(brush_create_info);
@@ -240,10 +240,10 @@ void Create::imgui()
         //// ImGui::Text("Selected Primitive: %s", source_geo_mesh->name.c_str());
         if (ImGui::Button("Selected Mesh to Brush")) {
             Brush_data brush_create_info{
-                .context         = m_context,
-                .editor_settings = *m_context.editor_settings,
-                .name            = m_brush_name,
-                .build_info      = erhe::primitive::Build_info{
+                .context      = m_context,
+                .app_settings = *m_context.app_settings,
+                .name         = m_brush_name,
+                .build_info   = erhe::primitive::Build_info{
                     .primitive_types = {
                         .fill_triangles  = true,
                         .edge_lines      = true,
@@ -252,9 +252,9 @@ void Create::imgui()
                     },
                     .buffer_info     = m_context.mesh_memory->buffer_info
                 },
-                .normal_style    = m_normal_style,
-                .geometry        = source_geometry,
-                .density         = m_density
+                .normal_style = m_normal_style,
+                .geometry     = source_geometry,
+                .density      = m_density
             };
             //// source_geometry->build_edges();
             //// source_geometry->compute_polygon_normals();

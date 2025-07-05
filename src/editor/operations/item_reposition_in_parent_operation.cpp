@@ -1,8 +1,8 @@
 #include "operations/item_reposition_in_parent_operation.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_log/log_glm.hpp"
@@ -41,7 +41,7 @@ auto Item_reposition_in_parent_operation::describe() const -> std::string
     );
 }
 
-void Item_reposition_in_parent_operation::execute(Editor_context& context)
+void Item_reposition_in_parent_operation::execute(App_context& context)
 {
     static_cast<void>(context);
     log_operations->trace("Op Execute {}", describe());
@@ -69,7 +69,7 @@ void Item_reposition_in_parent_operation::execute(Editor_context& context)
 #endif
 }
 
-void Item_reposition_in_parent_operation::undo(Editor_context& context)
+void Item_reposition_in_parent_operation::undo(App_context& context)
 {
     static_cast<void>(context);
     log_operations->trace("Op Undo {}", describe());

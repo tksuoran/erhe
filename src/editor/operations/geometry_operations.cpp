@@ -1,6 +1,6 @@
 #include "operations/geometry_operations.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/scene_root.hpp"
 

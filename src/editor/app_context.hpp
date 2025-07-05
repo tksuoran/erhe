@@ -39,11 +39,11 @@ class Clipboard;
 class Clipboard_window;
 class Create;
 class Debug_renderer;
-class Editor_message_bus;
-class Editor_rendering;
-class Editor_scenes;
-class Editor_settings;
-class Editor_windows;
+class App_message_bus;
+class App_rendering;
+class App_scenes;
+class App_settings;
+class App_windows;
 class Fly_camera_tool;
 class Grid_tool;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -75,6 +75,7 @@ class Selection;
 class Selection_tool;
 class Settings_window;
 class Sheet_window;
+class Thumbnails;
 class Time;
 class Timeline_window;
 class Tools;
@@ -82,7 +83,7 @@ class Transform_tool;
 class Viewport_config_window;
 class Scene_views;
 
-class Editor_context
+class App_context
 {
 public:
     bool  OpenXR        {false};
@@ -111,11 +112,11 @@ public:
     Clipboard*                              clipboard             {nullptr};
     Clipboard_window*                       clipboard_window      {nullptr};
     Create*                                 create                {nullptr};
-    Editor_message_bus*                     editor_message_bus    {nullptr};
-    Editor_rendering*                       editor_rendering      {nullptr};
-    Editor_scenes*                          editor_scenes         {nullptr};
-    Editor_settings*                        editor_settings       {nullptr};
-    Editor_windows*                         editor_windows        {nullptr};
+    App_message_bus*                        app_message_bus       {nullptr};
+    App_rendering*                          app_rendering         {nullptr};
+    App_scenes*                             app_scenes            {nullptr};
+    App_settings*                           app_settings          {nullptr};
+    App_windows*                            app_windows           {nullptr};
     Fly_camera_tool*                        fly_camera_tool       {nullptr};
     Grid_tool*                              grid_tool             {nullptr};
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -144,6 +145,7 @@ public:
     Selection_tool*                         selection_tool        {nullptr};
     Settings_window*                        settings_window       {nullptr};
     Sheet_window*                           sheet_window          {nullptr};
+    Thumbnails*                             thumbnails            {nullptr};
     Time*                                   time                  {nullptr};
     Timeline_window*                        timeline_window       {nullptr};
     Tools*                                  tools                 {nullptr};

@@ -1,7 +1,7 @@
 #include "windows/properties.hpp"
 
-#include "editor_context.hpp"
-#include "editor_message_bus.hpp"
+#include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "rendertarget_mesh.hpp"
 #include "tools/brushes/brush.hpp"
 #include "tools/selection_tool.hpp"
@@ -53,9 +53,9 @@
 
 namespace editor {
 
-Properties::Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
+Properties::Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
     : Imgui_window{imgui_renderer, imgui_windows, "Properties", "properties"}
-    , m_context   {editor_context}
+    , m_context   {app_context}
 {
 }
 
@@ -105,8 +105,8 @@ void Properties::animation_properties(erhe::scene::Animation& animation)
     const float time_in_timeline = m_context.timeline_window->get_play_position();
     animation.apply(start_time + time_in_timeline);
 
-    m_context.editor_message_bus->send_message(
-        Editor_message{
+    m_context.app_message_bus->send_message(
+        App_message{
             .update_flags = Message_flag_bit::c_flag_bit_animation_update
         }
     );

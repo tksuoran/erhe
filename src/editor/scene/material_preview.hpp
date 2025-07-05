@@ -29,8 +29,8 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_context;
-class Editor_rendering;
+class App_context;
+class App_rendering;
 class Content_library;
 class Mesh_memory;
 class Programs;
@@ -43,7 +43,7 @@ public:
     Material_preview(
         erhe::graphics::Device&         graphics_device,
         erhe::scene::Scene_message_bus& scene_message_bus,
-        Editor_context&                 editor_context,
+        App_context&                    context,
         Mesh_memory&                    mesh_memory,
         Programs&                       programs
     );

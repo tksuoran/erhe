@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor_message.hpp"
+#include "app_message.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/viewport_config.hpp"
 #include "scene/node_raytrace_mask.hpp"
@@ -32,9 +32,9 @@ namespace erhe::scene_renderer { class Light_projections; }
 
 namespace editor {
 
-class Editor_context;
-class Editor_message;
-class Editor_message_bus;
+class App_context;
+class App_message;
+class App_message_bus;
 class Grid;
 class Raytrace_primitive;
 class Scene_root;
@@ -97,7 +97,7 @@ public:
 class Scene_view
 {
 public:
-    Scene_view(Editor_context& context, Viewport_config viewport_config);
+    Scene_view(App_context& context, Viewport_config viewport_config);
     virtual ~Scene_view() noexcept;
 
     // Virtual interface
@@ -134,7 +134,7 @@ public:
 protected:
     void set_hover(std::size_t slot, const Hover_entry& entry);
 
-    Editor_context&          m_context;
+    App_context&          m_context;
     std::optional<glm::mat4> m_world_from_control;
     std::optional<glm::mat4> m_control_from_world;
     Viewport_config          m_viewport_config;

@@ -16,8 +16,8 @@ namespace editor {
 
 class Depth_visualization_window;
 class Depth_to_color_rendergraph_node;
-class Editor_context;
-class Editor_rendering;
+class App_context;
+class App_rendering;
 class Mesh_memory;
 class Programs;
 class Shadow_render_node;
@@ -58,8 +58,8 @@ public:
         erhe::imgui::Imgui_windows&             imgui_windows,
         erhe::rendergraph::Rendergraph&         rendergraph,
         erhe::scene_renderer::Forward_renderer& forward_renderer,
-        Editor_context&                         editor_context,
-        Editor_rendering&                       editor_rendering,
+        App_context&                            context,
+        App_rendering&                          app_rendering,
         Mesh_memory&                            mesh_memory,
         Programs&                               programs
     );
@@ -71,7 +71,7 @@ public:
 private:
     void set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node);
 
-    Editor_context&                                  m_context;
+    App_context&                                  m_context;
     std::unique_ptr<Depth_to_color_rendergraph_node> m_depth_to_color_node{};
     std::weak_ptr<Shadow_render_node>                m_shadow_renderer_node{};
     int                                              m_selected_shadow_node{0};

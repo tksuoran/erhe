@@ -14,7 +14,7 @@ namespace erhe::scene_renderer { class Forward_renderer; }
 namespace editor {
 
 class Brdf_slice;
-class Editor_context;
+class App_context;
 class Programs;
 
 class Brdf_slice_rendergraph_node : public erhe::rendergraph::Texture_rendergraph_node
@@ -54,7 +54,7 @@ public:
     Brdf_slice(
         erhe::rendergraph::Rendergraph&         rendergraph,
         erhe::scene_renderer::Forward_renderer& forward_renderer,
-        Editor_context&                         editor_context,
+        App_context&                            app_context,
         Programs&                               programs
     );
 
@@ -66,7 +66,7 @@ public:
 
 private:
     erhe::rendergraph::Rendergraph&              m_rendergraph;
-    Editor_context&                              m_context;
+    App_context&                                 m_context;
     std::shared_ptr<Brdf_slice_rendergraph_node> m_node;
 };
 

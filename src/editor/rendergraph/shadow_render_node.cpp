@@ -1,6 +1,6 @@
 #include "rendergraph/shadow_render_node.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 
@@ -29,14 +29,14 @@ using erhe::graphics::Texture;
 Shadow_render_node::Shadow_render_node(
     erhe::graphics::Device&         graphics_device,
     erhe::rendergraph::Rendergraph& rendergraph,
-    Editor_context&                 editor_context,
+    App_context&                    context,
     Scene_view&                     scene_view,
     const int                       resolution,
     const int                       light_count
 )
     // TODO fmt::format("Shadow render {}", viewport_scene_view->name())
     : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"} 
-    , m_context   {editor_context}
+    , m_context   {context}
     , m_scene_view{scene_view}
 {
     register_output("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);

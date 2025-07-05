@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor_message.hpp"
+#include "app_message.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/handle_visualizations.hpp"
 #include "tools/transform/rotation_inspector.hpp"
@@ -41,7 +41,7 @@ namespace tf {
 namespace editor {
 
 class Compound_operation;
-class Editor_message_bus;
+class App_message_bus;
 class Headset_view;
 class Node_physics;
 class Scene_root;
@@ -53,13 +53,13 @@ class Viewport_scene_view;
 class Transform_tool_drag_command : public erhe::commands::Command
 {
 public:
-    Transform_tool_drag_command(erhe::commands::Commands& commands, Editor_context& context);
+    Transform_tool_drag_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready  () override;
     auto try_call   () -> bool override;
     void on_inactive() override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Transform_entry
@@ -149,8 +149,8 @@ public:
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
-        Editor_message_bus&          editor_message_bus,
+        App_context&                 app_context,
+        App_message_bus&             app_message_bus,
         Headset_view&                headset_view,
         Mesh_memory&                 mesh_memory,
         Tools&                       tools
@@ -197,7 +197,7 @@ public:
     Transform_tool_shared shared;
 
 private:
-    void on_message     (Editor_message& message);
+    void on_message     (App_message& message);
     void update_for_view(Scene_view* scene_view);
     void update_hover   ();
     void render_rays    (erhe::scene::Node& node);

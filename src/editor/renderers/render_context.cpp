@@ -1,6 +1,6 @@
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
-#include "editor_context.hpp"
+#include "app_context.hpp"
 
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_scene/node.hpp"
@@ -27,7 +27,7 @@ auto Render_context::get_scene() const -> const erhe::scene::Scene*
 
 auto Render_context::get_line_renderer(const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer
 {
-    return editor_context.debug_renderer->get(config);
+    return app_context.debug_renderer->get(config);
 }
 
 auto Render_context::get_line_renderer(unsigned int stencil, bool visible, bool hidden) const -> erhe::renderer::Primitive_renderer
@@ -38,7 +38,7 @@ auto Render_context::get_line_renderer(unsigned int stencil, bool visible, bool 
         .draw_visible      = visible,
         .draw_hidden       = hidden
     };
-    return editor_context.debug_renderer->get(config);
+    return app_context.debug_renderer->get(config);
 }
 
 } // namespace editor

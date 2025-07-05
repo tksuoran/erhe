@@ -1,6 +1,6 @@
 #include "theremin.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 
 #include "graphics/gradients.hpp"
 #include "xr/hand_tracker.hpp"
@@ -137,10 +137,10 @@ Theremin::Theremin(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
     Hand_tracker&                hand_tracker,
-    Editor_context&              editor_context
+    App_context&                 app_context
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Theremin", "theremin"}
-    , m_context{editor_context}
+    , m_context{app_context}
     //// , m_audio_config             {}
     //// , m_audio_device             {}
 {

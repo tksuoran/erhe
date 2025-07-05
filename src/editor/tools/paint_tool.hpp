@@ -31,12 +31,12 @@ class Paint_tool;
 class Paint_vertex_command : public erhe::commands::Command
 {
 public:
-    Paint_vertex_command(erhe::commands::Commands& commands, Editor_context& context);
+    Paint_vertex_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 enum class Paint_mode {
@@ -51,8 +51,8 @@ static constexpr const char* c_paint_mode_strings[] = {
     "Polygon"
 };
 
-class Editor_message_bus;
-class Editor_scenes;
+class App_message_bus;
+class App_scenes;
 class Icon_set;
 class Mesh_memory;
 class Selection_tool;
@@ -69,8 +69,8 @@ public:
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
-        Editor_message_bus&          editor_message_bus,
+        App_context&                 context,
+        App_message_bus&             app_message_bus,
         Headset_view&                headset_view,
         Icon_set&                    icon_set,
         Tools&                       tools

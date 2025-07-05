@@ -11,7 +11,7 @@ namespace ax::NodeEditor { class EditorContext; }
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Sheet;
 class Shader_graph;
 
@@ -40,7 +40,7 @@ public:
     void make_input_pin             (std::size_t key, std::string_view name);
     void make_output_pin            (std::size_t key, std::string_view name);
 
-    void node_editor(Editor_context& context, ax::NodeEditor::EditorContext& node_editor);
+    void node_editor(App_context& context, ax::NodeEditor::EditorContext& node_editor);
 
     virtual void evaluate(Shader_graph& graph);
     virtual void imgui   ();
@@ -50,7 +50,7 @@ protected:
 
     struct Node_context
     {
-        Editor_context&                context;
+        App_context&                   context;
         ax::NodeEditor::EditorContext& node_editor;
         ImDrawList*                    draw_list      {nullptr};
         float                          pin_width;

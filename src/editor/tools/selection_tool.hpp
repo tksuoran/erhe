@@ -25,9 +25,9 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_context;
-class Editor_message_bus;
-class Editor_scenes;
+class App_context;
+class App_message_bus;
+class App_scenes;
 class Icon_set;
 class Selection;
 class Tools;
@@ -35,63 +35,63 @@ class Tools;
 class Selection_delete_command : public erhe::commands::Command
 {
 public:
-    Selection_delete_command(erhe::commands::Commands& commands, Editor_context& context);
+    Selection_delete_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Selection_cut_command : public erhe::commands::Command
 {
 public:
-    Selection_cut_command(erhe::commands::Commands& commands, Editor_context& context);
+    Selection_cut_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Selection_copy_command : public erhe::commands::Command
 {
 public:
-    Selection_copy_command(erhe::commands::Commands& commands, Editor_context& context);
+    Selection_copy_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Selection_duplicate_command : public erhe::commands::Command
 {
 public:
-    Selection_duplicate_command(erhe::commands::Commands& commands, Editor_context& context);
+    Selection_duplicate_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Viewport_select_command : public erhe::commands::Command
 {
 public:
-    Viewport_select_command(erhe::commands::Commands& commands, Editor_context& context);
+    Viewport_select_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Viewport_select_toggle_command : public erhe::commands::Command
 {
 public:
-    Viewport_select_toggle_command(erhe::commands::Commands& commands, Editor_context& context);
+    Viewport_select_toggle_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Range_selection
@@ -122,7 +122,7 @@ class Selection_tool : public Tool
 public:
     static constexpr int c_priority{3};
 
-    Selection_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools);
+    Selection_tool(App_context& app_context, Icon_set& icon_set, Tools& tools);
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
@@ -146,7 +146,7 @@ private:
 class Selection : public erhe::commands::Command_host
 {
 public:
-    Selection(erhe::commands::Commands& commands, Editor_context& editor_context, Editor_message_bus& editor_message_bus);
+    Selection(erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void setup_xr_bindings(erhe::commands::Commands& commands, Headset_view& headset_view);
@@ -197,7 +197,7 @@ public:
 private:
     void toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& mesh, bool was_selected, bool clear_others);
 
-    Editor_context&                m_context;
+    App_context&                m_context;
 
     Viewport_select_command        m_viewport_select_command;
     Viewport_select_toggle_command m_viewport_select_toggle_command;

@@ -1,7 +1,7 @@
 #include "graphics/icon_rasterization.hpp"
 #include "graphics/icon_set.hpp"
-#include "editor_context.hpp"
-#include "editor_settings.hpp"
+#include "app_context.hpp"
+#include "app_settings.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_graphics/device.hpp"
@@ -166,8 +166,8 @@ void Icon_loader::clear_load_queue()
     m_icons_to_load.clear();
 }
 
-Icon_rasterization::Icon_rasterization(Editor_context& editor_context, erhe::graphics::Device& graphics_device, const int size)
-    : m_context{editor_context}
+Icon_rasterization::Icon_rasterization(App_context& context, erhe::graphics::Device& graphics_device, const int size)
+    : m_context{context}
     , m_texture{
         std::make_shared<erhe::graphics::Texture>(
             graphics_device,

@@ -45,7 +45,7 @@ public:
     Grid_tool(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
+        App_context&                 context,
         Icon_set&                    icon_set,
         Tools&                       tools
     );

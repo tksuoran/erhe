@@ -6,16 +6,12 @@
 
 #include <memory>
 
-namespace erhe {
-    class Item_base;
-}
-namespace erhe::imgui {
-    class Imgui_windows;
-}
+namespace erhe        { class Item_base; }
+namespace erhe::imgui { class Imgui_windows; }
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Shader_graph_node;
 
 class Node_properties_window : public erhe::imgui::Imgui_window
@@ -24,7 +20,7 @@ public:
     Node_properties_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context
+        App_context&                 context
     );
 
     // Implements Imgui_window
@@ -37,7 +33,7 @@ private:
     void item_properties(const std::shared_ptr<erhe::Item_base>& item);
     void node_properties(Shader_graph_node& node);
 
-    Editor_context& m_context;
+    App_context&    m_context;
     Property_editor m_property_editor;
 };
 

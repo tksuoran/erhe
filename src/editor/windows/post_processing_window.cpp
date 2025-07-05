@@ -1,6 +1,6 @@
 #include "windows/post_processing_window.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 
 #include "rendergraph/post_processing.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -18,9 +18,9 @@
 
 namespace editor {
 
-Post_processing_window::Post_processing_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
+Post_processing_window::Post_processing_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
     : Imgui_window{imgui_renderer, imgui_windows, "Post Processing", "post_processing"}
-    , m_context   {editor_context}
+    , m_context   {app_context}
 {
 }
 

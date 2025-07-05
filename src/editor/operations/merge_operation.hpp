@@ -6,13 +6,11 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 
-namespace erhe::primitive {
-    class Buffer_info;
-}
+namespace erhe::primitive { class Buffer_info; }
 
 namespace editor {
 
-class Editor_context;
+class PP_context;
 class Node_physics;
 class Mesh_raytrace;
 
@@ -22,7 +20,7 @@ public:
     class Parameters
     {
     public:
-        Editor_context&             context;
+        App_context&                context;
         erhe::primitive::Build_info build_info;
         std::function<erhe::geometry::Geometry(
             const erhe::geometry::Geometry& lhs,
@@ -33,9 +31,9 @@ public:
     explicit Merge_operation(Parameters&& parameters);
 
     // Implements Operation
-    auto describe() const -> std::string   override;
-    void execute (Editor_context& context) override;
-    void undo    (Editor_context& context) override;
+    auto describe() const -> std::string override;
+    void execute (App_context& context)  override;
+    void undo    (App_context& context)  override;
 
 private:
     class Entry

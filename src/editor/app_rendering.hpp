@@ -14,22 +14,16 @@
 
 #include <memory>
 
-namespace erhe::commands {
-    class Commands;
-}
-namespace erhe::imgui {
-    class Imgui_windows;
-}
-namespace erhe::window {
-    class Context_window;
-}
+namespace erhe::commands { class Commands; }
+namespace erhe::imgui    { class Imgui_windows; }
+namespace erhe::window   { class Context_window; }
 
 namespace editor {
 
-class Editor_context;
-class Editor_message_bus;
-class Editor_rendering;
-class Editor_settings;
+class App_context;
+class App_message_bus;
+class App_rendering;
+class App_settings;
 class Graphics_preset;
 class Mesh_memory;
 class Programs;
@@ -41,11 +35,11 @@ class Shadow_render_node;
 class Capture_frame_command : public erhe::commands::Command
 {
 public:
-    Capture_frame_command(erhe::commands::Commands& commands, Editor_context& context);
+    Capture_frame_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Pipeline_renderpasses
@@ -69,14 +63,14 @@ public:
     erhe::renderer::Pipeline_renderpass grid;
 };
 
-class Editor_rendering
+class App_rendering
 {
 public:
-    Editor_rendering(
+    App_rendering(
         erhe::commands::Commands& commands,
         erhe::graphics::Device&   graphics_device,
-        Editor_context&           editor_context,
-        Editor_message_bus&       editor_message_bus,
+        App_context&              context,
+        App_message_bus&          app_message_bus,
         Mesh_memory&              mesh_memory,
         Programs&                 programs
     );
@@ -84,7 +78,7 @@ public:
     [[nodiscard]] auto create_shadow_node_for_scene_view(
         erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
-        Editor_settings&                editor_settings,
+        App_settings&                   app_settings,
         Scene_view&                     scene_view
     ) -> std::shared_ptr<Shadow_render_node>;
 
@@ -123,7 +117,7 @@ private:
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 
-    Editor_context&           m_context;
+    App_context&              m_context;
 
     // Commands
     Capture_frame_command     m_capture_frame_command;

@@ -1,6 +1,6 @@
 #include "tools/transform/subtool.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
@@ -12,8 +12,8 @@ namespace editor {
 
 using namespace glm;
 
-Subtool::Subtool(Editor_context& editor_context)
-    : Tool{editor_context}
+Subtool::Subtool(App_context& app_context)
+    : Tool{app_context}
 {
 }
 

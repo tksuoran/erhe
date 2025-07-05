@@ -4,21 +4,21 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     editor.cpp
     editor.hpp
-    editor_context.cpp
-    editor_context.hpp
     editor_log.cpp
     editor_log.hpp
-    editor_message.hpp
-    editor_message_bus.cpp
-    editor_message_bus.hpp
-    editor_rendering.cpp
-    editor_rendering.hpp
-    editor_scenes.cpp
-    editor_scenes.hpp
-    editor_settings.cpp
-    editor_settings.hpp
-    editor_windows.cpp
-    editor_windows.hpp
+    app_context.cpp
+    app_context.hpp
+    app_message.hpp
+    app_message_bus.cpp
+    app_message_bus.hpp
+    app_rendering.cpp
+    app_rendering.hpp
+    app_scenes.cpp
+    app_scenes.hpp
+    app_settings.cpp
+    app_settings.hpp
+    app_windows.cpp
+    app_windows.hpp
     erhe.ini
     graph/node_properties.cpp
     graph/node_properties.hpp

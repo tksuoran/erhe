@@ -1,6 +1,6 @@
-#include "editor_windows.hpp"
-#include "editor_context.hpp"
-#include "editor_rendering.hpp"
+#include "app_windows.hpp"
+#include "app_context.hpp"
+#include "app_rendering.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -14,8 +14,8 @@
 
 namespace editor {
 
-Editor_windows::Editor_windows(
-    Editor_context&           context,
+App_windows::App_windows(
+    App_context&              context,
     erhe::commands::Commands& commands
 )
     : m_context{context}
@@ -29,19 +29,19 @@ Editor_windows::Editor_windows(
     }
 }
 
-void Editor_windows::renderdoc_capture()
+void App_windows::renderdoc_capture()
 {
     if (m_context.renderdoc) {
 //  #if defined(ERHE_XR_LIBRARY_OPENXR)
 //          if (m_context.OpenXR && m_context.headset_view->is_active()) {
-//              m_context.editor_rendering->request_renderdoc_capture();
+//              m_context.app_rendering->request_renderdoc_capture();
 //          }
 //  #endif
-        m_context.editor_rendering->trigger_capture();
+        m_context.app_rendering->trigger_capture();
     }
 }
 
-void Editor_windows::builtin_imgui_window_menu()
+void App_windows::builtin_imgui_window_menu()
 {
     if (ImGui::BeginMenu("ImGui")) {
         ImGui::MenuItem("Demo",             "", &m_imgui_builtin_windows.demo);
@@ -55,7 +55,7 @@ void Editor_windows::builtin_imgui_window_menu()
     }
 }
 
-void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
+void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{10.0f, 2.0f});
@@ -77,7 +77,7 @@ void Editor_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
 #if defined(ERHE_XR_LIBRARY_OPENXR)
                     if (m_context.OpenXR && m_context.headset_view->is_active()) {
                         if (ImGui::MenuItem("Make OpenXR RenderDoc Capture")) {
-                            m_context.editor_rendering->request_renderdoc_capture();
+                            m_context.app_rendering->request_renderdoc_capture();
                         }
                     }
 #endif

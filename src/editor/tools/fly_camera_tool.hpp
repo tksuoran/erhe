@@ -18,19 +18,13 @@
 #include <random>
 #include <vector>
 
-namespace erhe::commands {
-    class Commands;
-}
-namespace erhe::imgui {
-    class Imgui_windows;
-}
-namespace erhe::scene {
-    class Camera;
-}
+namespace erhe::commands { class Commands; }
+namespace erhe::imgui    { class Imgui_windows; }
+namespace erhe::scene    { class Camera; }
 
 namespace editor {
 
-class Editor_message_bus;
+class App_message_bus;
 class Fly_camera_tool;
 class Tools;
 class Scene_views;
@@ -55,57 +49,57 @@ private:
 class Fly_camera_turn_command : public erhe::commands::Command
 {
 public:
-    Fly_camera_turn_command(erhe::commands::Commands& commands, Editor_context& context);
+    Fly_camera_turn_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready          () override;
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
     void on_inactive        () override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Fly_camera_tumble_command : public erhe::commands::Command
 {
 public:
-    Fly_camera_tumble_command(erhe::commands::Commands& commands, Editor_context& context);
+    Fly_camera_tumble_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready          () override;
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
     void on_inactive        () override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Fly_camera_track_command : public erhe::commands::Command
 {
 public:
-    Fly_camera_track_command(erhe::commands::Commands& commands, Editor_context& context);
+    Fly_camera_track_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Fly_camera_zoom_command : public erhe::commands::Command
 {
 public:
-    Fly_camera_zoom_command(erhe::commands::Commands& commands, Editor_context& context);
+    Fly_camera_zoom_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready          () override;
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Fly_camera_frame_command : public erhe::commands::Command
 {
 public:
-    Fly_camera_frame_command(erhe::commands::Commands& commands, Editor_context& context);
+    Fly_camera_frame_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Fly_camera_move_command : public erhe::commands::Command
@@ -113,7 +107,7 @@ class Fly_camera_move_command : public erhe::commands::Command
 public:
     Fly_camera_move_command(
         erhe::commands::Commands&      commands,
-        Editor_context&                context,
+        App_context&                context,
         Variable                       variable,
         erhe::math::Input_axis_control control,
         bool                           active
@@ -122,7 +116,7 @@ public:
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
-    Editor_context&                m_context;
+    App_context&                m_context;
     Variable                       m_variable;
     erhe::math::Input_axis_control m_control;
     bool                           m_active;
@@ -133,7 +127,7 @@ class Fly_camera_active_axis_float_command : public erhe::commands::Command
 public:
     Fly_camera_active_axis_float_command(
         erhe::commands::Commands& commands,
-        Editor_context&           context,
+        App_context&           context,
         Variable                  variable,
         float                     scale
     );
@@ -141,7 +135,7 @@ public:
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
     Variable        m_variable;
     float           m_scale;
 };
@@ -149,12 +143,12 @@ private:
 class Fly_camera_serialization_command : public erhe::commands::Command
 {
 public:
-    Fly_camera_serialization_command(erhe::commands::Commands& commands, Editor_context& context, bool store);
+    Fly_camera_serialization_command(erhe::commands::Commands& commands, App_context& context, bool store);
 
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
     bool            m_store;
 };
 
@@ -179,8 +173,8 @@ public:
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
-        Editor_message_bus&          editor_message_bus,
+        App_context&                 context,
+        App_message_bus&             app_message_bus,
         Tools&                       tools
     );
 

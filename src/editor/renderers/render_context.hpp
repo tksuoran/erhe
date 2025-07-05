@@ -15,7 +15,7 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Scene_view;
 class Viewport_config;
 class Viewport_scene_view;
@@ -28,7 +28,7 @@ public:
     [[nodiscard]] auto get_line_renderer(const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer;
     [[nodiscard]] auto get_line_renderer(unsigned int stencil, bool visible, bool hidden) const -> erhe::renderer::Primitive_renderer;
 
-    Editor_context&                      editor_context;
+    App_context&                         app_context;
     Scene_view&                          scene_view;
     Viewport_config&                     viewport_config;
     erhe::scene::Camera*                 camera                {nullptr};

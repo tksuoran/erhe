@@ -2,11 +2,11 @@
 
 #include "scene/viewport_scene_view.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
+#include "app_message_bus.hpp"
+#include "app_rendering.hpp"
+#include "app_scenes.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
@@ -53,7 +53,7 @@ using erhe::graphics::Texture;
 int Viewport_scene_view::s_serial = 0;
 
 Viewport_scene_view::Viewport_scene_view(
-    Editor_context&                             editor_context,
+    App_context&                                context,
     erhe::rendergraph::Rendergraph&             rendergraph,
     Tools&                                      tools,
     const std::string_view                      name,
@@ -62,7 +62,7 @@ Viewport_scene_view::Viewport_scene_view(
     const std::shared_ptr<erhe::scene::Camera>& camera,
     int                                         msaa_sample_count
 )
-    : Scene_view              {editor_context, Viewport_config::default_config()}
+    : Scene_view              {context, Viewport_config::default_config()}
     , Texture_rendergraph_node{
         erhe::rendergraph::Texture_rendergraph_node_create_info{
             .rendergraph          = rendergraph,
@@ -111,7 +111,7 @@ void Viewport_scene_view::execute_rendergraph_node()
     }
 
     const Render_context context{
-        .editor_context         = m_context,
+        .app_context            = m_context,
         .scene_view             = *this,
         .viewport_config        = m_viewport_config,
         .camera                 = camera.get(),
@@ -121,7 +121,7 @@ void Viewport_scene_view::execute_rendergraph_node()
     };
 
     if (do_render && m_is_scene_view_hovered && m_context.id_renderer->enabled) {
-        m_context.editor_rendering->render_id(context);
+        m_context.app_rendering->render_id(context);
     }
 
     update_render_pass(m_projection_viewport.width, m_projection_viewport.height);
@@ -147,18 +147,18 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     m_context.tools->get_tool_scene_root()->get_hosted_scene()->update_node_transforms();
 
-    m_context.editor_message_bus->send_message(
-        Editor_message{
+    m_context.app_message_bus->send_message(
+        App_message{
             .update_flags = Message_flag_bit::c_flag_bit_render_scene_view,
             .scene_view   = this
         }
     );
 
-    m_context.editor_rendering->render_viewport_main(context);
-    m_context.tools           ->render_viewport_tools(context);
-    m_context.editor_rendering->render_viewport_renderables(context);
-    m_context.debug_renderer  ->render(context.viewport, *context.camera);
-    m_context.text_renderer   ->render(context.viewport);
+    m_context.app_rendering ->render_viewport_main(context);
+    m_context.tools         ->render_viewport_tools(context);
+    m_context.app_rendering ->render_viewport_renderables(context);
+    m_context.debug_renderer->render(context.viewport, *context.camera);
+    m_context.text_renderer ->render(context.viewport);
 }
 
 void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
@@ -464,7 +464,7 @@ auto Viewport_scene_view::viewport_toolbar() -> bool
     std::shared_ptr<Scene_root> scene_root     = get_scene_root();
     Scene_root*                 scene_root_raw = scene_root.get();
     ImGui::SetNextItemWidth(110.0f);
-    const bool combo_used     = m_context.editor_scenes->scene_combo("##Scene", scene_root_raw, false);
+    const bool combo_used     = m_context.app_scenes->scene_combo("##Scene", scene_root_raw, false);
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }

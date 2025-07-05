@@ -9,7 +9,7 @@ namespace erhe::imgui { class Imgui_windows; }
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 
 class Timeline_window : public erhe::imgui::Imgui_window
 {
@@ -17,7 +17,7 @@ public:
     Timeline_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context
+        App_context&                 app_context
     );
 
     // Implements Imgui_window
@@ -33,7 +33,7 @@ public:
     [[nodiscard]] auto get_play_speed     () const -> float;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 
     bool  m_playing       {false};
     bool  m_looping       {true};

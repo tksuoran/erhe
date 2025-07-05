@@ -16,9 +16,9 @@ namespace erhe::commands {
 namespace editor {
 
 class Content_library;
-class Editor_context;
-class Editor_message;
-class Editor_message_bus;
+class App_context;
+class App_message;
+class App_message_bus;
 class Scene_view;
 class Scene_root;
 class Tools;
@@ -26,13 +26,13 @@ class Tools;
 class Clipboard_paste_command : public erhe::commands::Command
 {
 public:
-    Clipboard_paste_command(erhe::commands::Commands& commands, Editor_context& context);
+    Clipboard_paste_command(erhe::commands::Commands& commands, App_context& context);
 
     void try_ready()         override;
     auto try_call () -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Clipboard : public erhe::commands::Command_host
@@ -40,8 +40,8 @@ class Clipboard : public erhe::commands::Command_host
 public:
     Clipboard(
         erhe::commands::Commands& commands,
-        Editor_context&           context,
-        Editor_message_bus&       editor_message_bus
+        App_context&              context,
+        App_message_bus&          app_message_bus
     );
 
     // Commands
@@ -55,11 +55,11 @@ public:
     auto get_contents() -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
 
 private:
-    void on_message(Editor_message& message);
+    void on_message(App_message& message);
     [[nodiscard]] auto resolve_paste_target() -> std::shared_ptr<erhe::Hierarchy>;
 
     Clipboard_paste_command                       m_paste_command;
-    Editor_context&                               m_context;
+    App_context&                               m_context;
     std::vector<std::shared_ptr<erhe::Item_base>> m_contents;
 
     Scene_view*                                   m_hover_scene_view          {nullptr};

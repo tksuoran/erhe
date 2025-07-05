@@ -29,10 +29,10 @@ namespace editor {
 Timeline_window::Timeline_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
+    App_context&                 app_context
 )
     : Imgui_window{imgui_renderer, imgui_windows, "Timeline", "timeline"}
-    , m_context   {editor_context}
+    , m_context   {app_context}
 {
 }
 

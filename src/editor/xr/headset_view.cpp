@@ -1,9 +1,9 @@
 #include "xr/headset_view.hpp"
 
-#include "editor_context.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
+#include "app_context.hpp"
+#include "app_message_bus.hpp"
+#include "app_rendering.hpp"
+#include "app_scenes.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -81,11 +81,11 @@ Headset_view::Headset_view(
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*              headset,
 #endif
-    Editor_context&                 editor_context,
-    Editor_rendering&               editor_rendering,
-    Editor_settings&                editor_settings
+    App_context&                    app_context,
+    App_rendering&                  app_rendering,
+    App_settings&                   app_settings
 )
-    : Scene_view               {editor_context, Viewport_config::default_config()}
+    : Scene_view               {app_context, Viewport_config::default_config()}
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset"}
     , m_translate_x            {}
     , m_translate_y            {}
@@ -93,7 +93,7 @@ Headset_view::Headset_view(
     , m_offset_x_command       {commands, m_translate_x, 'x'}
     , m_offset_y_command       {commands, m_translate_y, 'y'}
     , m_offset_z_command       {commands, m_translate_z, 'z'}
-    , m_editor_context         {editor_context}
+    , m_app_context            {app_context}
     , m_context_window         {context_window}
     , m_headset                {headset}
 {
@@ -101,7 +101,7 @@ Headset_view::Headset_view(
     if (headset == nullptr) {
         return;
     }
-    editor_rendering.add(this);
+    app_rendering.add(this);
 
     commands.register_command(&m_offset_x_command);
     commands.register_command(&m_offset_y_command);
@@ -118,7 +118,7 @@ Headset_view::Headset_view(
 
     m_rendergraph_node = std::make_shared<Headset_view_node>(rendergraph, *this);
 
-    m_shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(graphics_device, rendergraph, editor_settings, *this);
+    m_shadow_render_node = app_rendering.create_shadow_node_for_scene_view(graphics_device, rendergraph, app_settings, *this);
     rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::shadow_maps, m_shadow_render_node.get(), m_rendergraph_node.get());
 
     if (m_context.OpenXR_mirror) {
@@ -174,7 +174,7 @@ void Headset_view::imgui()
     auto                        old_scene_root = m_scene_root;
     std::shared_ptr<Scene_root> scene_root     = get_scene_root();
     Scene_root*                 scene_root_raw = scene_root.get();
-    const bool combo_used = m_editor_context.editor_scenes->scene_combo("##Scene", scene_root_raw, false);
+    const bool combo_used = m_app_context.app_scenes->scene_combo("##Scene", scene_root_raw, false);
     if (combo_used) {
         scene_root = (scene_root_raw != nullptr) 
             ? scene_root_raw->shared_from_this()
@@ -424,8 +424,8 @@ auto Headset_view::render_headset() -> bool
 
                 // TODO Consider multiple scene view being able to be (hover) active
                 //      (viewport window and headset view).
-                m_context.editor_message_bus->send_message(
-                    Editor_message{
+                m_context.app_message_bus->send_message(
+                    App_message{
                         .update_flags = Message_flag_bit::c_flag_bit_hover_scene_view | Message_flag_bit::c_flag_bit_render_scene_view,
                         .scene_view   = this
                     }
@@ -468,7 +468,7 @@ auto Headset_view::render_headset() -> bool
             if (!m_context.OpenXR_mirror || first_view) {
                 const erhe::graphics::Shader_stages* override_shader_stages = m_context.programs->get_variant_shader_stages(m_shader_stages_variant);
                 Render_context render_context {
-                    .editor_context         = m_context,
+                    .app_context            = m_context,
                     .scene_view             = *this,
                     .viewport_config        = m_viewport_config,
                     .camera                 = view_resources->get_camera(),
@@ -476,10 +476,10 @@ auto Headset_view::render_headset() -> bool
                     .override_shader_stages = override_shader_stages
                 };
 
-                m_context.editor_rendering->render_composer(render_context);
-                m_context.tools           ->render_viewport_tools(render_context);
-                m_context.editor_rendering->render_viewport_renderables(render_context);
-                m_context.debug_renderer  ->render(render_context.viewport, *render_context.camera);
+                m_context.app_rendering ->render_composer(render_context);
+                m_context.tools         ->render_viewport_tools(render_context);
+                m_context.app_rendering ->render_viewport_renderables(render_context);
+                m_context.debug_renderer->render(render_context.viewport, *render_context.camera);
             }
             if (m_context.OpenXR_mirror && !first_view) {
                 gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);

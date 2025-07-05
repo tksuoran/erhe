@@ -1,8 +1,8 @@
 #include "operations/item_parent_change_operation.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_log/log_glm.hpp"
@@ -44,7 +44,7 @@ Item_parent_change_operation::Item_parent_change_operation(
     ERHE_VERIFY(!place_before || !place_after);
 }
 
-void Item_parent_change_operation::execute(Editor_context& context)
+void Item_parent_change_operation::execute(App_context& context)
 {
     static_cast<void>(context);
     log_operations->trace("Op Execute {}", describe());
@@ -69,7 +69,7 @@ void Item_parent_change_operation::execute(Editor_context& context)
 #endif
 }
 
-void Item_parent_change_operation::undo(Editor_context& context)
+void Item_parent_change_operation::undo(App_context& context)
 {
     static_cast<void>(context);
     log_operations->trace("Op Undo {}", describe());

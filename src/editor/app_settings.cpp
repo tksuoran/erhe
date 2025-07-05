@@ -1,5 +1,5 @@
-#include "editor_settings.hpp"
-#include "editor_message_bus.hpp"
+#include "app_settings.hpp"
+#include "app_message_bus.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -11,18 +11,18 @@
 
 namespace editor {
 
-Editor_settings::Editor_settings()
+App_settings::App_settings()
 {
    read();
 }
 
-void Editor_settings::apply_limits(erhe::graphics::Device& instance, Editor_message_bus& editor_message_bus)
+void App_settings::apply_limits(erhe::graphics::Device& instance, App_message_bus& app_message_bus)
 {
     graphics.get_limits(instance, erhe::dataformat::Format::format_d32_sfloat); // TODO Do not hard code depth format
-    graphics.select_active_graphics_preset(editor_message_bus);
+    graphics.select_active_graphics_preset(app_message_bus);
 }
 
-auto Editor_settings::get_ui_scale() const -> float
+auto App_settings::get_ui_scale() const -> float
 {
     return imgui.font_size / 16.0f;
 }
@@ -98,7 +98,7 @@ void Graphics_settings::apply_limits(Graphics_preset& graphics_preset)
     graphics_preset.shadow_light_count = std::min(graphics_preset.shadow_light_count, 128);
 }
 
-void Graphics_settings::select_active_graphics_preset(Editor_message_bus& editor_message_bus)
+void Graphics_settings::select_active_graphics_preset(App_message_bus& app_message_bus)
 {
     log_startup->debug("Graphics_settings::select_active_graphics_preset()");
 
@@ -113,8 +113,8 @@ void Graphics_settings::select_active_graphics_preset(Editor_message_bus& editor
             current_graphics_preset = graphics_preset;
             log_startup->info("Using graphics preset {}", graphics_preset.name);
             // Queue instead of instant send
-            editor_message_bus.queue_message(
-                Editor_message{
+            app_message_bus.queue_message(
+                App_message{
                     .update_flags    = Message_flag_bit::c_flag_bit_graphics_settings,
                     .graphics_preset = &current_graphics_preset
                 }
@@ -124,9 +124,9 @@ void Graphics_settings::select_active_graphics_preset(Editor_message_bus& editor
     }
 }
 
-void Editor_settings::read()
+void App_settings::read()
 {
-    log_startup->debug("Editor_settings::read()");
+    log_startup->debug("App_settings::read()");
 
     graphics.read_presets();
 
@@ -147,9 +147,9 @@ void Editor_settings::read()
     icons_section.get("hotbar_icon_size", icon_settings.hotbar_icon_size);
 }
 
-void Editor_settings::write()
+void App_settings::write()
 {
-    log_startup->debug("Editor_settings::write()");
+    log_startup->debug("App_settings::write()");
 
     graphics.write_presets();
 

@@ -1,6 +1,6 @@
 #include "windows/icon_browser.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 
 #include "IconsMaterialDesignIcons.h"
 
@@ -15,7 +15,7 @@ namespace editor {
 Icon_browser::Icon_browser(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              context
+    App_context&              context
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Icon Browser", "icon_browser"}
     , m_context                {context}

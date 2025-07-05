@@ -30,7 +30,7 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Headset_view;
 class Operation_stack;
 class Rendertarget_mesh;
@@ -43,47 +43,47 @@ class Scene_views;
 class Create_new_camera_command : public erhe::commands::Command
 {
 public:
-    Create_new_camera_command(erhe::commands::Commands& commands, Editor_context& context);
+    Create_new_camera_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Create_new_empty_node_command : public erhe::commands::Command
 {
 public:
-    Create_new_empty_node_command(erhe::commands::Commands& commands, Editor_context& context);
+    Create_new_empty_node_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Create_new_light_command : public erhe::commands::Command
 {
 public:
-    Create_new_light_command(erhe::commands::Commands& commands, Editor_context& context);
+    Create_new_light_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Create_new_rendertarget_command : public erhe::commands::Command
 {
 public:
-    Create_new_rendertarget_command(erhe::commands::Commands& commands, Editor_context& context);
+    Create_new_rendertarget_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Scene_commands
 {
 public:
-    Scene_commands(erhe::commands::Commands& commands, Editor_context& editor_context);
+    Scene_commands(erhe::commands::Commands& commands, App_context& context);
 
     // Public API
     auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
@@ -94,7 +94,7 @@ public:
     auto get_scene_root         (erhe::primitive::Material* material) const -> Scene_root*;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 
     Create_new_camera_command       m_create_new_camera_command;
     Create_new_empty_node_command   m_create_new_empty_node_command;

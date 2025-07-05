@@ -12,7 +12,7 @@ namespace erhe::scene_renderer { class Light_projections; }
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Scene_view;
 class Viewport_scene_view;
 
@@ -26,7 +26,7 @@ public:
     Shadow_render_node(
         erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
-        Editor_context&                 editor_context,
+        App_context&                    context,
         Scene_view&                     scene_view,
         int                             resolution,
         int                             light_count
@@ -50,7 +50,7 @@ public:
     [[nodiscard]] auto get_viewport         () const -> erhe::math::Viewport;
 
 private:
-    Editor_context&                                           m_context;
+    App_context&                                              m_context;
     Scene_view&                                               m_scene_view;
     std::shared_ptr<erhe::graphics::Texture>                  m_texture;
     std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_render_passes;

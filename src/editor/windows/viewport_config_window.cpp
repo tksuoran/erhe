@@ -1,5 +1,5 @@
 #include "windows/viewport_config_window.hpp"
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
@@ -11,9 +11,9 @@
 
 namespace editor {
 
-Viewport_config_window::Viewport_config_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
+Viewport_config_window::Viewport_config_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Viewport config", "viewport_config"}
-    , m_context                {editor_context}
+    , m_context                {app_context}
 {
 }
 

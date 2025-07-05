@@ -15,9 +15,9 @@ namespace editor {
 class Brush;
 class Brush_tool;
 class Content_library;
-class Editor_message;
-class Editor_message_bus;
-class Editor_scenes;
+class App_message;
+class App_message_bus;
+class App_scenes;
 class Icon_set;
 class Item_tree;
 class Operation_stack;
@@ -29,33 +29,33 @@ class Headset_view;
 class Brush_tool_preview_command : public erhe::commands::Command
 {
 public:
-    Brush_tool_preview_command(erhe::commands::Commands& commands, Editor_context& context);
+    Brush_tool_preview_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Brush_tool_insert_command : public erhe::commands::Command
 {
 public:
-    Brush_tool_insert_command(erhe::commands::Commands& commands, Editor_context& context);
+    Brush_tool_insert_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Brush_tool_pick_command : public erhe::commands::Command
 {
 public:
-    Brush_tool_pick_command(erhe::commands::Commands& commands, Editor_context& context);
+    Brush_tool_pick_command(erhe::commands::Commands& commands, App_context& context);
 
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Brush_tool : public Tool
@@ -65,8 +65,8 @@ public:
 
     Brush_tool(
         erhe::commands::Commands& commands,
-        Editor_context&           editor_context,
-        Editor_message_bus&       editor_message_bus,
+        App_context&              context,
+        App_message_bus&          app_message_bus,
         Headset_view&             headset_view,
         Icon_set&                 icon_set,
         Tools&                    tools
@@ -87,7 +87,7 @@ public:
     [[nodiscard]] auto get_hover_brush() const -> std::shared_ptr<Brush>;
 
 private:
-    void on_message                        (Editor_message& editor_message);
+    void on_message                        (App_message& app_message);
     void update_preview_mesh               ();
     void do_insert_operation               (Brush& brush);
     void add_preview_mesh                  (Brush& brush);

@@ -1,6 +1,6 @@
 #include "tools/transform/handle_visualizations.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "graphics/icon_set.hpp"
@@ -61,8 +61,8 @@ auto Handle_visualizations::c_str(const Mode mode) -> const char*
     }
 }
 
-Handle_visualizations::Handle_visualizations(Editor_context& editor_context, Mesh_memory& mesh_memory, Tools& tools)
-    : m_context{editor_context}
+Handle_visualizations::Handle_visualizations(App_context& app_context, Mesh_memory& mesh_memory, Tools& tools)
+    : m_context{app_context}
 {
     ERHE_PROFILE_FUNCTION();
 

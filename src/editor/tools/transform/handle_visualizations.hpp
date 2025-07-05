@@ -26,7 +26,7 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Mesh_memory;
 class Raytrace_primitive;
 class Scene_view;
@@ -38,7 +38,7 @@ enum class Handle : unsigned int;
 class Handle_visualizations
 {
 public:
-    Handle_visualizations(Editor_context& editor_context, Mesh_memory& mesh_memory, Tools& tools);
+    Handle_visualizations(App_context& app_context, Mesh_memory& mesh_memory, Tools& tools);
 
     enum class Mode : unsigned int {
         Normal = 0,
@@ -99,7 +99,7 @@ private:
         const std::shared_ptr<erhe::primitive::Material>& ready
     ) -> std::shared_ptr<erhe::primitive::Material>;
 
-    Editor_context& m_context;
+    App_context& m_context;
     float           m_scale     {1.0f};
     Scene_view*     m_scene_view{nullptr};
 

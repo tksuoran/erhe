@@ -8,18 +8,18 @@ namespace erhe::imgui {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 
 class Layers_window : public erhe::imgui::Imgui_window
 {
 public:
-    Layers_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context);
+    Layers_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& editor_context);
 
     // Implements Imgui_window
     void imgui() override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 } // namespace editor

@@ -1,6 +1,6 @@
 #include "scene/material_preview.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/renderpass.hpp"
@@ -36,11 +36,11 @@ using Color_blend_state    = erhe::graphics::Color_blend_state;
 Material_preview::Material_preview(
     erhe::graphics::Device&         graphics_device,
     erhe::scene::Scene_message_bus& scene_message_bus,
-    Editor_context&                 editor_context,
+    App_context&                    context,
     Mesh_memory&                    mesh_memory,
     Programs&                       programs
 )
-    : Scene_view{editor_context, Viewport_config{}}
+    : Scene_view{context, Viewport_config{}}
     , m_graphics_device    {graphics_device}
     , m_pipeline_renderpass{erhe::graphics::Render_pipeline_state{{
         .name           = "Polygon Fill Opaque",
@@ -63,7 +63,7 @@ Material_preview::Material_preview(
         scene_message_bus,
         nullptr, // No content library
         nullptr, // Don't process editor messages
-        nullptr, // Don't register to Editor_scenes
+        nullptr, // Don't register to App_scenes
         m_content_library,
         "Material preview scene"
     );
@@ -285,7 +285,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     };
 
     const Render_context context{
-        .editor_context      = m_context,
+        .app_context         = m_context,
         .scene_view          = *this,
         .viewport_config     = m_viewport_config,
         .camera              = m_camera.get(),

@@ -1,8 +1,8 @@
 #include "windows/physics_window.hpp"
 
-#include "editor_context.hpp"
-#include "editor_scenes.hpp"
-#include "editor_settings.hpp"
+#include "app_context.hpp"
+#include "app_scenes.hpp"
+#include "app_settings.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -19,15 +19,15 @@
 namespace editor
 {
 
-Physics_window::Physics_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
+Physics_window::Physics_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Physics", "physics"}
-    , m_context                {editor_context}
+    , m_context                {app_context}
 {
 }
 
 void Physics_window::viewport_toolbar(bool& hovered)
 {
-    bool physics_enabled = m_context.editor_settings->physics.dynamic_enable;
+    bool physics_enabled = m_context.app_settings->physics.dynamic_enable;
 
     ImGui::SameLine();
     const bool pressed = erhe::imgui::make_button("P", (physics_enabled) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
@@ -38,8 +38,8 @@ void Physics_window::viewport_toolbar(bool& hovered)
         );
     };
 
-    if (pressed && m_context.editor_settings->physics.static_enable) {
-        m_context.editor_settings->physics.dynamic_enable = !m_context.editor_settings->physics.dynamic_enable;
+    if (pressed && m_context.app_settings->physics.static_enable) {
+        m_context.app_settings->physics.dynamic_enable = !m_context.app_settings->physics.dynamic_enable;
     }
 }
 
@@ -48,12 +48,12 @@ void Physics_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_context.editor_settings->physics.static_enable) {
+    if (!m_context.app_settings->physics.static_enable) {
         ImGui::BeginDisabled();
     }
-    ImGui::Checkbox("Physics enabled", &m_context.editor_settings->physics.dynamic_enable);
-    ImGui::Checkbox("Debug draw", &m_context.editor_settings->physics.debug_draw);
-    if (!m_context.editor_settings->physics.static_enable) {
+    ImGui::Checkbox("Physics enabled", &m_context.app_settings->physics.dynamic_enable);
+    ImGui::Checkbox("Debug draw", &m_context.app_settings->physics.debug_draw);
+    if (!m_context.app_settings->physics.static_enable) {
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("erhe.ini has [physics] static_enable = false");
@@ -64,7 +64,7 @@ void Physics_window::imgui()
         return;
     }
 
-    const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
+    const auto& scene_roots = m_context.app_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {
         if (!ImGui::TreeNodeEx(scene_root->get_name().c_str())) {
             continue;

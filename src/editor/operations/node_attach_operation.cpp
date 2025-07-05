@@ -1,8 +1,8 @@
 #include "operations/node_attach_operation.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_log/log_glm.hpp"
@@ -38,7 +38,7 @@ Node_attach_operation::Node_attach_operation(
 {
 }
 
-void Node_attach_operation::execute(Editor_context& context)
+void Node_attach_operation::execute(App_context& context)
 {
     static_cast<void>(context);
     log_operations->trace("Op Execute {}", describe());
@@ -60,7 +60,7 @@ void Node_attach_operation::execute(Editor_context& context)
 #endif
 }
 
-void Node_attach_operation::undo(Editor_context& context)
+void Node_attach_operation::undo(App_context& context)
 {
     static_cast<void>(context);
     log_operations->trace("Op Undo {}", describe());

@@ -14,9 +14,9 @@
 #include "windows/sheet_window.hpp"
 #include "windows/property_editor.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_graph/link.hpp"
@@ -81,16 +81,16 @@ Graph_window::Graph_window(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Editor_message_bus&          editor_message_bus
+    App_context&                 app_context,
+    App_message_bus&             app_message_bus
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Graph", "graph"}
-    , m_context                {editor_context}
+    , m_app_context            {app_context}
 {
     static_cast<void>(commands); // TODO Keeping in case we need to add commands here
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
@@ -105,7 +105,7 @@ Graph_window::~Graph_window() noexcept
 {
 }
 
-void Graph_window::on_message(Editor_message&)
+void Graph_window::on_message(App_message&)
 {
     //// using namespace erhe::bit;
     //// if (test_any_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
@@ -199,7 +199,7 @@ void Graph_window::imgui()
     ImGui::SameLine(); if (ImGui::Button("L")) { m_graph.register_node(make_load()); }
     ImGui::SameLine(); if (ImGui::Button("S")) { m_graph.register_node(make_store()); }
 
-    Sheet_window* sheet_window = m_context.sheet_window;
+    Sheet_window* sheet_window = m_app_context.sheet_window;
     Sheet* sheet = (sheet_window != nullptr) ? sheet_window->get_sheet() : nullptr;
     m_graph.evaluate(sheet);
 
@@ -207,7 +207,7 @@ void Graph_window::imgui()
 
     for (erhe::graph::Node* node : m_graph.get_nodes()) {
         Shader_graph_node* shader_graph_node = dynamic_cast<Shader_graph_node*>(node);
-        shader_graph_node->node_editor(m_context, *m_node_editor.get());
+        shader_graph_node->node_editor(m_app_context, *m_node_editor.get());
     }
 
     // Links
@@ -268,7 +268,7 @@ void Graph_window::imgui()
                 if (i != m_nodes.end()) {
                     const std::shared_ptr<Shader_graph_node>& shader_node = *i;
                     if (shader_node->is_selected()) {
-                        m_context.selection->remove_from_selection(shader_node);
+                        m_app_context.selection->remove_from_selection(shader_node);
                     }
                     m_graph.unregister_node(i->get());
                     m_nodes.erase(i);

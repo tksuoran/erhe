@@ -10,7 +10,7 @@ namespace erhe::imgui {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 
 class Icon_browser : public erhe::imgui::Imgui_window
 {
@@ -18,14 +18,14 @@ public:
     Icon_browser(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              context
+        App_context&              context
     );
 
     // Implements Imgui_window
     void imgui() override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
     ImGuiTextFilter m_name_filter;
 };
 

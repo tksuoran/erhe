@@ -35,14 +35,14 @@ namespace erhe::primitive {
 namespace editor {
 
 class Brush_placement;
-class Editor_context;
+class App_context;
 class Node_physics;
 class Rendertarget_mesh;
 
 class Properties : public erhe::imgui::Imgui_window, public Property_editor
 {
 public:
-    Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context);
+    Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context);
 
     // Implements Imgui_window
     void imgui   () override;
@@ -68,7 +68,7 @@ private:
     void item_flags                   (const std::shared_ptr<erhe::Item_base>& item);
     void item_properties              (const std::shared_ptr<erhe::Item_base>& item);
 
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 } // namespace editor

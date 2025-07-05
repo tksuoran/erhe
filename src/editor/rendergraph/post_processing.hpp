@@ -14,19 +14,14 @@
 #include <string>
 #include <string_view>
 
-namespace erhe::graphics {
-    class Texture;
-}
-namespace erhe::scene_renderer {
-    class Program_interface;
-}
+namespace erhe::graphics       { class Texture; }
+namespace erhe::scene_renderer { class Program_interface; }
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Post_processing;
 class Programs;
-
 
 class Post_processing_node : public erhe::rendergraph::Rendergraph_node
 {
@@ -99,7 +94,7 @@ public:
         std::size_t tonemap_alpha        {0}; // float
     };
 
-    Post_processing(erhe::graphics::Device& graphics_device, Editor_context& editor_context);
+    Post_processing(erhe::graphics::Device& graphics_device, App_context& context);
 
     // Public API
     [[nodiscard]] auto create_node(
@@ -151,7 +146,7 @@ private:
     static constexpr int    s_upsample_texture   = 2;
     static constexpr size_t s_max_level_count = 20;
 
-    Editor_context&                                    m_context;
+    App_context&                                       m_context;
     std::vector<std::shared_ptr<Post_processing_node>> m_nodes;
     erhe::graphics::Fragment_outputs                   m_fragment_outputs;
     std::shared_ptr<erhe::graphics::Texture>           m_dummy_texture;

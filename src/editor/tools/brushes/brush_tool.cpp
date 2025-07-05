@@ -1,9 +1,9 @@
 #include "tools/brushes/brush_tool.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_scenes.hpp"
+#include "app_message_bus.hpp"
+#include "app_scenes.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -51,7 +51,7 @@ namespace editor {
 
 
 #pragma region Commands
-Brush_tool_preview_command::Brush_tool_preview_command(erhe::commands::Commands& commands, Editor_context& context)
+Brush_tool_preview_command::Brush_tool_preview_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Brush_tool.motion_preview"}
     , m_context{context}
 {
@@ -66,7 +66,7 @@ auto Brush_tool_preview_command::try_call() -> bool
     return true;
 }
 
-Brush_tool_insert_command::Brush_tool_insert_command(erhe::commands::Commands& commands, Editor_context& context)
+Brush_tool_insert_command::Brush_tool_insert_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Brush_tool.insert"}
     , m_context{context}
 {
@@ -89,7 +89,7 @@ auto Brush_tool_insert_command::try_call() -> bool
     return consumed;
 }
 
-Brush_tool_pick_command::Brush_tool_pick_command(erhe::commands::Commands& commands, Editor_context& context)
+Brush_tool_pick_command::Brush_tool_pick_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Brush_tool.pick"}
     , m_context{context}
 {
@@ -104,16 +104,16 @@ auto Brush_tool_pick_command::try_call() -> bool
 
 Brush_tool::Brush_tool(
     erhe::commands::Commands& commands,
-    Editor_context&           editor_context,
-    Editor_message_bus&       editor_message_bus,
+    App_context&              context,
+    App_message_bus&          app_message_bus,
     Headset_view&             headset_view,
     Icon_set&                 icon_set,
     Tools&                    tools
 )
-    : Tool                            {editor_context}
-    , m_preview_command               {commands, editor_context}
-    , m_insert_command                {commands, editor_context}
-    , m_pick_command                  {commands, editor_context}
+    : Tool                            {context}
+    , m_preview_command               {commands, context}
+    , m_insert_command                {commands, context}
+    , m_pick_command                  {commands, context}
     , m_pick_using_float_input_command{commands, m_pick_command, 0.6f, 0.4f}
 {
     ERHE_PROFILE_FUNCTION();
@@ -145,8 +145,8 @@ Brush_tool::Brush_tool(
 
     tools.register_tool(this);
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
@@ -157,7 +157,7 @@ Brush_tool::Brush_tool(
     m_pick_using_float_input_command.set_host(this);
 }
 
-void Brush_tool::on_message(Editor_message& message)
+void Brush_tool::on_message(App_message& message)
 {
     Scene_view* const old_scene_view = get_hover_scene_view();
 
@@ -261,19 +261,19 @@ auto Brush_tool::try_insert(Brush* brush) -> bool
     }
 
 #if !defined(NDEBUG)
-        m_context.editor_scenes->sanity_check();
+        m_context.app_scenes->sanity_check();
 #endif
 
     do_insert_operation(*brush);
 
 #if !defined(NDEBUG)
-        m_context.editor_scenes->sanity_check();
+        m_context.app_scenes->sanity_check();
 #endif
 
     remove_preview_mesh();
 
 #if !defined(NDEBUG)
-        m_context.editor_scenes->sanity_check();
+        m_context.app_scenes->sanity_check();
 #endif
 
     return true;

@@ -31,8 +31,8 @@ namespace editor {
 //
 //    // Implements Operation
 //    [[nodiscard]] auto describe() const -> std::string override;
-//    void execute(Editor_context& context) override;
-//    void undo   (Editor_context& context) override;
+//    void execute(App_context& context) override;
+//    void undo   (App_context& context) override;
 //
 //    // Public API
 //    void add_entry(Entry&& entry);
@@ -53,9 +53,9 @@ public:
     );
 
     // Implements Operation
-    auto describe() const -> std::string   override;
-    void execute (Editor_context& context) override;
-    void undo    (Editor_context& context) override;
+    auto describe() const -> std::string override;
+    void execute (App_context& context)  override;
+    void undo    (App_context& context)  override;
 
 private:
     std::shared_ptr<erhe::Hierarchy> m_child              {};
@@ -78,9 +78,9 @@ public:
     );
 
     // Implements Operation
-    auto describe() const -> std::string   override;
-    void execute (Editor_context& context) override;
-    void undo    (Editor_context& context) override;
+    auto describe() const -> std::string override;
+    void execute (App_context& context)  override;
+    void undo    (App_context& context)  override;
 
 private:
     std::shared_ptr<erhe::Hierarchy> m_child;

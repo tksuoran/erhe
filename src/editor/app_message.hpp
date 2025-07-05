@@ -3,12 +3,8 @@
 #include <memory>
 #include <vector>
 
-namespace erhe {
-    class Item_base;
-}
-namespace erhe::scene {
-    class Node;
-}
+namespace erhe        { class Item_base; }
+namespace erhe::scene { class Node; }
 
 namespace editor {
 
@@ -33,7 +29,7 @@ public:
 class Scene_root;
 class Scene_view;
 
-class Editor_message
+class App_message
 {
 public:
     uint64_t                                      update_flags      {0};

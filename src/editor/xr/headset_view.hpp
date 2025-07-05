@@ -35,10 +35,10 @@ namespace erhe::window {
 
 namespace editor {
 
-class Editor_context;
-class Editor_message_bus;
-class Editor_rendering;
-class Editor_settings;
+class App_context;
+class App_message_bus;
+class App_rendering;
+class App_settings;
 class Fly_camera_tool;
 class Hud;
 class Mesh_memory;
@@ -97,9 +97,9 @@ public:
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         erhe::xr::Headset*              headset,
 #endif
-        Editor_context&                 editor_context,
-        Editor_rendering&               editor_rendering,
-        Editor_settings&                editor_settings
+        App_context&                    context,
+        App_rendering&                  app_rendering,
+        App_settings&                   app_settings
     );
 
     void attach_to_scene(std::shared_ptr<Scene_root> scene_root, Mesh_memory& mesh_memory);
@@ -149,7 +149,7 @@ private:
     Headset_camera_offset_move_command                   m_offset_y_command;
     Headset_camera_offset_move_command                   m_offset_z_command;
 
-    Editor_context&                                      m_editor_context;
+    App_context&                                         m_app_context;
     erhe::window::Context_window&                        m_context_window;
     std::shared_ptr<Headset_view_node>                   m_rendergraph_node;
     std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;

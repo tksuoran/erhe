@@ -1,6 +1,6 @@
 #include "tools/grid.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -199,7 +199,7 @@ void Grid::update()
     }
 }
 
-void Grid::imgui(Editor_context& context)
+void Grid::imgui(App_context& context)
 {
     ImGui::InputText  ("Name",             &m_name);
     ImGui::Separator();

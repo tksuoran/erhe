@@ -1,9 +1,9 @@
-#include "editor_rendering.hpp"
+#include "app_rendering.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_settings.hpp"
+#include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "tools/tools.hpp"
 #include "renderable.hpp"
 #include "renderers/composer.hpp"
@@ -44,30 +44,30 @@ using erhe::graphics::Color_blend_state;
 
 
 #pragma region Commands
-Capture_frame_command::Capture_frame_command(erhe::commands::Commands& commands, Editor_context& editor_context)
+Capture_frame_command::Capture_frame_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "editor.capture_frame"}
-    , m_context{editor_context}
+    , m_context{app_context}
 {
 }
 
 auto Capture_frame_command::try_call() -> bool
 {
-    m_context.editor_rendering->trigger_capture();
+    m_context.app_rendering->trigger_capture();
     return true;
 }
 #pragma endregion Commands
 
 
-Editor_rendering::Editor_rendering(
+App_rendering::App_rendering(
     erhe::commands::Commands& commands,
     erhe::graphics::Device&   graphics_device,
-    Editor_context&           editor_context,
-    Editor_message_bus&       editor_message_bus,
+    App_context&              app_context,
+    App_message_bus&          app_message_bus,
     Mesh_memory&              mesh_memory,
     Programs&                 programs
 )
-    : m_context              {editor_context}
-    , m_capture_frame_command{commands, editor_context}
+    : m_context              {app_context}
+    , m_capture_frame_command{commands, app_context}
     , m_pipeline_renderpasses{graphics_device, mesh_memory, programs}
     , m_composer             {"Main Composer"}
     , m_content_timer        {graphics_device, "content"}
@@ -220,8 +220,8 @@ Editor_rendering::Editor_rendering(
     };
     rendertarget->allow_shader_stages_override = false;
     //rendertarget->allow_shader_stages_override = true;
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             using namespace erhe::bit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
                 handle_graphics_settings_changed(message.graphics_preset);
@@ -255,14 +255,14 @@ Editor_rendering::Editor_rendering(
     debug_joint_colors.push_back(glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}); // 23
 }
 
-auto Editor_rendering::create_shadow_node_for_scene_view(
+auto App_rendering::create_shadow_node_for_scene_view(
     erhe::graphics::Device&         graphics_device,
     erhe::rendergraph::Rendergraph& rendergraph,
-    Editor_settings&                editor_settings,
+    App_settings&                   app_settings,
     Scene_view&                     scene_view
 ) -> std::shared_ptr<Shadow_render_node>
 {
-    const auto& preset      = editor_settings.graphics.current_graphics_preset;
+    const auto& preset      = app_settings.graphics.current_graphics_preset;
     const int   resolution  = preset.shadow_enable ? preset.shadow_resolution  : 1;
     const int   light_count = preset.shadow_enable ? preset.shadow_light_count : 1;
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
@@ -277,7 +277,7 @@ auto Editor_rendering::create_shadow_node_for_scene_view(
     return shadow_render_node;
 }
 
-void Editor_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
+void App_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
 {
     const int resolution  = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
     const int light_count = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
@@ -287,7 +287,7 @@ void Editor_rendering::handle_graphics_settings_changed(Graphics_preset* graphic
     }
 }
 
-auto Editor_rendering::get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>
+auto App_rendering::get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>
 {
     auto i = std::find_if(
         m_all_shadow_render_nodes.begin(),
@@ -302,12 +302,12 @@ auto Editor_rendering::get_shadow_node_for_view(const Scene_view& scene_view) ->
     return *i;
 }
 
-auto Editor_rendering::get_all_shadow_nodes() -> const std::vector<std::shared_ptr<Shadow_render_node>>&
+auto App_rendering::get_all_shadow_nodes() -> const std::vector<std::shared_ptr<Shadow_render_node>>&
 {
     return m_all_shadow_render_nodes;
 }
 
-auto Editor_rendering::get_pipeline_renderpass(
+auto App_rendering::get_pipeline_renderpass(
     const Renderpass&                renderpass,
     const erhe::renderer::Blend_mode blend_mode,
     const bool                       selected
@@ -338,7 +338,7 @@ auto Editor_rendering::get_pipeline_renderpass(
     }
 }
 
-auto Editor_rendering::make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>
+auto App_rendering::make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>
 {
     auto renderpass = std::make_shared<Renderpass>(name);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
@@ -614,22 +614,22 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
 {
 }
 
-void Editor_rendering::trigger_capture()
+void App_rendering::trigger_capture()
 {
     m_trigger_capture = true;
 }
 
-auto Editor_rendering::width() const -> int
+auto App_rendering::width() const -> int
 {
     return m_context.context_window->get_width();
 }
 
-auto Editor_rendering::height() const -> int
+auto App_rendering::height() const -> int
 {
     return m_context.context_window->get_height();
 }
 
-void Editor_rendering::imgui()
+void App_rendering::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -655,7 +655,7 @@ void Editor_rendering::imgui()
     m_composer.imgui();
 }
 
-void Editor_rendering::begin_frame()
+void App_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -664,14 +664,14 @@ void Editor_rendering::begin_frame()
     }
 }
 
-void Editor_rendering::request_renderdoc_capture()
+void App_rendering::request_renderdoc_capture()
 {
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_context.headset_view->request_renderdoc_capture();
 #endif
 }
 
-void Editor_rendering::end_frame()
+void App_rendering::end_frame()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -689,7 +689,7 @@ void Editor_rendering::end_frame()
     m_context.graphics_device->end_of_frame();
 }
 
-void Editor_rendering::add(Renderable* renderable)
+void App_rendering::add(Renderable* renderable)
 {
     ERHE_VERIFY(renderable != nullptr);
 
@@ -704,7 +704,7 @@ void Editor_rendering::add(Renderable* renderable)
         }
     );
     if (i != m_renderables.end()) {
-        log_render->error("Editor_rendering::add(Renderable*): renderable is already registered");
+        log_render->error("App_rendering::add(Renderable*): renderable is already registered");
         return;
     }
 #endif
@@ -712,7 +712,7 @@ void Editor_rendering::add(Renderable* renderable)
     m_renderables.push_back(renderable);
 }
 
-void Editor_rendering::remove(Renderable* renderable)
+void App_rendering::remove(Renderable* renderable)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_renderables_mutex};
 
@@ -724,13 +724,13 @@ void Editor_rendering::remove(Renderable* renderable)
         }
     );
     if (i == m_renderables.end()) {
-        log_render->error("Editor_rendering::remove(Renderable*): renderable is not registered");
+        log_render->error("App_rendering::remove(Renderable*): renderable is not registered");
         return;
     }
     m_renderables.erase(i);
 }
 
-void Editor_rendering::render_viewport_main(const Render_context& context)
+void App_rendering::render_viewport_main(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -741,7 +741,7 @@ void Editor_rendering::render_viewport_main(const Render_context& context)
     render_composer(context);
 }
 
-void Editor_rendering::render_viewport_renderables(const Render_context& context)
+void App_rendering::render_viewport_renderables(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -750,19 +750,19 @@ void Editor_rendering::render_viewport_renderables(const Render_context& context
     }
 }
 
-void Editor_rendering::render_composer(const Render_context& context)
+void App_rendering::render_composer(const Render_context& context)
 {
     static constexpr std::string_view c_id_main{"Main"};
     //ERHE_PROFILE_GPU_SCOPE(c_id_main);
     erhe::graphics::Scoped_gpu_timer timer{m_content_timer};
-    erhe::graphics::Scoped_debug_group pass_scope{"Editor_rendering::render_composer()"};
+    erhe::graphics::Scoped_debug_group pass_scope{"App_rendering::render_composer()"};
 
     m_composer.render(context);
 
     m_context.graphics_device->opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
-void Editor_rendering::render_id(const Render_context& context)
+void App_rendering::render_id(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 

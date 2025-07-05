@@ -1,7 +1,7 @@
 #include "tools/grid_tool.hpp"
 
-#include "editor_context.hpp"
-#include "editor_settings.hpp"
+#include "app_context.hpp"
+#include "app_settings.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/grid.hpp"
@@ -25,12 +25,12 @@ using glm::vec3;
 Grid_tool::Grid_tool(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
+    App_context&                 context,
     Icon_set&                    icon_set,
     Tools&                       tools
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Grid", "grid"}
-    , Tool                     {editor_context}
+    , Tool                     {context}
 {
     ERHE_PROFILE_FUNCTION();
 

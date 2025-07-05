@@ -5,7 +5,7 @@
 
 #include "erhe_renderer/primitive_renderer.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 
 namespace editor {
 
@@ -17,7 +17,7 @@ auto Create_shape::get_line_renderer(const Create_preview_settings& preview_sett
         .draw_visible      = true,
         .draw_hidden       = true
     };
-    return preview_settings.render_context.editor_context.debug_renderer->get(config);
+    return preview_settings.render_context.app_context.debug_renderer->get(config);
 }
 
 }

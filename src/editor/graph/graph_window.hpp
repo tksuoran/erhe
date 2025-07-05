@@ -32,10 +32,9 @@ namespace ax::NodeEditor {
 
 namespace editor {
 
-class Editor_context;
-class Editor_message;
-class Editor_message_bus;
-
+class App_context;
+class App_message;
+class App_message_bus;
 
 class Sheet;
 class Shader_graph_node;
@@ -48,8 +47,8 @@ public:
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
-        Editor_message_bus&          editor_message_bus
+        App_context&                 app_context,
+        App_message_bus&             app_message_bus
     );
     ~Graph_window() noexcept override;
 
@@ -67,9 +66,9 @@ private:
     auto make_mul        () -> Shader_graph_node*;
     auto make_div        () -> Shader_graph_node*;
 
-    void on_message(Editor_message& message);
+    void on_message(App_message& message);
 
-    Editor_context&                                 m_context;
+    App_context&                                    m_app_context;
     Shader_graph                                    m_graph;
     std::unique_ptr<ax::NodeEditor::EditorContext>  m_node_editor;
 

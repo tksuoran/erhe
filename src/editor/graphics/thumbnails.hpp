@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/sampler.hpp"
+#include "erhe_item/item.hpp"
 
 #include <memory>
 #include <vector>
@@ -15,36 +16,52 @@ namespace erhe::graphics {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Icon_settings;
 class Programs;
 
 class Icon_settings;
 
+class Thumbnail
+{
+public:
+    Thumbnail();
+    ~Thumbnail();
+    Thumbnail(const Thumbnail&) = delete;
+    Thumbnail(Thumbnail&&);
+    auto operator=(const Thumbnail&) -> Thumbnail& = delete;
+    auto operator=(Thumbnail&&) -> Thumbnail&;
+
+    std::weak_ptr<erhe::Item_base>               item{};
+    uint64_t                                     last_use_frame_number{0};
+    std::shared_ptr<erhe::graphics::Texture>     texture_view{};
+    std::unique_ptr<erhe::graphics::Render_pass> render_pass{};
+    uint64_t                                     color_texture_handle{};
+};
+
 class Thumbnails
 {
 public:
-    Thumbnails(erhe::graphics::Device& graphics_device, unsigned int capacity, unsigned int size_pixels);
+    Thumbnails(erhe::graphics::Device& graphics_device, App_context& context);
+    ~Thumbnails();
 
-    [[nodiscard]] auto allocate     () -> uint32_t;
-    [[nodiscard]] auto begin_capture(uint32_t slot) -> std::unique_ptr<erhe::graphics::Render_command_encoder>;
+    void update(uint64_t frame_number);
 
-    void free             (uint32_t slot);
-    void draw             (uint32_t slot) const;
-    auto get_color_texture() -> std::shared_ptr<erhe::graphics::Texture> { return m_color_texture; }
+    void draw(
+        std::shared_ptr<erhe::Item_base>            item,
+        std::function<bool(Thumbnails& thumbnails)> callback
+    );
 
 private:
-    erhe::graphics::Device&                                   m_graphics_device;
-    std::shared_ptr<erhe::graphics::Texture>                  m_color_texture;
-    std::shared_ptr<erhe::graphics::Renderbuffer>             m_depth_renderbuffer;
-    std::unique_ptr<erhe::graphics::Render_pass>              m_render_pass;
-    erhe::graphics::Sampler                                   m_color_sampler;
-    std::vector<bool>                                         m_in_use;
-    int                                                       m_capacity   {0};
-    int                                                       m_size_pixels{0};
-    std::vector<std::shared_ptr<erhe::graphics::Texture>>     m_texture_views;
-    std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_render_passes;
-    std::vector<uint64_t>                                     m_color_texture_handles;
+    App_context&                                  m_context;
+    erhe::graphics::Device&                       m_graphics_device;
+    std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
+    std::shared_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
+    std::unique_ptr<erhe::graphics::Render_pass>  m_render_pass;
+    erhe::graphics::Sampler                       m_color_sampler;
+    std::vector<Thumbnail>                        m_thumbnails;
+    int                                           m_size_pixels{0};
+    std::vector<uint64_t>                         m_color_texture_handles;
 };
 
 } // namespace editor

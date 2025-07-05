@@ -1,7 +1,7 @@
 #include "windows/operations.hpp"
 
-#include "editor_context.hpp"
-#include "editor_message_bus.hpp"
+#include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "scene/scene_root.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
@@ -38,11 +38,11 @@ Operations::Operations(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Editor_message_bus&          editor_message_bus
+    App_context&                 app_context,
+    App_message_bus&             app_message_bus
 )
     : Imgui_window            {imgui_renderer, imgui_windows, "Operations", "operations"}
-    , m_context               {editor_context}
+    , m_context               {app_context}
     , m_merge_command         {commands, "Geometry.Merge",                     [this]() -> bool { merge         (); return true; } }
     , m_triangulate_command   {commands, "Geometry.Triangulate",               [this]() -> bool { triangulate   (); return true; } }
     , m_normalize_command     {commands, "Geometry.Normalize",                 [this]() -> bool { normalize     (); return true; } }
@@ -120,14 +120,14 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_gyro_command    , "Geometry.Conway Operations.Gyro");
     commands.bind_command_to_menu(&m_chamfer_command , "Geometry.Conway Operations.Chamfer");
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
 }
 
-void Operations::on_message(Editor_message& message)
+void Operations::on_message(App_message& message)
 {
     using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {

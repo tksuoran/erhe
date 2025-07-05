@@ -35,7 +35,7 @@ public:
     Create(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
+        App_context&                 app_context,
         Tools&                       tools
     );
 

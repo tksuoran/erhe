@@ -1,8 +1,8 @@
 #include "tools/clipboard.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_attach_operation.hpp"
@@ -19,7 +19,7 @@
 
 namespace editor {
 
-Clipboard_paste_command::Clipboard_paste_command(erhe::commands::Commands& commands, Editor_context& context)
+Clipboard_paste_command::Clipboard_paste_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Clipboard.paste"}
     , m_context{context}
 {
@@ -37,7 +37,7 @@ auto Clipboard_paste_command::try_call() -> bool
     return m_context.clipboard->try_paste();
 }
 
-Clipboard::Clipboard(erhe::commands::Commands& commands, Editor_context& context, Editor_message_bus& editor_message_bus)
+Clipboard::Clipboard(erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus)
     : m_paste_command{commands, context}
     , m_context      {context}
 {
@@ -49,14 +49,14 @@ Clipboard::Clipboard(erhe::commands::Commands& commands, Editor_context& context
     commands.bind_command_to_menu(&m_paste_command, "Edit.Paste");
     m_paste_command.set_host(this);
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
 }
 
-void Clipboard::on_message(Editor_message& message)
+void Clipboard::on_message(App_message& message)
 {
     using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {

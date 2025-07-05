@@ -1,6 +1,6 @@
 #include "scene/debug_draw.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_renderer/debug_renderer.hpp"
@@ -10,8 +10,8 @@
 
 namespace editor {
 
-Debug_draw::Debug_draw(Editor_context& editor_context)
-    : m_context   {editor_context}
+Debug_draw::Debug_draw(App_context& context)
+    : m_context   {context}
     , m_debug_mode{0}
 {
     using IDebug_draw = erhe::physics::IDebug_draw;

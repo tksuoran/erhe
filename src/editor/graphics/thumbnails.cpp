@@ -1,23 +1,31 @@
 #include "graphics/thumbnails.hpp"
-#include "editor_settings.hpp"
+#include "app_settings.hpp"
 
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
 namespace editor {
 
-Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, const unsigned int capacity, const unsigned int size_pixels)
-    : m_graphics_device{graphics_device}
+Thumbnail::Thumbnail()
+{
+}
+
+Thumbnail::Thumbnail(Thumbnail&&) = default;
+
+auto Thumbnail::operator=(Thumbnail&&) -> Thumbnail& = default;
+
+Thumbnail::~Thumbnail() = default;
+
+Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& context)
+    : m_context{context}
+    , m_graphics_device{graphics_device}
     , m_color_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -27,10 +35,14 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, const unsigned i
         }
     }
 {
-    m_capacity = capacity;
-    m_in_use.resize(m_capacity);
-    std::fill(m_in_use.begin(), m_in_use.end(), false);
-    m_size_pixels = size_pixels;
+    int capacity = 0;
+    int size_pixels = 0;
+    const auto& section = erhe::configuration::get_ini_file_section("erhe.ini", "thumbnails");
+    section.get("capacity", capacity);
+    section.get("capacity", size_pixels);
+
+    m_thumbnails.resize(capacity);
+    m_size_pixels = static_cast<unsigned int>(size_pixels);
     m_color_texture = std::make_shared<erhe::graphics::Texture>(
         graphics_device,
         erhe::graphics::Texture_create_info{
@@ -40,7 +52,7 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, const unsigned i
             .use_mipmaps       = true,
             .width             = m_size_pixels,
             .height            = m_size_pixels,
-            .array_layer_count = m_capacity,
+            .array_layer_count = capacity,
             .debug_label       = "Thumbnails"
         }
     );
@@ -53,18 +65,18 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, const unsigned i
     );
     m_depth_renderbuffer->set_debug_label("Thumbnail depth renderbuffer");
 
-    m_texture_views.resize(m_capacity);
-    m_color_texture_handles.resize(m_capacity);
-    for (int i = 0; i < m_capacity; ++i) {
+    for (int i = 0; i < capacity; ++i) {
+        Thumbnail& t = m_thumbnails[i];
+
         erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, m_color_texture);
         texture_create_info.view_base_level       = 0;
         texture_create_info.level_count           = 1;
         texture_create_info.view_base_array_layer = i;
         texture_create_info.debug_label           = fmt::format("Thumbnail layer {}", i);
-        m_texture_views[i] = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
+        t.texture_view = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
 
         erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
-        render_pass_descriptor.color_attachments[0].texture      = m_texture_views[i].get();
+        render_pass_descriptor.color_attachments[0].texture      = t.texture_view.get();
         render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
         render_pass_descriptor.depth_attachment.renderbuffer     = m_depth_renderbuffer.get();
@@ -74,37 +86,45 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, const unsigned i
         render_pass_descriptor.render_target_width               = m_size_pixels;
         render_pass_descriptor.render_target_height              = m_size_pixels;
         render_pass_descriptor.debug_label                       = fmt::format("Thumbnail render pass layer {}", i);
-        m_render_pass = std::make_unique<erhe::graphics::Render_pass>(graphics_device, render_pass_descriptor);
-        m_color_texture_handles[i] = graphics_device.get_handle(*m_texture_views[i].get(), m_color_sampler);
+        t.render_pass = std::make_unique<erhe::graphics::Render_pass>(graphics_device, render_pass_descriptor);
+        t.color_texture_handle = graphics_device.get_handle(*t.texture_view.get(), m_color_sampler);
     }
 }
 
-auto Thumbnails::allocate() -> uint32_t
+Thumbnails::~Thumbnails()
 {
-    for (size_t i = 0, end = m_in_use.size(); i < end; ++i) {
-        if (!m_in_use[i]) {
-            m_in_use[i] = true;
-            return static_cast<uint32_t>(i);
-        }
-    }
-    ERHE_FATAL("out of thumbnail slots");
-    return std::numeric_limits<uint32_t>::max();
 }
 
-void Thumbnails::free(uint32_t slot)
-{
-    ERHE_VERIFY(m_in_use[slot]);
-    m_in_use[slot] = true;
-}
+//auto Thumbnails::allocate() -> uint32_t
+//{
+//    for (size_t i = 0, end = m_last_use_frame_number.size(); i < end; ++i) {
+//        if (!m_in_use[i]) {
+//            m_in_use[i] = true;
+//            return static_cast<uint32_t>(i);
+//        }
+//    }
+//    ERHE_FATAL("out of thumbnail slots");
+//    return std::numeric_limits<uint32_t>::max();
+//}
+//
+//void Thumbnails::free(uint32_t slot)
+//{
+//    ERHE_VERIFY(m_in_use[slot]);
+//    m_in_use[slot] = true;
+//}
+//
+//auto Thumbnails::begin_capture(uint32_t slot) -> std::unique_ptr<erhe::graphics::Render_command_encoder>
+//{
+//    return m_graphics_device.make_render_command_encoder(*m_render_passes[slot].get());
+//}
 
-auto Thumbnails::begin_capture(uint32_t slot) -> std::unique_ptr<erhe::graphics::Render_command_encoder>
+void Thumbnails::draw(
+    std::shared_ptr<erhe::Item_base>            item,
+    std::function<bool(Thumbnails& thumbnails)> callback
+)
 {
-    return m_graphics_device.make_render_command_encoder(*m_render_passes[slot].get());
-}
-
-void Thumbnails::draw(uint32_t slot) const
-{
-    static_cast<void>(slot);
+    static_cast<void>(item);
+    static_cast<void>(callback);
     //m_context.imgui_renderer->image(
     //    m_texture,
     //    m_icon_width,

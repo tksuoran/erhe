@@ -2,8 +2,8 @@
 
 #include "tools/hover_tool.hpp"
 
-#include "editor_context.hpp"
-#include "editor_message_bus.hpp"
+#include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -29,19 +29,19 @@ namespace editor {
 Hover_tool::Hover_tool(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Editor_message_bus&          editor_message_bus,
+    App_context&                 context,
+    App_message_bus&             app_message_bus,
     Tools&                       tools
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover_tool"}
-    , Tool                     {editor_context}
+    , Tool                     {context}
 {
     set_flags      (Tool_flags::background | Tool_flags::toolbox);
     set_description("Hover Tool");
     tools.register_tool(this);
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             Tool::on_message(message);
         }
     );

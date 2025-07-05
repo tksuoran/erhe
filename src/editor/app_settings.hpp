@@ -5,13 +5,11 @@
 
 #include <string>
 
-namespace erhe::window {
-    class Context_window;
-}
+namespace erhe::window { class Context_window; }
 
 namespace editor {
 
-class Editor_message_bus;
+class App_message_bus;
 
 class Icon_settings
 {
@@ -49,7 +47,7 @@ public:
     void read_presets                 ();
     void write_presets                ();
     void apply_limits                 (Graphics_preset& graphics_preset);
-    void select_active_graphics_preset(Editor_message_bus& editor_message_bus);
+    void select_active_graphics_preset(App_message_bus& app_message_bus);
 
     Graphics_preset              current_graphics_preset;
     std::vector<Graphics_preset> graphics_presets;
@@ -60,14 +58,12 @@ public:
     int                          max_depth_layers{1};
 };
 
-class Editor_message_bus;
-
-class Editor_settings
+class App_settings
 {
 public:
-    explicit Editor_settings();
+    explicit App_settings();
 
-    void apply_limits(erhe::graphics::Device& instance, Editor_message_bus& editor_message_bus);
+    void apply_limits(erhe::graphics::Device& instance, App_message_bus& message_bus);
     void read        ();
     void write       ();
 

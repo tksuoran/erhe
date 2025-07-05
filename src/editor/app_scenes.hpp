@@ -7,14 +7,14 @@
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Scene_root;
 class Time_context;
 
-class Editor_scenes
+class App_scenes
 {
 public:
-    Editor_scenes(Editor_context& editor_context);
+    App_scenes(App_context& context);
 
     void register_scene_root                 (Scene_root* scene_root);
     void unregister_scene_root               (Scene_root* scene_root);
@@ -31,7 +31,7 @@ public:
     void imgui();
 
 private:
-    Editor_context&                m_context;
+    App_context&                   m_context;
     ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     std::vector<Scene_root*>       m_scene_roots;
 };

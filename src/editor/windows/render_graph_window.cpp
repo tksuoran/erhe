@@ -1,5 +1,5 @@
 #include "windows/render_graph_window.hpp"
-#include "editor_scenes.hpp"
+#include "app_scenes.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
@@ -34,8 +34,8 @@ void Rendergraph_window::initialize_component()
 
 void Rendergraph_window::post_initialize()
 {
-    m_editor_scenes = get<Editor_scenes>();
-    m_render_graph  = get<erhe::rendergraph::Rendergraph>();
+    m_app_scenes   = get<App_scenes>();
+    m_render_graph = get<erhe::rendergraph::Rendergraph>();
 }
 
 void Rendergraph_window::imgui()
@@ -70,7 +70,7 @@ void Rendergraph_window::imgui()
         ImGui::TreePop();
     }
 
-    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    const auto& scene_roots = m_app_scenes->get_scene_roots();
     if (ImGui::TreeNodeEx("Scenes", parent_flags))
     {
         for (const auto& scene_root : scene_roots)

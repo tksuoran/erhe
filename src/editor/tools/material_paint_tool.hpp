@@ -17,7 +17,7 @@ namespace erhe::primitive {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Headset_view;
 class Icon_set;
 class Material_paint_tool;
@@ -30,23 +30,23 @@ class Headset_view;
 class Material_paint_command : public erhe::commands::Command
 {
 public:
-    Material_paint_command(erhe::commands::Commands& commands, Editor_context& context);
+    Material_paint_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Material_pick_command : public erhe::commands::Command
 {
 public:
-    Material_pick_command(erhe::commands::Commands& commands, Editor_context& context);
+    Material_pick_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Material_paint_tool : public Tool
@@ -56,7 +56,7 @@ public:
 
     Material_paint_tool(
         erhe::commands::Commands& commands,
-        Editor_context&           editor_context,
+        App_context&              app_context,
         Headset_view&             headset_view,
         Icon_set&                 icon_set,
         Tools&                    tools

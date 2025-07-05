@@ -33,8 +33,8 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_context;
-class Editor_settings;
+class App_context;
+class App_settings;
 class Input_state;
 class Item_tree_window;
 class Operation_stack;
@@ -67,8 +67,8 @@ public:
 
         erhe::graphics::Device&         graphics_device,
         erhe::scene::Scene_message_bus& scene_message_bus,
-        Editor_context&                 editor_context,
-        Editor_rendering&               editor_rendering,
+        App_context&                    context,
+        App_rendering&                  app_rendering,
         Mesh_memory&                    mesh_memory,
         Programs&                       programs
     );
@@ -82,7 +82,7 @@ public:
     [[nodiscard]] auto get_tool_scene_root() -> std::shared_ptr<Scene_root>;
 
 private:
-    Editor_context&                   m_context;
+    App_context&                   m_context;
     Tools_pipeline_renderpasses       m_pipeline_renderpasses;
     Tool*                             m_priority_tool{nullptr};
     ERHE_PROFILE_MUTEX(std::mutex,    m_mutex);

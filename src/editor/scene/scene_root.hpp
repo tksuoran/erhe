@@ -64,10 +64,10 @@ namespace erhe::scene {
 namespace editor {
 
 class Content_library;
-class Editor_context;
-class Editor_message_bus;
-class Editor_scenes;
-class Editor_settings;
+class App_context;
+class App_message_bus;
+class App_scenes;
+class App_settings;
 class Item_tree_window;
 class Node_physics;
 class Raytrace_primitive;
@@ -120,9 +120,9 @@ public:
         erhe::imgui::Imgui_renderer*            imgui_renderer,
         erhe::imgui::Imgui_windows*             imgui_windows,
         erhe::scene::Scene_message_bus&         scene_message_bus,
-        Editor_context*                         editor_context,
-        Editor_message_bus*                     editor_message_bus,
-        Editor_scenes*                          editor_scenes,
+        App_context*                            context,
+        App_message_bus*                        app_message_bus,
+        App_scenes*                             app_scenes,
         const std::shared_ptr<Content_library>& content_library,
         const std::string_view                  name
     );
@@ -135,13 +135,13 @@ public:
     auto make_browser_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              context,
-        Editor_settings&             editor_settings
+        App_context&                 context,
+        App_settings&                app_settings
     ) -> std::shared_ptr<Item_tree_window>;
     void remove_browser_window();
 
-    void register_to_editor_scenes    (Editor_scenes& editor_scenes);
-    void unregister_from_editor_scenes(Editor_scenes& editor_scenes);
+    void register_to_editor_scenes    (App_scenes& app_scenes);
+    void unregister_from_editor_scenes(App_scenes& app_scenes);
 
     void register_node    (const std::shared_ptr<erhe::scene::Node>&   node)   override;
     void unregister_node  (const std::shared_ptr<erhe::scene::Node>&   node)   override;
@@ -189,7 +189,7 @@ private:
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     ERHE_PROFILE_MUTEX        (std::mutex, m_rendertarget_meshes_mutex);
 
-    Editor_scenes*                                  m_editor_scenes{nullptr};
+    App_scenes*                                     m_app_scenes{nullptr};
     std::shared_ptr<Content_library>                m_content_library;
     bool                                            m_is_registered{false};
 

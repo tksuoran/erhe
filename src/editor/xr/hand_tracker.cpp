@@ -1,7 +1,7 @@
 #include "xr/hand_tracker.hpp"
 
-#include "editor_context.hpp"
-#include "editor_rendering.hpp"
+#include "app_context.hpp"
+#include "app_rendering.hpp"
 #include "renderers/render_context.hpp"
 #include "xr/headset_view.hpp"
 
@@ -402,24 +402,24 @@ void Hand::draw_joint_line_strip(
     }
 }
 
-Hand_tracker::Hand_tracker(Editor_context& editor_context, Editor_rendering& editor_rendering)
-    : m_context   {editor_context}
+Hand_tracker::Hand_tracker(App_context& app_context, App_rendering& app_rendering)
+    : m_context   {app_context}
     , m_left_hand {XR_HAND_LEFT_EXT}
     , m_right_hand{XR_HAND_RIGHT_EXT}
 {
-    if (!editor_context.OpenXR) {
+    if (!app_context.OpenXR) {
         m_show_hands = false;
         return;
     }
 
-    editor_rendering.add(this);
+    app_rendering.add(this);
     //set_flags      (Tool_flags::background);
     //set_description("Hand_tracker");
 }
 
 Hand_tracker::~Hand_tracker() noexcept
 {
-    m_context.editor_rendering->remove(this);
+    m_context.app_rendering->remove(this);
 }
 
 void Hand_tracker::update_hands(erhe::xr::Headset& headset)

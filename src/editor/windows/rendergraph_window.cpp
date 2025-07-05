@@ -4,7 +4,7 @@
 
 #include "windows/rendergraph_window.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_defer/defer.hpp"
@@ -25,9 +25,9 @@
 
 namespace editor {
 
-Rendergraph_window::Rendergraph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
+Rendergraph_window::Rendergraph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Render Graph", "rendergraph"}
-    , m_context                {editor_context}
+    , m_context                {app_context}
 {
 }
 
@@ -104,7 +104,7 @@ void Rendergraph_window::imgui()
         ImGui::TreePop();
     }
 
-    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    const auto& scene_roots = m_app_scenes->get_scene_roots();
     if (ImGui::TreeNodeEx("Scenes", parent_flags)) {
         for (const auto& scene_root : scene_roots) {
             ImGui::Text("%s", scene_root->get_name().c_str());

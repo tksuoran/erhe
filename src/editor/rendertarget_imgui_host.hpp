@@ -13,7 +13,7 @@ namespace erhe::rendergraph {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Headset_view;
 class Rendertarget_mesh;
 
@@ -23,7 +23,7 @@ public:
     Rendertarget_imgui_host(
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::rendergraph::Rendergraph& rendergraph,
-        Editor_context&                 editor_context,
+        App_context&                    context,
         Rendertarget_mesh*              rendertarget_mesh,
         const std::string_view          name,
         bool                            imgui_ini = true
@@ -59,7 +59,7 @@ public:
     auto get_producer_output_texture(int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
 
 private:
-    Editor_context&    m_context;
+    App_context&       m_app_context;
     Rendertarget_mesh* m_rendertarget_mesh{nullptr};
     float              m_last_mouse_x{0.0f};
     float              m_last_mouse_y{0.0f};

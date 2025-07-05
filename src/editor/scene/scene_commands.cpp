@@ -1,7 +1,7 @@
 #include "scene/scene_commands.hpp"
 
-#include "editor_context.hpp"
-#include "editor_windows.hpp"
+#include "app_context.hpp"
+#include "app_windows.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_attach_operation.hpp"
@@ -29,7 +29,7 @@ using erhe::Item_flags;
 
 #pragma region Command
 
-Create_new_camera_command::Create_new_camera_command(erhe::commands::Commands& commands, Editor_context& context)
+Create_new_camera_command::Create_new_camera_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "scene.create_new_camera"}
     , m_context{context}
 {
@@ -40,7 +40,7 @@ auto Create_new_camera_command::try_call() -> bool
     return m_context.scene_commands->create_new_camera().operator bool();
 }
 
-Create_new_empty_node_command::Create_new_empty_node_command(erhe::commands::Commands& commands, Editor_context& context)
+Create_new_empty_node_command::Create_new_empty_node_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "scene.create_new_empty_node"}
     , m_context{context}
 {
@@ -51,7 +51,7 @@ auto Create_new_empty_node_command::try_call() -> bool
     return m_context.scene_commands->create_new_empty_node().operator bool();
 }
 
-Create_new_light_command::Create_new_light_command(erhe::commands::Commands& commands, Editor_context& context)
+Create_new_light_command::Create_new_light_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "scene.create_new_light"}
     , m_context{context}
 {
@@ -62,7 +62,7 @@ auto Create_new_light_command::try_call() -> bool
     return m_context.scene_commands->create_new_light().operator bool();
 }
 
-Create_new_rendertarget_command::Create_new_rendertarget_command(erhe::commands::Commands& commands, Editor_context& context)
+Create_new_rendertarget_command::Create_new_rendertarget_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "scene.create_new_rendertarget"}
     , m_context{context}
 {
@@ -74,12 +74,12 @@ auto Create_new_rendertarget_command::try_call() -> bool
 }
 #pragma endregion Command
 
-Scene_commands::Scene_commands(erhe::commands::Commands& commands, Editor_context& editor_context)
-    : m_context                        {editor_context}
-    , m_create_new_camera_command      {commands, editor_context}
-    , m_create_new_empty_node_command  {commands, editor_context}
-    , m_create_new_light_command       {commands, editor_context}
-    , m_create_new_rendertarget_command{commands, editor_context}
+Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& context)
+    : m_context                        {context}
+    , m_create_new_camera_command      {commands, context}
+    , m_create_new_empty_node_command  {commands, context}
+    , m_create_new_light_command       {commands, context}
+    , m_create_new_rendertarget_command{commands, context}
 {
     commands.register_command   (&m_create_new_camera_command);
     commands.register_command   (&m_create_new_empty_node_command);
@@ -306,7 +306,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
 
     rendertarget_imgui_host->set_begin_callback(
         [this](erhe::imgui::Imgui_host& imgui_host) {
-            m_context.editor_windows->viewport_menu(imgui_host);
+            m_context.app_windows->viewport_menu(imgui_host);
         }
     );
 
@@ -336,8 +336,8 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         *m_context.graphics_device,
         *m_context.rendergraph,
         *m_context.imgui_windows,
-        *m_context.editor_rendering,
-        *m_context.editor_settings,
+        *m_context.app_rendering,
+        *m_context.app_settings,
         *m_context.post_processing,
         *m_context.tools,
         "rt scene view",

@@ -2,7 +2,7 @@
 
 #include "windows/brdf_slice.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
 
@@ -131,11 +131,11 @@ void Brdf_slice_rendergraph_node::set_area_size(const int size)
 Brdf_slice::Brdf_slice(
     erhe::rendergraph::Rendergraph&         rendergraph,
     erhe::scene_renderer::Forward_renderer& forward_renderer,
-    Editor_context&                         editor_context,
+    App_context&                            app_context,
     Programs&                               programs
 )
     : m_rendergraph{rendergraph}
-    , m_context    {editor_context}
+    , m_context    {app_context}
     , m_node{
         std::make_shared<Brdf_slice_rendergraph_node>(
             rendergraph,

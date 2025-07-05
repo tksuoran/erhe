@@ -1,8 +1,8 @@
 #include "windows/settings_window.hpp"
 
-#include "editor_context.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_settings.hpp"
+#include "app_context.hpp"
+#include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "graphics/icon_set.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
@@ -19,23 +19,23 @@ namespace editor {
 Settings_window::Settings_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
+    App_context&                 app_context
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Settings", "settings"}
-    , m_context                {editor_context}
+    , m_context                {app_context}
 {
 }
 
 void Settings_window::rasterize_icons()
 {
     Icons icons;
-    Icon_loader icon_loader{m_context.editor_settings->icon_settings};
+    Icon_loader icon_loader{m_context.app_settings->icon_settings};
     icons.queue_load_icons(icon_loader);
     icon_loader.execute_rasterization_queue();
 
     m_context.icon_set->load_icons(
         *m_context.graphics_device,
-        m_context.editor_settings->icon_settings,
+        m_context.app_settings->icon_settings,
         icons,
         icon_loader
     );
@@ -45,12 +45,12 @@ void Settings_window::imgui()
 {
     reset();
 
-    const float ui_scale = m_context.editor_settings->get_ui_scale();
+    const float ui_scale = m_context.app_settings->get_ui_scale();
     const ImVec2 button_size{110.0f * ui_scale, 0.0f};
 
     push_group("User Interface", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen);
     add_entry("UI Font Size", [this](){
-        auto& imgui = m_context.editor_settings->imgui;
+        auto& imgui = m_context.app_settings->imgui;
         const bool font_size_changed = ImGui::DragFloat("UI Font Size", &imgui.font_size, 0.1f, 4.0f, 100.0f, "%.1f");
         if (font_size_changed) {
             m_context.imgui_renderer->on_font_config_changed(imgui);
@@ -58,7 +58,7 @@ void Settings_window::imgui()
     });
 
     add_entry("Small Icon Size", [this](){
-        int* icon_size = &m_context.editor_settings->icon_settings.small_icon_size;
+        int* icon_size = &m_context.app_settings->icon_settings.small_icon_size;
         const int old_icon_size = *icon_size;
         ImGui::DragInt("##", icon_size, 0.1f, 4, 512);
         if (ImGui::IsItemDeactivatedAfterEdit() && old_icon_size != *icon_size) {
@@ -66,7 +66,7 @@ void Settings_window::imgui()
         }
     });
     add_entry("Large Icon Size", [this](){
-        int* icon_size = &m_context.editor_settings->icon_settings.large_icon_size;
+        int* icon_size = &m_context.app_settings->icon_settings.large_icon_size;
         const int old_icon_size = *icon_size;
         ImGui::DragInt("##", icon_size, 0.1f, 4, 512);
         if (ImGui::IsItemDeactivatedAfterEdit() && old_icon_size != *icon_size) {
@@ -75,7 +75,7 @@ void Settings_window::imgui()
     });
 
     add_entry("Hotbar Icon Size", [this](){
-        int* icon_size = &m_context.editor_settings->icon_settings.hotbar_icon_size;
+        int* icon_size = &m_context.app_settings->icon_settings.hotbar_icon_size;
         const int old_icon_size = *icon_size;
         ImGui::DragInt("##", icon_size, 0.1f, 4, 512);
         if (ImGui::IsItemDeactivatedAfterEdit() && old_icon_size != *icon_size) {
@@ -87,7 +87,7 @@ void Settings_window::imgui()
 
     push_group("Graphics", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen);
 
-    auto& graphics = m_context.editor_settings->graphics;
+    auto& graphics = m_context.app_settings->graphics;
     add_entry("Currently Used Preset", [&graphics]() {
         ImGui::TextUnformatted(graphics.current_graphics_preset.name.c_str());
     });
@@ -193,11 +193,11 @@ void Settings_window::imgui()
 
         ImGui::SameLine();
         if (ImGui::Button("Use", button_size)) {
-            m_context.editor_settings->graphics.current_graphics_preset = graphics_presets.at(m_graphics_preset_index);
-            m_context.editor_message_bus->queue_message(
-                Editor_message{
+            m_context.app_settings->graphics.current_graphics_preset = graphics_presets.at(m_graphics_preset_index);
+            m_context.app_message_bus->queue_message(
+                App_message{
                     .update_flags    = Message_flag_bit::c_flag_bit_graphics_settings,
-                    .graphics_preset = &m_context.editor_settings->graphics.current_graphics_preset
+                    .graphics_preset = &m_context.app_settings->graphics.current_graphics_preset
                 }
             );
         }
@@ -206,11 +206,11 @@ void Settings_window::imgui()
 
     add_entry("", [this, button_size](){
         if (ImGui::Button("Load", button_size)) {
-            m_context.editor_settings->read();
+            m_context.app_settings->read();
         }
         ImGui::SameLine();
         if (ImGui::Button("Save", button_size)) {
-            m_context.editor_settings->write();
+            m_context.app_settings->write();
         }
     });
 

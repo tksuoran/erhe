@@ -1,8 +1,8 @@
 #include "operations/merge_operation.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_settings.hpp"
+#include "app_settings.hpp"
 #include "operations/merge_operation.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
@@ -170,7 +170,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             compound_shape_create_info
         );
 
-        if (m_parameters.context.editor_settings->physics.static_enable) {
+        if (m_parameters.context.app_settings->physics.static_enable) {
             const erhe::physics::IRigid_body_create_info rigid_body_create_info{
                 .collision_shape = combined_collision_shape,
                 .debug_label     = "merged", // TODO
@@ -196,7 +196,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     m_first_mesh_primitives_after.push_back(after_primitive);
 }
 
-void Merge_operation::execute(Editor_context& context)
+void Merge_operation::execute(App_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -261,7 +261,7 @@ void Merge_operation::execute(Editor_context& context)
 #endif
 }
 
-void Merge_operation::undo(Editor_context& context)
+void Merge_operation::undo(App_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 

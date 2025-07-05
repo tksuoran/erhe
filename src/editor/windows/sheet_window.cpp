@@ -1,8 +1,8 @@
 #include "windows/sheet_window.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
@@ -91,22 +91,22 @@ Sheet_window::Sheet_window(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Editor_message_bus&          editor_message_bus
+    App_context&                 context,
+    App_message_bus&             app_message_bus
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Sheet", "sheet"}
-    , m_context                {editor_context}
+    , m_context                {context}
 {
     static_cast<void>(commands); // TODO Keeping in case we need to add commands here
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
 }
 
-void Sheet_window::on_message(Editor_message&)
+void Sheet_window::on_message(App_message&)
 {
     //// using namespace erhe::bit;
     //// if (test_any_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {

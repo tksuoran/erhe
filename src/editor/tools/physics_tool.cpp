@@ -1,10 +1,10 @@
 #include "tools/physics_tool.hpp"
 #include "tools/physics_tool.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_settings.hpp"
+#include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "renderers/render_context.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/node_physics.hpp"
@@ -39,7 +39,7 @@ namespace editor {
 class Scene_builder;
 
 #pragma region Commands
-Physics_tool_drag_command::Physics_tool_drag_command(erhe::commands::Commands& commands, Editor_context& context)
+Physics_tool_drag_command::Physics_tool_drag_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Physics_tool.drag"}
     , m_context{context}
 {
@@ -88,14 +88,14 @@ void Physics_tool_drag_command::on_inactive()
 
 Physics_tool::Physics_tool(
     erhe::commands::Commands& commands,
-    Editor_context&           editor_context,
-    Editor_message_bus&       editor_message_bus,
+    App_context&              context,
+    App_message_bus&          app_message_bus,
     Headset_view&             headset_view,
     Icon_set&                 icon_set,
     Tools&                    tools
 )
-    : Tool                          {editor_context}
-    , m_drag_command                {commands,editor_context}
+    : Tool                          {context}
+    , m_drag_command                {commands, context}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     , m_drag_redirect_update_command{commands, m_drag_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command, 0.3f, 0.2f}
@@ -127,8 +127,8 @@ Physics_tool::Physics_tool(
 
     m_motion_mode = erhe::physics::Motion_mode::e_kinematic_non_physical;
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
@@ -146,7 +146,7 @@ Physics_tool::~Physics_tool() noexcept
     }
 }
 
-void Physics_tool::on_message(Editor_message& message)
+void Physics_tool::on_message(App_message& message)
 {
     // Re-implementing here Tool::on_message(message);
 
@@ -414,7 +414,7 @@ auto Physics_tool::on_drag() -> bool
     if (m_physics_world == nullptr) {
         return false;
     }
-    if (!m_context.editor_settings->physics.dynamic_enable) {
+    if (!m_context.app_settings->physics.dynamic_enable) {
         return false;
     }
 

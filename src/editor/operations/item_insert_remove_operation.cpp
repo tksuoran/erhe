@@ -2,7 +2,7 @@
 #include "operations/item_parent_change_operation.hpp"
 #include "erhe_item/item_host.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -80,7 +80,7 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
     }
 }
 
-void Item_insert_remove_operation::execute(Editor_context& context)
+void Item_insert_remove_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -116,7 +116,7 @@ void Item_insert_remove_operation::execute(Editor_context& context)
     context.selection->set_selection(m_selection_after);
 }
 
-void Item_insert_remove_operation::undo(Editor_context& context)
+void Item_insert_remove_operation::undo(App_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
 

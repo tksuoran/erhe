@@ -8,7 +8,7 @@ namespace erhe::imgui { class Imgui_windows; }
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Post_processing_node;
 
 // ImGui window for showing downsample steps for a Post_processing node
@@ -18,14 +18,14 @@ public:
     Post_processing_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context
+        App_context&                 app_context
     );
 
     // Implements Imgui_window
     void imgui() override;
 
 private:
-    Editor_context&                     m_context;
+    App_context&                        m_context;
     int                                 m_selection{0};
     std::weak_ptr<Post_processing_node> m_post_processing_node{};
     bool                                m_scale_size   {true};

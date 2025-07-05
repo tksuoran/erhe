@@ -4,15 +4,11 @@
 
 #include <memory>
 
-namespace erhe::application
-{
-    class Rendergraph;
-}
+namespace erhe::application { class Rendergraph; }
 
-namespace editor
-{
+namespace editor {
 
-class Editor_scenes;
+class App_scenes;
 
 class Rendergraph_window
     : public erhe::imgui::Imgui_window
@@ -26,7 +22,7 @@ public:
     void imgui() override;
 
 private:
-    Editor_scenes&                  m_editor_scenes;
+    App_scenes&                     m_app_scenes;
     erhe::rendergraph::Rendergraph& m_render_graph;
 };
 

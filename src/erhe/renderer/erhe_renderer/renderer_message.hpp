@@ -27,7 +27,7 @@ public:
 
 class Scene_view;
 
-class Editor_message
+class App_message
 {
 public:
     uint64_t           update_flags{0};

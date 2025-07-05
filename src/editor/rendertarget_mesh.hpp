@@ -26,8 +26,8 @@ namespace erhe::primitive {
 
 namespace editor {
 
-class Editor_context;
-class Editor_message;
+class App_context;
+class App_message;
 class Forward_renderer;
 class Hand_tracker;
 class Mesh_memory;
@@ -69,7 +69,7 @@ public:
 
     auto update_pointer(Scene_view* scene_view) -> bool;
     void clear         (glm::vec4 clear_color);
-    void render_done   (Editor_context& context); // generates mipmaps, updates lod bias
+    void render_done   (App_context& context); // generates mipmaps, updates lod bias
 
     void resize_rendertarget(
         erhe::graphics::Device& graphics_device,

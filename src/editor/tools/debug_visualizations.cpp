@@ -1,9 +1,9 @@
 #include "tools/debug_visualizations.hpp"
 
-#include "editor_context.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
-#include "editor_settings.hpp"
+#include "app_context.hpp"
+#include "app_message_bus.hpp"
+#include "app_rendering.hpp"
+#include "app_settings.hpp"
 #include "renderers/render_context.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/node_physics.hpp"
@@ -94,17 +94,17 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 Debug_visualizations::Debug_visualizations(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Editor_message_bus&          editor_message_bus,
-    Editor_rendering&            editor_rendering
+    App_context&                 context,
+    App_message_bus&             app_message_bus,
+    App_rendering&               app_rendering
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Debug Visualizations", "debug_visualizations"}
-    , m_context{editor_context}
+    , m_context{context}
 {
-    editor_rendering.add(this);
+    app_rendering.add(this);
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             using namespace erhe::bit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 m_hover_scene_view = message.scene_view;
@@ -339,7 +339,7 @@ void Debug_visualizations::light_visualization(
 
 void Debug_visualizations::directional_light_visualization(const Light_visualization_context& context)
 {
-    const auto shadow_render_node = m_context.editor_rendering->get_shadow_node_for_view(context.render_context.scene_view);
+    const auto shadow_render_node = m_context.app_rendering->get_shadow_node_for_view(context.render_context.scene_view);
     if (!shadow_render_node) {
         return;
     }
@@ -447,9 +447,9 @@ void Debug_visualizations::spot_light_visualization(const Light_visualization_co
         camera_node->position_in_world()
     );
 
-    //auto* editor_time = get<Editor_time>();
-    //const float time = static_cast<float>(editor_time->time());
-    //const float half_position = (editor_time != nullptr)
+    //auto* app_time = get<App_time>();
+    //const float time = static_cast<float>(app_time->time());
+    //const float half_position = (app_time != nullptr)
     //    ? time - floor(time)
     //    : 0.5f;
 
@@ -1160,11 +1160,11 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
     }
 
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
-    Editor_context& editor_context = context.editor_context;
-    if (editor_context.editor_settings->physics.debug_draw) {
+    App_context& app_context = context.app_context;
+    if (app_context.app_settings->physics.debug_draw) {
         glm::vec4 camera_position = camera->get_node()->position_in_world();
         const JPH::Vec3 camera_position_jolt{camera_position.x, camera_position.y, camera_position.z};
-        editor_context.jolt_debug_renderer->SetCameraPos(camera_position_jolt);
+        app_context.jolt_debug_renderer->SetCameraPos(camera_position_jolt);
         erhe::physics::IWorld& world = scene_root->get_physics_world();
         world.debug_draw(*m_context.jolt_debug_renderer);
     }

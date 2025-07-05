@@ -2,7 +2,7 @@
 
 #include "rendertarget_imgui_host.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "rendertarget_mesh.hpp"
 
@@ -32,7 +32,7 @@ namespace editor {
 Rendertarget_imgui_host::Rendertarget_imgui_host(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::rendergraph::Rendergraph& rendergraph,
-    Editor_context&                 editor_context,
+    App_context&                    app_context,
     Rendertarget_mesh*              rendertarget_mesh,
     const std::string_view          name,
     const bool                      imgui_ini
@@ -44,7 +44,7 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
         imgui_ini,
         imgui_renderer.get_font_atlas()
     }
-    , m_context          {editor_context}
+    , m_app_context      {app_context}
     , m_rendertarget_mesh{rendertarget_mesh}
 {
     register_output("rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
@@ -57,7 +57,7 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     io.DisplaySize             = ImVec2{m_rendertarget_mesh->get_width(), m_rendertarget_mesh->get_height()};
     io.FontDefault             = imgui_renderer.vr_primary_font();
     io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
-    io.MouseDrawCursor         = editor_context.OpenXR;
+    io.MouseDrawCursor         = app_context.OpenXR;
     io.BackendPlatformUserData = this;
     io.BackendPlatformName     = "erhe rendertarget";
     io.MousePos                = ImVec2{-FLT_MAX, -FLT_MAX};
@@ -104,7 +104,7 @@ auto Rendertarget_imgui_host::on_xr_boolean_event(const erhe::window::Input_even
     if (!m_has_cursor) {
         return false; // TODO Is this needed? Should not be.
     }
-    Headset_view* headset_view = m_context.headset_view;
+    Headset_view* headset_view = m_app_context.headset_view;
     ERHE_VERIFY(headset_view != nullptr);
     erhe::xr::Headset* headset = headset_view->get_headset();
     ERHE_VERIFY(headset != nullptr);
@@ -167,7 +167,7 @@ auto Rendertarget_imgui_host::on_xr_vector2f_event(const erhe::window::Input_eve
         return false; // TODO Is this needed? Should not be.
     }
 
-    Headset_view* headset_view = m_context.headset_view;
+    Headset_view* headset_view = m_app_context.headset_view;
     ERHE_VERIFY(headset_view != nullptr);
     erhe::xr::Headset* headset = headset_view->get_headset();
     ERHE_VERIFY(headset != nullptr);
@@ -227,13 +227,13 @@ void Rendertarget_imgui_host::begin_imgui_frame()
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_rendertarget_mesh->update_headset_hand_tracking();
 
-    auto& headset_view = *m_context.headset_view;
+    auto& headset_view = *m_app_context.headset_view;
 #endif
     const auto pointer = m_rendertarget_mesh->get_pointer();
     ImGuiIO& io = m_imgui_context->IO;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (!m_context.OpenXR) // TODO Figure out better way to combine different input methods
+    if (!m_app_context.OpenXR) // TODO Figure out better way to combine different input methods
 #endif
     {
         if (pointer.has_value()) {
@@ -275,7 +275,7 @@ void Rendertarget_imgui_host::begin_imgui_frame()
 
             // TODO Is there better way to route mouse button and other events here?
             // Process input events from the context window
-            std::vector<erhe::window::Input_event>& input_events = m_context.context_window->get_input_events();
+            std::vector<erhe::window::Input_event>& input_events = m_app_context.context_window->get_input_events();
             for (erhe::window::Input_event& input_event : input_events) {
                 if (!input_event.handled) {
                     dispatch_input_event(input_event);
@@ -317,7 +317,7 @@ void Rendertarget_imgui_host::begin_imgui_frame()
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_context.OpenXR) {
+    if (m_app_context.OpenXR) {
         erhe::xr::Headset* headset = headset_view.get_headset();
         ERHE_VERIFY(headset != nullptr);
         const erhe::scene::Node* node = m_rendertarget_mesh->get_node();
@@ -387,7 +387,7 @@ void Rendertarget_imgui_host::begin_imgui_frame()
 
                     // Process input events from the context window
                     // Here we are interested in the XR input events
-                    std::vector<erhe::window::Input_event>& input_events = m_context.context_window->get_input_events();
+                    std::vector<erhe::window::Input_event>& input_events = m_app_context.context_window->get_input_events();
                     //if (input_events.empty()) {
                     //    SPDLOG_LOGGER_TRACE(log_frame, "Rendertarget_imgui_host - no input events");
                     //}
@@ -467,19 +467,19 @@ void Rendertarget_imgui_host::set_text_input_area(int x, int y, int w, int h)
     static_cast<void>(w);
     static_cast<void>(h);
     //// TODO
-    //// m_context_window.set_text_input_area(x, y, w, h);
+    //// m_app_context_window.set_text_input_area(x, y, w, h);
 }
 
 void Rendertarget_imgui_host::start_text_input()
 {
     //// TODO
-    //// m_context_window.start_text_input();
+    //// m_app_context_window.start_text_input();
 }
 
 void Rendertarget_imgui_host::stop_text_input()
 {
     //// TODO
-    //// m_context_window.stop_text_input();
+    //// m_app_context_window.stop_text_input();
 }
 
 void Rendertarget_imgui_host::execute_rendergraph_node()
@@ -499,8 +499,8 @@ void Rendertarget_imgui_host::execute_rendergraph_node()
     erhe::graphics::Render_pass* render_pass = m_rendertarget_mesh->get_render_pass();
     ERHE_VERIFY(render_pass != nullptr);
     std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = graphics_device.make_render_command_encoder(*render_pass);
-    m_context.imgui_renderer->render_draw_data();
-    m_rendertarget_mesh->render_done(m_context);
+    m_app_context.imgui_renderer->render_draw_data();
+    m_rendertarget_mesh->render_done(m_app_context);
 }
 
 auto Rendertarget_imgui_host::get_consumer_input_texture(int, int) const -> std::shared_ptr<erhe::graphics::Texture>

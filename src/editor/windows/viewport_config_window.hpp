@@ -12,7 +12,7 @@ namespace erhe::imgui {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 
 class Viewport_config_window : public erhe::imgui::Imgui_window
 {
@@ -26,7 +26,7 @@ public:
     Viewport_config_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context
+        App_context&                 app_context
     );
 
     // Implements Imgui_window 
@@ -38,7 +38,7 @@ public:
     void set_edit_data(Viewport_config*);
 
 private:
-    Editor_context&  m_context;
+    App_context&  m_context;
     Viewport_config* m_edit_data{nullptr};
 };
 

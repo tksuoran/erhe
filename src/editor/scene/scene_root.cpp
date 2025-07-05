@@ -1,9 +1,9 @@
 #include "scene/scene_root.hpp"
 
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_scenes.hpp"
-#include "editor_settings.hpp"
+#include "app_message_bus.hpp"
+#include "app_scenes.hpp"
+#include "app_settings.hpp"
 #include "rendertarget_mesh.hpp"
 
 #include "scene/content_library.hpp"
@@ -111,9 +111,9 @@ Scene_root::Scene_root(
     erhe::imgui::Imgui_renderer*            imgui_renderer,
     erhe::imgui::Imgui_windows*             imgui_windows,
     erhe::scene::Scene_message_bus&         scene_message_bus,
-    Editor_context*                         editor_context,
-    Editor_message_bus*                     editor_message_bus,
-    Editor_scenes*                          editor_scenes,
+    App_context*                            context,
+    App_message_bus*                        app_message_bus,
+    App_scenes*                             app_scenes,
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name
 )
@@ -172,15 +172,15 @@ Scene_root::Scene_root(
 
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("rt_root_scene");
 
-    if (editor_scenes != nullptr) {
-        register_to_editor_scenes(*editor_scenes);
+    if (app_scenes != nullptr) {
+        register_to_editor_scenes(*app_scenes);
     }
 
-    if ((imgui_renderer != nullptr) && (imgui_windows  != nullptr) && (editor_context != nullptr)) {
+    if ((imgui_renderer != nullptr) && (imgui_windows != nullptr) && (context != nullptr)) {
         m_content_library_tree_window = std::make_shared<Item_tree_window>(
             *imgui_renderer,
             *imgui_windows,
-            *editor_context,
+            *context,
             "Content Library",
             "Content_library"
         );
@@ -195,9 +195,9 @@ Scene_root::Scene_root(
         );
     }
 
-    if (editor_message_bus != nullptr) {
-        editor_message_bus->add_receiver(
-            [this](Editor_message& message) {
+    if (app_message_bus != nullptr) {
+        app_message_bus->add_receiver(
+            [this](App_message& message) {
                 using namespace erhe::bit;
                 if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
                     for (const auto& item : message.no_longer_selected) {
@@ -264,8 +264,8 @@ Scene_root::Scene_root(
 
 Scene_root::~Scene_root() noexcept
 {
-    if (m_is_registered) { // && (m_editor_scenes != nullptr)) {
-        unregister_from_editor_scenes(*m_editor_scenes);
+    if (m_is_registered) { // && (m_app_scenes != nullptr)) {
+        unregister_from_editor_scenes(*m_app_scenes);
     }
 }
 
@@ -298,8 +298,8 @@ void sanitize(std::string& s)
 auto Scene_root::make_browser_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              context,
-    Editor_settings&             editor_settings
+    App_context&                 context,
+    App_settings&                app_settings
 ) -> std::shared_ptr<Item_tree_window>
 {
     std::string ini_label = m_scene->get_name();
@@ -313,7 +313,7 @@ auto Scene_root::make_browser_window(
     );
     m_node_tree_window->set_root(m_scene->get_root_node());
     m_node_tree_window->set_item_filter(
-        editor_settings.node_tree_show_all
+        app_settings.node_tree_show_all
             ? erhe::Item_filter{
                 .require_all_bits_set           = 0,
                 .require_at_least_one_bit_set   = 0,
@@ -334,8 +334,8 @@ auto Scene_root::make_browser_window(
     );
     m_node_tree_window->set_hover_callback(
         [this, &context]() {
-            context.editor_message_bus->send_message(
-                Editor_message{
+            context.app_message_bus->send_message(
+                App_message{
                     .update_flags = Message_flag_bit::c_flag_bit_hover_scene_item_tree,
                     .scene_root   = this
                 }
@@ -350,21 +350,21 @@ void Scene_root::remove_browser_window()
     m_node_tree_window.reset();
 }
 
-void Scene_root::register_to_editor_scenes(Editor_scenes& editor_scenes)
+void Scene_root::register_to_editor_scenes(App_scenes& app_scenes)
 {
     ERHE_VERIFY(m_is_registered == false);
-    ERHE_VERIFY(m_editor_scenes == nullptr);
-    m_editor_scenes = &editor_scenes;
-    editor_scenes.register_scene_root(this);
+    ERHE_VERIFY(m_app_scenes == nullptr);
+    m_app_scenes = &app_scenes;
+    app_scenes.register_scene_root(this);
     m_is_registered = true;
 }
 
-void Scene_root::unregister_from_editor_scenes(Editor_scenes& editor_scenes)
+void Scene_root::unregister_from_editor_scenes(App_scenes& app_scenes)
 {
     ERHE_VERIFY(m_is_registered == true);
-    ERHE_VERIFY(m_editor_scenes == &editor_scenes);
-    m_editor_scenes = nullptr;
-    editor_scenes.unregister_scene_root(this);
+    ERHE_VERIFY(m_app_scenes == &app_scenes);
+    m_app_scenes = nullptr;
+    app_scenes.unregister_scene_root(this);
     m_is_registered = false;
 }
 

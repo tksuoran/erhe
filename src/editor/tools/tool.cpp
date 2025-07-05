@@ -1,6 +1,6 @@
 #include "tools/tool.hpp"
 #include "editor_log.hpp"
-#include "editor_message.hpp"
+#include "app_message.hpp"
 #include "scene/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
@@ -9,12 +9,12 @@
 
 namespace editor {
 
-Tool::Tool(Editor_context& editor_context)
-    : m_context{editor_context}
+Tool::Tool(App_context& app_context)
+    : m_context{app_context}
 {
 }
 
-void Tool::on_message(Editor_message& message)
+void Tool::on_message(App_message& message)
 {
     using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {

@@ -1,9 +1,9 @@
 #include "tools/fly_camera_tool.hpp"
 #include "tools/fly_camera_tool.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "tools/tools.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
@@ -119,7 +119,7 @@ auto Fly_camera_tool::try_ready() -> bool
 }
 
 #pragma region Fly_camera_turn_command
-Fly_camera_turn_command::Fly_camera_turn_command(erhe::commands::Commands& commands, Editor_context& context)
+Fly_camera_turn_command::Fly_camera_turn_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Fly_camera.turn_camera"}
     , m_context{context}
 {
@@ -165,7 +165,7 @@ auto Fly_camera_turn_command::try_call_with_input(erhe::commands::Input_argument
 #pragma endregion Fly_camera_turn_command
 
 #pragma region Fly_camera_tumble_command
-Fly_camera_tumble_command::Fly_camera_tumble_command(erhe::commands::Commands& commands, Editor_context& context)
+Fly_camera_tumble_command::Fly_camera_tumble_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Fly_camera.tumble"}
     , m_context{context}
 {
@@ -207,7 +207,7 @@ void Fly_camera_tumble_command::on_inactive()
 #pragma endregion Fly_camera_tumble_command
 
 #pragma region Fly_camera_track_command
-Fly_camera_track_command::Fly_camera_track_command(erhe::commands::Commands& commands, Editor_context& context)
+Fly_camera_track_command::Fly_camera_track_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Fly_camera.track"}
     , m_context{context}
 {
@@ -241,7 +241,7 @@ auto Fly_camera_track_command::try_call() -> bool
 #pragma region Fly_camera_active_axis_float_command
 Fly_camera_active_axis_float_command::Fly_camera_active_axis_float_command(
     erhe::commands::Commands& commands,
-    Editor_context&           context,
+    App_context&           context,
     Variable                  variable,
     float                     scale
 )
@@ -259,7 +259,7 @@ auto Fly_camera_active_axis_float_command::try_call_with_input(erhe::commands::I
 #pragma endregion Fly_camera_variable_float_command
 
 #pragma region Fly_camera_zoom_command
-Fly_camera_zoom_command::Fly_camera_zoom_command(erhe::commands::Commands& commands, Editor_context& context)
+Fly_camera_zoom_command::Fly_camera_zoom_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Fly_camera.zoom_camera"}
     , m_context{context}
 {
@@ -298,7 +298,7 @@ auto Fly_camera_zoom_command::try_call_with_input(erhe::commands::Input_argument
 #pragma endregion Fly_camera_zoom_command
 
 #pragma region Fly_camera_frame_command
-Fly_camera_frame_command::Fly_camera_frame_command(erhe::commands::Commands& commands, Editor_context& context)
+Fly_camera_frame_command::Fly_camera_frame_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Fly_camera.frame"}
     , m_context{context}
 {
@@ -373,7 +373,7 @@ auto Fly_camera_frame_command::try_call() -> bool
 #pragma region Fly_camera_move_command
 Fly_camera_move_command::Fly_camera_move_command(
     erhe::commands::Commands&            commands,
-    Editor_context&                      context,
+    App_context&                      context,
     const Variable                       variable,
     const erhe::math::Input_axis_control control,
     const bool                           active
@@ -392,7 +392,7 @@ auto Fly_camera_move_command::try_call_with_input(erhe::commands::Input_argument
 }
 #pragma endregion Fly_camera_move_command
 
-Fly_camera_serialization_command::Fly_camera_serialization_command(erhe::commands::Commands& commands, Editor_context& context, bool store)
+Fly_camera_serialization_command::Fly_camera_serialization_command(erhe::commands::Commands& commands, App_context& context, bool store)
     : Command  {commands, "Fly_camera_serialization_command"}
     , m_context{context}
     , m_store  {store}
@@ -601,37 +601,37 @@ Fly_camera_tool::Fly_camera_tool(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Editor_message_bus&          editor_message_bus,
+    App_context&                 app_context,
+    App_message_bus&             app_message_bus,
     Tools&                       tools
 )
     : erhe::imgui::Imgui_window       {imgui_renderer, imgui_windows, "Fly Camera", "fly_camera"}
-    , Tool                            {editor_context}
-    , m_turn_command                  {commands, editor_context}
-    , m_tumble_command                {commands, editor_context}
-    , m_track_command                 {commands, editor_context}
-    , m_zoom_command                  {commands, editor_context}
-    , m_frame_command                 {commands, editor_context}
-    , m_move_up_active_command        {commands, editor_context, Variable::translate_y, erhe::math::Input_axis_control::more, true }
-    , m_move_up_inactive_command      {commands, editor_context, Variable::translate_y, erhe::math::Input_axis_control::more, false}
-    , m_move_down_active_command      {commands, editor_context, Variable::translate_y, erhe::math::Input_axis_control::less, true }
-    , m_move_down_inactive_command    {commands, editor_context, Variable::translate_y, erhe::math::Input_axis_control::less, false}
-    , m_move_left_active_command      {commands, editor_context, Variable::translate_x, erhe::math::Input_axis_control::less, true }
-    , m_move_left_inactive_command    {commands, editor_context, Variable::translate_x, erhe::math::Input_axis_control::less, false}
-    , m_move_right_active_command     {commands, editor_context, Variable::translate_x, erhe::math::Input_axis_control::more, true }
-    , m_move_right_inactive_command   {commands, editor_context, Variable::translate_x, erhe::math::Input_axis_control::more, false}
-    , m_move_forward_active_command   {commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::less, true }
-    , m_move_forward_inactive_command {commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::less, false}
-    , m_move_backward_active_command  {commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::more, true }
-    , m_move_backward_inactive_command{commands, editor_context, Variable::translate_z, erhe::math::Input_axis_control::more, false}
-    , m_active_translate_x_command    {commands, editor_context, Variable::translate_x,  1.0 / 32.0f}
-    , m_active_translate_y_command    {commands, editor_context, Variable::translate_y, -1.0 / 32.0f}
-    , m_active_translate_z_command    {commands, editor_context, Variable::translate_z,  1.0 / 32.0f}
-    , m_active_rotate_x_command       {commands, editor_context, Variable::rotate_x,     1.0 / 128.0f}
-    , m_active_rotate_y_command       {commands, editor_context, Variable::rotate_y,    -1.0 / 128.0f}
-    , m_active_rotate_z_command       {commands, editor_context, Variable::rotate_z,     1.0 / 128.0f}
-    , m_serialize_transform_command   {commands, editor_context, true}
-    , m_deserialize_transform_command {commands, editor_context, false}
+    , Tool                            {app_context}
+    , m_turn_command                  {commands, app_context}
+    , m_tumble_command                {commands, app_context}
+    , m_track_command                 {commands, app_context}
+    , m_zoom_command                  {commands, app_context}
+    , m_frame_command                 {commands, app_context}
+    , m_move_up_active_command        {commands, app_context, Variable::translate_y, erhe::math::Input_axis_control::more, true }
+    , m_move_up_inactive_command      {commands, app_context, Variable::translate_y, erhe::math::Input_axis_control::more, false}
+    , m_move_down_active_command      {commands, app_context, Variable::translate_y, erhe::math::Input_axis_control::less, true }
+    , m_move_down_inactive_command    {commands, app_context, Variable::translate_y, erhe::math::Input_axis_control::less, false}
+    , m_move_left_active_command      {commands, app_context, Variable::translate_x, erhe::math::Input_axis_control::less, true }
+    , m_move_left_inactive_command    {commands, app_context, Variable::translate_x, erhe::math::Input_axis_control::less, false}
+    , m_move_right_active_command     {commands, app_context, Variable::translate_x, erhe::math::Input_axis_control::more, true }
+    , m_move_right_inactive_command   {commands, app_context, Variable::translate_x, erhe::math::Input_axis_control::more, false}
+    , m_move_forward_active_command   {commands, app_context, Variable::translate_z, erhe::math::Input_axis_control::less, true }
+    , m_move_forward_inactive_command {commands, app_context, Variable::translate_z, erhe::math::Input_axis_control::less, false}
+    , m_move_backward_active_command  {commands, app_context, Variable::translate_z, erhe::math::Input_axis_control::more, true }
+    , m_move_backward_inactive_command{commands, app_context, Variable::translate_z, erhe::math::Input_axis_control::more, false}
+    , m_active_translate_x_command    {commands, app_context, Variable::translate_x,  1.0 / 32.0f}
+    , m_active_translate_y_command    {commands, app_context, Variable::translate_y, -1.0 / 32.0f}
+    , m_active_translate_z_command    {commands, app_context, Variable::translate_z,  1.0 / 32.0f}
+    , m_active_rotate_x_command       {commands, app_context, Variable::rotate_x,     1.0 / 128.0f}
+    , m_active_rotate_y_command       {commands, app_context, Variable::rotate_y,    -1.0 / 128.0f}
+    , m_active_rotate_z_command       {commands, app_context, Variable::rotate_z,     1.0 / 128.0f}
+    , m_serialize_transform_command   {commands, app_context, true}
+    , m_deserialize_transform_command {commands, app_context, false}
 
     , m_tx_graph       {"Tx",      "time", "ms", "Tx",      ""}
     , m_ty_graph       {"Ty",      "time", "ms", "Ty",      ""}
@@ -662,7 +662,7 @@ Fly_camera_tool::Fly_camera_tool(
     m_py_graph.hover_color = 0xff88ff88;
     m_pz_graph.hover_color = 0xff8888ff;
 
-    if (editor_context.OpenXR) {
+    if (app_context.OpenXR) {
         return;
     }
 
@@ -746,8 +746,8 @@ Fly_camera_tool::Fly_camera_tool(
     commands.bind_command_to_controller_axis(&m_active_rotate_y_command, 5);
     commands.bind_command_to_controller_axis(&m_active_rotate_z_command, 4);
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             Tool::on_message(message);
             using namespace erhe::bit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {

@@ -15,7 +15,7 @@ Compound_operation::~Compound_operation() noexcept
 {
 }
 
-void Compound_operation::execute(Editor_context& context)
+void Compound_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute Begin {}", describe());
 
@@ -26,7 +26,7 @@ void Compound_operation::execute(Editor_context& context)
     log_operations->trace("Op Execute End {}", describe());
 }
 
-void Compound_operation::undo(Editor_context& context)
+void Compound_operation::undo(App_context& context)
 {
     log_operations->trace("Op Undo Begin {}", describe());
 

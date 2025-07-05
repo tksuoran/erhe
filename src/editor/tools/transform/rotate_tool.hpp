@@ -17,7 +17,7 @@ class Rotate_tool : public Subtool
 public:
     static constexpr int c_priority{1};
 
-    Rotate_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools);
+    Rotate_tool(App_context& app_context, Icon_set& icon_set, Tools& tools);
     ~Rotate_tool() noexcept override;
 
     // Implements Tool

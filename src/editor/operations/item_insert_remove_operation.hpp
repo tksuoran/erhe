@@ -33,7 +33,7 @@ public:
     class Parameters
     {
     public:
-        Editor_context&                  context;
+        App_context&                     context;
         std::shared_ptr<erhe::Hierarchy> item;
         std::shared_ptr<erhe::Hierarchy> parent;
         Mode                             mode;
@@ -43,9 +43,9 @@ public:
     explicit Item_insert_remove_operation(const Parameters& parameters);
 
     // Implements Operation
-    auto describe() const -> std::string   override;
-    void execute (Editor_context& context) override;
-    void undo    (Editor_context& context) override;
+    auto describe() const -> std::string override;
+    void execute (App_context& context)  override;
+    void undo    (App_context& context)  override;
 
 private:
     Mode                                                       m_mode;

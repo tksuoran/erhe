@@ -9,13 +9,11 @@
 #include <optional>
 #include <vector>
 
-namespace erhe::imgui {
-    class Imgui_windows;
-}
+namespace erhe::imgui { class Imgui_windows; }
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Hand_tracker;
 
 class Theremin
@@ -27,7 +25,7 @@ public:
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         Hand_tracker&                hand_tracker,
-        Editor_context&              editor_context
+        App_context&                 app_context
     );
 
     // Implements Renderable
@@ -55,7 +53,7 @@ public:
 private:
     auto normalized_finger_distance() const -> float;
 
-    Editor_context& m_context;
+    App_context& m_context;
 
     bool                 m_enable_audio          {false};  // master on/off switch
     float                m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna

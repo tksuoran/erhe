@@ -1,6 +1,6 @@
 #include "tools/brushes/brush.hpp"
 
-#include "editor_settings.hpp"
+#include "app_settings.hpp"
 #include "scene/node_physics.hpp"
 #include "editor_log.hpp"
 
@@ -94,7 +94,7 @@ void Brush::late_initialize()
     }
 
     if (
-        m_data.editor_settings.physics.static_enable &&
+        m_data.app_settings.physics.static_enable &&
         !m_data.collision_shape &&
         !m_data.collision_shape_generator
     ) {
@@ -186,7 +186,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
     const float scale = static_cast<float>(scale_key) / c_scale_factor;
     if (scale == 1.0f) {
         glm::mat4 local_inertia{0.0f};
-        if (m_data.editor_settings.physics.static_enable) {
+        if (m_data.app_settings.physics.static_enable) {
             if (m_data.collision_shape) {
                 ERHE_VERIFY(m_data.collision_shape->is_convex());
                 const float mass = m_data.density * m_data.volume;
@@ -235,7 +235,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
     };
 
     glm::mat4 local_inertia{0.0f};
-    if (m_data.editor_settings.physics.static_enable) {
+    if (m_data.app_settings.physics.static_enable) {
         if (m_data.collision_shape) {
             ERHE_VERIFY(m_data.collision_shape->is_convex());
             const auto scaled_volume          = m_data.volume * scale * scale * scale;
@@ -318,7 +318,7 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
     node->attach             (mesh);
     node->enable_flag_bits   (instance_create_info.node_flags);
 
-    if (m_data.editor_settings.physics.static_enable) {
+    if (m_data.app_settings.physics.static_enable) {
         if (m_data.collision_shape || m_data.collision_shape_generator) {
             ERHE_PROFILE_SCOPE("make brush node physics");
 

@@ -2,7 +2,7 @@
 
 #include "rendertarget_mesh.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_view.hpp"
@@ -300,7 +300,7 @@ void Rendertarget_mesh::clear(const glm::vec4 clear_color)
     gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
 }
 
-void Rendertarget_mesh::render_done(Editor_context& context)
+void Rendertarget_mesh::render_done(App_context& context)
 {
     gl::generate_texture_mipmap(m_texture->gl_name());
 

@@ -1,4 +1,4 @@
-#include "editor_context.hpp"
+#include "app_context.hpp"
 
 namespace editor {
 

@@ -1,8 +1,8 @@
 #include "scene/asset_browser.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_scenes.hpp"
+#include "app_scenes.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/ioperation.hpp"
 #include "operations/operation_stack.hpp"
@@ -33,8 +33,8 @@ public:
 
     // Implements Operation
     auto describe() const -> std::string   override;
-    void execute (Editor_context& context) override;
-    void undo    (Editor_context& context) override;
+    void execute (App_context& context) override;
+    void undo    (App_context& context) override;
 
 private:
     std::filesystem::path            m_path;
@@ -52,7 +52,7 @@ auto Scene_open_operation::describe() const -> std::string
     return fmt::format("[{}] Scene_open_operation(path = {})", get_serial(), m_path.string());
 }
 
-void Scene_open_operation::execute(Editor_context& context)
+void Scene_open_operation::execute(App_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -64,8 +64,8 @@ void Scene_open_operation::execute(Editor_context& context)
             context.imgui_windows,
             *context.scene_message_bus,
             &context,
-            context.editor_message_bus,
-            context.editor_scenes, // registers into Editor_scenes
+            context.app_message_bus,
+            context.app_scenes, // registers into App_scenes
             m_content_library,
             erhe::file::to_string(m_path.filename())
         );
@@ -74,7 +74,7 @@ void Scene_open_operation::execute(Editor_context& context)
             *context.imgui_renderer,
             *context.imgui_windows,
             context,
-            *context.editor_settings
+            *context.app_settings
         );
         browser_window->show_window();
 
@@ -94,14 +94,14 @@ void Scene_open_operation::execute(Editor_context& context)
         );
     } else {
         // Re-register
-        m_scene_root->register_to_editor_scenes(*context.editor_scenes);
+        m_scene_root->register_to_editor_scenes(*context.app_scenes);
     }
 }
 
-void Scene_open_operation::undo(Editor_context& context)
+void Scene_open_operation::undo(App_context& context)
 {
     ERHE_VERIFY(m_scene_root);
-    context.editor_scenes->unregister_scene_root(m_scene_root.get());
+    context.app_scenes->unregister_scene_root(m_scene_root.get());
     m_scene_root->remove_browser_window();
 }
 
@@ -185,7 +185,7 @@ Asset_browser_window::Asset_browser_window(
     Asset_browser&               asset_browser,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              context,
+    App_context&                 context,
     const std::string_view       window_title,
     const std::string_view       ini_label
 )
@@ -202,8 +202,8 @@ void Asset_browser_window::imgui()
     Item_tree_window::imgui();
 }
 
-Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
-    : m_context{editor_context}
+Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& context)
+    : m_context{context}
 {
     ERHE_PROFILE_FUNCTION();
     scan();
@@ -212,7 +212,7 @@ Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
         *this,
         imgui_renderer, 
         imgui_windows, 
-        editor_context,
+        context,
         "Asset Browser",
         "asset_browser"
     );

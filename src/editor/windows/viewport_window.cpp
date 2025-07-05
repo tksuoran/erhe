@@ -5,7 +5,7 @@
 #include "tools/brushes/brush.hpp"
 #include "tools/brushes/brush_tool.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "scene/viewport_scene_view.hpp"
 
@@ -27,13 +27,13 @@ Viewport_window::Viewport_window(
     erhe::imgui::Imgui_renderer&                                imgui_renderer,
     erhe::imgui::Imgui_windows&                                 imgui_windows,
     const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
-    Editor_context&                                             editor_context,
+    App_context&                                                app_context,
     const std::string_view                                      name,
     const std::string_view                                      ini_label,
     const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, name, ini_label}
-    , m_editor_context         {editor_context}
+    , m_app_context            {app_context}
     , m_viewport_scene_view    {viewport_scene_view}
     , m_rendergraph_output_node{rendergraph_output_node}
 {
@@ -108,7 +108,7 @@ void Viewport_window::hidden()
 void Viewport_window::cancel_brush_drag_and_drop()
 {
     m_brush_drag_and_drop_active = false;
-    m_editor_context.brush_tool->preview_drag_and_drop({});
+    m_app_context.brush_tool->preview_drag_and_drop({});
 }
 
 void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x, float max_y)
@@ -141,10 +141,10 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
         if (brush) {
             if (payload->Preview) {
                 // TODO preview
-                m_editor_context.brush_tool->preview_drag_and_drop(brush);
+                m_app_context.brush_tool->preview_drag_and_drop(brush);
             }
             if (payload->Delivery) {
-                m_editor_context.brush_tool->try_insert(brush.get());
+                m_app_context.brush_tool->try_insert(brush.get());
             }
         } else {
             cancel_brush_drag_and_drop();

@@ -18,13 +18,13 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Node_physics;
 
 class Mesh_operation_parameters
 {
 public:
-    Editor_context&             context;
+    App_context&                context;
     erhe::primitive::Build_info build_info;
 };
 
@@ -51,9 +51,9 @@ protected:
     ~Mesh_operation() noexcept override;
 
     // Implements Operation
-    auto describe() const -> std::string   override;
-    void execute (Editor_context& context) override;
-    void undo    (Editor_context& context) override;
+    auto describe() const -> std::string override;
+    void execute (App_context& context)  override;
+    void undo    (App_context& context)  override;
 
     // Public API
     void add_entry   (Entry&& entry);

@@ -1,6 +1,6 @@
 #include "tools/material_paint_tool.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 
 #include "graphics/icon_set.hpp"
 #include "scene/content_library.hpp"
@@ -26,7 +26,7 @@ namespace editor {
 
 #pragma region Command
 
-Material_paint_command::Material_paint_command(erhe::commands::Commands& commands, Editor_context& context)
+Material_paint_command::Material_paint_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Material_paint.paint"}
     , m_context{context}
 {
@@ -70,7 +70,7 @@ void Material_pick_command::try_ready()
     }
 }
 
-Material_pick_command::Material_pick_command(erhe::commands::Commands& commands, Editor_context& context)
+Material_pick_command::Material_pick_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Material_paint.pick"}
     , m_context{context}
 {
@@ -95,14 +95,14 @@ auto Material_pick_command::try_call() -> bool
 
 Material_paint_tool::Material_paint_tool(
     erhe::commands::Commands& commands,
-    Editor_context&           editor_context,
+    App_context&              app_context,
     Headset_view&             headset_view,
     Icon_set&                 icon_set,
     Tools&                    tools
 )
-    : Tool           {editor_context}
-    , m_paint_command{commands, editor_context}
-    , m_pick_command {commands, editor_context}
+    : Tool           {app_context}
+    , m_paint_command{commands, app_context}
+    , m_pick_command {commands, app_context}
 {
     ERHE_PROFILE_FUNCTION();
 

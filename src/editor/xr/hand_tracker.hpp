@@ -9,17 +9,13 @@
 
 #include <optional>
 
-namespace erhe::xr {
-    class Headset;
-}
-namespace erhe::renderer {
-    class Primitive_renderer;
-}
+namespace erhe::xr       { class Headset; }
+namespace erhe::renderer { class Primitive_renderer; }
 
 namespace editor {
 
-class Editor_context;
-class Editor_rendering;
+class App_context;
+class App_rendering;
 class Headset_view;
 
 enum class Hand_name : unsigned int {
@@ -93,7 +89,7 @@ private:
 class Hand_tracker : public Renderable
 {
 public:
-    Hand_tracker(Editor_context& editor_context, Editor_rendering& editor_rendering);
+    Hand_tracker(App_context& editor_context, App_rendering& app_rendering);
     ~Hand_tracker() noexcept override;
 
     // Implements Renderable
@@ -106,7 +102,7 @@ public:
     void set_color(Hand_name hand_name, std::size_t finger_name, ImVec4 color);
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 
     Hand m_left_hand;
     Hand m_right_hand;

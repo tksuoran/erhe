@@ -20,8 +20,8 @@ namespace erhe::scene {
 namespace editor {
 
 class Content_library;
-class Editor_context;
-class Editor_message;
+class App_context;
+class App_message;
 class Render_context;
 class Scene_view;
 class Scene_root;
@@ -41,7 +41,7 @@ public:
 class Tool : public erhe::commands::Command_host
 {
 public:
-    explicit Tool(Editor_context& editor_context);
+    explicit Tool(App_context& context);
 
     // Implements Command_host
     [[nodiscard]] auto get_priority() const -> int override;
@@ -69,13 +69,13 @@ protected:
     [[nodiscard]] auto get_content_library() const -> std::shared_ptr<Content_library>;
     [[nodiscard]] auto get_material       () const -> std::shared_ptr<erhe::primitive::Material>;
 
-    void on_message          (Editor_message& message);
+    void on_message          (App_message& message);
     void set_base_priority   (int base_priority);
     void set_flags           (uint64_t flags);
     void set_icon            (glm::vec2 icon);
     void set_hover_scene_view(Scene_view* scene_view);
 
-    Editor_context& m_context;
+    App_context& m_context;
 
 private:
     int                      m_base_priority     {0};

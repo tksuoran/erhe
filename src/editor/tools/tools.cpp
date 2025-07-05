@@ -1,9 +1,9 @@
 ﻿#include "tools/tools.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
+#include "app_message_bus.hpp"
+#include "app_rendering.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
@@ -216,23 +216,23 @@ Tools::Tools(
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::graphics::Device&         graphics_device,
     erhe::scene::Scene_message_bus& scene_message_bus,
-    Editor_context&                 editor_context,
-    Editor_rendering&               editor_rendering,
+    App_context&                    app_context,
+    App_rendering&                  app_rendering,
     Mesh_memory&                    mesh_memory,
     Programs&                       programs
 )
-    : m_context              {editor_context}
+    : m_context              {app_context}
     , m_pipeline_renderpasses{graphics_device, mesh_memory, programs}
 {
     ERHE_PROFILE_FUNCTION();
 
     const auto tools_content_library = std::make_shared<Content_library>();
 
-    if (editor_context.developer_mode) {
+    if (app_context.developer_mode) {
         m_content_library_tree_window = std::make_shared<Item_tree_window>(
             imgui_renderer,
             imgui_windows,
-            editor_context,
+            app_context,
             "Tools Library",
             "tools_content_library"
         );
@@ -254,7 +254,7 @@ Tools::Tools(
         scene_message_bus,
         nullptr,
         nullptr, // Do not process editor messages
-        nullptr, // Do not register to Editor_scenes
+        nullptr, // Do not register to App_scenes
         tools_content_library,
         "Tool scene"
     );
@@ -267,7 +267,7 @@ Tools::Tools(
     }
 
     using Item_flags = erhe::Item_flags;
-    auto tool = editor_rendering.make_renderpass("Tool");
+    auto tool = app_rendering.make_renderpass("Tool");
     tool->mesh_layers    = { Mesh_layer_id::tool };
     tool->passes         = {
         &m_pipeline_renderpasses.tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
@@ -360,8 +360,8 @@ void Tools::set_priority_tool(Tool* priority_tool)
     }
 
     m_context.commands->sort_bindings();
-    m_context.editor_message_bus->send_message(
-        Editor_message{
+    m_context.app_message_bus->send_message(
+        App_message{
             .update_flags = Message_flag_bit::c_flag_bit_tool_select
         }
     );

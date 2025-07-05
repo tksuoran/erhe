@@ -1,8 +1,8 @@
-#include "editor_scenes.hpp"
+#include "app_scenes.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_settings.hpp"
+#include "app_settings.hpp"
 #include "tools/tools.hpp"
 #include "scene/scene_root.hpp"
 
@@ -14,49 +14,49 @@
 
 namespace editor {
 
-Editor_scenes::Editor_scenes(Editor_context& editor_context)
-    : m_context{editor_context}
+App_scenes::App_scenes(App_context& context)
+    : m_context{context}
 {
 }
 
-void Editor_scenes::register_scene_root(Scene_root* scene_root)
+void App_scenes::register_scene_root(Scene_root* scene_root)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const auto i = std::find(m_scene_roots.begin(), m_scene_roots.end(), scene_root);
     if (i != m_scene_roots.end()) {
-        log_scene->error("Scene '{}' is already in registered in Editor_scenes", scene_root->get_name());
+        log_scene->error("Scene '{}' is already in registered in App_scenes", scene_root->get_name());
     } else {
         m_scene_roots.push_back(scene_root);
     }
 }
 
-void Editor_scenes::unregister_scene_root(Scene_root* scene_root)
+void App_scenes::unregister_scene_root(Scene_root* scene_root)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const auto i = std::remove(m_scene_roots.begin(), m_scene_roots.end(), scene_root);
     if (i == m_scene_roots.end()) {
-        log_scene->error("Scene '{}' not registered in Editor_scenes", scene_root->get_name());
+        log_scene->error("Scene '{}' not registered in App_scenes", scene_root->get_name());
     } else {
         m_scene_roots.erase(i, m_scene_roots.end());
     }
 }
 
-void Editor_scenes::imgui()
+void App_scenes::imgui()
 {
     for (const auto& scene_root : m_scene_roots) {
         scene_root->imgui();
     }
 }
 
-void Editor_scenes::update_physics_simulation_fixed_step(const Time_context& time_context)
+void App_scenes::update_physics_simulation_fixed_step(const Time_context& time_context)
 {
     ERHE_PROFILE_FUNCTION();
 
     if (
-        !m_context.editor_settings->physics.static_enable ||
-        !m_context.editor_settings->physics.dynamic_enable
+        !m_context.app_settings->physics.static_enable ||
+        !m_context.app_settings->physics.dynamic_enable
     ) {
         return;
     }
@@ -66,11 +66,11 @@ void Editor_scenes::update_physics_simulation_fixed_step(const Time_context& tim
     }
 }
 
-void Editor_scenes::before_physics_simulation_steps()
+void App_scenes::before_physics_simulation_steps()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_context.editor_settings->physics.static_enable || !m_context.editor_settings->physics.dynamic_enable) {
+    if (!m_context.app_settings->physics.static_enable || !m_context.app_settings->physics.dynamic_enable) {
         return;
     }
 
@@ -79,7 +79,7 @@ void Editor_scenes::before_physics_simulation_steps()
     }
 }
 
-void Editor_scenes::update_node_transforms()
+void App_scenes::update_node_transforms()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -94,11 +94,11 @@ void Editor_scenes::update_node_transforms()
     scene_root.get_hosted_scene()->update_node_transforms();
 }
 
-void Editor_scenes::after_physics_simulation_steps()
+void App_scenes::after_physics_simulation_steps()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_context.editor_settings->physics.static_enable || !m_context.editor_settings->physics.dynamic_enable) {
+    if (!m_context.app_settings->physics.static_enable || !m_context.app_settings->physics.dynamic_enable) {
         return;
     }
 
@@ -107,12 +107,12 @@ void Editor_scenes::after_physics_simulation_steps()
     }
 }
 
-auto Editor_scenes::get_scene_roots() -> const std::vector<Scene_root*>&
+auto App_scenes::get_scene_roots() -> const std::vector<Scene_root*>&
 {
     return m_scene_roots;
 }
 
-void Editor_scenes::sanity_check()
+void App_scenes::sanity_check()
 {
 #if !defined(NDEBUG)
     for (const auto& scene_root : m_scene_roots) {
@@ -121,7 +121,7 @@ void Editor_scenes::sanity_check()
 #endif
 }
 
-auto Editor_scenes::scene_combo(const char* label, Scene_root*& in_out_selected_entry, const bool empty_option) const -> bool
+auto App_scenes::scene_combo(const char* label, Scene_root*& in_out_selected_entry, const bool empty_option) const -> bool
 {
     int selection_index = 0;
     int index = 0;

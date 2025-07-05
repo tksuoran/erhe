@@ -19,7 +19,7 @@ class Transform_tool_shared;
 class Subtool : public Tool
 {
 public:
-    explicit Subtool(Editor_context& editor_context);
+    explicit Subtool(App_context& app_context);
     ~Subtool() noexcept override;
 
     [[nodiscard]] virtual auto begin (unsigned int axis_mask, Scene_view* scene_view) -> bool = 0;

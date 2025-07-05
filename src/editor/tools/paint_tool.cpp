@@ -2,9 +2,9 @@
 
 #include "tools/paint_tool.hpp"
 
-#include "editor_context.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_settings.hpp"
+#include "app_context.hpp"
+#include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
@@ -41,7 +41,7 @@
 namespace editor {
 
 #pragma region Commands
-Paint_vertex_command::Paint_vertex_command(erhe::commands::Commands& commands, Editor_context& context)
+Paint_vertex_command::Paint_vertex_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Paint_tool.paint_vertex"}
     , m_context{context}
 {
@@ -86,15 +86,15 @@ Paint_tool::Paint_tool(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Editor_message_bus&          editor_message_bus,
+    App_context&                 context,
+    App_message_bus&             app_message_bus,
     Headset_view&                headset_view,
     Icon_set&                    icon_set,
     Tools&                       tools
 )
     : erhe::imgui::Imgui_window     {imgui_renderer, imgui_windows, "Paint Tool", "paint_tool"}
-    , Tool                          {editor_context}
-    , m_paint_vertex_command        {commands, editor_context}
+    , Tool                          {context}
+    , m_paint_vertex_command        {commands, context}
     , m_drag_redirect_update_command{commands, m_paint_vertex_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
 {
@@ -177,8 +177,8 @@ Paint_tool::Paint_tool(
     m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f, 255.0f / 255.0f, 1.0f);
     m_ngon_colors.emplace_back(  0.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             Tool::on_message(message);
         }
     );
@@ -490,7 +490,7 @@ void Paint_tool::tool_properties(erhe::imgui::Imgui_window&)
 
 void Paint_tool::imgui()
 {
-    const float ui_scale = m_context.editor_settings->get_ui_scale();
+    const float ui_scale = m_context.app_settings->get_ui_scale();
     const ImVec2 button_size{110.0f * ui_scale, 0.0f};
 
     ImGui::SetNextItemWidth(200);

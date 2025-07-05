@@ -4,12 +4,12 @@
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 
 class Debug_draw : public erhe::physics::IDebug_draw
 {
 public:
-    explicit Debug_draw(Editor_context& editor_context);
+    explicit Debug_draw(App_context& context);
     virtual ~Debug_draw(); // TODO override - make virtual ~IDebug_draw()
 
     // Implemnents IDebug_draw
@@ -31,9 +31,9 @@ public:
     float line_width{4.0f};
 
 private:
-    Editor_context& m_context;
-    int             m_debug_mode{0};
-    Colors          m_colors;
+    App_context& m_context;
+    int          m_debug_mode{0};
+    Colors       m_colors;
 };
 
 } // namespace editor

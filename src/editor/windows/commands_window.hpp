@@ -11,7 +11,7 @@ namespace erhe::imgui {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 
 class Commands_window : public erhe::imgui::Imgui_window
 {
@@ -19,7 +19,7 @@ public:
     Commands_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor
+        App_context&              editor
     );
 
     // Implements Imgui_window
@@ -28,7 +28,7 @@ public:
 private:
     void filtered_commands(const erhe::commands::State filter);
 
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 } // namespace editor

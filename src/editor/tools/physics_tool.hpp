@@ -24,8 +24,8 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_message;
-class Editor_message_bus;
+class App_message;
+class App_message_bus;
 class Headset_view;
 class Icon_set;
 class Node_physics;
@@ -41,13 +41,13 @@ enum class Physics_tool_mode : int {
 class Physics_tool_drag_command : public erhe::commands::Command
 {
 public:
-    Physics_tool_drag_command(erhe::commands::Commands& commands, Editor_context& context);
+    Physics_tool_drag_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready  () override;
     auto try_call   () -> bool override;
     void on_inactive() override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Physics_tool : public Tool
@@ -57,8 +57,8 @@ public:
 
     Physics_tool(
         erhe::commands::Commands& commands,
-        Editor_context&           editor_context,
-        Editor_message_bus&       editor_message_bus,
+        App_context&              context,
+        App_message_bus&          app_message_bus,
         Headset_view&             headset_view,
         Icon_set&                 icon_set,
         Tools&                    tools
@@ -81,7 +81,7 @@ public:
     auto on_drag      () -> bool;
 
 private:
-    void on_message(Editor_message& message);
+    void on_message(App_message& message);
     void tool_hover(Scene_view* scene_view);
 
     void move_drag_point_instant  (glm::vec3 position);

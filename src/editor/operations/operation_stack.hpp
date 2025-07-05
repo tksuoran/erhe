@@ -6,43 +6,37 @@
 #include <memory>
 #include <vector>
 
-namespace erhe::commands {
-    class CommandS;
-}
-namespace erhe::imgui {
-    class Imgui_windows;
-}
-namespace tf {
-    class Executor;
-}
+namespace erhe::commands { class Commands; }
+namespace erhe::imgui    { class Imgui_windows; }
+namespace tf             { class Executor; }
 
 namespace editor {
 
-class Editor_context;
-class Editor_message_bus;
+class App_context;
+class App_message_bus;
 class Operation;
-class Editor_context;
+class App_context;
 class Operation_stack;
 class Selection_tool;
 
 class Undo_command : public erhe::commands::Command
 {
 public:
-    Undo_command(erhe::commands::Commands& commands, Editor_context& context);
+    Undo_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Redo_command : public erhe::commands::Command
 {
 public:
-    Redo_command(erhe::commands::Commands& commands, Editor_context& context);
+    Redo_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Operation_stack
@@ -55,7 +49,7 @@ public:
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context
+        App_context&                 context
     );
     ~Operation_stack();
 
@@ -75,11 +69,10 @@ public:
 private:
     void imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations);
 
-    Editor_context& m_context;
-    tf::Executor&   m_executor;
-
-    Undo_command m_undo_command;
-    Redo_command m_redo_command;
+    App_context&  m_context;
+    tf::Executor& m_executor;
+    Undo_command  m_undo_command;
+    Redo_command  m_redo_command;
 
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;

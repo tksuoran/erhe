@@ -1,9 +1,9 @@
 #include "tools/selection_tool.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_scenes.hpp"
+#include "app_message_bus.hpp"
+#include "app_scenes.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
@@ -136,9 +136,9 @@ void Range_selection::reset()
 #pragma endregion Range_selection
 
 #pragma region Commands
-Viewport_select_command::Viewport_select_command(erhe::commands::Commands& commands, Editor_context& editor_context)
+Viewport_select_command::Viewport_select_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Selection.viewport_select"}
-    , m_context{editor_context}
+    , m_context{app_context}
 {
 }
 
@@ -165,9 +165,9 @@ auto Viewport_select_command::try_call() -> bool
 
 //
 
-Viewport_select_toggle_command::Viewport_select_toggle_command(erhe::commands::Commands& commands, Editor_context& editor_context)
+Viewport_select_toggle_command::Viewport_select_toggle_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Selection.viewport_select_toggle"}
-    , m_context{editor_context}
+    , m_context{app_context}
 {
 }
 
@@ -192,9 +192,9 @@ auto Viewport_select_toggle_command::try_call() -> bool
 
 //
 
-Selection_delete_command::Selection_delete_command(erhe::commands::Commands& commands, Editor_context& editor_context)
+Selection_delete_command::Selection_delete_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Selection.delete"}
-    , m_context{editor_context}
+    , m_context{app_context}
 {
 }
 
@@ -205,9 +205,9 @@ auto Selection_delete_command::try_call() -> bool
 
 //
 
-Selection_cut_command::Selection_cut_command(erhe::commands::Commands& commands, Editor_context& editor_context)
+Selection_cut_command::Selection_cut_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Selection.cut"}
-    , m_context{editor_context}
+    , m_context{app_context}
 {
 }
 
@@ -218,9 +218,9 @@ auto Selection_cut_command::try_call() -> bool
 
 //
 
-Selection_copy_command::Selection_copy_command(erhe::commands::Commands& commands, Editor_context& editor_context)
+Selection_copy_command::Selection_copy_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Selection.copy"}
-    , m_context{editor_context}
+    , m_context{app_context}
 {
 }
 
@@ -231,9 +231,9 @@ auto Selection_copy_command::try_call() -> bool
 
 //
 
-Selection_duplicate_command::Selection_duplicate_command(erhe::commands::Commands& commands, Editor_context& editor_context)
+Selection_duplicate_command::Selection_duplicate_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Selection.duplicate"}
-    , m_context{editor_context}
+    , m_context{app_context}
 {
 }
 
@@ -245,8 +245,8 @@ auto Selection_duplicate_command::try_call() -> bool
 
 #pragma endregion Commands
 
-Selection_tool::Selection_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools)
-    : Tool{editor_context}
+Selection_tool::Selection_tool(App_context& app_context, Icon_set& icon_set, Tools& tools)
+    : Tool{app_context}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -257,14 +257,14 @@ Selection_tool::Selection_tool(Editor_context& editor_context, Icon_set& icon_se
     tools.register_tool(this);
 }
 
-Selection::Selection(erhe::commands::Commands& commands, Editor_context& editor_context, Editor_message_bus& editor_message_bus)
-    : m_context                       {editor_context}
-    , m_viewport_select_command       {commands, editor_context}
-    , m_viewport_select_toggle_command{commands, editor_context}
-    , m_delete_command                {commands, editor_context}
-    , m_cut_command                   {commands, editor_context}
-    , m_copy_command                  {commands, editor_context}
-    , m_duplicate_command             {commands, editor_context}
+Selection::Selection(erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus)
+    : m_context                       {context}
+    , m_viewport_select_command       {commands, context}
+    , m_viewport_select_toggle_command{commands, context}
+    , m_delete_command                {commands, context}
+    , m_cut_command                   {commands, context}
+    , m_copy_command                  {commands, context}
+    , m_duplicate_command             {commands, context}
     , m_range_selection               {*this}
 {
     commands.register_command            (&m_viewport_select_command);
@@ -285,8 +285,8 @@ Selection::Selection(erhe::commands::Commands& commands, Editor_context& editor_
     commands.bind_command_to_menu(&m_duplicate_command, "Edit.Duplicate");
     commands.bind_command_to_menu(&m_duplicate_command, "Edit.Paster");
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             using namespace erhe::bit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 m_hover_scene_view = message.scene_view;
@@ -567,7 +567,7 @@ void Selection::end_selection_change()
     const auto sorted_old = get_sorted(m_begin_selection_change_state);
     const auto sorted_new = get_sorted(m_selection);
 
-    Editor_message selection_changed_message{
+    App_message selection_changed_message{
         .update_flags = Message_flag_bit::c_flag_bit_selection,
     };
 
@@ -585,7 +585,7 @@ void Selection::end_selection_change()
         item_set_sort_predicate
     );
 
-    m_context.editor_message_bus->send_message(selection_changed_message);
+    m_context.app_message_bus->send_message(selection_changed_message);
 }
 
 auto Selection::on_viewport_select_try_ready() -> bool
@@ -817,7 +817,7 @@ void Selection::sanity_check()
 #if !defined(NDEBUG)
     std::size_t error_count{0};
 
-    const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
+    const auto& scene_roots = m_context.app_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {
         const auto& scene = scene_root->get_scene();
         const auto& flat_nodes = scene.get_flat_nodes();

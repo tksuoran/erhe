@@ -18,7 +18,7 @@ namespace erhe::rendergraph {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Post_processing_node;
 class Viewport_scene_view;
 
@@ -29,7 +29,7 @@ public:
         erhe::imgui::Imgui_renderer&                                imgui_renderer,
         erhe::imgui::Imgui_windows&                                 imgui_windows,
         const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
-        Editor_context&                                             editor_context,
+        App_context&                                             editor_context,
         const std::string_view                                      name,
         const std::string_view                                      ini_label,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
@@ -55,7 +55,7 @@ private:
     void drag_and_drop_target(float min_x, float min_y, float max_x, float max_y);
     void cancel_brush_drag_and_drop();
 
-    Editor_context&                                    m_editor_context;
+    App_context&                                       m_app_context;
     std::weak_ptr<Viewport_scene_view>                 m_viewport_scene_view;
     std::weak_ptr<erhe::rendergraph::Rendergraph_node> m_rendergraph_output_node;
     bool                                               m_brush_drag_and_drop_active{false};

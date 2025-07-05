@@ -1,8 +1,8 @@
 ﻿#include "tools/hotbar.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/node_raytrace.hpp"
@@ -83,7 +83,7 @@ namespace editor {
 using glm::vec3;
 
 #pragma region Commmands
-Toggle_menu_visibility_command::Toggle_menu_visibility_command(erhe::commands::Commands& commands, Editor_context& context)
+Toggle_menu_visibility_command::Toggle_menu_visibility_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Hotbar.toggle_visibility"}
     , m_context{context}
 {
@@ -95,7 +95,7 @@ auto Toggle_menu_visibility_command::try_call() -> bool
     return true;
 }
 
-Hotbar_trackpad_command::Hotbar_trackpad_command(erhe::commands::Commands& commands, Editor_context& context)
+Hotbar_trackpad_command::Hotbar_trackpad_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Hotbar.trackpad"}
     , m_context{context}
 {
@@ -106,7 +106,7 @@ auto Hotbar_trackpad_command::try_call_with_input(erhe::commands::Input_argument
     return m_context.hotbar->try_trackpad(input);
 }
 
-Hotbar_thumbstick_command::Hotbar_thumbstick_command(erhe::commands::Commands& commands, Editor_context& context)
+Hotbar_thumbstick_command::Hotbar_thumbstick_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Hotbar.thumbstick"}
     , m_context{context}
 {
@@ -149,7 +149,7 @@ auto Hotbar_thumbstick_command::try_call_with_input(erhe::commands::Input_argume
     return true;
 }
 
-Hotbar_rotate_tool_command::Hotbar_rotate_tool_command(erhe::commands::Commands& commands, Editor_context& context, int rotate_direction)
+Hotbar_rotate_tool_command::Hotbar_rotate_tool_command(erhe::commands::Commands& commands, App_context& context, int rotate_direction)
     : Command{commands, "Hotbar.rotate"}
     , m_context{context}
     , m_rotate_direction{rotate_direction}
@@ -168,22 +168,22 @@ Hotbar::Hotbar(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Editor_message_bus&          editor_message_bus,
+    App_context&                 context,
+    App_message_bus&             app_message_bus,
     Headset_view&                headset_view,
     Mesh_memory&                 mesh_memory,
     Scene_builder&               scene_builder,
     Tools&                       tools
 )
     : erhe::imgui::Imgui_window  {imgui_renderer, imgui_windows, "Hotbar", ""}
-    , Tool                       {editor_context}
-    , m_toggle_visibility_command{commands, editor_context}
-    , m_prev_tool_command        {commands, editor_context, -1}
-    , m_next_tool_command        {commands, editor_context, 1}
+    , Tool                       {context}
+    , m_toggle_visibility_command{commands, context}
+    , m_prev_tool_command        {commands, context, -1}
+    , m_next_tool_command        {commands, context, 1}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    , m_trackpad_command         {commands, editor_context}
+    , m_trackpad_command         {commands, context}
     , m_trackpad_click_command   {commands, m_trackpad_command}
-    , m_thumbstick_command       {commands, editor_context}
+    , m_thumbstick_command       {commands, context}
 #endif
 {
     ERHE_PROFILE_FUNCTION();
@@ -245,8 +245,8 @@ Hotbar::Hotbar(
         this->Imgui_window::m_show_in_menu = false;
     }
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
@@ -391,7 +391,7 @@ void Hotbar::get_all_tools()
     init_hotbar();
 }
 
-void Hotbar::on_message(Editor_message& message)
+void Hotbar::on_message(App_message& message)
 {
     Scene_view* const old_scene_view = get_hover_scene_view();
     Tool::on_message(message);

@@ -25,7 +25,7 @@ namespace lunasvg {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Icon_loader;
 class Icon_rasterization;
 class Icon_settings;
@@ -83,18 +83,18 @@ class Icon_set
 {
 public:
     Icon_set(
-        Editor_context&           editor_context,
+        App_context&            context,
         erhe::graphics::Device& graphics_device,
-        Icon_settings&            icon_settings,
-        Icons&                    icons,
-        Icon_loader&              icon_loader
+        Icon_settings&          icon_settings,
+        Icons&                  icons,
+        Icon_loader&            icon_loader
     );
 
     void load_icons(
         erhe::graphics::Device& graphics_device,
-        Icon_settings&            icon_settings,
-        Icons&                    icons_in,
-        Icon_loader&              loader
+        Icon_settings&          icon_settings,
+        Icons&                  icons_in,
+        Icon_loader&            loader
     );
 
     void item_icon(const std::shared_ptr<erhe::Item_base>& item, float scale);
@@ -108,7 +108,7 @@ public:
     void add_icons(uint64_t item_type, float scale);
 
 private:
-    Editor_context&                     m_context;
+    App_context&                        m_context;
     std::unique_ptr<Icon_rasterization> m_small;
     std::unique_ptr<Icon_rasterization> m_large;
     std::unique_ptr<Icon_rasterization> m_hotbar;

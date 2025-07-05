@@ -2,10 +2,10 @@
 
 #include "scene/scene_view.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/grid.hpp"
 #include "tools/grid_tool.hpp"
@@ -45,7 +45,7 @@ auto Hover_entry::get_name() const -> const std::string&
     return empty_string;
 }
 
-Scene_view::Scene_view(Editor_context& context, Viewport_config viewport_config)
+Scene_view::Scene_view(App_context& context, Viewport_config viewport_config)
     : m_context        {context}
     , m_viewport_config{viewport_config}
 {
@@ -65,8 +65,8 @@ void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
     m_hover_entries[slot].slot = slot;
 
     if (mesh_changed || grid_changed) {
-        m_context.editor_message_bus->send_message(
-            Editor_message{
+        m_context.app_message_bus->send_message(
+            App_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_mesh
             }
         );

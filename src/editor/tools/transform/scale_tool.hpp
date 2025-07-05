@@ -18,7 +18,7 @@ class Scale_tool : public Subtool
 public:
     static constexpr int c_priority{1};
 
-    Scale_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools);
+    Scale_tool(App_context& app_context, Icon_set& icon_set, Tools& tools);
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;

@@ -1,6 +1,6 @@
 #include "windows/tool_properties_window.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
 
@@ -8,9 +8,9 @@
 
 namespace editor {
 
-Tool_properties_window::Tool_properties_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, Editor_context& editor_context)
+Tool_properties_window::Tool_properties_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Tool Properties", "tool_properties"}
-    , m_context                {editor_context}
+    , m_context                {app_context}
 {
 }
 

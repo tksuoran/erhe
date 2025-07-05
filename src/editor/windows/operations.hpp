@@ -59,9 +59,9 @@ struct Tool_slot
     };
 };
 
-class Editor_context;
-class Editor_message;
-class Editor_message_bus;
+class App_context;
+class App_message;
+class App_message_bus;
 class Scene_view;
 
 class Operations : public erhe::imgui::Imgui_window
@@ -71,8 +71,8 @@ public:
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
-        Editor_message_bus&          editor_message_bus
+        App_context&                 context,
+        App_message_bus&             app_message_bus
     );
 
     // Implements Window
@@ -113,9 +113,9 @@ private:
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
     [[nodiscard]] auto mesh_context() -> Mesh_operation_parameters;
 
-    void on_message(Editor_message& message);
+    void on_message(App_message& message);
 
-    Editor_context& m_context;
+    App_context& m_context;
 
     erhe::commands::Lambda_command m_merge_command;
     erhe::commands::Lambda_command m_triangulate_command;

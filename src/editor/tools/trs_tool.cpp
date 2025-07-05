@@ -1,9 +1,9 @@
 #include "tools/trs_tool.hpp"
 
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
+#include "app_message_bus.hpp"
+#include "app_rendering.hpp"
+#include "app_scenes.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -135,9 +135,9 @@ void Trs_tool::declare_required_components()
     require<erhe::commands::Commands           >();
     require<erhe::graphics::Gl_context_provider>();
     require<erhe::imgui::Imgui_windows         >();
-    require<Editor_message_bus>();
-    require<Icon_set          >();
-    m_editor_scenes  = require<Editor_scenes >();
+    require<App_message_bus>();
+    require<Icon_set       >();
+    m_app_scenes     = require<App_scenes    >();
     m_mesh_memory    = require<Mesh_memory   >();
     m_selection_tool = require<Selection_tool>();
     m_tools          = require<Tools         >();
@@ -176,15 +176,15 @@ void Trs_tool::initialize_component()
     commands->bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_left);
     commands->bind_command_to_controller_trigger_drag(&m_drag_command);
 
-    get<Editor_message_bus>()->add_receiver(
-        [&](Editor_message& message)
+    get<App_message_bus>()->add_receiver(
+        [&](App_message& message)
         {
             on_message(message);
         }
     );
 }
 
-void Trs_tool::on_message(Editor_message& message)
+void Trs_tool::on_message(App_message& message)
 {
     Tool::on_message(message);
 

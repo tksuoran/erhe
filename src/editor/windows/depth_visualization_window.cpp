@@ -2,9 +2,9 @@
 
 #include "windows/depth_visualization_window.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_rendering.hpp"
+#include "app_rendering.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -172,15 +172,15 @@ Depth_visualization_window::Depth_visualization_window(
     erhe::imgui::Imgui_windows&             imgui_windows,
     erhe::rendergraph::Rendergraph&         rendergraph,
     erhe::scene_renderer::Forward_renderer& forward_renderer,
-    Editor_context&                         editor_context,
-    Editor_rendering&                       editor_rendering,
+    App_context&                            context,
+    App_rendering&                          app_rendering,
     Mesh_memory&                            mesh_memory,
     Programs&                               programs
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Depth Visualization", "depth_visualization"}
-    , m_context                {editor_context}
+    , m_context                {context}
 {
-    if (editor_context.OpenXR || !editor_context.developer_mode) {
+    if (context.OpenXR || !context.developer_mode) {
         hide_window();
         hidden();
         return;
@@ -188,7 +188,7 @@ Depth_visualization_window::Depth_visualization_window(
 
     m_depth_to_color_node = std::make_unique<Depth_to_color_rendergraph_node>(rendergraph, forward_renderer, mesh_memory, programs);
 
-    const auto& shadow_nodes = editor_rendering.get_all_shadow_nodes();
+    const auto& shadow_nodes = app_rendering.get_all_shadow_nodes();
     if (!shadow_nodes.empty()) {
         const std::shared_ptr<Shadow_render_node>& shadow_node = shadow_nodes.front();
         set_shadow_renderer_node(shadow_node);
@@ -238,7 +238,7 @@ void Depth_visualization_window::imgui()
         return;
     }
 
-    const auto& shadow_nodes = m_context.editor_rendering->get_all_shadow_nodes();
+    const auto& shadow_nodes = m_context.app_rendering->get_all_shadow_nodes();
     if (!shadow_nodes.empty()) {
         int last_index = static_cast<int>(shadow_nodes.size() - 1);
         const bool edited = ImGui::SliderInt("Viewport", &m_selected_shadow_node, 0, last_index);

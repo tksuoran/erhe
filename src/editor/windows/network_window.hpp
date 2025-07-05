@@ -12,7 +12,7 @@ namespace erhe::imgui {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 
 class Network_window
     : public erhe::imgui::Imgui_window
@@ -21,7 +21,7 @@ public:
     Network_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context
+        App_context&              editor_context
     );
 
     // Implements Imgui_window
@@ -31,7 +31,7 @@ public:
 
 private:
 
-    Editor_context&          m_context;
+    App_context&          m_context;
     erhe::net::Client        m_client;
     erhe::net::Server        m_server;
 

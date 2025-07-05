@@ -54,7 +54,7 @@ public:
     [[nodiscard]] auto get_cell_size      () const -> float;
 
     void render          (const Render_context& context);
-    void imgui           (Editor_context& context);
+    void imgui           (App_context& context);
     void set_snap_enabled(bool snap_enabled) { m_snap_enabled = snap_enabled; }
     void set_cell_size   (float cell_size) { m_cell_size = cell_size; }
     void set_cell_div    (int cell_div) { m_cell_div = cell_div; }

@@ -1,6 +1,6 @@
 ﻿#include "rendergraph/post_processing.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_gl/wrapper_functions.hpp"
@@ -379,8 +379,8 @@ auto Post_processing::make_program(
         };
 }
 
-Post_processing::Post_processing(erhe::graphics::Device& d, Editor_context& editor_context)
-    : m_context         {editor_context}
+Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_context)
+    : m_context         {app_context}
     , m_fragment_outputs{erhe::graphics::Fragment_output{.name = "out_color", .type = gl::Fragment_shader_output_type::float_vec4, .location = 0}}
     , m_dummy_texture   {d.create_dummy_texture()}
     , m_sampler_linear{

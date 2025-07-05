@@ -20,9 +20,9 @@ namespace erhe::scene {
 
 namespace editor {
 
-class Editor_context;
-class Editor_message_bus;
-class Editor_rendering;
+class App_context;
+class App_message_bus;
+class App_rendering;
 class Scene_root;
 class Scene_view;
 
@@ -48,9 +48,9 @@ public:
     Debug_visualizations(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context,
-        Editor_message_bus&          editor_message_bus,
-        Editor_rendering&            editor_rendering
+        App_context&                 context,
+        App_message_bus&             app_message_bus,
+        App_rendering&               app_rendering
     );
 
     // Implements Renderable
@@ -101,7 +101,7 @@ private:
 
     void make_combo(const char* label, Visualization_mode& visualization);
 
-    Editor_context&                      m_context;
+    App_context&                      m_context;
     Scene_view*                          m_hover_scene_view{nullptr};
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;
 

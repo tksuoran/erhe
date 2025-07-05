@@ -1,7 +1,7 @@
 #include "tools/transform/scale_tool.hpp"
 #include "windows/property_editor.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/tools.hpp"
@@ -12,8 +12,8 @@ namespace editor {
 
 using namespace glm;
 
-Scale_tool::Scale_tool(Editor_context& editor_context, Icon_set& icon_set, Tools& tools)
-    : Subtool{editor_context}
+Scale_tool::Scale_tool(App_context& app_context, Icon_set& icon_set, Tools& tools)
+    : Subtool{app_context}
 {
     set_base_priority(c_priority);
     set_description  ("Scale");

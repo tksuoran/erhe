@@ -1,5 +1,5 @@
 #include "graph/shader_graph_node.hpp"
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -88,7 +88,7 @@ void Shader_graph_node::imgui()
 {
 }
 
-void Shader_graph_node::node_editor(Editor_context& editor_context, ax::NodeEditor::EditorContext& node_editor)
+void Shader_graph_node::node_editor(App_context& app_context, ax::NodeEditor::EditorContext& node_editor)
 {
     log_graph_editor->info("Shader_graph_node {} {}", get_name(), get_id());
 
@@ -101,12 +101,12 @@ void Shader_graph_node::node_editor(Editor_context& editor_context, ax::NodeEdit
     ax::NodeEditor::NodeId node_id{get_id()};
     node_editor.BeginNode(node_id);
     Node_context context {
-        .context         = editor_context,
+        .context         = app_context,
         .node_editor     = node_editor,
         .pin_width       =   0.0f,
         .pin_label_width =  70.0f,
         .center_width    = 150.0f,
-        .icon_font       = editor_context.imgui_renderer->icon_font()
+        .icon_font       = app_context.imgui_renderer->icon_font()
     };
     context.side_width      = context.pin_width + context.pin_label_width;
     context.pin_table_size  = ImVec2{context.side_width, 0.0f};
@@ -189,9 +189,9 @@ void Shader_graph_node::node_editor(Editor_context& editor_context, ax::NodeEdit
     const bool editor_selection = node_editor.IsNodeSelected(get_id());
     if (item_selection != editor_selection) {
         if (editor_selection) {
-            editor_context.selection->add_to_selection(shared_from_this());
+            app_context.selection->add_to_selection(shared_from_this());
         } else {
-            editor_context.selection->remove_from_selection(shared_from_this());
+            app_context.selection->remove_from_selection(shared_from_this());
         }
     }
 }

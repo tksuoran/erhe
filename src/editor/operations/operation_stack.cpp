@@ -1,6 +1,6 @@
 #include "operations/operation_stack.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "operations/ioperation.hpp"
 #include "tools/tool.hpp"
 
@@ -21,7 +21,7 @@ Operation::~Operation() noexcept
 }
 
 #pragma region Commands
-Undo_command::Undo_command(erhe::commands::Commands& commands, Editor_context& context)
+Undo_command::Undo_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "undo"}
     , m_context{context}
 {
@@ -37,7 +37,7 @@ auto Undo_command::try_call() -> bool
     }
 }
 
-Redo_command::Redo_command(erhe::commands::Commands& commands, Editor_context& context)
+Redo_command::Redo_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "redo"}
     , m_context{context}
 {
@@ -59,13 +59,13 @@ Operation_stack::Operation_stack(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
+    App_context&                 context
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Operation Stack", "operation_stack"}
-    , m_context     {editor_context}
+    , m_context     {context}
     , m_executor    {executor}
-    , m_undo_command{commands, editor_context}
-    , m_redo_command{commands, editor_context}
+    , m_undo_command{commands, context}
+    , m_redo_command{commands, context}
 {
     commands.register_command(&m_undo_command);
     commands.register_command(&m_redo_command);

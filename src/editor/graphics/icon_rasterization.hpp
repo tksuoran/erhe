@@ -25,7 +25,7 @@ namespace tf {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 class Icon_settings;
 class Programs;
 
@@ -69,7 +69,7 @@ private:
 class Icon_rasterization
 {
 public:
-    Icon_rasterization(Editor_context& editor_context, erhe::graphics::Device& graphics_device, int size);
+    Icon_rasterization(App_context& context, erhe::graphics::Device& graphics_device, int size);
 
     [[nodiscard]] auto get_size() const -> int;
 
@@ -86,7 +86,7 @@ public:
 private:
     [[nodiscard]] auto uv1(const glm::vec2& uv0) const -> glm::vec2;
 
-    Editor_context&                          m_context;
+    App_context&                             m_context;
     std::shared_ptr<erhe::graphics::Texture> m_texture;
     erhe::graphics::Sampler                  m_linear_sampler;
     uint64_t                                 m_texture_handle{0};

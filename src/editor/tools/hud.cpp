@@ -1,8 +1,8 @@
 #include "tools/hud.hpp"
 
-#include "editor_context.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_windows.hpp"
+#include "app_context.hpp"
+#include "app_message_bus.hpp"
+#include "app_windows.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
@@ -34,7 +34,7 @@ namespace editor {
 using glm::vec3;
 
 #pragma region Commands
-Hud_drag_command::Hud_drag_command(erhe::commands::Commands& commands, Editor_context& context)
+Hud_drag_command::Hud_drag_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Hud.drag"}
     , m_context{context}
 {
@@ -72,7 +72,7 @@ void Hud_drag_command::on_inactive()
     }
 }
 
-Toggle_hud_visibility_command::Toggle_hud_visibility_command(erhe::commands::Commands& commands, Editor_context& context)
+Toggle_hud_visibility_command::Toggle_hud_visibility_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Hud.toggle_visibility"}
     , m_context{context}
 {
@@ -90,18 +90,18 @@ Hud::Hud(
     erhe::graphics::Device&         graphics_device,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::rendergraph::Rendergraph& rendergraph,
-    Editor_context&                 editor_context,
-    Editor_message_bus&             editor_message_bus,
-    Editor_windows&                 editor_windows,
+    App_context&                    app_context,
+    App_message_bus&                app_message_bus,
+    App_windows&                    app_windows,
     Headset_view&                   headset_view,
     Mesh_memory&                    mesh_memory,
     Scene_builder&                  scene_builder,
     Tools&                          tools
 )
-    : Tool                                {editor_context}
-    , m_toggle_visibility_command         {commands, editor_context}
+    : Tool                                {app_context}
+    , m_toggle_visibility_command         {commands, app_context}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    , m_drag_command                      {commands, editor_context}
+    , m_drag_command                      {commands, app_context}
     , m_drag_float_redirect_update_command{commands, m_drag_command}
     , m_drag_float_enable_command         {commands, m_drag_float_redirect_update_command, 0.3f, 0.1f}
     , m_drag_bool_redirect_update_command {commands, m_drag_command}
@@ -156,7 +156,7 @@ Hud::Hud(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::visible      |
         erhe::Item_flags::translucent  |
-        (editor_context.developer_mode ? erhe::Item_flags::show_in_ui : 0)
+        (app_context.developer_mode ? erhe::Item_flags::show_in_ui : 0)
     );
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
@@ -165,28 +165,28 @@ Hud::Hud(
     m_rendertarget_node->enable_flag_bits(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::visible      |
-        (editor_context.developer_mode ? erhe::Item_flags::show_in_ui : 0)
+        (app_context.developer_mode ? erhe::Item_flags::show_in_ui : 0)
     );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_host>(
         imgui_renderer,
         rendergraph,
-        editor_context,
+        app_context,
         m_rendertarget_mesh.get(),
         "Hud Viewport",
         true
     );
 
     m_rendertarget_imgui_viewport->set_begin_callback(
-        [&editor_windows](erhe::imgui::Imgui_host& imgui_host) {
-            editor_windows.viewport_menu(imgui_host);
+        [&app_windows](erhe::imgui::Imgui_host& imgui_host) {
+            app_windows.viewport_menu(imgui_host);
         }
     );
 
     set_mesh_visibility(true);
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
@@ -310,7 +310,7 @@ void Hud::end_drag()
     m_drag_node.reset();
 }
 
-void Hud::on_message(Editor_message& message)
+void Hud::on_message(App_message& message)
 {
     Tool::on_message(message);
 }

@@ -16,7 +16,7 @@ namespace erhe::imgui {
 
 namespace editor {
 
-class Editor_context;
+class App_context;
 
 class Asset_node
     : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Asset_node>
@@ -106,7 +106,7 @@ public:
         Asset_browser&               asset_browser,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              context,
+        App_context&              context,
         const std::string_view       window_title,
         const std::string_view       ini_label
     );
@@ -123,7 +123,7 @@ public:
     Asset_browser(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        Editor_context&              editor_context
+        App_context&                 context
     );
 
     void scan();
@@ -139,7 +139,7 @@ private:
 
     auto try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool;
 
-    Editor_context& m_context;
+    App_context& m_context;
     Asset_node*     m_popup_node{nullptr};
 
     std::shared_ptr<Asset_node>           m_root;

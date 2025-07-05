@@ -1,7 +1,7 @@
 #include "graph/node_properties.hpp"
 #include "graph/shader_graph_node.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
@@ -25,10 +25,10 @@ namespace editor {
 Node_properties_window::Node_properties_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
+    App_context&                 context
 )
     : Imgui_window{imgui_renderer, imgui_windows, "Node Properties", "node_pproperties"}
-    , m_context   {editor_context}
+    , m_context   {context}
 {
 }
 

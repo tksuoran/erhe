@@ -1,6 +1,6 @@
 #include "windows/selection_window.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "graphics/icon_set.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -13,10 +13,10 @@ namespace editor {
 Selection_window::Selection_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context
+    App_context&                 app_context
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Selection", "selection"}
-    , m_context                {editor_context}
+    , m_context                {app_context}
 {
 }
 

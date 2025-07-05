@@ -2,10 +2,10 @@
 
 #include "windows/item_tree_window.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_scenes.hpp"
-#include "editor_settings.hpp"
+#include "app_scenes.hpp"
+#include "app_settings.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -30,7 +30,7 @@ namespace editor {
 
 using Light_type = erhe::scene::Light_type;
 
-Item_tree::Item_tree(Editor_context& context)
+Item_tree::Item_tree(App_context& context)
     : m_context{context}
     , m_filter{
         .require_all_bits_set           = erhe::Item_flags::show_in_ui,
@@ -86,7 +86,7 @@ void Item_tree::select_all()
     SPDLOG_LOGGER_TRACE(log_tree, "select_all()");
 
     m_context.selection->clear_selection();
-    const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
+    const auto& scene_roots = m_context.app_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {
         const auto& scene = scene_root->get_scene();
         for (const auto& node : scene.get_root_node()->get_children()) {
@@ -910,7 +910,7 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     m_context.icon_set->item_icon(item, m_ui_scale);
 
     const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    if (!m_context.editor_settings->node_tree_expand_attachments && node) {
+    if (!m_context.app_settings->node_tree_expand_attachments && node) {
         for (const auto& node_attachment : node->get_attachments()) {
             m_context.icon_set->item_icon(node_attachment, m_ui_scale);
         }
@@ -1074,7 +1074,7 @@ void Item_tree::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
     }
     const auto tree_node_state = item_icon_and_text(item, flags);
     if (tree_node_state.is_open) {
-        if (m_context.editor_settings->node_tree_expand_attachments) {
+        if (m_context.app_settings->node_tree_expand_attachments) {
             const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
             if (node) {
                 const float attachment_indent = 15.0f; // TODO
@@ -1133,8 +1133,8 @@ void Item_tree::imgui_tree(float ui_scale)
     ImGui::TableSetupColumn("entry", ImGuiTableColumnFlags_IndentEnable  | ImGuiTableColumnFlags_WidthStretch,  1.0f);
 
 #if 0 //// TODO
-    ImGui::Checkbox("Expand Attachments", &m_context.editor_settings->node_tree_expand_attachments);
-    ImGui::Checkbox("Show All",           &m_context.editor_settings->node_tree_show_all);
+    ImGui::Checkbox("Expand Attachments", &m_context.app_settings->node_tree_expand_attachments);
+    ImGui::Checkbox("Show All",           &m_context.app_settings->node_tree_show_all);
 #endif
 
     m_context.selection->range_selection().begin();
@@ -1181,10 +1181,10 @@ void Item_tree::imgui_tree(float ui_scale)
             )
         );
 
-        m_context.editor_scenes->register_scene_root(scene_root);
+        m_context.app_scenes->register_scene_root(scene_root);
     }
 #endif
-    //// const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
+    //// const auto& scene_roots = m_context.app_scenes->get_scene_roots();
     //// for (const auto& scene_root : scene_roots) {
     ////     const auto& scene = scene_root->get_scene();
     ////     for (const auto& node : scene.get_root_node()->get_children()) {
@@ -1218,7 +1218,7 @@ void Item_tree::imgui_tree(float ui_scale)
 
     ImGui::EndTable();
 
-    //// m_context.editor_scenes->sanity_check();
+    //// m_context.app_scenes->sanity_check();
 }
 
 ////////////////////////////
@@ -1226,7 +1226,7 @@ void Item_tree::imgui_tree(float ui_scale)
 Item_tree_window::Item_tree_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              context,
+    App_context&              context,
     const std::string_view       window_title,
     const std::string_view       ini_label
 )

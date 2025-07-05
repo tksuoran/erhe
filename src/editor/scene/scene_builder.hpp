@@ -46,11 +46,11 @@ class Brush;
 class Brush_data;
 class Content_library_node;
 class Depth_visualization_window;
-class Editor_context;
-class Editor_message_bus;
-class Editor_rendering;
-class Editor_scenes;
-class Editor_settings;
+class App_context;
+class App_message_bus;
+class App_rendering;
+class App_scenes;
+class App_settings;
 class Fly_camera_tool;
 class Json_library;
 class Mesh_memory;
@@ -82,9 +82,9 @@ public:
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
-        Editor_context&                 editor_context,
-        Editor_rendering&               editor_rendering,
-        Editor_settings&                editor_settings,
+        App_context&                    app_context,
+        App_rendering&                  app_rendering,
+        App_settings&                   app_settings,
         Mesh_memory&                    mesh_memory,
         Post_processing&                post_processing,
         Tools&                          tools,
@@ -129,14 +129,14 @@ private:
 
     //// auto make_brush(
     ////     Content_library_node& folder,
-    ////     Editor_settings&      editor_settings,
+    ////     App_settings&         app_settings,
     ////     Mesh_memory&          mesh_memory,
     ////     GEO::Mesh&&           geo_mesh
     //// ) -> std::shared_ptr<Brush>;
 
     auto make_brush(
         Content_library_node&                            folder,
-        Editor_settings&                                 editor_settings,
+        App_settings&                                    app_settings,
         Mesh_memory&                                     mesh_memory,
         const std::shared_ptr<erhe::geometry::Geometry>& geometry
     ) -> std::shared_ptr<Brush>;
@@ -148,8 +148,8 @@ private:
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
-        Editor_rendering&               editor_rendering,
-        Editor_settings&                editor_settings,
+        App_rendering&                  app_rendering,
+        App_settings&                   app_settings,
         Post_processing&                post_processing,
         Tools&                          tools,
         Scene_views&                    scene_views
@@ -159,17 +159,17 @@ private:
 
     auto get_brushes() -> Content_library_node&;
 
-    void make_brushes               (Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Executor& executor);
-    void make_platonic_solid_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory);
-    void make_sphere_brushes        (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
-    void make_torus_brushes         (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
-    void make_cylinder_brushes      (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
-    void make_cone_brushes          (Editor_settings& editor_settings, Mesh_memory& mesh_memory);
-    void make_json_brushes          (Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Taskflow* tf, Json_library& library);
+    void make_brushes               (App_settings& app_settings, Mesh_memory& mesh_memory, tf::Executor& executor);
+    void make_platonic_solid_brushes(App_settings& app_settings, Mesh_memory& mesh_memory);
+    void make_sphere_brushes        (App_settings& app_settings, Mesh_memory& mesh_memory);
+    void make_torus_brushes         (App_settings& app_settings, Mesh_memory& mesh_memory);
+    void make_cylinder_brushes      (App_settings& app_settings, Mesh_memory& mesh_memory);
+    void make_cone_brushes          (App_settings& app_settings, Mesh_memory& mesh_memory);
+    void make_json_brushes          (App_settings& app_settings, Mesh_memory& mesh_memory, tf::Taskflow* tf, Json_library& library);
     void make_mesh_nodes            (const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes);
     void setup_lights               ();
 
-    Editor_context& m_context;
+    App_context& m_context;
 
     class Config
     {

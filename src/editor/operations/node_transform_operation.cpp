@@ -1,8 +1,8 @@
 #include "operations/node_transform_operation.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
+#include "app_message_bus.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_log/log_glm.hpp"
@@ -33,7 +33,7 @@ namespace editor {
 //    return ss.str();
 //}
 //
-//void Node_operation::execute(Editor_context&)
+//void Node_operation::execute(App_context&)
 //{
 //    log_operations->trace("Op Execute {}", describe());
 //
@@ -42,7 +42,7 @@ namespace editor {
 //    }
 //}
 //
-//void Node_operation::undo(Editor_context&)
+//void Node_operation::undo(App_context&)
 //{
 //    log_operations->trace("Op Undo {}", describe());
 //
@@ -101,24 +101,24 @@ auto Node_transform_operation::describe() const -> std::string
     );
 }
 
-void Node_transform_operation::execute(Editor_context& context)
+void Node_transform_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
-    context.editor_message_bus->send_message(
-        Editor_message{
+    context.app_message_bus->send_message(
+        App_message{
             .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
             .node         = m_parameters.node.get()
         }
     );
 }
 
-void Node_transform_operation::undo(Editor_context& context)
+void Node_transform_operation::undo(App_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_before);
-    context.editor_message_bus->send_message(
-        Editor_message{
+    context.app_message_bus->send_message(
+        App_message{
             .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
             .node         = m_parameters.node.get()
         }

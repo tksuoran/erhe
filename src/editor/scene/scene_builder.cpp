@@ -1,7 +1,7 @@
 #include "scene/scene_builder.hpp"
 
-#include "editor_rendering.hpp"
-#include "editor_settings.hpp"
+#include "app_rendering.hpp"
+#include "app_settings.hpp"
 
 #include "tools/brushes/brush.hpp"
 #include "parsers/json_polyhedron.hpp"
@@ -83,15 +83,15 @@ Scene_builder::Scene_builder(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
-    Editor_context&                 editor_context,
-    Editor_rendering&               editor_rendering,
-    Editor_settings&                editor_settings,
+    App_context&                    context,
+    App_rendering&                  app_rendering,
+    App_settings&                   app_settings,
     Mesh_memory&                    mesh_memory,
     Post_processing&                post_processing,
     Tools&                          tools,
     Scene_views&                    scene_views
 )
-    : m_context{editor_context}
+    : m_context{context}
 {
     ERHE_PROFILE_FUNCTION();
     m_scene_root = scene;
@@ -101,14 +101,14 @@ Scene_builder::Scene_builder(
         imgui_renderer,
         imgui_windows,
         rendergraph,
-        editor_rendering,
-        editor_settings,
+        app_rendering,
+        app_settings,
         post_processing,
         tools,
         scene_views
     );
     setup_lights();
-    make_brushes(editor_settings, mesh_memory, executor);
+    make_brushes(app_settings, mesh_memory, executor);
     add_room    ();
 }
 
@@ -148,8 +148,8 @@ void Scene_builder::setup_cameras(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
-    Editor_rendering&               editor_rendering,
-    Editor_settings&                editor_settings,
+    App_rendering&                  app_rendering,
+    App_settings&                   app_settings,
     Post_processing&                post_processing,
     Tools&                          tools,
     Scene_views&                    scene_views
@@ -185,14 +185,14 @@ void Scene_builder::setup_cameras(
         return;
     }
 
-    const int msaa_sample_count = editor_settings.graphics.current_graphics_preset.msaa_sample_count;
+    const int msaa_sample_count = app_settings.graphics.current_graphics_preset.msaa_sample_count;
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
     m_primary_viewport_window = scene_views.create_viewport_scene_view(
         graphics_device,
         rendergraph,
         imgui_windows,
-        editor_rendering,
-        editor_settings,
+        app_rendering,
+        app_settings,
         post_processing,
         tools,
         "Default Viewport",
@@ -237,7 +237,7 @@ auto Scene_builder::build_info(Mesh_memory& mesh_memory) -> erhe::primitive::Bui
 
 auto Scene_builder::make_brush(
     Content_library_node&                            folder,
-    Editor_settings&                                 editor_settings,
+    App_settings&                                    app_settings,
     Mesh_memory&                                     mesh_memory,
     const std::shared_ptr<erhe::geometry::Geometry>& geometry
 ) -> std::shared_ptr<Brush>
@@ -245,17 +245,17 @@ auto Scene_builder::make_brush(
     return make_brush(
         folder,
         Brush_data{
-            .context         = m_context,
-            .editor_settings = editor_settings,
-            .build_info      = build_info(mesh_memory),
-            .normal_style    = Normal_style::polygon_normals,
-            .geometry        = geometry,
-            .density         = m_config.mass_scale,
+            .context      = m_context,
+            .app_settings = app_settings,
+            .build_info   = build_info(mesh_memory),
+            .normal_style = Normal_style::polygon_normals,
+            .geometry     = geometry,
+            .density      = m_config.mass_scale,
         }
     );
 }
 
-void Scene_builder::make_platonic_solid_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory)
+void Scene_builder::make_platonic_solid_brushes(App_settings& app_settings, Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -272,30 +272,19 @@ void Scene_builder::make_platonic_solid_brushes(Editor_settings& editor_settings
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
 
-    auto dodecahedron = std::make_shared<erhe::geometry::Geometry>("dodecahedron");
-    erhe::geometry::shapes::make_dodecahedron(dodecahedron->get_mesh(), scale);
-    dodecahedron->process(flags);
-    m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, dodecahedron));
+    auto make_platonic_solid = [this, &folder, &app_settings, &mesh_memory, flags](const char* name, std::function<void(GEO::Mesh&)> builder)
+    {
+        auto new_geometry = std::make_shared<erhe::geometry::Geometry>(name);
+        builder(new_geometry->get_mesh());
+        new_geometry->process(flags);
+        m_platonic_solids.push_back(make_brush(folder, app_settings, mesh_memory, new_geometry));
+    };
 
-    auto icosahedron = std::make_shared<erhe::geometry::Geometry>("icosahedron");
-    erhe::geometry::shapes::make_icosahedron(icosahedron->get_mesh(), scale);
-    icosahedron->process(flags);
-    m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, icosahedron));
-
-    auto octahedron = std::make_shared<erhe::geometry::Geometry>("octahedron");
-    erhe::geometry::shapes::make_octahedron(octahedron->get_mesh(), scale);
-    octahedron->process(flags);
-    m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, octahedron));
-
-    auto cuboctahedron = std::make_shared<erhe::geometry::Geometry>("cuboctahedron");
-    erhe::geometry::shapes::make_cuboctahedron(cuboctahedron->get_mesh(), scale);
-    cuboctahedron->process(flags);
-    m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, cuboctahedron));
-
-    auto tetrahedron = std::make_shared<erhe::geometry::Geometry>("tetrahedron");
-    erhe::geometry::shapes::make_tetrahedron(tetrahedron->get_mesh(), scale);
-    tetrahedron->process(flags);
-    m_platonic_solids.push_back(make_brush(folder, editor_settings, mesh_memory, tetrahedron));
+    make_platonic_solid("dodecahedron",  [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_dodecahedron (mesh, scale); });
+    make_platonic_solid("icosahedron",   [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_icosahedron  (mesh, scale); });
+    make_platonic_solid("octahedron",    [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_octahedron   (mesh, scale); });
+    make_platonic_solid("cuboctahedron", [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_cuboctahedron(mesh, scale); });
+    make_platonic_solid("tetrahedron",   [scale](GEO::Mesh& mesh){ erhe::geometry::shapes::make_tetrahedron  (mesh, scale); });
 
     auto cube = std::make_shared<erhe::geometry::Geometry>("cube");
     erhe::geometry::shapes::make_cube(cube->get_mesh(), scale);
@@ -304,7 +293,7 @@ void Scene_builder::make_platonic_solid_brushes(Editor_settings& editor_settings
         folder,
         Brush_data{
             .context         = m_context,
-            .editor_settings = editor_settings,
+            .app_settings    = app_settings,
             .build_info      = build_info(mesh_memory),
             .normal_style    = Normal_style::polygon_normals,
             .geometry        = cube,
@@ -314,7 +303,7 @@ void Scene_builder::make_platonic_solid_brushes(Editor_settings& editor_settings
     ));
 }
 
-void Scene_builder::make_sphere_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory)
+void Scene_builder::make_sphere_brushes(App_settings& app_settings, Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -336,7 +325,7 @@ void Scene_builder::make_sphere_brushes(Editor_settings& editor_settings, Mesh_m
         brushes,
         Brush_data{
             .context         = m_context,
-            .editor_settings = editor_settings,
+            .app_settings    = app_settings,
             .build_info      = build_info(mesh_memory),
             .normal_style    = Normal_style::corner_normals,
             .geometry        = sphere,
@@ -348,7 +337,7 @@ void Scene_builder::make_sphere_brushes(Editor_settings& editor_settings, Mesh_m
     );
 }
 
-void Scene_builder::make_torus_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory)
+void Scene_builder::make_torus_brushes(App_settings& app_settings, Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -420,7 +409,7 @@ void Scene_builder::make_torus_brushes(Editor_settings& editor_settings, Mesh_me
         brushes,
         Brush_data{
             .context                     = m_context,
-            .editor_settings             = editor_settings,
+            .app_settings                = app_settings,
             .build_info                  = build_info(mesh_memory),
             .normal_style                = Normal_style::corner_normals,
             .geometry                    = torus_geometry,
@@ -431,7 +420,7 @@ void Scene_builder::make_torus_brushes(Editor_settings& editor_settings, Mesh_me
     );
 }
 
-void Scene_builder::make_cylinder_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory)
+void Scene_builder::make_cylinder_brushes(App_settings& app_settings, Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -461,7 +450,7 @@ void Scene_builder::make_cylinder_brushes(Editor_settings& editor_settings, Mesh
             brushes,
             Brush_data{
                 .context         = m_context,
-                .editor_settings = editor_settings,
+                .app_settings    = app_settings,
                 .build_info      = build_info(mesh_memory),
                 .normal_style    = Normal_style::corner_normals,
                 .geometry        = cylinder_geometry,
@@ -475,7 +464,7 @@ void Scene_builder::make_cylinder_brushes(Editor_settings& editor_settings, Mesh
     }
 }
 
-void Scene_builder::make_cone_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory)
+void Scene_builder::make_cone_brushes(App_settings& app_settings, Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -502,7 +491,7 @@ void Scene_builder::make_cone_brushes(Editor_settings& editor_settings, Mesh_mem
         brushes,
         Brush_data{
             .context         = m_context,
-            .editor_settings = editor_settings,
+            .app_settings    = app_settings,
             .build_info      = build_info(mesh_memory),
             .normal_style    = Normal_style::corner_normals,
             .geometry        = cone_geometry,
@@ -517,7 +506,7 @@ void Scene_builder::make_cone_brushes(Editor_settings& editor_settings, Mesh_mem
     );
 }
 
-void Scene_builder::make_json_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Taskflow* tf, Json_library& library)
+void Scene_builder::make_json_brushes(App_settings& app_settings, Mesh_memory& mesh_memory, tf::Taskflow* tf, Json_library& library)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -532,7 +521,7 @@ void Scene_builder::make_json_brushes(Editor_settings& editor_settings, Mesh_mem
 
     auto& folder = *(brushes.make_folder("Johnson Solids").get());
     for (const auto& key_name : library.names) {
-        auto op = [this, &editor_settings, &mesh_memory, &library, &key_name, &folder]() {
+        auto op = [this, &app_settings, &mesh_memory, &library, &key_name, &folder]() {
             std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(key_name);
             const bool ok = library.make_geometry(*geometry.get(), key_name);
             if (!ok || (geometry->get_mesh().facets.nb() == 0)) {
@@ -543,13 +532,13 @@ void Scene_builder::make_json_brushes(Editor_settings& editor_settings, Mesh_mem
             auto brush = make_brush(
                 folder,
                 Brush_data{
-                    .context         = m_context,
-                    .editor_settings = editor_settings,
-                    .name            = "", //// TODO shared_geometry->name,
-                    .build_info      = build_info(mesh_memory),
-                    .normal_style    = Normal_style::polygon_normals,
-                    .geometry        = geometry,
-                    .density         = m_config.mass_scale
+                    .context      = m_context,
+                    .app_settings = app_settings,
+                    .name         = "", //// TODO shared_geometry->name,
+                    .build_info   = build_info(mesh_memory),
+                    .normal_style = Normal_style::polygon_normals,
+                    .geometry     = geometry,
+                    .density      = m_config.mass_scale
                 }
             );
             m_johnson_solids.push_back(brush);
@@ -568,7 +557,7 @@ auto Scene_builder::get_brushes() -> Content_library_node&
     return *(content_library->brushes.get());
 }
 
-void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& mesh_memory, tf::Executor& executor)
+void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_memory, tf::Executor& executor)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -582,7 +571,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
         m_collision_shapes.push_back(floor_box_shape);
 
         //execution_queue->enqueue(
-        //    [this, &floor_box_shape, &editor_settings, &mesh_memory]() {
+        //    [this, &floor_box_shape, &app_settings, &mesh_memory]() {
         {
             ERHE_PROFILE_SCOPE("Floor brush");
 
@@ -600,7 +589,7 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
             m_floor_brush = std::make_unique<Brush>(
                 Brush_data{
                     .context         = m_context,
-                    .editor_settings = editor_settings,
+                    .app_settings    = app_settings,
                     .build_info      = build_info(mesh_memory),
                     .normal_style    = Normal_style::polygon_normals,
                     .geometry        = floor_geometry,
@@ -616,24 +605,24 @@ void Scene_builder::make_brushes(Editor_settings& editor_settings, Mesh_memory& 
     if (executor.num_workers() > 1) {
         tf::Taskflow tf;
 
-        tf.emplace([this, &editor_settings, &mesh_memory]() { make_platonic_solid_brushes(editor_settings, mesh_memory); }).name("Platonic Solid Brushes");
-        tf.emplace([this, &editor_settings, &mesh_memory]() { make_sphere_brushes        (editor_settings, mesh_memory); }).name("Sphere Brushes");
-        tf.emplace([this, &editor_settings, &mesh_memory]() { make_torus_brushes         (editor_settings, mesh_memory); }).name("Torus Brushes");
-        tf.emplace([this, &editor_settings, &mesh_memory]() { make_cylinder_brushes      (editor_settings, mesh_memory); }).name("Cylinder Brushes");
-        tf.emplace([this, &editor_settings, &mesh_memory]() { make_cone_brushes          (editor_settings, mesh_memory); }).name("Cone Brushes");
+        tf.emplace([this, &app_settings, &mesh_memory]() { make_platonic_solid_brushes(app_settings, mesh_memory); }).name("Platonic Solid Brushes");
+        tf.emplace([this, &app_settings, &mesh_memory]() { make_sphere_brushes        (app_settings, mesh_memory); }).name("Sphere Brushes");
+        tf.emplace([this, &app_settings, &mesh_memory]() { make_torus_brushes         (app_settings, mesh_memory); }).name("Torus Brushes");
+        tf.emplace([this, &app_settings, &mesh_memory]() { make_cylinder_brushes      (app_settings, mesh_memory); }).name("Cylinder Brushes");
+        tf.emplace([this, &app_settings, &mesh_memory]() { make_cone_brushes          (app_settings, mesh_memory); }).name("Cone Brushes");
 
-        make_json_brushes(editor_settings, mesh_memory, &tf, library);
+        make_json_brushes(app_settings, mesh_memory, &tf, library);
 
         tf::Future<void> future = executor.run(tf);
         future.wait();
     } else {
-        make_platonic_solid_brushes(editor_settings, mesh_memory);
-        make_sphere_brushes        (editor_settings, mesh_memory);
-        make_torus_brushes         (editor_settings, mesh_memory);
-        make_cylinder_brushes      (editor_settings, mesh_memory);
-        make_cone_brushes          (editor_settings, mesh_memory);
+        make_platonic_solid_brushes(app_settings, mesh_memory);
+        make_sphere_brushes        (app_settings, mesh_memory);
+        make_torus_brushes         (app_settings, mesh_memory);
+        make_cylinder_brushes      (app_settings, mesh_memory);
+        make_cone_brushes          (app_settings, mesh_memory);
 
-        make_json_brushes(editor_settings, mesh_memory, nullptr, library);
+        make_json_brushes(app_settings, mesh_memory, nullptr, library);
     }
 
     mesh_memory.gl_buffer_transfer_queue.flush();

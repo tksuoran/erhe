@@ -14,10 +14,10 @@ namespace erhe::scene       { class Node; };
 
 namespace editor {
 
-class Editor_context;
-class Editor_message;
-class Editor_message_bus;
-class Editor_windows;
+class App_context;
+class App_message;
+class App_message_bus;
+class App_windows;
 class Headset_view;
 class Icon_set;
 class Mesh_memory;
@@ -32,23 +32,23 @@ class Hud;
 class Toggle_hud_visibility_command : public erhe::commands::Command
 {
 public:
-    Toggle_hud_visibility_command(erhe::commands::Commands& commands, Editor_context& context);
+    Toggle_hud_visibility_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Hud_drag_command : public erhe::commands::Command
 {
 public:
-    Hud_drag_command(erhe::commands::Commands& commands, Editor_context& context);
+    Hud_drag_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready  () override;
     auto try_call   () -> bool override;
     void on_inactive() override;
 
 private:
-    Editor_context& m_context;
+    App_context& m_context;
 };
 
 class Hud
@@ -60,9 +60,9 @@ public:
         erhe::graphics::Device&         graphics_device,
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::rendergraph::Rendergraph& rendergraph,
-        Editor_context&                 editor_context,
-        Editor_message_bus&             editor_message_bus,
-        Editor_windows&                 editor_windows,
+        App_context&                    context,
+        App_message_bus&                app_message_bus,
+        App_windows&                    app_windows,
         Headset_view&                   headset_view,
         Mesh_memory&                    mesh_memory,
         Scene_builder&                  scene_builder,
@@ -88,7 +88,7 @@ public:
     [[nodiscard]] auto intersect_ray  (const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>;
 
 private:
-    void on_message           (Editor_message& message);
+    void on_message           (App_message& message);
     void update_node_transform(const glm::mat4& world_from_hud);
 
     Toggle_hud_visibility_command m_toggle_visibility_command;

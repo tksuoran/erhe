@@ -3,10 +3,10 @@
 #include "tools/transform/rotate_tool.hpp"
 #include "tools/transform/scale_tool.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_settings.hpp"
+#include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -67,9 +67,9 @@ using Trs_transform = erhe::scene::Trs_transform;
 
 #pragma region Commands
 
-Transform_tool_drag_command::Transform_tool_drag_command(erhe::commands::Commands& commands, Editor_context& editor_context)
+Transform_tool_drag_command::Transform_tool_drag_command(erhe::commands::Commands& commands, App_context& app_context)
     : Command  {commands, "Transform_tool.drag"}
-    , m_context{editor_context}
+    , m_context{app_context}
 {
 }
 
@@ -113,15 +113,15 @@ Transform_tool::Transform_tool(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&              editor_context,
-    Editor_message_bus&          editor_message_bus,
+    App_context&                 app_context,
+    App_message_bus&             app_message_bus,
     Headset_view&                headset_view,
     Mesh_memory&                 mesh_memory,
     Tools&                       tools
 )
     : Imgui_window                  {imgui_renderer, imgui_windows, "Transform", "transform"}
-    , Tool                          {editor_context}
-    , m_drag_command                {commands, editor_context}
+    , Tool                          {app_context}
+    , m_drag_command                {commands, app_context}
     , m_drag_redirect_update_command{commands, m_drag_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
 {
@@ -136,7 +136,7 @@ Transform_tool::Transform_tool(
     //    [this, &editor_context, &mesh_memory, &tools](){
     // TODO
     static_cast<void>(executor);
-    shared.visualizations = std::make_unique<Handle_visualizations>(editor_context, mesh_memory, tools);
+    shared.visualizations = std::make_unique<Handle_visualizations>(app_context, mesh_memory, tools);
     shared.visualizations_ready.store(true);
     //    }
     //);
@@ -160,8 +160,8 @@ Transform_tool::Transform_tool(
     static_cast<void>(headset_view);
 #endif
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
@@ -169,7 +169,7 @@ Transform_tool::Transform_tool(
     m_drag_command.set_host(this);
 }
 
-void Transform_tool::on_message(Editor_message& message)
+void Transform_tool::on_message(App_message& message)
 {
     Tool::on_message(message);
 

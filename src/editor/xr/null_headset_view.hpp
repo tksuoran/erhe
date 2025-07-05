@@ -37,10 +37,10 @@ namespace erhe::window {
 
 namespace editor {
 
-class Editor_context;
-class Editor_message_bus;
-class Editor_rendering;
-class Editor_settings;
+class App_context;
+class App_message_bus;
+class App_rendering;
+class App_settings;
 class Hud;
 class Mesh_memory;
 class Scene_builder;
@@ -70,9 +70,9 @@ public:
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
-        Editor_context&                 editor_context,
-        Editor_rendering&               editor_rendering,
-        Editor_settings&                editor_settings
+        App_context&                    context,
+        App_rendering&                  app_rendering,
+        App_settings&                   app_settings
     );
 
     // Public API

@@ -37,8 +37,8 @@ class Brush_data
 public:
     [[nodiscard]] auto get_name() const -> const std::string&;
 
-    Editor_context&                                  context;
-    Editor_settings&                                 editor_settings;
+    App_context&                                     context;
+    App_settings&                                    app_settings;
     std::string                                      name                       {};
     erhe::primitive::Build_info                      build_info;
     erhe::primitive::Normal_style                    normal_style               {erhe::primitive::Normal_style::corner_normals};

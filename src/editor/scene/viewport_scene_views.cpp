@@ -2,11 +2,11 @@
 
 #include "scene/viewport_scene_views.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
-#include "editor_settings.hpp"
+#include "app_message_bus.hpp"
+#include "app_rendering.hpp"
+#include "app_settings.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "rendergraph/basic_scene_view_node.hpp"
@@ -54,9 +54,9 @@ using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
 #pragma region Commands
-Open_new_viewport_scene_view_command::Open_new_viewport_scene_view_command(erhe::commands::Commands& commands, Editor_context& editor_context)
+Open_new_viewport_scene_view_command::Open_new_viewport_scene_view_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Scene_views.open_new_viewport_scene_view"}
-    , m_context{editor_context}
+    , m_context{context}
 {
 }
 
@@ -69,11 +69,11 @@ auto Open_new_viewport_scene_view_command::try_call() -> bool
 
 Scene_views::Scene_views(
     erhe::commands::Commands& commands,
-    Editor_context&           editor_context,
-    Editor_message_bus&       editor_message_bus
+    App_context&              app_context,
+    App_message_bus&          app_message_bus
 )
-    : m_context                             {editor_context}
-    , m_open_new_viewport_scene_view_command{commands, editor_context}
+    : m_app_context                         {app_context}
+    , m_open_new_viewport_scene_view_command{commands, app_context}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -82,8 +82,8 @@ Scene_views::Scene_views(
     commands.register_command   (&m_open_new_viewport_scene_view_command);
     commands.bind_command_to_key(&m_open_new_viewport_scene_view_command, erhe::window::Key_f1, true);
 
-    editor_message_bus.add_receiver(
-        [&](Editor_message& message) {
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
             on_message(message);
         }
     );
@@ -91,7 +91,7 @@ Scene_views::Scene_views(
     m_open_new_viewport_scene_view_command.set_host(this);
 }
 
-void Scene_views::on_message(Editor_message& message)
+void Scene_views::on_message(App_message& message)
 {
     using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
@@ -136,8 +136,8 @@ auto Scene_views::create_viewport_scene_view(
     erhe::graphics::Device&                               graphics_device,
     erhe::rendergraph::Rendergraph&                       rendergraph,
     erhe::imgui::Imgui_windows&                           imgui_windows,
-    Editor_rendering&                                     editor_rendering,
-    Editor_settings&                                      editor_settings,
+    App_rendering&                                        app_rendering,
+    App_settings&                                         app_settings,
     Post_processing&                                      post_processing,
     Tools&                                                tools,
     const std::string_view                                name,
@@ -149,7 +149,7 @@ auto Scene_views::create_viewport_scene_view(
 ) -> std::shared_ptr<Viewport_scene_view>
 {
     const auto new_viewport = std::make_shared<Viewport_scene_view>(
-        m_context,
+        m_app_context,
         rendergraph,
         tools,
         name,
@@ -164,11 +164,11 @@ auto Scene_views::create_viewport_scene_view(
         m_viewport_scene_views.push_back(new_viewport);
     }
 
-    if (editor_settings.graphics.current_graphics_preset.shadow_enable) {
-        const auto shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(
+    if (app_settings.graphics.current_graphics_preset.shadow_enable) {
+        const auto shadow_render_node = app_rendering.create_shadow_node_for_scene_view(
             graphics_device,
             rendergraph,
-            editor_settings,
+            app_settings,
             *new_viewport.get()
         );
         rendergraph.connect(
@@ -216,8 +216,8 @@ auto Scene_views::create_basic_viewport_scene_view_node(
 
 void Scene_views::layout_basic_viewport_windows()
 {
-    const int window_width    = m_context.context_window->get_width();
-    const int window_height   = m_context.context_window->get_height();
+    const int window_width    = m_app_context.context_window->get_width();
+    const int window_height   = m_app_context.context_window->get_height();
     const int count           = static_cast<int>(m_basic_scene_view_nodes.size());
     const int a               = std::max<int>(1, static_cast<int>(std::sqrt(count)));
     const int b               = count / a;
@@ -259,7 +259,7 @@ auto Scene_views::create_viewport_window(
         imgui_renderer,
         imgui_windows,
         rendergraph_output_node,
-        m_context,
+        m_app_context,
         window_name,
         ini_name,
         viewport_scene_view
@@ -277,19 +277,19 @@ auto Scene_views::open_new_viewport_scene_view(
 {
     const std::string name = fmt::format("Viewport_scene_view {}", m_viewport_scene_views.size());
 
-    const int msaa_sample_count = m_context.editor_settings->graphics.current_graphics_preset.msaa_sample_count;
+    const int msaa_sample_count = m_app_context.app_settings->graphics.current_graphics_preset.msaa_sample_count;
     if (scene_root) {
-        for (const auto& item : m_context.selection->get_selection()) {
+        for (const auto& item : m_app_context.selection->get_selection()) {
             const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
             if (camera) {
                 return create_viewport_scene_view(
-                    *m_context.graphics_device,
-                    *m_context.rendergraph,
-                    *m_context.imgui_windows,
-                    *m_context.editor_rendering,
-                    *m_context.editor_settings,
-                    *m_context.post_processing,
-                    *m_context.tools,
+                    *m_app_context.graphics_device,
+                    *m_app_context.rendergraph,
+                    *m_app_context.imgui_windows,
+                    *m_app_context.app_rendering,
+                    *m_app_context.app_settings,
+                    *m_app_context.post_processing,
+                    *m_app_context.tools,
                     name,
                     scene_root,
                     camera,
@@ -302,13 +302,13 @@ auto Scene_views::open_new_viewport_scene_view(
         if (!scene_root->get_scene().get_cameras().empty()) {
             const auto& camera = scene_root->get_scene().get_cameras().front();
             return create_viewport_scene_view(
-                *m_context.graphics_device,
-                *m_context.rendergraph,
-                *m_context.imgui_windows,
-                *m_context.editor_rendering,
-                *m_context.editor_settings,
-                *m_context.post_processing,
-                *m_context.tools,
+                *m_app_context.graphics_device,
+                *m_app_context.rendergraph,
+                *m_app_context.imgui_windows,
+                *m_app_context.app_rendering,
+                *m_app_context.app_settings,
+                *m_app_context.post_processing,
+                *m_app_context.tools,
                 name,
                 scene_root,
                 camera,
@@ -320,13 +320,13 @@ auto Scene_views::open_new_viewport_scene_view(
 
     // Case for when no cameras found in scene
     return create_viewport_scene_view(
-        *m_context.graphics_device,
-        *m_context.rendergraph,
-        *m_context.imgui_windows,
-        *m_context.editor_rendering,
-        *m_context.editor_settings,
-        *m_context.post_processing,
-        *m_context.tools,
+        *m_app_context.graphics_device,
+        *m_app_context.rendergraph,
+        *m_app_context.imgui_windows,
+        *m_app_context.app_rendering,
+        *m_app_context.app_settings,
+        *m_app_context.post_processing,
+        *m_app_context.tools,
         name,
         {},
         nullptr,
@@ -340,15 +340,15 @@ void Scene_views::open_new_viewport_scene_view_node()
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
     auto viewport_scene_view = open_new_viewport_scene_view(rendergraph_output_node);
     create_viewport_window(
-        *m_context.imgui_renderer,
-        *m_context.imgui_windows,
+        *m_app_context.imgui_renderer,
+        *m_app_context.imgui_windows,
         viewport_scene_view,
         rendergraph_output_node,
         "scene view",
         ""
     );
 
-    // create_basic_viewport_scene_view_node(*m_context.rendergraph, viewport_scene_view, "b scene view");
+    // create_basic_viewport_scene_view_node(*m_app_context.rendergraph, viewport_scene_view, "b scene view");
 }
 
 void Scene_views::debug_imgui()
@@ -421,7 +421,7 @@ void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
 
     // Pull mouse position
     {
-        //const auto mouse_position = m_context.input_state->mouse_position;
+        //const auto mouse_position = m_app_context.input_state->mouse_position;
         const glm::vec2 mouse_position = imgui_host->get_mouse_position();
         // if (mouse_position.x >= 0.0f && mouse_position.y >= 0.0f) {
         //     log_scene_view->info("mouse_position: {}, {}", mouse_position.x, mouse_position.y);
@@ -448,8 +448,8 @@ void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
 
     if (old_scene_view != m_hover_scene_view) {
         // log_scene_view->info("Changing hover scene view to: {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
-        m_context.editor_message_bus->send_message(
-            Editor_message{
+        m_app_context.app_message_bus->send_message(
+            App_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_viewport | Message_flag_bit::c_flag_bit_hover_scene_view,
                 .scene_view   = m_hover_scene_view.get()
             }
@@ -499,7 +499,7 @@ void Scene_views::update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_
 
 void Scene_views::update_pointer_from_basic_viewport_windows()
 {
-    glm::vec2 pointer_window_position = m_context.input_state->mouse_position;
+    glm::vec2 pointer_window_position = m_app_context.input_state->mouse_position;
 
     m_hover_stack.clear();
     for (const auto& node : m_basic_scene_view_nodes) {
@@ -552,20 +552,20 @@ auto Scene_views::last_scene_view() -> std::shared_ptr<Viewport_scene_view>
 void Scene_views::viewport_toolbar(Viewport_scene_view& viewport_scene_view, bool& hovered)
 {
     ImGui::PushID("Scene_views::viewport_toolbar");
-    const auto& rasterization = m_context.icon_set->get_small_rasterization();
+    const auto& rasterization = m_app_context.icon_set->get_small_rasterization();
 
     static constexpr std::string_view open_config{"open_config"};
     static constexpr uint32_t viewport_open_config_id{
         compiletime_xxhash::xxh32(open_config.data(), open_config.size(), {})
     };
 
-    const bool button_pressed = rasterization.icon_button(ERHE_HASH("open_config"), m_context.icon_set->icons.three_dots);
+    const bool button_pressed = rasterization.icon_button(ERHE_HASH("open_config"), m_app_context.icon_set->icons.three_dots);
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }
     if (button_pressed) {
-        m_context.viewport_config_window->show_window();
-        m_context.viewport_config_window->set_edit_data(&viewport_scene_view.get_config());
+        m_app_context.viewport_config_window->show_window();
+        m_app_context.viewport_config_window->set_edit_data(&viewport_scene_view.get_config());
     }
     ImGui::PopID();
 }

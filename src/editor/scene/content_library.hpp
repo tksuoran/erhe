@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 
@@ -30,7 +30,7 @@ namespace erhe::scene {
 namespace editor {
 
 class Brush;
-class Editor_context;
+class App_context;
 
 class Content_library_node : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Content_library_node>
 {
@@ -54,7 +54,7 @@ public:
     auto make(Args&& ...args) -> std::shared_ptr<T>;
 
     template <typename T>
-    auto combo(Editor_context& context, const char* label, std::shared_ptr<T>& in_out_selected_entry, bool empty_option) const -> bool;
+    auto combo(App_context& context, const char* label, std::shared_ptr<T>& in_out_selected_entry, bool empty_option) const -> bool;
 
     template <typename T>
     void add(const std::shared_ptr<T>& entry);
@@ -108,7 +108,7 @@ auto Content_library_node::make(Args&& ...args) -> std::shared_ptr<T>
 
 template <typename T>
 auto Content_library_node::combo(
-    Editor_context&     context,
+    App_context&     context,
     const char*         label,
     std::shared_ptr<T>& in_out_selected_entry,
     const bool          empty_option

@@ -1,8 +1,8 @@
 #include "operations/mesh_operation.hpp"
 
-#include "editor_context.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
-#include "editor_settings.hpp"
+#include "app_settings.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -36,7 +36,7 @@ auto Mesh_operation::describe() const -> std::string
 
 Mesh_operation::~Mesh_operation() noexcept = default;
 
-void Mesh_operation::execute(Editor_context&)
+void Mesh_operation::execute(App_context&)
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -74,7 +74,7 @@ void Mesh_operation::execute(Editor_context&)
     }
 }
 
-void Mesh_operation::undo(Editor_context&)
+void Mesh_operation::undo(App_context&)
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -224,7 +224,7 @@ void Mesh_operation::make_entries(const std::function<void(const erhe::geometry:
             ERHE_VERIFY(renderable_ok && raytrace_ok);
             entry.after.primitives.push_back(after_primitive);
 
-            if (m_parameters.context.editor_settings->physics.static_enable) {
+            if (m_parameters.context.app_settings->physics.static_enable) {
 
                 GEO::Mesh convex_hull{};
                 const bool convex_hull_ok = make_convex_hull(after_geometry->get_mesh(), convex_hull);
