@@ -1,7 +1,6 @@
 ﻿#include "rendergraph/post_processing.hpp"
 
 #include "app_context.hpp"
-#include "editor_log.hpp"
 
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
@@ -10,7 +9,6 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
-#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
@@ -50,7 +48,7 @@ Post_processing_node::Post_processing_node(
             .capacity_byte_count =
                 erhe::graphics::align_offset(
                     post_processing.get_parameter_block().size_bytes(),
-                    graphics_device.get_buffer_alignment(gl::Buffer_target::uniform_buffer)
+                    graphics_device.get_buffer_alignment(erhe::graphics::Buffer_target::uniform)
                 ) * 20, // max 20 levels
             .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
             .access_mask         = gl::Map_buffer_access_mask::map_write_bit,
@@ -239,7 +237,7 @@ void Post_processing_node::update_parameters()
 
     const std::size_t level_offset_size = erhe::graphics::align_offset(
         entry_size,
-        m_graphics_device.get_buffer_alignment(parameter_buffer.target())
+        m_graphics_device.get_buffer_alignment(erhe::graphics::Buffer_target::uniform/*parameter_buffer.target()*/) // TODO
     );
 
     const std::shared_ptr<erhe::graphics::Texture> input_texture = get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
@@ -426,66 +424,66 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
     }
     , m_pipelines{
         .downsample_with_lowpass_input = erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Downsample with Lowpass from input",
                 .shader_stages  = &m_shader_stages.downsample_with_lowpass_input.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
-                .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle_strip,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
         .downsample_with_lowpass = erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Downsample with Lowpass",
                 .shader_stages  = &m_shader_stages.downsample_with_lowpass.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
-                .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
         .downsample = erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Post Processing Downsample",
                 .shader_stages  = &m_shader_stages.downsample.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
-                .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
         .upsample_first = erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Post Processing Upsample first",
                 .shader_stages  = &m_shader_stages.upsample_first.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
-                .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
         .upsample = erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Post Processing Upsample",
                 .shader_stages  = &m_shader_stages.upsample.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
-                .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
         .upsample_last = erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Post Processing Upsample last",
                 .shader_stages  = &m_shader_stages.upsample_last.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
-                .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
@@ -530,7 +528,7 @@ void Post_processing::post_process(Post_processing_node& node)
     const std::size_t level_offset_size = erhe::graphics::align_offset(
         m_parameter_block.size_bytes(),
         m_context.graphics_device->get_buffer_alignment(
-            node.parameter_buffer.target()
+            erhe::graphics::Buffer_target::uniform // TODO node.parameter_buffer.target()
         )
     );
 
@@ -576,7 +574,7 @@ void Post_processing::post_process(Post_processing_node& node)
         } else {
             graphics_device.opengl_state_tracker.execute_(m_pipelines.downsample);
         }
-        gl::draw_arrays(gl::Primitive_type::triangles, 0, 3);
+        encoder->draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
     erhe::math::Viewport viewport{
@@ -612,7 +610,7 @@ void Post_processing::post_process(Post_processing_node& node)
             static_cast<GLintptr>  (source_level * level_offset_size),
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );
-        gl::draw_arrays(gl::Primitive_type::triangles, 0, 3);
+        encoder->draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
     if (m_context.graphics_device->info.use_bindless_texture) {

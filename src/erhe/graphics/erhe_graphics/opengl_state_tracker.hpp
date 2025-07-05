@@ -9,10 +9,10 @@
 #include "erhe_graphics/state/viewport_state.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 
-
 namespace erhe::graphics {
 
 class Render_pipeline_state;
+class Compute_pipeline_state;
 
 class OpenGL_state_tracker
 {
@@ -25,6 +25,7 @@ public:
     void on_thread_enter();
     void reset          ();
     void execute_       (const Render_pipeline_state& pipeline, bool skip_shader_stages = false);
+    void execute_       (const Compute_pipeline_state& pipeline);
 
     Shader_stages_tracker        shader_stages;
     Vertex_input_state_tracker   vertex_input;

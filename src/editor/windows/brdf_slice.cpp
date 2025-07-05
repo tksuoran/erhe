@@ -11,7 +11,6 @@
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
-#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_profile/profile.hpp"
@@ -40,11 +39,11 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     , m_empty_vertex_input{rendergraph.get_graphics_device(), erhe::graphics::Vertex_input_state_data{}}
     , m_renderpass{ 
         erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Brdf_slice",
                 .shader_stages  = &programs.brdf_slice.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
-                .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
@@ -102,6 +101,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
+            .render_encoder        = *render_encoder.get(),
             .index_type            = erhe::dataformat::Format::format_32_scalar_uint, // Note: Indices are not used by render_fullscreen()
             .index_buffer          = nullptr,
             .vertex_buffer0        = nullptr,

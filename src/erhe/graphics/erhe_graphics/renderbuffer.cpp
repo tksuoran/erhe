@@ -29,7 +29,7 @@ Renderbuffer::Renderbuffer(
 
     std::optional<gl::Internal_format> gl_internal_format = gl_helpers::convert_to_gl(pixelformat);
     ERHE_VERIFY(gl_internal_format.has_value());
-    device.named_renderbuffer_storage_multisample(gl_name(), 0, gl_internal_format.value(), width, height);
+    gl::named_renderbuffer_storage_multisample(gl_name(), 0, gl_internal_format.value(), width, height);
 }
 
 Renderbuffer::Renderbuffer(
@@ -125,7 +125,7 @@ Renderbuffer::Renderbuffer(
         ERHE_FATAL("format is not renderable");
     }
 
-    device.named_renderbuffer_storage_multisample(
+    gl::named_renderbuffer_storage_multisample(
         gl_name(),
         m_sample_count,
         internal_format,

@@ -8,7 +8,9 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
@@ -17,7 +19,6 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_defer/defer.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::renderer {
@@ -143,13 +144,19 @@ Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device)
     , m_program_interface{graphics_device}
     , m_view_buffer{
         graphics_device,
+        erhe::graphics::Buffer_target::uniform,
         "Debug_renderer::m_view_buffer",
-        gl::Buffer_target::uniform_buffer,
         m_program_interface.view_block->binding_point()
     }
     , m_vertex_input{
         graphics_device,
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)
+    }
+    , m_lines_to_triangles_compute_pipeline{
+        erhe::graphics::Compute_pipeline_data{
+            .name          = "compute_before_line",
+            .shader_stages = m_program_interface.compute_shader_stages.get()
+        }
     }
 {
 }
@@ -228,30 +235,41 @@ auto Debug_renderer::update_view_buffer(const erhe::math::Viewport viewport, con
     return view_buffer_range;
 }
 
-void Debug_renderer::render(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera)
+void Debug_renderer::update(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera)
+{
+    m_view_buffer_range = update_view_buffer(viewport, camera);
+}
+
+void Debug_renderer::compute(erhe::graphics::Compute_command_encoder& command_encoder)
+{
+    ERHE_VERIFY(m_graphics_device.info.use_compute_shader);
+
+    m_graphics_device.opengl_state_tracker.shader_stages.execute(m_program_interface.compute_shader_stages.get());
+    m_view_buffer.bind(command_encoder, m_view_buffer_range);
+
+    // Convert all lines to triangles using compute shader
+    command_encoder.set_compute_pipeline_state(m_lines_to_triangles_compute_pipeline);
+    for (Debug_renderer_bucket& bucket : m_buckets) {
+        bucket.dispatch_compute(command_encoder);
+    }
+
+    // m_view_buffer_range.release(); done in release()
+}
+
+void Debug_renderer::render(erhe::graphics::Render_command_encoder& encoder, const erhe::math::Viewport viewport)
 {
     ERHE_PROFILE_FUNCTION();
-
-    ERHE_VERIFY(m_graphics_device.info.use_compute_shader);
 
     erhe::graphics::Scoped_debug_group scoped_debug_group{"Debug_renderer::render()"};
 
     gl::enable  (gl::Enable_cap::sample_alpha_to_coverage);
     gl::enable  (gl::Enable_cap::sample_alpha_to_one);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-
-    erhe::graphics::Buffer_range view_buffer_range = update_view_buffer(viewport, camera);
-    m_view_buffer.bind(view_buffer_range);
-
-    // Convert all lines to triangles using compute shader
-    m_graphics_device.opengl_state_tracker.shader_stages.execute(m_program_interface.compute_shader_stages.get());
-    for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.dispatch_compute();
-    }
+    m_view_buffer.bind(encoder, m_view_buffer_range);
 
     // Draw hidden
     for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.render(true, false);
+        bucket.render(encoder, true, false);
     }
 
     // Subsequent draw triangles reading vertex data must wait for compute shader
@@ -259,22 +277,30 @@ void Debug_renderer::render(const erhe::math::Viewport viewport, const erhe::sce
 
     // Draw visible
     for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.render(false, true);
+        bucket.render(encoder, false, true);
     }
 
-    // Release buffers
-    view_buffer_range.release();
-    for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.release_buffers();
-    }
+    // Release buffers - now done in release()
+    // m_view_buffer_range.release();
+    // for (Debug_renderer_bucket& bucket : m_buckets) {
+    //     bucket.release_buffers();
+    // }
 
     // Subsequent compute dispatch writing to triangle vertex buffer must wait for draw triangles reading that data
-    // TODO Use gl::wait_sync()
+    // TODO Use gl::wait_sync()?
     gl::memory_barrier(gl::Memory_barrier_mask::shader_storage_barrier_bit);
 
     gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     gl::disable(gl::Enable_cap::sample_alpha_to_one);
     m_graphics_device.opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
+}
+
+void Debug_renderer::release()
+{
+    m_view_buffer_range.release();
+    for (Debug_renderer_bucket& bucket : m_buckets) {
+        bucket.release_buffers();
+    }
 }
 
 } // namespace erhe::renderer

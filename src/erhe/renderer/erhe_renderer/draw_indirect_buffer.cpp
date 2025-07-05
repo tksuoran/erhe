@@ -4,12 +4,9 @@
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/span.hpp"
-
-#include "erhe_gl/draw_indirect.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_verify/verify.hpp"
 
 namespace erhe::renderer {
 
@@ -24,8 +21,8 @@ auto Draw_indirect_buffer::get_max_draw_count() -> int
 Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Device& graphics_device)
     : GPU_ring_buffer_client{
         graphics_device,
-        "Draw_indirect_buffer",
-        gl::Buffer_target::draw_indirect_buffer
+        erhe::graphics::Buffer_target::draw_indirect,
+        "Draw_indirect_buffer"
     }
 {
 }
@@ -58,7 +55,7 @@ auto Draw_indirect_buffer::update(
         return {};
     }
 
-    const std::size_t            entry_size     = sizeof(gl::Draw_elements_indirect_command);
+    const std::size_t            entry_size     = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
     const std::size_t            max_byte_count = primitive_count * entry_size;
     erhe::graphics::Buffer_range buffer_range   = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
     const auto                   gpu_data       = buffer_range.get_span();
@@ -94,7 +91,7 @@ auto Draw_indirect_buffer::update(
             const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
             const uint32_t base_vertex = buffer_mesh.base_vertex();
 
-            const gl::Draw_elements_indirect_command draw_command{
+            const erhe::graphics::Draw_indexed_primitives_indirect_command draw_command{
                 index_count,
                 instance_count,
                 first_index,

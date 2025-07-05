@@ -888,6 +888,16 @@ auto has_stencil(const gl::Internal_format format) -> bool
     }
 }
 
+[[nodiscard]] auto convert_to_gl_index_type(erhe::dataformat::Format format) -> std::optional<gl::Draw_elements_type>
+{
+    switch (format) {
+        case erhe::dataformat::Format::format_8_scalar_uint:  return gl::Draw_elements_type::unsigned_byte;
+        case erhe::dataformat::Format::format_16_scalar_uint: return gl::Draw_elements_type::unsigned_short;
+        case erhe::dataformat::Format::format_32_scalar_uint: return gl::Draw_elements_type::unsigned_int;
+        default: return {};
+    }
+}
+
 [[nodiscard]] auto convert_to_gl(erhe::dataformat::Format format) -> std::optional<gl::Internal_format>
 {
     switch (format) {

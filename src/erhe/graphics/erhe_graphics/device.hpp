@@ -11,14 +11,14 @@
 #include <unordered_map>
 #include <vector>
 
-namespace erhe::window {
-    class Context_window;
-}
+namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
 
+class Compute_command_encoder;
 class Render_pass;
 class Render_command_encoder;
+class Command_encoder;
 
 class Format_properties
 {
@@ -187,7 +187,7 @@ static constexpr unsigned int format_flag_require_stencil   = 0x02u;
 static constexpr unsigned int format_flag_prefer_accuracy   = 0x04u;
 static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
 
-class Device
+class Device final
 {
 public:
     explicit Device(erhe::window::Context_window& context_window);
@@ -195,6 +195,7 @@ public:
     void operator= (const Device&) = delete;
     Device         (Device&&)      = delete;
     void operator= (Device&&)      = delete;
+    ~Device();
 
     [[nodiscard]] auto get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture() -> std::shared_ptr<Texture>;
@@ -204,25 +205,14 @@ public:
     auto texture_unit_cache_allocate(uint64_t handle) -> std::optional<std::size_t>;
     auto texture_unit_cache_bind    (uint64_t fallback_handle) -> std::size_t;
 
-    auto get_buffer_alignment(gl::Buffer_target target) -> std::size_t;
+    auto get_buffer_alignment(Buffer_target target) -> std::size_t;
 
     [[nodiscard]] auto get_frame_number() const -> uint64_t;
-    [[nodiscard]] auto allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
+    [[nodiscard]] auto allocate_ring_buffer_entry(Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
     void end_of_frame();
 
-    // dsa
-    void named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height);
-
     [[nodiscard]] auto make_render_command_encoder(Render_pass& render_pass) -> std::unique_ptr<Render_command_encoder>;
-
-    // multi draw indirect
-    void multi_draw_elements_indirect(
-        gl::Primitive_type     mode,
-        gl::Draw_elements_type type,
-        const void*            indirect,
-        GLsizei                drawcount,
-        GLsizei                stride
-    );
+    [[nodiscard]] auto make_compute_command_encoder() -> std::unique_ptr<Compute_command_encoder>;
 
     auto get_format_properties(erhe::dataformat::Format format) const -> Format_properties;
 
@@ -352,16 +342,21 @@ private:
 class GPU_ring_buffer_client
 {
 public:
-    GPU_ring_buffer_client(Device& graphics_device, std::string_view debug_label, gl::Buffer_target buffer_target, std::optional<unsigned int> binding_point = {});
+    GPU_ring_buffer_client(
+        Device&                     graphics_device,
+        Buffer_target               buffer_target,
+        std::string_view            debug_label, 
+        std::optional<unsigned int> binding_point = {}
+    );
 
     auto acquire(Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
-    auto bind(const Buffer_range& range) -> bool;
+    auto bind   (Command_encoder& command_encoder, const Buffer_range& range) -> bool;
 
 protected:
     Device&                     m_graphics_device;
 
 private:
-    gl::Buffer_target           m_buffer_target;
+    Buffer_target               m_buffer_target;
     std::string                 m_debug_label;
     std::optional<unsigned int> m_binding_point;
 };

@@ -15,7 +15,7 @@ namespace erhe::graphics {
 class Shader_stages;
 class Vertex_input_state;
 
-class Pipeline_data
+class Render_pipeline_data
 {
 public:
     const char*               name          {nullptr};
@@ -32,7 +32,7 @@ class Render_pipeline_state final
 {
 public:
     Render_pipeline_state();
-    Render_pipeline_state(Pipeline_data&& create_info);
+    Render_pipeline_state(Render_pipeline_data&& create_info);
     ~Render_pipeline_state() noexcept;
 
     Render_pipeline_state(const Render_pipeline_state& other);
@@ -42,7 +42,7 @@ public:
 
     void reset();
 
-    Pipeline_data data;
+    Render_pipeline_data data;
 
     static auto get_pipelines() -> std::vector<Render_pipeline_state*>;
 

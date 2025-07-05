@@ -32,7 +32,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .name                    = "Tool pass 1: Tag depth hidden `s_stencil_tool_mesh_hidden`",
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
-        .input_assembly          = Input_assembly_state::triangles,
+        .input_assembly          = Input_assembly_state::triangle,
         .rasterization           = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable   = true,
@@ -67,7 +67,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .name                    = "Tool pass 2: Tag visible tool parts `s_stencil_tool_mesh_visible`",
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
-        .input_assembly          = erhe::graphics::Input_assembly_state::triangles,
+        .input_assembly          = erhe::graphics::Input_assembly_state::triangle,
         .rasterization           = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable   = true,
@@ -104,7 +104,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
                 .name           = "Tool pass 3: Set depth to fixed value",
                 .shader_stages  = &programs.tool.shader_stages,
                 .vertex_input   = &mesh_memory.vertex_input,
-                .input_assembly = Input_assembly_state::triangles,
+                .input_assembly = Input_assembly_state::triangle,
                 .rasterization  = Rasterization_state::cull_mode_back_ccw,
                 .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
                 .color_blend    = Color_blend_state::color_writes_disabled
@@ -120,7 +120,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .name           = "Tool pass 4: Set depth to proper tool depth",
         .shader_stages  = &programs.tool.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_writes_disabled
@@ -132,7 +132,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .name                    = "Tool pass 5: Render visible tool parts, require `s_stencil_tool_mesh_visible`",
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
-        .input_assembly          = Input_assembly_state::triangles,
+        .input_assembly          = Input_assembly_state::triangle,
         .rasterization           = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable   = true,
@@ -167,7 +167,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .name                       = "Tool pass 6: Render hidden tool parts, require `s_stencil_tool_mesh_hidden`",
         .shader_stages              = &programs.tool.shader_stages,
         .vertex_input               = &mesh_memory.vertex_input,
-        .input_assembly             = Input_assembly_state::triangles,
+        .input_assembly             = Input_assembly_state::triangle,
         .rasterization              = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable      = true,

@@ -74,7 +74,6 @@
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_dataformat/dataformat_log.hpp"
-#include "erhe_file/file.hpp"
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_gl/gl_helpers.hpp"
@@ -85,7 +84,6 @@
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/renderbuffer.hpp"
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include "erhe_imgui/imgui_log.hpp"
 #   include "erhe_imgui/imgui_renderer.hpp"
@@ -1337,23 +1335,13 @@ void run_editor()
             }
 #endif
 
-            path = path.parent_path();
-            std::filesystem::current_path(path, error_code);
-            path = std::filesystem::current_path();
-            path_string = path.string();
-            fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
-
-            path = path.parent_path();
-            std::filesystem::current_path(path, error_code);
-            path = std::filesystem::current_path();
-            path_string = path.string();
-            fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
-
-            path = path.parent_path();
-            std::filesystem::current_path(path, error_code);
-            path = std::filesystem::current_path();
-            path_string = path.string();
-            fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
+            for (int i = 0; i < 4; ++i) {
+                path = path.parent_path();
+                std::filesystem::current_path(path, error_code);
+                path = std::filesystem::current_path();
+                path_string = path.string();
+                fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
+            }
 
             path = path / std::filesystem::path("src/editor");
             std::filesystem::current_path(path, error_code);

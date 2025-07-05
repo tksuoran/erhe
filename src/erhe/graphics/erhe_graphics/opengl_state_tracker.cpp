@@ -1,6 +1,7 @@
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -63,6 +64,11 @@ void OpenGL_state_tracker::execute_(const Render_pipeline_state& pipeline, const
     depth_stencil .execute(pipeline.data.depth_stencil);
     color_blend   .execute(pipeline.data.color_blend);
     // dynamic
+}
+
+void OpenGL_state_tracker::execute_(const Compute_pipeline_state& pipeline)
+{
+    shader_stages.execute(pipeline.data.shader_stages);
 }
 
 } // namespace erhe::graphics

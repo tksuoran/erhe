@@ -428,6 +428,7 @@ void Map_window::render()
     const auto& unit_shapes    = m_tile_renderer.get_unit_shapes();
 
     std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+    erhe::graphics::Render_command_encoder& encoder = *render_encoder.get();
 
     std::size_t width_in_tiles  = static_cast<size_t>(std::ceil(extent_x / (Tile_shape::interleave_width * m_zoom)));
     std::size_t height_in_tiles = static_cast<size_t>(std::ceil(extent_y / (Tile_shape::height           * m_zoom)));
@@ -549,8 +550,8 @@ void Map_window::render()
     m_tile_renderer.end();
     int width  = static_cast<int>(extent_x);
     int height = static_cast<int>(extent_y);
-    m_tile_renderer.render(erhe::math::Viewport{0, 0, width, height});
-    m_text_renderer.render(erhe::math::Viewport{0, 0, width, height});
+    m_tile_renderer.render(encoder, erhe::math::Viewport{0, 0, width, height});
+    m_text_renderer.render(encoder, erhe::math::Viewport{0, 0, width, height});
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 }

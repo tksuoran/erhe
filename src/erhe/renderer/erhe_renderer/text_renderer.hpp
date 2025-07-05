@@ -7,7 +7,6 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-//#include "erhe_ui/font.hpp"
 #include "erhe_ui/rectangle.hpp"
 #include "erhe_math/viewport.hpp"
 
@@ -20,6 +19,7 @@ namespace erhe::graphics {
     class Gl_context_provider;
     class Device;
     class OpenGL_state_tracker;
+    class Render_command_encoder;
     class Sampler;
     class Shader_monitor;
     class Shader_stages;
@@ -54,7 +54,7 @@ public:
     [[nodiscard]] auto font_size() -> float;
     [[nodiscard]] auto measure  (const std::string_view text) const -> erhe::ui::Rectangle;
 
-    void render(erhe::math::Viewport viewport);
+    void render(erhe::graphics::Render_command_encoder& encoder, erhe::math::Viewport viewport);
 
 private:
     auto build_shader_stages() -> erhe::graphics::Shader_stages_prototype;

@@ -48,11 +48,11 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     , m_empty_vertex_input{rendergraph.get_graphics_device()}
     , m_renderpass{ 
         erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Debug_view",
                 .shader_stages  = &programs.debug_depth.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
-                .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
@@ -142,6 +142,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
+            .render_encoder        = *render_encoder.get(),
             .index_type            = m_mesh_memory.buffer_info.index_type,
             .index_buffer          = nullptr,
             .vertex_buffer0        = nullptr,

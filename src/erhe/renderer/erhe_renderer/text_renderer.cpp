@@ -7,6 +7,7 @@
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_math/viewport.hpp"
@@ -79,15 +80,15 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
         }
     }
     , m_shader_stages     {graphics_device, build_shader_stages()}
-    , m_vertex_ssbo_buffer{graphics_device, "Text_renderer::m_vertex_buffer", gl::Buffer_target::shader_storage_buffer, m_vertex_ssbo_block.binding_point()}
-    , m_projection_buffer {graphics_device, "Text_renderer::m_projection_buffer", gl::Buffer_target::uniform_buffer, m_projection_block.binding_point()}
+    , m_vertex_ssbo_buffer{graphics_device, erhe::graphics::Buffer_target::storage, "Text_renderer::m_vertex_buffer",     m_vertex_ssbo_block.binding_point()}
+    , m_projection_buffer {graphics_device, erhe::graphics::Buffer_target::uniform, "Text_renderer::m_projection_buffer", m_projection_block.binding_point()}
     , m_vertex_input      {graphics_device, {}}
     , m_pipeline{
-        erhe::graphics::Pipeline_data{
+        erhe::graphics::Render_pipeline_data{
             .name           = "Text renderer",
             .shader_stages  = &m_shader_stages,
             .vertex_input   = &m_vertex_input,
-            .input_assembly = erhe::graphics::Input_assembly_state::triangles,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
@@ -186,7 +187,7 @@ auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rect
     return m_font ? m_font->measure(text) : erhe::ui::Rectangle{};
 }
 
-void Text_renderer::render(erhe::math::Viewport viewport)
+void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe::math::Viewport viewport)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -225,11 +226,11 @@ void Text_renderer::render(erhe::math::Viewport viewport)
         write(gpu_uint32_data, m_u_texture_offset,          texture_handle_cpu_data);
         projection_buffer_range.bytes_written(m_projection_block.size_bytes());
         projection_buffer_range.close();
-        m_projection_buffer.bind(projection_buffer_range);
+        m_projection_buffer.bind(encoder, projection_buffer_range);
     }
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
+    encoder.set_render_pipeline_state(m_pipeline);
     if (m_graphics_device.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
     } else {
@@ -246,9 +247,9 @@ void Text_renderer::render(erhe::math::Viewport viewport)
         const std::size_t byte_count = vertex_buffer_range.get_written_byte_count();
         const std::size_t quad_count = byte_count / bytes_per_quad;
 
-        m_vertex_ssbo_buffer.bind(vertex_buffer_range);
+        m_vertex_ssbo_buffer.bind(encoder, vertex_buffer_range);
 
-        gl::draw_arrays(m_pipeline.data.input_assembly.primitive_topology, 0, static_cast<GLsizei>(6 * quad_count));
+        encoder.draw_primitives(m_pipeline.data.input_assembly.primitive_topology, 0, static_cast<GLsizei>(6 * quad_count));
 
         vertex_buffer_range.release();
     }

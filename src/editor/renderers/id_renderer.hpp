@@ -146,7 +146,7 @@ private:
         std::size_t                        mesh_primitive_index{0};
     };
 
-    void render(const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes);
+    void render(erhe::graphics::Render_command_encoder& render_encoder, const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes);
 
     std::vector<Range> m_ranges;
     bool               m_use_scissor      {true};

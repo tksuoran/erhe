@@ -46,8 +46,8 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device)
 Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface)
     : GPU_ring_buffer_client{
         graphics_device,
+        erhe::graphics::Buffer_target::storage,
         "Material_buffer",
-        gl::Buffer_target::shader_storage_buffer,
         material_interface.material_block.binding_point()
     }
     , m_graphics_device {graphics_device}

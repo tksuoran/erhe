@@ -2,15 +2,12 @@
 
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 
-#include "erhe_configuration/configuration.hpp"
-#include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
@@ -105,11 +102,11 @@ auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state)
     ERHE_VERIFY(lru_entry != nullptr);
     lru_entry->serial = m_pipeline_cache_serial;
     lru_entry->pipeline = erhe::graphics::Render_pipeline_state{
-        erhe::graphics::Pipeline_data{
+        erhe::graphics::Render_pipeline_data{
             .name           = "Shadow Renderer",
             .shader_stages  = &m_shader_stages.shader_stages,
             .vertex_input   = vertex_input_state,
-            .input_assembly = Input_assembly_state::triangles,
+            .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
             .color_blend    = Color_blend_state::color_writes_disabled
@@ -164,11 +161,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     auto& pipeline = get_pipeline(parameters.vertex_input_state);
 
-    // TODO Multiple vertex buffer bindings
-    m_graphics_device.opengl_state_tracker.execute_(pipeline);
-    m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
-    m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer, parameters.vertex_buffer_offset);
-
     erhe::Item_filter shadow_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
@@ -180,12 +172,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     using Draw_indirect_buffer_range = erhe::renderer::Draw_indirect_buffer_range;
 
     Buffer_range material_range = m_material_buffer.update(parameters.materials);
-    m_material_buffer.bind(material_range);
-
     Buffer_range joint_range = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
     Buffer_range light_range = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f});
-    m_joint_buffer.bind(joint_range);
-    m_light_buffer.bind_light_buffer(light_range);
 
     log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label());
 
@@ -207,6 +195,15 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         }
 
         std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*parameters.render_passes[light_index].get());
+        erhe::graphics::Render_command_encoder& encoder = *render_encoder.get();
+
+        // TODO Multiple vertex buffer bindings
+        encoder.set_render_pipeline_state(pipeline);
+        encoder.set_index_buffer(parameters.index_buffer);
+        encoder.set_vertex_buffer(parameters.vertex_buffer, parameters.vertex_buffer_offset, 0);
+        m_material_buffer.bind(encoder, material_range);
+        m_joint_buffer.bind(encoder, joint_range);
+        m_light_buffer.bind_light_buffer(encoder, light_range);
 
         if ((parameters.light_camera_viewport.width > 2) && (parameters.light_camera_viewport.height > 2)) {
             gl::enable(gl::Enable_cap::scissor_test);
@@ -219,7 +216,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         }
 
         Buffer_range control_range = m_light_buffer.update_control(light_index);
-        m_light_buffer.bind_control_buffer(control_range);
+        m_light_buffer.bind_control_buffer(encoder, control_range);
 
         for (const auto& meshes : mesh_spans) {
             std::size_t primitive_count{0};
@@ -236,20 +233,20 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 continue;
             }
 
-            m_primitive_buffer.bind(primitive_range);
-            m_draw_indirect_buffer.bind(draw_indirect_buffer_range.range);
+            m_primitive_buffer.bind(encoder, primitive_range);
+            m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
 
             {
                 static constexpr std::string_view c_id_mdi{"mdi"};
 
                 ERHE_PROFILE_SCOPE("mdi");
                 //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
-                m_graphics_device.multi_draw_elements_indirect(
+                encoder.multi_draw_indexed_primitives_indirect(
                     pipeline.data.input_assembly.primitive_topology,
-                    erhe::graphics::to_gl_index_type(parameters.index_type),
-                    reinterpret_cast<const void *>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),
-                    static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-                    static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+                    parameters.index_type,
+                    draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+                    draw_indirect_buffer_range.draw_indirect_count,
+                    sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
                 );
             }
             primitive_range.release();

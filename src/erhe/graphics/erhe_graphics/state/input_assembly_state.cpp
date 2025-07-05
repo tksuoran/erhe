@@ -11,39 +11,27 @@ void Input_assembly_state_tracker::execute(const Input_assembly_state& state)
     static_cast<void>(state);
 }
 
-Input_assembly_state Input_assembly_state::points
+Input_assembly_state Input_assembly_state::point
 {
-    gl::Primitive_type::points,
+    Primitive_type::point,
     true
 };
 
-Input_assembly_state Input_assembly_state::lines
+Input_assembly_state Input_assembly_state::line
 {
-    gl::Primitive_type::lines,
+    Primitive_type::line,
     true
 };
 
-Input_assembly_state Input_assembly_state::line_loop
+Input_assembly_state Input_assembly_state::triangle
 {
-    gl::Primitive_type::line_loop,
-    true
-};
-
-Input_assembly_state Input_assembly_state::triangles
-{
-    gl::Primitive_type::triangles,
-    true
-};
-
-Input_assembly_state Input_assembly_state::triangle_fan
-{
-    gl::Primitive_type::triangle_fan,
+    Primitive_type::triangle,
     true
 };
 
 Input_assembly_state Input_assembly_state::triangle_strip
 {
-    gl::Primitive_type::triangle_strip,
+    Primitive_type::triangle_strip,
     true
 };
 

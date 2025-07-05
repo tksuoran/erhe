@@ -5,6 +5,8 @@
 #include <vector>
 
 namespace erhe::graphics {
+    class Compute_command_encoder;
+    class Render_command_encoder;
     class Shader_stages;
 }
 
@@ -38,8 +40,8 @@ public:
 
     void clear           ();
     auto match           (const Debug_renderer_config& config) const -> bool;
-    void dispatch_compute();
-    void render          (bool draw_hidden, bool draw_visible);
+    void dispatch_compute(erhe::graphics::Compute_command_encoder& command_encoder);
+    void render          (erhe::graphics::Render_command_encoder& render_encoder, bool draw_hidden, bool draw_visible);
     void release_buffers ();
     auto make_draw       (std::size_t vertex_byte_count, std::size_t primitive_count) -> std::span<std::byte>;
 

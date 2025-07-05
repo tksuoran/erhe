@@ -3,7 +3,6 @@
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_graphics/span.hpp"
-#include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_math/math_util.hpp"
@@ -43,8 +42,8 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
 Primitive_buffer::Primitive_buffer(erhe::graphics::Device& graphics_device, Primitive_interface& primitive_interface)
     : GPU_ring_buffer_client{
         graphics_device,
+        erhe::graphics::Buffer_target::storage,
         "Primitive_buffer",
-        gl::Buffer_target::shader_storage_buffer,
         primitive_interface.primitive_block.binding_point()
     }
     , m_primitive_interface{primitive_interface}

@@ -1,4 +1,4 @@
-#include "erhe_graphics/render_pipeline_state.hpp"
+#include "erhe_graphics/compute_pipeline_state.hpp"
 
 #include <algorithm>
 #include <vector>
@@ -6,17 +6,17 @@
 namespace erhe::graphics {
 
 // TODO Move to graphics device?
-ERHE_PROFILE_MUTEX(std::mutex, Render_pipeline_state::s_mutex);
-std::vector<Render_pipeline_state*>         Render_pipeline_state::s_pipelines;
+ERHE_PROFILE_MUTEX(std::mutex, Compute_pipeline_state::s_mutex);
+std::vector<Compute_pipeline_state*> Compute_pipeline_state::s_pipelines;
 
-Render_pipeline_state::Render_pipeline_state()
+Compute_pipeline_state::Compute_pipeline_state()
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
     s_pipelines.push_back(this);
 }
 
-Render_pipeline_state::Render_pipeline_state(Render_pipeline_data&& create_info)
+Compute_pipeline_state::Compute_pipeline_state(Compute_pipeline_data&& create_info)
     : data{std::move(create_info)}
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
@@ -24,7 +24,7 @@ Render_pipeline_state::Render_pipeline_state(Render_pipeline_data&& create_info)
     s_pipelines.push_back(this);
 }
 
-Render_pipeline_state::Render_pipeline_state(const Render_pipeline_state& other)
+Compute_pipeline_state::Compute_pipeline_state(const Compute_pipeline_state& other)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
@@ -32,13 +32,13 @@ Render_pipeline_state::Render_pipeline_state(const Render_pipeline_state& other)
     data = other.data;
 }
 
-auto Render_pipeline_state::operator=(const Render_pipeline_state& other) -> Render_pipeline_state&
+auto Compute_pipeline_state::operator=(const Compute_pipeline_state& other) -> Compute_pipeline_state&
 {
     data = other.data;
     return *this;
 }
 
-Render_pipeline_state::Render_pipeline_state(Render_pipeline_state&& old)
+Compute_pipeline_state::Compute_pipeline_state(Compute_pipeline_state&& old)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
@@ -46,13 +46,13 @@ Render_pipeline_state::Render_pipeline_state(Render_pipeline_state&& old)
     data = old.data;
 }
 
-auto Render_pipeline_state::operator=(Render_pipeline_state&& old) -> Render_pipeline_state&
+auto Compute_pipeline_state::operator=(Compute_pipeline_state&& old) -> Compute_pipeline_state&
 {
     data = old.data;
     return *this;
 }
 
-Render_pipeline_state::~Render_pipeline_state() noexcept
+Compute_pipeline_state::~Compute_pipeline_state() noexcept
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
@@ -62,19 +62,13 @@ Render_pipeline_state::~Render_pipeline_state() noexcept
     }
 }
 
-void Render_pipeline_state::reset()
+void Compute_pipeline_state::reset()
 {
     data.name           = nullptr;
     data.shader_stages  = nullptr;
-    data.vertex_input   = nullptr;
-    data.input_assembly = Input_assembly_state{};
-    data.multisample    = Multisample_state   {};
-    data.rasterization  = Rasterization_state {};
-    data.depth_stencil  = Depth_stencil_state {};
-    data.color_blend    = Color_blend_state   {};
 }
 
-auto Render_pipeline_state::get_pipelines() -> std::vector<Render_pipeline_state*>
+auto Compute_pipeline_state::get_pipelines() -> std::vector<Compute_pipeline_state*>
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 

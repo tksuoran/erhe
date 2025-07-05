@@ -2,7 +2,6 @@
 
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
-#include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/span.hpp"
@@ -41,8 +40,8 @@ Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device)
 Joint_buffer::Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interface& joint_interface)
     : GPU_ring_buffer_client{
         graphics_device,
+        erhe::graphics::Buffer_target::storage,
         "Joint_buffer",
-        gl::Buffer_target::shader_storage_buffer,
         joint_interface.joint_block.binding_point()
     }
     , m_graphics_device{graphics_device}

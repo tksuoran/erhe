@@ -69,14 +69,14 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
     : m_light_interface{light_interface}
     , m_light_buffer{
         graphics_device,
+        erhe::graphics::Buffer_target::uniform,
         "Light_buffer::m_light_buffer",
-        gl::Buffer_target::uniform_buffer,
         light_interface.light_block.binding_point()
     }
     , m_control_buffer{
         graphics_device,
+        erhe::graphics::Buffer_target::uniform,
         "Light_buffer::m_control_buffer",
-        gl::Buffer_target::uniform_buffer,
         light_interface.light_control_block.binding_point()
     }
 {
@@ -300,14 +300,14 @@ auto Light_buffer::update_control(const std::size_t light_index) -> erhe::graphi
     return buffer_range;
 }
 
-void Light_buffer::bind_light_buffer(const erhe::graphics::Buffer_range& range)
+void Light_buffer::bind_light_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Buffer_range& range)
 {
-    m_light_buffer.bind(range);
+    m_light_buffer.bind(encoder, range);
 }
 
-void Light_buffer::bind_control_buffer(const erhe::graphics::Buffer_range& range)
+void Light_buffer::bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Buffer_range& range)
 {
-    m_control_buffer.bind(range);
+    m_control_buffer.bind(encoder, range);
 }
 
 } // namespace erhe::scene_renderer

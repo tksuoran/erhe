@@ -5,7 +5,6 @@
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/command_info.hpp"
-#include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/gl_helpers.hpp"
@@ -13,9 +12,11 @@
 #include "erhe_graphics/align.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/depth_stencil_state.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
@@ -722,7 +723,6 @@ auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
     return texture;
 }
 
-
 void Device::texture_unit_cache_reset(const unsigned int base_texture_unit)
 {
     SPDLOG_LOGGER_TRACE(log_texture_frame, "texture_unit_cache_reset(base_texture_unit = {})", base_texture_unit);
@@ -796,25 +796,20 @@ auto Device::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::siz
     return m_texture_units.size();
 }
 
-auto Device::get_buffer_alignment(gl::Buffer_target target) -> std::size_t
+auto Device::get_buffer_alignment(Buffer_target target) -> std::size_t
 {
     switch (target) {
-        //using enum gl::Buffer_target;
-        case gl::Buffer_target::array_buffer: 
-        case gl::Buffer_target::element_array_buffer: {
-            return 64; // TODO Good alignment?
-        }
-
-        case gl::Buffer_target::shader_storage_buffer: {
+        case Buffer_target::storage: {
             return implementation_defined.shader_storage_buffer_offset_alignment;
         }
 
-        case gl::Buffer_target::uniform_buffer: {
+        case Buffer_target::uniform: {
             return implementation_defined.uniform_buffer_offset_alignment;
         }
 
-        case gl::Buffer_target::draw_indirect_buffer: {
-            return sizeof(gl::Draw_elements_indirect_command);
+        case Buffer_target::draw_indirect: {
+            // TODO Consider Draw_primitives_indirect_command
+            return sizeof(Draw_indexed_primitives_indirect_command);
         }
         default: {
             return 64; // TODO
@@ -822,7 +817,7 @@ auto Device::get_buffer_alignment(gl::Buffer_target target) -> std::size_t
     }
 }
 
-
+Device::~Device() = default;
 
 /// Ring buffer
 
@@ -1037,7 +1032,7 @@ GPU_ring_buffer::GPU_ring_buffer(
     erhe::graphics::Device&          graphics_device,
     const GPU_ring_buffer_create_info& create_info
 )
-    : m_device     {graphics_device}
+    : m_device{graphics_device}
     , m_buffer{
         std::make_unique<Buffer>(
             m_device,
@@ -1104,8 +1099,6 @@ void GPU_ring_buffer::get_size_available_for_write(
     //   +----+---+---+--------------+-+
     //        ^   ^                     
     //        w2  r1                    
-    //// gl::Buffer_target target = m_buffer.target();
-    //// std::size_t required_alignment = m_device.get_buffer_alignment(target);
     const std::size_t aligned_write_position = align_offset(m_write_position, required_alignment);
     ERHE_VERIFY(aligned_write_position >= m_write_position);
     out_alignment_byte_count_without_wrap    = aligned_write_position - m_write_position;
@@ -1373,7 +1366,12 @@ void GPU_ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_o
     );
 }
 
-GPU_ring_buffer_client::GPU_ring_buffer_client(Device& graphics_device, std::string_view debug_label, gl::Buffer_target buffer_target, std::optional<unsigned int> binding_point)
+GPU_ring_buffer_client::GPU_ring_buffer_client(
+    Device&                     graphics_device,
+    Buffer_target               buffer_target,
+    std::string_view            debug_label,
+    std::optional<unsigned int> binding_point
+)
     : m_graphics_device{graphics_device}
     , m_buffer_target  {buffer_target}
     , m_debug_label    {debug_label}
@@ -1387,7 +1385,7 @@ auto GPU_ring_buffer_client::acquire(Ring_buffer_usage usage, std::size_t byte_c
     return m_graphics_device.allocate_ring_buffer_entry(m_buffer_target, usage, byte_count);
 }
 
-auto GPU_ring_buffer_client::bind(const Buffer_range& range) -> bool
+auto GPU_ring_buffer_client::bind(Command_encoder& command_encoder, const Buffer_range& range) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1406,9 +1404,8 @@ auto GPU_ring_buffer_client::bind(const Buffer_range& range) -> bool
 
     SPDLOG_LOGGER_TRACE(
         log_gpu_ring_buffer,
-        "binding {} {} {} buffer offset = {} byte count = {}",
+        "binding {} {} buffer offset = {} byte count = {}",
         m_name,
-        gl::c_str(m_buffer_target),
         m_binding_point.has_value() ? "uses binding point" : "non-indexed binding",
         m_binding_point.has_value() ? m_binding_point.value() : 0,
         range.first_byte_offset,
@@ -1416,23 +1413,17 @@ auto GPU_ring_buffer_client::bind(const Buffer_range& range) -> bool
     );
 
     ERHE_VERIFY(
-        (m_buffer_target != gl::Buffer_target::uniform_buffer) ||
+        (m_buffer_target != Buffer_target::uniform) ||
         (byte_count <= static_cast<std::size_t>(m_graphics_device.limits.max_uniform_block_size))
     );
     ERHE_VERIFY(offset + byte_count <= buffer->capacity_byte_count());
 
     if (m_binding_point.has_value()) {
-        ERHE_VERIFY(gl_helpers::is_indexed(m_buffer_target));
-        gl::bind_buffer_range(
-            m_buffer_target,
-            m_binding_point.value(),
-            static_cast<GLuint>    (buffer->gl_name()),
-            static_cast<GLintptr>  (offset),
-            static_cast<GLsizeiptr>(byte_count)
-        );
+        ERHE_VERIFY(is_indexed(m_buffer_target));
+        command_encoder.set_buffer(m_buffer_target, buffer, offset, byte_count, m_binding_point.value());
     } else {
-        ERHE_VERIFY(!gl_helpers::is_indexed(m_buffer_target));
-        gl::bind_buffer(m_buffer_target, static_cast<GLuint>(buffer->gl_name()));
+        ERHE_VERIFY(!is_indexed(m_buffer_target));
+        command_encoder.set_buffer(m_buffer_target, buffer);
     }
     return true;
 }
@@ -1442,7 +1433,7 @@ auto Device::get_frame_number() const -> uint64_t
     return m_frame_number;
 }
 
-auto Device::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
+auto Device::allocate_ring_buffer_entry(Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
 {
     m_need_sync = true;
     std::size_t required_alignment = get_buffer_alignment(buffer_target);
@@ -1485,31 +1476,6 @@ auto Device::allocate_ring_buffer_entry(gl::Buffer_target buffer_target, Ring_bu
     return m_ring_buffers.back()->acquire(required_alignment, usage, byte_count);
 }
 
-void Device::named_renderbuffer_storage_multisample(GLuint renderbuffer, GLsizei samples, gl::Internal_format internalformat, GLsizei width, GLsizei height)
-{
-    gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
-    // if (info.use_direct_state_access) {
-    //     gl::named_renderbuffer_storage_multisample(renderbuffer, samples, internalformat, width, height);
-    // } else {
-    //     int current_renderbuffer = 0;
-    //     gl::get_integer_v(gl::Get_p_name::renderbuffer_binding, &current_renderbuffer);
-    //     gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, renderbuffer);
-    //     gl::renderbuffer_storage_multisample(gl::Renderbuffer_target::renderbuffer, samples, internalformat, width, height);
-    //     gl::bind_renderbuffer(gl::Renderbuffer_target::renderbuffer, current_renderbuffer);
-    // }
-}
-
-void Device::multi_draw_elements_indirect(
-    gl::Primitive_type     mode,
-    gl::Draw_elements_type type,
-    const void*            indirect,
-    GLsizei                drawcount,
-    GLsizei                stride
-)
-{
-    gl::multi_draw_elements_indirect(mode, type, indirect, drawcount, stride);
-}
-
 auto Device::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
     std::optional<gl::Internal_format> gl_format_opt = gl_helpers::convert_to_gl(format);
@@ -1526,5 +1492,11 @@ auto Device::make_render_command_encoder(Render_pass& render_pass) -> std::uniqu
 {
     return std::make_unique<Render_command_encoder>(*this, render_pass);
 }
+
+auto Device::make_compute_command_encoder() -> std::unique_ptr<Compute_command_encoder>
+{
+    return std::make_unique<Compute_command_encoder>(*this);
+}
+
 
 } // namespace erhe::graphics

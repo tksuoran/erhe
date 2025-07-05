@@ -3,18 +3,30 @@ add_library(${_target})
 add_library(erhe::graphics ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe_graphics/buffer_transfer_queue.cpp
-    erhe_graphics/buffer_transfer_queue.hpp
+    erhe_graphics/blit_command_encoder.cpp
+    erhe_graphics/blit_command_encoder.hpp
     erhe_graphics/buffer.cpp
     erhe_graphics/buffer.hpp
+    erhe_graphics/buffer_transfer_queue.cpp
+    erhe_graphics/buffer_transfer_queue.hpp
+    erhe_graphics/command_buffer.cpp
+    erhe_graphics/command_buffer.hpp
+    erhe_graphics/command_encoder.cpp
+    erhe_graphics/command_encoder.hpp
+    erhe_graphics/compute_command_encoder.cpp
+    erhe_graphics/compute_command_encoder.hpp
+    erhe_graphics/compute_pipeline_state.cpp
+    erhe_graphics/compute_pipeline_state.hpp
     erhe_graphics/debug.cpp
     erhe_graphics/debug.hpp
+    erhe_graphics/device.cpp
+    erhe_graphics/device.hpp
+    erhe_graphics/enums.cpp
+    erhe_graphics/enums.hpp
     erhe_graphics/fragment_output.cpp
     erhe_graphics/fragment_output.hpp
     erhe_graphics/fragment_outputs.cpp
     erhe_graphics/fragment_outputs.hpp
-    erhe_graphics/render_pass.cpp
-    erhe_graphics/render_pass.hpp
     erhe_graphics/gl_context_provider.cpp
     erhe_graphics/gl_context_provider.hpp
     erhe_graphics/gl_objects.cpp
@@ -27,15 +39,17 @@ erhe_target_sources_grouped(
     erhe_graphics/gpu_timer.hpp
     erhe_graphics/graphics_log.cpp
     erhe_graphics/graphics_log.hpp
-    erhe_graphics/device.cpp
-    erhe_graphics/device.hpp
-    erhe_graphics/opengl_state_tracker.cpp
-    erhe_graphics/opengl_state_tracker.hpp
-    erhe_graphics/render_pipeline_state.cpp
-    erhe_graphics/render_pipeline_state.hpp
+    erhe_graphics/image_loader.hpp
     erhe_graphics/image_loader_wuffs.cpp
     erhe_graphics/image_loader_wuffs.hpp
-    erhe_graphics/image_loader.hpp
+    erhe_graphics/opengl_state_tracker.cpp
+    erhe_graphics/opengl_state_tracker.hpp
+    erhe_graphics/render_command_encoder.cpp
+    erhe_graphics/render_command_encoder.hpp
+    erhe_graphics/render_pass.cpp
+    erhe_graphics/render_pass.hpp
+    erhe_graphics/render_pipeline_state.cpp
+    erhe_graphics/render_pipeline_state.hpp
     erhe_graphics/renderbuffer.cpp
     erhe_graphics/renderbuffer.hpp
     erhe_graphics/sampler.cpp
@@ -44,10 +58,10 @@ erhe_target_sources_grouped(
     erhe_graphics/shader_monitor.hpp
     erhe_graphics/shader_resource.cpp
     erhe_graphics/shader_resource.hpp
-    erhe_graphics/shader_stages_create_info.cpp
-    erhe_graphics/shader_stages_prototype.cpp
     erhe_graphics/shader_stages.cpp
     erhe_graphics/shader_stages.hpp
+    erhe_graphics/shader_stages_create_info.cpp
+    erhe_graphics/shader_stages_prototype.cpp
     erhe_graphics/span.hpp
     erhe_graphics/state/color_blend_state.cpp
     erhe_graphics/state/color_blend_state.hpp
@@ -65,15 +79,6 @@ erhe_target_sources_grouped(
     erhe_graphics/state/viewport_state.hpp
     erhe_graphics/texture.cpp
     erhe_graphics/texture.hpp
-
-    erhe_graphics/command_buffer.cpp
-    erhe_graphics/command_buffer.hpp
-    erhe_graphics/blit_command_encoder.cpp
-    erhe_graphics/blit_command_encoder.hpp
-    erhe_graphics/compute_command_encoder.cpp
-    erhe_graphics/compute_command_encoder.hpp
-    erhe_graphics/render_command_encoder.cpp
-    erhe_graphics/render_command_encoder.hpp
 )
 
 if (ERHE_SPIRV)

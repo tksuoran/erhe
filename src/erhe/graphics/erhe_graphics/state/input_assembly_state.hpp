@@ -1,20 +1,18 @@
 #pragma once
 
-#include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_graphics/enums.hpp"
 
 namespace erhe::graphics {
 
 class Input_assembly_state
 {
 public:
-    gl::Primitive_type primitive_topology{gl::Primitive_type::points};
-    bool               primitive_restart {false};
+    Primitive_type primitive_topology{Primitive_type::point};
+    bool           primitive_restart {false};
 
-    static Input_assembly_state points;
-    static Input_assembly_state lines;
-    static Input_assembly_state line_loop;
-    static Input_assembly_state triangles;
-    static Input_assembly_state triangle_fan;
+    static Input_assembly_state point;
+    static Input_assembly_state line;
+    static Input_assembly_state triangle;
     static Input_assembly_state triangle_strip;
 };
 

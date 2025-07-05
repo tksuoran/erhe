@@ -16,7 +16,7 @@ Render_pipeline_state::Render_pipeline_state()
     s_pipelines.push_back(this);
 }
 
-Render_pipeline_state::Render_pipeline_state(Pipeline_data&& create_info)
+Render_pipeline_state::Render_pipeline_state(Render_pipeline_data&& create_info)
     : data{std::move(create_info)}
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};

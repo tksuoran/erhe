@@ -19,7 +19,8 @@ namespace gl_helpers {
 [[nodiscard]] auto has_depth          (gl::Internal_format format) -> bool;
 [[nodiscard]] auto has_stencil        (gl::Internal_format format) -> bool;
 
-[[nodiscard]] auto convert_to_gl  (erhe::dataformat::Format format) -> std::optional<gl::Internal_format>;
+[[nodiscard]] auto convert_to_gl_index_type(erhe::dataformat::Format format) -> std::optional<gl::Draw_elements_type>;
+[[nodiscard]] auto convert_to_gl(erhe::dataformat::Format format) -> std::optional<gl::Internal_format>;
 [[nodiscard]] auto convert_from_gl(gl::Internal_format format) -> erhe::dataformat::Format;
 
 void set_error_checking(const bool enable);

@@ -4,7 +4,7 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_scene/camera.hpp"
@@ -113,13 +113,13 @@ void Cube_renderer::render(const Render_parameters& parameters)
         glm::vec4{0.0f},
         parameters.frame_number
     );
-    m_camera_buffer.bind(camera_buffer_range.value());
+    m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
 
     Buffer_range primitive_range = m_primitive_buffer.update(
         erhe::graphics::as_span(parameters.node),
         parameters.primitive_settings
     );
-    m_primitive_buffer.bind(primitive_range);
+    m_primitive_buffer.bind(parameters.render_encoder, primitive_range);
 
     Buffer_range cube_control_range = m_cube_control_buffer.update(
         parameters.cube_size,
@@ -128,13 +128,13 @@ void Cube_renderer::render(const Render_parameters& parameters)
         parameters.color_start,
         parameters.color_end
     );
-    m_cube_control_buffer.bind(cube_control_range);
+    m_cube_control_buffer.bind(parameters.render_encoder, cube_control_range);
 
     const erhe::graphics::Render_pipeline_state& pipeline = parameters.pipeline;
-    m_graphics_device.opengl_state_tracker.execute_(pipeline, false);
+    parameters.render_encoder.set_render_pipeline_state(pipeline);
     const std::size_t cube_count   = parameters.cube_instance_buffer.bind();
     const GLsizei     vertex_count = static_cast<GLsizei>(cube_count * 6 * 6);
-    gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, vertex_count);
+    parameters.render_encoder.draw_primitives(pipeline.data.input_assembly.primitive_topology, 0, vertex_count);
 
     camera_buffer_range.value().release();
     primitive_range.release();

@@ -116,8 +116,8 @@ public:
 
     auto update_control(std::size_t light_index) -> erhe::graphics::Buffer_range;
 
-    void bind_light_buffer  (const erhe::graphics::Buffer_range& range);
-    void bind_control_buffer(const erhe::graphics::Buffer_range& range);
+    void bind_light_buffer  (erhe::graphics::Command_encoder& encoder, const erhe::graphics::Buffer_range& range);
+    void bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Buffer_range& range);
 
 private:
     Light_interface&                       m_light_interface;

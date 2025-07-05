@@ -5,22 +5,22 @@
 #include "renderers/programs.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
-#include "erhe_graphics/render_pass.hpp"
-#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/draw_indirect.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace editor {
@@ -96,21 +96,21 @@ Id_renderer::Id_renderer(
     , m_camera_buffers       {graphics_device, program_interface.camera_interface}
     , m_draw_indirect_buffers{graphics_device}
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
-    , m_pipeline{erhe::graphics::Pipeline_data{
+    , m_pipeline{erhe::graphics::Render_pipeline_data{
         .name           = "ID Renderer",
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
 
-    , m_selective_depth_clear_pipeline{erhe::graphics::Pipeline_data{
+    , m_selective_depth_clear_pipeline{erhe::graphics::Render_pipeline_data{
         .name           = "ID Renderer selective depth clear",
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
         .color_blend    = Color_blend_state::color_writes_disabled,
@@ -246,7 +246,7 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
     }
 }
 
-void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes)
+void Id_renderer::render(erhe::graphics::Render_command_encoder& render_encoder, const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -272,18 +272,18 @@ void Id_renderer::render(const std::span<const std::shared_ptr<erhe::scene::Mesh
         log_render->warn("primitive_range != draw_indirect_buffer_range.draw_indirect_count");
     }
 
-    m_primitive_buffers.bind(primitive_range);
-    m_draw_indirect_buffers.bind(draw_indirect_buffer_range.range);
+    m_primitive_buffers    .bind(render_encoder, primitive_range);
+    m_draw_indirect_buffers.bind(render_encoder, draw_indirect_buffer_range.range);
     {
         static constexpr std::string_view c_draw{"draw"};
 
         ERHE_PROFILE_SCOPE("mdi");
-        m_graphics_device.multi_draw_elements_indirect(
+        render_encoder.multi_draw_indexed_primitives_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
-            erhe::graphics::to_gl_index_type(m_mesh_memory.buffer_info.index_type),
-            reinterpret_cast<const void*>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),
-            static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-            static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+            m_mesh_memory.buffer_info.index_type,
+            draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+            draw_indirect_buffer_range.draw_indirect_count,
+            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
         );
     }
 
@@ -334,9 +334,13 @@ void Id_renderer::render(const Render_parameters& parameters)
         glm::vec4{0.0f},
         0
     );
-    m_camera_buffers.bind(camera_range);
 
     std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+    erhe::graphics::Render_command_encoder& encoder = *render_encoder.get();
+
+    m_camera_buffers.bind(encoder, camera_range);
+
+    // TODO Is still needed? NVIDIA driver bug? workaround
     m_graphics_device.opengl_state_tracker.shader_stages.reset();
     m_graphics_device.opengl_state_tracker.color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
 
@@ -352,18 +356,18 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     m_primitive_buffers.reset_id_ranges();
 
-    m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
+    encoder.set_render_pipeline_state(m_pipeline);
 
     for (auto meshes : content_mesh_spans) {
-        render(meshes);
+        render(encoder, meshes);
     }
 
     // Clear depth for tool pixels
     {
-        m_graphics_device.opengl_state_tracker.execute_(m_selective_depth_clear_pipeline);
-        gl::depth_range(0.0f, 0.0f);
+        encoder.set_render_pipeline_state(m_selective_depth_clear_pipeline);
+        gl::depth_range(0.0f, 0.0f); // TODO move to render pipeline
         for (auto mesh_spans : tool_mesh_spans) {
-            render(mesh_spans);
+            render(encoder, mesh_spans);
         }
     }
 
@@ -371,12 +375,10 @@ void Id_renderer::render(const Render_parameters& parameters)
     {
         //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
 
-        m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
-
-        gl::depth_range(0.0f, 1.0f);
-
+        encoder.set_render_pipeline_state(m_pipeline);
+        gl::depth_range(0.0f, 1.0f); // TODO move to render pipeline
         for (auto meshes : tool_mesh_spans) {
-            render(meshes);
+            render(encoder, meshes);
         }
     }
 

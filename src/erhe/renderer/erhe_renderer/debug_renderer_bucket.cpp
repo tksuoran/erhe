@@ -2,6 +2,8 @@
 #include "erhe_renderer/debug_renderer_bucket.hpp"
 
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -28,11 +30,11 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
     const gl::Depth_function depth_compare_op0 = visible ? gl::Depth_function::less : gl::Depth_function::gequal;
     const gl::Depth_function depth_compare_op  = reverse_depth ? erhe::graphics::reverse(depth_compare_op0) : depth_compare_op0;
     return erhe::graphics::Render_pipeline_state{
-        erhe::graphics::Pipeline_data{
+        erhe::graphics::Render_pipeline_data{
             .name           = "Line Renderer",
             .shader_stages  = graphics_shader_stages,
             .vertex_input   = m_debug_renderer.get_vertex_input(),
-            .input_assembly = erhe::graphics::Input_assembly_state::triangles,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = {
                 .depth_test_enable   = true,
@@ -86,16 +88,16 @@ Debug_renderer_bucket::Debug_renderer_bucket(
 )
     : m_graphics_device   {graphics_device}
     , m_debug_renderer    {debug_renderer}
-    , m_vertex_ssbo_buffer{
+    , m_vertex_ssbo_buffer{ // compute read
         graphics_device,
+        erhe::graphics::Buffer_target::storage,
         "Debug_renderer_bucket::m_vertex_ssbo_buffer",
-        gl::Buffer_target::shader_storage_buffer, // for compute bind range
         debug_renderer.get_program_interface().line_vertex_buffer_block->binding_point()
     }
-    , m_triangle_vertex_buffer{
+    , m_triangle_vertex_buffer{ // compute write, vs read
         graphics_device,
+        erhe::graphics::Buffer_target::storage,
         "Debug_renderer_bucket::m_triangle_vertex_buffer",
-        gl::Buffer_target::shader_storage_buffer, // for compute bind range
         debug_renderer.get_program_interface().triangle_vertex_buffer_block->binding_point()
     }
     , m_config            {config}
@@ -159,7 +161,7 @@ void Debug_renderer_bucket::clear()
     }
 }
 
-void Debug_renderer_bucket::dispatch_compute()
+void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_encoder& encoder)
 {
     if (m_config.primitive_type != gl::Primitive_type::lines) {
         ERHE_FATAL("TODO");
@@ -171,7 +173,7 @@ void Debug_renderer_bucket::dispatch_compute()
         ERHE_VERIFY(draw.primitive_count > 0);
 
         draw.input_buffer_range.close();
-        m_vertex_ssbo_buffer.bind(draw.input_buffer_range);
+        m_vertex_ssbo_buffer.bind(encoder, draw.input_buffer_range);
 
         const std::size_t triangle_byte_count = 6 * draw.primitive_count * triangle_vertex_stride;
 
@@ -184,7 +186,7 @@ void Debug_renderer_bucket::dispatch_compute()
         draw.draw_buffer_range.bytes_written(triangle_byte_count);
         draw.draw_buffer_range.close();
 
-        m_triangle_vertex_buffer.bind(draw.draw_buffer_range);
+        m_triangle_vertex_buffer.bind(encoder, draw.draw_buffer_range);
 
         gl::dispatch_compute(static_cast<unsigned int>(draw.primitive_count), 1, 1);
 
@@ -200,20 +202,15 @@ void Debug_renderer_bucket::release_buffers()
     m_draws.clear();
 }
 
-void Debug_renderer_bucket::render(bool draw_hidden, bool draw_visible)
+void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& render_encoder, bool draw_hidden, bool draw_visible)
 {
     if (draw_hidden && m_config.draw_hidden) {
         m_graphics_device.opengl_state_tracker.execute_(m_pipeline_hidden);
         for (const Debug_draw_entry& draw : m_draws) {
             erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
             size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
-            m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(
-                0,
-                triangle_vertex_buffer,
-                triangle_vertex_buffer_offset
-            );
-
-            gl::draw_arrays(
+            render_encoder.set_vertex_buffer(triangle_vertex_buffer, triangle_vertex_buffer_offset, 0);
+            render_encoder.draw_primitives(
                 m_pipeline_hidden.data.input_assembly.primitive_topology,
                 0,
                 static_cast<GLint>(6 * draw.primitive_count)
@@ -226,12 +223,8 @@ void Debug_renderer_bucket::render(bool draw_hidden, bool draw_visible)
         for (const Debug_draw_entry& draw : m_draws) {
             erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
             size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
-            m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(
-                0,
-                triangle_vertex_buffer,
-                triangle_vertex_buffer_offset
-            );
-            gl::draw_arrays(
+            render_encoder.set_vertex_buffer(triangle_vertex_buffer, triangle_vertex_buffer_offset, 0);
+            render_encoder.draw_primitives(
                 m_pipeline_visible.data.input_assembly.primitive_topology,
                 0,
                 static_cast<GLint>(6 * draw.primitive_count)

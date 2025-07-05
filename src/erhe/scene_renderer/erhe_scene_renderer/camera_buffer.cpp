@@ -2,7 +2,6 @@
 
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
-#include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/span.hpp"
@@ -12,7 +11,6 @@
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/transform.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
-#include "erhe_verify/verify.hpp"
 
 namespace erhe::scene_renderer {
 
@@ -44,8 +42,8 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device)
 Camera_buffer::Camera_buffer(erhe::graphics::Device& graphics_device, Camera_interface& camera_interface)
     : GPU_ring_buffer_client{
         graphics_device,
+        erhe::graphics::Buffer_target::uniform,
         "Camera_buffer",
-        gl::Buffer_target::uniform_buffer,
         camera_interface.camera_block.binding_point()
     }
     , m_camera_interface{camera_interface}

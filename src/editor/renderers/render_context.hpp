@@ -28,13 +28,14 @@ public:
     [[nodiscard]] auto get_line_renderer(const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer;
     [[nodiscard]] auto get_line_renderer(unsigned int stencil, bool visible, bool hidden) const -> erhe::renderer::Primitive_renderer;
 
-    App_context&                         app_context;
-    Scene_view&                          scene_view;
-    Viewport_config&                     viewport_config;
-    erhe::scene::Camera*                 camera                {nullptr};
-    Viewport_scene_view*                 viewport_scene_view   {nullptr};
-    erhe::math::Viewport                 viewport              {0, 0, 0, 0};
-    const erhe::graphics::Shader_stages* override_shader_stages{nullptr};
+    erhe::graphics::Render_command_encoder* encoder{nullptr};
+    App_context&                            app_context;
+    Scene_view&                             scene_view;
+    Viewport_config&                        viewport_config;
+    erhe::scene::Camera*                    camera                {nullptr};
+    Viewport_scene_view*                    viewport_scene_view   {nullptr};
+    erhe::math::Viewport                    viewport              {0, 0, 0, 0};
+    const erhe::graphics::Shader_stages*    override_shader_stages{nullptr};
 };
 
 }

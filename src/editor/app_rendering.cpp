@@ -356,7 +356,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Polygon Fill Opaque",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
@@ -365,7 +365,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Polygon Fill Opaque Selected",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = {
             .depth_test_enable   = true,
@@ -397,7 +397,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Polygon Fill Translucent",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_none,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_premultiplied
@@ -406,7 +406,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name                       = "Hidden lines with blending",
         .shader_stages              = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input               = &mesh_memory.vertex_input,
-        .input_assembly             = Input_assembly_state::lines,
+        .input_assembly             = Input_assembly_state::line,
         .rasterization              = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = {
             .depth_test_enable      = true,
@@ -451,7 +451,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Brush back faces",
         .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_front_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_premultiplied
@@ -460,7 +460,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Brush front faces",
         .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_premultiplied
@@ -469,7 +469,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Edge Lines",
         .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::lines,
+        .input_assembly = Input_assembly_state::line,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable   = true,
@@ -501,7 +501,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Selection Outline",
         .shader_stages  = &programs.fat_triangle.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable   = false,
@@ -533,7 +533,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Corner Points",
         .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::points,
+        .input_assembly = Input_assembly_state::point,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
@@ -542,7 +542,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Polygon Centroids",
         .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::points,
+        .input_assembly = Input_assembly_state::point,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
@@ -551,7 +551,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .name           = "Rendertarget Meshes",
         .shader_stages  = &programs.textured.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
+        .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw, 
         // Useful for debugging rendertarget meshes
         // .rasterization  = Rasterization_state::cull_mode_none,
@@ -560,11 +560,11 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
     }}}
     , sky{
         erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Sky",
                 .shader_stages  = &programs.sky.shader_stages,
                 .vertex_input   = &mesh_memory.vertex_input,
-                .input_assembly = Input_assembly_state::triangles,
+                .input_assembly = Input_assembly_state::triangle,
                 .rasterization  = Rasterization_state::cull_mode_none,
                 .depth_stencil  = Depth_stencil_state{
                     .depth_test_enable   = true,
@@ -598,11 +598,11 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
     }
     , grid{
         erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Pipeline_data{
+            erhe::graphics::Render_pipeline_data{
                 .name           = "Grid",
                 .shader_stages  = &programs.grid.shader_stages,
                 .vertex_input   = &mesh_memory.vertex_input,
-                .input_assembly = Input_assembly_state::triangles,
+                .input_assembly = Input_assembly_state::triangle,
                 .rasterization  = Rasterization_state::cull_mode_none_depth_clamp,
                 .depth_stencil  = Depth_stencil_state::depth_test_enabled_less_or_equal_stencil_test_disabled(),
                 .color_blend    = Color_blend_state::color_blend_premultiplied

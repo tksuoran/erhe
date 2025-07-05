@@ -18,22 +18,23 @@
 #include "tools/transform/transform_tool.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
-#include "erhe_imgui/imgui_helpers.hpp"
-#include "erhe_log/log_glm.hpp"
-#include "erhe_rendergraph/rendergraph.hpp"
-#include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_math/math_util.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <glm/gtx/matrix_operation.hpp>
 
@@ -110,7 +111,8 @@ void Viewport_scene_view::execute_rendergraph_node()
         do_render = false;
     }
 
-    const Render_context context{
+    Render_context context{
+        .encoder                = nullptr, // filled in later once we start render pass
         .app_context            = m_context,
         .scene_view             = *this,
         .viewport_config        = m_viewport_config,
@@ -124,17 +126,32 @@ void Viewport_scene_view::execute_rendergraph_node()
         m_context.app_rendering->render_id(context);
     }
 
+    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
+
+    {
+        m_context.tools         ->render_viewport_tools(context);
+        m_context.app_rendering ->render_viewport_renderables(context);
+
+        m_context.debug_renderer->update(context.viewport, *context.camera);
+        std::unique_ptr<erhe::graphics::Compute_command_encoder> compute_encoder;
+        compute_encoder = graphics_device.make_compute_command_encoder();
+        m_context.debug_renderer->compute(*compute_encoder.get());
+    }
+
     update_render_pass(m_projection_viewport.width, m_projection_viewport.height);
     // TODO If we ever have non-ImGui viewport, this might be an option:
     // update_render_pass(m_projection_viewport.width, m_projection_viewport.height, true);
 
     ERHE_VERIFY(m_render_pass);
-    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
+
     std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder;
     render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
+    context.encoder = render_encoder.get();
+
     // Starting render encoder clears render target texture(s)
     if (!do_render) {
         // ending render encoder applies multisample resolve, if applicabale
+        m_context.debug_renderer->release();
         return;
     }
 
@@ -155,10 +172,9 @@ void Viewport_scene_view::execute_rendergraph_node()
     );
 
     m_context.app_rendering ->render_viewport_main(context);
-    m_context.tools         ->render_viewport_tools(context);
-    m_context.app_rendering ->render_viewport_renderables(context);
-    m_context.debug_renderer->render(context.viewport, *context.camera);
-    m_context.text_renderer ->render(context.viewport);
+    m_context.debug_renderer->render(*context.encoder, context.viewport);
+    m_context.debug_renderer->release();
+    m_context.text_renderer ->render(*context.encoder, context.viewport);
 }
 
 void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)

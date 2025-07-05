@@ -2,8 +2,9 @@
 
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_renderer/debug_renderer_bucket.hpp"
-#include "erhe_graphics/fragment_outputs.hpp"
+#include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_math/viewport.hpp"
@@ -15,6 +16,8 @@
 
 namespace erhe::graphics {
     class Buffer;
+    class Compute_pipeline_state;
+    class Render_command_encoder;
     class Shader_stages;
 }
 namespace erhe::scene {
@@ -55,9 +58,13 @@ public:
     ~Debug_renderer();
 
     // Public API
-    auto get   (const Debug_renderer_config& config) -> Primitive_renderer;
-    auto get   (unsigned int stencil, bool visible, bool hidden) -> Primitive_renderer;
-    void render(const erhe::math::Viewport camera_viewport, const erhe::scene::Camera& camera);
+    auto get    (const Debug_renderer_config& config) -> Primitive_renderer;
+    auto get    (unsigned int stencil, bool visible, bool hidden) -> Primitive_renderer;
+
+    void update (const erhe::math::Viewport viewport, const erhe::scene::Camera& camera);
+    void compute(erhe::graphics::Compute_command_encoder& command_encoder);
+    void render (erhe::graphics::Render_command_encoder& encoder, const erhe::math::Viewport camera_viewport);
+    void release();
 
     // API for Debug_renderer_bucket
     auto get_program_interface() const -> const Debug_renderer_program_interface& { return m_program_interface; }
@@ -74,6 +81,8 @@ private:
 
     erhe::graphics::GPU_ring_buffer_client m_view_buffer;
     erhe::graphics::Vertex_input_state     m_vertex_input;
+    erhe::graphics::Buffer_range           m_view_buffer_range;
+    erhe::graphics::Compute_pipeline_state m_lines_to_triangles_compute_pipeline;
 
     // NOTE: Elements in m_buckets must be stable, etl::vector<> works, std::vector<> does not work.
     etl::vector<Debug_renderer_bucket, 32> m_buckets;

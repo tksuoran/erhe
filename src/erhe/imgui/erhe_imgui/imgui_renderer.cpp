@@ -3,14 +3,13 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_host.hpp"
-#include "erhe_renderer/renderer_config.hpp"
 
-#include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
@@ -221,26 +220,26 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
             }
         }
     }
-    , m_vertex_buffer{graphics_device, "ImGui Vertex Buffer", gl::Buffer_target::array_buffer}
-    , m_index_buffer{graphics_device,  "ImGui Index Buffer", gl::Buffer_target::element_array_buffer, }
+    , m_vertex_buffer{graphics_device, erhe::graphics::Buffer_target::vertex, "ImGui Vertex Buffer"}
+    , m_index_buffer{graphics_device,  erhe::graphics::Buffer_target::index, "ImGui Index Buffer"}
     , m_draw_parameter_buffer{
         graphics_device,
+        erhe::graphics::Buffer_target::storage,
         "ImGui Draw Parameter Buffer",
-        gl::Buffer_target::shader_storage_buffer,
         m_imgui_program_interface.draw_parameter_block.binding_point(),
     }
     , m_draw_indirect_buffer{
         graphics_device,
-        "ImGui Draw Indirect Buffer",
-        gl::Buffer_target::draw_indirect_buffer
+        erhe::graphics::Buffer_target::draw_indirect,
+        "ImGui Draw Indirect Buffer"
     }
     , m_vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
     , m_pipeline{
-        erhe::graphics::Pipeline_data{
+        erhe::graphics::Render_pipeline_data{
             .name           = "ImGui Renderer",
             .shader_stages  = &m_shader_stages,
             .vertex_input   = &m_vertex_input,
-            .input_assembly = erhe::graphics::Input_assembly_state::triangles,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied
@@ -258,7 +257,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
     , m_linear_sampler{
         graphics_device,
         {
-            .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
+            .min_filter  = gl::Texture_min_filter::linear,
             .mag_filter  = gl::Texture_mag_filter::linear,
             .debug_label = "Imgui_renderer linear"
         }
@@ -763,7 +762,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                 }
             } else {
                 draw_parameter_byte_count += draw_parameter_entry_size;
-                draw_indirect_byte_count  += sizeof(gl::Draw_elements_indirect_command);
+                draw_indirect_byte_count  += sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
             }
         }
     }
@@ -916,7 +915,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                     }
 
                     draw_parameter_write_offset += draw_parameter_entry_size;
-                    const auto draw_command = gl::Draw_elements_indirect_command{
+                    const erhe::graphics::Draw_indexed_primitives_indirect_command draw_command{
                         pcmd->ElemCount,
                         1,
                         pcmd->IdxOffset + static_cast<uint32_t>(list_index_offset),
@@ -928,7 +927,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                         draw_indirect_write_offset,
                         erhe::graphics::as_span(draw_command)
                     );
-                    draw_indirect_write_offset += sizeof(gl::Draw_elements_indirect_command);
+                    draw_indirect_write_offset += sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
                     ++draw_indirect_count;
                 }
             }
@@ -998,15 +997,15 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
         }
 
         ERHE_VERIFY(draw_parameter_buffer_range.get_written_byte_count() > 0);
-        m_draw_parameter_buffer.bind(draw_parameter_buffer_range);
-        m_draw_indirect_buffer.bind(draw_indirect_buffer_range);
+        m_draw_parameter_buffer.bind(render_encoder, draw_parameter_buffer_range);
+        m_draw_indirect_buffer.bind(render_encoder, draw_indirect_buffer_range);
 
-        m_graphics_device.multi_draw_elements_indirect(
+        render_encoder.multi_draw_indexed_primitives_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
-            gl::Draw_elements_type::unsigned_short,
-            reinterpret_cast<const void*>(draw_indirect_buffer_range.get_byte_start_offset_in_buffer()),
-            static_cast<GLsizei>(draw_indirect_count),
-            static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+            erhe::dataformat::Format::format_16_scalar_uint,
+            draw_indirect_buffer_range.get_byte_start_offset_in_buffer(),
+            draw_indirect_count,
+            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
         );
 
         draw_parameter_buffer_range.release();

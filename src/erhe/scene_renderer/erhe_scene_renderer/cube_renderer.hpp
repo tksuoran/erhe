@@ -7,7 +7,10 @@
 
 #include "erhe_renderer/pipeline_renderpass.hpp"
 
-namespace erhe::graphics { class Device; }
+namespace erhe::graphics {
+    class Device;
+    class Render_command_encoder;
+}
 namespace erhe::scene    { class Camera; }
 namespace erhe::math     { class Viewport; }
 
@@ -26,18 +29,19 @@ public:
     class Render_parameters
     {
     public:
-        Cube_instance_buffer&                  cube_instance_buffer;
-        erhe::graphics::Render_pipeline_state& pipeline;
-        const erhe::scene::Camera*             camera{nullptr};
-        std::shared_ptr<erhe::scene::Node>     node{};
-        Primitive_interface_settings           primitive_settings{};
-        erhe::math::Viewport                   viewport;
-        glm::vec4                              cube_size  {0.4f, 0.4f, 0.4f, 1.0f};
-        glm::vec4                              color_bias {0.0f, 0.0f, 0.0f, 0.0f};
-        glm::vec4                              color_scale{1.0f, 1.0f, 1.0f, 0.0f};
-        glm::vec4                              color_start{0.0f, 0.0f, 0.0f, 0.0f};
-        glm::vec4                              color_end  {1.0f, 1.0f, 1.0f, 0.0f};
-        uint64_t                               frame_number{0};
+        Cube_instance_buffer&                   cube_instance_buffer;
+        erhe::graphics::Render_command_encoder& render_encoder;
+        erhe::graphics::Render_pipeline_state&  pipeline;
+        const erhe::scene::Camera*              camera{nullptr};
+        std::shared_ptr<erhe::scene::Node>      node{};
+        Primitive_interface_settings            primitive_settings{};
+        erhe::math::Viewport                    viewport;
+        glm::vec4                               cube_size  {0.4f, 0.4f, 0.4f, 1.0f};
+        glm::vec4                               color_bias {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4                               color_scale{1.0f, 1.0f, 1.0f, 0.0f};
+        glm::vec4                               color_start{0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4                               color_end  {1.0f, 1.0f, 1.0f, 0.0f};
+        uint64_t                                frame_number{0};
     };
 
     void render(const Render_parameters& parameters);

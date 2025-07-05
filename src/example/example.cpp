@@ -15,6 +15,8 @@
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item_log.hpp"
@@ -170,9 +172,6 @@ public:
                 m_time += dt;
             }
         }
-        gl::clear_color(0.1f, 0.1f, 0.1f, 1.0f);
-        gl::clear_depth_f(*m_graphics_device.depth_clear_value_pointer());
-        gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
 
         erhe::math::Viewport viewport{
             .x      = 0,
@@ -181,17 +180,21 @@ public:
             .height = m_window.get_height()
         };
 
+        update_render_pass(viewport.width, viewport.height);
+
+        std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+
         m_scene.update_node_transforms();
 
         std::vector<erhe::renderer::Pipeline_renderpass*> passes;
 
         erhe::renderer::Pipeline_renderpass standard_pipeline_renderpass{ 
             erhe::graphics::Render_pipeline_state{
-                erhe::graphics::Pipeline_data{
+                erhe::graphics::Render_pipeline_data{
                     .name           = "Standard Renderpass",
                     .shader_stages  = &m_programs.standard,
                     .vertex_input   = &m_mesh_memory.vertex_input,
-                    .input_assembly = erhe::graphics::Input_assembly_state::triangles,
+                    .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                     .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
                     .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
                     .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
@@ -228,6 +231,7 @@ public:
 
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
+                .render_encoder         = *render_encoder.get(),
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
                 .index_buffer           = &m_mesh_memory.index_buffer,
                 .vertex_buffer0         = &m_mesh_memory.position_vertex_buffer,
@@ -252,6 +256,31 @@ public:
     }
 
 private:
+    void update_render_pass(int width, int height)
+    {
+        if (
+            m_render_pass &&
+            (m_render_pass->get_render_target_width () == width) &&
+            (m_render_pass->get_render_target_height() == height)
+        )
+        {
+            return;
+        }
+
+        m_render_pass.reset();
+        erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+        render_pass_descriptor.color_attachments[0].use_default_framebuffer = true;
+        render_pass_descriptor.color_attachments[0].load_action             = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment    .use_default_framebuffer = true;
+        render_pass_descriptor.depth_attachment    .load_action             = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.stencil_attachment  .use_default_framebuffer = true;
+        render_pass_descriptor.stencil_attachment  .load_action             = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.render_target_width  = width;
+        render_pass_descriptor.render_target_height = height;
+        render_pass_descriptor.debug_label          = "Example Render_pass";
+        m_render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
+    }
+
     auto make_camera(const std::string_view name, const glm::vec3 position, const glm::vec3 look_at) -> std::shared_ptr<erhe::scene::Camera>
     {
         using Item_flags = erhe::Item_flags;
@@ -335,13 +364,14 @@ private:
         return light;
     }
 
-    erhe::window::Context_window&           m_window;
-    erhe::scene::Scene&                     m_scene;
-    erhe::graphics::Device&                 m_graphics_device;
-    erhe::scene_renderer::Forward_renderer& m_forward_renderer;
-    erhe::gltf::Gltf_data&                  m_gltf_data;
-    Mesh_memory&                            m_mesh_memory;
-    Programs&                               m_programs;
+    erhe::window::Context_window&                m_window;
+    erhe::scene::Scene&                          m_scene;
+    erhe::graphics::Device&                      m_graphics_device;
+    erhe::scene_renderer::Forward_renderer&      m_forward_renderer;
+    erhe::gltf::Gltf_data&                       m_gltf_data;
+    std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
+    Mesh_memory&                                 m_mesh_memory;
+    Programs&                                    m_programs;
 
     bool                                    m_close_requested{false};
     std::shared_ptr<erhe::scene::Camera>    m_camera;

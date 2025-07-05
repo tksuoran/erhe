@@ -9,7 +9,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/scoped_buffer_mapping.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
@@ -136,22 +136,22 @@ Tile_renderer::Tile_renderer(
     , m_shader_stages            {make_program(make_prototype(graphics_device))}
     , m_vertex_buffer{
         graphics_device,
+        erhe::graphics::Buffer_target::vertex,
         "Tile_renderer::m_vertex_buffer",
-        gl::Buffer_target::array_buffer
     }
     , m_projection_buffer{
         graphics_device,
+        erhe::graphics::Buffer_target::uniform,
         "Tile_renderer::m_projection_buffer",
-        gl::Buffer_target::uniform_buffer,
         m_projection_block.binding_point()
     }
     , m_vertex_input{m_graphics_device, erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
     , m_pipeline{
-        erhe::graphics::Pipeline_data{
+        erhe::graphics::Render_pipeline_data{
             .name           = "Map renderer",
             .shader_stages  = &m_shader_stages,
             .vertex_input   = &m_vertex_input,
-            .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle_strip,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
@@ -165,10 +165,11 @@ Tile_renderer::Tile_renderer(
     size_t      offset      {0};
     uint32_t    vertex_index{0};
     for (unsigned int i = 0; i < max_quad_count; ++i) {
+        // This used to be triangle fan but is now triangle strip
         gpu_index_data[offset + 0] = vertex_index;
         gpu_index_data[offset + 1] = vertex_index + 1;
-        gpu_index_data[offset + 2] = vertex_index + 2;
-        gpu_index_data[offset + 3] = vertex_index + 3;
+        gpu_index_data[offset + 2] = vertex_index + 3;
+        gpu_index_data[offset + 3] = vertex_index + 2;
         gpu_index_data[offset + 4] = uint32_primitive_restart;
         vertex_index += 4;
         offset += 5;
@@ -663,7 +664,7 @@ void Tile_renderer::end()
     m_can_blit = false;
 }
 
-void Tile_renderer::render(erhe::math::Viewport viewport)
+void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encoder, erhe::math::Viewport viewport)
 {
     if (m_index_count == 0) {
         return;
@@ -717,11 +718,11 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
 
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_graphics_device.opengl_state_tracker.execute_(m_pipeline);
-    m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(&m_index_buffer);
-    m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, vertex_buffer, vertex_buffer_range.get_byte_start_offset_in_buffer());
+    render_encoder.set_render_pipeline_state(m_pipeline);
+    render_encoder.set_index_buffer(&m_index_buffer);
+    render_encoder.set_vertex_buffer(vertex_buffer, vertex_buffer_range.get_byte_start_offset_in_buffer(), 0);
 
-    m_projection_buffer.bind(projection_buffer_range);
+    m_projection_buffer.bind(render_encoder, projection_buffer_range);
 
     if (m_graphics_device.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
@@ -730,11 +731,11 @@ void Tile_renderer::render(erhe::math::Viewport viewport)
         gl::bind_sampler     (0, m_nearest_sampler.gl_name());
     }
 
-    gl::draw_elements(
+    render_encoder.draw_indexed_primitives(
         m_pipeline.data.input_assembly.primitive_topology,
-        static_cast<GLsizei>(m_index_count),
-        gl::Draw_elements_type::unsigned_int,
-        nullptr
+        m_index_count,
+        erhe::dataformat::Format::format_32_scalar_uint,
+        0
     );
 
     projection_buffer_range.release();

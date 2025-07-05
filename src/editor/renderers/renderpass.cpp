@@ -126,6 +126,7 @@ void Renderpass::render(const Render_context& context) const
         log_composer->debug("render_fullscreen");
         context.app_context.forward_renderer->draw_primitives(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
+                .render_encoder         = *context.encoder,
                 .index_buffer           = &context.app_context.mesh_memory->index_buffer,
                 .vertex_buffer0         = &context.app_context.mesh_memory->position_vertex_buffer,
                 .vertex_buffer1         = &context.app_context.mesh_memory->non_position_vertex_buffer,
@@ -177,6 +178,7 @@ void Renderpass::render(const Render_context& context) const
 
         context.app_context.forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
+                .render_encoder         = *context.encoder,
                 .index_type             = context.app_context.mesh_memory->buffer_info.index_type,
                 .index_buffer           = &context.app_context.mesh_memory->index_buffer,
                 .vertex_buffer0         = &context.app_context.mesh_memory->position_vertex_buffer,

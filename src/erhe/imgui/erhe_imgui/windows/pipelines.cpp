@@ -444,7 +444,7 @@ void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
                 ImGui::TreePop();
             }
         }
-        ImGui::Text("Primitive type: %s", gl::c_str(pipeline.data.input_assembly.primitive_topology));
+        ImGui::Text("Primitive type: %s", erhe::graphics::c_str(pipeline.data.input_assembly.primitive_topology));
         ImGui::Text("Primitive restart: %s", pipeline.data.input_assembly.primitive_restart ? "yes" : "no");
 
         Pipelines::rasterization(pipeline.data.rasterization);

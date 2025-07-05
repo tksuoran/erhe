@@ -70,8 +70,8 @@ auto Cube_instance_buffer::bind() -> std::size_t
 Cube_control_buffer::Cube_control_buffer(erhe::graphics::Device& graphics_device, Cube_interface& cube_interface)
     : GPU_ring_buffer_client{
         graphics_device,
+        erhe::graphics::Buffer_target::storage,
         "cube_control",
-        gl::Buffer_target::shader_storage_buffer,
         cube_interface.cube_control_block.binding_point()
     }
     , m_cube_interface{cube_interface}

@@ -21,6 +21,7 @@ namespace erhe {
 }
 namespace erhe::graphics {
     class Device;
+    class Render_command_encoder;
     class Texture;
 }
 namespace erhe::scene {
@@ -45,6 +46,7 @@ public:
     class Render_parameters
     {
     public:
+        erhe::graphics::Render_command_encoder&                            render_encoder;
         erhe::dataformat::Format                                           index_type       {erhe::dataformat::Format::format_32_scalar_uint};
         erhe::graphics::Buffer*                                            index_buffer     {nullptr};
         erhe::graphics::Buffer*                                            vertex_buffer0   {nullptr};

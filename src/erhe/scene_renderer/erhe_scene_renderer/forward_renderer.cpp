@@ -2,12 +2,12 @@
 
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
-#include "erhe_gl/draw_indirect.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
@@ -135,7 +135,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             parameters.grid_line_width,
             parameters.frame_number
         );
-        m_camera_buffer.bind(camera_buffer_range.value());
+        m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
     }
 
     if (!m_graphics_device.info.use_bindless_texture) {
@@ -143,15 +143,15 @@ void Forward_renderer::render(const Render_parameters& parameters)
     }
 
     Buffer_range material_range = m_material_buffer.update(materials);
-    m_material_buffer.bind(material_range);
+    m_material_buffer.bind(parameters.render_encoder, material_range);
 
     Buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
-    m_joint_buffer.bind(joint_range);
+    m_joint_buffer.bind(parameters.render_encoder, joint_range);
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
     Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
-    m_light_buffer.bind_light_buffer(light_range);
+    m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
 
     if (m_graphics_device.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures resident");
@@ -230,15 +230,15 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 continue;
             }
             ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
-            m_primitive_buffer.bind(primitive_range);
-            m_draw_indirect_buffer.bind(draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
+            m_primitive_buffer.bind(parameters.render_encoder, primitive_range);
+            m_draw_indirect_buffer.bind(parameters.render_encoder, draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
 
-            m_graphics_device.multi_draw_elements_indirect(
+            parameters.render_encoder.multi_draw_indexed_primitives_indirect(
                 pipeline.data.input_assembly.primitive_topology,
-                erhe::graphics::to_gl_index_type(parameters.index_type),
-                reinterpret_cast<const void *>(draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer()),
-                static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
-                static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
+                parameters.index_type,
+                draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+                draw_indirect_buffer_range.draw_indirect_count,
+                sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
             );
 
             primitive_range.release();
@@ -290,7 +290,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     using Buffer_range = erhe::graphics::Buffer_range;
     Buffer_range material_range = m_material_buffer.update(parameters.materials);
     if (material_range.get_buffer() != nullptr) {
-        m_material_buffer.bind(material_range);
+        m_material_buffer.bind(parameters.render_encoder, material_range);
     }
 
     std::optional<Buffer_range> camera_range;
@@ -304,7 +304,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
             parameters.grid_line_width,
             parameters.frame_number
         );
-        m_camera_buffer.bind(camera_range.value());
+        m_camera_buffer.bind(parameters.render_encoder, camera_range.value());
     }
 
     std::optional<Buffer_range> light_control_range{};
@@ -312,14 +312,14 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         const auto* light_projection_transforms = parameters.light_projections->get_light_projection_transforms_for_light(light);
         if (light_projection_transforms != nullptr) {
             light_control_range = m_light_buffer.update_control(light_projection_transforms->index);
-            m_light_buffer.bind_control_buffer(light_control_range.value());
+            m_light_buffer.bind_control_buffer(parameters.render_encoder, light_control_range.value());
         } else {
             //// log_render->warn("Light {} has no light projection transforms", light->name());
         }
     }
 
     Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
-    m_light_buffer.bind_light_buffer(light_range);
+    m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
 
     if (enable_shadows) {
         if (m_graphics_device.info.use_bindless_texture) {
@@ -346,8 +346,8 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         const std::string debug_group_name = fmt::format("Forward_renderer::draw_primitives() pass: {}", pipeline.data.name);
         erhe::graphics::Scoped_debug_group pass_scope{debug_group_name};
 
-        m_graphics_device.opengl_state_tracker.execute_(pipeline);
-        gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, static_cast<GLsizei>(parameters.non_mesh_vertex_count));
+        parameters.render_encoder.set_render_pipeline_state(pipeline);
+        parameters.render_encoder.draw_primitives(pipeline.data.input_assembly.primitive_topology, 0, parameters.non_mesh_vertex_count);
 
         if (pass->end) {
             pass->end();

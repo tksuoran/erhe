@@ -83,7 +83,7 @@ public:
     void begin    (std::size_t tile_count);
     void end      ();
 
-    void render   (erhe::math::Viewport viewport);
+    void render   (erhe::graphics::Render_command_encoder& render_encoder, erhe::math::Viewport viewport);
 
 private:
     auto make_prototype(erhe::graphics::Device& graphics_device) const -> erhe::graphics::Shader_stages_prototype;
