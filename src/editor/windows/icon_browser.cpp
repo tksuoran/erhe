@@ -71,4 +71,4 @@ void Icon_browser::imgui()
     ImGui::NewLine();
 }
 
-} // namespace editor
+}

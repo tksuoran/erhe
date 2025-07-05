@@ -96,4 +96,4 @@ private:
     float                                    m_icon_uv_height{0.0f};
 };
 
-} // namespace editor
+}

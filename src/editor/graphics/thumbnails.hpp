@@ -64,4 +64,4 @@ private:
     std::vector<uint64_t>                         m_color_texture_handles;
 };
 
-} // namespace editor
+}

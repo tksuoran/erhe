@@ -44,4 +44,4 @@ void Brush_palette::imgui()
 #endif
 }
 
-} // namespace editor
+}

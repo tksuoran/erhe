@@ -30,4 +30,4 @@ private:
     std::shared_ptr<erhe::scene::Mesh> m_controller_mesh;
 };
 
-} // namespace editor
+}

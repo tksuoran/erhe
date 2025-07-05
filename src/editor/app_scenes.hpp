@@ -36,5 +36,5 @@ private:
     std::vector<Scene_root*>       m_scene_roots;
 };
 
-} // namespace editor
+}
 

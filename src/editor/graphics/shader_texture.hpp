@@ -23,4 +23,4 @@ private:
     std::shared_ptr<Image_transfer> m_image_transfer;
 };
 
-} // namespace editor
+}

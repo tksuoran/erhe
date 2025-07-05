@@ -141,4 +141,4 @@ auto intersect(
 }
 #endif
 
-} // namespace editor
+}

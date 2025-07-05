@@ -24,4 +24,4 @@ private:
 };
 
 
-} // namespace editor
+}

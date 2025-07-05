@@ -187,4 +187,4 @@ void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
     }
 }
 
-} // namespace editor
+}

@@ -17,4 +17,4 @@ private:
     Sheet* m_sheet{nullptr};
 };
 
-} // namespace editor
+}

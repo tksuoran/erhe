@@ -59,4 +59,4 @@ Content_library::Content_library()
 }
 
 
-} // namespace editor
+}

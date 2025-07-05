@@ -47,7 +47,7 @@ public:
     Render_style_data data;
 };
 
-} // namespace editor
+}
 
 // bool  polygon_offset_enable{false};
 // float polygon_offset_factor{1.0000f};

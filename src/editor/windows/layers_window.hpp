@@ -22,4 +22,4 @@ private:
     App_context& m_context;
 };
 
-} // namespace editor
+}

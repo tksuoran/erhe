@@ -4,15 +4,9 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 
-namespace erhe::graphics {
-    class Device;
-}
-namespace erhe::scene_renderer {
-    class Program_interface;
-}
-namespace tf {
-    class Executor;
-}
+namespace erhe::graphics       { class Device; }
+namespace erhe::scene_renderer { class Program_interface; }
+namespace tf                   { class Executor; }
 
 namespace editor {
 
@@ -160,4 +154,4 @@ public:
     };
 };
 
-} // namespace editor
+}

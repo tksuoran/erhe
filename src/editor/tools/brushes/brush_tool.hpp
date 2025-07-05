@@ -137,4 +137,4 @@ private:
     std::unique_ptr<Item_tree>         m_brush_item_tree;
 };
 
-} // namespace editor
+}

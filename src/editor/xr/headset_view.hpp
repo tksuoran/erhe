@@ -1,11 +1,15 @@
 #pragma once
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+#include "renderers/programs.hpp"
 #include "scene/scene_view.hpp"
 #include "xr/hand_tracker.hpp"
 #include "xr/controller_visualization.hpp"
 #include "xr/headset_view_resources.hpp"
 
+#include "erhe_commands/command.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_commands/input_arguments.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_math/input_axis.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
@@ -176,7 +180,7 @@ private:
     uint64_t                                             m_frame_number{0};
 };
 
-} // namespace editor
+}
 #else
 #   include "xr/null_headset_view.hpp"
 #endif

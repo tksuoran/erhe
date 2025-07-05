@@ -2,7 +2,6 @@
 
 #include "tools/brushes/brush_tool.hpp"
 #include "scene/collision_generator.hpp"
-#include "scene/frame_controller.hpp"
 
 #include "erhe_profile/profile.hpp"
 
@@ -22,9 +21,13 @@ namespace erhe::graphics {
 }
 namespace erhe::imgui {
     class Imgui_windows;
+    class Imgui_renderer;
 }
 namespace erhe::primitive {
     class Build_info;
+}
+namespace erhe::rendergraph {
+    class Rendergraph;
 }
 namespace erhe::scene {
     class Camera;
@@ -210,4 +213,4 @@ private:
     std::shared_ptr<Scene_root>          m_scene_root;
 };
 
-} // namespace editor
+}

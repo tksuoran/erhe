@@ -2,7 +2,6 @@
 
 #include "renderers/composer.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "renderers/programs.hpp"
 #include "renderers/renderpass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
 #include "erhe_commands/command.hpp"
 #include "erhe_profile/profile.hpp"

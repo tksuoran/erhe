@@ -24,4 +24,4 @@ auto operator-(const Payload& lhs, const Payload& rhs) -> Payload;
 auto operator*(const Payload& lhs, const Payload& rhs) -> Payload;
 auto operator/(const Payload& lhs, const Payload& rhs) -> Payload;
 
-} // namespace editor
+}

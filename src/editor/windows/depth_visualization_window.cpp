@@ -355,4 +355,4 @@ void Depth_visualization_window::imgui()
     SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::imgui() - done");
 }
 
-} // namespace editor
+}

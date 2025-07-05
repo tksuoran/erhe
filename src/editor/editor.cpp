@@ -605,6 +605,7 @@ public:
             {
                 m_imgui_windows = std::make_unique<erhe::imgui::Imgui_windows>(
                     *m_imgui_renderer.get(),
+                    *m_graphics_device.get(),
                     conditionally_enable_window_imgui_host(m_context_window.get()),
                     *m_rendergraph.get(),
                     get_windows_ini_path()
@@ -1428,4 +1429,4 @@ void run_editor()
     }
 }
 
-} // namespace editor
+}

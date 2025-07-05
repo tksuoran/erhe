@@ -41,4 +41,4 @@ private:
     std::vector<std::string> m_text_lines;
 };
 
-} // namespace editor
+}

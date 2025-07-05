@@ -167,4 +167,4 @@ auto Physics_window::get_debug_draw_parameters() -> Debug_draw_parameters
 //// TODO     scene_root->physics_world().debug_draw();
 //// TODO }
 
-} // namespace editor
+}

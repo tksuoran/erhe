@@ -136,4 +136,4 @@ void Post_processing_window::imgui()
 #endif
 }
 
-} // namespace editor
+}

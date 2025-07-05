@@ -98,4 +98,4 @@ Mesh_memory::~Mesh_memory()
 {
 }
 
-} // namespace editor
+}

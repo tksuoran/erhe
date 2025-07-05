@@ -12,4 +12,4 @@ public:
     App_message_bus();
 };
 
-} // namespace editor
+}

@@ -140,4 +140,4 @@ void Layers_window::imgui()
 #endif
 }
 
-} // namespace editor
+}

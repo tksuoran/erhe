@@ -2,7 +2,6 @@
 
 #include "windows/item_tree_window.hpp"
 
-#include "erhe_imgui/imgui_window.hpp"
 #include "erhe_item/hierarchy.hpp"
 
 #include <glm/glm.hpp>
@@ -10,9 +9,7 @@
 #include <filesystem>
 #include <vector>
 
-namespace erhe::imgui {
-    class Imgui_windows;
-}
+namespace erhe::imgui { class Imgui_windows; }
 
 namespace editor {
 
@@ -146,4 +143,4 @@ private:
     std::shared_ptr<Asset_browser_window> m_node_tree_window;
 };
 
-} // namespace editor
+}

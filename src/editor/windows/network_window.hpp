@@ -46,5 +46,5 @@ private:
     std::vector<std::string> m_downstream_messages;
 };
 
-} // namespace editor
+}
 

@@ -1611,5 +1611,5 @@ void Debug_visualizations::imgui()
     p.show_entries();
 }
 
-} // namespace editor
+}
 

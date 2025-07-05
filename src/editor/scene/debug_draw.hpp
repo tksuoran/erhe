@@ -36,4 +36,4 @@ private:
     Colors       m_colors;
 };
 
-} // namespace editor
+}

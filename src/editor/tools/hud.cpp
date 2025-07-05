@@ -379,4 +379,4 @@ void Hud::set_mesh_visibility(const bool value)
     m_rendertarget_node->set_visible(m_mesh_visible);
 }
 
-} // namespace editor
+}

@@ -217,4 +217,4 @@ void Settings_window::imgui()
     show_entries("Settings", ImVec2{1.0f, 1.0f});
 }
 
-} // namespace editor
+}

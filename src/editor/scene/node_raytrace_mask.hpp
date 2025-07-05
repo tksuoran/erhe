@@ -18,4 +18,4 @@ public:
     static constexpr uint32_t grid         = (1u << 6);
 };
 
-} // namespace editor
+}

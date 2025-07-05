@@ -1128,4 +1128,4 @@ auto Scene_builder::get_scene_root() const -> std::shared_ptr<Scene_root>
     return m_scene_root;
 }
 
-} // namespace editor
+}

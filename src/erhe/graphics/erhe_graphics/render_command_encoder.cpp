@@ -33,4 +33,13 @@ void Render_command_encoder::end_render_pass()
     m_render_pass.end_render_pass();
 }
 
+void Render_command_encoder::set_index_buffer(const Buffer* buffer)
+{
+    m_device.opengl_state_tracker.vertex_input.set_index_buffer(buffer);
+}
+void Render_command_encoder::set_vertex_buffer(const Buffer* buffer, std::uintptr_t offset, std::uintptr_t index)
+{
+    m_device.opengl_state_tracker.vertex_input.set_vertex_buffer(index, buffer, offset);
+}
+
 } // namespace erhe::graphics

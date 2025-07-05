@@ -78,4 +78,4 @@ private:
 
 };
 
-} // namespace editor
+}

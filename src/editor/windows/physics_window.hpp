@@ -56,4 +56,4 @@ private:
     Debug_draw_parameters m_debug_draw;
 };
 
-} // namespace editor
+}

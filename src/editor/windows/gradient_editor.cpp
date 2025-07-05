@@ -48,4 +48,4 @@ void Gradient_editor::imgui()
     //ImGui::EndTable();
 }
 
-} // namespace editor
+}

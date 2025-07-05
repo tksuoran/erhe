@@ -78,4 +78,4 @@ extern const Palette cubehelix        ;
 
 } // namespace gradient
 
-} // namespace editor
+}

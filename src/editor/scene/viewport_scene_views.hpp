@@ -156,4 +156,4 @@ private:
     std::weak_ptr<Viewport_scene_view>                  m_last_scene_view;
 };
 
-} // namespace editor
+}

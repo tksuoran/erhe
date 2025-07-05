@@ -7,7 +7,6 @@
 #include "erhe_item/item.hpp"
 
 #include <functional>
-#include <initializer_list>
 #include <string_view>
 
 namespace erhe::renderer {
@@ -56,4 +55,4 @@ public:
     std::function<const Render_style_data&(const Render_context& context)> get_render_style;
 };
 
-} // namespace editor
+}

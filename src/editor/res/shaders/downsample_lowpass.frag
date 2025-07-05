@@ -21,7 +21,7 @@ vec3 karis_average(vec3 c1, vec3 c2, vec3 c3, vec3 c4)
 
 void main()
 {
-#if defined(ERHE_BINDLESS_TEXTURE)
+#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
     sampler2D s_input      = sampler2D(post_processing.input_texture);
     sampler2D s_downsample = sampler2D(post_processing.downsample_texture);
 #endif

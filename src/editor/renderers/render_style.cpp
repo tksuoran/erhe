@@ -84,4 +84,4 @@ auto Render_style_data::get_primitive_settings(
     }
 }
 
-} // namespace editor
+}

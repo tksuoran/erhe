@@ -105,4 +105,4 @@ private:
 
 [[nodiscard]] auto get_rendertarget(const erhe::scene::Node* node) -> std::shared_ptr<Rendertarget_mesh>;
 
-} // namespace editor
+}

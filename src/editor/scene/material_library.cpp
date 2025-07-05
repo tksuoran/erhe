@@ -70,4 +70,4 @@ void add_default_materials(Content_library& library)
 #endif
 }
 
-} // namespace editor
+}

@@ -62,4 +62,4 @@ private:
     std::shared_ptr<Brush>        m_brush;
 };
 
-} // namespace editor
+}

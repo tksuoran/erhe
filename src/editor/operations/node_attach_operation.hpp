@@ -5,7 +5,6 @@
 #include "erhe_scene/node.hpp"
 
 #include <memory>
-#include <vector>
 
 namespace erhe {
     class Hierarchy;

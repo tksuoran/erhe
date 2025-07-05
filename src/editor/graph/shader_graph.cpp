@@ -33,4 +33,4 @@ void Shader_graph::store(int row, int column, double value)
 }
 
 
-} // namespace editor
+}

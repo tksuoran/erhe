@@ -242,4 +242,4 @@ void Timeline_window::imgui()
     ImGui::PopID();
 }
 
-} // namespace editor
+}

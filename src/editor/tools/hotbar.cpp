@@ -729,4 +729,4 @@ void Hotbar::set_mesh_visibility(const bool value)
     }
 }
 
-} // namespace editor
+}

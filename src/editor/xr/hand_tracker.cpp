@@ -471,5 +471,5 @@ void Hand_tracker::render(const Render_context& render_context)
     m_right_hand.draw(line_renderer, transform);
 }
 
-} // namespace editor
+}
 

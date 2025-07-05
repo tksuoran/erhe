@@ -2,8 +2,6 @@
 #include "editor_log.hpp"
 #include "xr/headset_view.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene/camera.hpp"
@@ -172,4 +170,4 @@ void Headset_view_resources::update(erhe::xr::Render_view& render_view, erhe::sc
     m_node->set_parent_from_node(m);
 }
 
-} // namespace editor
+}

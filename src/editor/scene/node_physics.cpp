@@ -5,6 +5,7 @@
 #include "erhe_physics/iworld.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_bit/bit_helpers.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 

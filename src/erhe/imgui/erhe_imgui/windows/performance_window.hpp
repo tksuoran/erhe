@@ -104,4 +104,4 @@ private:
     bool                        m_pause{false};
 };
 
-} // namespace editor
+}

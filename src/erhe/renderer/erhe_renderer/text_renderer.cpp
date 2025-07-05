@@ -35,10 +35,7 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
         }
     };
 
-    if (m_graphics_device.info.use_bindless_texture) {
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-        create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-    } else {
+    if (!m_graphics_device.info.use_bindless_texture) {
         m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, 0);
         create_info.default_uniform_block = &m_default_uniform_block;
     }

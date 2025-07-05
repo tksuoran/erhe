@@ -2,7 +2,6 @@
 
 #include "app_context.hpp"
 #include "operations/ioperation.hpp"
-#include "tools/tool.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_commands/commands.hpp"
@@ -171,4 +170,4 @@ void Operation_stack::imgui()
 #endif
 }
 
-} // namespace editor
+}

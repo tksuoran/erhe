@@ -110,4 +110,4 @@ private:
     bool m_show_hands{true};
 };
 
-} // namespace editor
+}

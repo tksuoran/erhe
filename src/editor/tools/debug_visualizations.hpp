@@ -170,4 +170,4 @@ private:
     float     m_corner_label_line_width          {1.0f};
 };
 
-} // namespace editor
+}

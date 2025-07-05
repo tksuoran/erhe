@@ -12,4 +12,4 @@ public:
     virtual void render(const Render_context& context) = 0;
 };
 
-} // namespace editor
+}

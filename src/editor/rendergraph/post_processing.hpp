@@ -165,4 +165,4 @@ private:
     erhe::graphics::Gpu_timer                          m_gpu_timer;
 };
 
-} // namespace editor
+}

@@ -106,7 +106,7 @@ vec3 tonemap_log(vec3 x)
 
 void main()
 {
-#if defined(ERHE_BINDLESS_TEXTURE)
+#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
     vec4 base_color = texture(sampler2D(post_processing.source_texture[0]), v_texcoord);
 #else
     vec4 base_color = texture(s_source_textures[0], v_texcoord);
@@ -114,7 +114,7 @@ void main()
     vec3 sum = base_color.rgb;
     for (uint i = 1; i < post_processing.texture_count; ++i) {
         float scale = 0.02 / float(i + 1);
-#if defined(ERHE_BINDLESS_TEXTURE)
+#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
         vec3 source = texture(sampler2D(post_processing.source_texture[i]), v_texcoord).rgb;
 #else
         vec3 source = texture(s_source_textures[i], v_texcoord).rgb;

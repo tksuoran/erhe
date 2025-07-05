@@ -27,4 +27,4 @@ private:
     std::unique_ptr<ImGG::GradientWidget> m_gradient_widget;
 };
 
-} // namespace editor
+}

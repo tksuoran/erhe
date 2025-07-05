@@ -47,4 +47,4 @@ protected:
     unsigned int m_axis_mask{0u};
 };
 
-} // namespace editor
+}

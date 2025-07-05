@@ -32,4 +32,4 @@ private:
     void update(const glm::vec3 drag_position);
 };
 
-} // namespace editor
+}

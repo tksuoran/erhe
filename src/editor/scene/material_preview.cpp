@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/renderpass.hpp"
 #include "renderers/viewport_config.hpp"
@@ -17,6 +18,8 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"

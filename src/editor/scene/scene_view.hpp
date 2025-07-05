@@ -1,17 +1,7 @@
 #pragma once
 
-#include "app_message.hpp"
-#include "renderers/programs.hpp"
 #include "renderers/viewport_config.hpp"
 #include "scene/node_raytrace_mask.hpp"
-
-#include "erhe_rendergraph/rendergraph_node.hpp"
-#include "erhe_commands/command.hpp"
-#include "erhe_commands/input_arguments.hpp"
-#include "erhe_imgui/imgui_window.hpp"
-#include "erhe_message_bus/message_bus.hpp"
-#include "erhe_scene/camera.hpp"
-#include "erhe_math/viewport.hpp"
 
 #include <geogram/mesh/mesh.h>
 
@@ -143,4 +133,4 @@ private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
 };
 
-} // namespace editor
+}

@@ -38,4 +38,4 @@ private:
     erhe::math::Viewport               m_viewport;
 };
 
-} // namespace editor
+}

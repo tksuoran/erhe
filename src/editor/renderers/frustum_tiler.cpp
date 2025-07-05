@@ -594,5 +594,5 @@ void Frustum_tiler::update(
     );
 }
 
-} // namespace editor
+}
 #endif

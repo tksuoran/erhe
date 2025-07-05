@@ -14,9 +14,11 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 namespace editor {
 
@@ -230,4 +232,4 @@ auto Viewport_window::want_keyboard_events() const -> bool
     return true;
 }
 
-} // namespace editor
+}

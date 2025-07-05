@@ -93,8 +93,8 @@ public:
     void reset  ();
     void execute(const Vertex_input_state* state);
 
-    void set_index_buffer (erhe::graphics::Buffer* buffer) const;
-    void set_vertex_buffer(uint32_t binding, const erhe::graphics::Buffer* buffer, std::size_t offset);
+    void set_index_buffer (const erhe::graphics::Buffer* buffer) const;
+    void set_vertex_buffer(std::uintptr_t binding, const erhe::graphics::Buffer* buffer, std::uintptr_t offset);
 
 private:
     std::vector<Vertex_input_binding> m_bindings;

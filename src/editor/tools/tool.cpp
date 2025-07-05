@@ -6,6 +6,7 @@
 #include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
 #include "erhe_bit/bit_helpers.hpp"
+#include "erhe_primitive/material.hpp"
 
 namespace editor {
 
@@ -182,4 +183,4 @@ auto Tool::get_node() const -> std::shared_ptr<erhe::scene::Node>
     return {};
 }
 
-} // namespace editor
+}

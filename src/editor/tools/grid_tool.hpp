@@ -66,4 +66,4 @@ private:
     int                                m_grid_index{0};
 };
 
-} // namespace editor
+}

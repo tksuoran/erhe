@@ -315,4 +315,4 @@ void Rendergraph_window::imgui()
     m_node_editor->End();
 }
 
-} // namespace editor
+}

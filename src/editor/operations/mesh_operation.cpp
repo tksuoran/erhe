@@ -269,4 +269,4 @@ void Mesh_operation::add_entry(Entry&& entry)
     m_entries.emplace_back(entry);
 }
 
-} // namespace editor
+}

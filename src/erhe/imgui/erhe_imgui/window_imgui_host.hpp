@@ -4,9 +4,13 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_math/viewport.hpp"
 
-namespace erhe::window {
-    class Context_window;
+#include <memory>
+
+namespace erhe::graphics {
+    class Device;
+    class Render_pass;
 }
+namespace erhe::window   { class Context_window; }
 
 namespace erhe::imgui {
 
@@ -18,6 +22,7 @@ class Window_imgui_host : public Imgui_host
 public:
     Window_imgui_host(
         Imgui_renderer&                 imgui_renderer,
+        erhe::graphics::Device&         graphics_device,
         erhe::window::Context_window&   context_window,
         erhe::rendergraph::Rendergraph& rendergraph,
         const std::string_view          name
@@ -39,9 +44,13 @@ public:
     void stop_text_input    ()                            override;
 
 private:
-    erhe::window::Context_window& m_context_window;
-    bool                          m_is_visible     {false};
-    float                         m_this_frame_dt_s{0.0f};
+    void update_render_pass(int width, int height);
+
+    erhe::window::Context_window&                m_context_window;
+    erhe::graphics::Device&                      m_graphics_device;
+    std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
+    bool                                         m_is_visible     {false};
+    float                                        m_this_frame_dt_s{0.0f};
 };
 
 } // namespace erhe::imgui

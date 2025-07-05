@@ -61,4 +61,4 @@ private:
     Sheet           m_sheet;
 };
 
-} // namespace editor
+}

@@ -168,4 +168,4 @@ public:
     explicit Difference_operation(Mesh_operation_parameters&& parameters);
 };
 
-} // namespace editor
+}

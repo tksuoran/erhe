@@ -18,4 +18,4 @@ void Composer_window::imgui()
     m_context.app_rendering->imgui();
 }
 
-} // namespace editor
+}

@@ -67,5 +67,5 @@ public:
     );
 };
 
-} // namespace editor
+}
 #endif

@@ -3,7 +3,6 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_scenes.hpp"
-#include "graphics/icon_set.hpp"
 #include "operations/ioperation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/geogram.hpp"
@@ -16,10 +15,8 @@
 
 #include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_physics/iworld.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_scene/light.hpp"
-#include "erhe_scene/scene_message_bus.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -438,4 +435,4 @@ auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) 
     return false;
 }
 
-} // namespace editor
+}

@@ -60,4 +60,4 @@ void draw_ray_hit(
     erhe::raytrace::Hit&    hit
 ) -> bool;
 
-} // namespace editor
+}

@@ -264,4 +264,4 @@ auto Icon_rasterization::icon_button(
 #endif
 }
 
-} // namespace editor
+}

@@ -40,4 +40,4 @@ public:
     std::vector<std::shared_ptr<Renderpass>> renderpasses;
 };
 
-} // namespace editor
+}

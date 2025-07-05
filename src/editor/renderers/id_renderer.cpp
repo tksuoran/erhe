@@ -505,4 +505,4 @@ auto Id_renderer::get(const int x, const int y) -> Id_query_result
     return result;
 }
 
-} // namespace editor
+}

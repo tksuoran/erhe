@@ -24,4 +24,4 @@ namespace editor {
 ) -> bool;
 #endif
 
-} // namespace editor
+}

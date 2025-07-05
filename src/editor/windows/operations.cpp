@@ -624,4 +624,4 @@ void Operations::export_gltf()
 #endif
 }
 
-} // namespace editor
+}

@@ -47,4 +47,4 @@ auto is_brush_placement(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
 auto get_brush_placement(const erhe::scene::Node* node) -> std::shared_ptr<Brush_placement>;
 
-} // namespace editor
+}

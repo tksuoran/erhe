@@ -86,4 +86,4 @@ void Rendergraph_window::imgui()
 #endif
 }
 
-} // namespace editor
+}

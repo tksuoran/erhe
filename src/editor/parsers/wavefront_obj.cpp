@@ -430,4 +430,4 @@ auto parse_obj_geometry(const std::filesystem::path& path) -> std::vector<std::s
     return result;
 }
 
-} // namespace editor
+}

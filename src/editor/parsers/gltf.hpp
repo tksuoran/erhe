@@ -4,15 +4,9 @@
 #include <string>
 #include <vector>
 
-namespace erhe::graphics {
-    class Device;
-}
-namespace erhe::gltf {
-    class Image_transfer;
-}
-namespace erhe::primitive {
-    class Build_info;
-}
+namespace erhe::graphics  { class Device; }
+namespace erhe::gltf      { class Image_transfer; }
+namespace erhe::primitive { class Build_info; }
 
 namespace editor {
 

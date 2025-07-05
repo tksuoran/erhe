@@ -1,6 +1,4 @@
 #include "scene/frame_controller.hpp"
-#include "editor_log.hpp"
-#include "erhe_log/log_glm.hpp"
 
 #include "erhe_scene/node.hpp"
 #include "erhe_bit/bit_helpers.hpp"
@@ -317,4 +315,4 @@ auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Fram
     return {};
 }
 
-} // namespace editor
+}

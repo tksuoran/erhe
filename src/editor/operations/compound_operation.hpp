@@ -29,4 +29,4 @@ private:
     Parameters m_parameters;
 };
 
-} // namespace editor
+}

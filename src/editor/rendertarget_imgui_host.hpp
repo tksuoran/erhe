@@ -68,4 +68,4 @@ private:
     int64_t            m_time_ns{};
 };
 
-} // namespace editor
+}

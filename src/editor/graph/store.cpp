@@ -34,4 +34,4 @@ void Store::imgui()
     ImGui::InputInt("Col##", &m_col);
 }
 
-} // namespace editor
+}

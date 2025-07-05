@@ -47,4 +47,4 @@ private:
     float                    m_current_angle       {0.0f};
 };
 
-} // namespace editor
+}

@@ -121,7 +121,7 @@ auto Shader_stages_create_info::interface_source() const -> std::string
 }
 
 auto Shader_stages_create_info::final_source(
-    Device&                           graphics_device,
+    Device&                             graphics_device,
     const Shader_stage&                 shader,
     std::vector<std::filesystem::path>* paths,
     std::optional<unsigned int>         gl_name
@@ -167,7 +167,13 @@ auto Shader_stages_create_info::final_source(
     }
 
     sb << "#define ERHE_GLSL_VERSION " << graphics_device.info.glsl_version << "\n";
-    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
+
+    if (graphics_device.info.gl_version < 430) {
+        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
+        sb << "#extension GL_ARB_shader_storage_buffer_object : enable\n";
+        sb << "#define ERHE_HAS_ARB_SHADER_STORAGE_BUFFER_OBJECT 1\n";
+    }
+    if (graphics_device.info.use_bindless_texture) {
         sb << "#extension GL_ARB_bindless_texture : enable\n";
         sb << "#define ERHE_HAS_ARB_BINDLESS_TEXTURE 1\n";
     }

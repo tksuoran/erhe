@@ -13,12 +13,11 @@
 #include "xr/hand_tracker.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
-#include "erhe_commands/commands.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
@@ -800,7 +799,7 @@ void Headset_view::end_frame()
     }
 }
 
-} // namespace editor
+}
 
 
 

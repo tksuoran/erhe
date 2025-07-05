@@ -132,4 +132,4 @@ auto Reference_frame::transform(float hover_distance) const -> GEO::mat4f
     };
 }
 
-} // namespace editor
+}

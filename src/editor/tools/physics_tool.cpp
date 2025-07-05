@@ -647,4 +647,4 @@ void Physics_tool::tool_properties(erhe::imgui::Imgui_window&)
 #endif
 }
 
-} // namespace editor
+}

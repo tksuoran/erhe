@@ -67,4 +67,4 @@ auto Viewport_config::default_config() -> Viewport_config
     return config;
 }
 
-} // namespace editor
+}

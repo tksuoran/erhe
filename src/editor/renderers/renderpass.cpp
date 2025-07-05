@@ -5,6 +5,7 @@
 #include "app_rendering.hpp"
 #include "time.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/render_style.hpp"
 #include "scene/content_library.hpp"
@@ -13,6 +14,7 @@
 
 #include "erhe_imgui/windows/pipelines.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
@@ -226,4 +228,4 @@ void Renderpass::imgui()
     }
 }
 
-} // namespace editor
+}

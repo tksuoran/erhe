@@ -70,4 +70,4 @@ private:
     std::shared_ptr<Brdf_slice_rendergraph_node> m_node;
 };
 
-} // namespace editor
+}

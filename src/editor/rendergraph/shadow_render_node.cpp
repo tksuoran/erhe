@@ -9,15 +9,14 @@
 #include "scene/content_library.hpp"
 
 #include "erhe_rendergraph/rendergraph.hpp"
-#include "erhe_gl/command_info.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -199,4 +198,4 @@ auto Shadow_render_node::inputs_allowed() const -> bool
     return false;
 }
 
-} // namespace editor
+}

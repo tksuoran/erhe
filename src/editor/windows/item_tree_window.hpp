@@ -148,4 +148,4 @@ public:
     void on_end  () override;
 };
 
-} // namespace editor
+}

@@ -236,4 +236,4 @@ void Commands_window::filtered_commands(const erhe::commands::State filter)
     }
 }
 
-} // namespace editor
+}

@@ -308,4 +308,4 @@ void Create::tool_render(const Render_context& context)
     }
 }
 
-} // namespace editor
+}

@@ -29,4 +29,4 @@ private:
     ImGuiTextFilter m_name_filter;
 };
 
-} // namespace editor
+}

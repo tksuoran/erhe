@@ -20,4 +20,4 @@ public:
     std::shared_ptr<erhe::graphics::Texture> background;
 };
 
-} // namespace editor
+}

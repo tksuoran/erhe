@@ -36,4 +36,4 @@ public:
     bool                 selection_bounding_sphere{false};
 };
 
-} // namespace editor
+}

@@ -1,9 +1,10 @@
 #pragma once
 
-#include <memory>
+#include <cstdint>
 
 namespace erhe::graphics {
 
+class Buffer;
 class Device;
 class Render_pass;
 class Render_pipeline_state;
@@ -20,14 +21,8 @@ public:
 
     void set_render_pipeline_state(const Render_pipeline_state& pipeline);
 
-    void wait_for_fence();
-    void update_fence  ();
-    void memory_barrier();
-
-    void set_vertex_buffer       ();
-    void set_vertex_buffer_offset();
-    void set_vertex_buffers      ();
-    void set_vertex_bytes        ();
+    void set_index_buffer (const Buffer* buffer);
+    void set_vertex_buffer(const Buffer* buffer, std::uintptr_t offset, std::uintptr_t index);
 
 private:
     void start_render_pass();

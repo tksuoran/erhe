@@ -6,7 +6,6 @@
 #include "tools/tools.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe_physics/iworld.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene.hpp"
 

@@ -341,4 +341,4 @@ void Hover_tool::tool_render(const Render_context& context)
     );
 }
 
-} // namespace editor
+}

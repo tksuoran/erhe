@@ -75,4 +75,4 @@ protected:
     int                  m_output_pin_edge{Node_edge::right};
 };
 
-} // namespace editor
+}

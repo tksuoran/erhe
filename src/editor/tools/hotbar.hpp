@@ -175,4 +175,4 @@ private:
     glm::vec4 m_color_inactive{0.1f, 0.1f, 0.4f, 0.8f};
 };
 
-} // namespace editor
+}

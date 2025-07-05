@@ -26,4 +26,4 @@ void Tool_properties_window::imgui()
 #endif
 }
 
-} // namespace editor
+}

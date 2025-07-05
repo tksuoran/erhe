@@ -3,9 +3,6 @@
 #include "editor_log.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <fmt/format.h>
 

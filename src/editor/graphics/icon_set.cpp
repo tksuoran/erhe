@@ -235,4 +235,4 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     }
 }
 
-} // namespace editor
+}

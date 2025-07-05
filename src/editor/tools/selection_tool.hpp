@@ -337,4 +337,4 @@ auto Selection::count() const -> std::size_t
     return i;
 }
 
-} // namespace editor
+}

@@ -27,4 +27,4 @@ private:
     int                      m_selected_brush_index{0};
 };
 
-} // namespace editor
+}

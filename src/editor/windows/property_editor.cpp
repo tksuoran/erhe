@@ -129,4 +129,4 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
     ImGui::PopStyleVar(1);
 }
 
-} // namespace editor {
+}

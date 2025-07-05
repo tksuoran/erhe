@@ -6,7 +6,6 @@
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_primitive/build_info.hpp"
-#include "erhe_primitive/buffer_sink.hpp"
 
 namespace erhe::graphics {
     class Buffer;
@@ -51,4 +50,4 @@ private:
     [[nodiscard]] auto get_index_buffer_size() const -> std::size_t;
 };
 
-} // namespace editor
+}

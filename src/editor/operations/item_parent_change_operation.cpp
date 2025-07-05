@@ -2,16 +2,9 @@
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
-#include "app_message_bus.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe_log/log_glm.hpp"
-#include "erhe_scene/node_attachment.hpp"
 #include "erhe_verify/verify.hpp"
-
-#include <glm/gtx/matrix_decompose.hpp>
-
-#include <sstream>
 
 namespace editor {
 
@@ -87,4 +80,4 @@ void Item_parent_change_operation::undo(App_context& context)
 #endif
 }
 
-} // namespace editor
+}

@@ -7,6 +7,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -348,4 +349,4 @@ auto Brush::get_bounding_box() -> erhe::math::Aabb
     return m_primitive.get_bounding_box();
 }
 
-} // namespace editor
+}

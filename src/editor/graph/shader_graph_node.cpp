@@ -240,4 +240,4 @@ void Shader_graph_node::show_pins(Node_context& context, std::vector<erhe::graph
     }
 }
 
-} // namespace editor
+}

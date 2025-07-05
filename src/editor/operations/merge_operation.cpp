@@ -3,13 +3,11 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_settings.hpp"
-#include "operations/merge_operation.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_geometry/operation/repair.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene.hpp"
@@ -321,4 +319,4 @@ void Merge_operation::undo(App_context& context)
 #endif
 }
 
-} // namespace editor
+}

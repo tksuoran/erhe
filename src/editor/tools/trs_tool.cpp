@@ -1379,4 +1379,4 @@ auto Trs_tool::get_tool_scene_root() -> std::shared_ptr<Scene_root>
     return m_tools->get_tool_scene_root();
 }
 
-} // namespace editor
+}

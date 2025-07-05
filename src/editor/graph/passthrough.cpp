@@ -23,4 +23,4 @@ void Passthrough::imgui()
     ImGui::Text("%d", in.int_value[0]); // TODO Handle format
 }
 
-} // namespace editor
+}

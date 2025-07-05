@@ -135,5 +135,5 @@ void Item_insert_remove_operation::undo(App_context& context)
     context.selection->set_selection(m_selection_before);
 }
 
-} // namespace editor
+}
 

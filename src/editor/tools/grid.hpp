@@ -86,4 +86,4 @@ private:
     glm::mat4       m_grid_from_world {1.0f};
 };
 
-} // namespace editor
+}

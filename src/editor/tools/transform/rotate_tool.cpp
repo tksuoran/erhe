@@ -255,4 +255,4 @@ void Rotate_tool::render(const Render_context& context)
     line_renderer.add_lines(get_axis_color(m_axis_mask), { { p - 10.0f * n, p + 10.0f * n } } );
 }
 
-} // namespace editor
+}

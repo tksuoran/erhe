@@ -834,4 +834,4 @@ void Properties::imgui()
     show_entries();
 }
 
-} // namespace editor
+}

@@ -170,4 +170,4 @@ auto Subtool::project_pointer_to_plane(Scene_view* scene_view, const vec3 n, con
 
 #pragma endregion Helpers
 
-} // namespace editor
+}

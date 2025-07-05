@@ -15,4 +15,4 @@ public:
     Payload m_payload;
 };
 
-} // namespace editor
+}

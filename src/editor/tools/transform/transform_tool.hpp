@@ -219,4 +219,4 @@ private:
 
 };
 
-} // namespace editor
+}

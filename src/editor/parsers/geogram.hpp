@@ -2,9 +2,7 @@
 
 #include <filesystem>
 
-namespace erhe::primitive {
-    class Build_info;
-}
+namespace erhe::primitive { class Build_info; }
 
 namespace editor {
 

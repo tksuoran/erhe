@@ -27,4 +27,4 @@ void Add::imgui()
     ImGui::Text("%d + %d = %d", lhs.int_value[0], rhs.int_value[0], out.int_value[0]); // TODO Handle format
 }
 
-} // namespace editor
+}

@@ -23,4 +23,4 @@ private:
     erhe::Unique_id<Operation> m_id{};
 };
 
-} // namespace editor
+}

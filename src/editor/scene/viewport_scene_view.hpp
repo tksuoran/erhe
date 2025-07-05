@@ -145,4 +145,4 @@ private:
     bool                               m_is_scene_view_hovered{false};
 };
 
-} // namespace editor
+}

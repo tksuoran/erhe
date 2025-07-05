@@ -102,4 +102,4 @@ public:
 private:
 };
 
-} // namespace editor
+}

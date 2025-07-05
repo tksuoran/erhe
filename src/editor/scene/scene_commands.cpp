@@ -8,7 +8,6 @@
 #include "operations/operation_stack.hpp"
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_host.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -17,9 +16,8 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
-#include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 
@@ -364,4 +362,4 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
     return mesh;
 }
 
-} // namespace editor
+}

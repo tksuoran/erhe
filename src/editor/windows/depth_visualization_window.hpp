@@ -77,4 +77,4 @@ private:
     int                                              m_selected_shadow_node{0};
 };
 
-} // namespace editor
+}

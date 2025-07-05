@@ -22,4 +22,4 @@ public:
     auto get_line_renderer(const Create_preview_settings& preview_settings) -> erhe::renderer::Primitive_renderer;
 };
 
-} // namespace editor
+}

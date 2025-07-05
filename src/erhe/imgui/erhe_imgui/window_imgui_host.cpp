@@ -4,9 +4,10 @@
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/scoped_imgui_context.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_window/window.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_window/window.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -18,12 +19,14 @@ using erhe::graphics::Texture;
 
 Window_imgui_host::Window_imgui_host(
     Imgui_renderer&                 imgui_renderer,
+    erhe::graphics::Device&         graphics_device,
     erhe::window::Context_window&   context_window,
     erhe::rendergraph::Rendergraph& rendergraph,
     const std::string_view          name
 )
-    : Imgui_host{rendergraph, imgui_renderer, name, true, imgui_renderer.get_font_atlas()}
-    , m_context_window{context_window}
+    : Imgui_host       {rendergraph, imgui_renderer, name, true, imgui_renderer.get_font_atlas()}
+    , m_context_window {context_window}
+    , m_graphics_device{graphics_device}
 {
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);
 
@@ -46,6 +49,35 @@ Window_imgui_host::Window_imgui_host(
     main_viewport->PlatformHandle = this;
 
     ImGui::SetCurrentContext(nullptr);
+
+    const int width  = m_context_window.get_width();
+    const int height = m_context_window.get_height();
+    update_render_pass(width, height);
+}
+
+void Window_imgui_host::update_render_pass(int width, int height)
+{
+    if (
+        m_render_pass &&
+        (m_render_pass->get_render_target_width () == width) &&
+        (m_render_pass->get_render_target_height() == height)
+    )
+    {
+        return;
+    }
+
+    m_render_pass.reset();
+    erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+    render_pass_descriptor.color_attachments[0].use_default_framebuffer = true;
+    render_pass_descriptor.color_attachments[0].load_action             = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.depth_attachment    .use_default_framebuffer = true;
+    render_pass_descriptor.depth_attachment    .load_action             = erhe::graphics::Load_action::Dont_care;
+    render_pass_descriptor.stencil_attachment  .use_default_framebuffer = true;
+    render_pass_descriptor.stencil_attachment  .load_action             = erhe::graphics::Load_action::Dont_care;
+    render_pass_descriptor.render_target_width  = width;
+    render_pass_descriptor.render_target_height = height;
+    render_pass_descriptor.debug_label          = "Window_imgui_host Render_pass";
+    m_render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
 }
 
 Window_imgui_host::~Window_imgui_host()
@@ -90,19 +122,20 @@ void Window_imgui_host::begin_imgui_frame()
 
     /// auto* glfw_window    = m_context_window.get_glfw_window();
 
-    const auto w         = m_context_window.get_width();
-    const auto h         = m_context_window.get_height();
+    const int  width     = m_context_window.get_width();
+    const int  height    = m_context_window.get_height();
     const bool visible   = true;  //// TODO glfwGetWindowAttrib(glfw_window, GLFW_VISIBLE  ) == GLFW_TRUE;
     const bool iconified = false; ////      glfwGetWindowAttrib(glfw_window, GLFW_ICONIFIED) == GLFW_TRUE;
 
-    if ((w < 1) || (h < 1) || !visible || iconified) {
+    if ((width < 1) || (height < 1) || !visible || iconified) {
         m_is_visible = false;
         return;
     }
     m_is_visible = true;
+    update_render_pass(width, height);
 
     ImGuiIO& io = m_imgui_context->IO;
-    io.DisplaySize = ImVec2{static_cast<float>(w), static_cast<float>(h)};
+    io.DisplaySize = ImVec2{static_cast<float>(width), static_cast<float>(height)};
     io.DeltaTime   = m_this_frame_dt_s > 0.0f ? m_this_frame_dt_s : static_cast<float>(1.0 / 60.0);
 
     // ImGui_ImplGlfw_UpdateMouseCursor
@@ -152,11 +185,8 @@ void Window_imgui_host::execute_rendergraph_node()
 
     Scoped_imgui_context imgui_context{*this};
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
-    gl::viewport        (0, 0, m_context_window.get_width(), m_context_window.get_height());
-    gl::clear_color     (0.0f, 0.0f, 0.0f, 0.0f);
-    gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
-    m_imgui_renderer.render_draw_data();
+    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+    m_imgui_renderer.render_draw_data(*render_encoder.get());
 }
 
 auto Window_imgui_host::get_viewport() const -> erhe::math::Viewport

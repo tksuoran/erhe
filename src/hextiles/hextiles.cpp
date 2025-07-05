@@ -54,7 +54,7 @@ public:
         , m_text_renderer       {m_graphics_device}
         , m_rendergraph         {m_graphics_device}
         , m_imgui_renderer      {m_graphics_device, m_settings.imgui}
-        , m_imgui_windows       {m_imgui_renderer, &m_context_window, m_rendergraph, "windows.ini"}
+        , m_imgui_windows       {m_imgui_renderer, m_graphics_device, &m_context_window, m_rendergraph, "windows.ini"}
         , m_logs                {m_commands, m_imgui_renderer}
         , m_log_settings_window {m_imgui_renderer, m_imgui_windows, m_logs}
         , m_tail_log_window     {m_imgui_renderer, m_imgui_windows, m_logs}

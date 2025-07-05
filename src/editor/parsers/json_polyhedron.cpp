@@ -96,4 +96,4 @@ auto Json_library::make_geometry(erhe::geometry::Geometry& geometry, const std::
     }
 }
 
-} // namespace editor
+}

@@ -12,4 +12,4 @@ public:
     void imgui() override;
 };
 
-} // namespace editor
+}

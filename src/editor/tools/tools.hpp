@@ -92,4 +92,4 @@ private:
     std::shared_ptr<Item_tree_window> m_content_library_tree_window;
 };
 
-} // namespace editor
+}

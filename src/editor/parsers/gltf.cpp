@@ -11,6 +11,7 @@
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -18,6 +19,8 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+
+#include "erhe_math/math_util.hpp"
 
 #include <fmt/format.h>
 
@@ -289,4 +292,4 @@ auto scan_gltf(const std::filesystem::path& path) -> std::vector<std::string>
     return out;
 }
 
-} // namespace editor
+}

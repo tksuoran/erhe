@@ -20,6 +20,7 @@
 
 namespace erhe::graphics {
     class Device;
+    class Render_command_encoder;
     class Sampler;
     class Texture;
     class Vertex_input_state;
@@ -118,7 +119,7 @@ public:
     ) -> bool;
 
     void use(const std::shared_ptr<erhe::graphics::Texture>& texture, const uint64_t handle);
-    void render_draw_data();
+    void render_draw_data(erhe::graphics::Render_command_encoder& encoder);
 
     void at_end_of_frame(std::function<void()>&& func);
     void next_frame     ();

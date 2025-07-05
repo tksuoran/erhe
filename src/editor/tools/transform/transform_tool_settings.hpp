@@ -17,4 +17,4 @@ public:
     float rotate_snap          {15.0f};
 };
 
-} // namespace editor
+}

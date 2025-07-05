@@ -35,4 +35,4 @@ private:
     int                      m_shadow_resolution_index{0};
 };
 
-} // namespace editor
+}

@@ -3,8 +3,6 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 
-#include <glm/glm.hpp>
-
 #include <memory>
 
 namespace erhe::graphics       { class Device; }
@@ -58,4 +56,4 @@ private:
     erhe::scene_renderer::Light_projections                   m_light_projections;
 };
 
-} // namespace editor
+}

@@ -105,4 +105,4 @@ private:
     std::vector<std::shared_ptr<Rendertarget_imgui_host>> m_keep_alive;
 };
 
-} // namespace editor
+}

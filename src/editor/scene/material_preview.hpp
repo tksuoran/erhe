@@ -3,7 +3,6 @@
 #include "renderers/composer.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 
@@ -99,4 +98,4 @@ private:
     float     m_radius{1.0f};
 };
 
-} // namespace editor
+}

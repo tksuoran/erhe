@@ -19,4 +19,4 @@ private:
     float m_radius     {1.0f};
 };
 
-} // namespace editor
+}

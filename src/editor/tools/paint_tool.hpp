@@ -121,4 +121,4 @@ private:
     std::vector<glm::vec4>  m_palette;
 };
 
-} // namespace editor
+}

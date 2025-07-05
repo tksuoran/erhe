@@ -24,6 +24,7 @@
 #include "erhe_log/log_glm.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_hash/xxhash.hpp"
@@ -672,4 +673,4 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
     ImGui::PopID();
 }
 
-} // namespace editor
+}

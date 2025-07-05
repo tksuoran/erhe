@@ -7,6 +7,7 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/node.hpp"
 
@@ -85,4 +86,4 @@ auto Create_cone::create(Brush_data& brush_create_info) const -> std::shared_ptr
 }
 
 
-} // namespace editor
+}

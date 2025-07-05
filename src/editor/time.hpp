@@ -45,4 +45,4 @@ private:
     std::vector<Time_context>      m_this_frame_fixed_steps;
 };
 
-} // namespace editor
+}

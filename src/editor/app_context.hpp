@@ -154,4 +154,4 @@ public:
     Scene_views*                            scene_views           {nullptr};
 };
 
-} // namespace editor
+}

@@ -9,18 +9,15 @@
 #include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
-#include "tools/clipboard.hpp"
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_primitive/material.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_physics/irigid_body.hpp"
-#include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
-#include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
@@ -28,14 +25,12 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 #include <algorithm>
 
-namespace editor
-{
+namespace editor {
 
 using erhe::scene::Light;
 using erhe::scene::Light_layer;
@@ -829,4 +824,4 @@ void Scene_root::imgui()
     }
 }
 
-} // namespace editor
+}

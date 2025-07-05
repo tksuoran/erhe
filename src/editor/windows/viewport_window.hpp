@@ -61,4 +61,4 @@ private:
     bool                                               m_brush_drag_and_drop_active{false};
 };
 
-} // namespace editor
+}

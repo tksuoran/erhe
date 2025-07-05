@@ -45,4 +45,4 @@ protected:
 };
 
 
-} // namespace editor
+}

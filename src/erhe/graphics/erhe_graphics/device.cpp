@@ -398,9 +398,24 @@ Device::Device(erhe::window::Context_window& context_window)
 #endif
     }
 
-    const bool use_direct_state_access = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access) || (info.glsl_version >= 450);
+    const bool use_direct_state_access =
+        (info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
     if (!use_direct_state_access) {
-        log_startup->error("Your graphics driver does not support OpenGL direct state access: OpenGL version 4.5 or GL_ARB_direct_state_access is required. This is a fatal error.");
+        log_startup->error(
+            "Your graphics driver does not support OpenGL direct state access. "
+            "OpenGL version 4.5 or GL_ARB_direct_state_access is required. "
+            "This is a fatal error."
+        );
+    }
+
+    const bool use_shader_storage_buffer_object =
+        (info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object);
+    if (!use_shader_storage_buffer_object) {
+        log_startup->error(
+            "Your graphics driver does not support OpenGL shader storage buffer object. "
+            "OpenGL version 4.3 or GL_ARB_shader_storage_buffer_object is required. "
+            "This is a fatal error."
+        );
     }
 
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
@@ -425,18 +440,6 @@ Device::Device(erhe::window::Context_window& context_window)
         info.glsl_version = force_glsl_version;
         log_startup->warn("Forced GLSL version to be {} due to erhe.ini setting", force_glsl_version);
     }
-
-    // info.use_direct_state_access = (info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
-    //
-    // if (!info.use_direct_state_access) {
-    //     ERHE_FATAL("OpenGL driver does not support irect state access, required by erhe. This is a fatal error.");
-    // }
-    // if (info.use_direct_state_access) {
-    //     if (force_no_direct_state_access) {
-    //         info.use_direct_state_access = false;
-    //         log_startup->warn("Force disabled direct state access due to erhe.ini setting");
-    //     }
-    // }
 
     if (info.use_multi_draw_indirect) { 
         if (force_no_multi_draw_indirect) {

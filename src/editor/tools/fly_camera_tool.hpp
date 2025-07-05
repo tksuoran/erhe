@@ -284,4 +284,4 @@ private:
     glm::quat                             m_after_orientation {1.0f, 0.0f, 0.0f, 0.0f};
 };
 
-} // namespace editor
+}

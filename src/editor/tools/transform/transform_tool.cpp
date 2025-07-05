@@ -13,14 +13,12 @@
 
 #include "renderers/mesh_memory.hpp" // need to be able to pass to visualization
 #include "renderers/render_context.hpp"
-#include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/transform/handle_enums.hpp"
-#include "tools/transform/rotate_tool.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
@@ -28,10 +26,10 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_message_bus/message_bus.hpp"
-#include "erhe_physics/irigid_body.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -43,8 +41,6 @@
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui/imgui.h>
 #endif
-
-#include <unordered_map>
 
 namespace editor {
 
@@ -887,5 +883,5 @@ void Transform_tool::transform_properties()
     m_edit_state = Edit_state(shared, *this, m_rotation, m_property_editor);
 }
 
-} // namespace editor
+}
 

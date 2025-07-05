@@ -353,10 +353,6 @@ auto Post_processing::make_program(
     std::vector<erhe::graphics::Shader_stage_extension> extensions; 
     std::vector<std::pair<std::string, std::string>>    defines;
     const bool bindless_textures = graphics_device.info.use_bindless_texture;
-    if (bindless_textures) {
-        extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-        defines.push_back({"ERHE_BINDLESS_TEXTURE", "1"});
-    }
     if (flags & flag_first_pass       ) { defines.push_back({"FIRST_PASS", "1"}); }
     if (flags & flag_last_pass        ) { defines.push_back({"LAST_PASS",  "1"}); }
     if (flags & flag_source_input     ) { defines.push_back({"SOURCE", "s_input"}); }
@@ -627,7 +623,7 @@ void Post_processing::post_process(Post_processing_node& node)
     }
 }
 
-} // namespace editor
+}
 
 // DOWNSAMPLING - OUR SOLUTION
 //

@@ -575,4 +575,4 @@ auto Scene_views::get_post_processing_nodes() const -> const std::vector<std::sh
     return m_post_processing_nodes;
 }
 
-} // namespace editor
+}

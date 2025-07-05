@@ -135,4 +135,4 @@ auto Payload::operator/=(const Payload& rhs) -> Payload&
     return *this;
 }
 
-} // namespace editor
+}

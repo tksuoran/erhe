@@ -35,4 +35,4 @@ private:
     std::unique_ptr<ax::NodeEditor::EditorContext> m_node_editor;
 };
 
-} // namespace editor
+}

@@ -56,4 +56,4 @@ private:
     bool                                         m_is_valid{false};
 };
 
-} // namespace editor
+}

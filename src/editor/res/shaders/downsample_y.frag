@@ -18,7 +18,7 @@ vec3 fix(vec3 value)
 
 void main()
 {
-#if defined(ERHE_BINDLESS_TEXTURE)
+#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
     sampler2D s_source = sampler2D(post_processing.source_texture[0]);
 #endif
 

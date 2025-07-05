@@ -67,4 +67,4 @@ private:
     Scene_root*                                   m_last_hover_scene_item_tree{nullptr};
 };
 
-} // namespace editor
+}

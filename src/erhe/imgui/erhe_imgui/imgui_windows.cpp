@@ -13,12 +13,11 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <imgui/imgui_internal.h>
-
 namespace erhe::imgui {
 
 Imgui_windows::Imgui_windows(
     Imgui_renderer&                 imgui_renderer,
+    erhe::graphics::Device&         graphics_device,
     erhe::window::Context_window*   context_window,
     erhe::rendergraph::Rendergraph& rendergraph,
     std::string_view                windows_ini_path
@@ -32,6 +31,7 @@ Imgui_windows::Imgui_windows(
     if (context_window != nullptr) {
         m_window_imgui_host = std::make_shared<erhe::imgui::Window_imgui_host>(
             imgui_renderer,
+            graphics_device,
             *context_window,
             rendergraph,
             "window_imgui_host"

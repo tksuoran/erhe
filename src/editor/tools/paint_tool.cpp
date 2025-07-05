@@ -556,4 +556,4 @@ void Paint_tool::imgui()
     }
 }
 
-} // namespace editor
+}

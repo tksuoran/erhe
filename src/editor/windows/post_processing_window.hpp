@@ -33,4 +33,4 @@ private:
     bool                                m_linear_filter{true};
 };
 
-} // namespace editor
+}

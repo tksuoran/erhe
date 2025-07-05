@@ -97,4 +97,4 @@ void Scale_tool::update(const vec3 drag_position_in_world)
     m_context.transform_tool->adjust_scale(center_of_scale, scale);
 }
 
-} // namespace editor
+}

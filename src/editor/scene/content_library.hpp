@@ -9,7 +9,6 @@
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
-#include <imgui/imgui_internal.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -232,4 +231,4 @@ auto Content_library_node::remove(const std::shared_ptr<T>& entry) -> bool
     return true;
 }
 
-} // namespace editor
+}

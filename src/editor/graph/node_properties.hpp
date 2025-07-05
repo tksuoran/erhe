@@ -37,4 +37,4 @@ private:
     Property_editor m_property_editor;
 };
 
-} // namespace editor
+}

@@ -195,4 +195,4 @@ auto Grid_tool::update_hover(const glm::vec3 ray_origin_in_world, const glm::vec
     return result;
 }
 
-} // namespace editor
+}

@@ -22,4 +22,4 @@ public:
     bool                          ideal_shape    {false};
 };
 
-} // namespace editor
+}

@@ -60,4 +60,4 @@ void Basic_scene_view_node::set_is_hovered(const bool is_hovered)
     }
 }
 
-} // namespace editor
+}

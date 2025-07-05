@@ -2,5 +2,5 @@
 
 namespace editor {
 
-} // namespace editor
+}
 

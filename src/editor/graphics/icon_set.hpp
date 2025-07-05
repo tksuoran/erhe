@@ -127,4 +127,4 @@ public:
     std::vector<std::optional<Type_icon>> type_icons;
 };
 
-} // namespace editor
+}

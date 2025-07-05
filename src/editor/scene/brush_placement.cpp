@@ -2,7 +2,6 @@
 
 #include "erhe_scene/node.hpp"
 #include "erhe_bit/bit_helpers.hpp"
-#include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
 
@@ -103,4 +102,4 @@ auto get_brush_placement(const erhe::scene::Node* node) -> std::shared_ptr<Brush
     return {};
 }
 
-} // namespace editor
+}

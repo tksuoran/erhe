@@ -61,4 +61,4 @@ private:
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection_after;
 };
 
-} // namespace editor
+}

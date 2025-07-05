@@ -45,4 +45,4 @@ private:
     std::optional<std::chrono::steady_clock::time_point> m_last_time;
 };
 
-} // namespace editor
+}

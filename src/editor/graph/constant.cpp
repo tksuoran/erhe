@@ -29,4 +29,4 @@ void Constant::imgui()
     ImGui::InputInt("##", &m_payload.int_value[0]);
 }
 
-} // namespace editor
+}

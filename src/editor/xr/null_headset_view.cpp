@@ -95,5 +95,5 @@ void Headset_view::end_frame()
 ////     ImGui::Checkbox("Head Tracking Enabled", &m_head_tracking_enabled);
 //// }
 
-} // namespace editor
+}
 

@@ -409,4 +409,4 @@ auto Binary_mesh_operation::make_operations(
     return compound_operation_parameters;
 }
 
-} // namespace editor
+}

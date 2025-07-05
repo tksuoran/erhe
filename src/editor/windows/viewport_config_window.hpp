@@ -42,4 +42,4 @@ private:
     Viewport_config* m_edit_data{nullptr};
 };
 
-} // namespace editor
+}

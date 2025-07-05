@@ -172,4 +172,4 @@ void Node_properties_window::imgui()
     m_property_editor.show_entries();
 }
 
-} // namespace editor
+}

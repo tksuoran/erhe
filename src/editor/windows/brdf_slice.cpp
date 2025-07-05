@@ -187,4 +187,4 @@ void Brdf_slice::show_brdf_slice(int area_size)
 #endif
 }
 
-} // namespace editor
+}

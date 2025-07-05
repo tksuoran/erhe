@@ -5,26 +5,18 @@
 #include "scene/content_library.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/build_info.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_scene/animation.hpp"
-#include "erhe_scene/camera.hpp"
-#include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_scene/skin.hpp"
 
 #include <fmt/format.h>
 
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
-
-#include <unordered_map>
-#include <unordered_set>
 
 namespace editor {
 
@@ -102,4 +94,4 @@ void import_geogram(
     node->set_parent(scene_root_node);
 }
 
-} // namespace editor
+}

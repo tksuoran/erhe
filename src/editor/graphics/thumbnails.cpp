@@ -158,4 +158,4 @@ void Thumbnails::draw(
 //#endif
 //}
 
-} // namespace editor
+}

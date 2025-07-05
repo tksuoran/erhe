@@ -216,8 +216,6 @@ erhe_target_sources_grouped(
     scene/viewport_scene_views.cpp
     scene/viewport_scene_views.hpp
     settings.ini
-    task_queue.cpp
-    task_queue.hpp
     time.cpp
     time.hpp
     tools/brushes/brush.cpp

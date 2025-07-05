@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 
 #include "erhe_renderer/debug_renderer.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
 
 namespace editor {
@@ -41,4 +42,4 @@ auto Render_context::get_line_renderer(unsigned int stencil, bool visible, bool 
     return app_context.debug_renderer->get(config);
 }
 
-} // namespace editor
+}

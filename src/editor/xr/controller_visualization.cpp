@@ -6,11 +6,13 @@
 
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_geometry/shapes/torus.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_xr/xr_action.hpp"
 
 namespace editor {

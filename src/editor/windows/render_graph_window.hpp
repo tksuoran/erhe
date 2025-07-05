@@ -26,4 +26,4 @@ private:
     erhe::rendergraph::Rendergraph& m_render_graph;
 };
 
-} // namespace editor
+}

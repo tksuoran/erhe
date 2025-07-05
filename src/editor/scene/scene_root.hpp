@@ -1,22 +1,10 @@
 #pragma once
 
-
-#include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
 
-#include "erhe_commands/command.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_message_bus/message_bus.hpp"
-#include "erhe_primitive/material.hpp"
-#include "erhe_primitive/enums.hpp"
-#include "erhe_primitive/format_info.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene_host.hpp"
-#include "erhe_scene/scene_message.hpp"
-#include "erhe_scene/scene_message_bus.hpp"
-#include "erhe_math/math_util.hpp"
 
-#include <map>
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -213,4 +201,4 @@ private:
     std::shared_ptr<Item_tree_window>               m_content_library_tree_window;
 };
 
-} // namespace editor
+}

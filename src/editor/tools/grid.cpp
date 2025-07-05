@@ -315,4 +315,4 @@ auto Grid::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& 
     };
 }
 
-} // namespace editor
+}

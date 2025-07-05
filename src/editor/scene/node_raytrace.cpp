@@ -6,6 +6,7 @@
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_raytrace/iinstance.hpp"
@@ -16,8 +17,6 @@
 #include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
-
-#include <geogram/mesh/mesh_geometry.h>
 
 #include <glm/gtx/matrix_operation.hpp>
 

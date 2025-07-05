@@ -18,4 +18,4 @@ private:
     Payload m_payload;
 };
 
-} // namespace editor
+}

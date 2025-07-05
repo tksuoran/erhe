@@ -410,4 +410,4 @@ auto Scene_view::get_closest_point_on_plane(const glm::vec3 N, const glm::vec3 P
     return drag_point_new_position_in_world;
 }
 
-} // namespace editor
+}

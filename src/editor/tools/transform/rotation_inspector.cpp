@@ -386,4 +386,4 @@ auto Rotation_inspector::get_label_color(
     }
 }
 
-} // namespace editor
+}

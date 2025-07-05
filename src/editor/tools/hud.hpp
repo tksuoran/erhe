@@ -116,4 +116,4 @@ private:
     std::optional<glm::mat4> m_node_from_control;
 };
 
-} // namespace editor
+}

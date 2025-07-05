@@ -121,5 +121,5 @@ void Network_window::imgui()
     ImGui::PopID();
 }
 
-} // namespace editor
+}
 

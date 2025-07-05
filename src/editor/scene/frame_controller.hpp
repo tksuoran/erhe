@@ -90,4 +90,4 @@ auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
 auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>;
 
-} // namespace editor
+}

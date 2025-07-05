@@ -7,6 +7,7 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/torus.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/node.hpp"
 
@@ -85,4 +86,4 @@ auto Create_torus::create(Brush_data& brush_create_info) const -> std::shared_pt
     return brush;
 }
 
-} // namespace editor
+}

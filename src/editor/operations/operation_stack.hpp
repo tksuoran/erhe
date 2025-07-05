@@ -79,4 +79,4 @@ private:
     std::vector<std::shared_ptr<Operation>> m_queued;
 };
 
-} // namespace editor
+}

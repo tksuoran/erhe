@@ -10,6 +10,7 @@
 #include "tools/tools.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -248,4 +249,4 @@ void Material_paint_tool::tool_properties(erhe::imgui::Imgui_window&)
 #endif
 }
 
-} // namespace editor
+}

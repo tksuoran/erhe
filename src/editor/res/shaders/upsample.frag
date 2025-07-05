@@ -11,7 +11,7 @@ float get_weight()
 
 void main()
 {
-#if defined(ERHE_BINDLESS_TEXTURE)
+#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
     sampler2D s_input      = sampler2D(post_processing.input_texture);
     sampler2D s_downsample = sampler2D(post_processing.downsample_texture);
     sampler2D s_upsample   = sampler2D(post_processing.upsample_texture);

@@ -24,4 +24,4 @@ private:
     float      m_power{1.0f};
 };
 
-} // namespace editor
+}

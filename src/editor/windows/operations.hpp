@@ -151,4 +151,4 @@ private:
     Make_mesh_config m_make_mesh_config{};
 };
 
-} // namespace editor
+}

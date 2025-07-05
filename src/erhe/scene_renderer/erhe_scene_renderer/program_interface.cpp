@@ -91,19 +91,7 @@ auto Program_interface::make_prototype(
             create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
         }
     }
-    if (graphics_device.info.gl_version < 460) {
-        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
-            create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
-            create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_draw_parameters"});
-            create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
-        }
-    }
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
-
-    if (graphics_device.info.use_bindless_texture) {
-        create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-    }
 
     bool found = false;
     auto process_shader = [&create_info, &found](gl::Shader_type shader_type, const std::filesystem::path& path) -> void

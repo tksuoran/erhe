@@ -3,8 +3,6 @@
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_physics/irigid_body.hpp"
 
-#include <functional>
-
 namespace erhe {
     class Item_host;
 }
@@ -65,4 +63,4 @@ auto is_physics(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
 auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>;
 
-} // namespace editor
+}

@@ -2,14 +2,9 @@
 
 #include "operations/ioperation.hpp"
 
-#include "erhe_item/item.hpp"
-
 #include <memory>
-#include <vector>
 
-namespace erhe {
-    class Hierarchy;
-}
+namespace erhe { class Hierarchy; }
 
 namespace editor {
 

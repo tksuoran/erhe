@@ -87,4 +87,4 @@ private:
     std::shared_ptr<erhe::primitive::Material> m_material;
 };
 
-} // namespace editor
+}

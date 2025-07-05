@@ -26,4 +26,4 @@ private:
     int                          m_light_cone_sides{0};
 };
 
-} // namespace editor
+}

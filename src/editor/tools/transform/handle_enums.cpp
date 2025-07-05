@@ -215,4 +215,4 @@ auto get_axis_color(const unsigned int axis_mask) -> glm::vec4
     }
 }
 
-} // namespace editor
+}

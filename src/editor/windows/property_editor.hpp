@@ -40,4 +40,4 @@ protected:
     std::vector<Entry> m_entries;
 };
 
-} // namespace editor
+}

@@ -16,4 +16,4 @@ public:
     bool      alt    {false};
 };
 
-} // namespace editor
+}

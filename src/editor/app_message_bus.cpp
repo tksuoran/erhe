@@ -4,4 +4,4 @@ namespace editor {
 
 App_message_bus::App_message_bus() = default;
 
-} // namespace editor
+}

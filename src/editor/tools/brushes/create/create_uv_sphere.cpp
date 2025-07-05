@@ -71,4 +71,4 @@ auto Create_uv_sphere::create(Brush_data& brush_create_info) const -> std::share
     return brush;
 }
 
-} // namespace editor
+}

@@ -28,4 +28,4 @@ private:
     float     m_epsilon         {0.004f};
 };
 
-} // namespace editor
+}

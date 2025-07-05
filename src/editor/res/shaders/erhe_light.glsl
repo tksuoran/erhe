@@ -27,7 +27,7 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
         return 1.0;
     }
 
-#if defined(ERHE_BINDLESS_TEXTURE)
+#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
     //sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture_no_compare);
     sampler2DArrayShadow s_shadow_compare = sampler2DArrayShadow(light_block.shadow_texture_compare);
 #endif

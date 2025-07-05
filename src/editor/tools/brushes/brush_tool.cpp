@@ -1,7 +1,6 @@
 #include "tools/brushes/brush_tool.hpp"
 
 #include "app_context.hpp"
-#include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "graphics/icon_set.hpp"
@@ -16,18 +15,17 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
-#include "windows/property_editor.hpp"
 #include "windows/item_tree_window.hpp"
 
+#include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
-#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_bit/bit_helpers.hpp"
-#include "erhe_math/math_util.hpp"
-#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -837,4 +835,4 @@ void Brush_tool::tool_render(const Render_context& render_context)
 #endif
 }
 
-} // namespace editor
+}

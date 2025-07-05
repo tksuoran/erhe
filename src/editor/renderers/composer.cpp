@@ -85,4 +85,4 @@ void Composer::imgui()
     ImGui::TreePop();
 }
 
-} // namespace editor
+}

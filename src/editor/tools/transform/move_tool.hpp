@@ -36,4 +36,4 @@ private:
     int m_translate_snap_index{2};
 };
 
-} // namespace editor
+}

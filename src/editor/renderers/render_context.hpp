@@ -37,4 +37,4 @@ public:
     const erhe::graphics::Shader_stages* override_shader_stages{nullptr};
 };
 
-} // namespace editor
+}
