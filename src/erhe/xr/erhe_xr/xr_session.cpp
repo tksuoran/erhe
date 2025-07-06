@@ -459,17 +459,18 @@ auto Xr_session::create_swapchains() -> bool
             passthrough_result = m_instance.xrPassthroughStartFB(m_passthrough_fb);
         }
 
+        // We already use XR_PASSTHROUGH_IS_RUNNING_AT_CREATION_BIT_FB so this is not needed
         // if (passthrough_result != XR_SUCCESS) {
         //     log_xr->warn("xrPassthroughStartFB() failed with error {}", c_str(passthrough_result));
         // } else {
         //     m_instance.xrPassthroughLayerResumeFB(m_passthrough_layer_fb);
         // }
-        // 
-        // if (passthrough_result != XR_SUCCESS) {
-        //     log_xr->warn("xrPassthroughLayerResumeFB() failed with error {}", c_str(passthrough_result));
-        // } else {
-        //     log_xr->info("Initialized XR_FB_passthrough");
-        // }
+
+        if (passthrough_result != XR_SUCCESS) {
+            log_xr->warn("xrPassthroughLayerResumeFB() failed with error {}", c_str(passthrough_result));
+        } else {
+            log_xr->info("Initialized XR_FB_passthrough");
+        }
     }
 
     return true;

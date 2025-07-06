@@ -462,6 +462,7 @@ auto Headset_view::render_headset() -> bool
 
             {
                 erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(*render_pass);
+                render_context.encoder = &encoder;
                 ERHE_VERIFY(render_view.width  == static_cast<uint32_t>(render_pass->get_render_target_width()));
                 ERHE_VERIFY(render_view.height == static_cast<uint32_t>(render_pass->get_render_target_height()));
 
@@ -490,10 +491,6 @@ auto Headset_view::render_headset() -> bool
                     m_context.debug_renderer->render(encoder, render_context.viewport);
                 }
                 m_context.debug_renderer->release();
-                //if (m_context.OpenXR_mirror && !first_view) {
-                //    gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-                //    gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-                //}
             } // end of render encoder scope - end of render pass
 
             if (m_context.OpenXR_mirror && first_view) {
