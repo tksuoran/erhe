@@ -11,13 +11,14 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/align.hpp"
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/depth_stencil_state.hpp"
-#include "erhe_graphics/compute_command_encoder.hpp"
-#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_window/window.hpp"
@@ -398,6 +399,8 @@ Device::Device(erhe::window::Context_window& context_window)
         }
 #endif
     }
+    info.use_clear_texture = (info.gl_version >= 440) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_clear_texture);
+    log_startup->info("GL_ARB_clear_texture supported : {}", info.use_clear_texture);
 
     const bool use_direct_state_access =
         (info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
@@ -1488,14 +1491,99 @@ auto Device::get_format_properties(erhe::dataformat::Format format) const -> For
     return i->second;
 }
 
-auto Device::make_render_command_encoder(Render_pass& render_pass) -> std::unique_ptr<Render_command_encoder>
+void Device::clear_texture(Texture& texture, std::array<double, 4> value)
 {
-    return std::make_unique<Render_command_encoder>(*this, render_pass);
+    const erhe::dataformat::Format      pixelformat  = texture.get_pixelformat();
+    const erhe::dataformat::Format_kind format_kind  = erhe::dataformat::get_format_kind (pixelformat);
+    const std::size_t                   depth_size   = erhe::dataformat::get_depth_size  (pixelformat);
+    const std::size_t                   stencil_size = erhe::dataformat::get_stencil_size(pixelformat);
+    if (info.use_clear_texture) {
+        switch (format_kind) {
+            case erhe::dataformat::Format_kind::format_kind_unsigned_integer: {
+                const unsigned int clear_value[4] = {
+                    static_cast<unsigned int>(value[0]),
+                    static_cast<unsigned int>(value[1]),
+                    static_cast<unsigned int>(value[2]),
+                    static_cast<unsigned int>(value[3])
+                };
+                gl::clear_tex_image(texture.gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::unsigned_int, &clear_value[0]);
+                return;
+            }
+            case erhe::dataformat::Format_kind::format_kind_signed_integer: {
+                const int clear_value[4] = {
+                    static_cast<int>(value[0]),
+                    static_cast<int>(value[1]),
+                    static_cast<int>(value[2]),
+                    static_cast<int>(value[3])
+                };
+                gl::clear_tex_image(texture.gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::int_, &clear_value[0]);
+                return;
+            }
+            case erhe::dataformat::Format_kind::format_kind_float: {
+                const float clear_value[4] = {
+                    static_cast<float>(value[0]),
+                    static_cast<float>(value[1]),
+                    static_cast<float>(value[2]),
+                    static_cast<float>(value[3])
+                };
+                gl::clear_tex_image(texture.gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
+                return;
+            }
+            case erhe::dataformat::Format_kind::format_kind_depth_stencil: {
+                if ((depth_size > 0) && (stencil_size == 0)) {
+                    const float clear_value[4] = {
+                        static_cast<float>(value[0]),
+                        static_cast<float>(value[1]),
+                        static_cast<float>(value[2]),
+                        static_cast<float>(value[3])
+                    };
+                    gl::clear_tex_image(texture.gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &clear_value[0]);
+                    return;
+                }
+                // TODO - Currently falls through to renderpass path
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+
+    Render_pass_descriptor render_pass_descriptor{};
+    if (format_kind != erhe::dataformat::Format_kind::format_kind_depth_stencil) {
+        render_pass_descriptor.color_attachments[0].texture        = &texture;
+        render_pass_descriptor.color_attachments[0].load_action    = Load_action::Clear;
+        render_pass_descriptor.color_attachments[0].clear_value[0] = value[0];
+        render_pass_descriptor.color_attachments[0].clear_value[1] = value[1];
+        render_pass_descriptor.color_attachments[0].clear_value[2] = value[2];
+        render_pass_descriptor.color_attachments[0].clear_value[3] = value[3];
+    } else {
+        if (depth_size > 0) {
+            render_pass_descriptor.depth_attachment.texture        = &texture;
+            render_pass_descriptor.depth_attachment.load_action    = Load_action::Clear;
+            render_pass_descriptor.depth_attachment.clear_value[0] = value[0];
+        }
+        if (stencil_size > 0) {
+            render_pass_descriptor.stencil_attachment.texture        = &texture;
+            render_pass_descriptor.stencil_attachment.load_action    = Load_action::Clear;
+            render_pass_descriptor.stencil_attachment.clear_value[0] = value[1];
+        }
+    }
+    render_pass_descriptor.render_target_width  = texture.get_width();
+    render_pass_descriptor.render_target_height = texture.get_height();
+    Render_pass render_pass{*this, render_pass_descriptor};
+
+    Render_command_encoder clear_render_encoder = make_render_command_encoder(render_pass);
 }
 
-auto Device::make_compute_command_encoder() -> std::unique_ptr<Compute_command_encoder>
+auto Device::make_render_command_encoder(Render_pass& render_pass) -> Render_command_encoder
 {
-    return std::make_unique<Compute_command_encoder>(*this);
+    return Render_command_encoder(*this, render_pass);
+}
+
+auto Device::make_compute_command_encoder() -> Compute_command_encoder
+{
+    return Compute_command_encoder(*this);
 }
 
 

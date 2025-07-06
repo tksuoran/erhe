@@ -80,8 +80,8 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         );
 
         if (resolution <= 1) {
-            float depth_clear_value = 0.0f; // reverse Z
-            gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
+            double depth_clear_value = 0.0; // reverse Z
+            graphics_device.clear_texture(*m_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
         }
     }
 

@@ -51,15 +51,4 @@ void Command_encoder::set_buffer(Buffer_target buffer_target, const Buffer* buff
     );
 }
 
-//void Command_encoder::set_storage_buffer(const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
-//{
-//    gl::bind_buffer_range(
-//        gl::Buffer_target::shader_storage_buffer,
-//        static_cast<GLuint>    (index),
-//        static_cast<GLuint>    (buffer->gl_name()),
-//        static_cast<GLintptr>  (offset),
-//        static_cast<GLsizeiptr>(length)
-//    );
-//}
-
 } // namespace erhe::graphics

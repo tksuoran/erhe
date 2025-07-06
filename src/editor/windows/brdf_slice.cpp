@@ -85,7 +85,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
     erhe::graphics::Scoped_debug_group pass_scope{"Brdf_slice_rendergraph_node::execute_rendergraph_node()"};
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
-    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
+    erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
 
     erhe::scene_renderer::Light_projections light_projections;
     light_projections.brdf_phi          = m_brdf_slice.phi;
@@ -101,7 +101,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
-            .render_encoder        = *render_encoder.get(),
+            .render_encoder        = render_encoder,
             .index_type            = erhe::dataformat::Format::format_32_scalar_uint, // Note: Indices are not used by render_fullscreen()
             .index_buffer          = nullptr,
             .vertex_buffer0        = nullptr,

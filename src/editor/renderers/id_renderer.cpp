@@ -335,9 +335,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         0
     );
 
-    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
-    erhe::graphics::Render_command_encoder& encoder = *render_encoder.get();
-
+    erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
     m_camera_buffers.bind(encoder, camera_range);
 
     // TODO Is still needed? NVIDIA driver bug? workaround

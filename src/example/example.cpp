@@ -180,14 +180,9 @@ public:
             .height = m_window.get_height()
         };
 
-        update_render_pass(viewport.width, viewport.height);
-
-        std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
-
         m_scene.update_node_transforms();
 
         std::vector<erhe::renderer::Pipeline_renderpass*> passes;
-
         erhe::renderer::Pipeline_renderpass standard_pipeline_renderpass{ 
             erhe::graphics::Render_pipeline_state{
                 erhe::graphics::Render_pipeline_data{
@@ -201,7 +196,6 @@ public:
                 }
             }
         };
-
         passes.push_back(&standard_pipeline_renderpass);
 
         std::vector<std::shared_ptr<erhe::scene::Light>> lights;
@@ -229,9 +223,13 @@ public:
             meshes.push_back(mesh);
         }
 
+        update_render_pass(viewport.width, viewport.height);
+
+        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .render_encoder         = *render_encoder.get(),
+                .render_encoder         = render_encoder,
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
                 .index_buffer           = &m_mesh_memory.index_buffer,
                 .vertex_buffer0         = &m_mesh_memory.position_vertex_buffer,

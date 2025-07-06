@@ -1,9 +1,6 @@
 #include "erhe_graphics/compute_command_encoder.hpp"
-//#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
-//#include "erhe_gl/wrapper_enums.hpp"
-//#include "erhe_gl/wrapper_functions.hpp"
 
 namespace erhe::graphics {
 

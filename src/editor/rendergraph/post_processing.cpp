@@ -560,7 +560,7 @@ void Post_processing::post_process(Post_processing_node& node)
         erhe::graphics::Render_pass* render_pass       = node.downsample_render_passes.at(destination_level).get();
         const unsigned int           binding_point     = m_parameter_block.binding_point();
 
-        std::unique_ptr<erhe::graphics::Render_command_encoder> encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
+        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
 
         gl::bind_buffer_range(
             node.parameter_buffer.target(),
@@ -576,7 +576,7 @@ void Post_processing::post_process(Post_processing_node& node)
         } else {
             graphics_device.opengl_state_tracker.execute_(m_pipelines.downsample);
         }
-        encoder->draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
+        encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
     erhe::math::Viewport viewport{
@@ -599,7 +599,7 @@ void Post_processing::post_process(Post_processing_node& node)
         erhe::graphics::Render_pass* render_pass = node.upsample_render_passes.at(destination_level).get();
         const unsigned int binding_point = m_parameter_block.binding_point();
 
-        std::unique_ptr<erhe::graphics::Render_command_encoder> encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
+        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
 
         const int render_pass_width  = render_pass->get_render_target_width();
         const int render_pass_height = render_pass->get_render_target_height();
@@ -612,7 +612,7 @@ void Post_processing::post_process(Post_processing_node& node)
             static_cast<GLintptr>  (source_level * level_offset_size),
             static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
         );
-        encoder->draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
+        encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
     if (m_context.graphics_device->info.use_bindless_texture) {

@@ -456,48 +456,45 @@ auto Headset_view::render_headset() -> bool
 
             m_context.debug_renderer->update(render_context.viewport, *render_context.camera);
             {
-                std::unique_ptr<erhe::graphics::Compute_command_encoder> compute_encoder;
-                compute_encoder = graphics_device.make_compute_command_encoder();
-                m_context.debug_renderer->compute(*compute_encoder.get());
+                erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
+                m_context.debug_renderer->compute(compute_encoder);
             }
 
-            std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder;
-            render_encoder = graphics_device.make_render_command_encoder(*render_pass);
-            ERHE_VERIFY(render_view.width  == static_cast<uint32_t>(render_pass->get_render_target_width()));
-            ERHE_VERIFY(render_view.height == static_cast<uint32_t>(render_pass->get_render_target_height()));
-            render_context.encoder = render_encoder.get();
+            {
+                erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(*render_pass);
+                ERHE_VERIFY(render_view.width  == static_cast<uint32_t>(render_pass->get_render_target_width()));
+                ERHE_VERIFY(render_view.height == static_cast<uint32_t>(render_pass->get_render_target_height()));
 
-            graphics_device.opengl_state_tracker.shader_stages.reset();
-            graphics_device.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
+                graphics_device.opengl_state_tracker.shader_stages.reset();
+                graphics_device.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
 
-            // TODO This conflicts with hud grab - proper command for this?
-            //
-            // const auto* squeeze_click = m_headset->get_actions_right().squeeze_click;
-            // const auto* squeeze_value = m_headset->get_actions_right().squeeze_value;
-            // if (
-            //     ((squeeze_click != nullptr) && (squeeze_click->state.currentState == XR_TRUE)) ||
-            //     ((squeeze_value != nullptr) && (squeeze_value->state.currentState >= 0.5f))
-            // ) {
-            //     gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-            //     gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-            //     render = false;
-            // }
+                // TODO This conflicts with hud grab - proper command for this?
+                //
+                // const auto* squeeze_click = m_headset->get_actions_right().squeeze_click;
+                // const auto* squeeze_value = m_headset->get_actions_right().squeeze_value;
+                // if (
+                //     ((squeeze_click != nullptr) && (squeeze_click->state.currentState == XR_TRUE)) ||
+                //     ((squeeze_value != nullptr) && (squeeze_value->state.currentState >= 0.5f))
+                // ) {
+                //     gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
+                //     gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
+                //     render = false;
+                // }
 
-            // When in mirror mode, speed up rendering by only rendering first view
-            if (!m_context.OpenXR_mirror || first_view) {
-                const erhe::graphics::Shader_stages* override_shader_stages = m_context.programs->get_variant_shader_stages(m_shader_stages_variant);
-                render_context.override_shader_stages = override_shader_stages;
+                // When in mirror mode, speed up rendering by only rendering first view
+                if (!m_context.OpenXR_mirror || first_view) {
+                    const erhe::graphics::Shader_stages* override_shader_stages = m_context.programs->get_variant_shader_stages(m_shader_stages_variant);
+                    render_context.override_shader_stages = override_shader_stages;
 
-                m_context.app_rendering ->render_composer(render_context);
-                m_context.debug_renderer->render(*render_encoder, render_context.viewport);
-            }
-            m_context.debug_renderer->release();
-            if (m_context.OpenXR_mirror && !first_view) {
-                gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-                gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-            }
-
-            render_encoder.reset();
+                    m_context.app_rendering ->render_composer(render_context);
+                    m_context.debug_renderer->render(encoder, render_context.viewport);
+                }
+                m_context.debug_renderer->release();
+                //if (m_context.OpenXR_mirror && !first_view) {
+                //    gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
+                //    gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
+                //}
+            } // end of render encoder scope - end of render pass
 
             if (m_context.OpenXR_mirror && first_view) {
                 // Copy from OpenXR to default framebuffer (window)

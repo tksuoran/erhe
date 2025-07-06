@@ -115,15 +115,7 @@ void Material_preview::update_rendertarget(erhe::graphics::Device& graphics_devi
             .debug_label = "Material preview Color Texture"
         }
     );
-    const float clear_value[4] = { 1.0f, 0.0f, 0.5f, 0.0f };
-    gl::clear_tex_image(
-        m_color_texture->gl_name(),
-        0,
-        gl::Pixel_format::rgba,
-        gl::Pixel_type::float_,
-        &clear_value[0]
-    );
-
+    graphics_device.clear_texture(*m_color_texture.get(), { 1.0, 0.0, 0.5, 0.0 });
     m_depth_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
         graphics_device,
         m_depth_format,
@@ -161,8 +153,8 @@ void Material_preview::update_rendertarget(erhe::graphics::Device& graphics_devi
         }
     );
 
-    const float depth_clear_value = 0.0f; // reverse Z
-    gl::clear_tex_image(m_shadow_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
+    const double depth_clear_value = 0.0; // reverse Z
+    graphics_device.clear_texture(*m_shadow_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
 }
 
 void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
@@ -287,7 +279,9 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         erhe::graphics::invalid_texture_handle
     };
 
+    erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
     const Render_context context{
+        .encoder             = &render_encoder,
         .app_context         = m_context,
         .scene_view          = *this,
         .viewport_config     = m_viewport_config,
@@ -301,8 +295,6 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         },
         .override_shader_stages = nullptr
     };
-
-    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
     m_composer.render(context);
 }
 

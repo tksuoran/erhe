@@ -257,7 +257,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
 
     {
         // Clear once
-        std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_context.graphics_device->make_render_command_encoder(*mesh->get_render_pass());
+        erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(*mesh->get_render_pass());
         mesh->render_done(m_context);
     }
 

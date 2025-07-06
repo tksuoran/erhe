@@ -1,8 +1,6 @@
 #include "erhe_imgui/windows/framebuffer_window.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -50,7 +48,7 @@ auto Framebuffer_window::to_content(const glm::vec2 position_in_root) const -> g
     return glm::vec2{content_x, content_y};
 }
 
-auto Framebuffer_window::make_render_command_encoder() -> std::unique_ptr<erhe::graphics::Render_command_encoder>
+auto Framebuffer_window::make_render_command_encoder() -> erhe::graphics::Render_command_encoder
 {
     return m_graphics_device.make_render_command_encoder(*m_render_pass.get());
 }
@@ -107,8 +105,7 @@ void Framebuffer_window::update_render_pass()
             .debug_label  = fmt::format("Framebuffer_window {}", m_debug_label)
         }
     );
-    const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
-    gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
+    m_graphics_device.clear_texture(*m_texture.get(), { 1.0, 0.0, 1.0, 1.0 });
 
     erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
     render_pass_descriptor.color_attachments[0].texture      = m_texture.get();

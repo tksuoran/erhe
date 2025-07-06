@@ -185,8 +185,8 @@ void Window_imgui_host::execute_rendergraph_node()
 
     Scoped_imgui_context imgui_context{*this};
 
-    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
-    m_imgui_renderer.render_draw_data(*render_encoder.get());
+    erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+    m_imgui_renderer.render_draw_data(render_encoder);
 }
 
 auto Window_imgui_host::get_viewport() const -> erhe::math::Viewport

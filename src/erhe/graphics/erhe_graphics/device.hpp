@@ -5,6 +5,7 @@
 #include "erhe_graphics/gl_context_provider.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <span>
@@ -211,10 +212,12 @@ public:
     [[nodiscard]] auto allocate_ring_buffer_entry(Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
     void end_of_frame();
 
-    [[nodiscard]] auto make_render_command_encoder(Render_pass& render_pass) -> std::unique_ptr<Render_command_encoder>;
-    [[nodiscard]] auto make_compute_command_encoder() -> std::unique_ptr<Compute_command_encoder>;
+    [[nodiscard]] auto make_render_command_encoder(Render_pass& render_pass) -> Render_command_encoder;
+    [[nodiscard]] auto make_compute_command_encoder() -> Compute_command_encoder;
 
     auto get_format_properties(erhe::dataformat::Format format) const -> Format_properties;
+
+    void clear_texture(Texture& texture, std::array<double, 4> clear_value);
 
     auto choose_depth_stencil_format(unsigned int flags, int sample_count) const -> erhe::dataformat::Format;
 
@@ -238,6 +241,7 @@ public:
         bool use_persistent_buffers {false};
         bool use_multi_draw_indirect{false};
         bool use_compute_shader     {false};
+        bool use_clear_texture      {false};
 
         // bool use_direct_state_access{false};
     };

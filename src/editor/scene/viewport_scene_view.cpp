@@ -133,9 +133,8 @@ void Viewport_scene_view::execute_rendergraph_node()
         m_context.app_rendering ->render_viewport_renderables(context);
 
         m_context.debug_renderer->update(context.viewport, *context.camera);
-        std::unique_ptr<erhe::graphics::Compute_command_encoder> compute_encoder;
-        compute_encoder = graphics_device.make_compute_command_encoder();
-        m_context.debug_renderer->compute(*compute_encoder.get());
+        erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
+        m_context.debug_renderer->compute(compute_encoder);
     }
 
     update_render_pass(m_projection_viewport.width, m_projection_viewport.height);
@@ -144,9 +143,8 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     ERHE_VERIFY(m_render_pass);
 
-    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder;
-    render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
-    context.encoder = render_encoder.get();
+    erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
+    context.encoder = &encoder;
 
     // Starting render encoder clears render target texture(s)
     if (!do_render) {
@@ -172,9 +170,9 @@ void Viewport_scene_view::execute_rendergraph_node()
     );
 
     m_context.app_rendering ->render_viewport_main(context);
-    m_context.debug_renderer->render(*context.encoder, context.viewport);
+    m_context.debug_renderer->render(encoder, context.viewport);
     m_context.debug_renderer->release();
-    m_context.text_renderer ->render(*context.encoder, context.viewport);
+    m_context.text_renderer ->render(encoder, context.viewport);
 }
 
 void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)

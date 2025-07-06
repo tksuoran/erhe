@@ -194,8 +194,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             continue;
         }
 
-        std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = m_graphics_device.make_render_command_encoder(*parameters.render_passes[light_index].get());
-        erhe::graphics::Render_command_encoder& encoder = *render_encoder.get();
+        erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(*parameters.render_passes[light_index].get());
 
         // TODO Multiple vertex buffer bindings
         encoder.set_render_pipeline_state(pipeline);

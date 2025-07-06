@@ -312,12 +312,7 @@ void Tile_renderer::compose_tileset_texture()
     };
 
     m_tileset_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
-    float clear_rgba[4] = { 1.0f, 0.0f, 1.0f, 1.0f};
-    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
-        gl::clear_tex_image(m_tileset_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_rgba);
-    } else {
-        // TODO
-    }
+    m_graphics_device.clear_texture(*m_tileset_texture.get(), { 1.0, 0.0, 1.0, 1.0 });
 
     // Upload everything before single unit tiles
     m_tileset_texture->upload_subimage(

@@ -132,7 +132,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     }
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
-    std::unique_ptr<erhe::graphics::Render_command_encoder> render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
+    erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
 
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
     const auto& layers = scene_root->layers();
@@ -142,7 +142,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
-            .render_encoder        = *render_encoder.get(),
+            .render_encoder        = render_encoder,
             .index_type            = m_mesh_memory.buffer_info.index_type,
             .index_buffer          = nullptr,
             .vertex_buffer0        = nullptr,

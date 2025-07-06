@@ -43,7 +43,7 @@ public:
     // Public API
     virtual void update_render_pass();
 
-    [[nodiscard]] auto make_render_command_encoder() -> std::unique_ptr<erhe::graphics::Render_command_encoder>;
+    [[nodiscard]] auto make_render_command_encoder() -> erhe::graphics::Render_command_encoder;
 
 protected:
     erhe::graphics::Device&                      m_graphics_device;

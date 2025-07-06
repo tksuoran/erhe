@@ -68,7 +68,6 @@ public:
 #endif
 
     auto update_pointer(Scene_view* scene_view) -> bool;
-    void clear         (glm::vec4 clear_color);
     void render_done   (App_context& context); // generates mipmaps, updates lod bias
 
     void resize_rendertarget(

@@ -74,8 +74,7 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
             .debug_label  = "Rendertarget_mesh::m_texture"
         }
     );
-    const float clear_value[4] = { 0.0f, 0.0f, 0.0f, 0.85f };
-    gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
+    graphics_device.clear_texture(*m_texture.get(), { 0.0, 0.0, 0.0, 0.85 });
 
     m_sampler = std::make_shared<erhe::graphics::Sampler>(
         graphics_device,
@@ -292,12 +291,6 @@ auto Rendertarget_mesh::get_world_to_window(const glm::vec3 position_in_world) c
         m_texture->get_width() * b.x,
         m_texture->get_height() * b.y
     };
-}
-
-void Rendertarget_mesh::clear(const glm::vec4 clear_color)
-{
-    const float clear_value[4] = { clear_color.r, clear_color.g, clear_color.b, clear_color.a };
-    gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_value[0]);
 }
 
 void Rendertarget_mesh::render_done(App_context& context)
