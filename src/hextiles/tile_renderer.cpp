@@ -106,7 +106,6 @@ Tile_renderer::Tile_renderer(
     , m_index_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .target              = gl::Buffer_target::element_array_buffer,
             .capacity_byte_count = index_stride * index_count,
             .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
             .debug_label         = "Tile_renderer index buffer"
