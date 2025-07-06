@@ -4,6 +4,7 @@
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
+#include "rendertarget_imgui_host.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -191,6 +192,11 @@ void Headset_view::imgui()
         IM_ARRAYSIZE(c_shader_stages_variant_strings)
     );
 
+    erhe::imgui::Imgui_host* imgui_host = get_imgui_host();
+    if (imgui_host != nullptr) {
+        const glm::vec2 mouse_position = imgui_host->get_mouse_position();
+        ImGui::Text("Mouse position x = %f, y = %f", mouse_position.x, mouse_position.y);
+    }
 }
 
 void Headset_view::render(const Render_context& render_context)

@@ -514,6 +514,10 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     // TODO Re-enable if this ever turns out to be less expensive.
     io.ConfigErrorRecovery = false;
 
+    // This seems to cause mouse move events to have lantency when mouse wheel events are used
+    // for scrolling (at least from headset).
+    io.ConfigInputTrickleEventQueue = false;
+
     auto& style = imgui_context->Style;
     style.WindowMenuButtonPosition = ImGuiDir_None;
 

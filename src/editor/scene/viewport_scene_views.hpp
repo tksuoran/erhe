@@ -1,18 +1,11 @@
 #pragma once
 
-#include "app_message.hpp"
 #include "renderers/viewport_config.hpp"
 
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_commands/command.hpp"
-#include "erhe_imgui/imgui_window.hpp"
-#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
-#include "erhe_math/viewport.hpp"
-#include "erhe_window/window_event_handler.hpp"
-
-#include <glm/glm.hpp>
 
 #include <memory>
 #include <mutex>
@@ -20,6 +13,7 @@
 namespace erhe::imgui {
     class Imgui_host;
     class Imgui_windows;
+    class Imgui_renderer;
 }
 namespace erhe::scene_renderer {
     class Shadow_renderer;
@@ -27,20 +21,20 @@ namespace erhe::scene_renderer {
 
 namespace editor {
 
-class Basic_scene_view_node;
 class App_context;
 class App_message;
 class App_message_bus;
 class App_rendering;
 class App_settings;
-class Viewport_window;
+class Graphics_preset;
 class Post_processing;
 class Post_processing_node;
 class Scene_root;
+class Scene_views;
 class Tools;
 class Viewport_config_window;
 class Viewport_scene_view;
-class Scene_views;
+class Viewport_window;
 
 class Open_new_viewport_scene_view_command : public erhe::commands::Command
 {
@@ -65,14 +59,6 @@ public:
 
     // Public API
 
-    // Creates a new Viewport_scene_view and necessary rendergraph nodes.
-    //
-    // Creates a new Viewport_scene_view and necessary rendergraph nodes.
-    // The following rendergraph nodes are created:
-    // - Viewport_scene_view - Used as producer node
-    // - Multisample_resolve_node - Consumes Viewport_scene_view output and performs multisample resolve
-    // - Post_processing_node - Consumes Multisample_resolve_node output and performs post processing (bloom and tonemap)
-    // - Viewport_window - Consumes Post_processing_node output, shows content using ImGui
     auto create_viewport_scene_view(
         erhe::graphics::Device&                               graphics_device,
         erhe::rendergraph::Rendergraph&                       rendergraph,
@@ -89,12 +75,6 @@ public:
         bool                                                  enable_post_processing = true
     ) -> std::shared_ptr<Viewport_scene_view>;
 
-    auto create_basic_viewport_scene_view_node(
-        erhe::rendergraph::Rendergraph&             rendergraph,
-        const std::shared_ptr<Viewport_scene_view>& viewport_scene_view,
-        std::string_view                            name
-    ) -> std::shared_ptr<Basic_scene_view_node>;
-
     auto create_viewport_window(
         erhe::imgui::Imgui_renderer&                                imgui_renderer,
         erhe::imgui::Imgui_windows&                                 imgui_windows,
@@ -107,7 +87,6 @@ public:
     void open_new_viewport_scene_view_node();
 
     void erase(Viewport_scene_view* viewport_scene_view);
-    void erase(Basic_scene_view_node* basic_viewport_window);
 
     auto open_new_viewport_scene_view(
         std::shared_ptr<erhe::rendergraph::Rendergraph_node>& out_rendergraph_output_node,
@@ -122,10 +101,6 @@ public:
 
     // Returns the Viewport_scene_view instance which is currently under pointer
     // (mouse cursor).
-    //
-    // returns Pointer to the Viewport_scene_view instance which is currently
-    // under pointer (mouse cursor), or nullptr if pointer (mouse cursor)
-    // is not currently over any Viewport_scene_view</returns>
     [[nodiscard]] auto hover_scene_view() -> std::shared_ptr<Viewport_scene_view>;
     [[nodiscard]] auto last_scene_view () -> std::shared_ptr<Viewport_scene_view>;
 
@@ -138,8 +113,6 @@ private:
     void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
 
     void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
-    void update_pointer_from_basic_viewport_windows();
-    void layout_basic_viewport_windows           ();
 
     App_context& m_app_context;
 
@@ -147,7 +120,6 @@ private:
     Open_new_viewport_scene_view_command m_open_new_viewport_scene_view_command;
 
     ERHE_PROFILE_MUTEX(std::mutex,                      m_mutex);
-    std::vector<std::shared_ptr<Basic_scene_view_node>> m_basic_scene_view_nodes;
     std::vector<std::shared_ptr<Viewport_window>>       m_viewport_windows;
     std::vector<std::shared_ptr<Viewport_scene_view>>   m_viewport_scene_views;
     std::vector<std::shared_ptr<Post_processing_node>>  m_post_processing_nodes;

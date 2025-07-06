@@ -115,6 +115,29 @@ Hotbar_thumbstick_command::Hotbar_thumbstick_command(erhe::commands::Commands& c
 
 auto Hotbar_thumbstick_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
 {
+    // In case we are hovering over rendertarget, we do not consume the event,
+    // so that the event can be used to emulate mouse wheel for scrolling.
+    Scene_view* scene_view;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (m_context.OpenXR) {
+        scene_view = m_context.headset_view;
+    }
+    else
+#endif
+    {
+        scene_view = m_context.scene_views->hover_scene_view().get();
+    }
+    if (scene_view != nullptr) {
+        const Hover_entry* nearest_hover = scene_view->get_nearest_hover(
+            Hover_entry::content_bit | Hover_entry::grid_bit | Hover_entry::rendertarget_bit
+        );
+        if (nearest_hover != nullptr) {
+            if (nearest_hover->slot == Hover_entry::rendertarget_slot) {
+                return false;
+            }
+        }
+    }
+
     // Check for deactivation
     float x = input.variant.vector2.absolute_value.x;
     float y = input.variant.vector2.absolute_value.y;

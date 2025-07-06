@@ -281,7 +281,9 @@ auto Imgui_host::on_mouse_button_event(const erhe::window::Input_event& input_ev
 auto Imgui_host::on_mouse_wheel_event(const erhe::window::Input_event& input_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
+    //io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
     io.AddMouseWheelEvent(input_event.u.mouse_wheel_event.x, input_event.u.mouse_wheel_event.y);
+    //io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
     return false;
 }
 

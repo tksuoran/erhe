@@ -3,13 +3,11 @@
 #include "scene/viewport_scene_views.hpp"
 
 #include "app_context.hpp"
-#include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_settings.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
-#include "rendergraph/basic_scene_view_node.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "scene/scene_root.hpp"
@@ -21,7 +19,6 @@
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -30,13 +27,11 @@
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/window_imgui_host.hpp"
-#include "erhe_log/log_glm.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_verify/verify.hpp"
-#include "erhe_window/window.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui/imgui.h>
@@ -120,18 +115,6 @@ void Scene_views::erase(Viewport_scene_view* viewport_scene_view)
     m_viewport_scene_views.erase(i, m_viewport_scene_views.end());
 }
 
-void Scene_views::erase(Basic_scene_view_node* basic_viewport_window)
-{
-    const auto i = std::remove_if(
-        m_basic_scene_view_nodes.begin(),
-        m_basic_scene_view_nodes.end(),
-        [basic_viewport_window](const auto& entry) {
-            return entry.get() == basic_viewport_window;
-        }
-    );
-    m_basic_scene_view_nodes.erase(i, m_basic_scene_view_nodes.end());
-}
-
 auto Scene_views::create_viewport_scene_view(
     erhe::graphics::Device&                               graphics_device,
     erhe::rendergraph::Rendergraph&                       rendergraph,
@@ -200,48 +183,6 @@ auto Scene_views::create_viewport_scene_view(
     );
 
     return new_viewport;
-}
-
-auto Scene_views::create_basic_viewport_scene_view_node(
-    erhe::rendergraph::Rendergraph&             rendergraph,
-    const std::shared_ptr<Viewport_scene_view>& viewport_scene_view,
-    std::string_view                            name
-) -> std::shared_ptr<Basic_scene_view_node>
-{
-    auto node = std::make_shared<Basic_scene_view_node>(rendergraph, name, viewport_scene_view);
-    m_basic_scene_view_nodes.push_back(node);
-    layout_basic_viewport_windows();
-    return node;
-}
-
-void Scene_views::layout_basic_viewport_windows()
-{
-    const int window_width    = m_app_context.context_window->get_width();
-    const int window_height   = m_app_context.context_window->get_height();
-    const int count           = static_cast<int>(m_basic_scene_view_nodes.size());
-    const int a               = std::max<int>(1, static_cast<int>(std::sqrt(count)));
-    const int b               = count / a;
-    const int x_count         = (window_width >= window_height) ? std::max(a, b) : std::min(a, b);
-    const int y_count         = (window_width >= window_height) ? std::min(a, b) : std::max(a, b);
-    const int viewport_width  = window_width  / x_count;
-    const int viewport_height = window_height / y_count;
-    int x = 0;
-    int y = 0;
-    for (const auto& basic_viewport_window : m_basic_scene_view_nodes) {
-        basic_viewport_window->set_viewport(
-            erhe::math::Viewport{
-                .x      = x * window_width,
-                .y      = y * window_height,
-                .width  = viewport_width,
-                .height = viewport_height
-            }
-        );
-        ++x;
-        if (x == x_count) {
-            x = 0;
-            ++y;
-        }
-    }
 }
 
 auto Scene_views::create_viewport_window(
@@ -347,8 +288,6 @@ void Scene_views::open_new_viewport_scene_view_node()
         "scene view",
         ""
     );
-
-    // create_basic_viewport_scene_view_node(*m_app_context.rendergraph, viewport_scene_view, "b scene view");
 }
 
 void Scene_views::debug_imgui()
@@ -368,13 +307,6 @@ void Scene_views::debug_imgui()
     ImGui::Text("Hover scene view: %s", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
     const auto last_scene_view = m_last_scene_view.lock();
     ImGui::Text("Last scene view: %s", last_scene_view ? last_scene_view->get_name().c_str() : "");
-
-    if (ImGui::TreeNodeEx("Basic scene view nodes", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (const auto& node : m_basic_scene_view_nodes) {
-            ImGui::BulletText("%s", node->get_name().c_str());
-        }
-        ImGui::TreePop();
-    }
 
     if (ImGui::TreeNodeEx("ImGui window scene view nodes", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
         for (const std::shared_ptr<Viewport_window>& viewport_window : m_viewport_windows) {
@@ -437,11 +369,6 @@ void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
 
     update_pointer_from_imgui_viewport_windows(imgui_host);
 
-    if (!m_basic_scene_view_nodes.empty()) {
-        layout_basic_viewport_windows();
-        update_pointer_from_basic_viewport_windows();
-    }
-
     m_hover_scene_view = m_hover_stack.empty()
         ? std::shared_ptr<Viewport_scene_view>{}
         : m_hover_stack.back().lock();
@@ -493,45 +420,6 @@ void Scene_views::update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_
             // log_scene_view->info("pushing {} to hover stack", viewport_scene_view->get_name());
             m_last_scene_view = viewport_scene_view;
             m_hover_stack.push_back(m_last_scene_view);
-        }
-    }
-}
-
-void Scene_views::update_pointer_from_basic_viewport_windows()
-{
-    glm::vec2 pointer_window_position = m_app_context.input_state->mouse_position;
-
-    m_hover_stack.clear();
-    for (const auto& node : m_basic_scene_view_nodes) {
-        const auto viewport_scene_view = node->get_viewport_scene_view();
-        if (!viewport_scene_view) {
-            continue;
-        }
-
-        const erhe::math::Viewport& viewport = node->get_viewport();
-        const bool is_hoverered = viewport.hit_test(
-            static_cast<int>(std::round(pointer_window_position.x)),
-            static_cast<int>(std::round(pointer_window_position.y))
-        );
-
-        viewport_scene_view->set_is_scene_view_hovered(is_hoverered);
-
-        if (is_hoverered) {
-            const glm::vec2 viewport_position = viewport_scene_view->get_viewport_from_window(pointer_window_position);
-            // log_pointer->info(
-            //     "window position {} hovers Viewport_scene_view {} @ {}",
-            //     pointer_window_position,
-            //     viewport_scene_view->get_name(),
-            //     viewport_position
-            // );
-
-            viewport_scene_view->update_pointer_2d_position(viewport_position);
-            ERHE_VERIFY(m_hover_stack.empty());
-            m_last_scene_view = viewport_scene_view;
-            m_hover_stack.push_back(m_last_scene_view);
-        } else {
-            viewport_scene_view->reset_control_transform();
-            viewport_scene_view->reset_hover_slots();
         }
     }
 }

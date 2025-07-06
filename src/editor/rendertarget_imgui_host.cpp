@@ -193,8 +193,8 @@ auto Rendertarget_imgui_host::on_xr_vector2f_event(const erhe::window::Input_eve
             .timestamp_ns = input_event.timestamp_ns,
             .u = {
                 .mouse_wheel_event = {
-                    .x             = xr_vector2f_event.x * 0.25f,
-                    .y             = xr_vector2f_event.y * 0.25f,
+                    .x             = xr_vector2f_event.x * -0.25f,
+                    .y             = xr_vector2f_event.y *  0.25f,
                     .modifier_mask = 0
                 }
             }
