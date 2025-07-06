@@ -220,4 +220,52 @@ auto Projection::get_fov_sides(const erhe::math::Viewport viewport) const -> Fov
     return Fov_sides{ 0.0f, 0.0f, 0.0f, 0.0f };
 }
 
+auto Projection::get_scale() const -> float
+{
+    switch (projection_type) {
+        //using enum Projection::Type;
+        case Projection::Type::perspective: {
+            return 0.5f * std::min(fov_x, fov_y);
+        }
+
+        case Projection::Type::perspective_xr: {
+            return std::min(fov_right - fov_left, fov_up - fov_down);
+        }
+
+        case Projection::Type::perspective_horizontal: {
+            return 0.5f * fov_x;
+        }
+
+        case Projection::Type::perspective_vertical: {
+            return 0.5f * fov_y;
+        }
+
+        case Projection::Type::orthogonal_horizontal: {
+            return 0.5f * ortho_width;
+        }
+
+        case Projection::Type::orthogonal_vertical: {
+            return 0.5f * ortho_height;
+        }
+
+        case Projection::Type::orthogonal: {
+            return 0.5f * std::min(ortho_width, ortho_height);
+        }
+
+        case Projection::Type::orthogonal_rectangle: {
+            return 0.5f * std::min(ortho_width, ortho_height);
+        }
+
+        case Projection::Type::generic_frustum: {
+            return 0.5f * std::min(frustum_right - frustum_left, frustum_top -frustum_bottom);
+        }
+
+        case Projection::Type::other: {
+            return 1.0f;
+        }
+    }
+
+    return 1.0f;
+}
+
 } // namespace erhe::scene

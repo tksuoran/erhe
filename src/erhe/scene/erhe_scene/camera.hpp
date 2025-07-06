@@ -46,6 +46,7 @@ public:
     [[nodiscard]] auto projection_transforms(const erhe::math::Viewport& viewport) const -> Camera_projection_transforms;
     [[nodiscard]] auto get_exposure         () const -> float;
     [[nodiscard]] auto get_shadow_range     () const -> float;
+    [[nodiscard]] auto get_projection_scale () const -> float;
 
     void set_exposure    (float value);
     void set_shadow_range(float value);

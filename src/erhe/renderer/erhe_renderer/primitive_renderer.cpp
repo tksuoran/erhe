@@ -28,7 +28,7 @@ Primitive_renderer::Primitive_renderer(Primitive_renderer&& old)
     , m_last_allocate_word_offset   {0}
     , m_last_allocate_word_count    {0}
     , m_line_color                  {old.m_line_color}
-    , m_half_line_thickness              {old.m_half_line_thickness}
+    , m_half_line_thickness         {old.m_half_line_thickness}
 {
     ERHE_VERIFY(old.m_last_allocate_gpu_data.empty());
     ERHE_VERIFY(old.m_last_allocate_gpu_float_data == nullptr);
@@ -106,6 +106,17 @@ void Primitive_renderer::set_thickness(const float thickness)
 }
 
 #pragma region add
+void Primitive_renderer::add_lines(const glm::mat4& transform, const std::vector<Line>& lines)
+{
+    make_lines(lines.size());
+    for (const Line& line : lines) {
+        const glm::vec4 p0{transform * glm::vec4{line.p0, 1.0f}};
+        const glm::vec4 p1{transform * glm::vec4{line.p1, 1.0f}};
+        put(glm::vec3{p0} / p0.w, m_half_line_thickness, m_line_color);
+        put(glm::vec3{p1} / p1.w, m_half_line_thickness, m_line_color);
+    }
+}
+
 void Primitive_renderer::add_lines(const glm::mat4& transform, const std::initializer_list<Line> lines)
 {
     make_lines(lines.size());
@@ -133,6 +144,15 @@ void Primitive_renderer::add_line(const glm::vec4& color0, float width0, glm::ve
     make_lines(1);
     put(p0, 0.5f * width0, color0);
     put(p1, 0.5f * width1, color1);
+}
+
+void Primitive_renderer::add_lines(const std::vector<Line>& lines)
+{
+    make_lines(lines.size());
+    for (const Line& line : lines) {
+        put(line.p0, m_half_line_thickness, m_line_color);
+        put(line.p1, m_half_line_thickness, m_line_color);
+    }
 }
 
 void Primitive_renderer::add_lines(const std::initializer_list<Line> lines)

@@ -376,10 +376,33 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
         }
     }
 
+    const float projection_scale = light_projections.parameters.view_camera->get_projection_scale();
+    const float r_major = light_projections.parameters.view_camera->get_shadow_range() / (40.0f * projection_scale);
+    line_renderer.set_thickness(-1.0f);
     line_renderer.add_lines(
         world_from_light_camera,
         context.light_color,
-        {{ O, -1.0f * axis_z }}
+        {
+            { O, -1.0f * axis_z },
+            { O - r_major * axis_x, O + r_major * axis_x },
+            { O - r_major * axis_y, O + r_major * axis_y }
+        }
+    );
+
+    const float r_minor = light_projections.parameters.view_camera->get_shadow_range() / (100.0f * projection_scale);
+    line_renderer.set_thickness(-2.0f);
+    std::vector<erhe::renderer::Line> lines(7);
+    for (int i = 0; i < 7; ++i) {
+        const float rel   = static_cast<float>(i) / 7.0f;
+        const float theta = rel * glm::pi<float>();
+        const float x     = r_minor * cos(theta);
+        const float y     = r_minor * sin(theta);
+        lines[i] = erhe::renderer::Line{O - x * axis_x - y * axis_y, O + x * axis_x + y * axis_y};
+    }
+    line_renderer.add_lines(
+        world_from_light_camera,
+        context.light_color,
+        lines
     );
 }
 

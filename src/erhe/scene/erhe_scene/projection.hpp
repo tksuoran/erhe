@@ -61,6 +61,7 @@ public:
     };
 
     [[nodiscard]] auto get_fov_sides(const erhe::math::Viewport viewport) const -> Fov_sides;
+    [[nodiscard]] auto get_scale() const -> float;
 
     Type  projection_type{Type::perspective_vertical};
     float z_near         { 0.03f};

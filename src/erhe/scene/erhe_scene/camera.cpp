@@ -102,6 +102,11 @@ auto Camera::projection() const -> const Projection*
     return &m_projection;
 }
 
+auto Camera::get_projection_scale() const -> float
+{
+    return m_projection.get_scale();
+}
+
 auto is_camera(const Item_base* const item) -> bool
 {
     if (item == nullptr) {
