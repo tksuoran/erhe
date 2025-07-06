@@ -3,6 +3,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_item/item.hpp"
 
+#include <functional>
 #include <memory>
 #include <vector>
 

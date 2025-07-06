@@ -3,12 +3,10 @@
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_physics/irigid_body.hpp"
 
-namespace erhe {
-    class Item_host;
-}
-namespace erhe::physics {
-    class IWorld;
-}
+#include <vector>
+
+namespace erhe          { class Item_host; }
+namespace erhe::physics { class IWorld; }
 
 namespace editor {
 

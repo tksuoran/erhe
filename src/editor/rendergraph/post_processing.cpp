@@ -13,6 +13,8 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <fmt/format.h>
+
 namespace editor {
 
 Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block)

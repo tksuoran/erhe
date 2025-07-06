@@ -73,7 +73,6 @@ endif()
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe_gl/draw_indirect.hpp
     erhe_gl/enum_bit_mask_operators.hpp
     erhe_gl/gl_helpers.cpp
     erhe_gl/gl_helpers.hpp

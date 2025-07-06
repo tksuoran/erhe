@@ -83,6 +83,7 @@
 #include "erhe_graph/graph_log.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/device.hpp"
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include "erhe_imgui/imgui_log.hpp"

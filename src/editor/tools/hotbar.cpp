@@ -19,6 +19,7 @@
 #endif
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_commands/input_arguments.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item.hpp"
