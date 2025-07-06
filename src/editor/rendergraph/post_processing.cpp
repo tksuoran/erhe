@@ -46,11 +46,10 @@ Post_processing_node::Post_processing_node(
     , parameter_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .target              = gl::Buffer_target::uniform_buffer,
             .capacity_byte_count =
                 erhe::graphics::align_offset(
                     post_processing.get_parameter_block().size_bytes(),
-                    graphics_device.get_buffer_alignment(erhe::graphics::Buffer_target::uniform)
+                    graphics_device.get_buffer_alignment(post_processing.get_parameter_block().get_binding_target())
                 ) * 20, // max 20 levels
             .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
             .access_mask         = gl::Map_buffer_access_mask::map_write_bit,
@@ -562,12 +561,12 @@ void Post_processing::post_process(Post_processing_node& node)
 
         erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
 
-        gl::bind_buffer_range(
-            node.parameter_buffer.target(),
-            static_cast<GLuint>    (binding_point),
-            static_cast<GLuint>    (node.parameter_buffer.gl_name()),
-            static_cast<GLintptr>  (source_level * level_offset_size),
-            static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
+        encoder.set_buffer(
+            m_parameter_block.get_binding_target(),
+            &node.parameter_buffer,
+            source_level * level_offset_size,
+            m_parameter_block.size_bytes(),
+            binding_point
         );
         if (source_level == 0) {
             graphics_device.opengl_state_tracker.execute_(m_pipelines.downsample_with_lowpass_input);
@@ -605,12 +604,12 @@ void Post_processing::post_process(Post_processing_node& node)
         const int render_pass_height = render_pass->get_render_target_height();
         ERHE_VERIFY(render_pass_width  == node.level_widths .at(destination_level));
         ERHE_VERIFY(render_pass_height == node.level_heights.at(destination_level));
-        gl::bind_buffer_range(
-            node.parameter_buffer.target(),
-            static_cast<GLuint>    (binding_point),
-            static_cast<GLuint>    (node.parameter_buffer.gl_name()),
-            static_cast<GLintptr>  (source_level * level_offset_size),
-            static_cast<GLsizeiptr>(m_parameter_block.size_bytes())
+        encoder.set_buffer(
+            m_parameter_block.get_binding_target(),
+            &node.parameter_buffer,
+            source_level * level_offset_size,
+            m_parameter_block.size_bytes(),
+            binding_point
         );
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }

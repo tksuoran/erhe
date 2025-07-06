@@ -92,12 +92,12 @@ public:
         const std::vector<uint32_t>& cubes
     );
 
-    auto bind() -> std::size_t;
+    auto bind(erhe::graphics::Render_command_encoder& encoder) -> std::size_t;
 
 private:
-    Cube_interface&        m_cube_interface;
-    erhe::graphics::Buffer m_buffer;
-    std::size_t            m_cube_count;
+    Cube_interface&         m_cube_interface;
+    erhe::graphics::Buffer  m_buffer;
+    std::size_t             m_cube_count;
 };
 
 class Cube_control_buffer : public erhe::graphics::GPU_ring_buffer_client

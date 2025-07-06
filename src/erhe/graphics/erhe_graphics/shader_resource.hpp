@@ -2,6 +2,7 @@
 
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_graphics/enums.hpp"
 
 #include <memory>
 #include <optional>
@@ -125,7 +126,7 @@ public:
     [[nodiscard]] auto member_count      () const -> std::size_t;
     [[nodiscard]] auto member            (const std::string_view name) const -> Shader_resource*;
     [[nodiscard]] auto binding_point     () const -> unsigned int;
-    [[nodiscard]] auto get_binding_target() const -> gl::Buffer_target;
+    [[nodiscard]] auto get_binding_target() const -> Buffer_target;
     [[nodiscard]] auto get_texture_unit  () const -> int;
 
     // Returns size of block.

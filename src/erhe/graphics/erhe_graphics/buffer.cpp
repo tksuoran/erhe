@@ -91,7 +91,6 @@ void Buffer::allocate_storage()
 Buffer::Buffer(Device& device, const Buffer_create_info& create_info) noexcept
     : m_device             {device}
     , m_handle             {device}
-    , m_target             {create_info.target}
     , m_capacity_byte_count{create_info.capacity_byte_count}
     , m_storage_mask       {create_info.storage_mask}
     , m_access_mask        {create_info.access_mask}
@@ -101,8 +100,7 @@ Buffer::Buffer(Device& device, const Buffer_create_info& create_info) noexcept
     ERHE_VERIFY(create_info.debug_label != nullptr);
     ERHE_VERIFY(m_capacity_byte_count < sanity_threshold); // sanity check, can raise limit when needed
     log_buffer->debug(
-        "Buffer::Buffer() target = {}, capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {} debug_label = {}",
-        gl::c_str(m_target),
+        "Buffer::Buffer() capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {} debug_label = {}",
         m_capacity_byte_count,
         gl::to_string(m_storage_mask),
         gl::to_string(m_access_mask),
@@ -131,7 +129,6 @@ Buffer::~Buffer() noexcept
 Buffer::Buffer(Buffer&& other) noexcept
     : m_device                {other.m_device}
     , m_handle                {std::move(other.m_handle)}
-    , m_target                {other.m_target}
     , m_capacity_byte_count   {other.m_capacity_byte_count}
     , m_next_free_byte        {other.m_next_free_byte}
     , m_storage_mask          {other.m_storage_mask}
@@ -149,7 +146,6 @@ auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
     ERHE_VERIFY(&m_device == &other.m_device);
     m_handle                 = std::move(other.m_handle);
     m_debug_label            = other.m_debug_label;
-    m_target                 = other.m_target;
     m_capacity_byte_count    = other.m_capacity_byte_count;
     m_next_free_byte         = other.m_next_free_byte;
     m_storage_mask           = other.m_storage_mask;
@@ -164,11 +160,6 @@ auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
 auto Buffer::map() const -> std::span<std::byte>
 {
     return m_map;
-}
-
-auto Buffer::target() const noexcept -> gl::Buffer_target
-{
-    return m_target;
 }
 
 auto Buffer::debug_label() const noexcept -> const char*
@@ -271,9 +262,8 @@ auto Buffer::map_all_bytes(const gl::Map_buffer_access_mask access_mask) noexcep
     ERHE_VERIFY(gl_name() != 0);
 
     log_buffer->trace(
-        "Buffer::map_all_bytes(access_mask = {}) target = {}, name = {}",
+        "Buffer::map_all_bytes(access_mask = {}), name = {}",
         gl::to_string(access_mask),
-        gl::c_str(m_target),
         gl_name()
     );
     //const log::Indenter indenter;
@@ -320,11 +310,10 @@ auto Buffer::map_bytes(
     ERHE_VERIFY(gl_name() != 0);
 
     log_buffer->trace(
-        "Buffer::map_bytes(byte_offset = {}, byte_count = {}, access_mask = {}) target = {}, name = {}",
+        "Buffer::map_bytes(byte_offset = {}, byte_count = {}, access_mask = {}), name = {}",
         byte_offset,
         byte_count,
         gl::to_string(access_mask),
-        gl::c_str(m_target),
         gl_name()
     );
     //const log::Indenter indenter;
@@ -405,8 +394,7 @@ void Buffer::unmap() noexcept
     ERHE_VERIFY(gl_name() != 0);
 
     log_buffer->trace(
-        "Buffer::unmap() target = {}, byte_offset = {}, byte_count = {}, pointer = {}, name = {} {}",
-        gl::c_str(m_target),
+        "Buffer::unmap() byte_offset = {}, byte_count = {}, pointer = {}, name = {} {}",
         m_map_byte_offset,
         m_map.size(),
         reinterpret_cast<intptr_t>(m_map.data()),
@@ -439,10 +427,9 @@ void Buffer::flush_bytes(const std::size_t byte_offset, const std::size_t byte_c
     }
 
     log_buffer->trace(
-       "Buffer::flush(byte_offset = {}, byte_count = {}) target = {}, m_mapped_ptr = {} name = {} {}",
+       "Buffer::flush(byte_offset = {}, byte_count = {}) m_mapped_ptr = {} name = {} {}",
         byte_offset,
         byte_count,
-        gl::c_str(m_target),
         reinterpret_cast<intptr_t>(m_map.data()),
         gl_name(),
         debug_label()

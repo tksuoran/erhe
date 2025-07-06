@@ -548,12 +548,16 @@ auto Shader_resource::get_texture_unit() const -> int
     return m_binding_point;
 }
 
-auto Shader_resource::get_binding_target() const->gl::Buffer_target
+auto Shader_resource::get_binding_target() const-> erhe::graphics::Buffer_target
 {
     switch (m_type) {
-        case Type::uniform_block:        return gl::Buffer_target::uniform_buffer;
-        case Type::shader_storage_block: return gl::Buffer_target::shader_storage_buffer;
-        default: return static_cast<gl::Buffer_target>(0);
+        case Type::uniform_block:        return Buffer_target::uniform;
+        case Type::shader_storage_block: return Buffer_target::storage;
+        default:
+        {
+            ERHE_FATAL("not binding target %d", m_type);
+            return Buffer_target::index; // TODO
+        }
     }
 }
 

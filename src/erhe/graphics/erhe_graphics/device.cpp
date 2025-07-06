@@ -1040,7 +1040,6 @@ GPU_ring_buffer::GPU_ring_buffer(
         std::make_unique<Buffer>(
             m_device,
             Buffer_create_info{
-                .target              = gl::Buffer_target::copy_write_buffer, // generic buffer target
                 .capacity_byte_count = create_info.size,
                 .storage_mask        = storage_mask(m_device),
                 .access_mask         = access_mask(m_device),

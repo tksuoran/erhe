@@ -42,7 +42,6 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
     , position_vertex_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .target              = gl::Buffer_target::array_buffer,
             .capacity_byte_count = get_vertex_buffer_size(s_vertex_binding_position),
             .storage_mask        = storage_mask,
             .debug_label         = "Mesh_memory position vertex buffer"
@@ -51,7 +50,6 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
     , non_position_vertex_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .target              = gl::Buffer_target::array_buffer,
             .capacity_byte_count = get_vertex_buffer_size(s_vertex_binding_non_position),
             .storage_mask        = storage_mask,
             .debug_label         = "Mesh_memory non-position vertex buffer"
@@ -60,7 +58,6 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
     , index_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .target              = gl::Buffer_target::element_array_buffer,
             .capacity_byte_count = get_index_buffer_size(),
             .storage_mask        = storage_mask,
             .debug_label         = "Mesh_memory index buffer"

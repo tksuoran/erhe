@@ -19,7 +19,6 @@ class Device;
 class Buffer_create_info
 {
 public:
-    gl::Buffer_target          target             {0};
     std::size_t                capacity_byte_count{0};
     gl::Buffer_storage_mask    storage_mask       {0};
     gl::Map_buffer_access_mask access_mask        {0};
@@ -45,7 +44,6 @@ public:
     [[nodiscard]] auto capacity_byte_count() const noexcept -> std::size_t;
     [[nodiscard]] auto allocate_bytes     (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::optional<std::size_t>;
     [[nodiscard]] auto free_capacity_bytes() const noexcept -> std::size_t;
-    [[nodiscard]] auto target             () const noexcept -> gl::Buffer_target;
     [[nodiscard]] auto gl_name            () const noexcept -> unsigned int;
     void clear                () noexcept;
     void unmap                () noexcept;
@@ -92,7 +90,6 @@ private:
     ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
     Device&                        m_device;
     Gl_buffer                      m_handle;
-    gl::Buffer_target              m_target             {gl::Buffer_target::array_buffer};
     std::size_t                    m_capacity_byte_count{0};
     std::size_t                    m_next_free_byte     {0};
     gl::Buffer_storage_mask        m_storage_mask       {0};

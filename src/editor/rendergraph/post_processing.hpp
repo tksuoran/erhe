@@ -1,9 +1,10 @@
 #pragma once
 
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"

@@ -55,7 +55,6 @@ Id_renderer::Id_frame_resources::Id_frame_resources(erhe::graphics::Device& grap
     : pixel_pack_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .target              = gl::Buffer_target::pixel_pack_buffer,
             .capacity_byte_count = s_id_buffer_size,
             .storage_mask        = storage_mask,
             .access_mask         = access_mask,

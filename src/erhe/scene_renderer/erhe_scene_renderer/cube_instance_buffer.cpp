@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/cube_instance_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 
 namespace erhe::scene_renderer {
@@ -39,7 +40,6 @@ Cube_instance_buffer::Cube_instance_buffer(
     , m_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .target              = gl::Buffer_target::shader_storage_buffer,
             .capacity_byte_count = cube_interface.cube_instance_struct.size_bytes() * cubes.size(),
             .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
             .access_mask         = gl::Map_buffer_access_mask::map_write_bit,
@@ -57,12 +57,14 @@ Cube_instance_buffer::Cube_instance_buffer(
     m_buffer.unmap();
 }
 
-auto Cube_instance_buffer::bind() -> std::size_t
+auto Cube_instance_buffer::bind(erhe::graphics::Render_command_encoder& encoder) -> std::size_t
 {
-    gl::bind_buffer_base(
-        m_buffer.target(),
-        static_cast<GLuint>(m_cube_interface.cube_instance_block.binding_point()),
-        static_cast<GLuint>(m_buffer.gl_name())
+    encoder.set_buffer(
+        m_cube_interface.cube_instance_block.get_binding_target(),
+        &m_buffer,
+        0,
+        m_buffer.capacity_byte_count(),
+        m_cube_interface.cube_instance_block.binding_point()
     );
     return m_cube_count;
 }
