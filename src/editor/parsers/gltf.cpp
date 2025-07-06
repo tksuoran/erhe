@@ -105,7 +105,7 @@ void import_gltf(
 
     // TODO Make importing an operation
 
-    std::shared_ptr<Content_library> content_library = scene_root.content_library();
+    std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     log_parsers->info("Processing {} textures", gltf_data.images.size());
     for (const auto& image : gltf_data.images) {
         if (image) {
@@ -269,7 +269,7 @@ void import_gltf(
         if (!animation) {
             continue;
         }
-        scene_root.content_library()->animations->add(animation);
+        scene_root.get_content_library()->animations->add(animation);
         //animation->apply(0.0f);
     }
 }

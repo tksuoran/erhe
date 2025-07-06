@@ -21,10 +21,12 @@ Controller_visualization::Controller_visualization(erhe::scene::Node* view_root,
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto& material_library = scene_root.content_library()->materials;
+    auto& material_library = scene_root.get_content_library()->materials;
     auto controller_material = material_library->make<erhe::primitive::Material>(
-        "Controller",
-        glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
+        erhe::primitive::Material_create_info{
+            .name       = "Controller",
+            .base_color = glm::vec3{0.1f, 0.1f, 0.2f}
+        }
     );
 
     GEO::Mesh controller_geo_mesh{3, true};

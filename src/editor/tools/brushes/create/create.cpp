@@ -106,7 +106,7 @@ void Create::imgui()
     }
 
     Scene_root* scene_root = static_cast<Scene_root*>(parent->get_item_host());
-    auto content_library = scene_root->content_library();
+    auto content_library = scene_root->get_content_library();
 
     const glm::mat4 world_from_node = parent->world_from_node();
 

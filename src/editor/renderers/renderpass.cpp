@@ -95,7 +95,7 @@ void Renderpass::render(const Render_context& context) const
         : nullptr;
 
     const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->content_library()->materials;
+    const auto& material_library = scene_root->get_content_library()->materials;
 
     // TODO: Keep this vector in content library and update when needed.
     //       Make content library item host for content library nodes.

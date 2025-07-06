@@ -31,7 +31,7 @@ void import_geogram(
     // Destination
     erhe::scene::Scene* scene = scene_root.get_hosted_scene();
     const auto scene_root_node = scene->get_root_node();
-    std::shared_ptr<Content_library> content_library = scene_root.content_library();
+    std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
 
     // Just pick one/any material for now
     std::shared_ptr<erhe::primitive::Material> material{};

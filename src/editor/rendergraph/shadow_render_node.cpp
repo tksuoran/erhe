@@ -135,7 +135,7 @@ void Shadow_render_node::execute_rendergraph_node()
 
     // TODO: Keep this vector in content library and update when needed.
     //       Make content library item host for content library nodes.
-    const auto& material_library = scene_root->content_library()->materials;
+    const auto& material_library = scene_root->get_content_library()->materials;
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials = material_library->get_all<erhe::primitive::Material>();
 
     scene_root->sort_lights();

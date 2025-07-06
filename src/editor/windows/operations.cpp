@@ -9,6 +9,7 @@
 #include "operations/node_transform_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "scene/content_library.hpp"
 #include "scene/scene_builder.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/property_editor.hpp"
@@ -68,6 +69,7 @@ Operations::Operations(
     , m_gyro_command          {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
     , m_chamfer_command       {commands, "Geometry.Conway.Chamfer",            [this]() -> bool { chamfer       (); return true; } }
     , m_export_gltf_command   {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf   (); return true; } }
+    , m_create_material       {commands, "Create.Material",                    [this]() -> bool { create_material(); return true; } }
 {
     commands.register_command(&m_merge_command         );
     commands.register_command(&m_triangulate_command   );
@@ -95,6 +97,9 @@ Operations::Operations(
     commands.register_command(&m_gyro_command    );
     commands.register_command(&m_chamfer_command );
 
+    commands.register_command(&m_export_gltf_command);
+    commands.register_command(&m_create_material);
+
     commands.bind_command_to_menu(&m_merge_command,          "Geometry.Merge");
     commands.bind_command_to_menu(&m_triangulate_command,    "Geometry.Triangulate");
     commands.bind_command_to_menu(&m_normalize_command,      "Geometry.Normalize");
@@ -119,6 +124,9 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_truncate_command, "Geometry.Conway Operations.Truncate");
     commands.bind_command_to_menu(&m_gyro_command    , "Geometry.Conway Operations.Gyro");
     commands.bind_command_to_menu(&m_chamfer_command , "Geometry.Conway Operations.Chamfer");
+
+    commands.bind_command_to_menu(&m_export_gltf_command, "File.Export glTF");
+    commands.bind_command_to_menu(&m_create_material,     "Create.Material");
 
     app_message_bus.add_receiver(
         [&](App_message& message) {
@@ -622,6 +630,38 @@ void Operations::export_gltf()
     int filter = 0;
     export_callback(filelist, filter);
 #endif
+}
+
+void Operations::create_material()
+{
+    std::shared_ptr<Scene_root> scene_root = m_last_hover_scene_view->get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    std::shared_ptr<Content_library>      content_library = scene_root->get_content_library();
+    std::shared_ptr<Content_library_node> materials       = content_library->materials;
+
+    std::shared_ptr<erhe::primitive::Material> new_material = std::make_shared<erhe::primitive::Material>(
+        erhe::primitive::Material_create_info{
+            .name       = "New Material",
+            .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
+            .roughness  = glm::vec2{0.5f, 0.5f},
+            .metallic   = 1.0f
+        }
+    );
+    std::shared_ptr<Content_library_node> new_content_library_node = std::make_shared<Content_library_node>(new_material);
+
+    std::shared_ptr<Item_insert_remove_operation> make_material_operation = std::make_shared<Item_insert_remove_operation>(
+        Item_insert_remove_operation::Parameters{
+            .context = m_context,
+            .item    = new_content_library_node,
+            .parent  = materials,
+            .mode    = Item_insert_remove_operation::Mode::insert
+        }
+    );
+
+    m_context.operation_stack->queue(make_material_operation);
 }
 
 }

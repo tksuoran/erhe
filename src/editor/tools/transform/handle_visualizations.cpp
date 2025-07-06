@@ -543,12 +543,37 @@ auto Handle_visualizations::make_material(
     const Mode       mode
 ) -> std::shared_ptr<erhe::primitive::Material>
 {
-    auto& material_library = tools.get_tool_scene_root()->content_library()->materials;
+    auto& material_library = tools.get_tool_scene_root()->get_content_library()->materials;
     switch (mode) {
-        case Mode::Normal: return material_library->make<erhe::primitive::Material>(name, color);
-        case Mode::Active: return material_library->make<erhe::primitive::Material>(name, color); //glm::vec3(1.0f, 0.7f, 0.1f));
-        case Mode::Hover:  return material_library->make<erhe::primitive::Material>(name, color); // 2.0f * color);
-        default:           return {};
+        case Mode::Normal: {
+            return material_library->make<erhe::primitive::Material>(
+                erhe::primitive::Material_create_info{
+                    .name       = name,
+                    .base_color = color
+                }
+            );
+        }
+        case Mode::Active: {
+            // TODO ? glm::vec3(1.0f, 0.7f, 0.1f));
+            return material_library->make<erhe::primitive::Material>(
+                erhe::primitive::Material_create_info{
+                    .name       = name,
+                    .base_color = color
+                }
+            );
+        }
+        case Mode::Hover: {
+            // TODO ? 2.0f * color);
+            return material_library->make<erhe::primitive::Material>(
+                erhe::primitive::Material_create_info{
+                    .name       = name,
+                    .base_color = color
+                }
+            );
+        }
+        default: {
+            return {};
+        }
     }
 }
 #pragma endregion Make handles

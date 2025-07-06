@@ -338,7 +338,12 @@ void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
     const int   slice_count  = 100;
     const int   stack_count  = 2;
 
-    auto disc_material = std::make_shared<erhe::primitive::Material>("Circular Menu Disc", glm::vec4{0.1f, 0.2f, 0.3f, 1.0f});
+    auto disc_material = std::make_shared<erhe::primitive::Material>(
+        erhe::primitive::Material_create_info{
+            .name       = "Circular Menu Disc",
+            .base_color = glm::vec3{0.1f, 0.2f, 0.3f}
+        }
+    );
     disc_material->opacity = 0.5f;
 
     GEO::Mesh disc_geo_mesh_shared;

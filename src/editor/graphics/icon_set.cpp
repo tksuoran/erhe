@@ -215,7 +215,7 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     }
     const auto& material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
     if (material) {
-        tint_color = material->base_color;
+        tint_color = glm::vec4{material->base_color, 1.0f};
         icon = icons.material;
     }
     const auto& light = std::dynamic_pointer_cast<erhe::scene::Light>(item);

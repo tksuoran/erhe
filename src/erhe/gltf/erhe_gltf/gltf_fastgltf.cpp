@@ -1173,45 +1173,44 @@ private:
         const std::string material_name = safe_resource_name(material.name, "material", material_index);
         log_gltf->trace("Primitive material: id = {}, name = {}", material_index, material_name);
 
-        auto new_material = std::make_shared<erhe::primitive::Material>(material_name);
-        new_material->set_source_path(m_arguments.path);
-        m_data_out.materials[material_index] = new_material;
+        erhe::primitive::Material_create_info create_info{
+            .name = material_name
+        };
         {
             const fastgltf::PBRData& pbr_data = material.pbrData;
             if (pbr_data.baseColorTexture.has_value()) {
                 const fastgltf::TextureInfo& texture_info = pbr_data.baseColorTexture.value();
                 const fastgltf::Texture& texture = m_asset->textures[texture_info.textureIndex];
                 if (texture.imageIndex.has_value()) {
-                    new_material->textures.base_color = m_data_out.images[texture.imageIndex.value()];
+                    create_info.textures.base_color = m_data_out.images[texture.imageIndex.value()];
                 }
                 if (texture.samplerIndex.has_value()) {
-                    new_material->samplers.base_color = m_data_out.samplers[texture.samplerIndex.value()];
+                    create_info.samplers.base_color = m_data_out.samplers[texture.samplerIndex.value()];
                 }
-                new_material->tex_coords.base_color = static_cast<uint8_t>(texture_info.textureIndex);
+                create_info.tex_coords.base_color = static_cast<uint8_t>(texture_info.textureIndex);
                 // TODO texture transform
             }
             if (pbr_data.metallicRoughnessTexture.has_value()) {
                 const fastgltf::TextureInfo& texture_info = pbr_data.metallicRoughnessTexture.value();
                 const fastgltf::Texture& texture = m_asset->textures[texture_info.textureIndex];
                 if (texture.imageIndex.has_value()) {
-                    new_material->textures.metallic_roughness = m_data_out.images[texture.imageIndex.value()];
+                    create_info.textures.metallic_roughness = m_data_out.images[texture.imageIndex.value()];
                 }
                 if (texture.samplerIndex.has_value()) {
-                    new_material->samplers.metallic_roughness = m_data_out.samplers[texture.samplerIndex.value()];
+                    create_info.samplers.metallic_roughness = m_data_out.samplers[texture.samplerIndex.value()];
                 }
-                new_material->tex_coords.metallic_roughness = static_cast<uint8_t>(texture_info.textureIndex);
+                create_info.tex_coords.metallic_roughness = static_cast<uint8_t>(texture_info.textureIndex);
             }
-            new_material->base_color = glm::vec4{
+            create_info.base_color = glm::vec3{
                 pbr_data.baseColorFactor[0],
                 pbr_data.baseColorFactor[1],
                 pbr_data.baseColorFactor[2],
-                pbr_data.baseColorFactor[3]
             };
-            new_material->metallic    = pbr_data.metallicFactor;
-            new_material->roughness.x = std::max(pbr_data.roughnessFactor, 0.001f);
-            new_material->roughness.y = std::max(pbr_data.roughnessFactor, 0.001f);
-            new_material->emissive    = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
-            new_material->enable_flag_bits(erhe::Item_flags::show_in_ui);
+            create_info.opacity     = pbr_data.baseColorFactor[3];
+            create_info.metallic    = pbr_data.metallicFactor;
+            create_info.roughness.x = std::max(pbr_data.roughnessFactor, 0.001f);
+            create_info.roughness.y = std::max(pbr_data.roughnessFactor, 0.001f);
+            create_info.emissive    = glm::vec3{0.0f, 0.0f, 0.0f};
             log_gltf->trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
                 pbr_data.baseColorFactor[0],
@@ -1221,6 +1220,11 @@ private:
             );
             log_gltf->trace("Material PBR metallic roughness metallic factor = {}", pbr_data.metallicFactor);
             log_gltf->trace("Material PBR metallic roughness roughness factor = {}", pbr_data.roughnessFactor);
+            auto new_material = std::make_shared<erhe::primitive::Material>(create_info);
+            new_material->set_source_path(m_arguments.path);
+            new_material->enable_flag_bits(erhe::Item_flags::show_in_ui);
+            m_data_out.materials[material_index] = new_material;
+
         }
     }
     void parse_node_transform(const fastgltf::Node& node, const std::shared_ptr<erhe::scene::Node>& erhe_node)
@@ -2047,7 +2051,7 @@ private:
                         material->base_color.r,
                         material->base_color.g,
                         material->base_color.b,
-                        material->base_color.a
+                        material->opacity
                     },
                     .metallicFactor           = material->metallic,
                     .roughnessFactor          = material->roughness.x,

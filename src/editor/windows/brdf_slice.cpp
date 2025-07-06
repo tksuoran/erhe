@@ -54,9 +54,7 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     register_output("brdf_slice", erhe::rendergraph::Rendergraph_node_key::texture_for_gui);
 }
 
-void Brdf_slice_rendergraph_node::set_material(
-    const std::shared_ptr<erhe::primitive::Material>& material
-)
+void Brdf_slice_rendergraph_node::set_material(const std::shared_ptr<erhe::primitive::Material>& material)
 {
     m_material = material;
 }

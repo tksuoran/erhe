@@ -100,7 +100,12 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
     render_pass_descriptor.debug_label                         = "Rendertarget Node";
     m_render_pass = std::make_shared<Render_pass>(graphics_device, render_pass_descriptor);
 
-    m_material = std::make_shared<erhe::primitive::Material>("Rendertarget Node", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
+    m_material = std::make_shared<erhe::primitive::Material>(
+        erhe::primitive::Material_create_info{
+            .name       = "Rendertarget Node",
+            .base_color = glm::vec3{0.1f, 0.1f, 0.2f}
+        }
+    );
     m_material->textures.base_color = m_texture;
     m_material->samplers.base_color = m_sampler;
     m_material->disable_flag_bits(erhe::Item_flags::show_in_ui);

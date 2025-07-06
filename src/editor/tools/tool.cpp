@@ -106,7 +106,7 @@ auto Tool::get_content_library() const -> std::shared_ptr<Content_library>
     if (!scene_root) {
         return {};
     }
-    return scene_root->content_library();
+    return scene_root->get_content_library();
 }
 
 auto Tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>

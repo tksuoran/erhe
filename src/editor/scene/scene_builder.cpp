@@ -216,7 +216,7 @@ void Scene_builder::setup_cameras(
 
 auto Scene_builder::make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>
 {
-    const std::shared_ptr<Content_library>& content_library = m_scene_root->content_library();
+    const std::shared_ptr<Content_library>& content_library = m_scene_root->get_content_library();
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
 
     return folder.make<Brush>(brush_create_info);
@@ -553,7 +553,7 @@ void Scene_builder::make_json_brushes(App_settings& app_settings, Mesh_memory& m
 
 auto Scene_builder::get_brushes() -> Content_library_node&
 {
-    auto content_library = m_scene_root->content_library();
+    auto content_library = m_scene_root->get_content_library();
     return *(content_library->brushes.get());
 }
 
@@ -636,19 +636,19 @@ void Scene_builder::add_room()
         return;
     }
 
-    Content_library& content_library = *m_scene_root->content_library().get();
+    Content_library& content_library = *m_scene_root->get_content_library().get();
     Content_library_node& material_library = *content_library.materials.get();
     std::shared_ptr<erhe::primitive::Material> floor_material{};
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library.mutex};
 
         floor_material = material_library.make<erhe::primitive::Material>(
-            "Floor",
-            //vec4{0.02f, 0.02f, 0.02f, 1.0f}, aces
-            vec4{0.07f, 0.07f, 0.07f, 1.0f},
-            //vec4{0.01f, 0.01f, 0.01f, 1.0f},
-            glm::vec2{0.9f, 0.9f},
-            0.01f
+            erhe::primitive::Material_create_info{
+                .name       = "Floor",
+                .base_color = glm::vec3{0.07f, 0.07f, 0.07f},
+                .roughness  = glm::vec2{0.9f, 0.9f},
+                .metallic   = 0.01f // TODO 0.0f ?
+            }
         );
     }
 
@@ -700,7 +700,7 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
     const float major_radius = 1.0f  * config.object_scale;
     const float minor_radius = 0.25f * config.object_scale;
 
-    auto&       material_library = m_scene_root->content_library()->materials;
+    auto&       material_library = m_scene_root->get_content_library()->materials;
     const auto  materials        = material_library->get_all<erhe::primitive::Material>();
     std::size_t material_index   = 0;
 
@@ -819,7 +819,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
     {
         ERHE_PROFILE_SCOPE("make instances");
 
-        auto&       material_library = m_scene_root->content_library()->materials;
+        auto&       material_library = m_scene_root->get_content_library()->materials;
         const auto  materials        = material_library->get_all<erhe::primitive::Material>();
         std::size_t material_index   = 0;
 
@@ -887,9 +887,14 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    auto& material_library = m_scene_root->content_library()->materials;
+    auto& material_library = m_scene_root->get_content_library()->materials;
     auto material = material_library->make<erhe::primitive::Material>(
-        "cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f
+        erhe::primitive::Material_create_info{
+            .name       = "cube",
+            .base_color = glm::vec4{1.0, 1.0f, 1.0f, 1.0f},
+            .roughness  = glm::vec2{0.3f, 0.4f},
+            .metallic   = 0.0f
+        }
     );
 
     const int x_count = shape.x;

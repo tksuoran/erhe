@@ -436,7 +436,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     }
 
     // Make sure materials are in the material library
-    auto& material_library = content_library()->materials;
+    auto& material_library = get_content_library()->materials;
     for (const auto& primitive : mesh->get_primitives()) {
         if (!primitive.material) {
             continue;
@@ -473,7 +473,7 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     }
 
     // TODO reference count? Remove materials from material library
-    // auto& material_library = content_library()->materials;
+    // auto& material_library = get_content_library()->materials;
     // material_library.remove(m_material);
 }
 
@@ -806,7 +806,7 @@ void Scene_root::update_pointer_for_rendertarget_meshes(Scene_view* scene_view)
     }
 }
 
-auto Scene_root::content_library() const -> std::shared_ptr<Content_library>
+auto Scene_root::get_content_library() const -> std::shared_ptr<Content_library>
 {
     return m_content_library;
 }

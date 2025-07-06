@@ -15,19 +15,29 @@ void add_default_materials(Content_library& library)
     auto& materials = *library.materials.get();
 
     //materials.make<erhe::primitive::Material>("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
-    materials.make<erhe::primitive::Material>("Titanium",  glm::vec3{0.542f, 0.497f, 0.449f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Chromium",  glm::vec3{0.549f, 0.556f, 0.554f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Iron",      glm::vec3{0.562f, 0.565f, 0.578f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Nickel",    glm::vec3{0.660f, 0.609f, 0.526f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Platinum",  glm::vec3{0.673f, 0.637f, 0.585f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Copper",    glm::vec3{0.955f, 0.638f, 0.538f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Palladium", glm::vec3{0.733f, 0.697f, 0.652f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Zinc",      glm::vec3{0.664f, 0.824f, 0.850f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Gold",      glm::vec3{1.022f, 0.782f, 0.344f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Aluminum",  glm::vec3{0.913f, 0.922f, 0.924f}, roughness, 1.0f);
-    materials.make<erhe::primitive::Material>("Silver",    glm::vec3{0.972f, 0.960f, 0.915f}, roughness, 1.0f);
-
-    materials.make<erhe::primitive::Material>("Cobalt",    glm::vec3{0.662f, 0.655f, 0.634f}, roughness, 1.0f);
+    auto make = [&materials, &roughness](const char* name, float r, float g, float b)
+    {
+        materials.make<erhe::primitive::Material>(
+            erhe::primitive::Material_create_info{
+                .name       = name, 
+                .base_color = glm::vec3{r, g, b},
+                .roughness  = roughness,
+                .metallic   = 1.0f
+            }
+        );
+    };
+    make("Titanium",  0.542f, 0.497f, 0.449f);
+    make("Chromium",  0.549f, 0.556f, 0.554f);
+    make("Iron",      0.562f, 0.565f, 0.578f);
+    make("Nickel",    0.660f, 0.609f, 0.526f);
+    make("Platinum",  0.673f, 0.637f, 0.585f);
+    make("Copper",    0.955f, 0.638f, 0.538f);
+    make("Palladium", 0.733f, 0.697f, 0.652f);
+    make("Zinc",      0.664f, 0.824f, 0.850f);
+    make("Gold",      1.022f, 0.782f, 0.344f);
+    make("Aluminum",  0.913f, 0.922f, 0.924f);
+    make("Silver",    0.972f, 0.960f, 0.915f);
+    make("Cobalt",    0.662f, 0.655f, 0.634f);
 
     // water          0.020
     // plastic, glass 0.040 .. 0.045

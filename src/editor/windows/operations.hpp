@@ -109,6 +109,8 @@ public:
     void export_gltf();
     void export_callback(const char* const* filelist, int filter);
 
+    void create_material();
+
 private:
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
     [[nodiscard]] auto mesh_context() -> Mesh_operation_parameters;
@@ -145,6 +147,9 @@ private:
     erhe::commands::Lambda_command m_chamfer_command;
 
     erhe::commands::Lambda_command m_export_gltf_command;
+
+    erhe::commands::Lambda_command m_create_material;
+
     Scene_view*                    m_hover_scene_view     {nullptr};
     Scene_view*                    m_last_hover_scene_view{nullptr};
 

@@ -237,7 +237,7 @@ void Material_paint_tool::tool_properties(erhe::imgui::Imgui_window&)
         return;
     }
 
-    const auto& material_library = scene_root->content_library()->materials;
+    const auto& material_library = scene_root->get_content_library()->materials;
     int command = m_active_command;
     ImGui::RadioButton("Paint", &command, c_command_paint); ImGui::SameLine();
     ImGui::RadioButton("Pick",  &command, c_command_pick);

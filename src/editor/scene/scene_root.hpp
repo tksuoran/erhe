@@ -165,7 +165,7 @@ public:
     auto camera_combo(const char* label, std::weak_ptr<erhe::scene::Camera>& selected_camera, bool nullptr_option = false) const -> bool;
     void sort_lights();
 
-    [[nodiscard]] auto content_library() const -> std::shared_ptr<Content_library>;
+    [[nodiscard]] auto get_content_library() const -> std::shared_ptr<Content_library>;
 
     void update_pointer_for_rendertarget_meshes(Scene_view* scene_view);
     void sanity_check();

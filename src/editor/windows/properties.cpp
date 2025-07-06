@@ -444,7 +444,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
         skin_properties(*mesh.skin.get());
     }
 
-    auto& material_library = scene_root->content_library()->materials;
+    auto& material_library = scene_root->get_content_library()->materials;
 
     push_group("Primitives", ImGuiTreeNodeFlags_None, m_indent);
     int primitive_index = 0;
@@ -789,7 +789,7 @@ void Properties::material_properties()
 
     Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material);
     if (scene_root != nullptr) {
-        const std::shared_ptr<Content_library>& content_library = scene_root->content_library();
+        const std::shared_ptr<Content_library>& content_library = scene_root->get_content_library();
         if (content_library) {
             const std::shared_ptr<Content_library_node>& textures_ = content_library->textures;
             if (textures_) {
