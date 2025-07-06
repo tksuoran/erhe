@@ -45,6 +45,13 @@
             "program": "${command:cmake.launchTargetPath}",
         },
         {
+            "name":    "example LLDB",
+            "type":    "lldb",
+            "request": "launch",
+            "cwd":     "${workspaceFolder}/src/example",
+            "program": "${command:cmake.launchTargetPath}",
+        },
+        {
             "name":    "hextiles LLDB",
             "type":    "lldb",
             "request": "launch",

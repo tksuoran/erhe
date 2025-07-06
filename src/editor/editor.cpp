@@ -142,8 +142,8 @@
 #include <stdexcept>
 
 #if defined(ERHE_OS_LINUX)
-#include <unistd.h>
-#include <limits.h>
+#   include <unistd.h>
+#   include <limits.h>
 #endif
 
 namespace editor {
@@ -1342,13 +1342,20 @@ void run_editor()
                 path = std::filesystem::current_path();
                 path_string = path.string();
                 fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
+                const std::filesystem::path try_path = path / std::filesystem::path("src/editor");
+                bool exists_directory = std::filesystem::exists(try_path, error_code);
+                if (exists_directory) {
+                    const std::filesystem::path erhe_ini_path = try_path / std::filesystem::path("erhe.ini");
+                    const bool exists_erhe_ini = std::filesystem::exists(erhe_ini_path, error_code);
+                    if (exists_erhe_ini) {
+                        std::filesystem::current_path(try_path, error_code);
+                        path = std::filesystem::current_path();
+                        path_string = path.string();
+                        fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
+                        break;
+                    }
+                }
             }
-
-            path = path / std::filesystem::path("src/editor");
-            std::filesystem::current_path(path, error_code);
-            path = std::filesystem::current_path();
-            path_string = path.string();
-            fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
         }
     }
 

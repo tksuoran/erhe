@@ -32,6 +32,11 @@
 #include "erhe_window/window_event_handler.hpp"
 #include "erhe_ui/ui_log.hpp"
 
+#if defined(ERHE_OS_LINUX)
+#   include <unistd.h>
+#   include <limits.h>
+#endif
+
 namespace hextiles {
 
 class Hextiles : public erhe::window::Input_event_handler
@@ -292,6 +297,41 @@ public:
 
 void run_hextiles()
 {
+    // Workaround for
+    // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
+    {
+        std::error_code error_code{};
+        bool found = std::filesystem::exists("erhe.ini", error_code);
+        if (!found) {
+            std::string path_string{};
+            std::filesystem::path path = std::filesystem::current_path();
+            path_string = path.string();
+            fprintf(stdout, "erhe.ini not found.\nCurrent working directory is %s\n", path_string.c_str());
+#if defined(ERHE_OS_LINUX)
+            char self_path[PATH_MAX];
+            ssize_t length = readlink("/proc/self/exe", self_path, PATH_MAX - 1);
+            if (length > 0) {
+                self_path[length] = '\0';
+                fprintf(stdout, "Executable is %s\n", self_path);
+            }
+#endif
+
+            for (int i = 0; i < 4; ++i) {
+                path = path.parent_path();
+                std::filesystem::current_path(path, error_code);
+                path = std::filesystem::current_path();
+                path_string = path.string();
+                fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
+            }
+
+            path = path / std::filesystem::path("src/hextiles");
+            std::filesystem::current_path(path, error_code);
+            path = std::filesystem::current_path();
+            path_string = path.string();
+            fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
+        }
+    }
+
     erhe::log::initialize_log_sinks();
     gl::initialize_logging();
     erhe::commands::initialize_logging();

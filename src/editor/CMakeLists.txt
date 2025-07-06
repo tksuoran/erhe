@@ -172,8 +172,6 @@ erhe_target_sources_grouped(
     res/shaders/text.vert
     res/shaders/textured.frag
     res/shaders/textured.vert
-    res/shaders/tile.frag
-    res/shaders/tile.vert
     res/shaders/tool.frag
     res/shaders/tool.vert
     res/shaders/upsample.frag
