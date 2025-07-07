@@ -37,7 +37,7 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
     };
 
     if (!m_graphics_device.info.use_bindless_texture) {
-        m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, 0);
+        m_default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, 0);
         create_info.default_uniform_block = &m_default_uniform_block;
     }
 
@@ -58,12 +58,12 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
     , m_clip_from_window_resource{m_projection_block.add_mat4 ("clip_from_window")}
     , m_texture_resource         {m_projection_block.add_uvec2("texture")}
     , m_vertex_data_resource     {m_vertex_ssbo_block.add_uvec4("data", erhe::graphics::Shader_resource::unsized_array)} // x,y | z,w | color | u,v
-    , m_u_clip_from_window_size  {m_clip_from_window_resource->size_bytes()}
-    , m_u_clip_from_window_offset{m_clip_from_window_resource->offset_in_parent()}
-    , m_u_texture_size           {m_texture_resource->size_bytes()}
-    , m_u_texture_offset         {m_texture_resource->offset_in_parent()}
-    , m_u_vertex_data_size       {m_vertex_data_resource->size_bytes()}
-    , m_u_vertex_data_offset     {m_vertex_data_resource->offset_in_parent()}
+    , m_u_clip_from_window_size  {m_clip_from_window_resource->get_size_bytes()}
+    , m_u_clip_from_window_offset{m_clip_from_window_resource->get_offset_in_parent()}
+    , m_u_texture_size           {m_texture_resource         ->get_size_bytes()}
+    , m_u_texture_offset         {m_texture_resource         ->get_offset_in_parent()}
+    , m_u_vertex_data_size       {m_vertex_data_resource     ->get_size_bytes()}
+    , m_u_vertex_data_offset     {m_vertex_data_resource     ->get_offset_in_parent()}
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -80,8 +80,8 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
         }
     }
     , m_shader_stages     {graphics_device, build_shader_stages()}
-    , m_vertex_ssbo_buffer{graphics_device, erhe::graphics::Buffer_target::storage, "Text_renderer::m_vertex_buffer",     m_vertex_ssbo_block.binding_point()}
-    , m_projection_buffer {graphics_device, erhe::graphics::Buffer_target::uniform, "Text_renderer::m_projection_buffer", m_projection_block.binding_point()}
+    , m_vertex_ssbo_buffer{graphics_device, erhe::graphics::Buffer_target::storage, "Text_renderer::m_vertex_buffer",     m_vertex_ssbo_block.get_binding_point()}
+    , m_projection_buffer {graphics_device, erhe::graphics::Buffer_target::uniform, "Text_renderer::m_projection_buffer", m_projection_block .get_binding_point()}
     , m_vertex_input      {graphics_device, {}}
     , m_pipeline{
         erhe::graphics::Render_pipeline_data{
@@ -198,7 +198,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
     const uint64_t handle = m_graphics_device.get_handle(*m_font->texture(), m_nearest_sampler);
     erhe::graphics::Scoped_debug_group pass_scope{"Text_renderer::render()"};
 
-    erhe::graphics::Buffer_range projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
+    erhe::graphics::Buffer_range projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.get_size_bytes());
     {
         const auto                projection_gpu_data = projection_buffer_range.get_span();
         std::byte* const          start               = projection_gpu_data.data();
@@ -224,7 +224,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
         using erhe::graphics::write;
         write(gpu_float_data,  m_u_clip_from_window_offset, as_span(clip_from_window));
         write(gpu_uint32_data, m_u_texture_offset,          texture_handle_cpu_data);
-        projection_buffer_range.bytes_written(m_projection_block.size_bytes());
+        projection_buffer_range.bytes_written(m_projection_block.get_size_bytes());
         projection_buffer_range.close();
         m_projection_buffer.bind(encoder, projection_buffer_range);
     }

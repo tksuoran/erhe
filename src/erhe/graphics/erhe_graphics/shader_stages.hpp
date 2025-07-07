@@ -55,7 +55,7 @@ public:
     // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
     // and source (possibly read from file).
     [[nodiscard]] auto final_source(
-        Device&                           graphics_device,
+        Device&                             graphics_device,
         const Shader_stage&                 shader,
         std::vector<std::filesystem::path>* paths,
         std::optional<unsigned int>         gl_name = {}

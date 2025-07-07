@@ -208,25 +208,25 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             m_color_texture = std::make_unique<Texture>(
                 m_graphics_device,
                 Texture::Create_info{
-                    .device          = m_graphics_device,
-                    .target          = gl::Texture_target::texture_2d,
-                    .pixelformat     = erhe::dataformat::Format::format_8_vec4_unorm,
-                    .use_mipmaps     = false,
-                    .width           = viewport.width,
-                    .height          = viewport.height,
-                    .debug_label     = "ID Render color"
+                    .device      = m_graphics_device,
+                    .type        = erhe::graphics::Texture_type::texture_2d,
+                    .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
+                    .use_mipmaps = false,
+                    .width       = viewport.width,
+                    .height      = viewport.height,
+                    .debug_label = "ID Render color"
                 }
             );
             m_depth_texture = std::make_unique<Texture>(
                 m_graphics_device,
                 Texture::Create_info{
-                    .device          = m_graphics_device,
-                    .target          = gl::Texture_target::texture_2d,
-                    .pixelformat     = erhe::dataformat::Format::format_d32_sfloat,
-                    .use_mipmaps     = false,
-                    .width           = viewport.width,
-                    .height          = viewport.height,
-                    .debug_label     = "ID Render depth"
+                    .device      = m_graphics_device,
+                    .type        = erhe::graphics::Texture_type::texture_2d,
+                    .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
+                    .use_mipmaps = false,
+                    .width       = viewport.width,
+                    .height      = viewport.height,
+                    .debug_label = "ID Render depth"
                 }
             );
             erhe::graphics::Render_pass_descriptor render_pass_descriptor;

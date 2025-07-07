@@ -22,19 +22,19 @@ Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device)
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
     ini.get("max_joint_count", max_joint_count);
 
-    offsets.debug_joint_indices     = joint_block.add_uvec4("debug_joint_indices")->offset_in_parent();
-    offsets.debug_joint_color_count = joint_block.add_uint ("debug_joint_color_count")->offset_in_parent(),
-    offsets.extra1                  = joint_block.add_uint ("extra1")->offset_in_parent(),
-    offsets.extra2                  = joint_block.add_uint ("extra2")->offset_in_parent(),
-    offsets.extra3                  = joint_block.add_uint ("extra3")->offset_in_parent(),
-    offsets.debug_joint_colors      = joint_block.add_vec4 ("debug_joint_colors", 32)->offset_in_parent();
+    offsets.debug_joint_indices     = joint_block.add_uvec4("debug_joint_indices"    )->get_offset_in_parent();
+    offsets.debug_joint_color_count = joint_block.add_uint ("debug_joint_color_count")->get_offset_in_parent(),
+    offsets.extra1                  = joint_block.add_uint ("extra1"                 )->get_offset_in_parent(),
+    offsets.extra2                  = joint_block.add_uint ("extra2"                 )->get_offset_in_parent(),
+    offsets.extra3                  = joint_block.add_uint ("extra3"                 )->get_offset_in_parent(),
+    offsets.debug_joint_colors      = joint_block.add_vec4 ("debug_joint_colors",  32)->get_offset_in_parent();
     offsets.joint = {
-        .world_from_bind  = joint_struct.add_mat4("world_from_bind"       )->offset_in_parent(),
-        .normal_transform = joint_struct.add_mat4("world_from_bind_normal")->offset_in_parent()
+        .world_from_bind  = joint_struct.add_mat4("world_from_bind"       )->get_offset_in_parent(),
+        .normal_transform = joint_struct.add_mat4("world_from_bind_normal")->get_offset_in_parent()
     };
 
     // TODO Unsized arrays require GLSL 430
-    offsets.joint_struct = joint_block.add_struct("joints", &joint_struct, erhe::graphics::Shader_resource::unsized_array)->offset_in_parent();
+    offsets.joint_struct = joint_block.add_struct("joints", &joint_struct, erhe::graphics::Shader_resource::unsized_array)->get_offset_in_parent();
 }
 
 Joint_buffer::Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interface& joint_interface)
@@ -42,10 +42,10 @@ Joint_buffer::Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interf
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "Joint_buffer",
-        joint_interface.joint_block.binding_point()
+        joint_interface.joint_block.get_binding_point()
     }
     , m_graphics_device{graphics_device}
-    , m_joint_interface  {joint_interface}
+    , m_joint_interface{joint_interface}
 {
 }
 
@@ -69,7 +69,7 @@ auto Joint_buffer::update(
         joint_count += skin_data.joints.size();
     }
 
-    const auto        entry_size       = m_joint_interface.joint_struct.size_bytes();
+    const auto        entry_size       = m_joint_interface.joint_struct.get_size_bytes();
     const auto&       offsets          = m_joint_interface.offsets;
     const std::size_t exact_byte_count = offsets.joint_struct + joint_count * entry_size;
 

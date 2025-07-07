@@ -16,14 +16,14 @@ namespace erhe::renderer {
 Primitive_renderer::Primitive_renderer(Debug_renderer& debug_renderer, Debug_renderer_bucket& bucket)
     : m_debug_renderer    {&debug_renderer}
     , m_bucket            {&bucket}
-    , m_line_vertex_stride{m_debug_renderer->get_program_interface().line_vertex_struct->size_bytes()}
+    , m_line_vertex_stride{m_debug_renderer->get_program_interface().line_vertex_struct->get_size_bytes()}
 {
 }
 
 Primitive_renderer::Primitive_renderer(Primitive_renderer&& old)
     : m_debug_renderer              {std::exchange(old.m_debug_renderer, nullptr)}
     , m_bucket                      {std::exchange(old.m_bucket,         nullptr)}
-    , m_line_vertex_stride          {m_debug_renderer->get_program_interface().line_vertex_struct->size_bytes()}
+    , m_line_vertex_stride          {m_debug_renderer->get_program_interface().line_vertex_struct->get_size_bytes()}
     , m_last_allocate_gpu_float_data{nullptr}
     , m_last_allocate_word_offset   {0}
     , m_last_allocate_word_count    {0}

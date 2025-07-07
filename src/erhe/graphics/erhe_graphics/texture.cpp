@@ -402,6 +402,20 @@ auto Texture::get_storage_dimensions(const gl::Texture_target target) -> int
     }
 }
 
+auto Texture::get_mipmap_dimensions(const Texture_type type) -> int
+{
+    switch (type) {
+        //using enum gl::Texture_target;
+        case Texture_type::texture_1d:       return 1;
+        case Texture_type::texture_cube_map: return 2;
+        case Texture_type::texture_2d:       return 2;
+        case Texture_type::texture_3d:       return 3;
+        default: {
+            ERHE_FATAL("Bad texture target");
+        }
+    }
+}
+
 auto Texture::get_mipmap_dimensions(const gl::Texture_target target) -> int
 {
     switch (target) {
@@ -498,7 +512,7 @@ auto Texture_create_info::calculate_level_count(const int width, const int heigh
 
 auto Texture_create_info::calculate_level_count() const -> int
 {
-    const auto dimensions = Texture::get_mipmap_dimensions(target);
+    const auto dimensions = Texture::get_mipmap_dimensions(type);
 
     if (dimensions >= 1) {
         if (width == 0) {
@@ -530,7 +544,7 @@ auto Texture_create_info::calculate_level_count() const -> int
 auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Texture>& view_source) -> Texture_create_info
 {
     Texture_create_info create_info{device};
-    create_info.target                 = view_source->get_target();
+    create_info.type                   = view_source->get_texture_type();
     create_info.pixelformat            = view_source->get_pixelformat();
     create_info.use_mipmaps            = view_source->get_level_count() > 1;
     create_info.fixed_sample_locations = view_source->get_fixed_sample_locations();
@@ -546,10 +560,119 @@ auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Textur
     return create_info;
 }
 
+[[nodiscard]] auto convert_to_gl_texture_target(Texture_type type, bool multisample, bool array)
+{
+    switch (type) {
+        case Texture_type::texture_buffer: {
+            ERHE_VERIFY(!multisample);
+            ERHE_VERIFY(!array);
+            return gl::Texture_target::texture_buffer;
+        }
+        case Texture_type::texture_1d: {
+            ERHE_VERIFY(!multisample);
+            return array
+                ? gl::Texture_target::texture_1d_array
+                : gl::Texture_target::texture_1d;
+        }
+        case Texture_type::texture_2d: {
+            return array
+                ? (multisample
+                    ? gl::Texture_target::texture_2d_multisample_array
+                    : gl::Texture_target::texture_2d_array)
+                : (multisample
+                    ? gl::Texture_target::texture_2d_multisample
+                    : gl::Texture_target::texture_2d);
+        }
+        case Texture_type::texture_3d: {
+            ERHE_VERIFY(!multisample);
+            ERHE_VERIFY(!array);
+            return gl::Texture_target::texture_3d;
+        }
+        case Texture_type::texture_cube_map: {
+            ERHE_VERIFY(!multisample);
+            return array 
+                ? gl::Texture_target::texture_cube_map_array
+                : gl::Texture_target::texture_cube_map;
+        }
+        default: {
+            ERHE_FATAL("Bad texture type %d", type);
+            return gl::Texture_target::texture_2d;
+        }
+    }
+}
+
+[[nodiscard]] auto convert_from_gl_texture_target(gl::Texture_target gl_texture_target, bool& multisample, bool& array) -> Texture_type
+{
+    switch (gl_texture_target) {
+        case gl::Texture_target::texture_buffer: {
+            multisample = false;
+            array       = false;
+            return Texture_type::texture_buffer;
+        }
+        case gl::Texture_target::texture_1d: {
+            multisample = false;
+            array       = false;
+            return Texture_type::texture_1d;
+        }
+        case gl::Texture_target::texture_1d_array: {
+            multisample = false;
+            array      = true;
+            return Texture_type::texture_1d;
+        }
+        case gl::Texture_target::texture_2d: {
+            multisample = false;
+            array       = false;
+            return Texture_type::texture_2d;
+        }
+        case gl::Texture_target::texture_2d_array: {
+            multisample = false;
+            array       = true;
+            return Texture_type::texture_2d;
+        }
+        case gl::Texture_target::texture_2d_multisample: {
+            multisample = true;
+            array       = false;
+            return Texture_type::texture_2d;
+        }
+        case gl::Texture_target::texture_2d_multisample_array: {
+            multisample = true;
+            array       = true;
+            return Texture_type::texture_2d;
+        }
+        case gl::Texture_target::texture_3d: {
+            multisample = false;
+            array       = false;
+            return Texture_type::texture_3d;
+        }
+        case gl::Texture_target::texture_cube_map: {
+            multisample = false;
+            array       = false;
+            return Texture_type::texture_cube_map;
+        }
+        case gl::Texture_target::texture_cube_map_array: {
+            multisample = false;
+            array       = true;
+            return Texture_type::texture_cube_map;
+        }
+        default: {
+            ERHE_FATAL("Bad gl::Texture_target %04x", gl_texture_target);
+            multisample = false;
+            array       = false;
+            return Texture_type::texture_2d;
+        }
+    }
+}
+
+
 Texture::Texture(Device& device, const Create_info& create_info)
     : Item                    {create_info.debug_label}
-    , m_handle                {device, create_info.target, create_info.wrap_texture_name, create_info.view_source ? Gl_texture::texture_view : Gl_texture::not_texture_view}
-    , m_target                {create_info.target}
+    , m_handle{
+        device,
+        convert_to_gl_texture_target(create_info.type, create_info.sample_count != 0, create_info.array_layer_count != 0),
+        static_cast<GLuint>(create_info.wrap_texture_name),
+        create_info.view_source ? Gl_texture::texture_view : Gl_texture::not_texture_view
+    }
+    , m_type                  {create_info.type}
     , m_pixelformat           {create_info.pixelformat}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
     , m_sample_count          {create_info.sample_count}
@@ -567,10 +690,17 @@ Texture::Texture(Device& device, const Create_info& create_info)
 {
     ERHE_PROFILE_FUNCTION();
 
+    gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
+        m_type,
+        m_sample_count != 0,
+        m_array_layer_count != 0
+    );
+
     SPDLOG_LOGGER_TRACE(
-        log_texture, "New texture {} {}x{}x{} [{}] {} sample count = {}",
+        log_texture, "New texture {} {} {}x{}x{} [{}] {} sample count = {}",
+        c_str(m_type),
         gl_name(), m_width, m_height, m_depth, m_array_count,
-        gl::c_str(m_internal_format), m_sample_count
+        erhe::dataformat::c_str(m_pixel_format), m_sample_count
     );
 
     enable_flag_bits(erhe::Item_flags::show_in_ui);
@@ -590,7 +720,7 @@ Texture::Texture(Device& device, const Create_info& create_info)
         }
     }
 
-    const auto dimensions = get_storage_dimensions(m_target);
+    const auto dimensions = get_storage_dimensions(gl_texture_target);
 
     if (create_info.sparse && device.info.use_sparse_texture) {
         gl::texture_parameter_i(m_handle.gl_name(), gl::Texture_parameter_name::texture_sparse_arb, GL_TRUE);
@@ -602,12 +732,13 @@ Texture::Texture(Device& device, const Create_info& create_info)
     gl::Internal_format internal_format = internal_format_opt.value();
 
     if (create_info.wrap_texture_name != 0) {
-        // Current limitation TODO is this still correct?
-        ERHE_VERIFY(create_info.target == gl::Texture_target::texture_2d);
+        ERHE_VERIFY(m_type == Texture_type::texture_2d); // TODO is this still correct?
         GLint target_i{0};
         gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_TARGET), &target_i);
-        gl::Texture_target texture_target = static_cast<gl::Texture_target>(target_i);
-        m_target = texture_target;
+        gl_texture_target = static_cast<gl::Texture_target>(target_i);
+        bool multisample{false};
+        bool array{false};
+        m_type = convert_from_gl_texture_target(gl_texture_target, multisample, array);
 
         ERHE_VERIFY(gl::is_texture(gl_name()));
         GLint max_framebuffer_width {0};
@@ -633,28 +764,28 @@ Texture::Texture(Device& device, const Create_info& create_info)
         m_width  = width;
         m_height = height;
         m_depth  = depth;
-        convert_texture_dimensions_from_gl(m_target, m_width, m_height, m_depth, m_array_layer_count);
+        convert_texture_dimensions_from_gl(gl_texture_target, m_width, m_height, m_depth, m_array_layer_count);
 
         ERHE_VERIFY(m_width == create_info.width);
         ERHE_VERIFY(m_height == create_info.height);
 
-        m_sample_count    = samples;
-        m_pixelformat     = gl_helpers::convert_from_gl(internal_format);
+        m_sample_count = samples;
+        m_pixelformat  = gl_helpers::convert_from_gl(internal_format);
         GLint immutable_format_i{0};
         GLint immutable_levels  {0};
         gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_IMMUTABLE_FORMAT), &immutable_format_i);
         gl::get_texture_parameter_iv(gl_name(), static_cast<gl::Get_texture_parameter>(GL_TEXTURE_IMMUTABLE_LEVELS), &immutable_levels);
-        GLint red_size{0};
-        GLint green_size{0};
-        GLint blue_size{0};
-        GLint alpha_size{0};
-        GLint depth_size{0};
+        GLint red_size    {0};
+        GLint green_size  {0};
+        GLint blue_size   {0};
+        GLint alpha_size  {0};
+        GLint depth_size  {0};
         GLint stencil_size{0};
-        GLint red_type{0};
-        GLint green_type{0};
-        GLint blue_type{0};
-        GLint alpha_type{0};
-        GLint depth_type{0};
+        GLint red_type    {0};
+        GLint green_type  {0};
+        GLint blue_type   {0};
+        GLint alpha_type  {0};
+        GLint depth_type  {0};
         gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_red_size,     &red_size);
         gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_green_size,   &green_size);
         gl::get_texture_level_parameter_iv(gl_name(), 0, gl::Get_texture_parameter::texture_blue_size,    &blue_size);
@@ -687,7 +818,7 @@ Texture::Texture(Device& device, const Create_info& create_info)
 
     if (create_info.view_source) {
         gl::texture_view(
-            gl_name(), m_target, create_info.view_source->gl_name(), internal_format,
+            gl_name(), gl_texture_target, create_info.view_source->gl_name(), internal_format,
             create_info.view_base_level, create_info.level_count, create_info.view_base_array_layer, 1 // TODO layer count
         );
         const std::string debug_label = fmt::format("(T:{}) {} (texture view)", gl_name(), m_debug_label);
@@ -696,7 +827,7 @@ Texture::Texture(Device& device, const Create_info& create_info)
         int gl_width  = m_width;
         int gl_height = m_height;
         int gl_depth  = m_depth;
-        convert_texture_dimensions_to_gl(m_target, gl_width, gl_height, gl_depth, m_array_layer_count);
+        convert_texture_dimensions_to_gl(gl_texture_target, gl_width, gl_height, gl_depth, m_array_layer_count);
         switch (dimensions) {
             case 0: {
                 ERHE_VERIFY(m_buffer != nullptr);
@@ -784,12 +915,18 @@ void Texture::upload(const erhe::dataformat::Format pixelformat, int width, int 
     ERHE_VERIFY(height <= m_height);
     ERHE_VERIFY(m_sample_count == 0);
 
-    convert_texture_dimensions_to_gl(m_target, width, height, depth, array_layer_count);
+    const gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
+        m_type,
+        m_sample_count != 0,
+        m_array_layer_count != 0
+    );
+
+    convert_texture_dimensions_to_gl(gl_texture_target, width, height, depth, array_layer_count);
 
     gl::Pixel_format format;
     gl::Pixel_type   type;
     ERHE_VERIFY(get_format_and_type(pixelformat, format, type));
-    switch (get_storage_dimensions(m_target)) {
+    switch (get_storage_dimensions(gl_texture_target)) {
         case 1: {
             gl::texture_sub_image_1d(gl_name(), 0, 0, width, format, type, nullptr);
             break;
@@ -832,8 +969,14 @@ void Texture::upload(
     ERHE_VERIFY(width  <= m_width);
     ERHE_VERIFY(height <= m_height);
 
-    convert_texture_dimensions_to_gl(m_target, width, height, depth, array_layer);
-    convert_texture_offset_to_gl    (m_target, x, y, z, array_layer);
+    const gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
+        m_type,
+        m_sample_count != 0,
+        m_array_layer_count != 0
+    );
+
+    convert_texture_dimensions_to_gl(gl_texture_target, width, height, depth, array_layer);
+    convert_texture_offset_to_gl    (gl_texture_target, x, y, z, array_layer);
 
     gl::Pixel_format gl_format;
     gl::Pixel_type   gl_type;
@@ -844,7 +987,7 @@ void Texture::upload(
     ERHE_VERIFY(data.size_bytes() >= byte_count);
     const auto* data_pointer = static_cast<const void*>(data.data());
 
-    switch (get_storage_dimensions(m_target)) {
+    switch (get_storage_dimensions(gl_texture_target)) {
         case 1: {
             gl::texture_sub_image_1d(gl_name(), level, x, width, gl_format, gl_type, data_pointer);
             break;
@@ -888,10 +1031,16 @@ void Texture::upload_subimage(
     ERHE_VERIFY(width  <= m_width);
     ERHE_VERIFY(height <= m_height);
 
+    const gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
+        m_type,
+        m_sample_count != 0,
+        m_array_layer_count != 0
+    );
+
     int depth = 1;
     int array_layer = 0;
-    convert_texture_dimensions_to_gl(m_target, width, height, depth, array_layer);
-    convert_texture_offset_to_gl    (m_target, x, y, z, array_layer);
+    convert_texture_dimensions_to_gl(gl_texture_target, width, height, depth, array_layer);
+    convert_texture_offset_to_gl    (gl_texture_target, x, y, z, array_layer);
 
     gl::Pixel_format format;
     gl::Pixel_type   type;
@@ -906,7 +1055,7 @@ void Texture::upload_subimage(
     const char* data_pointer = reinterpret_cast<const char*>(data.data()) + src_x_offset + src_y_offset;
     gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, src_row_length);
 
-    switch (get_storage_dimensions(m_target)) {
+    switch (get_storage_dimensions(gl_texture_target)) {
         case 1: {
             gl::texture_sub_image_1d(gl_name(), level, x, width, format, type, data_pointer);
             break;
@@ -934,14 +1083,20 @@ auto Texture::get_debug_label() const -> const std::string&
     return m_debug_label;
 }
 
-auto Texture::get_target() const -> gl::Texture_target
+auto Texture::get_texture_type() const -> Texture_type
 {
-    return m_target;
+    return m_type;
 }
 
 auto Texture::is_layered() const -> bool
 {
-    switch (m_target) {
+    const gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
+        m_type,
+        m_sample_count != 0,
+        m_array_layer_count != 0
+    );
+
+    switch (gl_texture_target) {
         //using enum gl::Texture_target;
         case gl::Texture_target::texture_buffer:
         case gl::Texture_target::texture_1d:
@@ -950,6 +1105,7 @@ auto Texture::is_layered() const -> bool
         case gl::Texture_target::texture_rectangle:
         case gl::Texture_target::texture_cube_map:
         case gl::Texture_target::texture_3d: {
+            ERHE_VERIFY(m_array_layer_count == 0);
             return false;
         }
 
@@ -957,11 +1113,12 @@ auto Texture::is_layered() const -> bool
         case gl::Texture_target::texture_2d_array:
         case gl::Texture_target::texture_2d_multisample_array:
         case gl::Texture_target::texture_cube_map_array: {
+            ERHE_VERIFY(m_array_layer_count >= 1);
             return true;
         }
 
         default: {
-            ERHE_FATAL("Bad texture target");
+            ERHE_FATAL("Bad texture type");
         }
     }
 }

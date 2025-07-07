@@ -19,17 +19,17 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device)
     : material_block {graphics_device, "material", material_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , material_struct{graphics_device, "Material"}
     , offsets        {
-        .roughness                  = material_struct.add_vec2 ("roughness"                 )->offset_in_parent(),
-        .metallic                   = material_struct.add_float("metallic"                  )->offset_in_parent(),
-        .reflectance                = material_struct.add_float("reflectance"               )->offset_in_parent(),
-        .base_color                 = material_struct.add_vec4 ("base_color"                )->offset_in_parent(),
-        .emissive                   = material_struct.add_vec4 ("emissive"                  )->offset_in_parent(),
-        .base_color_texture         = material_struct.add_uvec2("base_color_texture"        )->offset_in_parent(),
-        .metallic_roughness_texture = material_struct.add_uvec2("metallic_roughness_texture")->offset_in_parent(),
-        .opacity                    = material_struct.add_float("opacity"                   )->offset_in_parent(),
-        .reserved1                  = material_struct.add_float("reserved1"                 )->offset_in_parent(),
-        .reserved2                  = material_struct.add_float("reserved2"                 )->offset_in_parent(),
-        .reserved3                  = material_struct.add_float("reserved3"                 )->offset_in_parent()
+        .roughness                  = material_struct.add_vec2 ("roughness"                 )->get_offset_in_parent(),
+        .metallic                   = material_struct.add_float("metallic"                  )->get_offset_in_parent(),
+        .reflectance                = material_struct.add_float("reflectance"               )->get_offset_in_parent(),
+        .base_color                 = material_struct.add_vec4 ("base_color"                )->get_offset_in_parent(),
+        .emissive                   = material_struct.add_vec4 ("emissive"                  )->get_offset_in_parent(),
+        .base_color_texture         = material_struct.add_uvec2("base_color_texture"        )->get_offset_in_parent(),
+        .metallic_roughness_texture = material_struct.add_uvec2("metallic_roughness_texture")->get_offset_in_parent(),
+        .opacity                    = material_struct.add_float("opacity"                   )->get_offset_in_parent(),
+        .reserved1                  = material_struct.add_float("reserved1"                 )->get_offset_in_parent(),
+        .reserved2                  = material_struct.add_float("reserved2"                 )->get_offset_in_parent(),
+        .reserved3                  = material_struct.add_float("reserved3"                 )->get_offset_in_parent()
     }
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
@@ -48,7 +48,7 @@ Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Materi
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "Material_buffer",
-        material_interface.material_block.binding_point()
+        material_interface.material_block.get_binding_point()
     }
     , m_graphics_device {graphics_device}
     , m_material_interface{material_interface}
@@ -89,7 +89,7 @@ auto Material_buffer::update(const std::span<const std::shared_ptr<erhe::primiti
     //     m_writer.write_offset
     // );
 
-    const auto        entry_size     = m_material_interface.material_struct.size_bytes();
+    const auto        entry_size     = m_material_interface.material_struct.get_size_bytes();
     const auto&       offsets        = m_material_interface.offsets;
     const std::size_t max_byte_count = materials.size() * entry_size;
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/gl_objects.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_verify/verify.hpp"
@@ -25,7 +26,7 @@ public:
     static auto make_view(Device& device, const std::shared_ptr<Texture>& view_source) -> Texture_create_info;
 
     Device&                  device;
-    gl::Texture_target       target                {gl::Texture_target::texture_2d};
+    Texture_type             type                  {Texture_type::texture_2d};
     erhe::dataformat::Format pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
     bool                     use_mipmaps           {false};
     bool                     fixed_sample_locations{true};
@@ -38,12 +39,11 @@ public:
     int                      level_count           {0};
     int                      row_stride            {0};
     Buffer*                  buffer                {nullptr};
-    GLuint                   wrap_texture_name     {0};
+    uint64_t                 wrap_texture_name     {0};
     std::string              debug_label           {};
     std::shared_ptr<Texture> view_source           {};
     int                      view_base_level       {0};
     int                      view_base_array_layer {0};
-    // TODO layer_count?
 };
 
 class Texture : public erhe::Item<erhe::Item_base, erhe::Item_base, Texture, erhe::Item_kind::not_clonable>
@@ -68,6 +68,7 @@ public:
     [[nodiscard]] static auto is_array_target       (gl::Texture_target target) -> bool;
     [[nodiscard]] static auto get_storage_dimensions(gl::Texture_target target) -> int;
     [[nodiscard]] static auto get_mipmap_dimensions (gl::Texture_target target) -> int;
+    [[nodiscard]] static auto get_mipmap_dimensions (Texture_type type) -> int;
     [[nodiscard]] static auto get_size_level_count  (int size) -> int;
 
     void upload(erhe::dataformat::Format internal_format, int width, int height = 1, int depth = 1, int array_layer_count = 0);
@@ -107,7 +108,7 @@ public:
     [[nodiscard]] auto get_level_count           () const -> int;
     [[nodiscard]] auto get_fixed_sample_locations() const -> int;
     [[nodiscard]] auto get_sample_count          () const -> int;
-    [[nodiscard]] auto get_target                () const -> gl::Texture_target;
+    [[nodiscard]] auto get_texture_type          () const -> Texture_type;
     [[nodiscard]] auto is_layered                () const -> bool;
     [[nodiscard]] auto gl_name                   () const -> GLuint;
     [[nodiscard]] auto get_handle                () const -> uint64_t;
@@ -118,7 +119,7 @@ public:
 
 private:
     Gl_texture               m_handle;
-    gl::Texture_target       m_target                {gl::Texture_target::texture_2d};
+    Texture_type             m_type                  {Texture_type::texture_2d};
     erhe::dataformat::Format m_pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
     bool                     m_fixed_sample_locations{true};
     bool                     m_is_sparse             {false};

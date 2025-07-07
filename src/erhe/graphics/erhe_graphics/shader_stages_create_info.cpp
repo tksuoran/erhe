@@ -85,7 +85,7 @@ auto Shader_stages_create_info::struct_types_source() const -> std::string
         sb << "// Struct types\n";
         for (const auto& struct_type : struct_types) {
             ERHE_VERIFY(struct_type != nullptr);
-            sb << struct_type->source();
+            sb << struct_type->get_source();
             sb << "\n";
         }
         sb << "\n";
@@ -101,7 +101,7 @@ auto Shader_stages_create_info::interface_blocks_source() const -> std::string
     if (interface_blocks.size() > 0) {
         sb << "// Blocks\n";
         for (const auto* block : interface_blocks) {
-            sb << block->source();
+            sb << block->get_source();
             sb << "\n";
         }
         sb << "\n";
@@ -211,7 +211,7 @@ auto Shader_stages_create_info::final_source(
 
     if (default_uniform_block != nullptr) {
         sb << "// Default uniform block\n";
-        sb << default_uniform_block->source();
+        sb << default_uniform_block->get_source();
         sb << "\n";
     }
 

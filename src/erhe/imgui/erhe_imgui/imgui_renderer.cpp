@@ -119,7 +119,7 @@ auto get_shader_default_uniform_block(erhe::graphics::Device& graphics_device, c
 {
     erhe::graphics::Shader_resource default_uniform_block{graphics_device};
     if (!graphics_device.info.use_bindless_texture) {
-        default_uniform_block.add_sampler("s_textures", gl::Uniform_type::sampler_2d, 0, dedicated_texture_unit);
+        default_uniform_block.add_sampler("s_textures", erhe::graphics::Glsl_type::sampler_2d, 0, dedicated_texture_unit);
     }
     return default_uniform_block;
 }
@@ -128,15 +128,15 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphic
     : draw_parameter_block{graphics_device, "draw", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , draw_parameter_struct{graphics_device, "Draw_parameters"}
     , draw_parameter_struct_offsets{
-        .clip_rect       = draw_parameter_struct.add_vec4("clip_rect")->offset_in_parent(),
-        .texture         = graphics_device.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("texture"        )->offset_in_parent() : 0, // bindless
-        .extra           = graphics_device.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("extra"          )->offset_in_parent() : 0, // bindless
-        .texture_indices = graphics_device.info.use_bindless_texture ? 0 : draw_parameter_struct.add_uvec4("texture_indices")->offset_in_parent()  // non-bindless
+        .clip_rect       = draw_parameter_struct.add_vec4("clip_rect")->get_offset_in_parent(),
+        .texture         = graphics_device.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("texture"        )->get_offset_in_parent() : 0, // bindless
+        .extra           = graphics_device.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("extra"          )->get_offset_in_parent() : 0, // bindless
+        .texture_indices = graphics_device.info.use_bindless_texture ? 0 : draw_parameter_struct.add_uvec4("texture_indices")->get_offset_in_parent()  // non-bindless
     }
     , block_offsets{
-        .scale                       = draw_parameter_block.add_vec4  ("scale"    )->offset_in_parent(),
-        .translate                   = draw_parameter_block.add_vec4  ("translate")->offset_in_parent(),
-        .draw_parameter_struct_array = draw_parameter_block.add_struct("draw_parameters", &draw_parameter_struct, 0 /* unsized array*/ )->offset_in_parent()
+        .scale                       = draw_parameter_block.add_vec4  ("scale"    )->get_offset_in_parent(),
+        .translate                   = draw_parameter_block.add_vec4  ("translate")->get_offset_in_parent(),
+        .draw_parameter_struct_array = draw_parameter_block.add_struct("draw_parameters", &draw_parameter_struct, 0 /* unsized array*/ )->get_offset_in_parent()
     }
     , fragment_outputs{
         erhe::graphics::Fragment_output{
@@ -226,7 +226,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "ImGui Draw Parameter Buffer",
-        m_imgui_program_interface.draw_parameter_block.binding_point(),
+        m_imgui_program_interface.draw_parameter_block.get_binding_point(),
     }
     , m_draw_indirect_buffer{
         graphics_device,
@@ -736,7 +736,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
 
     auto&       program                       = m_imgui_program_interface;
     const auto& draw_parameter_struct_offsets = program.draw_parameter_struct_offsets;
-    const auto  draw_parameter_entry_size     = program.draw_parameter_struct.size_bytes();
+    const auto  draw_parameter_entry_size     = program.draw_parameter_struct.get_size_bytes();
 
     const float scale[2] = {
         2.0f / draw_data->DisplaySize.x,

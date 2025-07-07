@@ -42,7 +42,7 @@ Headset_view_resources::Headset_view_resources(
         graphics_device,
         Texture::Create_info{
             .device            = graphics_device,
-            .target            = gl::Texture_target::texture_2d,
+            .type              = erhe::graphics::Texture_type::texture_2d,
             .width             = m_width,
             .height            = m_height,
             .wrap_texture_name = render_view.color_texture,
@@ -54,7 +54,7 @@ Headset_view_resources::Headset_view_resources(
         graphics_device,
         Texture::Create_info{
             .device            = graphics_device,
-            .target            = gl::Texture_target::texture_2d,
+            .type              = erhe::graphics::Texture_type::texture_2d,
             .width             = m_width,
             .height            = m_height,
             .wrap_texture_name = render_view.depth_stencil_texture,

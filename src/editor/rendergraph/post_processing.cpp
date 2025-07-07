@@ -18,18 +18,18 @@
 namespace editor {
 
 Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block)
-    : input_texture        {block.add_uvec2("input_texture"        )->offset_in_parent()}
-    , downsample_texture   {block.add_uvec2("downsample_texture"   )->offset_in_parent()}
-    , upsample_texture     {block.add_uvec2("upsample_texture"     )->offset_in_parent()}
+    : input_texture        {block.add_uvec2("input_texture"        )->get_offset_in_parent()}
+    , downsample_texture   {block.add_uvec2("downsample_texture"   )->get_offset_in_parent()}
+    , upsample_texture     {block.add_uvec2("upsample_texture"     )->get_offset_in_parent()}
 
-    , texel_scale          {block.add_vec2 ("texel_scale"          )->offset_in_parent()}
-    , source_lod           {block.add_float("source_lod"           )->offset_in_parent()}
-    , level_count          {block.add_float("level_count"          )->offset_in_parent()}
+    , texel_scale          {block.add_vec2 ("texel_scale"          )->get_offset_in_parent()}
+    , source_lod           {block.add_float("source_lod"           )->get_offset_in_parent()}
+    , level_count          {block.add_float("level_count"          )->get_offset_in_parent()}
 
-    , upsample_radius      {block.add_float("upsample_radius"      )->offset_in_parent()}
-    , mix_weight           {block.add_float("mix_weight"           )->offset_in_parent()}
-    , tonemap_luminance_max{block.add_float("tonemap_luminance_max")->offset_in_parent()}
-    , tonemap_alpha        {block.add_float("tonemap_alpha"        )->offset_in_parent()}
+    , upsample_radius      {block.add_float("upsample_radius"      )->get_offset_in_parent()}
+    , mix_weight           {block.add_float("mix_weight"           )->get_offset_in_parent()}
+    , tonemap_luminance_max{block.add_float("tonemap_luminance_max")->get_offset_in_parent()}
+    , tonemap_alpha        {block.add_float("tonemap_alpha"        )->get_offset_in_parent()}
 {
 }
 
@@ -48,7 +48,7 @@ Post_processing_node::Post_processing_node(
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count =
                 erhe::graphics::align_offset(
-                    post_processing.get_parameter_block().size_bytes(),
+                    post_processing.get_parameter_block().get_size_bytes(),
                     graphics_device.get_buffer_alignment(post_processing.get_parameter_block().get_binding_target())
                 ) * 20, // max 20 levels
             .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
@@ -100,7 +100,7 @@ auto Post_processing_node::update_size() -> bool
         m_graphics_device,
         erhe::graphics::Texture::Create_info{
             .device       = m_graphics_device,
-            .target       = gl::Texture_target::texture_2d,
+            .type         = erhe::graphics::Texture_type::texture_2d,
             .pixelformat  = erhe::dataformat::Format::format_16_vec4_float, // TODO other formats
             .use_mipmaps  = true,
             .sample_count = 0,
@@ -113,7 +113,7 @@ auto Post_processing_node::update_size() -> bool
         m_graphics_device,
         erhe::graphics::Texture::Create_info{
             .device       = m_graphics_device,
-            .target       = gl::Texture_target::texture_2d,
+            .type         = erhe::graphics::Texture_type::texture_2d,
             .pixelformat  = erhe::dataformat::Format::format_16_vec4_float, // TODO other formats
             .use_mipmaps  = true,
             .sample_count = 0,
@@ -233,7 +233,7 @@ void Post_processing_node::update_parameters()
     // Prepare parameter buffer
     const erhe::graphics::Sampler&  sampler_linear                = m_post_processing.get_sampler_linear();
     const erhe::graphics::Sampler&  sampler_linear_mipmap_nearest = m_post_processing.get_sampler_linear_mipmap_nearest();
-    const std::size_t               entry_size                    = m_post_processing.get_parameter_block().size_bytes();
+    const std::size_t               entry_size                    = m_post_processing.get_parameter_block().get_size_bytes();
     const Post_processing::Offsets& offsets                       = m_post_processing.get_offsets();
 
     const std::size_t level_offset_size = erhe::graphics::align_offset(
@@ -402,17 +402,17 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
     , m_input_texture_resource{
         d.info.use_bindless_texture
             ? nullptr
-            : m_default_uniform_block.add_sampler("s_input", gl::Uniform_type::sampler_2d, s_input_texture)
+            : m_default_uniform_block.add_sampler("s_input", erhe::graphics::Glsl_type::sampler_2d, s_input_texture)
     }
     , m_downsample_texture_resource{
         d.info.use_bindless_texture
             ? nullptr
-            : m_default_uniform_block.add_sampler("s_downsample", gl::Uniform_type::sampler_2d, s_downsample_texture)
+            : m_default_uniform_block.add_sampler("s_downsample", erhe::graphics::Glsl_type::sampler_2d, s_downsample_texture)
     }
     , m_upsample_texture_resource{
         d.info.use_bindless_texture
             ? nullptr
-            : m_default_uniform_block.add_sampler("s_upsample", gl::Uniform_type::sampler_2d, s_upsample_texture)
+            : m_default_uniform_block.add_sampler("s_upsample", erhe::graphics::Glsl_type::sampler_2d, s_upsample_texture)
     }
     , m_shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , m_shader_stages{
@@ -527,7 +527,7 @@ void Post_processing::post_process(Post_processing_node& node)
     ERHE_VERIFY(input_texture);
 
     const std::size_t level_offset_size = erhe::graphics::align_offset(
-        m_parameter_block.size_bytes(),
+        m_parameter_block.get_size_bytes(),
         m_context.graphics_device->get_buffer_alignment(
             erhe::graphics::Buffer_target::uniform // TODO node.parameter_buffer.target()
         )
@@ -557,7 +557,7 @@ void Post_processing::post_process(Post_processing_node& node)
     for (const size_t source_level : node.downsample_source_levels) {
         const size_t                 destination_level = source_level + 1;
         erhe::graphics::Render_pass* render_pass       = node.downsample_render_passes.at(destination_level).get();
-        const unsigned int           binding_point     = m_parameter_block.binding_point();
+        const unsigned int           binding_point     = m_parameter_block.get_binding_point();
 
         erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
 
@@ -565,7 +565,7 @@ void Post_processing::post_process(Post_processing_node& node)
             m_parameter_block.get_binding_target(),
             &node.parameter_buffer,
             source_level * level_offset_size,
-            m_parameter_block.size_bytes(),
+            m_parameter_block.get_size_bytes(),
             binding_point
         );
         if (source_level == 0) {
@@ -596,7 +596,7 @@ void Post_processing::post_process(Post_processing_node& node)
             m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.upsample);
         }
         erhe::graphics::Render_pass* render_pass = node.upsample_render_passes.at(destination_level).get();
-        const unsigned int binding_point = m_parameter_block.binding_point();
+        const unsigned int binding_point = m_parameter_block.get_binding_point();
 
         erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
 
@@ -608,7 +608,7 @@ void Post_processing::post_process(Post_processing_node& node)
             m_parameter_block.get_binding_target(),
             &node.parameter_buffer,
             source_level * level_offset_size,
-            m_parameter_block.size_bytes(),
+            m_parameter_block.get_size_bytes(),
             binding_point
         );
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);

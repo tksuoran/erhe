@@ -106,7 +106,7 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, bool us
                 graphics_device,
                 Texture::Create_info{
                     .device       = graphics_device,
-                    .target       = gl::Texture_target::texture_2d_multisample,
+                    .type         = erhe::graphics::Texture_type::texture_2d,
                     .pixelformat  = m_color_format,
                     .sample_count = m_sample_count,
                     .width        = width,
@@ -120,7 +120,7 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, bool us
             graphics_device,
             Texture::Create_info{
                 .device       = graphics_device,
-                .target       = gl::Texture_target::texture_2d,
+                .type         = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat  = m_color_format,
                 .sample_count = 0,
                 .width        = width,

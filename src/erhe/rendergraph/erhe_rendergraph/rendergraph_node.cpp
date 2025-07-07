@@ -170,9 +170,9 @@ auto Rendergraph_node::get_size() const -> std::optional<glm::vec2>
         const auto& texture = get_producer_output_texture(output.key);
         if (
             texture &&
-            (texture->get_target() == gl::Texture_target::texture_2d) &&
-            (texture->get_width () >= 1) &&
-            (texture->get_height() >= 1) &&
+            (texture->get_texture_type() == erhe::graphics::Texture_type::texture_2d) &&
+            (texture->get_width       () >= 1) &&
+            (texture->get_height      () >= 1) &&
             (erhe::dataformat::has_color(texture->get_pixelformat()))
         ) {
             if (!size.has_value()) {

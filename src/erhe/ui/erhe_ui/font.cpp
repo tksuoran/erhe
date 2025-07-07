@@ -447,7 +447,7 @@ void Font::post_process()
 
     const Texture::Create_info create_info{
         .device      = m_graphics_device,
-        .target      = gl::Texture_target::texture_2d,
+        .type        = erhe::graphics::Texture_type::texture_2d,
         .pixelformat = erhe::dataformat::Format::format_8_vec2_unorm,
         .use_mipmaps = false,
         .width       = m_texture_width,

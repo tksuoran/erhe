@@ -65,7 +65,7 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
         graphics_device,
         Texture::Create_info{
             .device       = graphics_device,
-            .target       = gl::Texture_target::texture_2d,
+            .type         = erhe::graphics::Texture_type::texture_2d,
             .pixelformat  = erhe::dataformat::Format::format_8_vec4_srgb,
             .use_mipmaps  = true,
             .sample_count = 0,

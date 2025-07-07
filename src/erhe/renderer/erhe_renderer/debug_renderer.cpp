@@ -81,10 +81,10 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
         erhe::graphics::Shader_resource::Type::uniform_block
     );
 
-    clip_from_world_offset        = view_block->add_mat4("clip_from_world"       )->offset_in_parent();
-    view_position_in_world_offset = view_block->add_vec4("view_position_in_world")->offset_in_parent();
-    viewport_offset               = view_block->add_vec4("viewport"              )->offset_in_parent();
-    fov_offset                    = view_block->add_vec4("fov"                   )->offset_in_parent();
+    clip_from_world_offset        = view_block->add_mat4("clip_from_world"       )->get_offset_in_parent();
+    view_position_in_world_offset = view_block->add_vec4("view_position_in_world")->get_offset_in_parent();
+    viewport_offset               = view_block->add_vec4("viewport"              )->get_offset_in_parent();
+    fov_offset                    = view_block->add_vec4("fov"                   )->get_offset_in_parent();
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
@@ -146,7 +146,7 @@ Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device)
         graphics_device,
         erhe::graphics::Buffer_target::uniform,
         "Debug_renderer::m_view_buffer",
-        m_program_interface.view_block->binding_point()
+        m_program_interface.view_block->get_binding_point()
     }
     , m_vertex_input{
         graphics_device,
@@ -195,7 +195,7 @@ auto Debug_renderer::update_view_buffer(const erhe::math::Viewport viewport, con
     ERHE_VERIFY(camera_node != nullptr);
 
     const erhe::graphics::Shader_resource& view_block = *m_program_interface.view_block.get();
-    erhe::graphics::Buffer_range view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.size_bytes());
+    erhe::graphics::Buffer_range view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.get_size_bytes());
     const auto                   view_gpu_data     = view_buffer_range.get_span();
     size_t                       view_write_offset = 0;
     std::byte* const             start             = view_gpu_data.data();
@@ -228,7 +228,7 @@ auto Debug_renderer::update_view_buffer(const erhe::math::Viewport viewport, con
     write(view_gpu_data, m_program_interface.viewport_offset,               as_span(viewport_floats       ));
     write(view_gpu_data, m_program_interface.fov_offset,                    as_span(fov_floats            ));
 
-    view_write_offset += m_program_interface.view_block->size_bytes();
+    view_write_offset += m_program_interface.view_block->get_size_bytes();
     view_buffer_range.bytes_written(view_write_offset);
     view_buffer_range.close();
 

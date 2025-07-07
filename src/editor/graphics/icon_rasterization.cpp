@@ -173,7 +173,7 @@ Icon_rasterization::Icon_rasterization(App_context& context, erhe::graphics::Dev
             graphics_device,
             erhe::graphics::Texture_create_info{
                 .device      = graphics_device,
-                .target      = gl::Texture_target::texture_2d,
+                .type        = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm, // TODO sRGB?
                 .use_mipmaps = true,
                 .width       = Icon_set::s_column_count * size,

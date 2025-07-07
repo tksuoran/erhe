@@ -18,19 +18,19 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device)
     : camera_block{graphics_device, "camera", camera_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
     , camera_struct{graphics_device, "Camera"}
     , offsets{
-        .world_from_node      = camera_struct.add_mat4 ("world_from_node"     )->offset_in_parent(),
-        .world_from_clip      = camera_struct.add_mat4 ("world_from_clip"     )->offset_in_parent(),
-        .clip_from_world      = camera_struct.add_mat4 ("clip_from_world"     )->offset_in_parent(),
-        .viewport             = camera_struct.add_vec4 ("viewport"            )->offset_in_parent(),
-        .fov                  = camera_struct.add_vec4 ("fov"                 )->offset_in_parent(),
-        .clip_depth_direction = camera_struct.add_float("clip_depth_direction")->offset_in_parent(),
-        .view_depth_near      = camera_struct.add_float("view_depth_near"     )->offset_in_parent(),
-        .view_depth_far       = camera_struct.add_float("view_depth_far"      )->offset_in_parent(),
-        .exposure             = camera_struct.add_float("exposure"            )->offset_in_parent(),
-        .grid_size            = camera_struct.add_vec4 ("grid_size"           )->offset_in_parent(),
-        .grid_line_width      = camera_struct.add_vec4 ("grid_line_width"     )->offset_in_parent(),
-        .frame_number         = camera_struct.add_uvec2("frame_number"        )->offset_in_parent(),
-        .padding              = camera_struct.add_uvec2("padding"             )->offset_in_parent(),
+        .world_from_node      = camera_struct.add_mat4 ("world_from_node"     )->get_offset_in_parent(),
+        .world_from_clip      = camera_struct.add_mat4 ("world_from_clip"     )->get_offset_in_parent(),
+        .clip_from_world      = camera_struct.add_mat4 ("clip_from_world"     )->get_offset_in_parent(),
+        .viewport             = camera_struct.add_vec4 ("viewport"            )->get_offset_in_parent(),
+        .fov                  = camera_struct.add_vec4 ("fov"                 )->get_offset_in_parent(),
+        .clip_depth_direction = camera_struct.add_float("clip_depth_direction")->get_offset_in_parent(),
+        .view_depth_near      = camera_struct.add_float("view_depth_near"     )->get_offset_in_parent(),
+        .view_depth_far       = camera_struct.add_float("view_depth_far"      )->get_offset_in_parent(),
+        .exposure             = camera_struct.add_float("exposure"            )->get_offset_in_parent(),
+        .grid_size            = camera_struct.add_vec4 ("grid_size"           )->get_offset_in_parent(),
+        .grid_line_width      = camera_struct.add_vec4 ("grid_line_width"     )->get_offset_in_parent(),
+        .frame_number         = camera_struct.add_uvec2("frame_number"        )->get_offset_in_parent(),
+        .padding              = camera_struct.add_uvec2("padding"             )->get_offset_in_parent(),
     }
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
@@ -44,7 +44,7 @@ Camera_buffer::Camera_buffer(erhe::graphics::Device& graphics_device, Camera_int
         graphics_device,
         erhe::graphics::Buffer_target::uniform,
         "Camera_buffer",
-        camera_interface.camera_block.binding_point()
+        camera_interface.camera_block.get_binding_point()
     }
     , m_camera_interface{camera_interface}
 {
@@ -64,7 +64,7 @@ auto Camera_buffer::update(
 
     SPDLOG_LOGGER_TRACE(log_render, "write_offset = {}", m_writer.write_offset);
 
-    const auto  entry_size       = m_camera_interface.camera_struct.size_bytes();
+    const auto  entry_size       = m_camera_interface.camera_struct.get_size_bytes();
     const auto& offsets          = m_camera_interface.offsets;
     const auto  clip_from_camera = camera_projection.clip_from_node_transform(viewport);
 

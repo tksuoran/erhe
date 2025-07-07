@@ -92,13 +92,13 @@ Debug_renderer_bucket::Debug_renderer_bucket(
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "Debug_renderer_bucket::m_vertex_ssbo_buffer",
-        debug_renderer.get_program_interface().line_vertex_buffer_block->binding_point()
+        debug_renderer.get_program_interface().line_vertex_buffer_block->get_binding_point()
     }
     , m_triangle_vertex_buffer{ // compute write, vs read
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "Debug_renderer_bucket::m_triangle_vertex_buffer",
-        debug_renderer.get_program_interface().triangle_vertex_buffer_block->binding_point()
+        debug_renderer.get_program_interface().triangle_vertex_buffer_block->get_binding_point()
     }
     , m_config            {config}
     , m_pipeline_visible  {make_pipeline(true )}

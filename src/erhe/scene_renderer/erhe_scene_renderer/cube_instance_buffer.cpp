@@ -11,17 +11,17 @@ Cube_interface::Cube_interface(erhe::graphics::Device& graphics_device)
     : cube_instance_block  {graphics_device, "instance", cube_instance_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , cube_instance_struct {graphics_device, "Instance"}
     , cube_instance_offsets{
-        .packed_position = cube_instance_struct.add_uint("packed_position")->offset_in_parent(),
+        .packed_position = cube_instance_struct.add_uint("packed_position")->get_offset_in_parent(),
     }
 
     , cube_control_block  {graphics_device, "cube_control", cube_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , cube_control_struct {graphics_device, "Cube_control"}
     , cube_control_offsets{
-        .cube_size   = cube_control_struct.add_vec4("cube_size"  )->offset_in_parent(),
-        .color_bias  = cube_control_struct.add_vec4("color_bias" )->offset_in_parent(),
-        .color_scale = cube_control_struct.add_vec4("color_scale")->offset_in_parent(),
-        .color_start = cube_control_struct.add_vec4("color_start")->offset_in_parent(),
-        .color_end   = cube_control_struct.add_vec4("color_end"  )->offset_in_parent(),
+        .cube_size   = cube_control_struct.add_vec4("cube_size"  )->get_offset_in_parent(),
+        .color_bias  = cube_control_struct.add_vec4("color_bias" )->get_offset_in_parent(),
+        .color_scale = cube_control_struct.add_vec4("color_scale")->get_offset_in_parent(),
+        .color_start = cube_control_struct.add_vec4("color_start")->get_offset_in_parent(),
+        .color_end   = cube_control_struct.add_vec4("color_end"  )->get_offset_in_parent(),
     }
 {
     cube_instance_block.add_struct("instances", &cube_instance_struct, erhe::graphics::Shader_resource::unsized_array);
@@ -40,7 +40,7 @@ Cube_instance_buffer::Cube_instance_buffer(
     , m_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count = cube_interface.cube_instance_struct.size_bytes() * cubes.size(),
+            .capacity_byte_count = cube_interface.cube_instance_struct.get_size_bytes() * cubes.size(),
             .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
             .access_mask         = gl::Map_buffer_access_mask::map_write_bit,
             .debug_label         = "Cube_instance_buffer"
@@ -64,7 +64,7 @@ auto Cube_instance_buffer::bind(erhe::graphics::Render_command_encoder& encoder)
         &m_buffer,
         0,
         m_buffer.capacity_byte_count(),
-        m_cube_interface.cube_instance_block.binding_point()
+        m_cube_interface.cube_instance_block.get_binding_point()
     );
     return m_cube_count;
 }
@@ -74,7 +74,7 @@ Cube_control_buffer::Cube_control_buffer(erhe::graphics::Device& graphics_device
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "cube_control",
-        cube_interface.cube_control_block.binding_point()
+        cube_interface.cube_control_block.get_binding_point()
     }
     , m_cube_interface{cube_interface}
 {
@@ -89,7 +89,7 @@ auto Cube_control_buffer::update(
 ) -> erhe::graphics::Buffer_range
 {
     const std::size_t primitive_count = 1;
-    const auto        entry_size      = m_cube_interface.cube_control_struct.size_bytes();
+    const auto        entry_size      = m_cube_interface.cube_control_struct.get_size_bytes();
     const auto&       offsets         = m_cube_interface.cube_control_offsets;
     const std::size_t max_byte_count  = primitive_count * entry_size;
     erhe::graphics::Buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);

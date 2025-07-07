@@ -47,7 +47,7 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
         graphics_device,
         erhe::graphics::Texture_create_info{
             .device            = graphics_device,
-            .target            = gl::Texture_target::texture_2d_array,
+            .type              = erhe::graphics::Texture_type::texture_2d,
             .pixelformat       = erhe::dataformat::Format::format_8_vec4_unorm, // TODO sRGB?
             .use_mipmaps       = true,
             .width             = m_size_pixels,

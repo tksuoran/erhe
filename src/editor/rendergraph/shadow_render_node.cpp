@@ -69,7 +69,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
             graphics_device,
             erhe::graphics::Texture_create_info {
                 .device            = graphics_device,
-                .target            = gl::Texture_target::texture_2d_array,
+                .type              = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat       = erhe::dataformat::Format::format_d32_sfloat,
                 .width             = std::max(1, resolution),
                 .height            = std::max(1, resolution),

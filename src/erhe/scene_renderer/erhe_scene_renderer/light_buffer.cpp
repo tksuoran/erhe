@@ -27,40 +27,36 @@ namespace erhe::scene_renderer {
 
 Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
     : max_light_count    {get_max_light_count()}
-    , light_block        {graphics_device, "light_block",         light_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
+    , light_block        {graphics_device, "light_block",         light_buffer_binding_point,         erhe::graphics::Shader_resource::Type::uniform_block}
     , light_control_block{graphics_device, "light_control_block", light_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
     , light_struct       {graphics_device, "Light"}
     , offsets{
-        .shadow_texture_compare    = light_block.add_uvec2("shadow_texture_compare"   )->offset_in_parent(),
-        .shadow_texture_no_compare = light_block.add_uvec2("shadow_texture_no_compare")->offset_in_parent(),
-
-        .shadow_bias_scale         = light_block.add_float("shadow_bias_scale"      )->offset_in_parent(),
-        .shadow_min_bias           = light_block.add_float("shadow_min_bias"        )->offset_in_parent(),
-        .shadow_max_bias           = light_block.add_float("shadow_max_bias"        )->offset_in_parent(),
-        .reserved_0                = light_block.add_float("reserved_0"             )->offset_in_parent(),
-
-        .directional_light_count = light_block.add_uint ("directional_light_count")->offset_in_parent(),
-        .spot_light_count        = light_block.add_uint ("spot_light_count"       )->offset_in_parent(),
-        .point_light_count       = light_block.add_uint ("point_light_count"      )->offset_in_parent(),
-        .reserved_1              = light_block.add_uint ("reserved_1"             )->offset_in_parent(),
-
-        .brdf_material           = light_block.add_uint ("brdf_material"          )->offset_in_parent(),
-        .reserved_2              = light_block.add_uint ("reserved_2"             )->offset_in_parent(),
-        .brdf_phi_incident_phi   = light_block.add_vec2 ("brdf_phi_incident_phi"  )->offset_in_parent(),
-
-        .ambient_light           = light_block.add_vec4 ("ambient_light"          )->offset_in_parent(),
+        .shadow_texture_compare    = light_block.add_uvec2("shadow_texture_compare"   )->get_offset_in_parent(),
+        .shadow_texture_no_compare = light_block.add_uvec2("shadow_texture_no_compare")->get_offset_in_parent(),
+        .shadow_bias_scale         = light_block.add_float("shadow_bias_scale"        )->get_offset_in_parent(),
+        .shadow_min_bias           = light_block.add_float("shadow_min_bias"          )->get_offset_in_parent(),
+        .shadow_max_bias           = light_block.add_float("shadow_max_bias"          )->get_offset_in_parent(),
+        .reserved_0                = light_block.add_float("reserved_0"               )->get_offset_in_parent(),
+        .directional_light_count   = light_block.add_uint ("directional_light_count"  )->get_offset_in_parent(),
+        .spot_light_count          = light_block.add_uint ("spot_light_count"         )->get_offset_in_parent(),
+        .point_light_count         = light_block.add_uint ("point_light_count"        )->get_offset_in_parent(),
+        .reserved_1                = light_block.add_uint ("reserved_1"               )->get_offset_in_parent(),
+        .brdf_material             = light_block.add_uint ("brdf_material"            )->get_offset_in_parent(),
+        .reserved_2                = light_block.add_uint ("reserved_2"               )->get_offset_in_parent(),
+        .brdf_phi_incident_phi     = light_block.add_vec2 ("brdf_phi_incident_phi"    )->get_offset_in_parent(),
+        .ambient_light             = light_block.add_vec4 ("ambient_light"            )->get_offset_in_parent(),
 
         .light = {
-            .clip_from_world              = light_struct.add_mat4("clip_from_world"             )->offset_in_parent(),
-            .texture_from_world           = light_struct.add_mat4("texture_from_world"          )->offset_in_parent(),
-            .position_and_inner_spot_cos  = light_struct.add_vec4("position_and_inner_spot_cos" )->offset_in_parent(),
-            .direction_and_outer_spot_cos = light_struct.add_vec4("direction_and_outer_spot_cos")->offset_in_parent(),
-            .radiance_and_range           = light_struct.add_vec4("radiance_and_range"          )->offset_in_parent(),
+            .clip_from_world              = light_struct.add_mat4("clip_from_world"             )->get_offset_in_parent(),
+            .texture_from_world           = light_struct.add_mat4("texture_from_world"          )->get_offset_in_parent(),
+            .position_and_inner_spot_cos  = light_struct.add_vec4("position_and_inner_spot_cos" )->get_offset_in_parent(),
+            .direction_and_outer_spot_cos = light_struct.add_vec4("direction_and_outer_spot_cos")->get_offset_in_parent(),
+            .radiance_and_range           = light_struct.add_vec4("radiance_and_range"          )->get_offset_in_parent(),
         },
-        .light_struct = light_block.add_struct("lights", &light_struct, max_light_count)->offset_in_parent()
+        .light_struct = light_block.add_struct("lights", &light_struct, max_light_count)->get_offset_in_parent()
     }
     , light_index_offset{
-        light_control_block.add_uint("light_index")->offset_in_parent()
+        light_control_block.add_uint("light_index")->get_offset_in_parent()
     }
 {
 }
@@ -71,13 +67,13 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
         graphics_device,
         erhe::graphics::Buffer_target::uniform,
         "Light_buffer::m_light_buffer",
-        light_interface.light_block.binding_point()
+        light_interface.light_block.get_binding_point()
     }
     , m_control_buffer{
         graphics_device,
         erhe::graphics::Buffer_target::uniform,
         "Light_buffer::m_control_buffer",
-        light_interface.light_control_block.binding_point()
+        light_interface.light_control_block.get_binding_point()
     }
 {
 }
@@ -158,7 +154,7 @@ auto Light_buffer::update(
 
     SPDLOG_LOGGER_TRACE(log_render, "lights.size() = {}, m_light_buffer.writer().write_offset = {}", lights.size(), m_light_buffer.writer().write_offset);
 
-    const auto                   light_struct_size = m_light_interface.light_struct.size_bytes();
+    const auto                   light_struct_size = m_light_interface.light_struct.get_size_bytes();
     const auto&                  offsets           = m_light_interface.offsets;
 
     // NOTE: As long as we are using uniform buffer, always fill in data max lights
@@ -282,7 +278,7 @@ auto Light_buffer::update_control(const std::size_t light_index) -> erhe::graphi
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto                   entry_size   = m_light_interface.light_control_block.size_bytes();
+    const auto                   entry_size   = m_light_interface.light_control_block.get_size_bytes();
     erhe::graphics::Buffer_range buffer_range = m_control_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, entry_size);
     const auto                   gpu_data     = buffer_range.get_span();
     size_t                       write_offset = 0;

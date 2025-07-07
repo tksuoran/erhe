@@ -84,7 +84,7 @@ Tile_renderer::Tile_renderer(
     , m_texture_sampler{
         graphics_device.info.use_bindless_texture
             ? nullptr
-            : m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, 0)
+            : m_default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, 0)
     }
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
@@ -127,10 +127,10 @@ Tile_renderer::Tile_renderer(
     }
     , m_clip_from_window         {m_projection_block.add_mat4 ("clip_from_window")}
     , m_texture_handle           {m_projection_block.add_uvec2("texture")}
-    , m_u_clip_from_window_size  {m_clip_from_window->size_bytes()}
-    , m_u_clip_from_window_offset{m_clip_from_window->offset_in_parent()}
-    , m_u_texture_size           {m_texture_handle->size_bytes()}
-    , m_u_texture_offset         {m_texture_handle->offset_in_parent()}
+    , m_u_clip_from_window_size  {m_clip_from_window->get_size_bytes()}
+    , m_u_clip_from_window_offset{m_clip_from_window->get_offset_in_parent()}
+    , m_u_texture_size           {m_texture_handle  ->get_size_bytes()}
+    , m_u_texture_offset         {m_texture_handle  ->get_offset_in_parent()}
     , m_shader_path              {std::filesystem::path{"res"} / std::filesystem::path{"shaders"}}
     , m_shader_stages            {make_program(make_prototype(graphics_device))}
     , m_vertex_buffer{
@@ -142,7 +142,7 @@ Tile_renderer::Tile_renderer(
         graphics_device,
         erhe::graphics::Buffer_target::uniform,
         "Tile_renderer::m_projection_buffer",
-        m_projection_block.binding_point()
+        m_projection_block.get_binding_point()
     }
     , m_vertex_input{m_graphics_device, erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
     , m_pipeline{
@@ -300,7 +300,7 @@ void Tile_renderer::compose_tileset_texture()
     // Texture will be created with additional per-player colored unit tiles
     erhe::graphics::Texture_create_info texture_create_info{
         .device      = m_graphics_device,
-        .target      = gl::Texture_target::texture_2d,
+        .type        = erhe::graphics::Texture_type::texture_2d,
         .pixelformat = m_tileset_image.info.format,
         .use_mipmaps = false,
         .width       = m_tileset_image.info.width,
@@ -672,7 +672,7 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
     const auto handle = m_graphics_device.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
 
     erhe::graphics::Buffer_range& vertex_buffer_range     = m_vertex_buffer_range.value();
-    erhe::graphics::Buffer_range  projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.size_bytes());
+    erhe::graphics::Buffer_range  projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.get_size_bytes());
     const auto                    projection_gpu_data     = projection_buffer_range.get_span();
     size_t                        projection_write_offset = 0;
     std::byte* const              start                   = projection_gpu_data.data();

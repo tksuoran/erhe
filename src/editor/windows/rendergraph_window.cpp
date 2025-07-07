@@ -197,7 +197,7 @@ void Rendergraph_window::imgui()
             const auto& texture = node->get_producer_output_texture(output.key);
             if (
                 texture &&
-                (texture->get_target() == gl::Texture_target::texture_2d) &&
+                (texture->get_texture_type() == erhe::graphics::Texture_type::texture_2d) &&
                 (texture->get_width () >= 1) &&
                 (texture->get_height() >= 1) &&
                 (erhe::dataformat::has_color(texture->get_pixelformat()))

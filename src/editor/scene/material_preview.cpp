@@ -108,7 +108,7 @@ void Material_preview::update_rendertarget(erhe::graphics::Device& graphics_devi
         graphics_device,
         Texture::Create_info{
             .device      = graphics_device,
-            .target      = gl::Texture_target::texture_2d,
+            .type        = erhe::graphics::Texture_type::texture_2d,
             .pixelformat = m_color_format,
             .width       = m_width,
             .height      = m_height,
@@ -143,7 +143,7 @@ void Material_preview::update_rendertarget(erhe::graphics::Device& graphics_devi
         graphics_device,
         Texture::Create_info {
             .device            = graphics_device,
-            .target            = gl::Texture_target::texture_2d_array,
+            .type              = erhe::graphics::Texture_type::texture_2d,
             .pixelformat       = erhe::dataformat::Format::format_d32_sfloat,
             .width             = 1,
             .height            = 1,

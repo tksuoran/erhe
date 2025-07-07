@@ -23,13 +23,13 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
     : primitive_block {graphics_device, "primitive", primitive_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , primitive_struct{graphics_device, "Primitive"}
     , offsets{
-        .world_from_node  = primitive_struct.add_mat4 ("world_from_node"       )->offset_in_parent(),
-        .normal_transform = primitive_struct.add_mat4 ("world_from_node_normal")->offset_in_parent(),
-        .color            = primitive_struct.add_vec4 ("color"                 )->offset_in_parent(),
-        .material_index   = primitive_struct.add_uint ("material_index"        )->offset_in_parent(),
-        .size             = primitive_struct.add_float("size"                  )->offset_in_parent(),
-        .skinning_factor  = primitive_struct.add_float("skinning_factor"       )->offset_in_parent(),
-        .base_joint_index = primitive_struct.add_uint ("base_joint_index"      )->offset_in_parent()
+        .world_from_node  = primitive_struct.add_mat4 ("world_from_node"       )->get_offset_in_parent(),
+        .normal_transform = primitive_struct.add_mat4 ("world_from_node_normal")->get_offset_in_parent(),
+        .color            = primitive_struct.add_vec4 ("color"                 )->get_offset_in_parent(),
+        .material_index   = primitive_struct.add_uint ("material_index"        )->get_offset_in_parent(),
+        .size             = primitive_struct.add_float("size"                  )->get_offset_in_parent(),
+        .skinning_factor  = primitive_struct.add_float("skinning_factor"       )->get_offset_in_parent(),
+        .base_joint_index = primitive_struct.add_uint ("base_joint_index"      )->get_offset_in_parent()
     }
 {
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
@@ -44,7 +44,7 @@ Primitive_buffer::Primitive_buffer(erhe::graphics::Device& graphics_device, Prim
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "Primitive_buffer",
-        primitive_interface.primitive_block.binding_point()
+        primitive_interface.primitive_block.get_binding_point()
     }
     , m_primitive_interface{primitive_interface}
 {
@@ -113,7 +113,7 @@ auto Primitive_buffer::update(
         return {};
     }
 
-    const auto        entry_size     = m_primitive_interface.primitive_struct.size_bytes();
+    const auto        entry_size     = m_primitive_interface.primitive_struct.get_size_bytes();
     const auto&       offsets        = m_primitive_interface.offsets;
     const std::size_t max_byte_count = primitive_count * entry_size;
 
@@ -232,7 +232,7 @@ auto Primitive_buffer::update(
 ) -> erhe::graphics::Buffer_range
 {
     const std::size_t primitive_count = nodes.size();
-    const auto        entry_size      = m_primitive_interface.primitive_struct.size_bytes();
+    const auto        entry_size      = m_primitive_interface.primitive_struct.get_size_bytes();
     const auto&       offsets         = m_primitive_interface.offsets;
     const std::size_t max_byte_count  = primitive_count * entry_size;
 

@@ -97,7 +97,7 @@ void Framebuffer_window::update_render_pass()
         m_graphics_device,
         Texture::Create_info{
             .device       = m_graphics_device,
-            .target       = gl::Texture_target::texture_2d,
+            .type         = erhe::graphics::Texture_type::texture_2d,
             .pixelformat  = erhe::dataformat::Format::format_8_vec4_srgb,
             .sample_count = 0,
             .width        = m_viewport.width,
