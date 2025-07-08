@@ -33,11 +33,12 @@ public:
     auto operator=(const Thumbnail&) -> Thumbnail& = delete;
     auto operator=(Thumbnail&&) -> Thumbnail&;
 
-    std::weak_ptr<erhe::Item_base>               item{};
+    std::size_t                                  item_id{};
     uint64_t                                     last_use_frame_number{0};
     std::shared_ptr<erhe::graphics::Texture>     texture_view{};
     std::unique_ptr<erhe::graphics::Render_pass> render_pass{};
     uint64_t                                     color_texture_handle{};
+    std::optional<std::function<void()>>         callback{};
 };
 
 class Thumbnails
@@ -46,12 +47,10 @@ public:
     Thumbnails(erhe::graphics::Device& graphics_device, App_context& context);
     ~Thumbnails();
 
-    void update(uint64_t frame_number);
+    // This should be called once per frame, outside command encoder
+    void update();
 
-    void draw(
-        std::shared_ptr<erhe::Item_base>            item,
-        std::function<bool(Thumbnails& thumbnails)> callback
-    );
+    void draw  (std::shared_ptr<erhe::Item_base> item, std::function<void()> callback);
 
 private:
     App_context&                                  m_context;

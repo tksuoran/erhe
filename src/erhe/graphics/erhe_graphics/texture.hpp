@@ -106,7 +106,7 @@ public:
     [[nodiscard]] auto get_depth                 (unsigned int level = 0) const -> int;
     [[nodiscard]] auto get_array_layer_count     () const -> int;
     [[nodiscard]] auto get_level_count           () const -> int;
-    [[nodiscard]] auto get_fixed_sample_locations() const -> int;
+    [[nodiscard]] auto get_fixed_sample_locations() const -> bool;
     [[nodiscard]] auto get_sample_count          () const -> int;
     [[nodiscard]] auto get_texture_type          () const -> Texture_type;
     [[nodiscard]] auto is_layered                () const -> bool;

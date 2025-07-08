@@ -1,4 +1,4 @@
-#include "renderers/renderpass.hpp"
+#include "renderers/composition_pass.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -21,26 +21,26 @@
 
 namespace editor {
 
-Renderpass::Renderpass(const Renderpass&)            = default;
-Renderpass& Renderpass::operator=(const Renderpass&) = default;
-Renderpass::~Renderpass() noexcept                   = default;
+Composition_pass::Composition_pass(const Composition_pass&)            = default;
+Composition_pass& Composition_pass::operator=(const Composition_pass&) = default;
+Composition_pass::~Composition_pass() noexcept                         = default;
 
-Renderpass::Renderpass(const std::string_view name)
+Composition_pass::Composition_pass(const std::string_view name)
     : Item{name}
 {
 }
 
-auto Renderpass::get_static_type() -> uint64_t
+auto Composition_pass::get_static_type() -> uint64_t
 {
-    return erhe::Item_type::renderpass;
+    return erhe::Item_type::composition_pass;
 }
 
-auto Renderpass::get_type() const -> uint64_t
+auto Composition_pass::get_type() const -> uint64_t
 {
     return get_static_type();
 }
 
-auto Renderpass::get_type_name() const -> std::string_view
+auto Composition_pass::get_type_name() const -> std::string_view
 {
     return static_type_name;
 }
@@ -55,7 +55,7 @@ auto triangle_wave(float t, float p) -> float
     return 2.0f * std::abs(2.0f * (t / p - std::floor(t / p + 0.5f))) - 1.0f;
 }
 
-void Renderpass::render(const Render_context& context) const
+void Composition_pass::render(const Render_context& context) const
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -211,12 +211,12 @@ void Renderpass::render(const Render_context& context) const
     }
 }
 
-void Renderpass::imgui()
+void Composition_pass::imgui()
 {
     ImGui::Checkbox("Enabled", &enabled);
     if (ImGui::TreeNodeEx("Pipeline passes", ImGuiTreeNodeFlags_Framed)) {
         int pipeline_pass_index = 0;
-        for (erhe::renderer::Pipeline_renderpass* pass : passes) {
+        for (erhe::renderer::Pipeline_pass* pass : passes) {
             ImGui::PushID(pipeline_pass_index++);
             erhe::imgui::pipeline_imgui(pass->pipeline);
             ImGui::PopID();

@@ -41,9 +41,9 @@ private:
     Brdf_slice&                                m_brdf_slice;
     std::shared_ptr<erhe::primitive::Material> m_material;
 
-    erhe::graphics::Vertex_input_state  m_empty_vertex_input;
-    erhe::renderer::Pipeline_renderpass m_renderpass;
-    int                                 m_area_size{0};
+    erhe::graphics::Vertex_input_state m_empty_vertex_input;
+    erhe::renderer::Pipeline_pass      m_pipeline_pass;
+    int                                m_area_size{0};
 };
 
 

@@ -2,12 +2,12 @@
 
 namespace erhe::renderer {
 
-Pipeline_renderpass::Pipeline_renderpass(erhe::graphics::Render_pipeline_state&& pipeline)
+Pipeline_pass::Pipeline_pass(erhe::graphics::Render_pipeline_state&& pipeline)
     : pipeline{pipeline}
 {
 }
 
-Pipeline_renderpass::Pipeline_renderpass(
+Pipeline_pass::Pipeline_pass(
     erhe::graphics::Render_pipeline_state&& pipeline,
     std::function<void()>                   begin,
     std::function<void()>                   end
@@ -18,7 +18,7 @@ Pipeline_renderpass::Pipeline_renderpass(
 {
 }
 
-void Pipeline_renderpass::reset()
+void Pipeline_pass::reset()
 {
     pipeline.reset();
     begin = {};

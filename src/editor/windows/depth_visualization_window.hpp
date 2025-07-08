@@ -44,9 +44,9 @@ private:
     Mesh_memory&                            m_mesh_memory;
 
     // TODO These resources should not be per node
-    erhe::graphics::Vertex_input_state  m_empty_vertex_input;
-    erhe::renderer::Pipeline_renderpass m_renderpass;
-    int                                 m_light_index{};
+    erhe::graphics::Vertex_input_state m_empty_vertex_input;
+    erhe::renderer::Pipeline_pass      m_pipeline_pass;
+    int                                m_light_index{};
 };
 
 /// Rendergraph sink node for showing texture in ImGui window

@@ -1,4 +1,5 @@
 #include "graphics/thumbnails.hpp"
+#include "app_context.hpp"
 #include "app_settings.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -95,67 +96,54 @@ Thumbnails::~Thumbnails()
 {
 }
 
-//auto Thumbnails::allocate() -> uint32_t
-//{
-//    for (size_t i = 0, end = m_last_use_frame_number.size(); i < end; ++i) {
-//        if (!m_in_use[i]) {
-//            m_in_use[i] = true;
-//            return static_cast<uint32_t>(i);
-//        }
-//    }
-//    ERHE_FATAL("out of thumbnail slots");
-//    return std::numeric_limits<uint32_t>::max();
-//}
-//
-//void Thumbnails::free(uint32_t slot)
-//{
-//    ERHE_VERIFY(m_in_use[slot]);
-//    m_in_use[slot] = true;
-//}
-//
-//auto Thumbnails::begin_capture(uint32_t slot) -> std::unique_ptr<erhe::graphics::Render_command_encoder>
-//{
-//    return m_graphics_device.make_render_command_encoder(*m_render_passes[slot].get());
-//}
-
-void Thumbnails::draw(
-    std::shared_ptr<erhe::Item_base>            item,
-    std::function<bool(Thumbnails& thumbnails)> callback
-)
+void Thumbnails::draw(std::shared_ptr<erhe::Item_base> item, std::function<void()> callback)
 {
-    static_cast<void>(item);
-    static_cast<void>(callback);
-    //m_context.imgui_renderer->image(
-    //    m_texture,
-    //    m_icon_width,
-    //    m_icon_height,
-    //    uv0,
-    //    uv1(uv0),
-    //    imvec_from_glm(tint_color),
-    //    false
-    //);
-    //ImGui::SameLine();
+    const std::size_t item_id = item->get_id();
+    uint64_t oldest_frame_number = m_thumbnails[0].last_use_frame_number;
+    Thumbnail* oldest_thumbnail = &m_thumbnails[0];
+    for (size_t i = 0, end = m_thumbnails.size(); i < end; ++i) {
+        Thumbnail& thumbnail = m_thumbnails[i];
+        if (
+            (thumbnail.item_id == item_id) &&
+            !thumbnail.callback.has_value()
+        ) {
+            thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_number();
+            m_context.imgui_renderer->image(
+                thumbnail.texture_view,
+                m_size_pixels,
+                m_size_pixels,
+                glm::vec2{0.0f, 0.0f},
+                glm::vec2{1.0f, 1.0f},
+                glm::vec4{0.0f, 0.0f, 0.0f, 1.0f},
+                glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+                false
+            );
+            ImGui::SameLine();
+            return;
+        }
+        if (thumbnail.last_use_frame_number < oldest_frame_number) {
+            oldest_frame_number = thumbnail.last_use_frame_number;
+            oldest_thumbnail = &thumbnail;
+        }
+    }
+
+    oldest_thumbnail->callback = callback;
+    ImGui::Dummy(ImVec2{static_cast<float>(m_size_pixels), static_cast<float>(m_size_pixels)});
+
+    ImGui::SameLine();
 }
 
-//auto Icon_rasterization::icon_button(
-//    const uint32_t  id,
-//    const glm::vec2 uv0,
-//    const glm::vec4 background_color,
-//    const glm::vec4 tint_color,
-//    const bool      linear
-//) const -> bool
-//{
-//#if !defined(ERHE_GUI_LIBRARY_IMGUI)
-//    static_cast<void>(uv0);
-//    static_cast<void>(tint_color);
-//    return false;
-//#else
-//    ERHE_PROFILE_FUNCTION();
-//
-//    const bool result = m_context.imgui_renderer->image_button(id, m_texture, m_icon_width, m_icon_height, uv0, uv1(uv0), background_color, tint_color, linear);
-//    ImGui::SameLine();
-//    return result;
-//#endif
-//}
+void Thumbnails::update()
+{
+    for (size_t i = 0, end = m_thumbnails.size(); i < end; ++i) {
+        Thumbnail& thumbnail = m_thumbnails[i];
+        if (thumbnail.callback) {
+            erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*thumbnail.render_pass.get());
+            thumbnail.callback.value()();
+            thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_number();
+            thumbnail.callback.reset();
+        }
+    }
+}
 
 }

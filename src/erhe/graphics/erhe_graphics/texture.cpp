@@ -1160,7 +1160,7 @@ auto Texture::get_level_count() const -> int
     return m_level_count;
 }
 
-auto Texture::get_fixed_sample_locations() const -> int
+auto Texture::get_fixed_sample_locations() const -> bool
 {
     return m_fixed_sample_locations;
 }

@@ -83,7 +83,7 @@ public:
     static constexpr uint64_t index_material               = 12;
     static constexpr uint64_t index_mesh                   = 13;
     static constexpr uint64_t index_mesh_layer             = 14;
-    static constexpr uint64_t index_renderpass             = 15;
+    static constexpr uint64_t index_composition_pass       = 15;
     static constexpr uint64_t index_rendertarget           = 16;
     static constexpr uint64_t index_scene                  = 17;
     static constexpr uint64_t index_skin                   = 18;
@@ -120,7 +120,7 @@ public:
     static constexpr uint64_t material               = (uint64_t{1} << index_material              );
     static constexpr uint64_t mesh                   = (uint64_t{1} << index_mesh                  );
     static constexpr uint64_t mesh_layer             = (uint64_t{1} << index_mesh_layer            );
-    static constexpr uint64_t renderpass             = (uint64_t{1} << index_renderpass            );
+    static constexpr uint64_t composition_pass       = (uint64_t{1} << index_composition_pass      );
     static constexpr uint64_t rendertarget           = (uint64_t{1} << index_rendertarget          );
     static constexpr uint64_t scene                  = (uint64_t{1} << index_scene                 );
     static constexpr uint64_t skin                   = (uint64_t{1} << index_skin                  );
@@ -158,7 +158,7 @@ public:
         "Material",
         "Mesh",
         "Mesh_layer",
-        "Renderpass",
+        "Composition_pass",
         "Rendertarget",
         "Scene",
         "Skin",

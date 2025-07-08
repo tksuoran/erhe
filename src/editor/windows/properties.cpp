@@ -766,7 +766,7 @@ void Properties::material_properties()
     const auto  available_size = ImGui::GetContentRegionAvail();
     const float area_size_0    = std::min(available_size.x, available_size.y);
     const int   area_size      = std::max(1, static_cast<int>(area_size_0));
-    m_context.material_preview->set_area_size(area_size);
+    m_context.material_preview->resize(area_size);
     m_context.material_preview->update_rendertarget(*m_context.graphics_device);
     m_context.material_preview->render_preview(selected_material_);
     m_context.material_preview->show_preview();

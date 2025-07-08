@@ -11,7 +11,7 @@
 namespace editor {
 
 class Render_context;
-class Renderpass;
+class Composition_pass;
 
 class Composer : public erhe::Item<erhe::Item_base, erhe::Item_base, Composer>
 {
@@ -36,8 +36,8 @@ public:
     void imgui();
 
     // TODO Move to children
-    ERHE_PROFILE_MUTEX(std::mutex,           mutex);
-    std::vector<std::shared_ptr<Renderpass>> renderpasses;
+    ERHE_PROFILE_MUTEX(std::mutex,                 mutex);
+    std::vector<std::shared_ptr<Composition_pass>> composition_passes;
 };
 
 }

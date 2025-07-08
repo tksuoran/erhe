@@ -182,11 +182,11 @@ public:
 
         m_scene.update_node_transforms();
 
-        std::vector<erhe::renderer::Pipeline_renderpass*> passes;
-        erhe::renderer::Pipeline_renderpass standard_pipeline_renderpass{ 
+        std::vector<erhe::renderer::Pipeline_pass*> passes;
+        erhe::renderer::Pipeline_pass standard_pipeline_renderpass{
             erhe::graphics::Render_pipeline_state{
                 erhe::graphics::Render_pipeline_data{
-                    .name           = "Standard Renderpass",
+                    .name           = "Example Render_pass",
                     .shader_stages  = &m_programs.standard,
                     .vertex_input   = &m_mesh_memory.vertex_input,
                     .input_assembly = erhe::graphics::Input_assembly_state::triangle,

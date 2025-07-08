@@ -46,7 +46,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     , m_forward_renderer  {forward_renderer}
     , m_mesh_memory       {mesh_memory}
     , m_empty_vertex_input{rendergraph.get_graphics_device()}
-    , m_renderpass{ 
+    , m_pipeline_pass{
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
                 .name           = "Debug_view",
@@ -152,7 +152,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
             .materials             = {},
             .mesh_spans            = {},
             .non_mesh_vertex_count = 3, // Full-screen triangle
-            .passes                = { &m_renderpass },
+            .passes                = { &m_pipeline_pass },
             .shadow_texture        = texture.get(),
             .viewport              = viewport,
             .debug_label           = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
