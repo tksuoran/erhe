@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 namespace erhe::graphics {
 
 enum class Glsl_type

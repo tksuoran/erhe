@@ -42,8 +42,8 @@ public:
     glm::vec3   emissive   {0.0f, 0.0f, 0.0f};
     float       opacity    {1.0f};
 
-    Textures    textures;
-    Samplers    samplers;
+    Textures    textures{};
+    Samplers    samplers{};
     TexCoords   tex_coords{};
 
 };

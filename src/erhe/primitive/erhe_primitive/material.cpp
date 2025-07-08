@@ -20,16 +20,16 @@ Material::Material(const Material_create_info& create_info)
     , reflectance{create_info.reflectance}
     , emissive   {create_info.emissive}
     , textures{
-        .base_color        {create_info.textures.base_color},
-        .metallic_roughness{create_info.textures.metallic_roughness}
+        .base_color         = create_info.textures.base_color,
+        .metallic_roughness = create_info.textures.metallic_roughness
     }
     , samplers{
-        .base_color        {create_info.samplers.base_color},
-        .metallic_roughness{create_info.samplers.metallic_roughness}
+        .base_color         = create_info.samplers.base_color,
+        .metallic_roughness = create_info.samplers.metallic_roughness
     }
     , tex_coords{
-        .base_color        {create_info.tex_coords.base_color},
-        .metallic_roughness{create_info.tex_coords.metallic_roughness}
+        .base_color         = create_info.tex_coords.base_color,
+        .metallic_roughness = create_info.tex_coords.metallic_roughness
     }
 {
     enable_flag_bits(erhe::Item_flags::show_in_ui);
