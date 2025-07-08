@@ -34,6 +34,7 @@ namespace erhe::window {
 namespace editor {
 
 class Brdf_slice;
+class Brush_preview;
 class Brush_tool;
 class Clipboard;
 class Clipboard_window;
@@ -130,6 +131,7 @@ public:
     Input_state*                            input_state           {nullptr};
     Material_paint_tool*                    material_paint_tool   {nullptr};
     Material_preview*                       material_preview      {nullptr};
+    Brush_preview*                          brush_preview         {nullptr};
     Mesh_memory*                            mesh_memory           {nullptr};
     Move_tool*                              move_tool             {nullptr};
     Operation_stack*                        operation_stack       {nullptr};

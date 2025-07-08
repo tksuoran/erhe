@@ -436,22 +436,19 @@ void Imgui_renderer::next_frame()
     }
     m_at_end_of_frame.clear();
 
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+//#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
     std::stringstream ss;
     for (const auto& used_texture : m_used_textures) {
         if (used_texture) {
-            ss << fmt::format("{}-{} ", used_texture->gl_name(), used_texture->debug_label());
+            ss << fmt::format("{}-{} ", used_texture->gl_name(), used_texture->get_debug_label());
         } else {
             ss << "<> ";
         }
     }
-    SPDLOG_LOGGER_TRACE(
-        log_imgui,
-        "clearing {} used textures: {}",
-        m_used_textures.size(),
-        ss.str()
-    );
-#endif
+    if (!m_used_textures.empty()) {
+        log_frame->trace("{} used textures: {}", m_used_textures.size(), ss.str());
+    }
+//#endif
 
     m_used_textures.clear();
     m_used_texture_handles.clear();
@@ -708,6 +705,24 @@ void Imgui_renderer::use(const std::shared_ptr<erhe::graphics::Texture>& texture
     m_used_texture_handles.insert(handle);
 }
 
+class Imgui_render_context
+{
+public:
+    erhe::graphics::Buffer_range draw_parameter_buffer_range; // = m_draw_parameter_buffer.acquire(usage, draw_parameter_byte_count);
+    erhe::graphics::Buffer_range draw_indirect_buffer_range ; // = m_draw_indirect_buffer .acquire(usage, draw_indirect_byte_count);
+    erhe::graphics::Buffer_range vertex_buffer_range        ; // = m_vertex_buffer        .acquire(usage, vertex_byte_count);
+    erhe::graphics::Buffer_range index_buffer_range         ; // = m_index_buffer         .acquire(usage, index_byte_count);
+    size_t                       draw_parameter_write_offset; // = 0;
+    size_t                       draw_indirect_write_offset ; // = 0;
+    size_t                       vertex_write_offset        ; // = 0;
+    size_t                       index_write_offset         ; // = 0;
+    size_t                       index_stride               ; // = sizeof(uint16_t);
+    std::span<std::byte>         draw_parameter_gpu_data    ; // = draw_parameter_buffer_range.get_span();
+    std::span<std::byte>         draw_indirect_gpu_data     ; // = draw_indirect_buffer_range .get_span();
+    std::span<std::byte>         vertex_gpu_data            ; // = vertex_buffer_range        .get_span();
+    std::span<std::byte>         index_gpu_data             ; // = index_buffer_range         .get_span();
+};
+
 void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& render_encoder)
 {
     SPDLOG_LOGGER_TRACE(log_frame, "begin Imgui_renderer::render_draw_data()");
@@ -747,15 +762,40 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
         -1.0f - draw_data->DisplayPos.y * scale[1]
     };
 
-    // Pass 1: Count how much memory will be needed
-    std::size_t vertex_byte_count         = 0;
-    std::size_t index_byte_count          = 0;
-    std::size_t draw_parameter_byte_count = m_imgui_program_interface.block_offsets.draw_parameter_struct_array;
-    std::size_t draw_indirect_byte_count  = 0;
+    using Buffer_range = erhe::graphics::Buffer_range;
+    using erhe::graphics::write;
+    constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
+
+    if (m_graphics_device.info.use_bindless_texture) {
+        for (const auto handle : m_used_texture_handles) {
+            SPDLOG_LOGGER_TRACE(log_imgui, "making texture handle {:16x} resident", handle);
+            gl::make_texture_handle_resident_arb(handle);
+        }
+    } else {
+//#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        for (const auto& texture : m_used_textures) {
+            //SPDLOG_LOGGER_TRACE(log_imgui, "used texture: {} {}", texture->gl_name(), texture->get_debug_label());
+            log_frame->trace("used texture: {} {}", texture->gl_name(), texture->get_debug_label());
+        }
+        for (const auto texture_handle : m_used_texture_handles) {
+            const GLuint texture_name = erhe::graphics::get_texture_from_handle(texture_handle);
+            //const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(texture_handle);
+            //SPDLOG_LOGGER_TRACE(log_imgui, "used texture: {}", texture_name);
+            //SPDLOG_LOGGER_TRACE(log_imgui, "used sampler: {}", sampler_name);
+            log_frame->trace("used texture via handle: {}", texture_name);
+        }
+    }
+//#endif
+
     for (int n = 0; n < draw_data->CmdListsCount; n++) {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
-        vertex_byte_count += static_cast<size_t>(cmd_list->VtxBuffer.size_in_bytes());
-        index_byte_count  += static_cast<size_t>(cmd_list->IdxBuffer.size_in_bytes());
+
+        std::size_t vertex_byte_count         = static_cast<size_t>(cmd_list->VtxBuffer.size_in_bytes());
+        std::size_t index_byte_count          = static_cast<size_t>(cmd_list->IdxBuffer.size_in_bytes());
+        std::size_t draw_parameter_byte_count = m_imgui_program_interface.block_offsets.draw_parameter_struct_array;
+        std::size_t draw_indirect_byte_count  = 0;
+
+        // Pass 1: Count how much memory will be needed
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
             const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
             if (pcmd->UserCallback != nullptr) {
@@ -769,61 +809,54 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                 draw_indirect_byte_count  += sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
             }
         }
-    }
-    if (
-        (draw_parameter_byte_count == 0) ||
-        (draw_indirect_byte_count == 0) ||
-        (vertex_byte_count == 0) ||
-        (index_byte_count == 0)
-    ) {
-        return;
-    }
+        if (
+            (draw_parameter_byte_count == 0) ||
+            (draw_indirect_byte_count == 0) ||
+            (vertex_byte_count == 0) ||
+            (index_byte_count == 0)
+        ) {
+            continue;
+        }
 
-    using Buffer_range = erhe::graphics::Buffer_range;
-    constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
-    Buffer_range draw_parameter_buffer_range = m_draw_parameter_buffer.acquire(usage, draw_parameter_byte_count);
-    Buffer_range draw_indirect_buffer_range  = m_draw_indirect_buffer .acquire(usage, draw_indirect_byte_count);
-    Buffer_range vertex_buffer_range         = m_vertex_buffer        .acquire(usage, vertex_byte_count);
-    Buffer_range index_buffer_range          = m_index_buffer         .acquire(usage, index_byte_count);
-    size_t draw_parameter_write_offset = 0;
-    size_t draw_indirect_write_offset  = 0;
-    size_t vertex_write_offset         = 0;
-    size_t index_write_offset          = 0;
-    size_t index_stride                = sizeof(uint16_t);
+        Buffer_range draw_parameter_buffer_range = m_draw_parameter_buffer.acquire(usage, draw_parameter_byte_count);
+        Buffer_range draw_indirect_buffer_range  = m_draw_indirect_buffer .acquire(usage, draw_indirect_byte_count);
+        Buffer_range vertex_buffer_range         = m_vertex_buffer        .acquire(usage, vertex_byte_count);
+        Buffer_range index_buffer_range          = m_index_buffer         .acquire(usage, index_byte_count);
+        size_t draw_parameter_write_offset = 0;
+        size_t draw_indirect_write_offset  = 0;
+        size_t vertex_write_offset         = 0;
+        size_t index_write_offset          = 0;
+        size_t index_stride                = sizeof(uint16_t);
 
-    std::span<std::byte> draw_parameter_gpu_data = draw_parameter_buffer_range.get_span();
-    std::span<std::byte> draw_indirect_gpu_data  = draw_indirect_buffer_range .get_span();
-    std::span<std::byte> vertex_gpu_data         = vertex_buffer_range        .get_span();
-    std::span<std::byte> index_gpu_data          = index_buffer_range         .get_span();
+        std::span<std::byte> draw_parameter_gpu_data = draw_parameter_buffer_range.get_span();
+        std::span<std::byte> draw_indirect_gpu_data  = draw_indirect_buffer_range .get_span();
+        std::span<std::byte> vertex_gpu_data         = vertex_buffer_range        .get_span();
+        std::span<std::byte> index_gpu_data          = index_buffer_range         .get_span();
 
-    using erhe::graphics::write;
+        // glVertexArrayVertexBuffer() / set_vertex_buffer() takes in buffer offset, so we can use 0 here
+        std::size_t list_vertex_offset{0};
 
-    // Write scale and translate
-    const std::span<const float> scale_cpu_data    {&scale    [0], 2};
-    const std::span<const float> translate_cpu_data{&translate[0], 2};
-    write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.scale,     scale_cpu_data);
-    write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.translate, translate_cpu_data);
-    draw_parameter_write_offset += m_imgui_program_interface.block_offsets.draw_parameter_struct_array;
+        // glVertexArrayElementBuffer() / set_index_buffer() does not take offset.
+        // thus index buffer offset must be baked into MDI DrawIndirect records
+        std::size_t list_index_offset{index_buffer_range.get_byte_start_offset_in_buffer() / index_stride};
 
-    const ImVec2 clip_off   = draw_data->DisplayPos;
-    const ImVec2 clip_scale = draw_data->FramebufferScale;
+        std::size_t draw_indirect_count{0};
 
-    if (!m_graphics_device.info.use_bindless_texture) {
-        m_graphics_device.texture_unit_cache_reset(0);
-    }
+        // Write scale and translate
+        const std::span<const float> scale_cpu_data    {&scale    [0], 2};
+        const std::span<const float> translate_cpu_data{&translate[0], 2};
+        write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.scale,     scale_cpu_data);
+        write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.translate, translate_cpu_data);
+        draw_parameter_write_offset += m_imgui_program_interface.block_offsets.draw_parameter_struct_array;
 
-    // Pass 2: fill buffers
+        const ImVec2 clip_off   = draw_data->DisplayPos;
+        const ImVec2 clip_scale = draw_data->FramebufferScale;
 
-    // glVertexArrayVertexBuffer() / set_vertex_buffer() takes in buffer offset, so we can use 0 here
-    std::size_t list_vertex_offset{0};
+        if (!m_graphics_device.info.use_bindless_texture) {
+            m_graphics_device.texture_unit_cache_reset(0);
+        }
 
-    // glVertexArrayElementBuffer() / set_index_buffer() does not take offset.
-    // thus index buffer offset must be baked into MDI DrawIndirect records
-    std::size_t list_index_offset{index_buffer_range.get_byte_start_offset_in_buffer() / index_stride};
-
-    std::size_t draw_indirect_count{0};
-    for (int n = 0; n < draw_data->CmdListsCount; n++) {
-        const ImDrawList* cmd_list = draw_data->CmdLists[n];
+        ///const ImDrawList* cmd_list = draw_data->CmdLists[n];
 
         // Upload vertex buffer
         const std::span<const uint8_t> vertex_cpu_data{
@@ -840,6 +873,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
         };
         write(index_gpu_data, index_write_offset, index_cpu_data);
 
+        // Pass 2: fill buffers
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
             const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
             if (pcmd->UserCallback != nullptr) {
@@ -942,97 +976,81 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
 
         list_vertex_offset += cmd_list->VtxBuffer.size();
         list_index_offset += cmd_list->IdxBuffer.size();
+
+        draw_parameter_buffer_range.bytes_written(draw_parameter_write_offset);
+        draw_parameter_buffer_range.close();
+        draw_indirect_buffer_range .bytes_written(draw_indirect_write_offset);
+        draw_indirect_buffer_range .close();
+        vertex_buffer_range        .bytes_written(vertex_write_offset);
+        vertex_buffer_range        .close();
+        index_buffer_range         .bytes_written(index_write_offset);
+        index_buffer_range         .close();
+
+        const size_t vertex_buffer_binding_offset = vertex_buffer_range.get_byte_start_offset_in_buffer();
+
+        if (draw_indirect_count > 0) {
+            gl::enable(gl::Enable_cap::clip_distance0);
+            gl::enable(gl::Enable_cap::clip_distance1);
+            gl::enable(gl::Enable_cap::clip_distance2);
+            gl::enable(gl::Enable_cap::clip_distance3);
+
+            // This binds vertex input states (VAO) and shader stages (shader program)
+            // and most other state
+            render_encoder.set_render_pipeline_state(m_pipeline);
+
+            erhe::graphics::Buffer* index_buffer  = index_buffer_range.get_buffer()->get_buffer();
+            erhe::graphics::Buffer* vertex_buffer = vertex_buffer_range.get_buffer()->get_buffer();
+
+            render_encoder.set_index_buffer(index_buffer);
+            render_encoder.set_vertex_buffer(vertex_buffer, vertex_buffer_binding_offset, 0);
+
+            // TODO viewport states is not currently in pipeline
+            gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));
+
+            if (!m_graphics_device.info.use_bindless_texture) {
+                const auto dummy_handle           = m_graphics_device.get_handle(*m_dummy_texture.get(), m_nearest_sampler);
+                const auto texture_unit_use_count = m_graphics_device.texture_unit_cache_bind(dummy_handle);
+
+                for (size_t i = texture_unit_use_count; i < Imgui_program_interface::s_texture_unit_count; ++i) {
+                    gl::bind_texture_unit(static_cast<GLuint>(i), m_dummy_texture->gl_name());
+                    gl::bind_sampler     (static_cast<GLuint>(i), m_nearest_sampler.gl_name());
+                }
+            }
+
+            ERHE_VERIFY(draw_parameter_buffer_range.get_written_byte_count() > 0);
+            m_draw_parameter_buffer.bind(render_encoder, draw_parameter_buffer_range);
+            m_draw_indirect_buffer.bind(render_encoder, draw_indirect_buffer_range);
+
+            render_encoder.multi_draw_indexed_primitives_indirect(
+                m_pipeline.data.input_assembly.primitive_topology,
+                erhe::dataformat::Format::format_16_scalar_uint,
+                draw_indirect_buffer_range.get_byte_start_offset_in_buffer(),
+                draw_indirect_count,
+                sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+            );
+
+            draw_parameter_buffer_range.release();
+            draw_indirect_buffer_range .release();
+            vertex_buffer_range        .release();
+            index_buffer_range         .release();
+
+            gl::disable(gl::Enable_cap::clip_distance0);
+            gl::disable(gl::Enable_cap::clip_distance1);
+            gl::disable(gl::Enable_cap::clip_distance2);
+            gl::disable(gl::Enable_cap::clip_distance3);
+        } else {
+            draw_parameter_buffer_range.cancel();
+            draw_indirect_buffer_range .cancel();
+            vertex_buffer_range        .cancel();
+            index_buffer_range         .cancel();
+        }
     }
 
-    draw_parameter_buffer_range.bytes_written(draw_parameter_write_offset);
-    draw_parameter_buffer_range.close();
-    draw_indirect_buffer_range .bytes_written(draw_indirect_write_offset);
-    draw_indirect_buffer_range .close();
-    vertex_buffer_range        .bytes_written(vertex_write_offset);
-    vertex_buffer_range        .close();
-    index_buffer_range         .bytes_written(index_write_offset);
-    index_buffer_range         .close();
-
-    const size_t vertex_buffer_binding_offset = vertex_buffer_range.get_byte_start_offset_in_buffer();
-
-    if (draw_indirect_count > 0) {
-        gl::enable(gl::Enable_cap::clip_distance0);
-        gl::enable(gl::Enable_cap::clip_distance1);
-        gl::enable(gl::Enable_cap::clip_distance2);
-        gl::enable(gl::Enable_cap::clip_distance3);
-
-        // This binds vertex input states (VAO) and shader stages (shader program)
-        // and most other state
-        render_encoder.set_render_pipeline_state(m_pipeline);
-
-        erhe::graphics::Buffer* index_buffer  = index_buffer_range.get_buffer()->get_buffer();
-        erhe::graphics::Buffer* vertex_buffer = vertex_buffer_range.get_buffer()->get_buffer();
-
-        render_encoder.set_index_buffer(index_buffer);
-        render_encoder.set_vertex_buffer(vertex_buffer, vertex_buffer_binding_offset, 0);
-
-        // TODO viewport states is not currently in pipeline
-        gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));
-
-        if (m_graphics_device.info.use_bindless_texture) {
-            for (const auto handle : m_used_texture_handles) {
-                SPDLOG_LOGGER_TRACE(log_imgui, "making texture handle {:16x} resident", handle);
-                gl::make_texture_handle_resident_arb(handle);
-            }
-        } else {
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-            for (const auto& texture : m_used_textures) {
-                SPDLOG_LOGGER_TRACE(log_imgui, "used texture: {} {}", texture->gl_name(), texture->debug_label());
-            }
-            for (const auto texture_handle : m_used_texture_handles) {
-                const GLuint texture_name = erhe::graphics::get_texture_from_handle(texture_handle);
-                const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(texture_handle);
-                SPDLOG_LOGGER_TRACE(log_imgui, "used texture: {}", texture_name);
-                SPDLOG_LOGGER_TRACE(log_imgui, "used sampler: {}", sampler_name);
-            }
-#endif
-            const auto dummy_handle           = m_graphics_device.get_handle(*m_dummy_texture.get(), m_nearest_sampler);
-            const auto texture_unit_use_count = m_graphics_device.texture_unit_cache_bind(dummy_handle);
-
-            for (size_t i = texture_unit_use_count; i < Imgui_program_interface::s_texture_unit_count; ++i) {
-                gl::bind_texture_unit(static_cast<GLuint>(i), m_dummy_texture->gl_name());
-                gl::bind_sampler     (static_cast<GLuint>(i), m_nearest_sampler.gl_name());
-            }
+    if (m_graphics_device.info.use_bindless_texture) {
+        for (const auto handle : m_used_texture_handles) {
+            SPDLOG_LOGGER_TRACE(log_imgui, "making texture handle {:16x} non-resident", handle);
+            gl::make_texture_handle_non_resident_arb(handle);
         }
-
-        ERHE_VERIFY(draw_parameter_buffer_range.get_written_byte_count() > 0);
-        m_draw_parameter_buffer.bind(render_encoder, draw_parameter_buffer_range);
-        m_draw_indirect_buffer.bind(render_encoder, draw_indirect_buffer_range);
-
-        render_encoder.multi_draw_indexed_primitives_indirect(
-            m_pipeline.data.input_assembly.primitive_topology,
-            erhe::dataformat::Format::format_16_scalar_uint,
-            draw_indirect_buffer_range.get_byte_start_offset_in_buffer(),
-            draw_indirect_count,
-            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-        );
-
-        draw_parameter_buffer_range.release();
-        draw_indirect_buffer_range .release();
-        vertex_buffer_range        .release();
-        index_buffer_range         .release();
-
-        if (m_graphics_device.info.use_bindless_texture) {
-            for (const auto handle : m_used_texture_handles) {
-                SPDLOG_LOGGER_TRACE(log_imgui, "making texture handle {:16x} non-resident", handle);
-                gl::make_texture_handle_non_resident_arb(handle);
-            }
-        }
-
-        gl::disable(gl::Enable_cap::clip_distance0);
-        gl::disable(gl::Enable_cap::clip_distance1);
-        gl::disable(gl::Enable_cap::clip_distance2);
-        gl::disable(gl::Enable_cap::clip_distance3);
-    } else {
-        draw_parameter_buffer_range.cancel();
-        draw_indirect_buffer_range .cancel();
-        vertex_buffer_range        .cancel();
-        index_buffer_range         .cancel();
     }
 
     SPDLOG_LOGGER_TRACE(log_frame, "end Imgui_renderer::render_draw_data()");

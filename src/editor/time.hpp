@@ -27,19 +27,21 @@ public:
 class Time
 {
 public:
-    [[nodiscard]] auto get_simulation_time_ns () const -> int64_t;
-    [[nodiscard]] auto get_host_system_time_ns() const -> int64_t;
-    [[nodiscard]] auto get_frame_number       () const -> uint64_t;
+    [[nodiscard]] auto get_simulation_time_ns                () const -> int64_t;
+    [[nodiscard]] auto get_host_system_time_ns               () const -> int64_t;
+    [[nodiscard]] auto get_host_system_last_frame_duration_ns() const -> int64_t;
+    [[nodiscard]] auto get_frame_number                      () const -> uint64_t;
     void prepare_update     ();
     void for_each_fixed_step(std::function<void(const Time_context&)> callback);
 
 private:
-    int64_t  m_host_system_last_frame_start_time{0};
-    int64_t  m_host_system_time_ns              {0};
-    int64_t  m_simulation_time_accumulator      {0};
-    int64_t  m_simulation_dt_ns                 {0};
-    int64_t  m_simulation_time_ns               {0};
-    uint64_t m_frame_number                     {0};
+    int64_t  m_host_system_last_frame_start_time {0};
+    int64_t  m_host_system_time_ns               {0};
+    int64_t  m_host_system_last_frame_duration_ns{0};
+    int64_t  m_simulation_time_accumulator       {0};
+    int64_t  m_simulation_dt_ns                  {0};
+    int64_t  m_simulation_time_ns                {0};
+    uint64_t m_frame_number                      {0};
 
     ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     std::vector<Time_context>      m_this_frame_fixed_steps;

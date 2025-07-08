@@ -6,6 +6,8 @@
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 
+#include <glm/glm.hpp>
+
 namespace erhe::graphics {
     class Render_pass;
     class Device;
@@ -30,6 +32,7 @@ namespace editor {
 
 class App_context;
 class App_rendering;
+class Brush;
 class Content_library;
 class Mesh_memory;
 class Programs;
@@ -57,14 +60,16 @@ public:
     // Public API
     [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;
 
-    void resize             (int size);
+    void resize             (int width, int height);
     void set_color_texture  (const std::shared_ptr<erhe::graphics::Texture>& color_texture);
+    void set_clear_color    (glm::vec4 clear_color);
     void update_rendertarget(erhe::graphics::Device& graphics_device);
 
 protected:
     erhe::graphics::Device&                       m_graphics_device;
     int                                           m_width{0};
     int                                           m_height{0};
+    glm::vec4                                     m_clear_color{0.5f, 0.5f, 0.5f, 0.0f};
     bool                                          m_use_external_color_texture{false};
     erhe::dataformat::Format                      m_color_format;
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
@@ -122,13 +127,20 @@ public:
         Programs&                       programs
     );
 
-    ////void render_preview(const std::shared_ptr<Brush>& brush);
+    void render_preview(
+        const std::shared_ptr<erhe::graphics::Texture>& texture,
+        const std::shared_ptr<Brush>&                   brush,
+        int64_t                                         time
+    );
 
 private:
     void make_preview_scene();
 
-    std::shared_ptr<erhe::scene::Node> m_node;
-    std::shared_ptr<erhe::scene::Mesh> m_mesh;
+    std::shared_ptr<erhe::primitive::Material> m_material;
+    std::shared_ptr<erhe::scene::Node>         m_node;
+    std::shared_ptr<erhe::scene::Mesh>         m_mesh;
+    std::shared_ptr<erhe::scene::Node>         m_key_light_node;
+    std::shared_ptr<erhe::scene::Light>        m_key_light;
 };
 
 }

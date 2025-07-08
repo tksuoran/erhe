@@ -30,6 +30,7 @@
 #include "rendertarget_imgui_host.hpp"
 #include "scene/asset_browser.hpp"
 #include "scene/debug_draw.hpp"
+//#include "scene/brush_preview.hpp" TODO
 #include "scene/material_preview.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
@@ -293,6 +294,8 @@ public:
 
         m_app_rendering->begin_frame(); // tests renderdoc capture start
 
+        m_thumbnails->update();
+
         // Execute rendergraph
         m_rendergraph->execute();
 
@@ -549,12 +552,12 @@ public:
             }
             ERHE_TASK_FOOTER( .name("Debug_renderer") );
 
-            //ERHE_TASK_HEADER(thumbnails_task)
-            //{
-            //    ERHE_GET_GL_CONTEXT
-            //    m_thumbnails = std::make_unique<erhe::renderer::Thumbnails>(*m_graphics_device.get());
-            //}
-            //ERHE_TASK_FOOTER( .name("Thumbnails") );
+            ERHE_TASK_HEADER(thumbnails_task)
+            {
+                ERHE_GET_GL_CONTEXT
+                m_thumbnails = std::make_unique<Thumbnails>(*m_graphics_device.get(), m_app_context);
+            }
+            ERHE_TASK_FOOTER( .name("Thumbnails") );
 
             ERHE_TASK_HEADER(rendergraph_task)
             {
@@ -920,6 +923,13 @@ public:
                     *m_mesh_memory.get(),
                     *m_programs.get()
                 );
+                m_brush_preview = std::make_unique<Brush_preview>(
+                    *m_graphics_device.get(),
+                    *m_scene_message_bus.get(),
+                    m_app_context,
+                    *m_mesh_memory.get(),
+                    *m_programs.get()
+                );
             }
             ERHE_TASK_FOOTER(
                 .name("Material_preview")
@@ -1125,6 +1135,7 @@ public:
         m_app_context.input_state            = m_input_state           .get();
         m_app_context.material_paint_tool    = m_material_paint_tool   .get();
         m_app_context.material_preview       = m_material_preview      .get();
+        m_app_context.brush_preview          = m_brush_preview         .get();
         m_app_context.mesh_memory            = m_mesh_memory           .get();
         m_app_context.move_tool              = m_move_tool             .get();
         m_app_context.operation_stack        = m_operation_stack       .get();
@@ -1140,6 +1151,7 @@ public:
         m_app_context.selection_tool         = m_selection_tool        .get();
         m_app_context.settings_window        = m_settings_window       .get();
         m_app_context.sheet_window           = m_sheet_window          .get();
+        m_app_context.thumbnails             = m_thumbnails            .get();
         m_app_context.time                   = m_time                  .get();
         m_app_context.timeline_window        = m_timeline_window       .get();
         m_app_context.tools                  = m_tools                 .get();
@@ -1292,6 +1304,7 @@ public:
     std::unique_ptr<Depth_visualization_window>              m_debug_view_window;
     std::unique_ptr<Debug_visualizations>                    m_debug_visualizations;
     std::unique_ptr<Material_preview    >                    m_material_preview;
+    std::unique_ptr<Brush_preview       >                    m_brush_preview;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     ////Theremin                                m_theremin;
 #endif

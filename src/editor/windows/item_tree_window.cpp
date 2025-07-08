@@ -3,25 +3,28 @@
 #include "windows/item_tree_window.hpp"
 
 #include "app_context.hpp"
-#include "editor_log.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
+#include "scene/material_preview.hpp" // TODO dedicated source files for brush_preview
+#include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
+#include "graphics/thumbnails.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/selection_tool.hpp"
+#include "tools/brushes/brush.hpp"
 #include "tools/clipboard.hpp"
+#include "tools/selection_tool.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -907,7 +910,23 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     }
     ERHE_DEFER( if (table_row) ImGui::PopID(); );
 
-    m_context.icon_set->item_icon(item, m_ui_scale);
+    bool thumbnail_drawn = false;
+    const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
+    if (content_library_node) {
+        const auto& brush = std::dynamic_pointer_cast<Brush>(content_library_node->item);
+        static_cast<void>(brush);
+        if (brush) {
+            thumbnail_drawn = m_context.thumbnails->draw(
+                brush,
+                [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, int64_t time) {
+                    m_context.brush_preview->render_preview(texture, brush, time);
+                }
+            );
+        }
+    }
+    if (!thumbnail_drawn) {
+        m_context.icon_set->item_icon(item, m_ui_scale);
+    }
 
     const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     if (!m_context.app_settings->node_tree_expand_attachments && node) {
@@ -918,9 +937,8 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     ImGui::TableSetColumnIndex(1);
     ImGui::SetNextItemWidth(-FLT_MIN); 
 
-    const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    const auto& hierarchy            = std::dynamic_pointer_cast<erhe::Hierarchy     >(item);
-    const auto& scene                = std::dynamic_pointer_cast<erhe::scene::Scene  >(item);
+    const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy     >(item);
+    const auto& scene     = std::dynamic_pointer_cast<erhe::scene::Scene  >(item);
 
     const char* c_name = [&item, &content_library_node](){
         if (content_library_node) {

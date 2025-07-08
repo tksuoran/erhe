@@ -8,12 +8,8 @@
 
 #include <memory>
 
-namespace erhe::imgui {
-    class Imgui_windows;
-}
-namespace erhe::primitive {
-    class Material;
-}
+namespace erhe::imgui     { class Imgui_windows; }
+namespace erhe::primitive { class Material; }
 
 namespace editor {
 

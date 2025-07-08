@@ -33,12 +33,13 @@ public:
     auto operator=(const Thumbnail&) -> Thumbnail& = delete;
     auto operator=(Thumbnail&&) -> Thumbnail&;
 
-    std::size_t                                  item_id{};
-    uint64_t                                     last_use_frame_number{0};
-    std::shared_ptr<erhe::graphics::Texture>     texture_view{};
-    std::unique_ptr<erhe::graphics::Render_pass> render_pass{};
-    uint64_t                                     color_texture_handle{};
-    std::optional<std::function<void()>>         callback{};
+    std::size_t                              item_id{};
+    uint64_t                                 last_use_frame_number{0};
+    int64_t                                  time{0};
+    std::shared_ptr<erhe::graphics::Texture> texture_view{};
+    std::optional<
+        std::function<void(const std::shared_ptr<erhe::graphics::Texture>&, int64_t)>
+    >                                        callback{};
 };
 
 class Thumbnails
@@ -50,7 +51,12 @@ public:
     // This should be called once per frame, outside command encoder
     void update();
 
-    void draw  (std::shared_ptr<erhe::Item_base> item, std::function<void()> callback);
+    auto draw(
+        const std::shared_ptr<erhe::Item_base>& item,
+        std::function<void(
+            const std::shared_ptr<erhe::graphics::Texture>&, int64_t
+        )> callback
+    ) -> bool;
 
 private:
     App_context&                                  m_context;

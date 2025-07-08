@@ -1,9 +1,11 @@
 #include "graphics/thumbnails.hpp"
 #include "app_context.hpp"
 #include "app_settings.hpp"
+#include "time.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -36,8 +38,8 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
         }
     }
 {
-    int capacity = 0;
-    int size_pixels = 0;
+    int capacity = 200;
+    int size_pixels = 64;
     const auto& section = erhe::configuration::get_ini_file_section("erhe.ini", "thumbnails");
     section.get("capacity", capacity);
     section.get("capacity", size_pixels);
@@ -75,20 +77,6 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
         texture_create_info.view_base_array_layer = i;
         texture_create_info.debug_label           = fmt::format("Thumbnail layer {}", i);
         t.texture_view = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
-
-        erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
-        render_pass_descriptor.color_attachments[0].texture      = t.texture_view.get();
-        render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
-        render_pass_descriptor.depth_attachment.renderbuffer     = m_depth_renderbuffer.get();
-        render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Dont_care;
-        render_pass_descriptor.depth_attachment.clear_value[0]   = 0.0f; // Reverse Z clear value is 0.0
-        render_pass_descriptor.render_target_width               = m_size_pixels;
-        render_pass_descriptor.render_target_height              = m_size_pixels;
-        render_pass_descriptor.debug_label                       = fmt::format("Thumbnail render pass layer {}", i);
-        t.render_pass = std::make_unique<erhe::graphics::Render_pass>(graphics_device, render_pass_descriptor);
-        t.color_texture_handle = graphics_device.get_handle(*t.texture_view.get(), m_color_sampler);
     }
 }
 
@@ -96,7 +84,10 @@ Thumbnails::~Thumbnails()
 {
 }
 
-void Thumbnails::draw(std::shared_ptr<erhe::Item_base> item, std::function<void()> callback)
+auto Thumbnails::draw(
+    const std::shared_ptr<erhe::Item_base>&                                       item,
+    std::function<void(const std::shared_ptr<erhe::graphics::Texture>&, int64_t)> callback
+) -> bool
 {
     const std::size_t item_id = item->get_id();
     uint64_t oldest_frame_number = m_thumbnails[0].last_use_frame_number;
@@ -118,8 +109,12 @@ void Thumbnails::draw(std::shared_ptr<erhe::Item_base> item, std::function<void(
                 glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
                 false
             );
+            if (ImGui::IsItemHovered()) {
+                oldest_thumbnail->callback = callback;
+                oldest_thumbnail->time += m_context.time->get_host_system_last_frame_duration_ns();
+            }
             ImGui::SameLine();
-            return;
+            return true;
         }
         if (thumbnail.last_use_frame_number < oldest_frame_number) {
             oldest_frame_number = thumbnail.last_use_frame_number;
@@ -127,20 +122,20 @@ void Thumbnails::draw(std::shared_ptr<erhe::Item_base> item, std::function<void(
         }
     }
 
+    oldest_thumbnail->last_use_frame_number = m_context.graphics_device->get_frame_number();
+    oldest_thumbnail->item_id = item_id;
     oldest_thumbnail->callback = callback;
-    ImGui::Dummy(ImVec2{static_cast<float>(m_size_pixels), static_cast<float>(m_size_pixels)});
-
-    ImGui::SameLine();
+    return false;
 }
 
 void Thumbnails::update()
 {
+    erhe::graphics::Scoped_debug_group render_graph_scope{"Thumbnails::update()"};
+
     for (size_t i = 0, end = m_thumbnails.size(); i < end; ++i) {
         Thumbnail& thumbnail = m_thumbnails[i];
         if (thumbnail.callback) {
-            erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*thumbnail.render_pass.get());
-            thumbnail.callback.value()();
-            thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_number();
+            thumbnail.callback.value()(thumbnail.texture_view, thumbnail.time);
             thumbnail.callback.reset();
         }
     }
