@@ -114,8 +114,9 @@ Tile_renderer::Tile_renderer(
     , m_nearest_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
-            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .min_filter  = erhe::graphics::Filter::nearest,
+            .mag_filter  = erhe::graphics::Filter::nearest,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
             .debug_label = "Tile_renderer"
         }
     }
@@ -764,7 +765,8 @@ auto Tile_renderer::terrain_image(const terrain_tile_t terrain_tile, const int s
         uv1,
         glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        false
+        erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     );
 }
 
@@ -788,7 +790,8 @@ auto Tile_renderer::unit_image(const unit_tile_t unit_tile, const int scale) -> 
         uv1,
         glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        false
+        erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     );
 }
 
@@ -805,7 +808,8 @@ void Tile_renderer::show_texture()
         uv1,
         glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        false
+        erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     );
 }
 

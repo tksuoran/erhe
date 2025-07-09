@@ -1,14 +1,14 @@
 #pragma once
 
+#include "erhe_imgui/imgui_renderer.hpp"
+
 #include <memory>
 #include <string>
 #include <string_view>
 
 typedef int ImGuiWindowFlags;
 
-namespace erhe::graphics {
-    class Texture;
-}
+namespace erhe::graphics { class Texture; }
 
 namespace erhe::imgui {
 
@@ -45,7 +45,13 @@ public:
     void show_window             ();
     void hide_window             ();
     void toggle_window_visibility();
-    void draw_image              (const std::shared_ptr<erhe::graphics::Texture>& texture, int width, int height, bool linear = false);
+    void draw_image              (
+        const std::shared_ptr<erhe::graphics::Texture>& texture,
+        int                                             width,
+        int                                             height,
+        erhe::graphics::Filter                          filter      = erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode             mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+    );
 
     auto get_imgui_host() const -> Imgui_host*;
     virtual void set_imgui_host(Imgui_host* imgui_host);

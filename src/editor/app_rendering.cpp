@@ -66,7 +66,7 @@ App_rendering::App_rendering(
 )
     : m_context              {app_context}
     , m_capture_frame_command{commands, app_context}
-    , m_pipeline_renderpasses{graphics_device, mesh_memory, programs}
+    , m_pipeline_passes      {graphics_device, mesh_memory, programs}
     , m_composer             {"Main Composer"}
     , m_content_timer        {graphics_device, "content"}
     , m_selection_timer      {graphics_device, "selection"}
@@ -105,61 +105,61 @@ App_rendering::App_rendering(
 
     using namespace erhe::primitive;
     using Blend_mode = erhe::renderer::Blend_mode;
-    auto opaque_fill_not_selected = make_renderpass("Content fill opaque not selected");
+    auto opaque_fill_not_selected = make_composition_pass("Content fill opaque not selected");
     opaque_fill_not_selected->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
     opaque_fill_not_selected->primitive_mode   = Primitive_mode::polygon_fill;
     opaque_fill_not_selected->filter           = opaque_not_selected_filter;
     opaque_fill_not_selected->get_render_style = render_style_not_selected;
-    opaque_fill_not_selected->passes           = { get_pipeline_renderpass(*opaque_fill_not_selected.get(), Blend_mode::opaque, false) };
+    opaque_fill_not_selected->passes           = { get_pipeline_pass(*opaque_fill_not_selected.get(), Blend_mode::opaque, false) };
 
     const auto& render_style_selected = [](const Render_context& context) -> const Render_style_data& {
         return context.viewport_config.render_style_selected;
     };
 
-    auto opaque_fill_selected = make_renderpass("Content fill opaque selected");
+    auto opaque_fill_selected = make_composition_pass("Content fill opaque selected");
     opaque_fill_selected->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
     opaque_fill_selected->primitive_mode   = Primitive_mode::polygon_fill;
     opaque_fill_selected->filter           = opaque_selected_filter;
     opaque_fill_selected->get_render_style = render_style_selected;
-    opaque_fill_selected->passes           = { get_pipeline_renderpass(*opaque_fill_selected.get(), Blend_mode::opaque, true)};
+    opaque_fill_selected->passes           = { get_pipeline_pass(*opaque_fill_selected.get(), Blend_mode::opaque, true)};
 
-    auto opaque_edge_lines_not_selected = make_renderpass("Content edge lines opaque not selected");
+    auto opaque_edge_lines_not_selected = make_composition_pass("Content edge lines opaque not selected");
     opaque_edge_lines_not_selected->mesh_layers      = { Mesh_layer_id::content };
     opaque_edge_lines_not_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_not_selected->filter           = opaque_not_selected_filter;
     opaque_edge_lines_not_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_not_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_not_selected->get_render_style = render_style_not_selected;
-    opaque_edge_lines_not_selected->passes           = { get_pipeline_renderpass(*opaque_edge_lines_not_selected.get(), Blend_mode::opaque, false) };
+    opaque_edge_lines_not_selected->passes           = { get_pipeline_pass(*opaque_edge_lines_not_selected.get(), Blend_mode::opaque, false) };
     opaque_edge_lines_not_selected->allow_shader_stages_override = false;
 
-    auto opaque_edge_lines_selected = make_renderpass("Content edge lines opaque selected");
+    auto opaque_edge_lines_selected = make_composition_pass("Content edge lines opaque selected");
     opaque_edge_lines_selected->mesh_layers      = { Mesh_layer_id::content };
     opaque_edge_lines_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_selected->filter           = opaque_selected_filter;
     opaque_edge_lines_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_selected->get_render_style = render_style_selected;
-    opaque_edge_lines_selected->passes           = { get_pipeline_renderpass(*opaque_edge_lines_selected.get(), Blend_mode::opaque, true) };
+    opaque_edge_lines_selected->passes           = { get_pipeline_pass(*opaque_edge_lines_selected.get(), Blend_mode::opaque, true) };
     opaque_edge_lines_selected->allow_shader_stages_override = false;
 
-    selection_outline = make_renderpass("Content outline opaque selected");
+    selection_outline = make_composition_pass("Content outline opaque selected");
     selection_outline->mesh_layers      = { Mesh_layer_id::content };
     selection_outline->primitive_mode   = Primitive_mode::polygon_fill;
     selection_outline->filter           = opaque_selected_filter;
     selection_outline->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     selection_outline->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
-    selection_outline->passes           = { &m_pipeline_renderpasses.selection_outline };
+    selection_outline->passes           = { &m_pipeline_passes.selection_outline };
     selection_outline->allow_shader_stages_override = false;
     selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
         .constant_color = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f},
         .constant_size = -5.0f
     };
 
-    auto sky = make_renderpass("Sky");
+    auto sky = make_composition_pass("Sky");
     sky->mesh_layers           = {};
     sky->non_mesh_vertex_count = 3; // Fullscreen quad
-    sky->passes                = { &m_pipeline_renderpasses.sky };
+    sky->passes                = { &m_pipeline_passes.sky };
     sky->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
     sky->filter = erhe::Item_filter{
         .require_all_bits_set         = 0,
@@ -169,10 +169,10 @@ App_rendering::App_rendering(
     sky->allow_shader_stages_override = false;
 
     // Infinite plane with 4 triangles / 12 indices - https://stackoverflow.com/questions/12965161/rendering-infinitely-large-plane
-    auto grid = make_renderpass("Grid");
+    auto grid = make_composition_pass("Grid");
     grid->mesh_layers           = {};
     grid->non_mesh_vertex_count = 12;
-    grid->passes                = { &m_pipeline_renderpasses.grid };
+    grid->passes                = { &m_pipeline_passes.grid };
     grid->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
     grid->filter = erhe::Item_filter{
         .require_all_bits_set         = 0,
@@ -182,23 +182,23 @@ App_rendering::App_rendering(
     grid->allow_shader_stages_override = false;
 
     // Translucent
-    auto translucent_fill = make_renderpass("Content fill translucent");
+    auto translucent_fill = make_composition_pass("Content fill translucent");
     translucent_fill->mesh_layers    = { Mesh_layer_id::content };
     translucent_fill->primitive_mode = Primitive_mode::polygon_fill;
     translucent_fill->filter         = translucent_filter;
-    translucent_fill->passes         = { get_pipeline_renderpass(*translucent_fill.get(), Blend_mode::translucent, false) };
+    translucent_fill->passes         = { get_pipeline_pass(*translucent_fill.get(), Blend_mode::translucent, false) };
 
-    auto translucent_outline = make_renderpass("Content outline translucent");
+    auto translucent_outline = make_composition_pass("Content outline translucent");
     translucent_outline->mesh_layers    = { Mesh_layer_id::content };
     translucent_outline->primitive_mode = Primitive_mode::edge_lines;
     translucent_outline->filter         = translucent_filter;
     translucent_outline->begin          = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     translucent_outline->end            = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
-    translucent_outline->passes         = { get_pipeline_renderpass(*translucent_outline.get(), Blend_mode::translucent, false) };
+    translucent_outline->passes         = { get_pipeline_pass(*translucent_outline.get(), Blend_mode::translucent, false) };
 
-    auto brush = make_renderpass("Brush");
+    auto brush = make_composition_pass("Brush");
     brush->mesh_layers    = { Mesh_layer_id::brush };
-    brush->passes         = { &m_pipeline_renderpasses.brush_back, &m_pipeline_renderpasses.brush_front };
+    brush->passes         = { &m_pipeline_passes.brush_back, &m_pipeline_passes.brush_front };
     brush->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
     brush->filter = erhe::Item_filter{
         .require_all_bits_set         = Item_flags::visible | Item_flags::brush,
@@ -207,9 +207,9 @@ App_rendering::App_rendering(
     };
     brush->allow_shader_stages_override = false;
 
-    auto rendertarget = make_renderpass("Rendertarget");
+    auto rendertarget = make_composition_pass("Rendertarget");
     rendertarget->mesh_layers    = { Mesh_layer_id::rendertarget };
-    rendertarget->passes         = { &m_pipeline_renderpasses.rendertarget_meshes };
+    rendertarget->passes         = { &m_pipeline_passes.rendertarget_meshes };
     rendertarget->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
     rendertarget->filter = erhe::Item_filter{
         .require_all_bits_set         = Item_flags::visible | Item_flags::rendertarget,
@@ -305,42 +305,42 @@ auto App_rendering::get_all_shadow_nodes() -> const std::vector<std::shared_ptr<
     return m_all_shadow_render_nodes;
 }
 
-auto App_rendering::get_pipeline_renderpass(
-    const Renderpass&                renderpass,
+auto App_rendering::get_pipeline_pass(
+    const Composition_pass&          composition_pass,
     const erhe::renderer::Blend_mode blend_mode,
     const bool                       selected
-) -> erhe::renderer::Pipeline_renderpass*
+) -> erhe::renderer::Pipeline_pass*
 {
     using namespace erhe::primitive;
-    switch (renderpass.primitive_mode) {
+    switch (composition_pass.primitive_mode) {
         case Primitive_mode::polygon_fill:
             switch (blend_mode) {
                 case erhe::renderer::Blend_mode::opaque:
                     return selected
-                        ? &m_pipeline_renderpasses.polygon_fill_standard_opaque_selected
-                        : &m_pipeline_renderpasses.polygon_fill_standard_opaque;
+                        ? &m_pipeline_passes.polygon_fill_standard_opaque_selected
+                        : &m_pipeline_passes.polygon_fill_standard_opaque;
                 case erhe::renderer::Blend_mode::translucent:
-                    return &m_pipeline_renderpasses.polygon_fill_standard_translucent;
+                    return &m_pipeline_passes.polygon_fill_standard_translucent;
                 default:
                     return nullptr;
             }
             break;
 
         case Primitive_mode::edge_lines:
-            return &m_pipeline_renderpasses.edge_lines;
+            return &m_pipeline_passes.edge_lines;
 
-        case Primitive_mode::corner_points    : return &m_pipeline_renderpasses.corner_points;
-        case Primitive_mode::corner_normals   : return &m_pipeline_renderpasses.edge_lines;
-        case Primitive_mode::polygon_centroids: return &m_pipeline_renderpasses.polygon_centroids;
+        case Primitive_mode::corner_points    : return &m_pipeline_passes.corner_points;
+        case Primitive_mode::corner_normals   : return &m_pipeline_passes.edge_lines;
+        case Primitive_mode::polygon_centroids: return &m_pipeline_passes.polygon_centroids;
         default: return nullptr;
     }
 }
 
-auto App_rendering::make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>
+auto App_rendering::make_composition_pass(const std::string_view name) -> std::shared_ptr<Composition_pass>
 {
-    auto renderpass = std::make_shared<Renderpass>(name);
+    auto renderpass = std::make_shared<Composition_pass>(name);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
-    m_composer.renderpasses.push_back(renderpass);
+    m_composer.composition_passes.push_back(renderpass);
     return renderpass;
 }
 
@@ -651,6 +651,11 @@ void App_rendering::imgui()
     }
 
     m_composer.imgui();
+}
+
+auto App_rendering::is_capturing() const -> bool
+{
+    return m_trigger_capture;
 }
 
 void App_rendering::begin_frame()

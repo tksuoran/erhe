@@ -43,29 +43,37 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
     , texture_sampler{
         graphics_device.info.use_bindless_texture
             ? nullptr
-            : default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, s_texture_unit_base, s_texture_unit_count)
+            : default_uniform_block.add_sampler(
+                "s_texture",
+                erhe::graphics::Glsl_type::sampler_2d,
+                s_texture_unit_base,
+                graphics_device.limits.max_texture_image_units - s_texture_unit_base
+            )
     }
     , nearest_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
-            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .min_filter  = erhe::graphics::Filter::nearest,
+            .mag_filter  = erhe::graphics::Filter::nearest,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
             .debug_label = "Programs nearest"
         }
     }
     , linear_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter = gl::Texture_min_filter::linear_mipmap_nearest,
-            .mag_filter = gl::Texture_mag_filter::linear,
+            .min_filter  = erhe::graphics::Filter::linear,
+            .mag_filter  = erhe::graphics::Filter::linear,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
             .debug_label = "Programs linear"
         }
     }
     , linear_mipmap_linear_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter = gl::Texture_min_filter::linear_mipmap_linear,
-            .mag_filter = gl::Texture_mag_filter::linear,
+            .min_filter  = erhe::graphics::Filter::linear,
+            .mag_filter  = erhe::graphics::Filter::linear,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::linear,
             .debug_label = "Programs linear mipmap"
         }
     }

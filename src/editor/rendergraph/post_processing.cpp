@@ -20,14 +20,15 @@ namespace editor {
 Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block)
     : input_texture        {block.add_uvec2("input_texture"        )->get_offset_in_parent()}
     , downsample_texture   {block.add_uvec2("downsample_texture"   )->get_offset_in_parent()}
-    , upsample_texture     {block.add_uvec2("upsample_texture"     )->get_offset_in_parent()}
 
+    , upsample_texture     {block.add_uvec2("upsample_texture"     )->get_offset_in_parent()}
     , texel_scale          {block.add_vec2 ("texel_scale"          )->get_offset_in_parent()}
+
     , source_lod           {block.add_float("source_lod"           )->get_offset_in_parent()}
     , level_count          {block.add_float("level_count"          )->get_offset_in_parent()}
-
     , upsample_radius      {block.add_float("upsample_radius"      )->get_offset_in_parent()}
     , mix_weight           {block.add_float("mix_weight"           )->get_offset_in_parent()}
+
     , tonemap_luminance_max{block.add_float("tonemap_luminance_max")->get_offset_in_parent()}
     , tonemap_alpha        {block.add_float("tonemap_alpha"        )->get_offset_in_parent()}
 {
@@ -381,16 +382,17 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
     , m_sampler_linear{
         d,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear,
-            .mag_filter  = gl::Texture_mag_filter::linear,
+            .min_filter  = erhe::graphics::Filter::linear,
+            .mag_filter  = erhe::graphics::Filter::linear,
             .debug_label = "linear"
         }
     }
     , m_sampler_linear_mipmap_nearest{
         d,
         erhe::graphics::Sampler_create_info{
-            .min_filter = gl::Texture_min_filter::linear_mipmap_nearest,
-            .mag_filter = gl::Texture_mag_filter::linear,
+            .min_filter  = erhe::graphics::Filter::linear,
+            .mag_filter  = erhe::graphics::Filter::linear,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
             .debug_label = "linear_mipmap_nearest"
         }
     }

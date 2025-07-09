@@ -2,7 +2,7 @@
 
 #include "renderers/composer.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "renderers/renderpass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
+#include "renderers/composition_pass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
 #include "erhe_commands/command.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
@@ -46,20 +46,20 @@ class Pipeline_renderpasses
 public:
     Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs);
 
-    erhe::graphics::Vertex_input_state  m_empty_vertex_input;
-    erhe::renderer::Pipeline_renderpass polygon_fill_standard_opaque;
-    erhe::renderer::Pipeline_renderpass polygon_fill_standard_opaque_selected;
-    erhe::renderer::Pipeline_renderpass polygon_fill_standard_translucent;
-    erhe::renderer::Pipeline_renderpass line_hidden_blend;
-    erhe::renderer::Pipeline_renderpass brush_back;
-    erhe::renderer::Pipeline_renderpass brush_front;
-    erhe::renderer::Pipeline_renderpass edge_lines;
-    erhe::renderer::Pipeline_renderpass selection_outline;
-    erhe::renderer::Pipeline_renderpass corner_points;
-    erhe::renderer::Pipeline_renderpass polygon_centroids;
-    erhe::renderer::Pipeline_renderpass rendertarget_meshes;
-    erhe::renderer::Pipeline_renderpass sky;
-    erhe::renderer::Pipeline_renderpass grid;
+    erhe::graphics::Vertex_input_state m_empty_vertex_input;
+    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque;
+    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_selected;
+    erhe::renderer::Pipeline_pass      polygon_fill_standard_translucent;
+    erhe::renderer::Pipeline_pass      line_hidden_blend;
+    erhe::renderer::Pipeline_pass      brush_back;
+    erhe::renderer::Pipeline_pass      brush_front;
+    erhe::renderer::Pipeline_pass      edge_lines;
+    erhe::renderer::Pipeline_pass      selection_outline;
+    erhe::renderer::Pipeline_pass      corner_points;
+    erhe::renderer::Pipeline_pass      polygon_centroids;
+    erhe::renderer::Pipeline_pass      rendertarget_meshes;
+    erhe::renderer::Pipeline_pass      sky;
+    erhe::renderer::Pipeline_pass      grid;
 };
 
 class App_rendering
@@ -83,6 +83,7 @@ public:
 
     [[nodiscard]] auto get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>;
     [[nodiscard]] auto get_all_shadow_nodes    () -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
+    [[nodiscard]] auto is_capturing            () const -> bool;
 
     void trigger_capture            ();
     void render_viewport_main       (const Render_context& context);
@@ -95,23 +96,23 @@ public:
     void add   (Renderable* renderable);
     void remove(Renderable* renderable);
 
-    auto make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>;
+    auto make_composition_pass(const std::string_view name) -> std::shared_ptr<Composition_pass>;
 
     void imgui();
     void request_renderdoc_capture();
 
-    glm::uvec4                  debug_joint_indices{0, 0, 0, 0};
-    std::vector<glm::vec4>      debug_joint_colors;
-    std::shared_ptr<Renderpass> selection_outline;
+    glm::uvec4                        debug_joint_indices{0, 0, 0, 0};
+    std::vector<glm::vec4>            debug_joint_colors;
+    std::shared_ptr<Composition_pass> selection_outline;
 
 private:
     void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
 
-    [[nodiscard]] auto get_pipeline_renderpass(
-        const Renderpass&          renderpass,
+    [[nodiscard]] auto get_pipeline_pass(
+        const Composition_pass&    renderpass,
         erhe::renderer::Blend_mode blend_mode,
         bool                       selected
-    ) -> erhe::renderer::Pipeline_renderpass*;
+    ) -> erhe::renderer::Pipeline_pass*;
 
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
@@ -121,7 +122,7 @@ private:
     // Commands
     Capture_frame_command     m_capture_frame_command;
 
-    Pipeline_renderpasses     m_pipeline_renderpasses;
+    Pipeline_renderpasses     m_pipeline_passes;
     Composer                  m_composer;
 
     erhe::graphics::Gpu_timer m_content_timer;

@@ -76,8 +76,7 @@ static constexpr const char* c_shader_stages_variant_strings[] =
 class Programs
 {
 public:
-    static constexpr int         s_texture_unit_base  =  2; // First two are reserved for shadow samplers
-    static constexpr std::size_t s_texture_unit_count = 14; // For non bindless textures
+    static constexpr int s_texture_unit_base = 2; // First two are reserved for shadow samplers
 
     Programs(erhe::graphics::Device& graphics_device);
 

@@ -2,10 +2,12 @@ set(_target "editor")
 add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    editor.cpp
-    editor.hpp
-    editor_log.cpp
-    editor_log.hpp
+    erhe.ini
+    graphics_presets.ini
+    logging.ini
+    settings.ini
+    windows.ini
+
     app_context.cpp
     app_context.hpp
     app_message.hpp
@@ -19,33 +21,36 @@ erhe_target_sources_grouped(
     app_settings.hpp
     app_windows.cpp
     app_windows.hpp
-    erhe.ini
-    graph/node_properties.cpp
-    graph/node_properties.hpp
-    graph/graph_window.cpp
-    graph/graph_window.hpp
-    graph/payload.cpp
-    graph/payload.hpp
-    graph/constant.cpp
-    graph/constant.hpp
+    editor.cpp
+    editor.hpp
+    editor_log.cpp
+    editor_log.hpp
     graph/add.cpp
     graph/add.hpp
-    graph/passthrough.cpp
-    graph/passthrough.hpp
-    graph/subtract.cpp
-    graph/subtract.hpp
-    graph/multiply.cpp
-    graph/multiply.hpp
+    graph/constant.cpp
+    graph/constant.hpp
     graph/divide.cpp
     graph/divide.hpp
+    graph/graph_window.cpp
+    graph/graph_window.hpp
     graph/load.cpp
     graph/load.hpp
+    graph/multiply.cpp
+    graph/multiply.hpp
+    graph/node_properties.cpp
+    graph/node_properties.hpp
+    graph/passthrough.cpp
+    graph/passthrough.hpp
+    graph/payload.cpp
+    graph/payload.hpp
     graph/shader_graph.cpp
     graph/shader_graph.hpp
     graph/shader_graph_node.cpp
     graph/shader_graph_node.hpp
     graph/store.cpp
     graph/store.hpp
+    graph/subtract.cpp
+    graph/subtract.hpp
     graphics/gradients.cpp
     graphics/gradients.hpp
     graphics/icon_rasterization.cpp
@@ -56,7 +61,6 @@ erhe_target_sources_grouped(
     graphics/thumbnails.hpp
     input_state.cpp
     input_state.hpp
-    logging.ini
     main.cpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
@@ -87,10 +91,11 @@ erhe_target_sources_grouped(
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
-    graphics_presets.ini
     renderable.hpp
     renderers/composer.cpp
     renderers/composer.hpp
+    renderers/composition_pass.cpp
+    renderers/composition_pass.hpp
     renderers/frustum_tiler.cpp
     renderers/frustum_tiler.hpp
     renderers/id_renderer.cpp
@@ -105,8 +110,6 @@ erhe_target_sources_grouped(
     renderers/render_context.hpp
     renderers/render_style.cpp
     renderers/render_style.hpp
-    renderers/renderpass.cpp
-    renderers/renderpass.hpp
     renderers/viewport_config.cpp
     renderers/viewport_config.hpp
     rendergraph/basic_scene_view_node.cpp
@@ -119,6 +122,153 @@ erhe_target_sources_grouped(
     rendertarget_imgui_host.hpp
     rendertarget_mesh.cpp
     rendertarget_mesh.hpp
+    scene/asset_browser.cpp
+    scene/asset_browser.hpp
+    scene/brush_placement.cpp
+    scene/brush_placement.hpp
+    scene/content_library.cpp
+    scene/content_library.hpp
+    scene/debug_draw.cpp
+    scene/debug_draw.hpp
+    scene/frame_controller.cpp
+    scene/frame_controller.hpp
+    scene/material_library.cpp
+    scene/material_library.hpp
+    scene/material_preview.cpp
+    scene/material_preview.hpp
+    scene/mesh_intersect.cpp
+    scene/mesh_intersect.hpp
+    scene/node_physics.cpp
+    scene/node_physics.hpp
+    scene/node_raytrace.cpp
+    scene/node_raytrace.hpp
+    scene/scene_builder.cpp
+    scene/scene_builder.hpp
+    scene/scene_commands.cpp
+    scene/scene_commands.hpp
+    scene/scene_root.cpp
+    scene/scene_root.hpp
+    scene/scene_view.cpp
+    scene/scene_view.hpp
+    scene/viewport_scene_view.cpp
+    scene/viewport_scene_view.hpp
+    scene/viewport_scene_views.cpp
+    scene/viewport_scene_views.hpp
+    time.cpp
+    time.hpp
+    tools/brushes/brush.cpp
+    tools/brushes/brush.hpp
+    tools/brushes/brush_tool.cpp
+    tools/brushes/brush_tool.hpp
+    tools/brushes/create/create.cpp
+    tools/brushes/create/create.hpp
+    tools/brushes/create/create_box.cpp
+    tools/brushes/create/create_box.hpp
+    tools/brushes/create/create_cone.cpp
+    tools/brushes/create/create_cone.hpp
+    tools/brushes/create/create_preview_settings.hpp
+    tools/brushes/create/create_shape.cpp
+    tools/brushes/create/create_shape.hpp
+    tools/brushes/create/create_torus.cpp
+    tools/brushes/create/create_torus.hpp
+    tools/brushes/create/create_uv_sphere.cpp
+    tools/brushes/create/create_uv_sphere.hpp
+    tools/brushes/reference_frame.cpp
+    tools/brushes/reference_frame.hpp
+    tools/clipboard.cpp
+    tools/clipboard.hpp
+    tools/debug_visualizations.cpp
+    tools/debug_visualizations.hpp
+    tools/fly_camera_tool.cpp
+    tools/fly_camera_tool.hpp
+    tools/grid.cpp
+    tools/grid.hpp
+    tools/grid_tool.cpp
+    tools/grid_tool.hpp
+    tools/hotbar.cpp
+    tools/hotbar.hpp
+    tools/hover_tool.cpp
+    tools/hover_tool.hpp
+    tools/hud.cpp
+    tools/hud.hpp
+    tools/material_paint_tool.cpp
+    tools/material_paint_tool.hpp
+    tools/paint_tool.cpp
+    tools/paint_tool.hpp
+    tools/physics_tool.cpp
+    tools/physics_tool.hpp
+    tools/selection_tool.cpp
+    tools/selection_tool.hpp
+    tools/tool.cpp
+    tools/tool.hpp
+    tools/tools.cpp
+    tools/tools.hpp
+    tools/transform/handle_enums.cpp
+    tools/transform/handle_enums.hpp
+    tools/transform/handle_visualizations.cpp
+    tools/transform/handle_visualizations.hpp
+    tools/transform/move_tool.cpp
+    tools/transform/move_tool.hpp
+    tools/transform/rotate_tool.cpp
+    tools/transform/rotate_tool.hpp
+    tools/transform/rotation_inspector.cpp
+    tools/transform/rotation_inspector.hpp
+    tools/transform/scale_tool.cpp
+    tools/transform/scale_tool.hpp
+    tools/transform/subtool.cpp
+    tools/transform/subtool.hpp
+    tools/transform/transform_tool.cpp
+    tools/transform/transform_tool.hpp
+    tools/transform/transform_tool_settings.cpp
+    tools/transform/transform_tool_settings.hpp
+    windows/animation_curve.cpp
+    windows/animation_curve.hpp
+    windows/brdf_slice.cpp
+    windows/brdf_slice.hpp
+    windows/clipboard_window.cpp
+    windows/clipboard_window.hpp
+    windows/commands_window.cpp
+    windows/commands_window.hpp
+    windows/composer_window.cpp
+    windows/composer_window.hpp
+    windows/depth_visualization_window.cpp
+    windows/depth_visualization_window.hpp
+    windows/gradient_editor.cpp
+    windows/gradient_editor.hpp
+    windows/icon_browser.cpp
+    windows/icon_browser.hpp
+    windows/item_tree_window.cpp
+    windows/item_tree_window.hpp
+    windows/layers_window.cpp
+    windows/layers_window.hpp
+    windows/network_window.cpp
+    windows/network_window.hpp
+    windows/operations.cpp
+    windows/operations.hpp
+    windows/physics_window.cpp
+    windows/physics_window.hpp
+    windows/post_processing_window.cpp
+    windows/post_processing_window.hpp
+    windows/properties.cpp
+    windows/properties.hpp
+    windows/property_editor.cpp
+    windows/property_editor.hpp
+    windows/rendergraph_window.cpp
+    windows/rendergraph_window.hpp
+    windows/selection_window.cpp
+    windows/selection_window.hpp
+    windows/settings_window.cpp
+    windows/settings_window.hpp
+    windows/sheet_window.cpp
+    windows/sheet_window.hpp
+    windows/timeline_window.cpp
+    windows/timeline_window.hpp
+    windows/tool_properties_window.cpp
+    windows/tool_properties_window.hpp
+    windows/viewport_config_window.cpp
+    windows/viewport_config_window.hpp
+    windows/viewport_window.cpp
+    windows/viewport_window.hpp
 
     # Shaders
     res/shaders/anisotropic_engine_ready.frag
@@ -180,156 +330,6 @@ erhe_target_sources_grouped(
     res/shaders/wide_lines.frag
     res/shaders/wide_lines.geom
     res/shaders/wide_lines.vert
-
-    scene/asset_browser.cpp
-    scene/asset_browser.hpp
-    scene/brush_placement.cpp
-    scene/brush_placement.hpp
-    scene/content_library.cpp
-    scene/content_library.hpp
-    scene/debug_draw.cpp
-    scene/debug_draw.hpp
-    scene/frame_controller.cpp
-    scene/frame_controller.hpp
-    scene/material_library.cpp
-    scene/material_library.hpp
-    scene/material_preview.cpp
-    scene/material_preview.hpp
-    scene/mesh_intersect.cpp
-    scene/mesh_intersect.hpp
-    scene/node_physics.cpp
-    scene/node_physics.hpp
-    scene/node_raytrace.cpp
-    scene/node_raytrace.hpp
-    scene/scene_builder.cpp
-    scene/scene_builder.hpp
-    scene/scene_commands.cpp
-    scene/scene_commands.hpp
-    scene/scene_root.cpp
-    scene/scene_root.hpp
-    scene/scene_view.cpp
-    scene/scene_view.hpp
-    scene/viewport_scene_view.cpp
-    scene/viewport_scene_view.hpp
-    scene/viewport_scene_views.cpp
-    scene/viewport_scene_views.hpp
-    settings.ini
-    time.cpp
-    time.hpp
-    tools/brushes/brush.cpp
-    tools/brushes/brush.hpp
-    tools/brushes/brush_tool.cpp
-    tools/brushes/brush_tool.hpp
-    tools/brushes/reference_frame.cpp
-    tools/brushes/reference_frame.hpp
-    tools/brushes/create/create.cpp
-    tools/brushes/create/create.hpp
-    tools/brushes/create/create_box.cpp
-    tools/brushes/create/create_box.hpp
-    tools/brushes/create/create_cone.cpp
-    tools/brushes/create/create_cone.hpp
-    tools/brushes/create/create_preview_settings.hpp
-    tools/brushes/create/create_shape.cpp
-    tools/brushes/create/create_shape.hpp
-    tools/brushes/create/create_torus.cpp
-    tools/brushes/create/create_torus.hpp
-    tools/brushes/create/create_uv_sphere.cpp
-    tools/brushes/create/create_uv_sphere.hpp
-    tools/clipboard.cpp
-    tools/clipboard.hpp
-    tools/debug_visualizations.cpp
-    tools/debug_visualizations.hpp
-    tools/fly_camera_tool.cpp
-    tools/fly_camera_tool.hpp
-    tools/grid.cpp
-    tools/grid.hpp
-    tools/grid_tool.cpp
-    tools/grid_tool.hpp
-    tools/hotbar.cpp
-    tools/hotbar.hpp
-    tools/hover_tool.cpp
-    tools/hover_tool.hpp
-    tools/hud.cpp
-    tools/hud.hpp
-    tools/material_paint_tool.cpp
-    tools/material_paint_tool.hpp
-    tools/paint_tool.cpp
-    tools/paint_tool.hpp
-    tools/physics_tool.cpp
-    tools/physics_tool.hpp
-    tools/selection_tool.cpp
-    tools/selection_tool.hpp
-    tools/tool.cpp
-    tools/tool.hpp
-    tools/tools.cpp
-    tools/tools.hpp
-    tools/transform/handle_enums.cpp
-    tools/transform/handle_enums.hpp
-    tools/transform/handle_visualizations.cpp
-    tools/transform/handle_visualizations.hpp
-    tools/transform/move_tool.cpp
-    tools/transform/move_tool.hpp
-    tools/transform/rotate_tool.cpp
-    tools/transform/rotate_tool.hpp
-    tools/transform/rotation_inspector.cpp
-    tools/transform/rotation_inspector.hpp
-    tools/transform/scale_tool.cpp
-    tools/transform/scale_tool.hpp
-    tools/transform/subtool.cpp
-    tools/transform/subtool.hpp
-    tools/transform/transform_tool.cpp
-    tools/transform/transform_tool.hpp
-    tools/transform/transform_tool_settings.cpp
-    tools/transform/transform_tool_settings.hpp
-    windows.ini
-    windows/animation_curve.cpp
-    windows/animation_curve.hpp
-    windows/brdf_slice.cpp
-    windows/brdf_slice.hpp
-    windows/clipboard_window.cpp
-    windows/clipboard_window.hpp
-    windows/commands_window.cpp
-    windows/commands_window.hpp
-    windows/composer_window.cpp
-    windows/composer_window.hpp
-    windows/depth_visualization_window.cpp
-    windows/depth_visualization_window.hpp
-    windows/icon_browser.cpp
-    windows/icon_browser.hpp
-    windows/item_tree_window.cpp
-    windows/item_tree_window.hpp
-    windows/gradient_editor.cpp
-    windows/gradient_editor.hpp
-    windows/layers_window.cpp
-    windows/layers_window.hpp
-    windows/network_window.cpp
-    windows/network_window.hpp
-    windows/operations.cpp
-    windows/operations.hpp
-    windows/physics_window.cpp
-    windows/physics_window.hpp
-    windows/post_processing_window.cpp
-    windows/post_processing_window.hpp
-    windows/properties.cpp
-    windows/properties.hpp
-    windows/property_editor.cpp
-    windows/property_editor.hpp
-    windows/rendergraph_window.cpp
-    windows/rendergraph_window.hpp
-    windows/selection_window.cpp
-    windows/selection_window.hpp
-    windows/settings_window.cpp
-    windows/settings_window.hpp
-    windows/sheet_window.cpp
-    windows/sheet_window.hpp
-    windows/tool_properties_window.cpp
-    windows/tool_properties_window.hpp
-    windows/timeline_window.cpp
-    windows/timeline_window.hpp
-    windows/viewport_config_window.cpp
-    windows/viewport_config_window.hpp
-    windows/viewport_window.cpp
-    windows/viewport_window.hpp
 )
 
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")

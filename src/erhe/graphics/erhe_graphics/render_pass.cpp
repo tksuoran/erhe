@@ -467,6 +467,10 @@ void Render_pass::start_render_pass()
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
 
+    if ((m_render_target_width > 0) && (m_render_target_height > 0)) {
+        gl::viewport(0, 0, m_render_target_width, m_render_target_height);
+    }
+
     std::string begin_debug_group_name = fmt::format("Render_pass::start_render_pass() {}", m_debug_group_name);
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
@@ -501,12 +505,8 @@ void Render_pass::start_render_pass()
                         static_cast<GLfloat>(attachment.clear_value[2]),
                         static_cast<GLfloat>(attachment.clear_value[3])
                     };
-                    if (attachment.texture != nullptr) {
-                        // TODO figure out why gl::clear_named_framebuffer_fv() does not work (at least on AMD).
-                        gl::clear_tex_image(attachment.texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &f[0]);
-                    } else {
-                        gl::clear_named_framebuffer_fv(name, gl::Buffer::color, static_cast<GLint>(color_index), &f[0]);
-                    }
+                    // gl::clear_tex_image(attachment.texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &f[0]);
+                    gl::clear_named_framebuffer_fv(name, gl::Buffer::color, static_cast<GLint>(color_index), &f[0]);
                     break;
                 }
                 case erhe::dataformat::Format_kind::format_kind_signed_integer: {
@@ -566,9 +566,6 @@ void Render_pass::start_render_pass()
         }
     }
 
-    if ((m_render_target_width > 0) && (m_render_target_height > 0)) {
-        gl::viewport(0, 0, m_render_target_width, m_render_target_height);
-    }
     gl::pop_debug_group();
 }
 

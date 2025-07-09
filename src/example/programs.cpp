@@ -21,30 +21,38 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
     , texture_sampler{
         graphics_device.info.use_bindless_texture
             ? nullptr
-            : default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, s_texture_unit_base, s_texture_unit_count)
+            : default_uniform_block.add_sampler(
+                "s_texture",
+                erhe::graphics::Glsl_type::sampler_2d,
+                0,
+                graphics_device.limits.max_texture_image_units
+            )
     }
 
     , nearest_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest_mipmap_nearest,
-            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .min_filter  = erhe::graphics::Filter::nearest,
+            .mag_filter  = erhe::graphics::Filter::nearest,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .debug_label = "Programs nearest"
         }
     }
     , linear_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
-            .mag_filter  = gl::Texture_mag_filter::linear,
+            .min_filter  = erhe::graphics::Filter::linear,
+            .mag_filter  = erhe::graphics::Filter::linear,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
             .debug_label = "Programs linear"
         }
     }
     , linear_mipmap_linear_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
-            .mag_filter  = gl::Texture_mag_filter::linear,
+            .min_filter  = erhe::graphics::Filter::linear,
+            .mag_filter  = erhe::graphics::Filter::linear,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::linear,
             .debug_label = "Programs linear mipmap"
         }
     }
@@ -54,7 +62,7 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
             program_interface.make_prototype(
                 shader_path,
                 erhe::graphics::Shader_stages_create_info{
-                    .name              = "standard",
+                    .name                  = "standard",
                     .default_uniform_block = graphics_device.info.use_bindless_texture
                         ? nullptr
                         : &default_uniform_block,

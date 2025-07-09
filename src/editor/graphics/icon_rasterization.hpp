@@ -75,11 +75,12 @@ public:
 
     void icon(glm::vec2 uv0, glm::vec4 background_color = glm::vec4{0.0f}, glm::vec4 tint_color = glm::vec4{1.0f}) const;
     auto icon_button(
-        uint32_t  id,
-        glm::vec2 uv0,
-        glm::vec4 backround_color = glm::vec4{0.0f},
-        glm::vec4 tint_color      = glm::vec4{1.0f},
-        bool      linear          = false
+        uint32_t                            id,
+        glm::vec2                           uv0,
+        glm::vec4                           backround_color = glm::vec4{0.0f},
+        glm::vec4                           tint_color      = glm::vec4{1.0f},
+        erhe::graphics::Filter              filter          = erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode mipmap_mode     = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     ) const -> bool;
     auto get_texture() -> std::shared_ptr<erhe::graphics::Texture> { return m_texture; }
 

@@ -369,7 +369,8 @@ auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> boo
         uv1,
         glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        false
+        erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     );
 }
 

@@ -89,11 +89,47 @@ enum class Texture_type : unsigned int
     texture_cube_map = 4
 };
 
-[[nodiscard]] auto glsl_type_c_str(const Glsl_type      type) -> const char*;
-[[nodiscard]] auto get_dimension  (const Glsl_type      type) -> std::size_t;
-[[nodiscard]] auto c_str          (const Primitive_type primitive_type) -> const char*;
-[[nodiscard]] auto c_str          (const Buffer_target  buffer_target) -> const char*;
-[[nodiscard]] auto is_indexed     (const Buffer_target  buffer_target) -> bool;
-[[nodiscard]] auto c_str          (const Texture_type   texture_type) -> const char*;
+enum class Filter : unsigned int
+{
+    nearest = 0,
+    linear
+};
+
+enum class Sampler_mipmap_mode : unsigned int
+{
+    not_mipmapped = 0,
+    nearest,
+    linear
+};
+
+enum class Sampler_address_mode : unsigned int
+{
+    repeat = 0,
+    clamp_to_edge,
+    mirrored_repeat
+};
+
+enum class Compare_operation : unsigned int
+{
+    never = 0,
+    less,
+    equal,
+    less_or_equal,
+    greater,
+    not_equal,
+    greater_or_equal,
+    always
+};
+
+[[nodiscard]] auto glsl_type_c_str(const Glsl_type            type) -> const char*;
+[[nodiscard]] auto get_dimension  (const Glsl_type            type) -> std::size_t;
+[[nodiscard]] auto c_str          (const Primitive_type       primitive_type) -> const char*;
+[[nodiscard]] auto c_str          (const Buffer_target        buffer_target) -> const char*;
+[[nodiscard]] auto is_indexed     (const Buffer_target        buffer_target) -> bool;
+[[nodiscard]] auto c_str          (const Texture_type         texture_type) -> const char*;
+[[nodiscard]] auto c_str          (const Filter               filter) -> const char*;
+[[nodiscard]] auto c_str          (const Sampler_mipmap_mode  sampler_mipmap_mode) -> const char*;
+[[nodiscard]] auto c_str          (const Sampler_address_mode sampler_address_mode) -> const char*;
+[[nodiscard]] auto c_str          (const Compare_operation    compare_operation) -> const char*;
 
 } // namespace erhe::graphics

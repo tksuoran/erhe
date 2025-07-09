@@ -877,7 +877,8 @@ void Selection_tool::viewport_toolbar(bool& hovered)
         m_context.icon_set->icons.select,
         glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        false
+        erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     );
     erhe::imgui::end_button_style(mode);
     if (ImGui::IsItemHovered()) {

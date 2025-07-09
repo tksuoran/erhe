@@ -15,6 +15,8 @@ void Time::prepare_update()
     int64_t host_system_frame_duration_ns   = host_system_frame_start_time_ns - m_host_system_last_frame_start_time;
     int64_t simulation_frame_duration_ns    = host_system_frame_duration_ns;
 
+    m_host_system_last_frame_duration_ns = host_system_frame_duration_ns;
+
     // Cap frame duration to 25ms. This causes time dilation
     if (simulation_frame_duration_ns > 25'000'000'000) {
         simulation_frame_duration_ns = 25'000'000'000;
@@ -73,10 +75,14 @@ auto Time::get_simulation_time_ns() const -> int64_t
     return m_simulation_time_ns;
 }
 
-
 auto Time::get_host_system_time_ns() const -> int64_t
 {
     return m_host_system_time_ns;
+}
+
+auto Time::get_host_system_last_frame_duration_ns() const -> int64_t
+{
+    return m_host_system_last_frame_duration_ns;
 }
 
 }  // namespace editor

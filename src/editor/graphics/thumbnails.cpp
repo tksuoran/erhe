@@ -1,8 +1,13 @@
 #include "graphics/thumbnails.hpp"
+#include "app_context.hpp"
+#include "app_rendering.hpp"
+#include "editor_log.hpp"
 #include "app_settings.hpp"
+#include "time.hpp"
 
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -29,14 +34,14 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
     , m_color_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear,
-            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .min_filter  = erhe::graphics::Filter::linear,
+            .mag_filter  = erhe::graphics::Filter::nearest,
             .debug_label = "Thumbnail sampler"
         }
     }
 {
-    int capacity = 0;
-    int size_pixels = 0;
+    int capacity = 200;
+    int size_pixels = 64;
     const auto& section = erhe::configuration::get_ini_file_section("erhe.ini", "thumbnails");
     section.get("capacity", capacity);
     section.get("capacity", size_pixels);
@@ -70,24 +75,12 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
 
         erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, m_color_texture);
         texture_create_info.view_base_level       = 0;
-        texture_create_info.level_count           = 1;
+        texture_create_info.array_layer_count     = 0;
+        texture_create_info.use_mipmaps           = true;
+        texture_create_info.level_count           = m_color_texture->get_level_count();
         texture_create_info.view_base_array_layer = i;
         texture_create_info.debug_label           = fmt::format("Thumbnail layer {}", i);
         t.texture_view = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
-
-        erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
-        render_pass_descriptor.color_attachments[0].texture      = t.texture_view.get();
-        render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
-        render_pass_descriptor.depth_attachment.renderbuffer     = m_depth_renderbuffer.get();
-        render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Dont_care;
-        render_pass_descriptor.depth_attachment.clear_value[0]   = 0.0f; // Reverse Z clear value is 0.0
-        render_pass_descriptor.render_target_width               = m_size_pixels;
-        render_pass_descriptor.render_target_height              = m_size_pixels;
-        render_pass_descriptor.debug_label                       = fmt::format("Thumbnail render pass layer {}", i);
-        t.render_pass = std::make_unique<erhe::graphics::Render_pass>(graphics_device, render_pass_descriptor);
-        t.color_texture_handle = graphics_device.get_handle(*t.texture_view.get(), m_color_sampler);
     }
 }
 
@@ -95,67 +88,64 @@ Thumbnails::~Thumbnails()
 {
 }
 
-//auto Thumbnails::allocate() -> uint32_t
-//{
-//    for (size_t i = 0, end = m_last_use_frame_number.size(); i < end; ++i) {
-//        if (!m_in_use[i]) {
-//            m_in_use[i] = true;
-//            return static_cast<uint32_t>(i);
-//        }
-//    }
-//    ERHE_FATAL("out of thumbnail slots");
-//    return std::numeric_limits<uint32_t>::max();
-//}
-//
-//void Thumbnails::free(uint32_t slot)
-//{
-//    ERHE_VERIFY(m_in_use[slot]);
-//    m_in_use[slot] = true;
-//}
-//
-//auto Thumbnails::begin_capture(uint32_t slot) -> std::unique_ptr<erhe::graphics::Render_command_encoder>
-//{
-//    return m_graphics_device.make_render_command_encoder(*m_render_passes[slot].get());
-//}
-
-void Thumbnails::draw(
-    std::shared_ptr<erhe::Item_base>            item,
-    std::function<bool(Thumbnails& thumbnails)> callback
-)
+auto Thumbnails::draw(
+    const std::shared_ptr<erhe::Item_base>&                                       item,
+    std::function<void(const std::shared_ptr<erhe::graphics::Texture>&, int64_t)> callback
+) -> bool
 {
-    static_cast<void>(item);
-    static_cast<void>(callback);
-    //m_context.imgui_renderer->image(
-    //    m_texture,
-    //    m_icon_width,
-    //    m_icon_height,
-    //    uv0,
-    //    uv1(uv0),
-    //    imvec_from_glm(tint_color),
-    //    false
-    //);
-    //ImGui::SameLine();
+    const std::size_t item_id = item->get_id();
+    uint64_t oldest_frame_number = m_thumbnails[0].last_use_frame_number;
+    Thumbnail* oldest_thumbnail = &m_thumbnails[0];
+    for (size_t i = 0, end = m_thumbnails.size(); i < end; ++i) {
+        Thumbnail& thumbnail = m_thumbnails[i];
+        if (
+            (thumbnail.item_id == item_id) &&
+            !thumbnail.callback.has_value()
+        ) {
+            thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_number();
+            const float height = ImGui::GetTextLineHeightWithSpacing();
+            m_context.imgui_renderer->image(
+                thumbnail.texture_view,
+                static_cast<int>(height), //m_size_pixels,
+                static_cast<int>(height), //m_size_pixels,
+                glm::vec2{0.0f, 1.0f},
+                glm::vec2{1.0f, 0.0f},
+                glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
+                glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+                erhe::graphics::Filter::linear,
+                erhe::graphics::Sampler_mipmap_mode::linear
+            );
+            if (ImGui::IsItemHovered()) {
+                thumbnail.callback = callback;
+                thumbnail.time += m_context.time->get_host_system_last_frame_duration_ns();
+            }
+            ImGui::SameLine();
+            return true;
+        }
+        if (thumbnail.last_use_frame_number < oldest_frame_number) {
+            oldest_frame_number = thumbnail.last_use_frame_number;
+            oldest_thumbnail = &thumbnail;
+        }
+    }
+
+    oldest_thumbnail->last_use_frame_number = m_context.graphics_device->get_frame_number();
+    oldest_thumbnail->item_id = item_id;
+    oldest_thumbnail->callback = callback;
+    return false;
 }
 
-//auto Icon_rasterization::icon_button(
-//    const uint32_t  id,
-//    const glm::vec2 uv0,
-//    const glm::vec4 background_color,
-//    const glm::vec4 tint_color,
-//    const bool      linear
-//) const -> bool
-//{
-//#if !defined(ERHE_GUI_LIBRARY_IMGUI)
-//    static_cast<void>(uv0);
-//    static_cast<void>(tint_color);
-//    return false;
-//#else
-//    ERHE_PROFILE_FUNCTION();
-//
-//    const bool result = m_context.imgui_renderer->image_button(id, m_texture, m_icon_width, m_icon_height, uv0, uv1(uv0), background_color, tint_color, linear);
-//    ImGui::SameLine();
-//    return result;
-//#endif
-//}
+void Thumbnails::update()
+{
+    erhe::graphics::Scoped_debug_group render_graph_scope{"Thumbnails::update()"};
+
+    for (size_t i = 0, end = m_thumbnails.size(); i < end; ++i) {
+        Thumbnail& thumbnail = m_thumbnails[i];
+        if (thumbnail.callback) {
+            log_render->trace("Updating thumbnail slot {}", i);
+            thumbnail.callback.value()(thumbnail.texture_view, thumbnail.time);
+            thumbnail.callback.reset();
+        }
+    }
+}
 
 }

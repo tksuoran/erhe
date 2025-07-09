@@ -177,4 +177,48 @@ auto c_str(const Texture_type type) -> const char*
     }
 }
 
+auto c_str(const Filter filter) -> const char*
+{
+    switch (filter) {
+        case Filter::nearest: return "nearest";
+        case Filter::linear : return "linear";
+        default: return "?";
+    }
+}
+
+auto c_str(const Sampler_mipmap_mode sampler_mipmap_mode) -> const char*
+{
+    switch (sampler_mipmap_mode) {
+        case Sampler_mipmap_mode::not_mipmapped: return "not_mipmapped";
+        case Sampler_mipmap_mode::nearest      : return "nearest";
+        case Sampler_mipmap_mode::linear       : return "linear";
+        default: return "?";
+    }
+}
+
+auto c_str(const Sampler_address_mode sampler_address_mode) -> const char*
+{
+    switch (sampler_address_mode) {
+        case Sampler_address_mode::repeat         : return "repeat";
+        case Sampler_address_mode::clamp_to_edge  : return "clamp_to_edge";
+        case Sampler_address_mode::mirrored_repeat: return "mirrored_repeat";
+        default: return "?";
+    }
+}
+
+auto c_str(const Compare_operation compare_operation) -> const char*
+{
+    switch (compare_operation) {
+        case Compare_operation::never:            return "never";
+        case Compare_operation::less:             return "less";
+        case Compare_operation::equal:            return "equal";
+        case Compare_operation::less_or_equal:    return "less_or_equal";
+        case Compare_operation::greater:          return "greater";
+        case Compare_operation::not_equal:        return "not_equal";
+        case Compare_operation::greater_or_equal: return "greater_or_equal";
+        case Compare_operation::always:           return "always";
+        default: return "?";
+    }
+}
+
 } // namespace erhe::graphics

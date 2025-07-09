@@ -65,8 +65,6 @@ public:
 class Imgui_program_interface
 {
 public:
-    static constexpr std::size_t s_texture_unit_count = 32; // for non bindless textures
-
     explicit Imgui_program_interface(erhe::graphics::Device& graphics_device);
 
     // scale, translation, clip rectangle, texture indices
@@ -103,7 +101,8 @@ public:
         glm::vec2                                       uv1              = {1.0f, 0.0f},
         glm::vec4                                       background_color = {0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4                                       tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
-        bool                                            linear           = true
+        erhe::graphics::Filter                          filter           = erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode             mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     ) -> bool;
 
     auto image_button(
@@ -115,7 +114,8 @@ public:
         glm::vec2                                       uv1              = {1.0f, 0.0f},
         glm::vec4                                       background_color = {0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4                                       tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
-        bool                                            linear           = true
+        erhe::graphics::Filter                          filter           = erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode             mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     ) -> bool;
 
     void use(const std::shared_ptr<erhe::graphics::Texture>& texture, const uint64_t handle);
@@ -141,6 +141,11 @@ public:
     void unlock_mutex();
 
 private:
+    [[nodiscard]] auto get_sampler(
+        erhe::graphics::Filter              filter,
+        erhe::graphics::Sampler_mipmap_mode mipmap_mode
+    ) const -> const erhe::graphics::Sampler&;
+
     void apply_font_config_changes(const Imgui_settings& settings);
 
     static constexpr std::size_t s_max_draw_count     =    64'000;
@@ -167,6 +172,9 @@ private:
     std::shared_ptr<erhe::graphics::Texture> m_font_texture;
     erhe::graphics::Sampler                  m_nearest_sampler;
     erhe::graphics::Sampler                  m_linear_sampler;
+    erhe::graphics::Sampler                  m_nearest_mipmap_nearest_sampler;
+    erhe::graphics::Sampler                  m_linear_mipmap_nearest_sampler;
+    erhe::graphics::Sampler                  m_nearest_mipmap_linear_sampler;
     erhe::graphics::Sampler                  m_linear_mipmap_linear_sampler;
     erhe::graphics::Gpu_timer                m_gpu_timer;
 

@@ -163,7 +163,9 @@ auto Brush::get_reference_frame(const GEO::index_t corner_count, const GEO::inde
 
 auto Brush::get_scaled(const double scale) -> const Scaled&
 {
-    late_initialize();
+    if (!m_primitive.render_shape) {
+        late_initialize();
+    }
     const int scale_key = static_cast<int>(scale * c_scale_factor);
     for (const auto& scaled : m_scaled_entries) {
         if (scaled.scale_key == scale_key) {

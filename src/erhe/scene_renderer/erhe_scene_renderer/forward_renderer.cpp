@@ -40,38 +40,40 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
     , m_shadow_sampler_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter   = gl::Texture_min_filter::linear,
-            .mag_filter   = gl::Texture_mag_filter::linear,
-            .wrap_mode    = { gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge },
-            .compare_mode = gl::Texture_compare_mode::compare_ref_to_texture,
-            .compare_func = gl::Texture_compare_func::gequal,
-            .lod_bias     = 0.0f,
-            .max_lod      = 0.0f,
-            .min_lod      = 0.0f,
-            .debug_label  = "Forward_renderer::m_shadow_sampler_compare"
+            .min_filter        = erhe::graphics::Filter::linear,
+            .mag_filter        = erhe::graphics::Filter::linear,
+            .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
+            .compare_enable    = true,
+            .compare_operation = erhe::graphics::Compare_operation::greater_or_equal,
+            .lod_bias          = 0.0f,
+            .max_lod           = 0.0f,
+            .min_lod           = 0.0f,
+            .debug_label       = "Forward_renderer::m_shadow_sampler_compare"
         }
     }
     , m_shadow_sampler_no_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter   = gl::Texture_min_filter::linear,
-            .mag_filter   = gl::Texture_mag_filter::nearest,
-            .wrap_mode    = { gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge },
-            .compare_mode = gl::Texture_compare_mode::none,
-            .lod_bias     = 0.0f,
-            .max_lod      = 0.0f,
-            .min_lod      = 0.0f,
-            .debug_label  = "Forward_renderer::m_shadow_sampler_no_compare"
+            .min_filter        = erhe::graphics::Filter::linear,
+            .mag_filter        = erhe::graphics::Filter::nearest,
+            .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
+            .compare_enable    = false,
+            .compare_operation = erhe::graphics::Compare_operation::always,
+            .lod_bias          = 0.0f,
+            .max_lod           = 0.0f,
+            .min_lod           = 0.0f,
+            .debug_label       = "Forward_renderer::m_shadow_sampler_no_compare"
         }
     }
     , m_fallback_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter   = gl::Texture_min_filter::nearest,
-            .mag_filter   = gl::Texture_mag_filter::nearest,
-            .wrap_mode    = { gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge, gl::Texture_wrap_mode::clamp_to_edge },
-            .compare_mode = gl::Texture_compare_mode::none,
-            .debug_label  = "Shadow_renderer::m_fallback_sampler"
+            .min_filter        = erhe::graphics::Filter::nearest,
+            .mag_filter        = erhe::graphics::Filter::nearest,
+            .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
+            .compare_enable    = false,
+            .compare_operation = erhe::graphics::Compare_operation::always,
+            .debug_label       = "Shadow_renderer::m_fallback_sampler"
         }
     }
 {

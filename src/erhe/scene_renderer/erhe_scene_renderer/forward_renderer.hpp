@@ -62,7 +62,7 @@ public:
             std::span<const std::shared_ptr<erhe::scene::Mesh>>
         >&                                                                 mesh_spans;
         std::size_t                                                        non_mesh_vertex_count{0};
-        const std::vector<erhe::renderer::Pipeline_renderpass*>            passes;
+        const std::vector<erhe::renderer::Pipeline_pass*>                  passes;
         erhe::primitive::Primitive_mode                                    primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
         Primitive_interface_settings                                       primitive_settings{};
         const erhe::graphics::Texture*                                     shadow_texture{nullptr};

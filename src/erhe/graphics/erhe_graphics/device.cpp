@@ -765,6 +765,7 @@ auto Device::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::siz
         static_cast<GLuint>(limits.max_texture_image_units - m_base_texture_unit)
     );
 
+    // TODO Use gl::bind_textures() gl::and bind_samplers()
     for (i = 0; i < end; ++i) {
         const uint64_t handle       = m_texture_units[i];
         const GLuint   texture_name = erhe::graphics::get_texture_from_handle(handle);
@@ -774,7 +775,7 @@ auto Device::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::siz
 #if !defined(NDEBUG)
             if (gl::is_texture(texture_name) == GL_TRUE) {
                 gl::bind_texture_unit(m_base_texture_unit + i, texture_name);
-                SPDLOG_LOGGER_TRACE(log_texture_frame, "texture unit {} + {} = {}: bound texture {}", m_base_texture_unit, i, m_base_texture_unit + i, texture_name);
+                // log_texture_frame->trace("texture unit {} + {} = {}: bound texture {}", m_base_texture_unit, i, m_base_texture_unit + i, texture_name);
             } else {
                 log_texture_frame->warn("texture unit {} + {} = {}: {} is not a texture", m_base_texture_unit, i, m_base_texture_unit + i, texture_name);
                 gl::bind_texture_unit(m_base_texture_unit + i, erhe::graphics::get_texture_from_handle(fallback_handle));
@@ -782,7 +783,7 @@ auto Device::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::siz
 
             if ((sampler_name == 0) || (gl::is_sampler(sampler_name) == GL_TRUE)) {
                 gl::bind_sampler(m_base_texture_unit + i, sampler_name);
-                SPDLOG_LOGGER_TRACE(log_texture_frame, "texture unit {} + {} = {}: bound sampler {}", m_base_texture_unit, i, m_base_texture_unit + i, sampler_name);
+                // log_texture_frame->trace("texture unit {} + {} = {}: bound sampler {}", m_base_texture_unit, i, m_base_texture_unit + i, sampler_name);
             } else {
                 gl::bind_sampler(m_base_texture_unit + i, erhe::graphics::get_sampler_from_handle(fallback_handle));
                 log_texture_frame->warn("texture unit {} + {} = {}: {} is not a sampler", m_base_texture_unit, i, m_base_texture_unit + i, sampler_name);

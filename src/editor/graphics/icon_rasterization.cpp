@@ -185,8 +185,9 @@ Icon_rasterization::Icon_rasterization(App_context& context, erhe::graphics::Dev
     , m_linear_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear_mipmap_nearest,
-            .mag_filter  = gl::Texture_mag_filter::linear,
+            .min_filter  = erhe::graphics::Filter::linear,
+            .mag_filter  = erhe::graphics::Filter::linear,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
             .debug_label = "Icon_rasterization linear"
         }
     }
@@ -237,18 +238,20 @@ void Icon_rasterization::icon(const glm::vec2 uv0, const glm::vec4 background_co
         uv1(uv0),
         background_color,
         imvec_from_glm(tint_color),
-        false
+        erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     );
     ImGui::SameLine();
 #endif
 }
 
 auto Icon_rasterization::icon_button(
-    const uint32_t  id,
-    const glm::vec2 uv0,
-    const glm::vec4 background_color,
-    const glm::vec4 tint_color,
-    const bool      linear
+    const uint32_t                            id,
+    const glm::vec2                           uv0,
+    const glm::vec4                           background_color,
+    const glm::vec4                           tint_color,
+    const erhe::graphics::Filter              filter,
+    const erhe::graphics::Sampler_mipmap_mode mipmap_mode
 ) const -> bool
 {
 #if !defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -258,7 +261,10 @@ auto Icon_rasterization::icon_button(
 #else
     ERHE_PROFILE_FUNCTION();
 
-    const bool result = m_context.imgui_renderer->image_button(id, m_texture, m_icon_width, m_icon_height, uv0, uv1(uv0), background_color, tint_color, linear);
+    const bool result = m_context.imgui_renderer->image_button(
+        id, m_texture, m_icon_width, m_icon_height, uv0, uv1(uv0), background_color, tint_color,
+        filter, mipmap_mode
+    );
     ImGui::SameLine();
     return result;
 #endif

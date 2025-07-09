@@ -13,8 +13,8 @@ namespace erhe::graphics {
 Renderbuffer::Renderbuffer(
     Device&                        device,
     const erhe::dataformat::Format pixelformat,
-    const unsigned int             width,
-    const unsigned int             height
+    const int                      width,
+    const int                      height
 )
     : m_device      {device}
     , m_handle      {device}
@@ -35,9 +35,9 @@ Renderbuffer::Renderbuffer(
 Renderbuffer::Renderbuffer(
     Device&                        device,
     const erhe::dataformat::Format pixelformat,
-    const unsigned int             sample_count,
-    const unsigned int             width,
-    const unsigned int             height
+    const int                      sample_count,
+    const int                      width,
+    const int                      height
 )
     : m_device      {device}
     , m_handle      {device}
@@ -80,16 +80,16 @@ Renderbuffer::Renderbuffer(
         // }
         // else
         {
-            m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_samples));
+            m_sample_count = std::min(m_sample_count, device.limits.max_samples);
             // TODO Format_properties
             if (gl_helpers::has_color(internal_format) || gl_helpers::has_alpha(internal_format)) {
-                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_color_texture_samples));
+                m_sample_count = std::min(m_sample_count, device.limits.max_color_texture_samples);
             }
             if (gl_helpers::has_depth(internal_format) || gl_helpers::has_stencil(internal_format)) {
-                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_depth_texture_samples));
+                m_sample_count = std::min(m_sample_count, device.limits.max_depth_texture_samples);
             }
             if (gl_helpers::is_integer(internal_format)) {
-                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(device.limits.max_integer_samples));
+                m_sample_count = std::min(m_sample_count, device.limits.max_integer_samples);
             }
         }
     }
@@ -149,17 +149,17 @@ auto Renderbuffer::get_pixelformat() const -> erhe::dataformat::Format
     return m_pixelformat;
 }
 
-auto Renderbuffer::get_sample_count() const -> unsigned int
+auto Renderbuffer::get_sample_count() const -> int
 {
     return m_sample_count;
 }
 
-auto Renderbuffer::get_width() const -> unsigned int
+auto Renderbuffer::get_width() const -> int
 {
     return m_width;
 }
 
-auto Renderbuffer::get_height() const -> unsigned int
+auto Renderbuffer::get_height() const -> int
 {
     return m_height;
 }

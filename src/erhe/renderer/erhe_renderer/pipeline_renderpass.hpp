@@ -6,13 +6,13 @@
 
 namespace erhe::renderer {
 
-class Pipeline_renderpass
+class Pipeline_pass
 {
 public:
     void reset();
 
-    explicit Pipeline_renderpass(erhe::graphics::Render_pipeline_state&& pipeline);
-    Pipeline_renderpass(
+    explicit Pipeline_pass(erhe::graphics::Render_pipeline_state&& pipeline);
+    Pipeline_pass(
         erhe::graphics::Render_pipeline_state&& pipeline,
         std::function<void()>                   begin,
         std::function<void()>                   end

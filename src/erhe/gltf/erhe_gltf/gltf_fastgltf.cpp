@@ -1152,12 +1152,42 @@ private:
         log_gltf->trace("Sampler: sampler index = {}, name = {}", sampler_index, sampler_name);
 
         erhe::graphics::Sampler_create_info create_info;
-        create_info.min_filter     = sampler.minFilter.has_value() ? static_cast<gl::Texture_min_filter>(sampler.minFilter.value()) : gl::Texture_min_filter::nearest_mipmap_nearest;
-        create_info.mag_filter     = sampler.magFilter.has_value() ? static_cast<gl::Texture_mag_filter>(sampler.magFilter.value()) : gl::Texture_mag_filter::nearest;
-        create_info.wrap_mode[0]   = static_cast<gl::Texture_wrap_mode>(sampler.wrapS);
-        create_info.wrap_mode[1]   = static_cast<gl::Texture_wrap_mode>(sampler.wrapT);
-        create_info.max_anisotropy = m_arguments.graphics_device.limits.max_texture_max_anisotropy;
-        create_info.debug_label    = sampler_name;
+        fastgltf::Filter gl_min_filter = sampler.minFilter.has_value() ? sampler.minFilter.value() : fastgltf::Filter::NearestMipMapNearest;
+        fastgltf::Filter gl_mag_filter = sampler.magFilter.has_value() ? sampler.magFilter.value() : fastgltf::Filter::NearestMipMapNearest;
+        erhe::graphics::Filter min_filter{erhe::graphics::Filter::nearest};
+        erhe::graphics::Filter mag_filter{erhe::graphics::Filter::nearest};
+        erhe::graphics::Sampler_mipmap_mode mipmap_mode{erhe::graphics::Sampler_mipmap_mode::not_mipmapped};
+        switch (gl_min_filter) {
+            default:
+            case fastgltf::Filter::Nearest:              min_filter = erhe::graphics::Filter::nearest; mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped; break;
+            case fastgltf::Filter::Linear:               min_filter = erhe::graphics::Filter::linear;  mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped; break;
+            case fastgltf::Filter::NearestMipMapNearest: min_filter = erhe::graphics::Filter::nearest; mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest; break;
+            case fastgltf::Filter::LinearMipMapNearest:  min_filter = erhe::graphics::Filter::linear;  mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest; break;
+            case fastgltf::Filter::NearestMipMapLinear:  min_filter = erhe::graphics::Filter::nearest; mipmap_mode = erhe::graphics::Sampler_mipmap_mode::linear; break;
+            case fastgltf::Filter::LinearMipMapLinear:   min_filter = erhe::graphics::Filter::linear;  mipmap_mode = erhe::graphics::Sampler_mipmap_mode::linear; break;
+        }
+        switch (gl_mag_filter) {
+            default:
+            case fastgltf::Filter::Nearest: mag_filter = erhe::graphics::Filter::nearest; break;
+            case fastgltf::Filter::Linear:  mag_filter = erhe::graphics::Filter::linear;  break;
+        }
+        auto from_gl = [](const fastgltf::Wrap wrap) -> erhe::graphics::Sampler_address_mode {
+            switch (wrap) {
+                default:
+                case fastgltf::Wrap::Repeat:         return erhe::graphics::Sampler_address_mode::repeat;
+                case fastgltf::Wrap::ClampToEdge:    return erhe::graphics::Sampler_address_mode::clamp_to_edge;
+                case fastgltf::Wrap::MirroredRepeat: return erhe::graphics::Sampler_address_mode::mirrored_repeat;
+            }
+        };
+
+        create_info.min_filter      = min_filter;
+        create_info.mag_filter      = mag_filter;
+        create_info.mipmap_mode     = mipmap_mode;
+        create_info.address_mode[0] = from_gl(sampler.wrapS);
+        create_info.address_mode[1] = from_gl(sampler.wrapT);
+        create_info.address_mode[2] = from_gl(sampler.wrapT);
+        create_info.max_anisotropy  = m_arguments.graphics_device.limits.max_texture_max_anisotropy; // TODO
+        create_info.debug_label     = sampler_name;
 
         auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(m_arguments.graphics_device, create_info);
         // TODO erhe_sampler->set_source_path(m_path);

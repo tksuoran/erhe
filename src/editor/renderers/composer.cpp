@@ -1,6 +1,6 @@
 #include "renderers/composer.hpp"
 #include "editor_log.hpp"
-#include "renderers/renderpass.hpp"
+#include "renderers/composition_pass.hpp"
 
 #include "erhe_profile/profile.hpp"
 
@@ -11,25 +11,25 @@ namespace editor {
 // TODO Do deep copy instead / use Hierarchy
 
 Composer::Composer(const Composer& other)
-    : renderpasses{other.renderpasses}
+    : composition_passes{other.composition_passes}
 {
 }
 
 Composer& Composer::operator=(const Composer& other)
 {
-    renderpasses = other.renderpasses;
+    composition_passes = other.composition_passes;
     return *this;
 }
 
 Composer::Composer(Composer&& old)
-    : renderpasses{std::move(old.renderpasses)}
+    : composition_passes{std::move(old.composition_passes)}
 {
 }
 
 Composer& Composer::operator=(Composer&& old)
 {
     if (this != &old) {
-        renderpasses = std::move(old.renderpasses);
+        composition_passes = std::move(old.composition_passes);
     }
     return *this;
 }
@@ -58,9 +58,9 @@ void Composer::render(const Render_context& context)
     log_composer->trace("Composer::render()");
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mutex};
 
-    for (const auto& renderpass : renderpasses) {
-        log_composer->trace("  rp: {}", renderpass->describe());
-        renderpass->render(context);
+    for (const auto& composition_pass : composition_passes) {
+        log_composer->trace("  rp: {}", composition_pass->describe());
+        composition_pass->render(context);
     }
 }
 
@@ -70,13 +70,13 @@ void Composer::imgui()
         return;
     }
 
-    int renderpass_index = 0;
+    int pass_index = 0;
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mutex};
 
-    for (const auto& renderpass : renderpasses) {
-        ImGui::PushID(renderpass_index++);
-        if (ImGui::TreeNodeEx(renderpass->describe().c_str(), ImGuiTreeNodeFlags_Framed)) {
-            renderpass->imgui();
+    for (const auto& composition_pass : composition_passes) {
+        ImGui::PushID(pass_index++);
+        if (ImGui::TreeNodeEx(composition_pass->describe().c_str(), ImGuiTreeNodeFlags_Framed)) {
+            composition_pass->imgui();
             ImGui::TreePop();
         }
         ImGui::PopID();

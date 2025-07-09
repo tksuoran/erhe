@@ -50,12 +50,12 @@ class Tools_pipeline_renderpasses
 {
 public:
     Tools_pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs);
-    erhe::renderer::Pipeline_renderpass tool1_hidden_stencil;
-    erhe::renderer::Pipeline_renderpass tool2_visible_stencil;
-    erhe::renderer::Pipeline_renderpass tool3_depth_clear;
-    erhe::renderer::Pipeline_renderpass tool4_depth;
-    erhe::renderer::Pipeline_renderpass tool5_visible_color;
-    erhe::renderer::Pipeline_renderpass tool6_hidden_color;
+    erhe::renderer::Pipeline_pass tool1_hidden_stencil;
+    erhe::renderer::Pipeline_pass tool2_visible_stencil;
+    erhe::renderer::Pipeline_pass tool3_depth_clear;
+    erhe::renderer::Pipeline_pass tool4_depth;
+    erhe::renderer::Pipeline_pass tool5_visible_color;
+    erhe::renderer::Pipeline_pass tool6_hidden_color;
 };
 
 class Tools

@@ -79,8 +79,9 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
     m_sampler = std::make_shared<erhe::graphics::Sampler>(
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
-            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .min_filter  = erhe::graphics::Filter::linear,
+            .mag_filter  = erhe::graphics::Filter::nearest,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::linear,
             .lod_bias    = -0.666f,
             .debug_label = "Rendertarget_mesh"
         }
@@ -306,8 +307,9 @@ void Rendertarget_mesh::render_done(App_context& context)
         m_sampler = std::make_shared<erhe::graphics::Sampler>(
             *context.graphics_device,
             erhe::graphics::Sampler_create_info{
-                .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
-                .mag_filter  = gl::Texture_mag_filter::nearest,
+                .min_filter  = erhe::graphics::Filter::linear,
+                .mag_filter  = erhe::graphics::Filter::nearest,
+                .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::linear,
                 .lod_bias    = s_rendertarget_mesh_lod_bias,
                 .debug_label = "Rendertarget_mesh"
             }

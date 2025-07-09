@@ -162,8 +162,8 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
     if (m_use_renderbuffers) {
         if (
             !m_color_renderbuffer ||
-            (m_color_renderbuffer->get_width()  != static_cast<unsigned int>(viewport.width)) ||
-            (m_color_renderbuffer->get_height() != static_cast<unsigned int>(viewport.height))
+            (m_color_renderbuffer->get_width()  != viewport.width) ||
+            (m_color_renderbuffer->get_height() != viewport.height)
         ) {
             m_color_renderbuffer.reset();
             m_depth_renderbuffer.reset();
@@ -336,10 +336,6 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
     m_camera_buffers.bind(encoder, camera_range);
-
-    // TODO Is still needed? NVIDIA driver bug? workaround
-    m_graphics_device.opengl_state_tracker.shader_stages.reset();
-    m_graphics_device.opengl_state_tracker.color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
 
     gl::viewport   (viewport.x, viewport.y, viewport.width, viewport.height);
     if (m_use_scissor) {

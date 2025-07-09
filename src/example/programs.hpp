@@ -5,7 +5,6 @@
 #include "erhe_graphics/sampler.hpp"
 
 #include <filesystem>
-#include <memory>
 
 namespace erhe::graphics{
     class Device;
@@ -35,9 +34,6 @@ public:
         erhe::graphics::Device&                  graphics_device,
         erhe::scene_renderer::Program_interface& program_interface
     );
-
-    static constexpr int         s_texture_unit_base  =  2; // First two are reserved for shadow samplers
-    static constexpr std::size_t s_texture_unit_count = 14; // For non bindless textures
 
     // Public members
     int                              shadow_texture_unit_compare{0};
