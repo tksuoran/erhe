@@ -160,15 +160,15 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              cxxopts 
-    VERSION           3.2.1
+    VERSION           3.3.1
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY jarro2783/cxxopts
 )
 
 CPMAddPackage(
     NAME              etl
-    VERSION           20.40.0
-    GIT_TAG           20.40.0
+    VERSION           20.41.7
+    GIT_TAG           20.41.7
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY ETLCPP/etl
 )
@@ -186,8 +186,8 @@ add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              glslang
-        VERSION           15.3.0
-        GIT_TAG           15.3.0
+        VERSION           15.4.0
+        GIT_TAG           15.4.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/glslang
         OPTIONS
@@ -219,8 +219,8 @@ vscode_support()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     CPMAddPackage(
         NAME              sdl
-        VERSION           release-3.2.12
-        GIT_TAG           release-3.2.12
+        VERSION           release-3.2.16
+        GIT_TAG           release-3.2.16
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
@@ -258,7 +258,7 @@ endif ()
 
 CPMAddPackage(
     NAME              simdjson
-    VERSION           3.12.3
+    VERSION           3.13.0
     GITHUB_REPOSITORY simdjson/simdjson
 )
 
@@ -313,7 +313,7 @@ endif ()
 if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
     CPMAddPackage(
         NAME              fastgltf
-        GIT_TAG           42d26b2b11ebe16ad43e481ddbd4e10fa50360fa
+        GIT_TAG           v0.9.0
         GITHUB_REPOSITORY spnda/fastgltf
     )
     message(STATUS "Erhe configured to use fastgltf for glTF.")
@@ -326,7 +326,7 @@ endif ()
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
     CPMAddPackage(
         NAME              nvtx
-        VERSION           3.1.1
+        VERSION           3.2.1
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY NVIDIA/NVTX
     )
@@ -336,7 +336,7 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
 elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     CPMAddPackage(
         NAME              tracy
-        VERSION           0.11.1
+        VERSION           0.12.2
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY wolfpld/tracy
         OPTIONS 
@@ -379,7 +379,7 @@ endif ()
 if (${ERHE_TEXT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
     CPMAddPackage(
         NAME              harfbuzz
-        GIT_TAG           11.2.0
+        GIT_TAG           11.2.1
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY harfbuzz/harfbuzz
     )
@@ -442,8 +442,8 @@ endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     CPMAddPackage(
         NAME              OpenXR-SDK
-        VERSION           1.1.47
-        GIT_TAG           release-1.1.47
+        VERSION           1.1.49
+        GIT_TAG           release-1.1.49
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK
     )
