@@ -42,6 +42,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
         erhe::graphics::Sampler_create_info{
             .min_filter        = erhe::graphics::Filter::linear,
             .mag_filter        = erhe::graphics::Filter::linear,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
             .compare_enable    = true,
             .compare_operation = erhe::graphics::Compare_operation::greater_or_equal,
@@ -56,6 +57,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
         erhe::graphics::Sampler_create_info{
             .min_filter        = erhe::graphics::Filter::linear,
             .mag_filter        = erhe::graphics::Filter::nearest,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
             .compare_enable    = false,
             .compare_operation = erhe::graphics::Compare_operation::always,
@@ -70,6 +72,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
         erhe::graphics::Sampler_create_info{
             .min_filter        = erhe::graphics::Filter::nearest,
             .mag_filter        = erhe::graphics::Filter::nearest,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
             .compare_enable    = false,
             .compare_operation = erhe::graphics::Compare_operation::always,

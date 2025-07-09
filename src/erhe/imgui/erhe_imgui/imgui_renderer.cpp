@@ -251,6 +251,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
         {
             .min_filter  = erhe::graphics::Filter::nearest, // nearest_mipmap_nearest,
             .mag_filter  = erhe::graphics::Filter::nearest,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .debug_label = "Imgui_renderer nearest"
         }
     }
@@ -259,6 +260,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
         {
             .min_filter  = erhe::graphics::Filter::linear,
             .mag_filter  = erhe::graphics::Filter::linear,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .debug_label = "Imgui_renderer linear"
         }
     }

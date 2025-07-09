@@ -49,6 +49,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
         erhe::graphics::Sampler_create_info{
             .min_filter        = erhe::graphics::Filter::linear,
             .mag_filter        = erhe::graphics::Filter::linear,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .compare_enable    = true,
             .compare_operation = erhe::graphics::Compare_operation::greater_or_equal,
             .lod_bias     = 0.0f,
@@ -62,6 +63,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
         erhe::graphics::Sampler_create_info{
             .min_filter     = erhe::graphics::Filter::linear,
             .mag_filter     = erhe::graphics::Filter::nearest,
+            .mipmap_mode    = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .compare_enable = false,
             .lod_bias       = 0.0f,
             .max_lod        = 0.0f,

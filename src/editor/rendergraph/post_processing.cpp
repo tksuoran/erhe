@@ -384,6 +384,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
         erhe::graphics::Sampler_create_info{
             .min_filter  = erhe::graphics::Filter::linear,
             .mag_filter  = erhe::graphics::Filter::linear,
+            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .debug_label = "linear"
         }
     }
