@@ -204,6 +204,7 @@ public:
     // Texture unit cache for bindless emulation
     void texture_unit_cache_reset   (unsigned int base_texture_unit);
     auto texture_unit_cache_allocate(uint64_t handle) -> std::optional<std::size_t>;
+    auto texture_unit_cache_get     (uint64_t handle) -> std::size_t;
     auto texture_unit_cache_bind    (uint64_t fallback_handle) -> std::size_t;
 
     auto get_buffer_alignment(Buffer_target target) -> std::size_t;

@@ -734,6 +734,18 @@ void Device::texture_unit_cache_reset(const unsigned int base_texture_unit)
     m_texture_units.clear();
 }
 
+auto Device::texture_unit_cache_get(const uint64_t handle) -> std::size_t
+{
+    for (std::size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit) {
+        if (m_texture_units[texture_unit] == handle) {
+            return texture_unit;
+        }
+    }
+    const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
+    const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(handle);
+    ERHE_FATAL("texture %u sampler %u not found in texture unit cache", texture_name, sampler_name);
+}
+
 auto Device::texture_unit_cache_allocate(const uint64_t handle) -> std::optional<std::size_t>
 {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
@@ -748,10 +760,15 @@ auto Device::texture_unit_cache_allocate(const uint64_t handle) -> std::optional
         }
     }
 
-    const std::size_t result = m_texture_units.size();
-    m_texture_units.push_back(handle);
-    SPDLOG_LOGGER_TRACE(log_texture_frame, "allocted texture unit {} for texture {}, sampler {}", result, texture_name, sampler_name);
-    return result;
+    if (m_texture_units.size() < limits.max_texture_image_units) {
+        const std::size_t result = m_texture_units.size();
+        m_texture_units.push_back(handle);
+        SPDLOG_LOGGER_TRACE(log_texture_frame, "allocted texture unit {} for texture {}, sampler {}", result, texture_name, sampler_name);
+        return result;
+    }
+
+    SPDLOG_LOGGER_TRACE(log_texture_frame, "texture cache is full, unable to allocate texture unit for texture {}, sampler {}", texture_name, sampler_name);
+    return {};
 }
 
 auto Device::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::size_t
