@@ -121,6 +121,7 @@ public:
     void use(const std::shared_ptr<erhe::graphics::Texture>& texture, const uint64_t handle);
     void render_draw_data(erhe::graphics::Render_command_encoder& encoder);
 
+    void begin_frame    ();
     void at_end_of_frame(std::function<void()>&& func);
     void next_frame     ();
 
@@ -133,7 +134,8 @@ public:
     void make_current         (const Imgui_host* imgui_host);
     void register_imgui_host  (Imgui_host* viewport);
     void unregister_imgui_host(Imgui_host* viewport);
-    [[nodiscard]] auto get_imgui_hosts() const -> const std::vector<Imgui_host*>&;
+    [[nodiscard]] auto get_imgui_hosts   () const -> const std::vector<Imgui_host*>&;
+    [[nodiscard]] auto get_imgui_settings() const -> const Imgui_settings&;
 
     void set_ime_data(ImGuiViewport* viewport, ImGuiPlatformImeData* data);
 
@@ -141,6 +143,8 @@ public:
     void unlock_mutex();
 
 private:
+    void update_texture(ImTextureData* tex);
+
     [[nodiscard]] auto get_sampler(
         erhe::graphics::Filter              filter,
         erhe::graphics::Sampler_mipmap_mode mipmap_mode
@@ -161,6 +165,7 @@ private:
     erhe::graphics::GPU_ring_buffer_client   m_draw_indirect_buffer;
     erhe::graphics::Vertex_input_state       m_vertex_input;
     erhe::graphics::Render_pipeline_state    m_pipeline;
+    Imgui_settings                           m_imgui_settings;
 
     ImFontAtlas                              m_font_atlas;
     ImFont*                                  m_primary_font   {nullptr};
@@ -169,7 +174,6 @@ private:
     ImFont*                                  m_vr_mono_font   {nullptr};
     ImFont*                                  m_icon_font      {nullptr};
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
-    std::shared_ptr<erhe::graphics::Texture> m_font_texture;
     erhe::graphics::Sampler                  m_nearest_sampler;
     erhe::graphics::Sampler                  m_linear_sampler;
     erhe::graphics::Sampler                  m_nearest_mipmap_nearest_sampler;
@@ -186,6 +190,8 @@ private:
     std::set<uint64_t>                                 m_used_texture_handles;
 
     std::vector<std::function<void()>> m_at_end_of_frame;
+
+    std::unordered_map<uint64_t, std::shared_ptr<erhe::graphics::Texture>> m_handle_to_texture;
 
     Imgui_host* m_ime_host{nullptr};
 };

@@ -71,9 +71,10 @@ void Icon_load_data::rasterize(int size)
                         }
                     }
                 }
-                bitmap.data()[y * write_stride + 4 * x + 0] = static_cast<uint8_t>(data[0] / 16.0f);
-                bitmap.data()[y * write_stride + 4 * x + 1] = static_cast<uint8_t>(data[1] / 16.0f);
-                bitmap.data()[y * write_stride + 4 * x + 2] = static_cast<uint8_t>(data[2] / 16.0f);
+                // TODO Figure out what is the correct way to render SVG with alpha and ImGui
+                bitmap.data()[y * write_stride + 4 * x + 0] = data[0] > 0.0f ? 0xffu : 0x00u;
+                bitmap.data()[y * write_stride + 4 * x + 1] = data[1] > 0.0f ? 0xffu : 0x00u;
+                bitmap.data()[y * write_stride + 4 * x + 2] = data[2] > 0.0f ? 0xffu : 0x00u;
                 bitmap.data()[y * write_stride + 4 * x + 3] = static_cast<uint8_t>(data[3] / 16.0f);
             }
         }

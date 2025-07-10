@@ -267,6 +267,8 @@ void Type_editor::make_bit_mask_def(const char* tooltip_text, uint32_t& value)
     static_cast<void>(tooltip_text);
     static_cast<void>(value);
 
+    const float font_size = m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
+
     std::array<bool, T::bit_count> type_boolean;
     char preview_chars[T::bit_count + 1];
     for (uint32_t bit_position = 0; bit_position < T::bit_count; ++bit_position) {
@@ -286,7 +288,7 @@ void Type_editor::make_bit_mask_def(const char* tooltip_text, uint32_t& value)
 
     if (ImGui::TableNextColumn()) {
         ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::PushFont(m_imgui_renderer.mono_font());
+        ImGui::PushFont(m_imgui_renderer.mono_font(), font_size);
         if (m_current_column < m_value_colors.size()) {
             ImGui::PushStyleColor(ImGuiCol_Text, m_value_colors[m_current_column]);
         }

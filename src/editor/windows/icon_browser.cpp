@@ -29,7 +29,8 @@ void Icon_browser::imgui()
         return;
     }
 
-    ImGui::PushFont(icon_font);
+    const float font_size = m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
+    ImGui::PushFont(icon_font, font_size);
     ImGui::TextUnformatted(ICON_MDI_FILTER);
     ImGui::PopFont();
     ImGui::SameLine();
@@ -48,14 +49,14 @@ void Icon_browser::imgui()
         if ((icon_MDI_unicodes[i] < ICON_MIN_MDI) || (icon_MDI_unicodes[i] > ICON_MAX_MDI)) {
             continue;
         }
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, font_size);
         ImGui::Button(icon_MDI_codes[i], button_size);
         ImGui::PopFont();
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
             ImGui::Text("%s - %x", icon_MDI_names[i], icon_MDI_unicodes[i]);
             {
-                ImGui::PushFont(icon_font);
+                ImGui::PushFont(icon_font, font_size);
                 ImGui::TextUnformatted(icon_MDI_codes[i]);
                 ImGui::PopFont();
             }

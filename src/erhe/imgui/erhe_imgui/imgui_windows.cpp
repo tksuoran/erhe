@@ -152,6 +152,8 @@ void Imgui_windows::begin_frame()
     ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(!m_iterating);
+    m_imgui_renderer.begin_frame();
+
     m_iterating = true;
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& imgui_host : imgui_hosts) {

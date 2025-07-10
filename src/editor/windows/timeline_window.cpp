@@ -117,10 +117,11 @@ void Timeline_window::imgui()
     if (icon_font == nullptr) {
         return;
     }
+    const float font_size = m_imgui_renderer.get_imgui_settings().font_size;
 
     {
         ImGui::PushID("##seek_start");
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, font_size);
         const bool seek_start = ImGui::Button(ICON_MDI_SKIP_PREVIOUS);
         ImGui::PopFont();
         if (ImGui::IsItemHovered()) {
@@ -136,7 +137,7 @@ void Timeline_window::imgui()
     {
         ImGui::PushID("##play_pause");
         if (m_playing) {
-            ImGui::PushFont(icon_font);
+            ImGui::PushFont(icon_font, font_size);
             const bool pause = ImGui::Button(ICON_MDI_PAUSE);
             ImGui::PopFont();
             if (ImGui::IsItemHovered()) {
@@ -146,7 +147,7 @@ void Timeline_window::imgui()
                 m_playing = false;
             }
         } else {
-            ImGui::PushFont(icon_font);
+            ImGui::PushFont(icon_font, font_size);
             const bool play = ImGui::Button(ICON_MDI_PLAY);
             ImGui::PopFont();
             if (ImGui::IsItemHovered()) {
@@ -165,7 +166,7 @@ void Timeline_window::imgui()
     ImGui::SameLine();
     {
         ImGui::PushID("##seek_end");
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, font_size);
         const bool seek_end = ImGui::Button(ICON_MDI_SKIP_NEXT);
         ImGui::PopFont();
         if (ImGui::IsItemHovered()) {
@@ -181,7 +182,7 @@ void Timeline_window::imgui()
     {
         ImGui::SameLine();
         if (m_looping) {
-            ImGui::PushFont(icon_font);
+            ImGui::PushFont(icon_font, font_size);
             const bool repeat_off = ImGui::Button(ICON_MDI_REPEAT);
             ImGui::PopFont();
             if (ImGui::IsItemHovered()) {
@@ -191,7 +192,7 @@ void Timeline_window::imgui()
                 m_looping = false;
             }
         } else {
-            ImGui::PushFont(icon_font);
+            ImGui::PushFont(icon_font, font_size);
             const bool repeat = ImGui::Button(ICON_MDI_REPEAT_OFF);
             ImGui::PopFont();
             if (ImGui::IsItemHovered()) {
@@ -212,7 +213,7 @@ void Timeline_window::imgui()
 
         ImGui::SameLine();
         if (m_backwards) {
-            ImGui::PushFont(icon_font);
+            ImGui::PushFont(icon_font, font_size);
             const bool pressed = ImGui::Button(ICON_MDI_CHEVRON_LEFT);
             ImGui::PopFont();
             if (ImGui::IsItemHovered()) {
@@ -222,7 +223,7 @@ void Timeline_window::imgui()
                 m_backwards = false;
             }
         } else {
-            ImGui::PushFont(icon_font);
+            ImGui::PushFont(icon_font, font_size);
             const bool pressed = ImGui::Button(ICON_MDI_CHEVRON_RIGHT);
             ImGui::PopFont();
             if (ImGui::IsItemHovered()) {

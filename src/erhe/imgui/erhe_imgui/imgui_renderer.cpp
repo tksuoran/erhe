@@ -107,8 +107,9 @@ void main()
 #else
     vec4 texture_sample = texture(s_textures[v_texture_id], v_texcoord.st);
 #endif
-    out_color.rgb       = v_color.rgb * texture_sample.rgb * v_color.a;
-    out_color.a         = texture_sample.a * v_color.a;
+    out_color = v_color * texture_sample;
+    //out_color.rgb       = v_color.rgb * texture_sample.rgb * v_color.a;
+    //out_color.a         = texture_sample.a * v_color.a;
 }
 )NUL";
 
@@ -161,43 +162,6 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphic
 
 #pragma endregion Imgui_program_interface
 
-auto make_font_texture_create_info(erhe::graphics::Device& graphics_device, ImFontAtlas& font_atlas) -> Texture::Create_info
-{
-    ERHE_PROFILE_FUNCTION();
-
-    // Build texture atlas
-    Texture::Create_info create_info{
-        .device      = graphics_device,
-        .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm, // TODO sRGB?
-        .debug_label = "ImGui Font texture"
-    };
-
-    unsigned char* pixels = nullptr;
-    font_atlas.GetTexDataAsAlpha8(&pixels, &create_info.width, &create_info.height);
-    return create_info;
-}
-
-auto get_font_atlas_pixel_data(ImFontAtlas& font_atlas) -> std::vector<uint8_t>
-{
-    unsigned char* pixels = nullptr;
-    int width = 0;
-    int height = 0;
-    font_atlas.GetTexDataAsAlpha8(&pixels, &width, &height);
-    const std::size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
-    const std::size_t byte_count  = 4 * pixel_count;
-    std::vector<uint8_t> post_processed_data;
-    post_processed_data.resize(byte_count);
-    const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels);
-    for (size_t i = 0; i < pixel_count; ++i) {
-        const uint8_t a = *src++;
-        post_processed_data[i * 4 + 0] = a;
-        post_processed_data[i * 4 + 1] = a;
-        post_processed_data[i * 4 + 2] = a;
-        post_processed_data[i * 4 + 3] = a;
-    }
-    return post_processed_data;
-}
-
 Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_settings& settings)
     : m_graphics_device{graphics_device}
     , m_imgui_program_interface{graphics_device}
@@ -242,7 +206,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied
+            .color_blend    = erhe::graphics::Color_blend_state::color_blend_alpha
         }
     }
     , m_dummy_texture{graphics_device.create_dummy_texture()}
@@ -306,7 +270,29 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
 {
     ERHE_PROFILE_FUNCTION();
 
-    apply_font_config_changes(settings);
+    m_primary_font    = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.font_size);
+    m_mono_font       = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.font_size);
+    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.vr_font_size);
+    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.vr_font_size);
+
+#if 1 // TODO Profile
+    // TODO Something nicer
+#define ICON_MIN_MDI 0xF68C
+#define ICON_MAX_16_MDI 0xF68C
+#define ICON_MAX_MDI 0xF1D17
+    ImFontGlyphRangesBuilder builder;
+    static const ImWchar ranges[] = { ICON_MIN_MDI, ICON_MAX_MDI, 0 };
+    builder.AddRanges(ranges);
+    ImVector<ImWchar> range;
+    builder.BuildRanges(&range);
+    m_icon_font = m_font_atlas.AddFontFromFileTTF(settings.icon_font.c_str(), settings.icon_font_size, nullptr, range.Data);
+#endif
+
+    // (1) If you manage font atlases yourself, e.g. create a ImFontAtlas yourself you need to call ImFontAtlasUpdateNewFrame() on it.
+    // Otherwise, calling ImGui::CreateContext() without parameter will create an atlas owned by the context.
+    // (2) If you have multiple font atlases, make sure the 'atlas->RendererHasTextures' as specified in the ImFontAtlasUpdateNewFrame() call matches for that.
+    // (3) If you have multiple imgui contexts, they also need to have a matching value for ImGuiBackendFlags_RendererHasTextures.
+    m_font_atlas.RendererHasTextures = true;
 }
 
 void Imgui_renderer::lock_mutex()
@@ -374,59 +360,14 @@ auto Imgui_renderer::get_imgui_hosts() const -> const std::vector<Imgui_host*>&
     return m_imgui_hosts;
 }
 
-void Imgui_renderer::on_font_config_changed(Imgui_settings& settings)
+auto Imgui_renderer::get_imgui_settings() const -> const Imgui_settings&
 {
-    at_end_of_frame(
-        [this, settings](){
-            apply_font_config_changes(settings);
-        }
-    );
+    return m_imgui_settings;
 }
 
-void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
+void Imgui_renderer::on_font_config_changed(Imgui_settings& settings)
 {
-    m_font_atlas.Clear();
-    m_primary_font    = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.font_size);
-    m_mono_font       = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.font_size);
-    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.vr_font_size);
-    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.vr_font_size);
-
-#if 1 // TODO Profile
-    // TODO Something nicer
-#define ICON_MIN_MDI 0xF68C
-#define ICON_MAX_16_MDI 0xF68C
-#define ICON_MAX_MDI 0xF1D17
-    ImFontGlyphRangesBuilder builder;
-    static const ImWchar ranges[] = { ICON_MIN_MDI, ICON_MAX_MDI, 0 };
-    builder.AddRanges(ranges);
-    ImVector<ImWchar> range;
-    builder.BuildRanges(&range);
-    m_icon_font = m_font_atlas.AddFontFromFileTTF(settings.icon_font.c_str(), settings.icon_font_size, nullptr, range.Data);
-#endif
-
-    // Create textures
-    m_font_texture = std::make_shared<erhe::graphics::Texture>(
-        m_graphics_device,
-        make_font_texture_create_info(m_graphics_device, m_font_atlas)
-    );
-
-    for (auto imgui_host : m_imgui_hosts) {
-        auto* context = imgui_host->get_imgui_context();
-        if (context == nullptr) {
-            continue;
-        }
-        ImGuiIO& io = context->IO;
-        io.Fonts       = &m_font_atlas;
-        io.FontDefault = m_primary_font;
-    }
-
-    const auto pixel_data = get_font_atlas_pixel_data(m_font_atlas);
-    const std::span<const std::uint8_t> image_data{pixel_data.data(), pixel_data.size()};
-    m_font_texture->upload(erhe::dataformat::Format::format_8_vec4_unorm, image_data, m_font_texture->get_width(), m_font_texture->get_height());
-
-    // Store our handle
-    const uint64_t handle = m_graphics_device.get_handle(*m_font_texture.get(), m_linear_sampler);
-    m_font_atlas.SetTexID(handle);
+    m_imgui_settings = settings;
 }
 
 auto Imgui_renderer::primary_font() const -> ImFont*
@@ -452,6 +393,11 @@ auto Imgui_renderer::vr_mono_font() const -> ImFont*
 auto Imgui_renderer::icon_font() const -> ImFont*
 {
     return m_icon_font;
+}
+
+void Imgui_renderer::begin_frame()
+{
+    ImFontAtlasUpdateNewFrame(&m_font_atlas, static_cast<int>(m_graphics_device.get_frame_number()), true);
 }
 
 void Imgui_renderer::at_end_of_frame(std::function<void()>&& func)
@@ -529,8 +475,11 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     io.BackendRendererUserData = this;
     io.BackendRendererName     = "erhe";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
 
     ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+    platform_io.Renderer_TextureMaxWidth = platform_io.Renderer_TextureMaxHeight = m_graphics_device.limits.max_texture_size;
+
     // TODO platform_io.Platform_SetClipboardTextFn = ImGui_ImplSDL3_SetClipboardText;
     // TODO platform_io.Platform_GetClipboardTextFn = ImGui_ImplSDL3_GetClipboardText;
     platform_io.Platform_SetImeDataFn = ImGui_Impl_erhe_PlatformSetImeData;
@@ -776,6 +725,83 @@ void Imgui_renderer::use(const std::shared_ptr<erhe::graphics::Texture>& texture
     m_used_texture_handles.insert(handle);
 }
 
+void Imgui_renderer::update_texture(ImTextureData* tex)
+{
+    erhe::graphics::Scoped_debug_group pass_scope{"Imgui_renderer::update_texture()"};
+
+    ERHE_VERIFY(tex != nullptr);
+
+    if (tex->Status == ImTextureStatus_WantCreate) {
+        // Create and upload new texture to graphics system
+        //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
+        IM_ASSERT(tex->TexID == 0 && tex->BackendUserData == nullptr);
+
+        /// Create texture
+        const erhe::graphics::Texture_create_info create_info{
+            .device      = m_graphics_device,
+            .pixelformat = (tex->Format == ImTextureFormat_RGBA32) ? erhe::dataformat::Format::format_8_vec4_unorm : erhe::dataformat::Format::format_8_scalar_unorm,
+            .use_mipmaps = false,
+            .width       = tex->Width,
+            .height      = tex->Height,
+            .depth       = 1,
+            .level_count = 1,
+            .row_stride  = tex->GetPitch(),
+            .debug_label = "ImGui texture"
+        };
+        auto texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, create_info);
+
+        // Upload pixel data
+        const int depth       = 1;
+        const int array_layer = 0;
+        const int level       = 0;
+        const int x           = 0;
+        const int y           = 0;
+        const int z           = 0;
+        const std::span<const std::uint8_t> data{
+            static_cast<const std::uint8_t*>(tex->GetPixels()),
+            static_cast<size_t>(tex->GetSizeInBytes())
+        };
+        texture->upload(create_info.pixelformat, data, create_info.width, create_info.height, depth, array_layer, level, x, y, z);
+
+        uint64_t handle = m_graphics_device.get_handle(*texture.get(), m_linear_sampler);
+        m_handle_to_texture[handle] = texture;
+        tex->SetTexID(handle);
+        tex->SetStatus(ImTextureStatus_OK);
+    }
+    else if (tex->Status == ImTextureStatus_WantUpdates)
+    {
+        // Update selected blocks. We only ever write to textures regions which have never been used before!
+        // This backend choose to use tex->Updates[] but you can use tex->UpdateRect to upload a single region.
+        std::shared_ptr<erhe::graphics::Texture> texture = m_handle_to_texture[tex->GetTexID()];
+
+        for (ImTextureRect& r : tex->Updates) {
+            const std::span<const std::uint8_t> data{
+                static_cast<const std::uint8_t*>(tex->GetPixels()),
+                 static_cast<size_t>(tex->GetSizeInBytes())
+            };
+            const erhe::dataformat::Format format = (tex->Format == ImTextureFormat_RGBA32) ? erhe::dataformat::Format::format_8_vec4_unorm : erhe::dataformat::Format::format_8_scalar_unorm;
+            const int src_row_length = tex->Width;
+            const int src_x  = r.x;
+            const int src_y  = r.y;
+            const int width  = r.w;
+            const int height = r.h;
+            const int level  = 0;
+            const int x      = r.x;
+            const int y      = r.y;
+            const int z      = 0;
+            texture->upload_subimage(format, data, src_row_length, src_x, src_y, width, height, level, x,  y, z);
+        }
+        tex->SetStatus(ImTextureStatus_OK);
+    }
+    else if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames > 0) {
+        auto i = m_handle_to_texture.find(tex->GetTexID());
+        ERHE_VERIFY(i != m_handle_to_texture.end());
+        m_handle_to_texture.erase(i);
+        tex->SetTexID(ImTextureID_Invalid);
+        tex->SetStatus(ImTextureStatus_Destroyed);
+    }
+}
+
 void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& render_encoder)
 {
     SPDLOG_LOGGER_TRACE(log_frame, "begin Imgui_renderer::render_draw_data()");
@@ -785,6 +811,14 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     const ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data == nullptr) {
         return;
+    }
+
+    if (draw_data->Textures != nullptr) {
+        for (ImTextureData* tex : *draw_data->Textures) {
+            if (tex->Status != ImTextureStatus_OK) {
+                update_texture(tex);
+            }
+        }
     }
 
     const int fb_width  = (int)(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
@@ -797,9 +831,9 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     erhe::graphics::Scoped_gpu_timer   timer     {m_gpu_timer};
 
     // Make font texture handle resident
-    {
-        const uint64_t handle = m_graphics_device.get_handle(*m_font_texture.get(),m_linear_sampler);
-        use(m_font_texture, handle);
+    // TODO Is this needed?
+    for (auto i : m_handle_to_texture) {
+        use(i.second, i.first);
     }
 
     auto&       program                       = m_imgui_program_interface;
@@ -883,7 +917,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                     } else {
                         // Check texture cache
                         if (!m_graphics_device.info.use_bindless_texture) {
-                            const uint64_t handle = pcmd->TextureId;
+                            const uint64_t handle = pcmd->TexRef.GetTexID();
                             const auto texture_unit_opt = m_graphics_device.texture_unit_cache_allocate(handle);
                             if (!texture_unit_opt.has_value()) {
                                 break;
@@ -983,7 +1017,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
 
                         // Write texture indices
                         if (m_graphics_device.info.use_bindless_texture) {
-                            const uint64_t handle = pcmd->TextureId;
+                            const uint64_t handle = pcmd->TexRef.GetTexID();
                             const uint32_t texture_handle[2] = { static_cast<uint32_t>((handle & 0xffffffffu)), static_cast<uint32_t>(handle >> 32u)};
                             const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
@@ -1002,7 +1036,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                                 extra_cpu_data
                             );
                         } else {
-                            const uint64_t handle             = pcmd->TextureId;
+                            const uint64_t handle             = pcmd->TexRef.GetTexID();
                             const size_t   texture_unit       = m_graphics_device.texture_unit_cache_get(handle);
                             const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit), 0, 0, 0 };
                             const std::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};

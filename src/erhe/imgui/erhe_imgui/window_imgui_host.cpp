@@ -144,6 +144,10 @@ void Window_imgui_host::begin_imgui_frame()
 
     SPDLOG_LOGGER_TRACE(log_frame, "ImGui::NewFrame()");
     ImGui::NewFrame();
+
+    ImFont* font = m_imgui_renderer.primary_font();
+    ImGui::PushFont(font, m_imgui_renderer.get_imgui_settings().font_size);
+
     ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
     if (m_begin_callback) {
@@ -154,6 +158,7 @@ void Window_imgui_host::begin_imgui_frame()
 void Window_imgui_host::end_imgui_frame()
 {
     SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::end_imgui_frame()");
+    ImGui::PopFont();
     ImGui::EndFrame();
     ImGui::Render();
     m_this_frame_dt_s = 0.0f;
