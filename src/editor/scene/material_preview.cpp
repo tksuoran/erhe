@@ -527,10 +527,19 @@ void Brush_preview::render_preview(
     m_node->attach(m_mesh);
 
     // Get brush primitive aabb in world space
-    const erhe::math::Aabb primitive_local_aabb = brush_scaled.primitive.get_bounding_box();
-    ERHE_VERIFY(primitive_local_aabb.is_valid());
-    erhe::math::Aabb world_aabb = primitive_local_aabb.transformed_by(m_node->world_from_node());
-    ERHE_VERIFY(world_aabb.is_valid());
+    //const erhe::math::Aabb primitive_local_aabb = brush_scaled.primitive.get_bounding_box();
+    //ERHE_VERIFY(primitive_local_aabb.is_valid());
+    //erhe::math::Aabb world_aabb = primitive_local_aabb.transformed_by(m_node->world_from_node());
+    //ERHE_VERIFY(world_aabb.is_valid());
+    //const glm::vec3 target_position = world_aabb.center();
+    //const float     size            = glm::length(world_aabb.diagonal());
+
+    const erhe::primitive::Buffer_mesh* renderable_mesh = brush_scaled.primitive.get_renderable_mesh();
+    ERHE_VERIFY(renderable_mesh != nullptr);
+    const erhe::math::Sphere primitive_local_bounding_sphere = renderable_mesh->bounding_sphere;
+    const erhe::math::Sphere world_sphere    = primitive_local_bounding_sphere.transformed_by(m_node->world_from_node());
+    const glm::vec3          target_position = world_sphere.center;
+    const float              size            = world_sphere.radius;
 
     const erhe::math::Viewport viewport{
         .x      = 0,
@@ -540,7 +549,7 @@ void Brush_preview::render_preview(
     };
 
     const float                      time_s   = static_cast<float>(static_cast<double>(time) / 1'000'000'000.0);
-    const glm::quat                  rotation = glm::angleAxis(time_s, glm::vec3{0.0f, 1.0f, 0.0f});
+    const glm::quat                  rotation = glm::angleAxis(2.0f * time_s, glm::vec3{0.0f, 1.0f, 0.0f});
     const erhe::scene::Trs_transform node_transform{rotation};
     m_node->set_parent_from_node(node_transform);
 
@@ -552,12 +561,10 @@ void Brush_preview::render_preview(
         )
     );
 
-    // Frame aabb into camera view
+    // Frame bounding volume into camera view
     glm::vec3   camera_position      = m_camera_node->position_in_world();
-    glm::vec3   target_position      = world_aabb.center();
     glm::vec3   direction            = target_position - camera_position;
     glm::vec3   direction_normalized = glm::normalize(target_position - camera_position);
-    const float size                 = glm::length(world_aabb.diagonal());
     const       erhe::scene::Projection::Fov_sides fov_sides = m_camera->projection()->get_fov_sides(viewport);
     float min_fov_side = std::numeric_limits<float>::max();
     for (float fov_side : { fov_sides.left, fov_sides.right, fov_sides.up, fov_sides.down }) {
@@ -565,7 +572,7 @@ void Brush_preview::render_preview(
     }
     ////float tan_fov_side = std::tanf(min_fov_side);
     const float     tan_fov_side        = tanf(min_fov_side);
-    const float     fit_distance        = size / (2.0f * tan_fov_side);
+    const float     fit_distance        = size / tan_fov_side;
     const glm::vec3 new_position        = target_position - fit_distance * direction_normalized;
     const glm::mat4 new_world_from_node = erhe::math::create_look_at(new_position, target_position, glm::vec3{0.0f, 1.0f, 0.0});
     m_camera_node->set_world_from_node(new_world_from_node);

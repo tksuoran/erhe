@@ -21,6 +21,9 @@ public:
     auto contains(const glm::vec3& point) const -> bool;
     auto contains(const glm::vec3& point, float epsilon) const -> bool;
 
+    void enclose(const glm::vec3& point, float epsilon = 1e-4f);
+    void enclose(const Sphere& sphere);
+
     [[nodiscard]] auto transformed_by(const glm::mat4& m) const -> Sphere;
 };
 

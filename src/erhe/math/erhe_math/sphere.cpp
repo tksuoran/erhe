@@ -29,6 +29,18 @@ auto max(float a, float b, float c, float d) -> float
     return std::max(std::max(a, b), std::max(c, d));
 }
 
+auto scaled_to_length(const glm::vec3& v, float new_length) -> glm::vec3
+{
+    float length = glm::length2(v);
+    if (length < 1e-6f) {
+        return glm::vec3{new_length, 0.0f, 0.0f};
+    }
+
+    length = std::sqrt(length);
+    float scalar = new_length / length;
+    return scalar * v;
+}
+
 // I did not verify this is was correctly converted from MathGeoLib to glm.
 bool inverse_symmetric(glm::mat3& m)
 {
@@ -397,6 +409,41 @@ auto optimal_enclosing_sphere(const std::vector<glm::vec3>& pts) -> Sphere
         .center = glm::vec3(transformed_center),
         .radius = radius * max_scale
     };
+}
+
+void Sphere::enclose(const glm::vec3& point, float epsilon)
+{
+	glm::vec3 d = point - center;
+	float dist2 = glm::length2(d);
+	if (dist2 + epsilon > radius * radius) {
+#ifdef MATH_ASSERT_CORRECTNESS
+		Sphere copy = *this;
+#endif
+		float dist = std::sqrt(dist2);
+		float halfDist = (dist - radius) * 0.5f;
+		// Nudge this Sphere towards the target point. Add half the missing distance to radius,
+		// and the other half to position. This gives a tighter enclosure, instead of if
+		// the whole missing distance were just added to radius.
+		center += d * halfDist / dist;
+		radius += halfDist + 1e-4f; // Use a fixed epsilon deliberately, the param is a squared epsilon, so different order of magnitude.
+#ifdef MATH_ASSERT_CORRECTNESS
+		mathassert(this->Contains(copy, epsilon));
+#endif
+	}
+
+	// assume(this->Contains(point));
+}
+
+void Sphere::enclose(const Sphere& sphere)
+{
+	// To enclose another sphere into this sphere, we only need to enclose two points:
+	// 1) Enclose the farthest point on the other sphere into this sphere.
+	// 2) Enclose the opposite point of the farthest point into this sphere.
+	glm::vec3 to_farthest_point = scaled_to_length(sphere.center - center, sphere.radius);
+	enclose(sphere.center + to_farthest_point);
+	enclose(sphere.center - to_farthest_point);
+
+	// assume(this->Contains(sphere));
 }
 
 } // namespace erhe::math

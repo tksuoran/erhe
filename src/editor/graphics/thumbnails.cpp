@@ -42,7 +42,7 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
     }
 {
     int capacity = 200;
-    int size_pixels = 64;
+    int size_pixels = 256;
     const auto& section = erhe::configuration::get_ini_file_section("erhe.ini", "thumbnails");
     section.get("capacity", capacity);
     section.get("capacity", size_pixels);
@@ -119,6 +119,21 @@ auto Thumbnails::draw(
             if (ImGui::IsItemHovered()) {
                 thumbnail.callback = callback;
                 thumbnail.time += m_context.time->get_host_system_last_frame_duration_ns();
+                ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4{0.0f, 0.0f, 0.0f, 0.8f});
+                ImGui::BeginTooltip();
+                m_context.imgui_renderer->image(
+                    thumbnail.texture_view,
+                    m_size_pixels,
+                    m_size_pixels,
+                    glm::vec2{0.0f, 1.0f},
+                    glm::vec2{1.0f, 0.0f},
+                    glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
+                    glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+                    erhe::graphics::Filter::nearest,
+                    erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+                );
+                ImGui::EndTooltip();
+                ImGui::PopStyleColor();
             }
             ImGui::SameLine();
             return true;
