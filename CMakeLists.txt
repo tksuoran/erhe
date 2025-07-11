@@ -45,7 +45,7 @@ set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"  
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either  or none"                          "jolt"     "jolt;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh or none"              "bvh"      "embree;bvh;none")
-set_option(ERHE_SVG_LIBRARY                "SVG loading library. Either lunasvg or none"                                "lunasvg"  "lunasvg;none")
+set_option(ERHE_SVG_LIBRARY                "SVG loading library. Either plutosvg or none"                               "plutosvg" "plutosvg;none")
 set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"                     "harfbuzz" "harfbuzz;freetype;none")
 set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, sdl or none"                  "sdl"      "sdl;glfw;none")
 set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either openxr, or none"                        "none"     "openxr;none")
@@ -296,15 +296,15 @@ else ()
     add_definitions(-DERHE_AUDIO_LIBRARY_NONE)
 endif ()
 
-if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
+if (${ERHE_SVG_LIBRARY} STREQUAL "plutosvg")
     CPMAddPackage(
-        NAME              lunasvg
-        VERSION           2.4.0
+        NAME              plutosvg
+        VERSION           0.0.7
         GIT_SHALLOW       TRUE
-        GITHUB_REPOSITORY sammycage/lunasvg
+        GITHUB_REPOSITORY sammycage/plutosvg
     )
-    message(STATUS "Erhe configured to use lunasvg for SVG.")
-    add_definitions(-DERHE_SVG_LIBRARY_LUNASVG)
+    message(STATUS "Erhe configured to use plutosvg for SVG.")
+    add_definitions(-DERHE_SVG_LIBRARY_PLUTOSVG)
 else ()
     message(STATUS "Erhe configured to disable SVG.")
     add_definitions(-DERHE_SVG_LIBRARY_NONE)

@@ -15,7 +15,7 @@ REPOS=(
     "simdjson/simdjson"
     "taskflow/taskflow"
     "google/wuffs"
-    "sammycage/lunasvg"
+    "sammycage/plutosvg"
     "spnda/fastgltf"
     "NVIDIA/NVTX"
     "wolfpld/tracy"

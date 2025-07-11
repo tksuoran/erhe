@@ -16,7 +16,7 @@
                 "ERHE_PHYSICS_LIBRARY":            "jolt",
                 "ERHE_PROFILE_LIBRARY":            "tracy",
                 "ERHE_RAYTRACE_LIBRARY":           "bvh",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
+                "ERHE_SVG_LIBRARY":                "plutosvg",
                 "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
                 "ERHE_WINDOW_LIBRARY":             "sdl",
                 "ERHE_XR_LIBRARY":                 "none"

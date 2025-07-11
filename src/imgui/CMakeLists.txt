@@ -23,9 +23,9 @@ if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
         imgui/misc/freetype/imgui_freetype.cpp
         imgui/misc/freetype/imgui_freetype.h
     )
-    if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
-        add_definitions(-DIMGUI_ENABLE_FREETYPE_LUNASVG)
-        target_link_libraries(${_target} PRIVATE lunasvg)
+    if (${ERHE_SVG_LIBRARY} STREQUAL "plutosvg")
+        add_definitions(-DIMGUI_ENABLE_FREETYPE_PLUTOSVG)
+        target_link_libraries(${_target} PRIVATE plutosvg)
     endif ()
 
     target_link_libraries(${_target} PUBLIC freetype)

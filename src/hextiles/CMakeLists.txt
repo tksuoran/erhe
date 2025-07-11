@@ -107,8 +107,8 @@ target_link_libraries(
     nlohmann_json::nlohmann_json
 )
 
-if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
-    target_link_libraries(${_target} PRIVATE lunasvg)
+if (${ERHE_SVG_LIBRARY} STREQUAL "plutosvg")
+    target_link_libraries(${_target} PRIVATE plutosvg)
 endif ()
 
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")

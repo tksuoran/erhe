@@ -4,8 +4,9 @@
 
 #include <glm/glm.hpp>
 
-#if defined(ERHE_SVG_LIBRARY_LUNASVG)
-#   include <lunasvg.h>
+#if defined(ERHE_SVG_LIBRARY_PLUTOSVG)
+#   include <plutosvg.h>
+#   include <plutovg.h>
 #endif
 
 #include <cstdint>
@@ -33,16 +34,17 @@ class Icon_load_data
 {
 public:
     Icon_load_data(Icon_settings& icon_settings, const char* icon_name, int column, int row, glm::vec2 uv0);
+    ~Icon_load_data();
 
     void rasterize(int size);
     void upload   (int size, erhe::graphics::Texture& texture);
 
 private:
-    std::unique_ptr<lunasvg::Document> m_document;
-    int                                m_column;
-    int                                m_row;
-    glm::vec2                          m_uv0;
-    std::vector<lunasvg::Bitmap>       m_bitmaps;
+    plutosvg_document_t*            m_document{nullptr};
+    int                             m_column;
+    int                             m_row;
+    glm::vec2                       m_uv0;
+    std::vector<plutovg_surface_t*> m_bitmaps;
 };
 
 class Icon_settings;
