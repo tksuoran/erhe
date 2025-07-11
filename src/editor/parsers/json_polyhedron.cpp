@@ -63,15 +63,16 @@ auto Json_library::make_geometry(erhe::geometry::Geometry& geometry, const std::
 
         const auto& json_vertices = (*json_mesh).value["vertex"];
         const size_t vertex_count = json_vertices.GetArray().Size();
+        mesh.vertices.set_double_precision();
         mesh.vertices.create_vertices(static_cast<GEO::index_t>(vertex_count));
         {
             GEO::index_t vertex = 0;
             for (auto& json_vertex : json_vertices.GetArray()) {
                 assert(json_vertex.IsArray());
-                const float x = json_vertex[0].GetFloat();
-                const float y = json_vertex[1].GetFloat();
-                const float z = json_vertex[2].GetFloat();
-                set_pointf(mesh.vertices, vertex++, GEO::vec3f{x, y, z});
+                const double x = json_vertex[0].GetDouble();
+                const double y = json_vertex[1].GetDouble();
+                const double z = json_vertex[2].GetDouble();
+                mesh.vertices.point(vertex++) = GEO::vec3{x, y, z};
             }
         }
 
@@ -89,7 +90,8 @@ auto Json_library::make_geometry(erhe::geometry::Geometry& geometry, const std::
             }
         }
 
-        GEO::mesh_reorient(mesh);
+        GEO::mesh_repair(mesh, GEO::MESH_REPAIR_TOPOLOGY, 0.0);
+        mesh.vertices.set_single_precision();
         return true;
     } catch (...) {
         return false;

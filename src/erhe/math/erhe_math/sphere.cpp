@@ -90,7 +90,7 @@ auto Sphere::contains(const glm::vec3& point, float epsilon) const -> bool
 }
 
 // The epsilon value used for enclosing sphere computations.
-static const float s_epsilon = 1e-3f;
+static const float s_epsilon = 5e-3f;
 
 auto fit_sphere_through_points(const glm::vec3& ab, const glm::vec3& ac, float& s, float& t) -> bool
 {
@@ -316,7 +316,7 @@ auto optimal_enclosing_sphere(const glm::vec3& a, const glm::vec3& b, const glm:
         return s;
     }
 
-    s = optimal_enclosing_sphere(a,b,c,d);
+    s = optimal_enclosing_sphere(a, b, c, d);
     assert(s.contains(e, s_epsilon));
     redundant_point = 4;
     return s;

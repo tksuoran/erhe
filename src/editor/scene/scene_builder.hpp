@@ -70,8 +70,8 @@ class Make_mesh_config
 public:
     std::shared_ptr<erhe::primitive::Material> material      {};
     int                                        instance_count{1};
-    float                                      instance_gap  {0.2f};
-    float                                      object_scale  {0.4f};
+    float                                      instance_gap  {0.5f};
+    float                                      object_scale  {1.0f};
     int                                        detail        {4};
 };
 
@@ -174,27 +174,6 @@ private:
 
     App_context& m_context;
 
-    class Config
-    {
-    public:
-        Config();
-        float camera_exposure            {1.0f};
-        float shadow_range               {22.0f};
-        float directional_light_intensity{20.0f};
-        float directional_light_radius   {6.0f};
-        float directional_light_height   {10.0f};
-        int   directional_light_count    {4};
-        float spot_light_intensity       {150.0f};
-        float spot_light_radius          {20.0f};
-        float spot_light_height          {10.0f};
-        int   spot_light_count           {3};
-        float floor_size                 {40.0f};
-        float mass_scale                 {1.0f};
-        int   detail                     {1};
-        bool  floor                      {true};
-    };
-    Config m_config;
-
     // Self owned parts
     ERHE_PROFILE_MUTEX(std::mutex,      m_brush_mutex);
     std::unique_ptr<Brush>              m_floor_brush;
@@ -207,6 +186,10 @@ private:
     std::shared_ptr<Brush>              m_cone_brush;
 
     std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
+
+    // Config
+    float m_mass_scale{1.0f};
+    int   m_detail    {4};
 
     // Output
     std::shared_ptr<Viewport_scene_view> m_primary_viewport_window;
