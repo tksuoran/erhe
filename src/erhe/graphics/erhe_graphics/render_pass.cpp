@@ -247,6 +247,7 @@ void Render_pass::on_thread_exit()
 void Render_pass::reset()
 {
     m_owner_thread = {};
+    m_draw_buffers.clear();
     m_gl_framebuffer.reset();
     m_gl_multisample_resolve_framebuffer.reset();
 }
@@ -255,7 +256,9 @@ void Render_pass::create()
 {
     ERHE_PROFILE_FUNCTION();
 
+    m_draw_buffers.clear();
     if (m_uses_default_framebuffer) {
+        m_draw_buffers.push_back(gl::Color_buffer::back);
         return;
     }
 
@@ -499,14 +502,33 @@ void Render_pass::start_render_pass()
                 : erhe::dataformat::get_format_kind(pixelformat);
             switch (format_kind) {
                 case erhe::dataformat::Format_kind::format_kind_float: {
+                    ERHE_VERIFY(
+                        (
+                            (name == 0) && (color_index == 0) && (m_draw_buffers[0] == gl::Color_buffer::back)
+                        ) ||
+                        (
+                            (name != 0) &&
+                            (
+                                m_draw_buffers[color_index] == 
+                                    static_cast<gl::Color_buffer>(
+                                        static_cast<unsigned int>(gl::Color_buffer::color_attachment0)
+                                        + color_index
+                                )
+                            )
+                        )
+                    );
                     GLfloat f[4] = {
                         static_cast<GLfloat>(attachment.clear_value[0]),
                         static_cast<GLfloat>(attachment.clear_value[1]),
                         static_cast<GLfloat>(attachment.clear_value[2]),
                         static_cast<GLfloat>(attachment.clear_value[3])
                     };
-                    // gl::clear_tex_image(attachment.texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &f[0]);
-                    gl::clear_named_framebuffer_fv(name, gl::Buffer::color, static_cast<GLint>(color_index), &f[0]);
+                    if (attachment.texture != nullptr) {
+                        gl::clear_tex_image(attachment.texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &f[0]);
+                    } else
+                    {
+                        gl::clear_named_framebuffer_fv(name, gl::Buffer::color, static_cast<GLint>(color_index), &f[0]);
+                    }
                     break;
                 }
                 case erhe::dataformat::Format_kind::format_kind_signed_integer: {
@@ -668,10 +690,12 @@ void Render_pass::end_render_pass()
             }
         }
         // Restore draw buffer state
-        gl::named_framebuffer_draw_buffers(gl_name(), 1, m_draw_buffers.data());
+        gl::named_framebuffer_draw_buffers(gl_name(), static_cast<GLsizei>(m_draw_buffers.size()), m_draw_buffers.data());
         gl::named_framebuffer_read_buffer(gl_name(), gl::Color_buffer::color_attachment0);
-        gl::named_framebuffer_draw_buffers(gl_multisample_resolve_name(), 1, m_draw_buffers.data());
+        gl::named_framebuffer_draw_buffers(gl_multisample_resolve_name(), static_cast<GLsizei>(m_draw_buffers.size()), m_draw_buffers.data());
         gl::named_framebuffer_read_buffer(gl_multisample_resolve_name(), gl::Color_buffer::color_attachment0);
+
+        // NOTE: Depth/stencil blit does not involve draw buffers
         if (check_multisample_resolve(m_depth_attachment, blit_width, blit_height)) {
             gl::blit_named_framebuffer(
                 gl_name(),

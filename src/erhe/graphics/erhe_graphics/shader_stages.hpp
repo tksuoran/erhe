@@ -127,7 +127,7 @@ private:
 
     friend class Shader_stages;
     friend class Reloadable_shader_stages;
-    Device&                                           m_graphics_device;
+    Device&                                             m_graphics_device;
     Gl_program                                          m_handle;
     Shader_stages_create_info                           m_create_info;
     std::vector<Gl_shader>                              m_prelink_shaders;
@@ -161,7 +161,7 @@ public:
     [[nodiscard]] auto is_valid() const -> bool;
 
 private:
-    Device&              m_device;
+    Device&                m_device;
     Gl_program             m_handle;
     std::string            m_name;
     bool                   m_is_valid{false};

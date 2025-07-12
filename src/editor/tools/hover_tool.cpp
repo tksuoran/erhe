@@ -190,10 +190,14 @@ void Hover_tool::tool_render(const Render_context& context)
     }
 
     const auto* entry = context.scene_view.get_nearest_hover(
-        Hover_entry::content_bit | Hover_entry::grid_bit
+        Hover_entry::content_bit | Hover_entry::grid_bit | Hover_entry::rendertarget_bit
     );
 
     if ((entry == nullptr) || !entry->valid || !entry->position.has_value()) {
+        return;
+    }
+
+    if (entry->slot == Hover_entry::rendertarget_slot) {
         return;
     }
 

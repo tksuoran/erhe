@@ -814,7 +814,7 @@ auto Device::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::siz
             gl::bind_sampler     (m_base_texture_unit + i, fallback_sampler_name);
         }
     }
-    return m_texture_units.size();
+    return m_base_texture_unit + i;
 }
 
 auto Device::get_buffer_alignment(Buffer_target target) -> std::size_t
