@@ -523,6 +523,8 @@ void Render_pass::start_render_pass()
                         static_cast<GLfloat>(attachment.clear_value[2]),
                         static_cast<GLfloat>(attachment.clear_value[3])
                     };
+
+                    // TODO Figure out why gl::clear_named_framebuffer_fv() does not always work
                     if (attachment.texture != nullptr) {
                         gl::clear_tex_image(attachment.texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &f[0]);
                     } else

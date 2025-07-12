@@ -241,7 +241,7 @@ auto Imgui_host::get_mouse_position() const -> glm::vec2
 auto Imgui_host::on_cursor_enter_event(const erhe::window::Input_event& input_event) -> bool
 {
     const erhe::window::Cursor_enter_event& cursor_enter_event = input_event.u.cursor_enter_event;
-    SPDLOG_LOGGER_TRACE(log_input_events, "on_cursor_enter_event({})", cursor_enter_event.entered);
+    SPDLOG_LOGGER_TRACE(log_input_events, "on_cursor_enter_event({}) {}", cursor_enter_event.entered, get_name());
     m_has_cursor = cursor_enter_event.entered != 0;
     ImGuiIO& io = m_imgui_context->IO;
     if (!m_has_cursor) {
@@ -252,7 +252,7 @@ auto Imgui_host::on_cursor_enter_event(const erhe::window::Input_event& input_ev
 
 auto Imgui_host::on_window_focus_event(const erhe::window::Input_event& input_event) -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_window_focus_event({})", input_event.u.window_focus_event.focused);
+    SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_window_focus_event({}) {}", input_event.u.window_focus_event.focused, get_name());
     ImGuiIO& io = m_imgui_context->IO;
     io.AddFocusEvent(input_event.u.window_focus_event.focused);
     return true;
@@ -260,6 +260,7 @@ auto Imgui_host::on_window_focus_event(const erhe::window::Input_event& input_ev
 
 auto Imgui_host::on_mouse_move_event(const erhe::window::Input_event& input_event) -> bool
 {
+    SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_mouse_move_event(x = {}, y = {}) {}", input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y, get_name());
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMousePosEvent(input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y);
     return false;

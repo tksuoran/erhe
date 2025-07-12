@@ -277,13 +277,26 @@ void Rendertarget_imgui_host::begin_imgui_frame()
             // Process input events from the context window
             std::vector<erhe::window::Input_event>& input_events = m_app_context.context_window->get_input_events();
             for (erhe::window::Input_event& input_event : input_events) {
+                // Do not process these events here
+                switch (input_event.type) {
+                    case erhe::window::Input_event_type::window_focus_event  :
+                    case erhe::window::Input_event_type::cursor_enter_event  :
+                    case erhe::window::Input_event_type::mouse_move_event    :
+                    case erhe::window::Input_event_type::window_resize_event :
+                    case erhe::window::Input_event_type::window_close_event  :
+                    case erhe::window::Input_event_type::window_refresh_event:
+                        continue;
+                    default:
+                        break;
+                }
+
                 if (!input_event.handled) {
                     dispatch_input_event(input_event);
                 }
             }
 
         } else {
-            if (has_cursor()) {
+            if (has_cursor()) { // Check if last known mouse state is outdated
                 on_cursor_enter_event(
                     erhe::window::Input_event{
                         .type = erhe::window::Input_event_type::cursor_enter_event,
@@ -297,21 +310,6 @@ void Rendertarget_imgui_host::begin_imgui_frame()
                 );
                 m_last_mouse_x = -FLT_MAX;
                 m_last_mouse_y = -FLT_MAX;
-                on_mouse_move_event(
-                    erhe::window::Input_event{
-                        .type = erhe::window::Input_event_type::mouse_move_event,
-                        .timestamp_ns = m_time_ns,
-                        .u = {
-                            .mouse_move_event = {
-                                .x = -FLT_MAX,
-                                .y = -FLT_MAX,
-                                .dx = 0.0f,
-                                .dy = 0.0f,
-                                .modifier_mask = 0
-                            }
-                        }
-                    }
-                );
             }
         }
     }
