@@ -189,7 +189,6 @@ auto Imgui_host::name() const -> const std::string&
     return m_name;
 }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
 auto Imgui_host::want_capture_keyboard() const -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
@@ -312,22 +311,5 @@ auto Imgui_host::on_char_event(const erhe::window::Input_event& input_event) -> 
 }
 
 #pragma endregion Events
-
-#else
-auto Imgui_host::want_capture_mouse() const -> bool
-{
-    return false;
-}
-
-void Imgui_host::on_focus(int) {}
-void Imgui_host::on_cursor_enter(int) {}
-void Imgui_host::on_mouse_button(uint32_t, bool) {}
-void Imgui_host::on_mouse_wheel(float, float) {}
-void Imgui_host::make_imgui_context_current() {}
-void Imgui_host::make_imgui_context_uncurrent() {}
-void Imgui_host::on_key(signed int, uint32_t, bool) {}
-void Imgui_host::on_char(const unsigned int) {}
-
-#endif
 
 } // namespace erhe::imgui

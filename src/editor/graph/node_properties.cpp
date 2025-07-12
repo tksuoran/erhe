@@ -15,10 +15,8 @@
 
 #include <fmt/format.h>
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#   include <imgui/misc/cpp/imgui_stdlib.h>
-#endif
+#include <imgui/imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace editor {
 

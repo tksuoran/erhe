@@ -46,21 +46,21 @@ auto Cpu_buffer_sink::allocate_index_buffer(const std::size_t index_count, const
 
 void Cpu_buffer_sink::enqueue_index_data(const std::size_t offset, std::vector<uint8_t>&& data) const
 {
-    auto buffer_span = m_index_buffer.span();
+    auto buffer_span = m_index_buffer.get_span();
     auto offset_span = buffer_span.subspan(offset, data.size());
     memcpy(offset_span.data(), data.data(), data.size());
 }
 
 void Cpu_buffer_sink::enqueue_vertex_data(const std::size_t stream, const std::size_t offset, std::vector<uint8_t>&& data) const
 {
-    auto buffer_span = m_vertex_buffers.at(stream)->span();
+    auto buffer_span = m_vertex_buffers.at(stream)->get_span();
     auto offset_span = buffer_span.subspan(offset, data.size());
     memcpy(offset_span.data(), data.data(), data.size());
 }
 
 void Cpu_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const
 {
-    auto        buffer_span = m_vertex_buffers.at(writer.stream)->span();
+    auto        buffer_span = m_vertex_buffers.at(writer.stream)->get_span();
     const auto& data        = writer.vertex_data;
     auto        offset_span = buffer_span.subspan(writer.start_offset(), data.size());
     memcpy(offset_span.data(), data.data(), data.size());
@@ -68,7 +68,7 @@ void Cpu_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const
 
 void Cpu_buffer_sink::buffer_ready(Index_buffer_writer& writer) const
 {
-    auto        buffer_span = m_index_buffer.span();
+    auto        buffer_span = m_index_buffer.get_span();
     const auto& data        = writer.index_data;
     auto        offset_span = buffer_span.subspan(writer.start_offset(), data.size());
     memcpy(offset_span.data(), data.data(), data.size());

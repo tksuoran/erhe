@@ -1,11 +1,11 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "windows/viewport_window.hpp"
-#include "scene/content_library.hpp"
-#include "tools/brushes/brush.hpp"
-#include "tools/brushes/brush_tool.hpp"
 
 #include "app_context.hpp"
+#include "brushes/brush.hpp"
+#include "brushes/brush_tool.hpp"
+#include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "scene/viewport_scene_view.hpp"
 
@@ -69,10 +69,8 @@ void Viewport_window::update_hover_info()
 
 void Viewport_window::on_begin()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{0.0, 0.0, 0.0, 0.0});
-#endif
 }
 
 void Viewport_window::on_end()

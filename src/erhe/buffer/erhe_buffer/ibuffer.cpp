@@ -32,7 +32,7 @@ Cpu_buffer& Cpu_buffer::operator=(Cpu_buffer&& other) noexcept
 
 Cpu_buffer::~Cpu_buffer() noexcept = default;
 
-auto Cpu_buffer::capacity_byte_count() const noexcept -> std::size_t
+auto Cpu_buffer::get_capacity_byte_count() const noexcept -> std::size_t
 {
     return m_capacity_byte_count;
 }
@@ -53,12 +53,12 @@ auto Cpu_buffer::allocate_bytes(const std::size_t byte_count, const std::size_t 
     return offset;
 }
 
-auto Cpu_buffer::span() noexcept -> std::span<std::byte>
+auto Cpu_buffer::get_span() noexcept -> std::span<std::byte>
 {
     return m_span;
 }
 
-auto Cpu_buffer::debug_label() const -> std::string_view
+auto Cpu_buffer::get_debug_label() const -> std::string_view
 {
     return m_debug_label;
 }

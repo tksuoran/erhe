@@ -873,7 +873,22 @@ inline auto access_mask(erhe::graphics::Device& device) -> gl::Map_buffer_access
         : access_mask_not_persistent;
 }
 
-
+void Device::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
+{
+    // TODO Use persistent staging buffer, maybe GPU_ring_buffer?
+    Buffer_create_info create_info{
+        .capacity_byte_count = length,
+        .usage               = Buffer_usage     ::transfer,
+        .direction           = Buffer_direction ::cpu_to_gpu,
+        .cache_mode          = Buffer_cache_mode::default_,
+        .mapping             = Buffer_mapping   ::not_mappable,
+        .coherency           = Buffer_coherency ::on,
+        .init_data           = data,
+        .debug_label         = "Staging buffer"
+    };
+    Buffer staging_buffer{*this, create_info};
+    gl::copy_named_buffer_sub_data(staging_buffer.gl_name(), buffer.gl_name(), 0, offset, length);
+}
 
 // Ring buffer
 
@@ -1050,7 +1065,7 @@ auto Buffer_range::get_buffer() const -> GPU_ring_buffer*
 //
 
 GPU_ring_buffer::GPU_ring_buffer(
-    erhe::graphics::Device&          graphics_device,
+    erhe::graphics::Device&            graphics_device,
     const GPU_ring_buffer_create_info& create_info
 )
     : m_device{graphics_device}
@@ -1059,14 +1074,17 @@ GPU_ring_buffer::GPU_ring_buffer(
             m_device,
             Buffer_create_info{
                 .capacity_byte_count = create_info.size,
-                .storage_mask        = storage_mask(m_device),
-                .access_mask         = access_mask(m_device),
+                .usage               = create_info.usage,
+                .direction           = erhe::graphics::Buffer_direction::cpu_to_gpu,
+                .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+                .mapping             = erhe::graphics::Buffer_mapping::persistent,
+                .coherency           = erhe::graphics::Buffer_coherency::on, // TODO explicitly flush range?
                 .debug_label         = create_info.debug_label
             }
         )
     }
     , m_read_wrap_count{0}
-    , m_read_offset    {m_buffer->capacity_byte_count()}
+    , m_read_offset    {m_buffer->get_capacity_byte_count()}
 {
 }
 
@@ -1082,7 +1100,7 @@ auto GPU_ring_buffer::get_name() const -> const std::string&
 
 void GPU_ring_buffer::sanity_check()
 {
-    ERHE_VERIFY(m_write_position <= m_buffer->capacity_byte_count());
+    ERHE_VERIFY(m_write_position <= m_buffer->get_capacity_byte_count());
 
     if (m_write_wrap_count == m_read_wrap_count + 1) {
         ERHE_VERIFY(m_read_offset >= m_write_position);
@@ -1136,7 +1154,7 @@ void GPU_ring_buffer::get_size_available_for_write(
         return;
     } else if (m_read_wrap_count == m_write_wrap_count) {
         ERHE_VERIFY(m_write_position >= m_read_offset);
-        out_available_byte_count_without_wrap = m_buffer->capacity_byte_count() - m_write_position;
+        out_available_byte_count_without_wrap = m_buffer->get_capacity_byte_count() - m_write_position;
         out_available_byte_count_with_wrap = m_read_offset;
         if (out_available_byte_count_without_wrap > out_alignment_byte_count_without_wrap) {
             out_available_byte_count_without_wrap -= out_alignment_byte_count_without_wrap;
@@ -1189,14 +1207,14 @@ auto GPU_ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage 
         if (usage == Ring_buffer_usage::CPU_write) {
             m_buffer->begin_write(m_write_position, byte_count); // maps requested range
         }
-        Buffer_range result{*this, usage, m_buffer->map(), m_write_wrap_count, m_write_position};
+        Buffer_range result{*this, usage, m_buffer->get_map(), m_write_wrap_count, m_write_position};
         m_write_position += byte_count;
         sanity_check();
         return result;
     } else {
-        size_t buffer_mapped_span_byte_count = m_buffer->map().size_bytes();
+        size_t buffer_mapped_span_byte_count = m_buffer->get_map().size_bytes();
         ERHE_VERIFY(m_write_position + byte_count <= buffer_mapped_span_byte_count);
-        Buffer_range result{*this, usage, m_buffer->map().subspan(m_write_position, byte_count), m_write_wrap_count, m_write_position};
+        Buffer_range result{*this, usage, m_buffer->get_map().subspan(m_write_position, byte_count), m_write_wrap_count, m_write_position};
         m_write_position += byte_count;
         sanity_check();
         return result;
@@ -1436,7 +1454,7 @@ auto GPU_ring_buffer_client::bind(Command_encoder& command_encoder, const Buffer
         (m_buffer_target != Buffer_target::uniform) ||
         (byte_count <= static_cast<std::size_t>(m_graphics_device.limits.max_uniform_block_size))
     );
-    ERHE_VERIFY(offset + byte_count <= buffer->capacity_byte_count());
+    ERHE_VERIFY(offset + byte_count <= buffer->get_capacity_byte_count());
 
     if (m_binding_point.has_value()) {
         ERHE_VERIFY(is_indexed(m_buffer_target));

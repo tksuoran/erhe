@@ -3,10 +3,10 @@
 #include "app_rendering.hpp"
 #include "app_settings.hpp"
 
-#include "tools/brushes/brush.hpp"
+#include "brushes/brush.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "scene/content_library.hpp"
+#include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
 
@@ -626,7 +626,7 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
         make_json_brushes(app_settings, mesh_memory, nullptr, library);
     }
 
-    mesh_memory.gl_buffer_transfer_queue.flush();
+    mesh_memory.buffer_transfer_queue.flush();
 }
 
 void Scene_builder::add_room()

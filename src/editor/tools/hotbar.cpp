@@ -42,9 +42,7 @@
 #   include "erhe_xr/headset.hpp"
 #endif
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 // https://math.stackexchange.com/questions/1662616/calculate-the-diameter-of-an-inscribed-circle-inside-a-sector-of-circle
 //                                                                              .
@@ -703,7 +701,6 @@ void Hotbar::update_slot_from_tool(Tool* tool)
 void Hotbar::imgui()
 {
     ERHE_PROFILE_FUNCTION();
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushID("Hotbar::imgui");
     //const ImVec2 button_size{64.0f, 64.0f};
     //ImGui::SliderFloat("X", &m_x, -2.0f, 2.0f);
@@ -724,7 +721,6 @@ void Hotbar::imgui()
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     ImGui::PopID();
-#endif
 }
 
 auto Hotbar::toggle_mesh_visibility() -> bool

@@ -7,8 +7,8 @@
 
 #include "app_message_bus.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/grid.hpp"
-#include "tools/grid_tool.hpp"
+#include "grid/grid.hpp"
+#include "grid/grid_tool.hpp"
 #include "tools/tools.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 

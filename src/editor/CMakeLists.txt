@@ -4,10 +4,21 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe.ini
     graphics_presets.ini
+    # "imgui_Hud Viewport.ini"
+    imgui_window_imgui_host.ini
+    imgui_window_imgui_viewport.ini
     logging.ini
+    openxr_windows.ini
     settings.ini
     windows.ini
 
+
+    animation/animation_curve.cpp
+    animation/animation_curve.hpp
+    animation/animation_window.cpp
+    animation/animation_window.hpp
+    animation/timeline_window.cpp
+    animation/timeline_window.hpp
     app_context.cpp
     app_context.hpp
     app_message.hpp
@@ -21,10 +32,67 @@ erhe_target_sources_grouped(
     app_settings.hpp
     app_windows.cpp
     app_windows.hpp
+    asset_browser/asset_browser.cpp
+    asset_browser/asset_browser.hpp
+    brushes/brush.cpp
+    brushes/brush.hpp
+    brushes/brush_placement.cpp
+    brushes/brush_placement.hpp
+    brushes/brush_tool.cpp
+    brushes/brush_tool.hpp
+    brushes/reference_frame.cpp
+    brushes/reference_frame.hpp
+    CMakeLists.txt
+    content_library/brdf_slice.cpp
+    content_library/brdf_slice.hpp
+    content_library/content_library.cpp
+    content_library/content_library.hpp
+    content_library/material_library.cpp
+    content_library/material_library.hpp
+    create/create.cpp
+    create/create.hpp
+    create/create_box.cpp
+    create/create_box.hpp
+    create/create_cone.cpp
+    create/create_cone.hpp
+    create/create_preview_settings.hpp
+    create/create_shape.cpp
+    create/create_shape.hpp
+    create/create_torus.cpp
+    create/create_torus.hpp
+    create/create_uv_sphere.cpp
+    create/create_uv_sphere.hpp
+    developer/clipboard_window.cpp
+    developer/clipboard_window.hpp
+    developer/commands_window.cpp
+    developer/commands_window.hpp
+    developer/composer_window.cpp
+    developer/composer_window.hpp
+    developer/depth_visualization_window.cpp
+    developer/depth_visualization_window.hpp
+    developer/icon_browser.cpp
+    developer/icon_browser.hpp
+    developer/layers_window.cpp
+    developer/layers_window.hpp
+    developer/post_processing_window.cpp
+    developer/post_processing_window.hpp
+    developer/rendergraph_window.cpp
+    developer/rendergraph_window.hpp
+    developer/selection_window.cpp
+    developer/selection_window.hpp
+    developer/tool_properties_window.cpp
+    developer/tool_properties_window.hpp
     editor.cpp
     editor.hpp
     editor_log.cpp
     editor_log.hpp
+    experiments/gradient_editor.cpp
+    experiments/gradient_editor.hpp
+    experiments/network_window.cpp
+    experiments/network_window.hpp
+    experiments/sheet_window.cpp
+    experiments/sheet_window.hpp
+    GenerateIconFontCppHeaders.py
     graph/add.cpp
     graph/add.hpp
     graph/constant.cpp
@@ -59,6 +127,10 @@ erhe_target_sources_grouped(
     graphics/icon_set.hpp
     graphics/thumbnails.cpp
     graphics/thumbnails.hpp
+    grid/grid.cpp
+    grid/grid.hpp
+    grid/grid_tool.cpp
+    grid/grid_tool.hpp
     input_state.cpp
     input_state.hpp
     main.cpp
@@ -81,6 +153,8 @@ erhe_target_sources_grouped(
     operations/node_attach_operation.hpp
     operations/node_transform_operation.cpp
     operations/node_transform_operation.hpp
+    operations/operations_window.cpp
+    operations/operations_window.hpp
     operations/operation_stack.cpp
     operations/operation_stack.hpp
     parsers/geogram.cpp
@@ -91,6 +165,17 @@ erhe_target_sources_grouped(
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
+    physics/collision_generator.hpp
+    physics/physics_tool.cpp
+    physics/physics_tool.hpp
+    physics/physics_window.cpp
+    physics/physics_window.hpp
+    preview/brush_preview.cpp
+    preview/brush_preview.hpp
+    preview/material_preview.cpp
+    preview/material_preview.hpp
+    preview/scene_preview.cpp
+    preview/scene_preview.hpp
     renderable.hpp
     renderers/composer.cpp
     renderers/composer.hpp
@@ -122,155 +207,6 @@ erhe_target_sources_grouped(
     rendertarget_imgui_host.hpp
     rendertarget_mesh.cpp
     rendertarget_mesh.hpp
-    scene/asset_browser.cpp
-    scene/asset_browser.hpp
-    scene/brush_placement.cpp
-    scene/brush_placement.hpp
-    scene/content_library.cpp
-    scene/content_library.hpp
-    scene/debug_draw.cpp
-    scene/debug_draw.hpp
-    scene/frame_controller.cpp
-    scene/frame_controller.hpp
-    scene/material_library.cpp
-    scene/material_library.hpp
-    scene/material_preview.cpp
-    scene/material_preview.hpp
-    scene/mesh_intersect.cpp
-    scene/mesh_intersect.hpp
-    scene/node_physics.cpp
-    scene/node_physics.hpp
-    scene/node_raytrace.cpp
-    scene/node_raytrace.hpp
-    scene/scene_builder.cpp
-    scene/scene_builder.hpp
-    scene/scene_commands.cpp
-    scene/scene_commands.hpp
-    scene/scene_root.cpp
-    scene/scene_root.hpp
-    scene/scene_view.cpp
-    scene/scene_view.hpp
-    scene/viewport_scene_view.cpp
-    scene/viewport_scene_view.hpp
-    scene/viewport_scene_views.cpp
-    scene/viewport_scene_views.hpp
-    time.cpp
-    time.hpp
-    tools/brushes/brush.cpp
-    tools/brushes/brush.hpp
-    tools/brushes/brush_tool.cpp
-    tools/brushes/brush_tool.hpp
-    tools/brushes/create/create.cpp
-    tools/brushes/create/create.hpp
-    tools/brushes/create/create_box.cpp
-    tools/brushes/create/create_box.hpp
-    tools/brushes/create/create_cone.cpp
-    tools/brushes/create/create_cone.hpp
-    tools/brushes/create/create_preview_settings.hpp
-    tools/brushes/create/create_shape.cpp
-    tools/brushes/create/create_shape.hpp
-    tools/brushes/create/create_torus.cpp
-    tools/brushes/create/create_torus.hpp
-    tools/brushes/create/create_uv_sphere.cpp
-    tools/brushes/create/create_uv_sphere.hpp
-    tools/brushes/reference_frame.cpp
-    tools/brushes/reference_frame.hpp
-    tools/clipboard.cpp
-    tools/clipboard.hpp
-    tools/debug_visualizations.cpp
-    tools/debug_visualizations.hpp
-    tools/fly_camera_tool.cpp
-    tools/fly_camera_tool.hpp
-    tools/grid.cpp
-    tools/grid.hpp
-    tools/grid_tool.cpp
-    tools/grid_tool.hpp
-    tools/hotbar.cpp
-    tools/hotbar.hpp
-    tools/hover_tool.cpp
-    tools/hover_tool.hpp
-    tools/hud.cpp
-    tools/hud.hpp
-    tools/material_paint_tool.cpp
-    tools/material_paint_tool.hpp
-    tools/paint_tool.cpp
-    tools/paint_tool.hpp
-    tools/physics_tool.cpp
-    tools/physics_tool.hpp
-    tools/selection_tool.cpp
-    tools/selection_tool.hpp
-    tools/tool.cpp
-    tools/tool.hpp
-    tools/tools.cpp
-    tools/tools.hpp
-    tools/transform/handle_enums.cpp
-    tools/transform/handle_enums.hpp
-    tools/transform/handle_visualizations.cpp
-    tools/transform/handle_visualizations.hpp
-    tools/transform/move_tool.cpp
-    tools/transform/move_tool.hpp
-    tools/transform/rotate_tool.cpp
-    tools/transform/rotate_tool.hpp
-    tools/transform/rotation_inspector.cpp
-    tools/transform/rotation_inspector.hpp
-    tools/transform/scale_tool.cpp
-    tools/transform/scale_tool.hpp
-    tools/transform/subtool.cpp
-    tools/transform/subtool.hpp
-    tools/transform/transform_tool.cpp
-    tools/transform/transform_tool.hpp
-    tools/transform/transform_tool_settings.cpp
-    tools/transform/transform_tool_settings.hpp
-    windows/animation_curve.cpp
-    windows/animation_curve.hpp
-    windows/brdf_slice.cpp
-    windows/brdf_slice.hpp
-    windows/clipboard_window.cpp
-    windows/clipboard_window.hpp
-    windows/commands_window.cpp
-    windows/commands_window.hpp
-    windows/composer_window.cpp
-    windows/composer_window.hpp
-    windows/depth_visualization_window.cpp
-    windows/depth_visualization_window.hpp
-    windows/gradient_editor.cpp
-    windows/gradient_editor.hpp
-    windows/icon_browser.cpp
-    windows/icon_browser.hpp
-    windows/item_tree_window.cpp
-    windows/item_tree_window.hpp
-    windows/layers_window.cpp
-    windows/layers_window.hpp
-    windows/network_window.cpp
-    windows/network_window.hpp
-    windows/operations.cpp
-    windows/operations.hpp
-    windows/physics_window.cpp
-    windows/physics_window.hpp
-    windows/post_processing_window.cpp
-    windows/post_processing_window.hpp
-    windows/properties.cpp
-    windows/properties.hpp
-    windows/property_editor.cpp
-    windows/property_editor.hpp
-    windows/rendergraph_window.cpp
-    windows/rendergraph_window.hpp
-    windows/selection_window.cpp
-    windows/selection_window.hpp
-    windows/settings_window.cpp
-    windows/settings_window.hpp
-    windows/sheet_window.cpp
-    windows/sheet_window.hpp
-    windows/timeline_window.cpp
-    windows/timeline_window.hpp
-    windows/tool_properties_window.cpp
-    windows/tool_properties_window.hpp
-    windows/viewport_config_window.cpp
-    windows/viewport_config_window.hpp
-    windows/viewport_window.cpp
-    windows/viewport_window.hpp
-
-    # Shaders
     res/shaders/anisotropic_engine_ready.frag
     res/shaders/anisotropic_engine_ready.vert
     res/shaders/anisotropic_slope.frag
@@ -330,6 +266,86 @@ erhe_target_sources_grouped(
     res/shaders/wide_lines.frag
     res/shaders/wide_lines.geom
     res/shaders/wide_lines.vert
+    robin_hood.h
+    scene/debug_draw.cpp
+    scene/debug_draw.hpp
+    scene/frame_controller.cpp
+    scene/frame_controller.hpp
+    scene/mesh_intersect.cpp
+    scene/mesh_intersect.hpp
+    scene/node_physics.cpp
+    scene/node_physics.hpp
+    scene/node_raytrace.cpp
+    scene/node_raytrace.hpp
+    scene/node_raytrace_mask.hpp
+    scene/scene_builder.cpp
+    scene/scene_builder.hpp
+    scene/scene_commands.cpp
+    scene/scene_commands.hpp
+    scene/scene_root.cpp
+    scene/scene_root.hpp
+    scene/scene_view.cpp
+    scene/scene_view.hpp
+    scene/viewport_scene_view.cpp
+    scene/viewport_scene_view.hpp
+    scene/viewport_scene_views.cpp
+    scene/viewport_scene_views.hpp
+    time.cpp
+    time.hpp
+    tools/clipboard.cpp
+    tools/clipboard.hpp
+    tools/debug_visualizations.cpp
+    tools/debug_visualizations.hpp
+    tools/fly_camera_tool.cpp
+    tools/fly_camera_tool.hpp
+    tools/hotbar.cpp
+    tools/hotbar.hpp
+    tools/hover_tool.cpp
+    tools/hover_tool.hpp
+    tools/hud.cpp
+    tools/hud.hpp
+    tools/material_paint_tool.cpp
+    tools/material_paint_tool.hpp
+    tools/paint_tool.cpp
+    tools/paint_tool.hpp
+    tools/selection_tool.cpp
+    tools/selection_tool.hpp
+    tools/tool.cpp
+    tools/tool.hpp
+    tools/tools.cpp
+    tools/tools.hpp
+    transform/handle_enums.cpp
+    transform/handle_enums.hpp
+    transform/handle_visualizations.cpp
+    transform/handle_visualizations.hpp
+    transform/move_tool.cpp
+    transform/move_tool.hpp
+    transform/rotate_tool.cpp
+    transform/rotate_tool.hpp
+    transform/rotation_inspector.cpp
+    transform/rotation_inspector.hpp
+    transform/scale_tool.cpp
+    transform/scale_tool.hpp
+    transform/subtool.cpp
+    transform/subtool.hpp
+    transform/transform_tool.cpp
+    transform/transform_tool.hpp
+    transform/transform_tool_settings.cpp
+    transform/transform_tool_settings.hpp
+    transform/trs_tool.cpp
+    windows/IconsMaterialDesignIcons.h
+    windows/item_tree_window.cpp
+    windows/item_tree_window.hpp
+    windows/properties.cpp
+    windows/properties.hpp
+    windows/property_editor.cpp
+    windows/property_editor.hpp
+    windows/settings_window.cpp
+    windows/settings_window.hpp
+    windows/viewport_config_window.cpp
+    windows/viewport_config_window.hpp
+    windows/viewport_window.cpp
+    windows/viewport_window.hpp
 )
 
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")

@@ -10,9 +10,7 @@
 #include "erhe_scene_renderer/material_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
-namespace erhe::graphics {
-    class Device;
-}
+namespace erhe::graphics { class Device; }
 
 namespace erhe::scene_renderer {
 

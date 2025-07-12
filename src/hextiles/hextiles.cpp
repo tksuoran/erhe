@@ -97,6 +97,7 @@ public:
             int64_t delta_time = new_timestamp_ns - timestamp_ns;
             double dt_s = static_cast<double>(delta_time) / 1'000'000'000.0f;
             tick(static_cast<float>(dt_s), timestamp_ns);
+            m_graphics_device.end_of_frame();
             m_context_window.swap_buffers();
         }
     }

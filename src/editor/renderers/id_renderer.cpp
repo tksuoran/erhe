@@ -35,29 +35,17 @@ using erhe::graphics::Color_blend_state;
 
 using glm::mat4;
 
-namespace {
-
-constexpr gl::Buffer_storage_mask storage_mask{
-    gl::Buffer_storage_mask::map_coherent_bit   |
-    gl::Buffer_storage_mask::map_persistent_bit |
-    gl::Buffer_storage_mask::map_read_bit
-};
-
-constexpr gl::Map_buffer_access_mask access_mask{
-    gl::Map_buffer_access_mask::map_coherent_bit   |
-    gl::Map_buffer_access_mask::map_persistent_bit |
-    gl::Map_buffer_access_mask::map_read_bit
-};
-
-}
-
+// TODO Check mapping and coherency
 Id_renderer::Id_frame_resources::Id_frame_resources(erhe::graphics::Device& graphics_device, const std::size_t /*slot*/)
     : pixel_pack_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count = s_id_buffer_size,
-            .storage_mask        = storage_mask,
-            .access_mask         = access_mask,
+            .usage               = erhe::graphics::Buffer_usage::pixel,
+            .direction           = erhe::graphics::Buffer_direction::gpu_to_cpu,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::persistent,
+            .coherency           = erhe::graphics::Buffer_coherency::on,
             .debug_label         = "ID"
         }
     }
@@ -443,7 +431,7 @@ auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_dep
             if (sync_status == GL_SIGNALED) {
                 gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, idr.pixel_pack_buffer.gl_name());
 
-                auto gpu_data = idr.pixel_pack_buffer.map();
+                std::span<std::byte> gpu_data = idr.pixel_pack_buffer.get_map();
 
                 memcpy(&idr.data[0], gpu_data.data(), gpu_data.size_bytes());
                 idr.state = Id_frame_resources::State::Read_complete;

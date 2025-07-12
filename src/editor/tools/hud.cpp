@@ -25,9 +25,7 @@
 #   include "erhe_xr/headset.hpp"
 #endif
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 namespace editor {
 

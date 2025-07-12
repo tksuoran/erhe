@@ -122,7 +122,6 @@ auto Frame_time_plot::label() const -> const char*
     return "Frame time";
 }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
 namespace {
 
 template<typename T>
@@ -136,7 +135,6 @@ static inline T clamp(T value, T min_value, T max_value)
 }
 
 }
-#endif
 
 Plot::~Plot() noexcept
 {
@@ -144,7 +142,6 @@ Plot::~Plot() noexcept
 
 void Plot::imgui()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
     //ImGuiContext& g = *GImGui;
@@ -343,7 +340,6 @@ void Plot::imgui()
     // Return hovered index or -1 if none are hovered.
     // This is currently not exposed in the public API because we need a larger redesign of the whole thing, but in the short-term we are making it available in PlotEx().
     //return idx_hovered;
-#endif
 }
 #pragma endregion Plot
 
@@ -354,7 +350,6 @@ Performance_window::Performance_window(Imgui_renderer& imgui_renderer, Imgui_win
 
 void Performance_window::imgui()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
     const auto all_gpu_timers = erhe::graphics::Gpu_timer::all_gpu_timers();
@@ -472,7 +467,6 @@ void Performance_window::imgui()
     for (auto* plot : m_generic_plots) {
         plot->imgui();
     }
-#endif
 }
 
 void Performance_window::register_plot(Plot* plot)

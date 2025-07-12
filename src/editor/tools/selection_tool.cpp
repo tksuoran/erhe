@@ -847,7 +847,6 @@ void Selection::sanity_check()
 
 //// void Selection::imgui()
 //// {
-//// #if defined(ERHE_GUI_LIBRARY_IMGUI)
 ////     for (const auto& item : m_selection) {
 ////         if (!item) {
 ////             ImGui::BulletText("(empty)");
@@ -860,7 +859,6 @@ void Selection::sanity_check()
 ////             );
 ////         }
 ////     }
-//// #endif
 //// }
 
 void Selection_tool::viewport_toolbar(bool& hovered)

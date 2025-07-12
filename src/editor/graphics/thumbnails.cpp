@@ -6,26 +6,18 @@
 #include "time.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
-#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
 namespace editor {
 
-Thumbnail::Thumbnail()
-{
-}
-
+Thumbnail::Thumbnail() = default;
 Thumbnail::Thumbnail(Thumbnail&&) = default;
-
 auto Thumbnail::operator=(Thumbnail&&) -> Thumbnail& = default;
-
 Thumbnail::~Thumbnail() = default;
 
 Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& context)

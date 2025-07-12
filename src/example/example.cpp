@@ -144,7 +144,7 @@ public:
             }
 
             tick();
-
+            m_graphics_device.end_of_frame();
             m_window.swap_buffers();
         }
     }
@@ -269,6 +269,10 @@ private:
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
         render_pass_descriptor.color_attachments[0].use_default_framebuffer = true;
         render_pass_descriptor.color_attachments[0].load_action             = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.color_attachments[0].clear_value[0]          = 0.02;
+        render_pass_descriptor.color_attachments[0].clear_value[1]          = 0.02;
+        render_pass_descriptor.color_attachments[0].clear_value[2]          = 0.02;
+        render_pass_descriptor.color_attachments[0].clear_value[3]          = 1.0;
         render_pass_descriptor.depth_attachment    .use_default_framebuffer = true;
         render_pass_descriptor.depth_attachment    .load_action             = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.stencil_attachment  .use_default_framebuffer = true;
@@ -454,7 +458,7 @@ void run_example()
         }
     }
 
-    mesh_memory.gl_buffer_transfer_queue.flush();
+    mesh_memory.buffer_transfer_queue.flush();
     gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
     gl::enable      (gl::Enable_cap::framebuffer_srgb);
 

@@ -275,18 +275,18 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
     m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.vr_font_size);
     m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.vr_font_size);
 
-#if 1 // TODO Profile
+    if (settings.icon_font_size > 0.0f) {
     // TODO Something nicer
 #define ICON_MIN_MDI 0xF68C
 #define ICON_MAX_16_MDI 0xF68C
 #define ICON_MAX_MDI 0xF1D17
-    ImFontGlyphRangesBuilder builder;
-    static const ImWchar ranges[] = { ICON_MIN_MDI, ICON_MAX_MDI, 0 };
-    builder.AddRanges(ranges);
-    ImVector<ImWchar> range;
-    builder.BuildRanges(&range);
-    m_icon_font = m_font_atlas.AddFontFromFileTTF(settings.icon_font.c_str(), settings.icon_font_size, nullptr, range.Data);
-#endif
+        ImFontGlyphRangesBuilder builder;
+        static const ImWchar ranges[] = { ICON_MIN_MDI, ICON_MAX_MDI, 0 };
+        builder.AddRanges(ranges);
+        ImVector<ImWchar> range;
+        builder.BuildRanges(&range);
+        m_icon_font = m_font_atlas.AddFontFromFileTTF(settings.icon_font.c_str(), settings.icon_font_size, nullptr, range.Data);
+    }
 
     // (1) If you manage font atlases yourself, e.g. create a ImFontAtlas yourself you need to call ImFontAtlasUpdateNewFrame() on it.
     // Otherwise, calling ImGui::CreateContext() without parameter will create an atlas owned by the context.

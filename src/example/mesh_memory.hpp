@@ -23,7 +23,7 @@ public:
     erhe::graphics::Buffer                           position_vertex_buffer;
     erhe::graphics::Buffer                           non_position_vertex_buffer;
     erhe::graphics::Buffer                           index_buffer;
-    erhe::graphics::Buffer_transfer_queue            gl_buffer_transfer_queue;
+    erhe::graphics::Buffer_transfer_queue            buffer_transfer_queue;
     erhe::graphics_buffer_sink::Graphics_buffer_sink graphics_buffer_sink;
     erhe::primitive::Buffer_info                     buffer_info;
     erhe::graphics::Vertex_input_state               vertex_input;

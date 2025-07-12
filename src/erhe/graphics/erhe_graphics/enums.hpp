@@ -77,7 +77,10 @@ enum class Buffer_target : unsigned int
     vertex        = 1,
     uniform       = 2,
     storage       = 3,
-    draw_indirect = 4
+    draw_indirect = 4,
+    texture       = 5,
+    pixel         = 7,
+    transfer      = 8
 };
 
 enum class Texture_type : unsigned int

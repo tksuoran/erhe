@@ -1,7 +1,7 @@
 #include "tools/tool.hpp"
 #include "editor_log.hpp"
 #include "app_message.hpp"
-#include "scene/content_library.hpp"
+#include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"

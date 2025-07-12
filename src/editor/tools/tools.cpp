@@ -7,7 +7,7 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
-#include "scene/content_library.hpp"
+#include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tool.hpp"
 #include "windows/item_tree_window.hpp"

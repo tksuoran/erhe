@@ -86,7 +86,6 @@ public:
 private:
     erhe::graphics::Device&                  m_graphics_device;
     Program_interface&                       m_program_interface;
-    int                                      m_base_texture_unit{2};
     Camera_buffer                            m_camera_buffer;
     erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffer;
     Joint_buffer                             m_joint_buffer;

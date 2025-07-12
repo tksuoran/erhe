@@ -132,7 +132,7 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
     clear_primitives();
     add_primitive(primitive);
 
-    mesh_memory.gl_buffer_transfer_queue.flush();
+    mesh_memory.buffer_transfer_queue.flush();
 
     enable_flag_bits(
         erhe::Item_flags::visible      |

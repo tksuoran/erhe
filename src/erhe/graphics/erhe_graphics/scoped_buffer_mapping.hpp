@@ -1,30 +1,23 @@
 #pragma once
 
 #include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/gl_objects.hpp"
-#include "erhe_graphics/span.hpp"
 
 #include <span>
 
-#include <string_view>
-#include <mutex>
-
-namespace erhe::graphics
-{
-
+namespace erhe::graphics {
 
 template <typename T>
 class Scoped_buffer_mapping
 {
 public:
     Scoped_buffer_mapping(
-        Buffer&                          buffer,
-        const std::size_t                element_offset,
-        const std::size_t                element_count,
-        const gl::Map_buffer_access_mask access_mask
+        Buffer&                buffer,
+        const std::size_t      element_offset,
+        const std::size_t      element_count,
+        const Buffer_map_flags map_flags
     )
         : m_buffer{buffer}
-        , m_span  {buffer.map_elements<T>(element_offset, element_count, access_mask)}
+        , m_span  {buffer.map_elements<T>(element_offset, element_count, map_flags)}
     {
     }
 

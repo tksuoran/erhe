@@ -1,9 +1,10 @@
 #pragma once
 
 #include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/gl_context_provider.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/shader_monitor.hpp"
 
 #include <array>
 #include <memory>
@@ -135,8 +136,9 @@ private:
 class GPU_ring_buffer_create_info
 {
 public:
-    std::size_t size       {0};
-    const char* debug_label{nullptr};
+    std::size_t  size       {0};
+    Buffer_usage usage      {0};
+    const char*  debug_label{nullptr};
 };
 
 class GPU_ring_buffer
@@ -219,6 +221,8 @@ public:
     auto get_format_properties(erhe::dataformat::Format format) const -> Format_properties;
 
     void clear_texture(Texture& texture, std::array<double, 4> clear_value);
+
+    void upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length);
 
     auto choose_depth_stencil_format(unsigned int flags, int sample_count) const -> erhe::dataformat::Format;
 

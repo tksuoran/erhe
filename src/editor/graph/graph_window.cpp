@@ -11,7 +11,7 @@
 #include "graph/divide.hpp"
 #include "graph/load.hpp"
 #include "graph/store.hpp"
-#include "windows/sheet_window.hpp"
+#include "experiments/sheet_window.hpp"
 #include "windows/property_editor.hpp"
 
 #include "app_context.hpp"

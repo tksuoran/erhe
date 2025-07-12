@@ -27,7 +27,6 @@ Pipelines::Pipelines(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_window
 {
 }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
 const char* gl_cull_face_mode_strings[] = {
     "Front",
     "Back",
@@ -381,11 +380,9 @@ void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 
     ImGui::PopID();
 }
-#endif
 
 void Pipelines::imgui()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
     //const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
@@ -400,7 +397,6 @@ void Pipelines::imgui()
         }
         pipeline_imgui(*pipeline);
     }
-#endif
 }
 
 void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)

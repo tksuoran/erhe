@@ -1,7 +1,7 @@
 #include "time.hpp"
 
 #include "erhe_profile/profile.hpp"
-#include "erhe_graphics/gpu_timer.hpp"
+//#include "erhe_graphics/gpu_timer.hpp"
 
 namespace editor {
 

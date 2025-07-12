@@ -112,6 +112,8 @@ public:
     auto get_sampler_linear               () const -> const erhe::graphics::Sampler&         { return m_sampler_linear; }
     auto get_sampler_linear_mipmap_nearest() const -> const erhe::graphics::Sampler&         { return m_sampler_linear_mipmap_nearest; }
 
+    static constexpr unsigned int s_max_mipmap_levels = 20u;
+
 private:
     static constexpr unsigned int flag_source_input      = 0x01u;
     static constexpr unsigned int flag_source_downsample = 0x02u;

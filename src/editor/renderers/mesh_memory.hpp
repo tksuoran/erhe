@@ -34,7 +34,7 @@ public:
     [[nodiscard]] auto get_vertex_buffer(std::size_t stream_index) -> erhe::graphics::Buffer*;
 
     erhe::graphics::Device&                          graphics_device;
-    erhe::graphics::Buffer_transfer_queue            gl_buffer_transfer_queue;
+    erhe::graphics::Buffer_transfer_queue            buffer_transfer_queue;
     erhe::dataformat::Vertex_format&                 vertex_format;
     erhe::graphics::Buffer                           position_vertex_buffer;
     erhe::graphics::Buffer                           non_position_vertex_buffer;
@@ -42,8 +42,6 @@ public:
     erhe::graphics_buffer_sink::Graphics_buffer_sink graphics_buffer_sink;
     erhe::primitive::Buffer_info                     buffer_info;
     erhe::graphics::Vertex_input_state               vertex_input;
-    //erhe::graphics::Shader_resource       vertex_data_in;   // For SSBO read
-    //erhe::graphics::Shader_resource       vertex_data_out;  // For SSBO write
 
 private:
     [[nodiscard]] auto get_vertex_buffer_size(std::size_t stream) const -> std::size_t;

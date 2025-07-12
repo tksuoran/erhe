@@ -11,7 +11,6 @@
 namespace erhe::graphics {
     class Device;
     class Render_command_encoder;
-    class Render_pass;
     class Renderbuffer;
     class Texture;
 }
@@ -64,7 +63,6 @@ private:
     erhe::graphics::Device&                       m_graphics_device;
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
     std::shared_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
-    std::unique_ptr<erhe::graphics::Render_pass>  m_render_pass;
     erhe::graphics::Sampler                       m_color_sampler;
     std::vector<Thumbnail>                        m_thumbnails;
     int                                           m_size_pixels{0};

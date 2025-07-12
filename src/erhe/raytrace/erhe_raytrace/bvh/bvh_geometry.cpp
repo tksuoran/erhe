@@ -153,8 +153,8 @@ void Bvh_geometry::commit()
             return;
         }
 
-        const char* raw_index_ptr  = reinterpret_cast<char*>(index_buffer ->span().data()) + index_buffer_info ->byte_offset;
-        const char* raw_vertex_ptr = reinterpret_cast<char*>(vertex_buffer->span().data()) + vertex_buffer_info->byte_offset;
+        const char* raw_index_ptr  = reinterpret_cast<char*>(index_buffer ->get_span().data()) + index_buffer_info ->byte_offset;
+        const char* raw_vertex_ptr = reinterpret_cast<char*>(vertex_buffer->get_span().data()) + vertex_buffer_info->byte_offset;
         const std::size_t triangle_count = index_buffer_info->item_count;
 
         std::vector<Tri> tris;

@@ -8,11 +8,12 @@
 namespace erhe::graphics {
 
 class Buffer;
+class Device;
 
 class Buffer_transfer_queue final
 {
 public:
-    Buffer_transfer_queue();
+    explicit Buffer_transfer_queue(Device& device);
     ~Buffer_transfer_queue() noexcept;
     Buffer_transfer_queue(Buffer_transfer_queue&) = delete;
     auto operator=(Buffer_transfer_queue&) -> Buffer_transfer_queue& = delete;
@@ -51,6 +52,7 @@ public:
 private:
     ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     std::vector<Transfer_entry>    m_queued;
+    Device&                        m_device;
 };
 
 

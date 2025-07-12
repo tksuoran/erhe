@@ -2,7 +2,7 @@
 
 #include "parsers/gltf.hpp"
 
-#include "scene/content_library.hpp"
+#include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_file/file.hpp"

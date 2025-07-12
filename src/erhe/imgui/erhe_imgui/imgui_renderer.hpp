@@ -39,7 +39,7 @@ public:
     std::string icon_font     {"res/fonts/materialdesignicons-webfont.ttf"};
     float       font_size     {24.0f};
     float       vr_font_size  {24.0f};
-    float       icon_font_size{24.0f};
+    float       icon_font_size{0.0f};
 };
 
 class Imgui_host;

@@ -41,8 +41,11 @@ Cube_instance_buffer::Cube_instance_buffer(
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count = cube_interface.cube_instance_struct.get_size_bytes() * cubes.size(),
-            .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
-            .access_mask         = gl::Map_buffer_access_mask::map_write_bit,
+            .usage               = erhe::graphics::get_buffer_usage(cube_interface.cube_instance_block.get_binding_target()),
+            .direction           = erhe::graphics::Buffer_direction::cpu_to_gpu,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::persistent,
+            .coherency           = erhe::graphics::Buffer_coherency::on, // TODO explicitly flush range?
             .debug_label         = "Cube_instance_buffer"
         }
     }
@@ -51,7 +54,7 @@ Cube_instance_buffer::Cube_instance_buffer(
     std::span<uint32_t> gpu_data = m_buffer.map_elements<uint32_t>(
         0,
         cubes.size(),
-        gl::Map_buffer_access_mask::map_write_bit
+        erhe::graphics::Buffer_map_flags::none
     );
     std::copy(cubes.begin(), cubes.end(), gpu_data.begin());
     m_buffer.unmap();
@@ -63,7 +66,7 @@ auto Cube_instance_buffer::bind(erhe::graphics::Render_command_encoder& encoder)
         m_cube_interface.cube_instance_block.get_binding_target(),
         &m_buffer,
         0,
-        m_buffer.capacity_byte_count(),
+        m_buffer.get_capacity_byte_count(),
         m_cube_interface.cube_instance_block.get_binding_point()
     );
     return m_cube_count;

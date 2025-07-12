@@ -2,7 +2,7 @@
 #include "graphics/icon_rasterization.hpp"
 #include "app_context.hpp"
 #include "app_settings.hpp"
-#include "scene/content_library.hpp"
+#include "content_library/content_library.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_primitive/material.hpp"

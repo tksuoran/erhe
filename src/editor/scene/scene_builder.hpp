@@ -1,7 +1,7 @@
 #pragma once
 
-#include "tools/brushes/brush_tool.hpp"
-#include "scene/collision_generator.hpp"
+#include "brushes/brush_tool.hpp"
+#include "physics/collision_generator.hpp"
 
 #include "erhe_profile/profile.hpp"
 

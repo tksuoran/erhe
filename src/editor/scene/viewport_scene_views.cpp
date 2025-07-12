@@ -33,9 +33,7 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_verify/verify.hpp"
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 namespace editor{
 

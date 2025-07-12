@@ -144,7 +144,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     }
 
     if (!m_graphics_device.info.use_bindless_texture) {
-        m_graphics_device.texture_unit_cache_reset(m_base_texture_unit);
+        m_graphics_device.texture_unit_cache_reset(enable_shadows ? 2 : 0);
     }
 
     Buffer_range material_range = m_material_buffer.update(materials);
@@ -169,21 +169,26 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
     } else {
         ERHE_PROFILE_SCOPE("bind texture units");
+        const GLuint fallback_texture = erhe::graphics::get_texture_from_handle(fallback_texture_handle);
+        const GLuint fallback_sampler = erhe::graphics::get_sampler_from_handle(fallback_texture_handle);
         if (enable_shadows) {
             gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_compare,    parameters.shadow_texture->gl_name());
             gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_no_compare, parameters.shadow_texture->gl_name());
             gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_compare,    m_shadow_sampler_compare.gl_name());
             gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_no_compare, m_shadow_sampler_no_compare.gl_name());
         } else {
-            const GLuint fallback_texture = erhe::graphics::get_texture_from_handle(fallback_texture_handle);
-            const GLuint fallback_sampler = erhe::graphics::get_sampler_from_handle(fallback_texture_handle);
             gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_compare,    fallback_texture);
             gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_no_compare, fallback_texture);
             gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_compare,    fallback_sampler);
             gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_no_compare, fallback_sampler);
         }
 
-        m_graphics_device.texture_unit_cache_bind(fallback_texture_handle);
+        const auto texture_unit_use_count = m_graphics_device.texture_unit_cache_bind(fallback_texture_handle);
+        const size_t end = static_cast<size_t>(m_graphics_device.limits.max_texture_image_units);
+        for (size_t i = texture_unit_use_count; i < end; ++i) {
+            gl::bind_texture_unit(static_cast<GLuint>(i), fallback_texture);
+            gl::bind_sampler     (static_cast<GLuint>(i), fallback_sampler);
+        }
     }
 
     for (auto& pass : passes) {

@@ -22,11 +22,10 @@
 #include "erhe_time/sleep.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
 
 #include <glm/gtx/euler_angles.hpp>
+
+#include <imgui/imgui.h>
 
 #include <cmath>
 #include <numeric>
@@ -1187,7 +1186,6 @@ void Fly_camera_tool::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
 
     float speed = m_camera_controller->translate_z.max_delta();
@@ -1286,7 +1284,6 @@ void Fly_camera_tool::imgui()
         }
         m_graph_plotter.end();
     }
-#endif
 }
 
 }

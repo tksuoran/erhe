@@ -70,6 +70,10 @@ void Window_imgui_host::update_render_pass(int width, int height)
     erhe::graphics::Render_pass_descriptor render_pass_descriptor;
     render_pass_descriptor.color_attachments[0].use_default_framebuffer = true;
     render_pass_descriptor.color_attachments[0].load_action             = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.color_attachments[0].clear_value[0]          = 0.05; // TODO expose API to set clear color
+    render_pass_descriptor.color_attachments[0].clear_value[1]          = 0.05;
+    render_pass_descriptor.color_attachments[0].clear_value[2]          = 0.05;
+    render_pass_descriptor.color_attachments[0].clear_value[3]          = 1.00;
     render_pass_descriptor.depth_attachment    .use_default_framebuffer = true;
     render_pass_descriptor.depth_attachment    .load_action             = erhe::graphics::Load_action::Dont_care;
     render_pass_descriptor.stencil_attachment  .use_default_framebuffer = true;

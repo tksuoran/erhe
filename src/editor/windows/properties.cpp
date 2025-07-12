@@ -3,18 +3,18 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "rendertarget_mesh.hpp"
-#include "tools/brushes/brush.hpp"
+#include "brushes/brush.hpp"
+#include "brushes/brush_placement.hpp"
+#include "content_library/content_library.hpp"
+#include "content_library/brdf_slice.hpp"
 #include "tools/selection_tool.hpp"
-#include "scene/brush_placement.hpp"
-#include "scene/content_library.hpp"
+#include "preview/material_preview.hpp"
 #include "scene/frame_controller.hpp"
-#include "scene/material_preview.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
-#include "windows/animation_curve.hpp"
-#include "windows/brdf_slice.hpp"
-#include "windows/timeline_window.hpp"
+#include "animation/animation_curve.hpp"
+#include "animation/timeline_window.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -46,10 +46,8 @@
 
 #include <fmt/format.h>
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#   include <imgui/misc/cpp/imgui_stdlib.h>
-#endif
+#include <imgui/imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace editor {
 
@@ -58,8 +56,6 @@ Properties::Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui:
     , m_context   {app_context}
 {
 }
-
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
 
 void Properties::animation_properties(erhe::scene::Animation& animation)
 {
@@ -509,20 +505,14 @@ void Properties::brush_placement_properties(Brush_placement& brush_placement)
     add_entry("Corner", [&](){ ImGui::Text("%u", brush_placement.get_corner()); });
 }
 
-#endif
-
 void Properties::on_begin()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0.0f);
-#endif
 }
 
 void Properties::on_end()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PopStyleVar();
-#endif
 }
 
 void Properties::node_physics_properties(Node_physics& node_physics)
@@ -748,7 +738,6 @@ void Properties::material_properties()
 {
     ERHE_PROFILE_FUNCTION();
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     const std::shared_ptr<erhe::primitive::Material> selected_material_ = m_context.selection->get<erhe::primitive::Material>();
     if (!selected_material_) {
         return;
@@ -801,7 +790,6 @@ void Properties::material_properties()
     }
 
     pop_group();
-#endif
 }
 
 void Properties::imgui()

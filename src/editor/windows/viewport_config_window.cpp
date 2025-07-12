@@ -5,9 +5,7 @@
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_profile/profile.hpp"
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 namespace editor {
 
@@ -17,7 +15,6 @@ Viewport_config_window::Viewport_config_window(erhe::imgui::Imgui_renderer& imgu
 {
 }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Viewport_config_window::render_style_ui(Render_style_data& render_style)
 {
     ERHE_PROFILE_FUNCTION();
@@ -86,7 +83,6 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
         ImGui::SliderFloat("Point Size", &render_style.point_size, 0.0f, 20.0f);
     }
 }
-#endif
 
 void Viewport_config_window::set_edit_data(Viewport_config* edit_data)
 {
@@ -95,7 +91,6 @@ void Viewport_config_window::set_edit_data(Viewport_config* edit_data)
 
 void Viewport_config_window::imgui()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
     const ImGuiTreeNodeFlags flags{
@@ -135,7 +130,6 @@ void Viewport_config_window::imgui()
             ImGui::TreePop();
         }
     }
-#endif
 }
 
 }

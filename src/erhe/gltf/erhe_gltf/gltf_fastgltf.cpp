@@ -2056,8 +2056,8 @@ private:
         ERHE_VERIFY(build_ok); // TODO
 
         Export_entry entry;
-        add_index_data_source(entry, vertex_count, index_count, index_buffer.span());
-        add_vertex_data_source(entry, vertex_count, vertex_format, vertex_buffer.span());
+        add_index_data_source(entry, vertex_count, index_count, index_buffer.get_span());
+        add_vertex_data_source(entry, vertex_count, vertex_format, vertex_buffer.get_span());
 
         m_erhe_geometry_entries.insert({geometry, entry});
         return entry;

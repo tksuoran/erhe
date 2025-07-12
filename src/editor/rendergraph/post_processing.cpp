@@ -3,7 +3,6 @@
 #include "app_context.hpp"
 
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_graphics/align.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/device.hpp"
@@ -51,17 +50,20 @@ Post_processing_node::Post_processing_node(
                 erhe::graphics::align_offset(
                     post_processing.get_parameter_block().get_size_bytes(),
                     graphics_device.get_buffer_alignment(post_processing.get_parameter_block().get_binding_target())
-                ) * 20, // max 20 levels
-            .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
-            .access_mask         = gl::Map_buffer_access_mask::map_write_bit,
+                ) * Post_processing::s_max_mipmap_levels,
+            .usage               = get_buffer_usage(post_processing.get_parameter_block().get_binding_target()),
+            .direction           = erhe::graphics::Buffer_direction::gpu_only,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
+            .coherency           = erhe::graphics::Buffer_coherency::off,
             .debug_label         = "post processing"
         }
     }
     , m_graphics_device{graphics_device}
     , m_post_processing{post_processing}
 {
-    register_input ("texture",  erhe::rendergraph::Rendergraph_node_key::viewport_texture);
-    register_output("texture",  erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    register_input ("texture", erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    register_output("texture", erhe::rendergraph::Rendergraph_node_key::viewport_texture);
 }
 
 Post_processing_node::~Post_processing_node()
@@ -239,7 +241,7 @@ void Post_processing_node::update_parameters()
 
     const std::size_t level_offset_size = erhe::graphics::align_offset(
         entry_size,
-        m_graphics_device.get_buffer_alignment(erhe::graphics::Buffer_target::uniform/*parameter_buffer.target()*/) // TODO
+        m_graphics_device.get_buffer_alignment(m_post_processing.get_parameter_block().get_binding_target())
     );
 
     const std::shared_ptr<erhe::graphics::Texture> input_texture = get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
@@ -264,14 +266,18 @@ void Post_processing_node::update_parameters()
     const std::span<const uint32_t> downsample_texture_handle_cpu_data{&downsample_texture_handle[0], 2};
     const std::span<const uint32_t> upsample_texture_handle_cpu_data  {&upsample_texture_handle  [0], 2};
 
-    size_t                    level_count        = level_widths.size();
-    std::size_t               write_offset       = 0;
-    std::span<std::byte>      parameter_gpu_data = parameter_buffer.map_all_bytes(gl::Map_buffer_access_mask::map_invalidate_buffer_bit | gl::Map_buffer_access_mask::map_write_bit);
-    std::byte* const          start              = parameter_gpu_data.data();
-    const std::size_t         byte_count         = parameter_gpu_data.size_bytes();
-    const std::size_t         word_count         = byte_count / sizeof(float);
-    const std::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    // NOTE: parameter_buffer is only rarely updated.
+    //       It can happen when texture size changed.
+    // TODO Should we consider what GPU might be currently doing?
+    //      Should we use GPU ring buffer instead, to handle that?
+    size_t                    level_count  = level_widths.size();
+    std::size_t               write_offset = 0;
+    const std::size_t         byte_count   = level_offset_size * Post_processing::s_max_mipmap_levels;
+    std::vector<std::byte>    parameter_data(byte_count);
+    std::byte* const          start        = parameter_data.data();
+    const std::size_t         word_count   = byte_count / sizeof(float);
+    const std::span<float>    float_data{reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
     for (size_t source_level = 0, end = level_count; source_level < end; ++source_level) {
         using erhe::graphics::write;
@@ -279,19 +285,19 @@ void Post_processing_node::update_parameters()
             1.0f / static_cast<float>(level_widths.at(source_level)),
             1.0f / static_cast<float>(level_heights.at(source_level))
         };
-        write<uint32_t>(gpu_uint_data,  write_offset + offsets.input_texture,         input_texture_handle_cpu_data);
-        write<uint32_t>(gpu_uint_data,  write_offset + offsets.downsample_texture,    downsample_texture_handle_cpu_data);
-        write<uint32_t>(gpu_uint_data,  write_offset + offsets.upsample_texture,      upsample_texture_handle_cpu_data);
-        write<float   >(gpu_float_data, write_offset + offsets.texel_scale,           std::span<float>{&texel_scale[0], 2});
-        write<float   >(gpu_float_data, write_offset + offsets.source_lod,            static_cast<float>(source_level));
-        write<float   >(gpu_float_data, write_offset + offsets.level_count,           static_cast<float>(level_count));
-        write<float   >(gpu_float_data, write_offset + offsets.upsample_radius,       upsample_radius);
-        write<float   >(gpu_float_data, write_offset + offsets.mix_weight,            weights.at(source_level));
-        write<float   >(gpu_float_data, write_offset + offsets.tonemap_luminance_max, tonemap_luminance_max);
-        write<float   >(gpu_float_data, write_offset + offsets.tonemap_alpha,         tonemap_alpha);
+        write<uint32_t>(uint_data,  write_offset + offsets.input_texture,         input_texture_handle_cpu_data);
+        write<uint32_t>(uint_data,  write_offset + offsets.downsample_texture,    downsample_texture_handle_cpu_data);
+        write<uint32_t>(uint_data,  write_offset + offsets.upsample_texture,      upsample_texture_handle_cpu_data);
+        write<float   >(float_data, write_offset + offsets.texel_scale,           std::span<float>{&texel_scale[0], 2});
+        write<float   >(float_data, write_offset + offsets.source_lod,            static_cast<float>(source_level));
+        write<float   >(float_data, write_offset + offsets.level_count,           static_cast<float>(level_count));
+        write<float   >(float_data, write_offset + offsets.upsample_radius,       upsample_radius);
+        write<float   >(float_data, write_offset + offsets.mix_weight,            weights.at(source_level));
+        write<float   >(float_data, write_offset + offsets.tonemap_luminance_max, tonemap_luminance_max);
+        write<float   >(float_data, write_offset + offsets.tonemap_alpha,         tonemap_alpha);
         write_offset += level_offset_size;
     }
-    parameter_buffer.flush_and_unmap_bytes(write_offset);
+    m_graphics_device.upload_to_buffer(parameter_buffer, 0, start, byte_count);
 }
 
 void Post_processing_node::viewport_toolbar()

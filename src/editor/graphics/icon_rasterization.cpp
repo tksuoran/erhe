@@ -241,7 +241,6 @@ auto Icon_rasterization::uv1(const glm::vec2& uv0) const -> glm::vec2
     return glm::vec2{uv0.x + m_icon_uv_width, uv0.y + m_icon_uv_height};
 }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
 auto imvec_from_glm(glm::vec2 v) -> ImVec2
 {
     return ImVec2{v.x, v.y};
@@ -250,14 +249,9 @@ auto imvec_from_glm(glm::vec4 v) -> ImVec4
 {
     return ImVec4{v.x, v.y, v.z, v.w};
 }
-#endif
 
 void Icon_rasterization::icon(const glm::vec2 uv0, const glm::vec4 background_color, const glm::vec4 tint_color) const
 {
-#if !defined(ERHE_GUI_LIBRARY_IMGUI)
-    static_cast<void>(uv0);
-    static_cast<void>(tint_color);
-#else
     ERHE_PROFILE_FUNCTION();
 
     m_context.imgui_renderer->image(
@@ -272,7 +266,6 @@ void Icon_rasterization::icon(const glm::vec2 uv0, const glm::vec4 background_co
         erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     );
     ImGui::SameLine();
-#endif
 }
 
 auto Icon_rasterization::icon_button(
@@ -284,11 +277,6 @@ auto Icon_rasterization::icon_button(
     const erhe::graphics::Sampler_mipmap_mode mipmap_mode
 ) const -> bool
 {
-#if !defined(ERHE_GUI_LIBRARY_IMGUI)
-    static_cast<void>(uv0);
-    static_cast<void>(tint_color);
-    return false;
-#else
     ERHE_PROFILE_FUNCTION();
 
     const bool result = m_context.imgui_renderer->image_button(
@@ -297,7 +285,6 @@ auto Icon_rasterization::icon_button(
     );
     ImGui::SameLine();
     return result;
-#endif
 }
 
 }

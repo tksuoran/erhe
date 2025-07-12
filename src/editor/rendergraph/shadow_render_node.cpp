@@ -1,12 +1,11 @@
 #include "rendergraph/shadow_render_node.hpp"
 
 #include "app_context.hpp"
+#include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
-
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/content_library.hpp"
 
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_gl/wrapper_functions.hpp"

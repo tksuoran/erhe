@@ -12,7 +12,7 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "tools/selection_tool.hpp"
-#include "tools/transform/transform_tool.hpp"
+#include "transform/transform_tool.hpp"
 
 #include "erhe_bit/bit_helpers.hpp"
 #include "erhe_geometry/geometry.hpp"

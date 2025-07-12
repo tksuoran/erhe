@@ -44,7 +44,11 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device)
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count = get_vertex_buffer_size(0),
-            .storage_mask        = storage_mask,
+            .usage               = erhe::graphics::Buffer_usage::vertex,
+            .direction           = erhe::graphics::Buffer_direction::gpu_only,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
+            .coherency           = erhe::graphics::Buffer_coherency::off,
             .debug_label         = "Mesh_memory position vertex buffer"
         }
     }
@@ -52,7 +56,11 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device)
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count = get_vertex_buffer_size(1),
-            .storage_mask        = storage_mask,
+            .usage               = erhe::graphics::Buffer_usage::vertex,
+            .direction           = erhe::graphics::Buffer_direction::gpu_only,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
+            .coherency           = erhe::graphics::Buffer_coherency::off,
             .debug_label         = "Mesh_memory non-position vertex buffer"
         }
     }
@@ -60,12 +68,17 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device)
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count = get_index_buffer_size(),
-            .storage_mask        = storage_mask,
+            .usage               = erhe::graphics::Buffer_usage::index,
+            .direction           = erhe::graphics::Buffer_direction::gpu_only,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
+            .coherency           = erhe::graphics::Buffer_coherency::off,
             .debug_label         = "Mesh_memory index buffer"
         }
     }
+    , buffer_transfer_queue{graphics_device}
     , graphics_buffer_sink{
-        gl_buffer_transfer_queue,
+        buffer_transfer_queue,
         {&position_vertex_buffer,&non_position_vertex_buffer},
         index_buffer
     }

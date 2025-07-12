@@ -15,10 +15,10 @@ class IBuffer
 public:
     virtual ~IBuffer() noexcept {};
 
-    [[nodiscard]] virtual auto capacity_byte_count() const noexcept -> std::size_t = 0;
-    [[nodiscard]] virtual auto allocate_bytes     (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::size_t = 0;
-    [[nodiscard]] virtual auto span               () noexcept -> std::span<std::byte> = 0;
-    [[nodiscard]] virtual auto debug_label        () const -> std::string_view = 0;
+    [[nodiscard]] virtual auto get_capacity_byte_count() const noexcept -> std::size_t = 0;
+    [[nodiscard]] virtual auto allocate_bytes         (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::size_t = 0;
+    [[nodiscard]] virtual auto get_span               () noexcept -> std::span<std::byte> = 0;
+    [[nodiscard]] virtual auto get_debug_label        () const -> std::string_view = 0;
 };
 
 
@@ -34,10 +34,10 @@ public:
     Cpu_buffer& operator=(const Cpu_buffer&) = delete;
 
     // Implements IBuffer
-    auto capacity_byte_count() const noexcept -> std::size_t override;
-    auto allocate_bytes     (const std::size_t byte_count, const std::size_t alignment = 64) noexcept -> std::size_t override;
-    auto span               () noexcept -> std::span<std::byte> override;
-    auto debug_label        () const -> std::string_view override;
+    auto get_capacity_byte_count() const noexcept -> std::size_t override;
+    auto allocate_bytes         (const std::size_t byte_count, const std::size_t alignment = 64) noexcept -> std::size_t override;
+    auto get_span               () noexcept -> std::span<std::byte> override;
+    auto get_debug_label        () const -> std::string_view override;
 
 private:
     ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);

@@ -37,13 +37,18 @@ auto Mesh_memory::get_index_buffer_size() const -> std::size_t
 }
 
 Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataformat::Vertex_format& vertex_format)
-    : graphics_device{graphics_device}
-    , vertex_format  {vertex_format}
+    : graphics_device       {graphics_device}
+    , buffer_transfer_queue {graphics_device}
+    , vertex_format         {vertex_format}
     , position_vertex_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count = get_vertex_buffer_size(s_vertex_binding_position),
-            .storage_mask        = storage_mask,
+            .usage               = erhe::graphics::Buffer_usage::vertex,
+            .direction           = erhe::graphics::Buffer_direction::gpu_only,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
+            .coherency           = erhe::graphics::Buffer_coherency::off,
             .debug_label         = "Mesh_memory position vertex buffer"
         }
     }
@@ -51,7 +56,11 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count = get_vertex_buffer_size(s_vertex_binding_non_position),
-            .storage_mask        = storage_mask,
+            .usage               = erhe::graphics::Buffer_usage::vertex,
+            .direction           = erhe::graphics::Buffer_direction::gpu_only,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
+            .coherency           = erhe::graphics::Buffer_coherency::off,
             .debug_label         = "Mesh_memory non-position vertex buffer"
         }
     }
@@ -59,31 +68,20 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count = get_index_buffer_size(),
-            .storage_mask        = storage_mask,
+            .usage               = erhe::graphics::Buffer_usage::index,
+            .direction           = erhe::graphics::Buffer_direction::gpu_only,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
+            .coherency           = erhe::graphics::Buffer_coherency::off,
             .debug_label         = "Mesh_memory index buffer"
         }
     }
-    , graphics_buffer_sink{gl_buffer_transfer_queue, {&position_vertex_buffer, &non_position_vertex_buffer}, index_buffer}
+    , graphics_buffer_sink{buffer_transfer_queue, {&position_vertex_buffer, &non_position_vertex_buffer}, index_buffer}
     , buffer_info{
         .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
         .vertex_format = vertex_format,
         .buffer_sink   = graphics_buffer_sink
     }
-    //, build_info{
-    //    .primitive_types{
-    //        .fill_triangles  = true,
-    //        .edge_lines      = true,
-    //        .corner_points   = true,
-    //        .centroid_points = true
-    //    },
-    //    .buffer_info{
-    //        .index_type    = gl::Draw_elements_type::unsigned_int,
-    //        .vertex_format = vertex_format,
-    //        .buffer_sink   = gl_buffer_sink
-    //    },
-    //    .constant_color{0.5f, 0.5f, 0.5f, 1.0f},
-    //    .
-    //}
     , vertex_input{
         graphics_device,
         erhe::graphics::Vertex_input_state_data::make(vertex_format)

@@ -7,9 +7,7 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_profile/profile.hpp"
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 #include <taskflow/taskflow.hpp>
 
@@ -137,7 +135,6 @@ auto Operation_stack::can_redo() const -> bool
     return !m_undone.empty();
 }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Operation_stack::imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations)
 {
     const ImGuiTreeNodeFlags parent_flags{
@@ -158,16 +155,13 @@ void Operation_stack::imgui(const char* stack_label, const std::vector<std::shar
         ImGui::TreePop();
     }
 }
-#endif
 
 void Operation_stack::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     imgui("Executed", m_executed);
     imgui("Undone", m_undone);
-#endif
 }
 
 }

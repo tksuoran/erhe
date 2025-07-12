@@ -6,7 +6,7 @@
 #include "app_settings.hpp"
 #include "rendertarget_mesh.hpp"
 
-#include "scene/content_library.hpp"
+#include "content_library/content_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "windows/item_tree_window.hpp"
@@ -647,7 +647,6 @@ auto Scene_root::get_name() const -> const std::string&
     return m_scene->get_name();
 }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
 auto Scene_root::camera_combo(
     const char*           label,
     erhe::scene::Camera*& selected_camera,
@@ -765,10 +764,7 @@ auto Scene_root::camera_combo(
     return camera_changed;
 }
 
-#endif
-
-namespace
-{
+namespace {
 
 [[nodiscard]] auto sort_value(const Light::Type light_type) -> int
 {

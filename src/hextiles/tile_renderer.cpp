@@ -107,7 +107,11 @@ Tile_renderer::Tile_renderer(
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count = index_stride * index_count,
-            .storage_mask        = gl::Buffer_storage_mask::map_write_bit,
+            .usage               = erhe::graphics::Buffer_usage::index,
+            .direction           = erhe::graphics::Buffer_direction::cpu_to_gpu,
+            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
+            .mapping             = erhe::graphics::Buffer_mapping::transient,
+            .coherency           = erhe::graphics::Buffer_coherency::off,
             .debug_label         = "Tile_renderer index buffer"
         }
     }
@@ -159,7 +163,9 @@ Tile_renderer::Tile_renderer(
     }
 {
     // Prefill index buffer
-    erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{m_index_buffer, 0, index_count, gl::Map_buffer_access_mask::map_write_bit};
+    erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{
+        m_index_buffer, 0, index_count, erhe::graphics::Buffer_map_flags::none
+    };
 
     const auto& gpu_index_data = index_buffer_map.span();
     size_t      offset      {0};

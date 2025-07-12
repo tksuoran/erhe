@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scene/content_library.hpp"
+#include "content_library/content_library.hpp"
 #include "tools/tool.hpp"
 
 #include "erhe_commands/command.hpp"

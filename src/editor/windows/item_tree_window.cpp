@@ -5,7 +5,8 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
-#include "scene/material_preview.hpp" // TODO dedicated source files for brush_preview
+#include "brushes/brush.hpp"
+#include "preview/brush_preview.hpp"
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/thumbnails.hpp"
@@ -15,7 +16,6 @@
 #include "operations/operation_stack.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/brushes/brush.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
 

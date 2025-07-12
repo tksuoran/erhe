@@ -1,9 +1,8 @@
 #include "tools/material_paint_tool.hpp"
 
 #include "app_context.hpp"
-
+#include "content_library/content_library.hpp"
 #include "graphics/icon_set.hpp"
-#include "scene/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -19,9 +18,7 @@
 #   include "erhe_xr/headset.hpp"
 #endif
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
+#include <imgui/imgui.h>
 
 namespace editor {
 
@@ -226,7 +223,6 @@ void Material_paint_tool::handle_priority_update(const int old_priority, const i
 
 void Material_paint_tool::tool_properties(erhe::imgui::Imgui_window&)
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     auto* hover_scene_view = Tool::get_hover_scene_view();
     if (hover_scene_view == nullptr) {
         return;
@@ -246,7 +242,6 @@ void Material_paint_tool::tool_properties(erhe::imgui::Imgui_window&)
     }
 
     material_library->combo(m_context, "Material", m_material, false);
-#endif
 }
 
 }
