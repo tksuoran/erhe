@@ -557,10 +557,17 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
     ERHE_PROFILE_FUNCTION();
 
     const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
-    float floor_size{40.0f};
-    bool  floor     {true};
+    float floor_size                  {40.0f};
+    bool  floor                       {true};
+    bool  make_johnson_solid_brushes  {true};
+    bool  make_platonic_solid_brushes_{true};
+    bool  make_curved_brushes         {true};
     ini.get("floor_size", floor_size);
     ini.get("floor",      floor);
+    ini.get("load_johnson_solids", floor);
+    ini.get("make_johnson_solid_brushes",  make_johnson_solid_brushes);
+    ini.get("make_platonic_solid_brushes", make_platonic_solid_brushes_);
+    ini.get("make_curved_brushes",         make_curved_brushes);
 
     // Floor
     if (floor) {
@@ -602,28 +609,37 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
         }
     }
 
-    Json_library library("res/polyhedra/johnson.json");
+    Json_library library{"res/polyhedra/johnson.json"};
     if (executor.num_workers() > 1) {
         tf::Taskflow tf;
-
-        tf.emplace([this, &app_settings, &mesh_memory]() { make_platonic_solid_brushes(app_settings, mesh_memory); }).name("Platonic Solid Brushes");
-        tf.emplace([this, &app_settings, &mesh_memory]() { make_sphere_brushes        (app_settings, mesh_memory); }).name("Sphere Brushes");
-        tf.emplace([this, &app_settings, &mesh_memory]() { make_torus_brushes         (app_settings, mesh_memory); }).name("Torus Brushes");
-        tf.emplace([this, &app_settings, &mesh_memory]() { make_cylinder_brushes      (app_settings, mesh_memory); }).name("Cylinder Brushes");
-        tf.emplace([this, &app_settings, &mesh_memory]() { make_cone_brushes          (app_settings, mesh_memory); }).name("Cone Brushes");
-
-        make_json_brushes(app_settings, mesh_memory, &tf, library);
+        if (make_platonic_solid_brushes_) {
+            tf.emplace([this, &app_settings, &mesh_memory]() { make_platonic_solid_brushes(app_settings, mesh_memory); }).name("Platonic Solid Brushes");
+        }
+        if (make_curved_brushes) {
+            tf.emplace([this, &app_settings, &mesh_memory]() { make_sphere_brushes        (app_settings, mesh_memory); }).name("Sphere Brushes");
+            tf.emplace([this, &app_settings, &mesh_memory]() { make_torus_brushes         (app_settings, mesh_memory); }).name("Torus Brushes");
+            tf.emplace([this, &app_settings, &mesh_memory]() { make_cylinder_brushes      (app_settings, mesh_memory); }).name("Cylinder Brushes");
+            tf.emplace([this, &app_settings, &mesh_memory]() { make_cone_brushes          (app_settings, mesh_memory); }).name("Cone Brushes");
+        }
+        if (make_johnson_solid_brushes) {
+            make_json_brushes(app_settings, mesh_memory, &tf, library);
+        }
 
         tf::Future<void> future = executor.run(tf);
         future.wait();
     } else {
-        make_platonic_solid_brushes(app_settings, mesh_memory);
-        make_sphere_brushes        (app_settings, mesh_memory);
-        make_torus_brushes         (app_settings, mesh_memory);
-        make_cylinder_brushes      (app_settings, mesh_memory);
-        make_cone_brushes          (app_settings, mesh_memory);
-
-        make_json_brushes(app_settings, mesh_memory, nullptr, library);
+        if (make_platonic_solid_brushes_) {
+            make_platonic_solid_brushes(app_settings, mesh_memory);
+        }
+        if (make_curved_brushes) {
+            make_sphere_brushes        (app_settings, mesh_memory);
+            make_torus_brushes         (app_settings, mesh_memory);
+            make_cylinder_brushes      (app_settings, mesh_memory);
+            make_cone_brushes          (app_settings, mesh_memory);
+        }
+        if (make_johnson_solid_brushes) {
+            make_json_brushes(app_settings, mesh_memory, nullptr, library);
+        }
     }
 
     mesh_memory.buffer_transfer_queue.flush();
