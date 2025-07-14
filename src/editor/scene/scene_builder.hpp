@@ -187,6 +187,9 @@ private:
 
     std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
 
+    std::shared_ptr<Content_library_node> m_platonic_solids_folder;
+    std::shared_ptr<Content_library_node> m_johnson_solids_folder;
+
     // Config
     float m_mass_scale{1.0f};
     int   m_detail    {4};

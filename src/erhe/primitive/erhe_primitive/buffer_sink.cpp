@@ -19,6 +19,8 @@ Cpu_buffer_sink::Cpu_buffer_sink(std::initializer_list<erhe::buffer::Cpu_buffer*
 
 auto Cpu_buffer_sink::allocate_vertex_buffer(const std::size_t stream, const std::size_t vertex_count, const std::size_t vertex_element_size) -> Buffer_range
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     const std::size_t                allocation_byte_count = vertex_count * vertex_element_size;
     const std::size_t                allocation_alignment  = vertex_element_size;
     erhe::buffer::Cpu_buffer*        vertex_buffer         = m_vertex_buffers.at(stream);
@@ -43,6 +45,8 @@ auto Cpu_buffer_sink::allocate_vertex_buffer(const std::size_t stream, const std
 
 auto Cpu_buffer_sink::allocate_index_buffer(const std::size_t index_count, const std::size_t index_element_size) -> Buffer_range
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     const std::size_t                allocation_byte_count = index_count * index_element_size;
     const std::size_t                allocation_alignment  = index_element_size;
     const std::optional<std::size_t> byte_offset_opt       = m_index_buffer.allocate_bytes(allocation_byte_count, allocation_alignment);
@@ -64,8 +68,10 @@ auto Cpu_buffer_sink::allocate_index_buffer(const std::size_t index_count, const
     };
 }
 
-void Cpu_buffer_sink::enqueue_index_data(const std::size_t offset, std::vector<uint8_t>&& data) const
+void Cpu_buffer_sink::enqueue_index_data(const std::size_t offset, std::vector<uint8_t>&& data) const 
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     auto buffer_span = m_index_buffer.get_span();
     auto offset_span = buffer_span.subspan(offset, data.size());
     memcpy(offset_span.data(), data.data(), data.size());
@@ -73,6 +79,8 @@ void Cpu_buffer_sink::enqueue_index_data(const std::size_t offset, std::vector<u
 
 void Cpu_buffer_sink::enqueue_vertex_data(const std::size_t stream, const std::size_t offset, std::vector<uint8_t>&& data) const
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     auto buffer_span = m_vertex_buffers.at(stream)->get_span();
     auto offset_span = buffer_span.subspan(offset, data.size());
     memcpy(offset_span.data(), data.data(), data.size());
@@ -80,6 +88,8 @@ void Cpu_buffer_sink::enqueue_vertex_data(const std::size_t stream, const std::s
 
 void Cpu_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     auto        buffer_span = m_vertex_buffers.at(writer.stream)->get_span();
     const auto& data        = writer.vertex_data;
     auto        offset_span = buffer_span.subspan(writer.start_offset(), data.size());
@@ -88,6 +98,8 @@ void Cpu_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const
 
 void Cpu_buffer_sink::buffer_ready(Index_buffer_writer& writer) const
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     auto        buffer_span = m_index_buffer.get_span();
     const auto& data        = writer.index_data;
     auto        offset_span = buffer_span.subspan(writer.start_offset(), data.size());

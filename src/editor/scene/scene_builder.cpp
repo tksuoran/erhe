@@ -211,6 +211,8 @@ void Scene_builder::setup_cameras(
 
 auto Scene_builder::make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>
 {
+    // TODO This is very crude locking.
+    //      We could be able to do more in parallel - check if we can do more fine grained locking.
     const std::shared_ptr<Content_library>& content_library = m_scene_root->get_content_library();
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
 
@@ -257,8 +259,9 @@ void Scene_builder::make_platonic_solid_brushes(App_settings& app_settings, Mesh
     Content_library_node& brushes = get_brushes();
 
     const auto scale = 1.0f;
-    auto platonic_solids = brushes.make_folder("Platonic Solids");
-    auto& folder = *platonic_solids.get();
+
+    m_platonic_solids_folder = brushes.make_folder("Platonic Solids");
+    auto& folder = *m_platonic_solids_folder.get();
 
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
@@ -272,6 +275,8 @@ void Scene_builder::make_platonic_solid_brushes(App_settings& app_settings, Mesh
         auto new_geometry = std::make_shared<erhe::geometry::Geometry>(name);
         builder(new_geometry->get_mesh());
         new_geometry->process(flags);
+
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_brush_mutex};
         m_platonic_solids.push_back(make_brush(folder, app_settings, mesh_memory, new_geometry));
     };
 
@@ -514,7 +519,9 @@ void Scene_builder::make_json_brushes(App_settings& app_settings, Mesh_memory& m
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
 
-    auto& folder = *(brushes.make_folder("Johnson Solids").get());
+    m_johnson_solids_folder = brushes.make_folder("Johnson Solids");
+    auto& folder = *m_johnson_solids_folder.get();
+
     for (const auto& key_name : library.names) {
         auto op = [this, &app_settings, &mesh_memory, &library, &key_name, &folder]() {
             std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(key_name);
@@ -536,6 +543,8 @@ void Scene_builder::make_json_brushes(App_settings& app_settings, Mesh_memory& m
                     .density      = m_mass_scale
                 }
             );
+
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_brush_mutex};
             m_johnson_solids.push_back(brush);
         };
         if (tf != nullptr) {
@@ -641,6 +650,23 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
             make_json_brushes(app_settings, mesh_memory, nullptr, library);
         }
     }
+
+    auto sort_folder = [](Content_library_node& folder)
+    {
+        std::vector<std::shared_ptr<erhe::Hierarchy>>& entries = folder.get_mutable_children();
+
+        std::sort(
+            entries.begin(),
+            entries.end(),
+            [](const std::shared_ptr<erhe::Hierarchy>& lhs, const std::shared_ptr<erhe::Hierarchy>& rhs)
+            {
+                return lhs->get_name() < rhs->get_name();
+            }
+        );
+    };
+
+    sort_folder(*m_platonic_solids_folder.get());
+    sort_folder(*m_johnson_solids_folder.get());
 
     mesh_memory.buffer_transfer_queue.flush();
 }
