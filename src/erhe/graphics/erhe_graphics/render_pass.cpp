@@ -1,6 +1,7 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -468,12 +469,6 @@ void Render_pass::start_render_pass()
         m_debug_group_name.data()
     );
 
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
-
-    if ((m_render_target_width > 0) && (m_render_target_height > 0)) {
-        gl::viewport(0, 0, m_render_target_width, m_render_target_height);
-    }
-
     std::string begin_debug_group_name = fmt::format("Render_pass::start_render_pass() {}", m_debug_group_name);
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
@@ -481,6 +476,15 @@ void Render_pass::start_render_pass()
         static_cast<GLsizei>(begin_debug_group_name.length() + 1),
         begin_debug_group_name.c_str()
     );
+
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
+
+    if ((m_render_target_width > 0) && (m_render_target_height > 0)) {
+        gl::viewport(0, 0, m_render_target_width, m_render_target_height);
+    }
+
+    // Color mask state is part of blend and it affects clears
+    m_device.opengl_state_tracker.color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
 
 #if !defined(NDEBUG)
     if (!m_uses_default_framebuffer) {
@@ -524,13 +528,7 @@ void Render_pass::start_render_pass()
                         static_cast<GLfloat>(attachment.clear_value[3])
                     };
 
-                    // TODO Figure out why gl::clear_named_framebuffer_fv() does not always work
-                    if (attachment.texture != nullptr) {
-                        gl::clear_tex_image(attachment.texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &f[0]);
-                    } else
-                    {
-                        gl::clear_named_framebuffer_fv(name, gl::Buffer::color, static_cast<GLint>(color_index), &f[0]);
-                    }
+                    gl::clear_named_framebuffer_fv(name, gl::Buffer::color, static_cast<GLint>(color_index), &f[0]);
                     break;
                 }
                 case erhe::dataformat::Format_kind::format_kind_signed_integer: {
