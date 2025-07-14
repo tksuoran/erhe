@@ -381,9 +381,10 @@ void Operations::imgui()
 
 void Operations::merge()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async(
-        [this](){
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async(
+    ///     [this]()
+    ///     {
             m_context.operation_stack->queue(
                 std::make_shared<Merge_operation>(
                     Merge_operation::Parameters{
@@ -400,27 +401,32 @@ void Operations::merge()
                     }
                 )
             );
-        }
-    );
+    ///     }
+    /// );
 }
 
 void Operations::triangulate()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){ m_context.operation_stack->queue(std::make_shared<Triangulate_operation>( mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Triangulate_operation>( mesh_context()));
+    /// });
 }
 
 void Operations::normalize()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){ m_context.operation_stack->queue(std::make_shared<Normalize_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Normalize_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::bake_transform()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async(
-        [this](){
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async(
+    ///     [this]()
+    ///     {
             Compound_operation::Parameters compound_operation_parameters;
             // First: Transform geometries using node transforms
             compound_operation_parameters.operations.push_back(
@@ -442,116 +448,149 @@ void Operations::bake_transform()
             m_context.operation_stack->queue(
                 std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
             );
-        }
-    );
+    ///    }
+    /// );
 }
 
 void Operations::reverse()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Reverse_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Reverse_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::repair()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Repair_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Repair_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::weld()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Weld_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Weld_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::difference()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async(
-        [this](){
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async(
+    ///     [this]()
+    ///     {
             m_context.operation_stack->queue(
                 std::make_shared<Difference_operation>(
                     mesh_context()
                 )
             );
-        }
-    );
+    ///     }
+    /// );
 }
 void Operations::intersection()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Intersection_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Intersection_operation>(mesh_context()));
+    /// });
 }
 void Operations::union_()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Union_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Union_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::catmull_clark()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Catmull_clark_subdivision_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Catmull_clark_subdivision_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::sqrt3()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Sqrt3_subdivision_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Sqrt3_subdivision_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::dual()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Dual_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Dual_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::join()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Join_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Join_operation>(mesh_context()));
+    //// });
 }
 
 void Operations::kis()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Kis_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Kis_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::meta()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Meta_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Meta_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::ortho()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Subdivide_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Subdivide_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::ambo()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Ambo_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Ambo_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::truncate()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Truncate_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Truncate_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::gyro()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Gyro_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Gyro_operation>(mesh_context()));
+    /// });
 }
 
 void Operations::chamfer()
 {
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    executor.silent_async([this](){m_context.operation_stack->queue(std::make_shared<Chamfer_operation>(mesh_context()));});
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Chamfer_operation>(mesh_context()));
+    /// });
 }
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)

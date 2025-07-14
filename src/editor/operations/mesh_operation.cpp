@@ -38,7 +38,7 @@ Mesh_operation::~Mesh_operation() noexcept = default;
 
 void Mesh_operation::execute(App_context&)
 {
-    log_operations->trace("Op Execute {}", describe());
+    log_operations->trace("Op Execute Wait {}", describe());
 
     ERHE_VERIFY(!m_entries.empty());
     Entry& first_entry = m_entries.front();
@@ -49,6 +49,8 @@ void Mesh_operation::execute(App_context&)
     erhe::Item_host* item_host = first_node->get_item_host();
     ERHE_VERIFY(item_host != nullptr);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+
+    log_operations->trace("Op Execute Begin {}", describe());
 
     for (const auto& entry : m_entries) {
         auto* node = entry.scene_mesh->get_node();
@@ -72,11 +74,13 @@ void Mesh_operation::execute(App_context&)
 
         node->set_parent(parent);
     }
+
+    log_operations->trace("Op Execute End {}", describe());
 }
 
 void Mesh_operation::undo(App_context&)
 {
-    log_operations->trace("Op Undo {}", describe());
+    log_operations->trace("Op Undo Wait {}", describe());
 
     ERHE_VERIFY(!m_entries.empty());
     Entry& first_entry = m_entries.front();
@@ -87,6 +91,8 @@ void Mesh_operation::undo(App_context&)
     erhe::Item_host* item_host = first_node->get_item_host();
     ERHE_VERIFY(item_host != nullptr);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+
+    log_operations->trace("Op Undo Begin {}", describe());
 
     for (const auto& entry : m_entries) {
         auto* node = entry.scene_mesh->get_node();
@@ -110,6 +116,8 @@ void Mesh_operation::undo(App_context&)
 
         node->set_parent(parent);
     }
+
+    log_operations->trace("Op Undo End {}", describe());
 }
 
 void Mesh_operation::make_entries(const std::function<void(const erhe::geometry::Geometry& before_geometry, erhe::geometry::Geometry& after_geometry)> operation)

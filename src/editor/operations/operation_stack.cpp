@@ -84,12 +84,16 @@ auto Operation_stack::get_executor() -> tf::Executor&
 
 void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     m_queued.push_back(operation);
 }
 
 void Operation_stack::update()
 {
     ERHE_PROFILE_FUNCTION();
+
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     if (m_queued.empty()) {
         return;
@@ -105,6 +109,8 @@ void Operation_stack::update()
 
 void Operation_stack::undo()
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     if (m_executed.empty()) {
         return;
     }
@@ -116,6 +122,8 @@ void Operation_stack::undo()
 
 void Operation_stack::redo()
 {
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     if (m_undone.empty()) {
         return;
     }
@@ -127,11 +135,15 @@ void Operation_stack::redo()
 
 auto Operation_stack::can_undo() const -> bool
 {
+    // TODO ? std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     return !m_executed.empty();
 }
 
 auto Operation_stack::can_redo() const -> bool
 {
+    // TODO ? std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
     return !m_undone.empty();
 }
 
@@ -161,7 +173,7 @@ void Operation_stack::imgui()
     ERHE_PROFILE_FUNCTION();
 
     imgui("Executed", m_executed);
-    imgui("Undone", m_undone);
+    imgui("Undone",   m_undone);
 }
 
 }

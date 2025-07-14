@@ -2,8 +2,10 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace erhe::commands { class Commands; }
@@ -74,6 +76,7 @@ private:
     Undo_command  m_undo_command;
     Redo_command  m_redo_command;
 
+    ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;
     std::vector<std::shared_ptr<Operation>> m_queued;
