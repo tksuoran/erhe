@@ -85,7 +85,10 @@ void Brush::late_initialize()
     ERHE_VERIFY(geometry);
     m_primitive = erhe::primitive::Primitive{geometry};
     if (!m_primitive.has_renderable_triangles()) {
-        ERHE_VERIFY(m_primitive.make_renderable_mesh(m_data.build_info, m_data.normal_style));
+        bool brush_renderable_mesh_ok = m_primitive.make_renderable_mesh(m_data.build_info, m_data.normal_style);
+        if (!brush_renderable_mesh_ok) {
+            log_brush->warn("Brush has no renderable mesh. This is likely due to memory configuration.");
+        }
     }
     ERHE_VERIFY(m_primitive.render_shape);
     const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = m_primitive.render_shape;
