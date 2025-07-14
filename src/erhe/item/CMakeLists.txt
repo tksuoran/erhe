@@ -23,7 +23,7 @@ target_link_libraries(
         erhe::profile
         glm::glm-header-only
     PRIVATE
-        erhe::bit
+        erhe::utility
         erhe::log
         erhe::message_bus
         erhe::verify

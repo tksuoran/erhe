@@ -94,6 +94,13 @@ void Build_context_root::allocate_vertex_buffers()
 {
     for (size_t i = 0, end = vertex_format.streams.size(); i < end; ++i) {
         const erhe::dataformat::Vertex_stream& sink_stream = vertex_format.streams[i];
+        const std::size_t allocation_byte_count = total_vertex_count * sink_stream.stride;
+        const std::size_t allocation_alignment  = sink_stream.stride;
+        const std::size_t available_byte_count  = build_info.buffer_info.buffer_sink.get_available_vertex_byte_count(i, allocation_alignment);
+        if (available_byte_count < allocation_byte_count) {
+            build_failed = true;
+            return;
+        }
         Buffer_range buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(i, total_vertex_count, sink_stream.stride);
         buffer_mesh.vertex_buffer_ranges.emplace_back(std::move(buffer_range));
     }
@@ -105,6 +112,14 @@ void Build_context_root::allocate_index_buffer()
 
     const erhe::dataformat::Format index_type     {build_info.buffer_info.index_type};
     const std::size_t              index_type_size{erhe::dataformat::get_format_size(index_type)};
+
+    const std::size_t allocation_byte_count = total_index_count * index_type_size;
+    const std::size_t allocation_alignment  = index_type_size;
+    const std::size_t available_byte_count  = build_info.buffer_info.buffer_sink.get_available_index_byte_count(allocation_alignment);
+    if (available_byte_count < allocation_byte_count) {
+        build_failed = true;
+        return;
+    }
 
     log_primitive_builder->trace(
         "allocating index buffer "
@@ -212,6 +227,9 @@ Build_context::Build_context(
     , index_writer   {*this, build_info.buffer_info.buffer_sink}
     , mesh_attributes{mesh}
 {
+    if (root.build_failed) {
+        return;
+    }
     for (std::size_t stream_index = 0, stream_end = root.vertex_format.streams.size(); stream_index < stream_end; ++stream_index) {
         const erhe::dataformat::Vertex_stream& sink_stream = root.vertex_format.streams.at(stream_index);
         //Vertex_buffer_writer vertex_writer{*this, build_info.buffer_info.buffer_sink, stream_index, sink_stream.stride};
@@ -243,7 +261,10 @@ Build_context::Build_context(
 
 Build_context::~Build_context() noexcept
 {
-    ERHE_VERIFY(vertex_buffer_index == root.total_vertex_count);
+    if (root.build_failed) {
+        log_primitive_builder->warn("Primitive build failed");
+    }
+    ERHE_VERIFY(root.build_failed || (vertex_buffer_index == root.total_vertex_count));
 }
 
 void Build_context::build_polygon_id()
@@ -538,12 +559,10 @@ void Build_context::build_triangle_fill_index()
 auto Build_context::is_ready() const -> bool
 {
     const bool ready = 
+        !root.build_failed &&
         (root.buffer_mesh.index_buffer_range.count != 0) &&
         (root.buffer_mesh.vertex_buffer_ranges.front().count != 0);
-    if (ready) {
-        return true;
-    }
-    return false;
+    return ready;
 }
 
 void Build_context::build_polygon_fill()

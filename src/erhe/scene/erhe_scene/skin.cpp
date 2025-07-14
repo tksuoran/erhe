@@ -1,6 +1,6 @@
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene/scene_host.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_item/unique_id.hpp"
 
 namespace erhe::scene {
@@ -35,7 +35,7 @@ auto operator<(const Skin& lhs, const Skin& rhs) -> bool
     return lhs.get_id() < rhs.get_id();
 }
 
-using namespace erhe::bit;
+using namespace erhe::utility;
 
 auto is_skin(const Item_base* const item) -> bool
 {

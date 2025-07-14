@@ -1159,9 +1159,9 @@ public:
 
     auto on_key_event(const erhe::window::Input_event& input_event) -> bool override
     {
-        m_input_state->shift   = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_shift);
-        m_input_state->control = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_ctrl);
-        m_input_state->alt     = erhe::bit::test_all_rhs_bits_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_menu);
+        m_input_state->shift   = erhe::utility::test_bit_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_shift);
+        m_input_state->control = erhe::utility::test_bit_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_ctrl);
+        m_input_state->alt     = erhe::utility::test_bit_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_menu);
         return false;
     }
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override

@@ -159,10 +159,7 @@ void Mesh_operation::make_entries(const std::function<void(const erhe::geometry:
 
     for (auto& item : selected_items) {
         // Prevent hotbar etc. from being operated
-        const bool is_content = erhe::bit::test_all_rhs_bits_set(
-            item->get_flag_bits(),
-            erhe::Item_flags::content
-        );
+        const bool is_content = erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::content);
         if (!is_content) {
             continue;
         }

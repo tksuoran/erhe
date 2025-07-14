@@ -4,7 +4,7 @@
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/light.hpp"
@@ -124,7 +124,7 @@ void Icon_set::load_icons(
 
 void Icon_set::add_icons(const uint64_t item_type, const float scale)
 {
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     for (uint64_t bit_position = 0; bit_position < erhe::Item_flags::count; ++ bit_position) {
         const uint64_t bit_mask = (uint64_t{1} << bit_position);
         if (test_all_rhs_bits_set(item_type, bit_mask)) {
@@ -194,7 +194,7 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     }
 
     const uint64_t type_mask = item->get_type();
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     for (uint64_t bit_position = 0; bit_position < erhe::Item_type::count; ++bit_position) {
         const uint64_t bit_mask = (uint64_t{1} << bit_position);
         if (test_all_rhs_bits_set(type_mask, bit_mask)) {

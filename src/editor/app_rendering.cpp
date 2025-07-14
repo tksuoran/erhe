@@ -30,7 +30,7 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
@@ -220,7 +220,7 @@ App_rendering::App_rendering(
     //rendertarget->allow_shader_stages_override = true;
     app_message_bus.add_receiver(
         [&](App_message& message) {
-            using namespace erhe::bit;
+            using namespace erhe::utility;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
                 handle_graphics_settings_changed(message.graphics_preset);
             }

@@ -1,7 +1,7 @@
 #include "scene/frame_controller.hpp"
 
 #include "erhe_scene/node.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/input_axis.hpp"
 #include "erhe_verify/verify.hpp"
@@ -285,7 +285,7 @@ auto is_frame_controller(const erhe::Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::frame_controller);
+    return erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::frame_controller);
 }
 
 auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool
@@ -298,7 +298,7 @@ auto as_frame_controller(erhe::Item_base* item) -> Frame_controller*
     if (item == nullptr) {
         return nullptr;
     }
-    if (!erhe::bit::test_all_rhs_bits_set(item->get_type(),erhe::Item_type::frame_controller)) {
+    if (!erhe::utility::test_all_rhs_bits_set(item->get_type(),erhe::Item_type::frame_controller)) {
         return nullptr;
     }
     return static_cast<Frame_controller*>(item);

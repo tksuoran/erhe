@@ -20,7 +20,7 @@
 #include "tools/tools.hpp"
 #include "transform/handle_enums.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
@@ -167,7 +167,7 @@ void Transform_tool::on_message(App_message& message)
 {
     Tool::on_message(message);
 
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
         update_hover();
     }
@@ -340,7 +340,7 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
         if (!node) {
             continue;
         }
-        const bool node_lock_viewport_transform = erhe::bit::test_all_rhs_bits_set(
+        const bool node_lock_viewport_transform = erhe::utility::test_all_rhs_bits_set(
             node->get_flag_bits(),
             erhe::Item_flags::lock_viewport_transform
         );
@@ -375,7 +375,7 @@ void Transform_tool::adjust_translation(const vec3 translation)
         if (!node) {
             continue;
         }
-        const bool node_lock_viewport_transform = erhe::bit::test_all_rhs_bits_set(
+        const bool node_lock_viewport_transform = erhe::utility::test_all_rhs_bits_set(
             node->get_flag_bits(),
             erhe::Item_flags::lock_viewport_transform
         );
@@ -400,7 +400,7 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
             if (!node) {
                 continue;
             }
-            const bool node_lock_viewport_transform = erhe::bit::test_all_rhs_bits_set(
+            const bool node_lock_viewport_transform = erhe::utility::test_all_rhs_bits_set(
                 node->get_flag_bits(),
                 erhe::Item_flags::lock_viewport_transform
             );
@@ -432,7 +432,7 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
             if (!node) {
                 continue;
             }
-            const bool node_lock_viewport_transform = erhe::bit::test_all_rhs_bits_set(
+            const bool node_lock_viewport_transform = erhe::utility::test_all_rhs_bits_set(
                 node->get_flag_bits(),
                 erhe::Item_flags::lock_viewport_transform
             );

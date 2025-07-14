@@ -1,7 +1,7 @@
 #include "brushes/brush_placement.hpp"
 
 #include "erhe_scene/node.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #include <glm/glm.hpp>
 
@@ -72,7 +72,7 @@ auto is_brush_placement(const erhe::Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::brush_placement);
+    return erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::brush_placement);
 }
 
 auto is_brush_placement(const std::shared_ptr<erhe::Item_base>& item) -> bool
@@ -85,7 +85,7 @@ auto as_brush_placement(erhe::Item_base* item) -> Brush_placement*
     if (item == nullptr) {
         return nullptr;
     }
-    if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::frame_controller)) {
+    if (!erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::frame_controller)) {
         return nullptr;
     }
     return static_cast<Brush_placement*>(item);

@@ -19,7 +19,7 @@
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_profile/profile.hpp"
@@ -898,7 +898,7 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
 {
     ERHE_PROFILE_FUNCTION();
 
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     bool update       = test_all_rhs_bits_set(visual_flags, item_visual_flag_update);
     bool force_expand = test_all_rhs_bits_set(visual_flags, item_visual_flag_force_expand);
     bool table_row    = test_all_rhs_bits_set(visual_flags, item_visual_flag_table_row);
@@ -1077,7 +1077,7 @@ auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Sho
 void Item_tree::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
 {
     // Special handling for invisible parents (scene root)
-    if (erhe::bit::test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
+    if (erhe::utility::test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
         const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (hierarchy) {
             for (const auto& child_node : hierarchy->get_children()) {

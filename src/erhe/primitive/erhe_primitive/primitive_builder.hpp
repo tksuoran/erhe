@@ -61,6 +61,7 @@ public:
     const erhe::dataformat::Vertex_format& vertex_format;
     std::size_t                            total_vertex_count{0};
     std::size_t                            total_index_count {0};
+    bool                                   build_failed{false};
 };
 
 class Build_context

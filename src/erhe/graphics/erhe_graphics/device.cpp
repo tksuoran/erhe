@@ -2,14 +2,13 @@
 
 #include "erhe_graphics/device.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/align.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/debug.hpp"
@@ -21,6 +20,7 @@
 #include "erhe_graphics/state/depth_stencil_state.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/align.hpp"
 #include "erhe_window/window.hpp"
 
 #if !defined(WIN32)
@@ -649,7 +649,7 @@ auto Device::get_handle(const Texture& texture, const Sampler& sampler) const ->
 
 auto Device::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> erhe::dataformat::Format
 {
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     const bool require_depth     = test_all_rhs_bits_set(flags, format_flag_require_depth    );
     const bool require_stencil   = test_all_rhs_bits_set(flags, format_flag_require_stencil  );
     const bool prefer_accuracy   = test_all_rhs_bits_set(flags, format_flag_prefer_accuracy  );
@@ -1137,7 +1137,7 @@ void GPU_ring_buffer::get_size_available_for_write(
     //   +----+---+---+--------------+-+
     //        ^   ^                     
     //        w2  r1                    
-    const std::size_t aligned_write_position = align_offset(m_write_position, required_alignment);
+    const std::size_t aligned_write_position = erhe::utility::align_offset_power_of_two(m_write_position, required_alignment);
     ERHE_VERIFY(aligned_write_position >= m_write_position);
     out_alignment_byte_count_without_wrap    = aligned_write_position - m_write_position;
 
@@ -1474,7 +1474,7 @@ auto Device::get_frame_number() const -> uint64_t
 auto Device::allocate_ring_buffer_entry(Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range
 {
     m_need_sync = true;
-    std::size_t required_alignment = get_buffer_alignment(buffer_target);
+    const std::size_t required_alignment = erhe::utility::next_power_of_two_16bit(get_buffer_alignment(buffer_target));
     std::size_t alignment_byte_count_without_wrap{0};
     std::size_t available_byte_count_without_wrap{0};
     std::size_t available_byte_count_with_wrap{0};

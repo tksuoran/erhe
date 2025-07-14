@@ -3,7 +3,6 @@
 #include "app_context.hpp"
 
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/align.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/opengl_state_tracker.hpp"
@@ -11,6 +10,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/align.hpp"
 
 #include <fmt/format.h>
 
@@ -47,7 +47,7 @@ Post_processing_node::Post_processing_node(
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count =
-                erhe::graphics::align_offset(
+                erhe::utility::align_offset_power_of_two(
                     post_processing.get_parameter_block().get_size_bytes(),
                     graphics_device.get_buffer_alignment(post_processing.get_parameter_block().get_binding_target())
                 ) * Post_processing::s_max_mipmap_levels,
@@ -239,7 +239,7 @@ void Post_processing_node::update_parameters()
     const std::size_t               entry_size                    = m_post_processing.get_parameter_block().get_size_bytes();
     const Post_processing::Offsets& offsets                       = m_post_processing.get_offsets();
 
-    const std::size_t level_offset_size = erhe::graphics::align_offset(
+    const std::size_t level_offset_size = erhe::utility::align_offset_power_of_two(
         entry_size,
         m_graphics_device.get_buffer_alignment(m_post_processing.get_parameter_block().get_binding_target())
     );
@@ -535,11 +535,9 @@ void Post_processing::post_process(Post_processing_node& node)
     const std::shared_ptr<erhe::graphics::Texture> input_texture = node.get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
     ERHE_VERIFY(input_texture);
 
-    const std::size_t level_offset_size = erhe::graphics::align_offset(
+    const std::size_t level_offset_size = erhe::utility::align_offset_power_of_two(
         m_parameter_block.get_size_bytes(),
-        m_context.graphics_device->get_buffer_alignment(
-            erhe::graphics::Buffer_target::uniform // TODO node.parameter_buffer.target()
-        )
+        m_context.graphics_device->get_buffer_alignment(m_parameter_block.get_binding_target())
     );
 
     const uint64_t input_handle      = graphics_device.get_handle(*input_texture.get(),     m_sampler_linear);

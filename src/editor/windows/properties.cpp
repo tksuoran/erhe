@@ -40,7 +40,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -607,7 +607,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 
     push_group("Flags", ImGuiTreeNodeFlags_None, m_indent);
 
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     using Item_flags = erhe::Item_flags;
 
     const uint64_t flags = item->get_flag_bits();

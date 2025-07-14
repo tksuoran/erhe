@@ -1,5 +1,5 @@
 #include "erhe_item/item.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #include <fmt/format.h>
 
@@ -15,7 +15,7 @@ auto Item_flags::to_string(const uint64_t flags) -> std::string
     bool first = true;
     for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
         const uint64_t bit_mask = (uint64_t{1} << bit_position);
-        const bool     value    = erhe::bit::test_all_rhs_bits_set(flags, bit_mask);
+        const bool     value    = erhe::utility::test_all_rhs_bits_set(flags, bit_mask);
         if (value) {
             if (!first) {
                 ss << " | ";

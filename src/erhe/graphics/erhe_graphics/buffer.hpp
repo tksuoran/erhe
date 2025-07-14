@@ -91,12 +91,14 @@ public:
     Buffer         (Buffer&& other) noexcept;
     auto operator= (Buffer&& other) noexcept -> Buffer&;
 
-    [[nodiscard]] auto get_map                () const -> std::span<std::byte>;
-    [[nodiscard]] auto get_debug_label        () const noexcept -> const std::string&;
-    [[nodiscard]] auto get_capacity_byte_count() const noexcept -> std::size_t;
-    [[nodiscard]] auto allocate_bytes         (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::optional<std::size_t>;
-    [[nodiscard]] auto get_free_capacity_bytes() const noexcept -> std::size_t;
-    [[nodiscard]] auto gl_name                () const noexcept -> unsigned int;
+    [[nodiscard]] auto get_capacity_byte_count () const noexcept -> std::size_t;
+    [[nodiscard]] auto allocate_bytes          (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::optional<std::size_t>;
+    [[nodiscard]] auto get_debug_label         () const noexcept -> const std::string&;
+    [[nodiscard]] auto get_used_byte_count     () const -> std::size_t;
+    [[nodiscard]] auto get_available_byte_count(std::size_t alignment = 64) const noexcept -> std::size_t;
+
+    [[nodiscard]] auto get_map                 () const -> std::span<std::byte>;
+    [[nodiscard]] auto gl_name                 () const noexcept -> unsigned int;
     void clear                () noexcept;
     void unmap                () noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;

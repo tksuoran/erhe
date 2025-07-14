@@ -17,7 +17,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 
 namespace editor {
@@ -343,7 +343,7 @@ auto is_rendertarget(const erhe::Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::rendertarget);
+    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::rendertarget);
 }
 
 auto is_rendertarget(const std::shared_ptr<erhe::Item_base>& item) -> bool

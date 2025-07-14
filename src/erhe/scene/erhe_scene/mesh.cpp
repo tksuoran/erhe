@@ -1,5 +1,5 @@
 #include "erhe_scene/mesh.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/iscene.hpp"
@@ -176,7 +176,7 @@ void Mesh::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
 void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits)
 {
     log->info("Mesh '{}' handle_flag_bits_update()", get_name());
-    const bool visibility_changed = erhe::bit::test_all_rhs_bits_set(old_flag_bits ^ new_flag_bits, erhe::Item_flags::visible);
+    const bool visibility_changed = erhe::utility::test_all_rhs_bits_set(old_flag_bits ^ new_flag_bits, erhe::Item_flags::visible);
     if (!visibility_changed) {
         return;
     }
@@ -210,7 +210,7 @@ auto is_mesh(const Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::mesh);
+    return erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::mesh);
 }
 
 auto is_mesh(const std::shared_ptr<erhe::Item_base>& item) -> bool

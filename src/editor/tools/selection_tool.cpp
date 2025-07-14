@@ -17,7 +17,7 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_hash/xxhash.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -287,7 +287,7 @@ Selection::Selection(erhe::commands::Commands& commands, App_context& context, A
 
     app_message_bus.add_receiver(
         [&](App_message& message) {
-            using namespace erhe::bit;
+            using namespace erhe::utility;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 m_hover_scene_view = message.scene_view;
             }
@@ -691,7 +691,7 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
 {
     Scoped_selection_change selection_change{*this};
 
-    const bool mesh_lock_viewport_select = erhe::bit::test_all_rhs_bits_set(
+    const bool mesh_lock_viewport_select = erhe::utility::test_all_rhs_bits_set(
         mesh->get_flag_bits(),
         erhe::Item_flags::lock_viewport_selection
     );
@@ -704,7 +704,7 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
         return;
     }
 
-    const bool node_lock_viewport_select = erhe::bit::test_all_rhs_bits_set(
+    const bool node_lock_viewport_select = erhe::utility::test_all_rhs_bits_set(
         node->get_flag_bits(),
         erhe::Item_flags::lock_viewport_selection
     );

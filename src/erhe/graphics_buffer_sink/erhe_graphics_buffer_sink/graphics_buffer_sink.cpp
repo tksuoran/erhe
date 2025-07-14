@@ -18,8 +18,19 @@ Graphics_buffer_sink::Graphics_buffer_sink(
 
 auto Graphics_buffer_sink::allocate_vertex_buffer(const std::size_t stream, const std::size_t vertex_count, const std::size_t vertex_element_size) -> erhe::primitive::Buffer_range
 {
-    const std::optional<std::size_t> byte_offset_opt = m_vertex_buffers.at(stream)->allocate_bytes(vertex_count * vertex_element_size, vertex_element_size);
+    const std::size_t                allocation_byte_count = vertex_count * vertex_element_size;
+    const std::size_t                allocation_alignment  = vertex_element_size;
+    erhe::graphics::Buffer*          vertex_buffer         = m_vertex_buffers.at(stream);
+    const std::optional<std::size_t> byte_offset_opt       = vertex_buffer->allocate_bytes(allocation_byte_count, allocation_alignment);
     if (!byte_offset_opt.has_value()) {
+        // TODO log here?
+        // log->error(
+        //     "Graphics_buffer_sink::allocate_vertex_buffer(): Out of memory requesting {} bytes, currently allocated {}, total size {}, free {} bytes",
+        //     allocation_byte_count,
+        //     vertex_buffer->get_used_byte_count(),
+        //     vertex_buffer->get_capacity_byte_count(),
+        //     vertex_buffer->get_available_byte_count(allocation_alignment)
+        // );
         return {};
     }
 
@@ -63,6 +74,26 @@ void Graphics_buffer_sink::buffer_ready(erhe::primitive::Vertex_buffer_writer& w
 void Graphics_buffer_sink::buffer_ready(erhe::primitive::Index_buffer_writer& writer) const
 {
     m_buffer_transfer_queue.enqueue(m_index_buffer, writer.start_offset(), std::move(writer.index_data));
+}
+
+auto Graphics_buffer_sink::get_used_vertex_byte_count(std::size_t stream) const -> std::size_t
+{
+    return m_vertex_buffers.at(stream)->get_used_byte_count();
+}
+
+auto Graphics_buffer_sink::get_available_vertex_byte_count(std::size_t stream, std::size_t alignment) const -> std::size_t
+{
+    return m_vertex_buffers.at(stream)->get_available_byte_count(alignment);
+}
+
+auto Graphics_buffer_sink::get_used_index_byte_count() const -> std::size_t
+{
+    return m_index_buffer.get_used_byte_count();
+}
+
+auto Graphics_buffer_sink::get_available_index_byte_count (std::size_t alignment) const -> std::size_t
+{
+    return m_index_buffer.get_available_byte_count(alignment);
 }
 
 } // namespace erhe::graphics_buffer_sink

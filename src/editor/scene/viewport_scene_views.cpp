@@ -17,7 +17,7 @@
 #include "windows/viewport_config_window.hpp"
 #include "windows/viewport_window.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
@@ -86,7 +86,7 @@ Scene_views::Scene_views(
 
 void Scene_views::on_message(App_message& message)
 {
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
         handle_graphics_settings_changed(message.graphics_preset);
     }

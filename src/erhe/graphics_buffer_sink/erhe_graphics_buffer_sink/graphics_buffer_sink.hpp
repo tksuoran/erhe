@@ -21,10 +21,14 @@ public:
     [[nodiscard]] auto allocate_vertex_buffer(std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_range override;
     [[nodiscard]] auto allocate_index_buffer (std::size_t index_count, std::size_t index_element_size) -> erhe::primitive::Buffer_range override;
 
-    void enqueue_vertex_data(std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
-    void enqueue_index_data (std::size_t offset, std::vector<uint8_t>&& data) const override;
-    void buffer_ready       (erhe::primitive::Vertex_buffer_writer& writer) const   override;
-    void buffer_ready       (erhe::primitive::Index_buffer_writer&  writer) const   override;
+    void enqueue_vertex_data            (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
+    void enqueue_index_data             (std::size_t offset, std::vector<uint8_t>&& data) const                     override;
+    void buffer_ready                   (erhe::primitive::Vertex_buffer_writer& writer) const                       override;
+    void buffer_ready                   (erhe::primitive::Index_buffer_writer&  writer) const                       override;
+    auto get_used_vertex_byte_count     (std::size_t stream) const -> std::size_t                                   override;
+    auto get_available_vertex_byte_count(std::size_t stream, std::size_t alignment) const -> std::size_t            override;
+    auto get_used_index_byte_count      () const -> std::size_t                                                     override;
+    auto get_available_index_byte_count (std::size_t alignment) const -> std::size_t                                override;
 
 private:
     erhe::graphics::Buffer_transfer_queue& m_buffer_transfer_queue;

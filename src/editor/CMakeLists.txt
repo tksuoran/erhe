@@ -373,7 +373,7 @@ endif ()
 target_link_libraries(
     ${_target}
     PRIVATE
-    erhe::bit
+    erhe::utility
     erhe::commands
     erhe::configuration
     erhe::defer

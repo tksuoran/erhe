@@ -4,7 +4,7 @@
 
 #include "erhe_physics/iworld.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -151,7 +151,7 @@ auto is_physics(const erhe::Item_base* const scene_item) -> bool
     if (scene_item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(
+    return erhe::utility::test_all_rhs_bits_set(
         scene_item->get_type(),
         erhe::Item_type::physics
     );

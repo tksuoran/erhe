@@ -107,7 +107,7 @@ Graph_window::~Graph_window() noexcept
 
 void Graph_window::on_message(App_message&)
 {
-    //// using namespace erhe::bit;
+    //// using namespace erhe::utility;
     //// if (test_any_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
     //// }
 }

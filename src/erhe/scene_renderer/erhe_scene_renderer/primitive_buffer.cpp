@@ -13,6 +13,7 @@
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/align.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <glm/gtx/matrix_operation.hpp>
@@ -150,7 +151,7 @@ auto Primitive_buffer::update(
             if (count == 0) {
                 continue;
             }
-            const uint32_t power_of_two = erhe::math::next_power_of_two(count);
+            const uint32_t power_of_two = erhe::utility::next_power_of_two(count);
             const uint32_t mask         = power_of_two - 1;
             const uint32_t current_bits = m_id_offset & mask;
             if (current_bits != 0) {

@@ -17,7 +17,7 @@
 #include "tools/tools.hpp"
 #include "transform/transform_tool.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -386,7 +386,7 @@ void Viewport_scene_view::update_hover_with_id_render()
         }
     }
 
-    using namespace erhe::bit;
+    using namespace erhe::utility;
 
     const uint64_t flags = (id_query.mesh != nullptr) && scene_mesh ? scene_mesh->get_flag_bits() : 0;
 

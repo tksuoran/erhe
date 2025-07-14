@@ -6,7 +6,7 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/node_attachment.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #include <memory>
 #include <unordered_map>
@@ -231,7 +231,7 @@ auto Selection::get(const std::size_t index) const -> std::shared_ptr<T>
             if (node) {
                 const auto node_item = node->item;
                 if (node_item) {
-                    if (!erhe::bit::test_all_rhs_bits_set(node_item->get_type(), T::get_static_type())) {
+                    if (!erhe::utility::test_all_rhs_bits_set(node_item->get_type(), T::get_static_type())) {
                         continue;
                     }
                     if (i == index) {
@@ -245,7 +245,7 @@ auto Selection::get(const std::size_t index) const -> std::shared_ptr<T>
             if (node) {
                 const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& attachments = node->get_attachments();
                 for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment_item : attachments) {
-                    if (!erhe::bit::test_all_rhs_bits_set(attachment_item->get_type(), T::get_static_type())) {
+                    if (!erhe::utility::test_all_rhs_bits_set(attachment_item->get_type(), T::get_static_type())) {
                         continue;
                     }
                     if (i == index) {
@@ -254,7 +254,7 @@ auto Selection::get(const std::size_t index) const -> std::shared_ptr<T>
                 }
             }
 
-            if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
+            if (!erhe::utility::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
                 continue;
             }
             if (i == index) {
@@ -281,7 +281,7 @@ auto Selection::get_all() const -> std::vector<std::shared_ptr<T>>
             if (node) {
                 const auto node_item = node->item;
                 if (node_item) {
-                    if (!erhe::bit::test_all_rhs_bits_set(node_item->get_type(), T::get_static_type())) {
+                    if (!erhe::utility::test_all_rhs_bits_set(node_item->get_type(), T::get_static_type())) {
                         continue;
                     }
                     result.push_back(std::static_pointer_cast<T>(node_item));
@@ -293,14 +293,14 @@ auto Selection::get_all() const -> std::vector<std::shared_ptr<T>>
             if (node) {
                 const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& attachments = node->get_attachments();
                 for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment_item : attachments) {
-                    if (!erhe::bit::test_all_rhs_bits_set(attachment_item->get_type(), T::get_static_type())) {
+                    if (!erhe::utility::test_all_rhs_bits_set(attachment_item->get_type(), T::get_static_type())) {
                         continue;
                     }
                     result.push_back(std::dynamic_pointer_cast<T>(attachment_item));
                 }
             }
 
-            if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
+            if (!erhe::utility::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
                 continue;
             }
             result.push_back(std::static_pointer_cast<T>(item));
@@ -329,7 +329,7 @@ auto Selection::count() const -> std::size_t
         if (!item) {
             continue;
         }
-        if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
+        if (!erhe::utility::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
             continue;
         }
         ++i;

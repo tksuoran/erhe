@@ -11,7 +11,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_physics/iconstraint.hpp"
@@ -147,8 +147,7 @@ void Physics_tool::on_message(App_message& message)
 {
     // Re-implementing here Tool::on_message(message);
 
-    using namespace erhe::bit;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+    if (erhe::utility::test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         if (get_hover_scene_view() != message.scene_view) {
             set_hover_scene_view(message.scene_view);
 

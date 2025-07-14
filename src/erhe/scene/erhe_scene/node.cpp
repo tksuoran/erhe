@@ -3,7 +3,7 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/scene_log.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -626,7 +626,7 @@ auto is_node(const Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::node);
+    return erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::node);
 }
 
 auto is_node(const std::shared_ptr<erhe::Item_base>& item) -> bool

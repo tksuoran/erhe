@@ -108,7 +108,7 @@ target_link_libraries(${_target}
         glm::glm-header-only
         mango
     PRIVATE
-        erhe::bit
+        erhe::utility
         erhe::defer
         erhe::file
         erhe::log

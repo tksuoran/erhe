@@ -5,7 +5,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/scene_log.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_item/unique_id.hpp"
 #include "erhe_verify/verify.hpp"
@@ -416,7 +416,7 @@ auto is_light(const erhe::Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::light);
+    return erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::light);
 }
 
 auto is_light(const std::shared_ptr<erhe::Item_base>& item) -> bool

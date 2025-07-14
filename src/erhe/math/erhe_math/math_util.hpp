@@ -28,19 +28,6 @@ template <typename T, typename U>
     return (x - from_low) / (from_high - from_low) * (to_high - to_low) + to_low;
 }
 
-[[nodiscard]] inline auto next_power_of_two(uint32_t x) -> uint32_t
-{
-    x--;
-    x |= x >> 1u;  // handle  2 bit numbers
-    x |= x >> 2u;  // handle  4 bit numbers
-    x |= x >> 4u;  // handle  8 bit numbers
-    x |= x >> 8u;  // handle 16 bit numbers
-    x |= x >> 16u; // handle 32 bit numbers
-    x++;
-
-    return x;
-}
-
 template <typename T>
 [[nodiscard]] inline auto uint_from_vector3(const glm::vec3 v) -> uint32_t
 {

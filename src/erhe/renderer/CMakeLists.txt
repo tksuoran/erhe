@@ -36,7 +36,7 @@ target_link_libraries(
         erhe::scene
         erhe::ui
     PRIVATE
-        erhe::bit
+        erhe::utility
         erhe::defer
         erhe::gl
         erhe::log

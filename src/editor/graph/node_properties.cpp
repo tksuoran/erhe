@@ -8,7 +8,7 @@
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -46,7 +46,7 @@ void Node_properties_window::item_flags(const std::shared_ptr<erhe::Item_base>& 
 
     m_property_editor.push_group("Flags", ImGuiTreeNodeFlags_None, 0.0f);
 
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     using Item_flags = erhe::Item_flags;
 
     const uint64_t flags = item->get_flag_bits();

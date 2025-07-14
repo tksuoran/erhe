@@ -144,8 +144,7 @@ Operations::Operations(
 
 void Operations::on_message(App_message& message)
 {
-    using namespace erhe::bit;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+    if (erhe::utility::test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         m_hover_scene_view = message.scene_view;
         if (message.scene_view != nullptr) {
             m_last_hover_scene_view = message.scene_view;

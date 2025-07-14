@@ -2,7 +2,7 @@
 #include "example_log.hpp"
 
 #include "erhe_scene/node.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/input_axis.hpp"
 #include "erhe_verify/verify.hpp"
@@ -229,7 +229,7 @@ auto is_frame_controller(const erhe::Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     return test_all_rhs_bits_set(item->get_type(), erhe::Item_type::frame_controller);
 }
 

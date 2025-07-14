@@ -5,7 +5,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_primitive/material.hpp"
 
 namespace editor {
@@ -17,7 +17,7 @@ Tool::Tool(App_context& app_context)
 
 void Tool::on_message(App_message& message)
 {
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         set_hover_scene_view(message.scene_view);
     }

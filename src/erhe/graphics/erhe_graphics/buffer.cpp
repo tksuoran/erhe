@@ -1,10 +1,11 @@
 #include "erhe_graphics/buffer.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_utility/align.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
@@ -67,56 +68,56 @@ auto to_string(Buffer_usage usage) -> std::string
 {
     std::stringstream ss;
     bool is_empty = true;
-    if (erhe::bit::test_all_rhs_bits_set(usage, Buffer_usage::vertex)) {
+    if (erhe::utility::test_all_rhs_bits_set(usage, Buffer_usage::vertex)) {
         if (!is_empty) {
             ss << " | ";
         }
         ss << "vertex";
         is_empty = false;
     }
-    if (erhe::bit::test_all_rhs_bits_set(usage, Buffer_usage::index)) {
+    if (erhe::utility::test_all_rhs_bits_set(usage, Buffer_usage::index)) {
         if (!is_empty) {
             ss << " | ";
         }
         ss << "index";
         is_empty = false;
     }
-    if (erhe::bit::test_all_rhs_bits_set(usage, Buffer_usage::uniform)) {
+    if (erhe::utility::test_all_rhs_bits_set(usage, Buffer_usage::uniform)) {
         if (!is_empty) {
             ss << " | ";
         }
         ss << "uniform";
         is_empty = false;
     }
-    if (erhe::bit::test_all_rhs_bits_set(usage, Buffer_usage::storage)) {
+    if (erhe::utility::test_all_rhs_bits_set(usage, Buffer_usage::storage)) {
         if (!is_empty) {
             ss << " | ";
         }
         ss << "storage";
         is_empty = false;
     }
-    if (erhe::bit::test_all_rhs_bits_set(usage, Buffer_usage::indirect)) {
+    if (erhe::utility::test_all_rhs_bits_set(usage, Buffer_usage::indirect)) {
         if (!is_empty) {
             ss << " | ";
         }
         ss << "indirect";
         is_empty = false;
     }
-    if (erhe::bit::test_all_rhs_bits_set(usage, Buffer_usage::texture)) {
+    if (erhe::utility::test_all_rhs_bits_set(usage, Buffer_usage::texture)) {
         if (!is_empty) {
             ss << " | ";
         }
         ss << "texture";
         is_empty = false;
     }
-    if (erhe::bit::test_all_rhs_bits_set(usage, Buffer_usage::pixel)) {
+    if (erhe::utility::test_all_rhs_bits_set(usage, Buffer_usage::pixel)) {
         if (!is_empty) {
             ss << " | ";
         }
         ss << "pixel";
         is_empty = false;
     }
-    if (erhe::bit::test_all_rhs_bits_set(usage, Buffer_usage::transfer)) {
+    if (erhe::utility::test_all_rhs_bits_set(usage, Buffer_usage::transfer)) {
         if (!is_empty) {
             ss << " | ";
         }
@@ -163,21 +164,21 @@ auto to_string(Buffer_map_flags flags) -> std::string
 {
     std::stringstream ss;
     bool is_empty = true;
-    if (erhe::bit::test_all_rhs_bits_set(flags, Buffer_map_flags::explicit_flush)) {
+    if (erhe::utility::test_all_rhs_bits_set(flags, Buffer_map_flags::explicit_flush)) {
         if (!is_empty) {
             ss << " | ";
         }
         ss << "explicit_flush";
         is_empty = false;
     }
-    if (erhe::bit::test_all_rhs_bits_set(flags, Buffer_map_flags::invalidate_range)) {
+    if (erhe::utility::test_all_rhs_bits_set(flags, Buffer_map_flags::invalidate_range)) {
         if (!is_empty) {
             ss << " | ";
         }
         ss << "invalidate_range";
         is_empty = false;
     }
-    if (erhe::bit::test_all_rhs_bits_set(flags, Buffer_map_flags::invalidate_buffer)) {
+    if (erhe::utility::test_all_rhs_bits_set(flags, Buffer_map_flags::invalidate_buffer)) {
         if (!is_empty) {
             ss << " | ";
         }
@@ -325,13 +326,13 @@ auto Buffer::get_gl_access_mask(Buffer_map_flags flags) const -> gl::Map_buffer_
     if (m_coherency == Buffer_coherency::on) {
         access_mask = access_mask | gl::Map_buffer_access_mask::map_coherent_bit;
     }
-    if (erhe::bit::test_all_rhs_bits_set(flags, Buffer_map_flags::explicit_flush)) {
+    if (erhe::utility::test_all_rhs_bits_set(flags, Buffer_map_flags::explicit_flush)) {
         access_mask = access_mask | gl::Map_buffer_access_mask::map_flush_explicit_bit;
     }
-    if (erhe::bit::test_all_rhs_bits_set(flags, Buffer_map_flags::invalidate_range)) {
+    if (erhe::utility::test_all_rhs_bits_set(flags, Buffer_map_flags::invalidate_range)) {
         access_mask = access_mask | gl::Map_buffer_access_mask::map_invalidate_range_bit;
     }
-    if (erhe::bit::test_all_rhs_bits_set(flags, Buffer_map_flags::invalidate_range)) {
+    if (erhe::utility::test_all_rhs_bits_set(flags, Buffer_map_flags::invalidate_range)) {
         access_mask = access_mask | gl::Map_buffer_access_mask::map_invalidate_buffer_bit;
     }
     return access_mask;
@@ -345,7 +346,7 @@ auto Buffer::gl_name() const noexcept -> unsigned int
 void Buffer::capability_check(const gl::Buffer_storage_mask storage_mask)
 {
     if (
-        erhe::bit::test_any_rhs_bits_set(
+        erhe::utility::test_any_rhs_bits_set(
             storage_mask,
             gl::Buffer_storage_mask::client_storage_bit  |
             gl::Buffer_storage_mask::dynamic_storage_bit |
@@ -361,7 +362,7 @@ void Buffer::capability_check(const gl::Buffer_storage_mask storage_mask)
 
 void Buffer::capability_check(const gl::Map_buffer_access_mask access_mask)
 {
-    if (erhe::bit::test_any_rhs_bits_set(access_mask,gl::Map_buffer_access_mask::map_coherent_bit | gl::Map_buffer_access_mask::map_persistent_bit)) {
+    if (erhe::utility::test_any_rhs_bits_set(access_mask,gl::Map_buffer_access_mask::map_coherent_bit | gl::Map_buffer_access_mask::map_persistent_bit)) {
         const bool in_core       = m_device.info.gl_version >= 440;
         const bool has_extension = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
         ERHE_VERIFY(in_core || has_extension);
@@ -396,7 +397,7 @@ void Buffer::allocate_storage(const void* init_data)
     }
 
     m_allocated = true;
-    if (erhe::bit::test_all_rhs_bits_set(gl_storage_mask, gl::Buffer_storage_mask::map_persistent_bit)) {
+    if (erhe::utility::test_all_rhs_bits_set(gl_storage_mask, gl::Buffer_storage_mask::map_persistent_bit)) {
         map_bytes(0, m_capacity_byte_count, Buffer_map_flags::none);
     }
 
@@ -501,22 +502,23 @@ void Buffer::clear() noexcept
 
 auto Buffer::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::optional<std::size_t>
 {
-    ERHE_VERIFY(alignment > 0);
-
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_allocate_mutex};
-
-    std::size_t offset = m_next_free_byte;
-    while ((offset % alignment) != 0) {
-        ++offset;
-    }
-    std::size_t next_free_byte = offset + byte_count;
+    const std::size_t offset         = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
+    const std::size_t next_free_byte = offset + byte_count;
     if (next_free_byte > m_capacity_byte_count) {
-        return std::nullopt;
+        const std::size_t available_byte_count = (offset < m_capacity_byte_count) ? m_capacity_byte_count - offset : 0;
+        log_buffer->error(
+            "erhe::graphics::Buffer::allocate_bytes(): Out of memory requesting {} bytes, currently allocated {}, total size {}, free {} bytes",
+            byte_count,
+            m_next_free_byte,
+            m_capacity_byte_count,
+            available_byte_count
+        );
+        return {};
     }
 
     m_next_free_byte = next_free_byte;
     ERHE_VERIFY(m_next_free_byte <= m_capacity_byte_count);
-
     log_buffer->trace("buffer {}: allocated {} bytes at offset {}", gl_name(), byte_count, offset);
     return offset;
 }
@@ -726,7 +728,7 @@ void Buffer::unmap() noexcept
 
 void Buffer::flush_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
-    ERHE_VERIFY(erhe::bit::test_all_rhs_bits_set(m_map_flags, Buffer_map_flags::explicit_flush));
+    ERHE_VERIFY(erhe::utility::test_all_rhs_bits_set(m_map_flags, Buffer_map_flags::explicit_flush));
     ERHE_VERIFY(gl_name() != 0);
 
     // unmap will do flush
@@ -802,7 +804,7 @@ void Buffer::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
 {
     ERHE_VERIFY(gl_name() != 0);
 
-    const bool flush_explicit = erhe::bit::test_all_rhs_bits_set(m_map_flags, Buffer_map_flags::explicit_flush);
+    const bool flush_explicit = erhe::utility::test_all_rhs_bits_set(m_map_flags, Buffer_map_flags::explicit_flush);
 
     log_buffer->trace("flush_and_unmap(byte_count = {}) name = {}", byte_count, gl_name());
 
@@ -815,9 +817,18 @@ void Buffer::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
     unmap();
 }
 
-auto Buffer::get_free_capacity_bytes() const noexcept -> std::size_t
+auto Buffer::get_used_byte_count() const -> std::size_t
 {
-    return m_capacity_byte_count - m_next_free_byte;
+    return m_next_free_byte;
+}
+
+auto Buffer::get_available_byte_count(std::size_t alignment) const noexcept -> std::size_t
+{
+    std::size_t aligned_offset = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
+    if (aligned_offset >= m_capacity_byte_count) {
+        return 0;
+    }
+    return m_capacity_byte_count - aligned_offset;
 }
 
 auto Buffer::get_capacity_byte_count() const noexcept -> std::size_t

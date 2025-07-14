@@ -23,7 +23,7 @@ erhe_target_sources_grouped(
 target_link_libraries(
     ${_target}
     PRIVATE
-    erhe::bit
+    erhe::utility
     erhe::dataformat
     erhe::file
     erhe::gl

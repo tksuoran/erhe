@@ -12,7 +12,7 @@
 #include "tools/tool.hpp"
 #include "windows/item_tree_window.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/device.hpp"
@@ -298,7 +298,7 @@ void Tools::register_tool(Tool* tool)
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const auto flags = tool->get_flags();
-    if (erhe::bit::test_all_rhs_bits_set(flags, Tool_flags::background)) {
+    if (erhe::utility::test_all_rhs_bits_set(flags, Tool_flags::background)) {
         m_background_tools.emplace_back(tool);
     } else {
         m_tools.emplace_back(tool);
@@ -338,7 +338,7 @@ void Tools::set_priority_tool(Tool* priority_tool)
     }
 
     {
-        using namespace erhe::bit;
+        using namespace erhe::utility;
         const bool allow_secondary =
             (m_priority_tool != nullptr) &&
             test_all_rhs_bits_set(m_priority_tool->get_flags(), Tool_flags::allow_secondary);

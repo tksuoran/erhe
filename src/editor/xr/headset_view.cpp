@@ -13,7 +13,7 @@
 #include "xr/controller_visualization.hpp"
 #include "xr/hand_tracker.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
@@ -258,9 +258,9 @@ void Headset_view::render(const Render_context& render_context)
             ? nearest->position.value() 
             : position + trigger_value * direction;
 
-        bool is_content      = (nearest != nullptr) && erhe::bit::test_all_rhs_bits_set(nearest->mask, Hover_entry::content_bit);
-        bool is_tool         = (nearest != nullptr) && erhe::bit::test_all_rhs_bits_set(nearest->mask, Hover_entry::tool_bit);
-        bool is_rendertarget = (nearest != nullptr) && erhe::bit::test_all_rhs_bits_set(nearest->mask, Hover_entry::rendertarget_bit);
+        bool is_content      = (nearest != nullptr) && erhe::utility::test_all_rhs_bits_set(nearest->mask, Hover_entry::content_bit);
+        bool is_tool         = (nearest != nullptr) && erhe::utility::test_all_rhs_bits_set(nearest->mask, Hover_entry::tool_bit);
+        bool is_rendertarget = (nearest != nullptr) && erhe::utility::test_all_rhs_bits_set(nearest->mask, Hover_entry::rendertarget_bit);
         glm::vec4 type_color =
             is_content      ? glm::vec4{0.8f, 0.5f, 0.3f, 1.0f} :
             is_tool         ? glm::vec4{1.0f, 0.0f, 1.0f, 1.0f} :

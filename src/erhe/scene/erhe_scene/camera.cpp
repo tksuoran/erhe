@@ -1,7 +1,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene_host.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::scene {
@@ -112,7 +112,7 @@ auto is_camera(const Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::bit::test_all_rhs_bits_set(item->get_type(), Item_type::camera);
+    return erhe::utility::test_all_rhs_bits_set(item->get_type(), Item_type::camera);
 }
 
 auto is_camera(const std::shared_ptr<Item_base>& item) -> bool

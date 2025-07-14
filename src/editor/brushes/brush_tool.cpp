@@ -17,7 +17,7 @@
 #include "tools/tools.hpp"
 #include "windows/item_tree_window.hpp"
 
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -158,7 +158,7 @@ void Brush_tool::on_message(App_message& message)
     Scene_view* const old_scene_view = get_hover_scene_view();
 
     Tool::on_message(message);
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
         on_motion();
     }

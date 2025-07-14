@@ -33,7 +33,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_message_bus/message_bus.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -186,7 +186,7 @@ void Trs_tool::on_message(App_message& message)
 {
     Tool::on_message(message);
 
-    using namespace erhe::bit;
+    using namespace erhe::utility;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection))
     {
         set_node(m_selection_tool->get_first_selected_node());

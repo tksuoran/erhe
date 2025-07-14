@@ -21,7 +21,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
-#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -193,7 +193,7 @@ Scene_root::Scene_root(
     if (app_message_bus != nullptr) {
         app_message_bus->add_receiver(
             [this](App_message& message) {
-                using namespace erhe::bit;
+                using namespace erhe::utility;
                 if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
                     for (const auto& item : message.no_longer_selected) {
                         if (item->get_item_host() != this) {
