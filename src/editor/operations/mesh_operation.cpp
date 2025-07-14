@@ -194,8 +194,10 @@ void Mesh_operation::make_entries(const std::function<void(const erhe::geometry:
 
         erhe::physics::IRigid_body* rigid_body  = entry.before.node_physics ? entry.before.node_physics->get_rigid_body() : nullptr;
         erhe::physics::Motion_mode  motion_mode = (rigid_body != nullptr) ? rigid_body->get_motion_mode() : erhe::physics::Motion_mode::e_invalid;
-        if (entry.before.node_physics->physics_motion_mode != motion_mode) {
-            motion_mode = entry.before.node_physics->physics_motion_mode;
+        if (m_parameters.context.app_settings->physics.static_enable) {
+            if (entry.before.node_physics && (entry.before.node_physics->physics_motion_mode != motion_mode)) {
+                motion_mode = entry.before.node_physics->physics_motion_mode;
+            }
         }
 
         for (auto& primitive : scene_mesh->get_mutable_primitives()) {

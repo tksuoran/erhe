@@ -3,29 +3,30 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
-#include "brushes/brush_placement.hpp"
 #include "brushes/brush.hpp"
+#include "brushes/brush_placement.hpp"
 #include "graphics/icon_set.hpp"
+#include "grid/grid.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
-#include "grid/grid.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/item_tree_window.hpp"
 
-#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
+#include "erhe_configuration/configuration.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -44,7 +45,6 @@
 #include <vector>
 
 namespace editor {
-
 
 #pragma region Commands
 Brush_tool_preview_command::Brush_tool_preview_command(erhe::commands::Commands& commands, App_context& context)
@@ -147,6 +147,9 @@ Brush_tool::Brush_tool(
         }
     );
 
+    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+    ini.get("object_scale", m_grid_scale);
+
     m_preview_command               .set_host(this);
     m_insert_command                .set_host(this);
     m_pick_command                  .set_host(this);
@@ -199,6 +202,8 @@ void Brush_tool::remove_preview_mesh()
         m_preview_node->set_parent({});
         m_preview_node.reset();
     }
+
+    m_hover_frame.reset();
 }
 
 auto Brush_tool::try_insert_ready() -> bool
@@ -380,11 +385,15 @@ auto Brush_tool::update_brush_frame(Brush& brush) -> bool
     ERHE_VERIFY(brush_frame.scale() != 0.0f);
     
     if (m_scale_to_match) {
-        const float hover_scale = hover_frame.scale();
-        const float brush_scale = brush_frame.scale();
-        const float scale       = (brush_scale != 0.0f) ? static_cast<float>(hover_scale / brush_scale) : 1.0f;
+        if (m_hover.slot == Hover_entry::grid_slot) {
+            m_transform_scale = m_grid_scale;
+        } else {
+            const float hover_scale = hover_frame.scale();
+            const float brush_scale = brush_frame.scale();
+            const float scale       = (brush_scale != 0.0f) ? static_cast<float>(hover_scale / brush_scale) : 1.0f;
     
-        m_transform_scale = m_scale * scale;
+            m_transform_scale = m_scale * scale;
+        }
         if (m_transform_scale != 1.0f) {
             const glm::mat4 scale_transform = erhe::math::create_scale(m_transform_scale);
             brush_frame.transform_by(to_geo_mat4f(scale_transform));
@@ -694,6 +703,7 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
     ImGui::Checkbox   ("Snap to Polygon", &m_snap_to_hover_polygon);
     ImGui::Checkbox   ("Snap To Grid",    &m_snap_to_grid);
     ImGui::SliderFloat("Scale",           &m_scale, 0.0001f, 32.0f, "%.3f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("Grid Scale",      &m_grid_scale, 0.0001f, 32.0f, "%.3f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
     ImGui::Checkbox   ("Physics",         &m_with_physics);
     ImGui::DragInt    ("Face Offset",     &m_polygon_offset, 0.1f, 0, INT_MAX);
     ImGui::DragInt    ("Corner Offset",   &m_corner_offset,  0.1f, 0, INT_MAX);

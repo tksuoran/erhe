@@ -125,6 +125,7 @@ private:
     bool                               m_with_physics   {true};
     float                              m_scale          {1.0f};
     float                              m_transform_scale{1.0f};
+    float                              m_grid_scale     {1.0f};
     int                                m_polygon_offset {0};
     int                                m_corner_offset  {0};
     std::optional<std::size_t>         m_selected_corner_count{};
