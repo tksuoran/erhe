@@ -18,7 +18,7 @@ erhe is a C++ library for modern OpenGL experiments.
 
 erhe is evolution of RenderStack <https://github.com/tksuoran/RenderStack>
 
-![screenshot](https://github.com/tksuoran/erhe/wiki/images/12.png)
+![screenshot](https://github.com/tksuoran/erhe/wiki/images/13.png)
 
 ## Building
 
