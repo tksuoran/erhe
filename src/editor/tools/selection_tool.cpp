@@ -864,20 +864,13 @@ void Selection::sanity_check()
 void Selection_tool::viewport_toolbar(bool& hovered)
 {
     ImGui::PushID("Selection_tool::viewport_toolbar");
-    const auto& icon_rasterication = m_context.icon_set->get_small_rasterization();
+    const auto& icon_set = m_context.icon_set;
 
     int boost = get_priority_boost();
     const auto mode = boost > 0 ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
 
     erhe::imgui::begin_button_style(mode);
-    const bool button_pressed = icon_rasterication.icon_button(
-        ERHE_HASH("select"),
-        m_context.icon_set->icons.select,
-        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
-    );
+    const bool button_pressed = icon_set->icon_button(ERHE_HASH("select"), m_context.icon_set->icons.select);
     erhe::imgui::end_button_style(mode);
     if (ImGui::IsItemHovered()) {
         hovered = true;

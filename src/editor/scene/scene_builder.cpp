@@ -665,6 +665,7 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
         );
     };
 
+    m_johnson_solids_folder->disable_flag_bits(erhe::Item_flags::expand);
     sort_folder(*m_platonic_solids_folder.get());
     sort_folder(*m_johnson_solids_folder.get());
 

@@ -421,7 +421,9 @@ void Chamfer::build()
     // Create new dst hexagon facets matching source mesh edges
     for (GEO::index_t src_edge : source_mesh.edges) {
         const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(src_edge);
-        ERHE_VERIFY(edge_facets.size() == 2); // TODO
+        if (edge_facets.size() != 2) {
+            continue; // TODO
+        }
         const GEO::index_t lo_vertex              = source_mesh.edges.vertex(src_edge, 0);
         const GEO::index_t hi_vertex              = source_mesh.edges.vertex(src_edge, 1);
         const GEO::index_t facet0                 = edge_facets[0];

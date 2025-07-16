@@ -428,18 +428,6 @@ public:
 #   define ERHE_TASK_FOOTER(ops)
 #endif
 
-            // Icon rasterization is slow task that can be run in parallel with
-            // GL context creation and Joystick scanning which are two other slow tasks
-            Icons icons;
-            Icon_loader icon_loader{m_app_settings->icon_settings};
-            // TODO compare with Icon_set::load_icons()
-            icons.queue_load_icons(icon_loader);
-            ERHE_TASK_HEADER(icon_rasterization_task)
-            {
-                icon_loader.execute_rasterization_queue();
-            }
-            ERHE_TASK_FOOTER( .name("Icon rasterization") );
-
 #if defined(ERHE_PARALLEL_INIT)
             m_executor->run(taskflow);
 #endif
@@ -615,15 +603,9 @@ public:
             ERHE_TASK_HEADER(icon_set_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_icon_set = std::make_unique<Icon_set>(
-                    m_app_context,
-                    *m_graphics_device.get(),
-                    m_app_settings->icon_settings,
-                    icons,
-                    icon_loader
-                );
+                m_icon_set = std::make_unique<Icon_set>(m_app_context);
             }
-            ERHE_TASK_FOOTER( .name("Icon_set") .succeed(icon_rasterization_task) );
+            ERHE_TASK_FOOTER( .name("Icon_set") );
 
             ERHE_TASK_HEADER(post_processing_task)
             {
@@ -1055,6 +1037,9 @@ public:
         }
 
         m_hotbar->get_all_tools();
+
+        // Notify ImGui renderer about current font settings
+        m_imgui_renderer->on_font_config_changed(m_app_settings->imgui);
 
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
         gl::enable      (gl::Enable_cap::framebuffer_srgb);

@@ -287,7 +287,12 @@ Scene::Scene(Scene_message_bus& message_bus, const std::string_view name, Scene_
     , m_host       {host}
     , m_root_node  {std::make_shared<Node>("root")}
 {
-    enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::no_transform_update);
+    enable_flag_bits(
+        erhe::Item_flags::content             |
+        erhe::Item_flags::no_transform_update |
+        erhe::Item_flags::expand
+    );
+
     // The implicit root node has a valid (identity) transform
     m_root_node->node_data.host = host;
     m_root_node->node_data.transforms.parent_from_node_serial = 1;

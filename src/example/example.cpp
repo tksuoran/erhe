@@ -134,6 +134,7 @@ public:
     {
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
+            m_graphics_device.start_of_frame();
             gl::finish();
             // m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
 

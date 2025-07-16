@@ -25,8 +25,9 @@ public:
     void imgui() override;
 
 private:
-    App_context& m_context;
+    App_context&    m_context;
     ImGuiTextFilter m_name_filter;
+    int             m_selected_font{0};
 };
 
 }

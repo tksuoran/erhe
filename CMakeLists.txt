@@ -167,8 +167,8 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              etl
-    VERSION           20.41.7
-    GIT_TAG           20.41.7
+    VERSION           20.42.1
+    GIT_TAG           20.42.1
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY ETLCPP/etl
 )
@@ -219,8 +219,8 @@ vscode_support()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     CPMAddPackage(
         NAME              sdl
-        VERSION           release-3.2.16
-        GIT_TAG           release-3.2.16
+        VERSION           release-3.2.18
+        GIT_TAG           release-3.2.18
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
@@ -413,11 +413,7 @@ endif ()
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(
         NAME              JoltPhysics
-        #VERSION           5.3.0
-        GIT_TAG           2dcab94cbc97e57747aa96b4f7060ffedaa2dbc3
-        #GIT_TAG           v5.3.0
-        #GIT_TAG           clang-20-no-overriding-option
-        #GITHUB_REPOSITORY tksuoran/JoltPhysics
+        GIT_TAG           8b5b4a489b01b697681a5857b8f6a7a8af02dd7c
         GITHUB_REPOSITORY jrouwe/JoltPhysics
         DOWNLOAD_ONLY     YES
     )

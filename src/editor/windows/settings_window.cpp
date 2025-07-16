@@ -24,21 +24,6 @@ Settings_window::Settings_window(
 {
 }
 
-void Settings_window::rasterize_icons()
-{
-    Icons icons;
-    Icon_loader icon_loader{m_context.app_settings->icon_settings};
-    icons.queue_load_icons(icon_loader);
-    icon_loader.execute_rasterization_queue();
-
-    m_context.icon_set->load_icons(
-        *m_context.graphics_device,
-        m_context.app_settings->icon_settings,
-        icons,
-        icon_loader
-    );
-}
-
 void Settings_window::imgui()
 {
     reset();
@@ -55,30 +40,31 @@ void Settings_window::imgui()
         }
     });
 
-    add_entry("Small Icon Size", [this](){
-        int* icon_size = &m_context.app_settings->icon_settings.small_icon_size;
-        const int old_icon_size = *icon_size;
-        ImGui::DragInt("##", icon_size, 0.1f, 4, 512);
-        if (ImGui::IsItemDeactivatedAfterEdit() && old_icon_size != *icon_size) {
-            rasterize_icons();
-        }
-    });
-    add_entry("Large Icon Size", [this](){
-        int* icon_size = &m_context.app_settings->icon_settings.large_icon_size;
-        const int old_icon_size = *icon_size;
-        ImGui::DragInt("##", icon_size, 0.1f, 4, 512);
-        if (ImGui::IsItemDeactivatedAfterEdit() && old_icon_size != *icon_size) {
-            rasterize_icons();
+    add_entry("Material Design Font Size", [this](){
+        auto& imgui = m_context.app_settings->imgui;
+        const bool font_size_changed = ImGui::DragFloat("Material Design Font Size", &imgui.material_design_font_size, 0.1f, 4.0f, 100.0f, "%.1f");
+        if (font_size_changed) {
+            m_context.imgui_renderer->on_font_config_changed(imgui);
         }
     });
 
-    add_entry("Hotbar Icon Size", [this](){
-        int* icon_size = &m_context.app_settings->icon_settings.hotbar_icon_size;
-        const int old_icon_size = *icon_size;
-        ImGui::DragInt("##", icon_size, 0.1f, 4, 512);
-        if (ImGui::IsItemDeactivatedAfterEdit() && old_icon_size != *icon_size) {
-            rasterize_icons();
+    add_entry("Icon Font Size", [this](){
+        auto& imgui = m_context.app_settings->imgui;
+        const bool font_size_changed = ImGui::DragFloat("Icon Font Size", &imgui.icon_font_size, 0.1f, 4.0f, 100.0f, "%.1f");
+        if (font_size_changed) {
+            m_context.imgui_renderer->on_font_config_changed(imgui);
         }
+    });
+
+    add_entry("Small Icon Size", [this](){
+        ImGui::DragInt("##", &m_context.app_settings->icon_settings.small_icon_size, 0.1f, 4, 512);
+    });
+    add_entry("Large Icon Size", [this](){
+        ImGui::DragInt("##", &m_context.app_settings->icon_settings.large_icon_size, 0.1f, 4, 512);
+    });
+
+    add_entry("Hotbar Icon Size", [this](){
+        ImGui::DragInt("##", &m_context.app_settings->icon_settings.hotbar_icon_size, 0.1f, 4, 512);
     });
 
     pop_group();

@@ -11,6 +11,7 @@ Content_library_node::Content_library_node(std::string_view folder_name, uint64_
     , type_code{type_code}
     , type_name{type_name}
 {
+    enable_flag_bits(erhe::Item_flags::expand);
 }
 
 Content_library_node::Content_library_node(const std::shared_ptr<erhe::Item_base>& in_item)

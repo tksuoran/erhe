@@ -101,12 +101,12 @@ void Shader_graph_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     ax::NodeEditor::NodeId node_id{get_id()};
     node_editor.BeginNode(node_id);
     Node_context context {
-        .context         = app_context,
-        .node_editor     = node_editor,
-        .pin_width       =   0.0f,
-        .pin_label_width =  70.0f,
-        .center_width    = 150.0f,
-        .icon_font       = app_context.imgui_renderer->icon_font()
+        .context              = app_context,
+        .node_editor          = node_editor,
+        .pin_width            =   0.0f,
+        .pin_label_width      =  70.0f,
+        .center_width         = 150.0f,
+        .material_design_font = app_context.imgui_renderer->material_design_font()
     };
     context.side_width      = context.pin_width + context.pin_label_width;
     context.pin_table_size  = ImVec2{context.side_width, 0.0f};

@@ -910,6 +910,11 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     }
     ERHE_DEFER( if (table_row) ImGui::PopID(); );
 
+    bool expand = test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::expand);
+    if (force_expand) {
+        expand = true;
+    }
+
     bool thumbnail_drawn = false;
     const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
     if (content_library_node) {
@@ -958,9 +963,6 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     if (scene && scene->get_root_node() && scene->get_root_node()->get_child_count(m_filter) > 0) {
         is_leaf = false;
     }
-    if (scene || content_library_node) {
-        force_expand = true;
-    }
 
     ////bool is_last_selected = false;
     ////if (!item->is_selected()) {
@@ -984,7 +986,7 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     const ImGuiTreeNodeFlags flags =
         ImGuiTreeNodeFlags_SpanAvailWidth |
         ImGuiTreeNodeFlags_SpanAllColumns |
-        (force_expand ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None) |
+        (expand ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None) |
         (is_leaf
             ? (ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf)
             : ImGuiTreeNodeFlags_OpenOnArrow

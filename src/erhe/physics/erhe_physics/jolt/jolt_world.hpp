@@ -107,7 +107,7 @@ private:
     static constexpr unsigned int cMaxBodies             = 1024 * 32;
     static constexpr unsigned int cNumBodyMutexes        = 0;
     static constexpr unsigned int cMaxBodyPairs          = 1024 * 8;
-    static constexpr unsigned int cMaxContactConstraints = 1024;
+    static constexpr unsigned int cMaxContactConstraints = 1024 * 4;
 
     glm::vec3                                      m_gravity        {0.0f};
     const Jolt_collision_filter                    m_collision_filter;

@@ -662,6 +662,8 @@ void App_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION();
 
+    m_context.graphics_device->start_of_frame();
+
     if (m_trigger_capture) {
         erhe::window::start_frame_capture(*m_context.context_window);
     }

@@ -488,17 +488,16 @@ void Brush_tool::update_preview_mesh_node_transform()
     m_preview_mesh->clear_primitives(); // TODO This is dangerous, as primitives *must* first be removed from rt_scene
     m_preview_mesh->add_primitive(brush_scaled.primitive, material);
 
+    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
     if (hover_scene_mesh) {
         m_preview_node->set_parent(hover_scene_mesh->get_node());
         m_preview_node->set_parent_from_node(transform);
     } else if (hover_grid) {
-        auto* scene_view = get_hover_scene_view();
-        ERHE_VERIFY(scene_view != nullptr);
-        const auto& scene_root = scene_view->get_scene_root();
         ERHE_VERIFY(scene_root);
         m_preview_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
         m_preview_node->set_parent_from_node(transform);
     }
+    m_preview_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
 }
 
 void Brush_tool::do_insert_operation(Brush& brush)
@@ -508,7 +507,6 @@ void Brush_tool::do_insert_operation(Brush& brush)
         return;
     }
 
-    //// const std::shared_ptr<Brush>& brush = m_context.selection->get_last_selected<Brush>();
     const std::shared_ptr<erhe::primitive::Material>& material = get_material();
     if (!m_hover.position.has_value() || !material) {
         return;
@@ -520,7 +518,7 @@ void Brush_tool::do_insert_operation(Brush& brush)
     if (!m_align_transform.has_value()) {
         return;
     }
-    const auto hover_from_brush = m_align_transform.value(); ////hover_scene_mesh ? get_hover_mesh_transform(brush, 0.0f) : get_hover_grid_transform(brush, 0.0f);
+    const auto hover_from_brush = m_align_transform.value();
     const uint64_t mesh_flags =
         erhe::Item_flags::visible     |
         erhe::Item_flags::content     |
@@ -550,14 +548,21 @@ void Brush_tool::do_insert_operation(Brush& brush)
     std::shared_ptr<Brush_placement> brush_placement = std::make_shared<Brush_placement>(shared_brush, get_placement_facet(), get_placement_corner0());
     instance_node->attach(brush_placement);
 
-    std::shared_ptr<erhe::scene::Node> parent = (hover_node != nullptr)
-        ? std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this())
-        : scene_root->get_hosted_scene()->get_root_node();
+    std::shared_ptr<erhe::scene::Node> parent;
     const auto& first_selected_node = m_context.selection->get_last_selected<erhe::scene::Node>();
-    // If item host is nullptr, the item is not in scene, and it is probably in undo stack.
-    // In that case, this is not the item user is looking for.
-    if (first_selected_node && (first_selected_node->get_item_host() != nullptr)) {
+
+    if (m_parent_to_first_selected && first_selected_node && (first_selected_node->get_item_host() != nullptr)) {
         parent = first_selected_node;
+    }
+    if (!parent && m_parent_to_scene_root) {
+        erhe::scene::Scene&                       scene     = scene_root->get_scene();
+        const std::shared_ptr<erhe::scene::Node>& root_node = scene.get_root_node();
+        if (root_node) {
+            parent = root_node;
+        }
+    }
+    if (!parent && m_parent_to_hovered) {
+        parent = std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this());
     }
 
     auto op = std::make_shared<Item_insert_remove_operation>(
@@ -649,6 +654,11 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
 
     const std::shared_ptr<Brush> last_selected_brush = m_context.selection->get_last_selected<Brush>();
     const std::shared_ptr<Brush> hover_brush = get_hover_brush();
+
+    ImGui::Checkbox("Parent to Selected", &m_parent_to_first_selected);
+    ImGui::Checkbox("Parent to Scene",    &m_parent_to_scene_root    );
+    ImGui::Checkbox("Parent to Hovered",  &m_parent_to_hovered       );
+
     ImGui::Text("Brush: %s", last_selected_brush ? last_selected_brush->get_name().c_str() : "");
     //ImGui::Text("Hover Brush: %s", hover_brush ? hover_brush->get_name().c_str() : "");
     //ImGui::Text("Drag and Drop Brush: %s", m_drag_and_drop_brush ? m_drag_and_drop_brush->get_name().c_str() : "");

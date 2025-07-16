@@ -51,11 +51,8 @@ void Layers_window::imgui()
         ImGuiTreeNodeFlags_Leaf
     };
 
-    const auto& scene_roots        = m_context.app_scenes->get_scene_roots();
-    const auto  mesh_icon          = m_context.icon_set->icons.mesh;
-    const auto& icon_rasterization = get_scale_value() < 1.5f
-        ? m_context.icon_set->get_small_rasterization()
-        : m_context.icon_set->get_large_rasterization();
+    const auto& scene_roots = m_context.app_scenes->get_scene_roots();
+    const char* mesh_icon   = m_context.icon_set->icons.mesh;
 
     std::shared_ptr<erhe::Item_base> item_clicked;
     for (const auto& scene_root : scene_roots) {
@@ -66,7 +63,7 @@ void Layers_window::imgui()
                 if (ImGui::TreeNodeEx(layer->get_name().c_str(), parent_flags)) {
                     const auto& meshes = layer->meshes;
                     for (const auto& mesh : meshes) {
-                        icon_rasterization.icon(mesh_icon);
+                        m_context.icon_set->draw_icon(mesh_icon, glm::vec4{0.6f, 0.6f, 0.6f, 1.0f});
                         ImGui::TreeNodeEx(
                             mesh->get_name().c_str(),
                             leaf_flags |

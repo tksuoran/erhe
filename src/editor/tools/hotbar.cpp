@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/node_raytrace.hpp"
@@ -276,13 +277,11 @@ Hotbar::Hotbar(
 
 void Hotbar::init_hotbar()
 {
-    const auto& icon_rasterization = m_context.icon_set->get_hotbar_rasterization();
-    const int   icon_size          = icon_rasterization.get_size();
-    const auto& tools = m_context.tools->get_tools();
-    if (tools.empty()) {
+    if (m_slots.empty()) {
         return;
     }
-    int width = icon_size * static_cast<int>(tools.size());
+    const int icon_size = m_context.app_settings->icon_settings.hotbar_icon_size;
+    const int width     = icon_size * static_cast<int>(m_slots.size());
 
     m_rendertarget_mesh.reset();
     m_rendertarget_node.reset();
@@ -406,8 +405,8 @@ void Hotbar::get_all_tools()
     m_slots.clear();
     const auto& tools = m_context.tools->get_tools();
     for (Tool* tool : tools) {
-        const auto opt_icon = tool->get_icon();
-        if (!opt_icon.has_value()) {
+        const char* icon = tool->get_icon();
+        if (icon == nullptr) {
             continue;
         }
         if (erhe::utility::test_all_rhs_bits_set(tool->get_flags(), Tool_flags::toolbox)) {
@@ -656,28 +655,25 @@ void Hotbar::set_locked(bool value)
 
 void Hotbar::tool_button(const uint32_t id, Tool* tool)
 {
-    const glm::vec4 background_color  {0.0f, 0.0f, 0.0f, 0.0f};
-    const glm::vec4 tint_color        {1.0f, 1.0f, 1.0f, 1.0f};
-    const auto&     icon_rasterization{m_context.icon_set->get_hotbar_rasterization()};
-    const bool      is_boosted        {tool->get_priority_boost() > 0};
-    const auto      opt_icon          {tool->get_icon()};
+    const glm::vec4 background_color{0.05f, 0.1f, 0.5f, 0.6f};
+    const glm::vec4 tint_color      {1.0f, 1.0f, 1.0f, 1.0f};
+    const bool      is_boosted      {tool->get_priority_boost() > 0};
+    const char*     icon            {tool->get_icon()};
 
-    if (!opt_icon) {
+    if (icon == nullptr) {
         return;
     }
 
-    if (is_boosted) {
-        ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
-    }
-
-    const bool is_pressed = icon_rasterization.icon_button(id, opt_icon.value(), background_color, tint_color);
+    const auto& icon_set   = m_context.icon_set;
+    const float icon_size  = static_cast<float>(m_context.app_settings->icon_settings.hotbar_icon_size);
+    const bool  is_pressed = icon_set->icon_button(
+        id, icon, icon_size,
+        is_boosted ? m_color_active : background_color,
+        tint_color
+    );
 
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("%s", tool->get_description());
-    }
-
-    if (is_boosted) {
-        ImGui::PopStyleColor();
     }
 
     if (is_pressed) {

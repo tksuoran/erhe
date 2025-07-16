@@ -7,129 +7,32 @@
    viewBox="0 0 16 16"
    version="1.1"
    id="svg5"
-   inkscape:version="1.1.2 (b8e25be833, 2022-02-05)"
-   sodipodi:docname="mesh.svg"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
-  <sodipodi:namedview
-     id="namedview7"
-     pagecolor="#505050"
-     bordercolor="#ffffff"
-     borderopacity="1"
-     inkscape:pageshadow="0"
-     inkscape:pageopacity="0"
-     inkscape:pagecheckerboard="1"
-     inkscape:document-units="px"
-     showgrid="true"
-     showguides="true"
-     inkscape:guide-bbox="true"
-     units="px"
-     viewbox-width="16"
-     viewbox-height="16"
-     inkscape:snap-nodes="true"
-     inkscape:snap-others="true"
-     inkscape:snap-bbox="true"
-     inkscape:snap-grids="true"
-     inkscape:snap-to-guides="false"
-     inkscape:zoom="40.96"
-     inkscape:cx="7.9956055"
-     inkscape:cy="8.1176758"
-     inkscape:window-width="1412"
-     inkscape:window-height="970"
-     inkscape:window-x="500"
-     inkscape:window-y="134"
-     inkscape:window-maximized="0"
-     inkscape:current-layer="layer2">
-    <sodipodi:guide
-       position="-257.34492,292.86927"
-       orientation="1,0"
-       id="guide824" />
-    <inkscape:grid
-       type="xygrid"
-       id="grid826"
-       originx="8.5"
-       originy="7.5"
-       empspacing="2"
-       color="#0e6ef5"
-       opacity="0.4"
-       empcolor="#728eff"
-       empopacity="0.78431373"
-       spacingx="0.5"
-       spacingy="0.5" />
-  </sodipodi:namedview>
   <defs
-     id="defs2" />
+     id="defs2">
+    <linearGradient
+       id="swatch6">
+      <stop
+         style="stop-color:#ffffff;stop-opacity:1;"
+         offset="0"
+         id="stop6" />
+    </linearGradient>
+    <linearGradient
+       xlink:href="#swatch6"
+       id="linearGradient6"
+       x1="1.3496089"
+       y1="8.0000002"
+       x2="14.650391"
+       y2="8.0000002"
+       gradientUnits="userSpaceOnUse" />
+  </defs>
   <g
-     inkscape:label="Layer 1"
-     inkscape:groupmode="layer"
-     id="layer1"
-     style="display:none">
+     id="layer2">
     <path
-       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="M 14.5,1.5 H 4.5"
-       id="path1067" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 12.5,3.5 h -9"
-       id="path1069" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 10.5,5.5 v 0 h -7"
-       id="path1071" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 1.5,14.5 v -9 h 8"
-       id="path3460" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 14.5,1.5 -4,4 v 9 h -9"
-       id="path3462" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 10.5,14.5 4,-4 v -9"
-       id="path3464" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 12.5,12.5 v -9"
-       id="path3466" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 1.5,5.5 4,-4"
-       id="path3468" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 1.5,5.5 9,9"
-       id="path3470" />
-  </g>
-  <g
-     inkscape:groupmode="layer"
-     id="layer2"
-     inkscape:label="content">
-    <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="M 1.5,10 V 5.5 l 4,-4 h 9 v 9 l -4,4 h -9 V 10"
-       id="path3472" />
-    <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 1.5,5.5 h 9 v 9"
-       id="path3606" />
-    <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 3.5,3.5 h 9 v 9"
-       id="path3707" />
-    <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 10.5,5.5 4,-4"
-       id="path3841" />
-    <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 6,14.5 v -9 l 4,-4"
-       id="path3942" />
-    <path
-       style="fill:none;stroke:#ffffff;stroke-width:0.3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 1.5,10 h 9 l 4,-4"
-       id="path4043" />
+       id="path3472"
+       style="baseline-shift:baseline;display:inline;overflow:visible;vector-effect:none;fill:url(#linearGradient6);stroke-linecap:round;stroke-linejoin:round;enable-background:accumulate;stop-color:#000000;stop-opacity:1;opacity:1;fill-opacity:1"
+       d="M 5.5 1.3496094 A 0.15001501 0.15001501 0 0 0 5.3945312 1.3945312 L 3.4082031 3.3808594 A 0.15000001 0.15000001 0 0 0 3.3808594 3.4082031 L 1.4082031 5.3808594 A 0.15000001 0.15000001 0 0 0 1.3945312 5.3925781 L 1.3945312 5.3945312 A 0.15001501 0.15001501 0 0 0 1.3808594 5.4082031 A 0.15000001 0.15000001 0 0 0 1.3613281 5.4414062 A 0.15001501 0.15001501 0 0 0 1.3496094 5.5 L 1.3496094 10 L 1.3496094 14.5 A 0.15001501 0.15001501 0 0 0 1.5 14.650391 L 6 14.650391 L 10.5 14.650391 A 0.15001501 0.15001501 0 0 0 10.558594 14.638672 A 0.15000001 0.15000001 0 0 0 10.591797 14.619141 A 0.15001501 0.15001501 0 0 0 10.605469 14.605469 L 10.619141 14.591797 L 12.591797 12.619141 A 0.15000001 0.15000001 0 0 0 12.619141 12.591797 L 14.605469 10.605469 A 0.15001501 0.15001501 0 0 0 14.650391 10.5 L 14.650391 1.5 A 0.15001501 0.15001501 0 0 0 14.648438 1.4804688 A 0.15001501 0.15001501 0 0 0 14.644531 1.4609375 A 0.15001501 0.15001501 0 0 0 14.619141 1.4101562 A 0.15000001 0.15000001 0 0 0 14.619141 1.4082031 A 0.15001501 0.15001501 0 0 0 14.591797 1.3808594 A 0.15001501 0.15001501 0 0 0 14.589844 1.3808594 A 0.15001501 0.15001501 0 0 0 14.539062 1.3554688 A 0.15000001 0.15000001 0 0 0 14.519531 1.3515625 A 0.15001501 0.15001501 0 0 0 14.5 1.3496094 L 5.5 1.3496094 z M 5.5625 1.6503906 L 9.6386719 1.6503906 L 7.9394531 3.3496094 L 3.8632812 3.3496094 L 5.5625 1.6503906 z M 10.060547 1.6503906 L 14.138672 1.6503906 L 12.439453 3.3496094 L 8.3613281 3.3496094 L 10.060547 1.6503906 z M 14.349609 1.8613281 L 14.349609 5.9394531 L 12.650391 7.6386719 L 12.650391 3.5605469 L 14.349609 1.8613281 z M 3.5625 3.6503906 L 7.6386719 3.6503906 L 5.9394531 5.3496094 L 1.8632812 5.3496094 L 3.5625 3.6503906 z M 8.0625 3.6503906 L 12.138672 3.6503906 L 10.439453 5.3496094 L 6.3632812 5.3496094 L 8.0625 3.6503906 z M 12.349609 3.8613281 L 12.349609 7.9375 L 10.650391 9.6367188 L 10.650391 5.5605469 L 12.349609 3.8613281 z M 1.6503906 5.6503906 L 5.8496094 5.6503906 L 5.8496094 9.8496094 L 1.6503906 9.8496094 L 1.6503906 5.6503906 z M 6.1503906 5.6503906 L 10.349609 5.6503906 L 10.349609 9.8496094 L 6.1503906 9.8496094 L 6.1503906 5.6503906 z M 14.349609 6.3613281 L 14.349609 10.4375 L 12.650391 12.136719 L 12.650391 8.0605469 L 14.349609 6.3613281 z M 12.349609 8.3613281 L 12.349609 12.4375 L 10.650391 14.136719 L 10.650391 10.060547 L 12.349609 8.3613281 z M 1.6503906 10.150391 L 5.8496094 10.150391 L 5.8496094 14.349609 L 1.6503906 14.349609 L 1.6503906 10.150391 z M 6.1503906 10.150391 L 10.349609 10.150391 L 10.349609 14.349609 L 6.1503906 14.349609 L 6.1503906 10.150391 z " />
   </g>
 </svg>

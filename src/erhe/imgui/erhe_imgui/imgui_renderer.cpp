@@ -275,7 +275,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
     m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.vr_font_size);
     m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.vr_font_size);
 
-    if (settings.icon_font_size > 0.0f) {
+    if (settings.material_design_font_size > 0.0f) {
     // TODO Something nicer
 #define ICON_MIN_MDI 0xF68C
 #define ICON_MAX_16_MDI 0xF68C
@@ -285,7 +285,10 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
         builder.AddRanges(ranges);
         ImVector<ImWchar> range;
         builder.BuildRanges(&range);
-        m_icon_font = m_font_atlas.AddFontFromFileTTF(settings.icon_font.c_str(), settings.icon_font_size, nullptr, range.Data);
+        m_material_design_font = m_font_atlas.AddFontFromFileTTF(settings.material_design_font.c_str(), settings.material_design_font_size, nullptr, range.Data);
+    }
+    if (settings.icon_font_size > 0.0f) {
+        m_icon_font = m_font_atlas.AddFontFromFileTTF(settings.icon_font.c_str(), settings.icon_font_size);
     }
 
     // (1) If you manage font atlases yourself, e.g. create a ImFontAtlas yourself you need to call ImFontAtlasUpdateNewFrame() on it.
@@ -388,6 +391,11 @@ auto Imgui_renderer::vr_primary_font() const -> ImFont*
 auto Imgui_renderer::vr_mono_font() const -> ImFont*
 {
     return m_vr_mono_font;
+}
+
+auto Imgui_renderer::material_design_font() const -> ImFont*
+{
+    return m_material_design_font;
 }
 
 auto Imgui_renderer::icon_font() const -> ImFont*

@@ -1,130 +1,98 @@
 #pragma once
 
-#include "graphics/icon_rasterization.hpp"
-
 #include <glm/glm.hpp>
 
 #include <memory>
 #include <optional>
 #include <vector>
 
-namespace erhe {
-    class Item_base;
-}
-namespace erhe::graphics {
-    class Device;
-    class Texture;
-}
-namespace erhe::scene {
-    enum class Light_type : unsigned int;
-}
-
-namespace lunasvg {
-    class Document;
-}
+namespace erhe        { class Item_base; }
+namespace erhe::scene { enum class Light_type : unsigned int; }
 
 namespace editor {
 
 class App_context;
-class Icon_loader;
-class Icon_rasterization;
 class Icon_settings;
 
 class Icons
 {
 public:
-    void queue_load_icons(Icon_loader& icon_loader);
-
-    glm::vec2 anim             {};
-    glm::vec2 bone             {};
-    glm::vec2 brush_small      {}; // for vertex paint
-    glm::vec2 brush_big        {}; // for brush tool
-    glm::vec2 camera           {};
-    glm::vec2 directional_light{};
-    glm::vec2 drag             {};
-    glm::vec2 file             {};
-    glm::vec2 folder           {};
-    glm::vec2 grid             {};
-    glm::vec2 hud              {};
-    glm::vec2 material         {};
-    glm::vec2 mesh             {};
-    glm::vec2 mouse_lmb        {};
-    glm::vec2 mouse_lmb_drag   {};
-    glm::vec2 mouse_mmb        {};
-    glm::vec2 mouse_mmb_drag   {};
-    glm::vec2 mouse_move       {};
-    glm::vec2 mouse_rmb        {};
-    glm::vec2 mouse_rmb_drag   {};
-    glm::vec2 move             {};
-    glm::vec2 node             {};
-    glm::vec2 physics          {};
-    glm::vec2 point_light      {};
-    glm::vec2 pull             {};
-    glm::vec2 push             {};
-    glm::vec2 raytrace         {};
-    glm::vec2 rotate           {};
-    glm::vec2 scale            {};
-    glm::vec2 scene            {};
-    glm::vec2 select           {};
-    glm::vec2 skin             {};
-    glm::vec2 space_mouse      {};
-    glm::vec2 space_mouse_lmb  {};
-    glm::vec2 space_mouse_rmb  {};
-    glm::vec2 spot_light       {};
-    glm::vec2 texture          {};
-    glm::vec2 three_dots       {};
-    glm::vec2 vive             {};
-    glm::vec2 vive_menu        {};
-    glm::vec2 vive_trackpad    {};
-    glm::vec2 vive_trigger     {};
+    const char* anim             {nullptr};
+    const char* bone             {nullptr};
+    const char* brush_big        {nullptr};
+    const char* brush_small      {nullptr};
+    const char* brush_tool       {nullptr};
+    const char* camera           {nullptr};
+    const char* directional_light{nullptr};
+    const char* drag             {nullptr};
+    const char* file             {nullptr};
+    const char* folder           {nullptr};
+    const char* grid             {nullptr};
+    const char* hud              {nullptr};
+    const char* material         {nullptr};
+    const char* mesh             {nullptr};
+    const char* mouse_lmb        {nullptr};
+    const char* mouse_lmb_drag   {nullptr};
+    const char* mouse_mmb        {nullptr};
+    const char* mouse_mmb_drag   {nullptr};
+    const char* mouse_move       {nullptr};
+    const char* mouse_rmb        {nullptr};
+    const char* mouse_rmb_drag   {nullptr};
+    const char* move             {nullptr};
+    const char* node             {nullptr};
+    const char* physics          {nullptr};
+    const char* point_light      {nullptr};
+    const char* pull             {nullptr};
+    const char* push             {nullptr};
+    const char* raytrace         {nullptr};
+    const char* rotate           {nullptr};
+    const char* scale            {nullptr};
+    const char* scene            {nullptr};
+    const char* select           {nullptr};
+    const char* skin             {nullptr};
+    const char* space_mouse      {nullptr};
+    const char* space_mouse_lmb  {nullptr};
+    const char* space_mouse_rmb  {nullptr};
+    const char* spot_light       {nullptr};
+    const char* texture          {nullptr};
+    const char* three_dots       {nullptr};
+    const char* vive             {nullptr};
+    const char* vive_menu        {nullptr};
+    const char* vive_trackpad    {nullptr};
+    const char* vive_trigger     {nullptr};
 };
 
 class Icon_set
 {
 public:
-    Icon_set(
-        App_context&            context,
-        erhe::graphics::Device& graphics_device,
-        Icon_settings&          icon_settings,
-        Icons&                  icons,
-        Icon_loader&            icon_loader
-    );
-
-    void load_icons(
-        erhe::graphics::Device& graphics_device,
-        Icon_settings&          icon_settings,
-        Icons&                  icons_in,
-        Icon_loader&            loader
-    );
+    Icon_set(App_context& context);
 
     void item_icon(const std::shared_ptr<erhe::Item_base>& item, float scale);
+    void draw_icon(const char* code, glm::vec4 color, float size = 0.0f);
+    auto icon_button(
+        uint32_t    id,
+        const char* icon_code,
+        float       size            = 0.0f,
+        glm::vec4   backround_color = glm::vec4{0.0f},
+        glm::vec4   tint_color      = glm::vec4{1.0f}
+    ) const -> bool;
 
-    [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const glm::vec2;
+    void add_icons(const uint64_t item_type, const float size);
 
-    [[nodiscard]] auto get_small_rasterization () const -> const Icon_rasterization&;
-    [[nodiscard]] auto get_large_rasterization () const -> const Icon_rasterization&;
-    [[nodiscard]] auto get_hotbar_rasterization() const -> const Icon_rasterization&;
+    [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const char*;
 
-    void add_icons(uint64_t item_type, float scale);
-
-private:
-    App_context&                        m_context;
-    std::unique_ptr<Icon_rasterization> m_small;
-    std::unique_ptr<Icon_rasterization> m_large;
-    std::unique_ptr<Icon_rasterization> m_hotbar;
-
-public:
     Icons icons;
-    static constexpr int s_row_count = 16;
-    static constexpr int s_column_count = 16;
 
     class Type_icon
     {
     public:
-        glm::vec2 icon;
+        const char*              code{nullptr};
         std::optional<glm::vec4> color{};
     };
     std::vector<std::optional<Type_icon>> type_icons;
+
+private:
+    App_context& m_context;
 };
 
 }

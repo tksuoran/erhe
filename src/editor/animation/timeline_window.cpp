@@ -114,11 +114,11 @@ auto Timeline_window::get_play_speed() const -> float
 void Timeline_window::imgui()
 {
     update();
-    ImFont* icon_font = m_imgui_renderer.icon_font();
+    ImFont* icon_font = m_imgui_renderer.material_design_font();
     if (icon_font == nullptr) {
         return;
     }
-    const float font_size = m_imgui_renderer.get_imgui_settings().font_size;
+    const float font_size = m_imgui_renderer.get_imgui_settings().material_design_font_size;
 
     {
         ImGui::PushID("##seek_start");

@@ -82,6 +82,7 @@ public:
     {
         int64_t timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
         while (!m_close_requested) {
+            m_graphics_device.start_of_frame();
             m_context_window.poll_events();
             auto& input_events = m_context_window.get_input_events();
             for (erhe::window::Input_event& input_event : input_events) {

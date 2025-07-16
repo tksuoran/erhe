@@ -1,10 +1,9 @@
 #include "graphics/icon_set.hpp"
-#include "graphics/icon_rasterization.hpp"
 #include "app_context.hpp"
-#include "app_settings.hpp"
 #include "content_library/content_library.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/light.hpp"
@@ -12,117 +11,79 @@
 
 namespace editor {
 
-void Icons::queue_load_icons(Icon_loader& loader)
-{
-    struct Entry{
-        glm::vec2&  uv;
-        const char* name;
-    };
-    const Entry entries[] = {
-        {anim             , "anim.svg"             },
-        {bone             , "bone_data.svg"        },
-        {brush_big        , "brush_big.svg"        },
-        {brush_small      , "brush_small.svg"      },
-        {camera           , "camera.svg"           },
-        {directional_light, "directional_light.svg"},
-        {drag             , "drag.svg"             },
-        {file             , "file.svg"             },
-        {folder           , "filebrowser.svg"      },
-        {grid             , "grid.svg"             },
-        {hud              , "hud.svg"              },
-        {material         , "material.svg"         },
-        {mesh             , "mesh.svg"             },
-        {mouse_lmb        , "mouse_lmb.svg"        },
-        {mouse_lmb_drag   , "mouse_lmb_drag.svg"   },
-        {mouse_mmb        , "mouse_mmb.svg"        },
-        {mouse_mmb_drag   , "mouse_mmb_drag.svg"   },
-        {mouse_move       , "mouse_move.svg"       },
-        {mouse_rmb        , "mouse_rmb.svg"        },
-        {mouse_rmb_drag   , "mouse_rmb_drag.svg"   },
-        {move             , "move.svg"             },
-        {node             , "node.svg"             },
-        {physics          , "physics.svg"          },
-        {point_light      , "point_light.svg"      },
-        {pull             , "pull.svg"             },
-        {push             , "push.svg"             },
-        {raytrace         , "curve_path.svg"       },
-        {rotate           , "rotate.svg"           },
-        {scale            , "scale.svg"            },
-        {scene            , "scene.svg"            },
-        {select           , "select.svg"           },
-        {skin             , "armature_data.svg"    },
-        {space_mouse      , "space_mouse.svg"      },
-        {space_mouse_lmb  , "space_mouse_lmb.svg"  },
-        {space_mouse_rmb  , "space_mouse_rmb.svg"  },
-        {spot_light       , "spot_light.svg"       },
-        {texture          , "texture.svg"          },
-        {three_dots       , "three_dots.svg"       },
-        {vive             , "vive.svg"             },
-        {vive_menu        , "vive_menu.svg"        },
-        {vive_trackpad    , "vive_trackpad.svg"    },
-        {vive_trigger     , "vive_trigger.svg"     }
-    };
-    for (const Entry& entry : entries) {
-        loader.queue_icon_load(entry.uv, entry.name);
-    }
-}
-
-Icon_set::Icon_set(
-    App_context&            context,
-    erhe::graphics::Device& graphics_device,
-    Icon_settings&          icon_settings,
-    Icons&                  icons_in,
-    Icon_loader&            loader
+Icon_set::Icon_set(App_context& context
 )
     : m_context{context}
 {
-    load_icons(graphics_device, icon_settings, icons_in, loader);
-}
-
-void Icon_set::load_icons(
-    erhe::graphics::Device& graphics_device,
-    Icon_settings&          icon_settings,
-    Icons&                  icons_in,
-    Icon_loader&            loader
-)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    icons = icons_in;
-
-    m_small  = std::make_unique<Icon_rasterization>(m_context, graphics_device, icon_settings.small_icon_size);
-    m_large  = std::make_unique<Icon_rasterization>(m_context, graphics_device, icon_settings.large_icon_size);
-    m_hotbar = std::make_unique<Icon_rasterization>(m_context, graphics_device, icon_settings.hotbar_icon_size);
-
-    loader.upload_to_texture(*m_small.get());
-    loader.upload_to_texture(*m_large.get());
-    loader.upload_to_texture(*m_hotbar.get());
-    loader.clear_load_queue();
+    icons.anim              = "\xee\xa8\x81";
+    icons.skin              = "\xee\xa8\x82";
+    icons.bone              = "\xee\xa8\x83";
+    icons.brush_big         = "\xee\xa8\x84";
+    icons.brush_small       = "\xee\xa8\x85";
+    icons.brush_tool        = "\xee\xa8\x86";
+    icons.camera            = "\xee\xa8\x87";
+    icons.raytrace          = "\xee\xa8\x88";
+    icons.directional_light = "\xee\xa8\x89";
+    icons.drag              = "\xee\xa8\x8a";
+    icons.file              = "\xee\xa8\x8b";
+    icons.folder            = "\xee\xa8\x8c";
+    icons.grid              = "\xee\xa8\x8d";
+    icons.hud               = "\xee\xa8\x8f";
+    icons.material          = "\xee\xa8\x90";
+    icons.mesh              = "\xee\xa8\x91";
+    icons.mouse_lmb         = "\xee\xa8\x98";
+    icons.mouse_lmb_drag    = "\xee\xa8\x99";
+    icons.mouse_mmb         = "\xee\xa8\x9a";
+    icons.mouse_mmb_drag    = "\xee\xa8\x9b";
+    icons.mouse_move        = "\xee\xa8\x9c";
+    icons.mouse_rmb         = "\xee\xa8\x9d";
+    icons.mouse_rmb_drag    = "\xee\xa8\x9e";
+    icons.move              = "\xee\xa8\x9f";
+    icons.node              = "\xee\xa8\xa0";
+    icons.physics           = "\xee\xa8\xa1";
+    icons.point_light       = "\xee\xa8\xa2";
+    icons.pull              = "\xee\xa8\xa3";
+    icons.push              = "\xee\xa8\xa4";
+    icons.rotate            = "\xee\xa8\xa5";
+    icons.scale             = "\xee\xa8\xa6";
+    icons.scene             = "\xee\xa8\xa7";
+    icons.select            = "\xee\xa8\xa8";
+    icons.space_mouse       = "\xee\xa8\xa9";
+    icons.space_mouse_lmb   = "\xee\xa8\xaa";
+    icons.space_mouse_rmb   = "\xee\xa8\xab";
+    icons.spot_light        = "\xee\xa8\xac";
+    icons.texture           = "\xee\xa8\xad";
+    icons.three_dots        = "\xee\xa8\xae";
+    icons.vive              = "\xee\xa8\xaf";
+    icons.vive_menu         = "\xee\xa8\xb0";
+    icons.vive_trackpad     = "\xee\xa8\xb1";
+    icons.vive_trigger      = "\xee\xa8\xb2";
 
     type_icons.resize(erhe::Item_type::count);
-    type_icons[erhe::Item_type::index_scene               ] = { .icon = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_content_library_node] = { .icon = icons.folder,      .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
-    type_icons[erhe::Item_type::index_brush               ] = { .icon = icons.brush_small, .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
-    type_icons[erhe::Item_type::index_material            ] = { .icon = icons.material};   // .color = glm::vec4{1.0f, 0.1f, 0.1f, 1.0f}};
-    type_icons[erhe::Item_type::index_node                ] = { .icon = icons.node};       // .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
-    type_icons[erhe::Item_type::index_mesh                ] = { .icon = icons.mesh,        .color = glm::vec4{0.6f, 1.0f, 0.6f, 1.0f}};
-    type_icons[erhe::Item_type::index_skin                ] = { .icon = icons.skin,        .color = glm::vec4{1.0f, 0.5f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_bone                ] = { .icon = icons.bone,        .color = glm::vec4{0.5f, 1.0f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_animation           ] = { .icon = icons.anim,        .color = glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_camera              ] = { .icon = icons.camera};     // .color = glm::vec4{0.4f, 0.0f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_light               ] = { .icon = icons.point_light};// .color = glm::vec4{1.0f, 0.8f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_physics             ] = { .icon = icons.physics,     .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_raytrace            ] = { .icon = icons.raytrace,    .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_grid                ] = { .icon = icons.grid,        .color = glm::vec4{0.0f, 0.6f, 0.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_texture             ] = { .icon = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_folder        ] = { .icon = icons.folder,      .color = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_gltf     ] = { .icon = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_geogram  ] = { .icon = icons.scene,       .color = glm::vec4{0.0f, 0.8f, 1.0f, 1.0f}};
-    //type_icons[erhe::Item_type::index_asset_file_png      ] = { .icon = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_other    ] = { .icon = icons.file,        .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
+    type_icons[erhe::Item_type::index_scene               ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_content_library_node] = { .code = icons.folder,      .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
+    type_icons[erhe::Item_type::index_brush               ] = { .code = icons.brush_small, .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
+    type_icons[erhe::Item_type::index_material            ] = { .code = icons.material};   // .color = glm::vec4{1.0f, 0.1f, 0.1f, 1.0f}};
+    type_icons[erhe::Item_type::index_node                ] = { .code = icons.node};       // .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
+    type_icons[erhe::Item_type::index_mesh                ] = { .code = icons.mesh,        .color = glm::vec4{0.6f, 1.0f, 0.6f, 1.0f}};
+    type_icons[erhe::Item_type::index_skin                ] = { .code = icons.skin,        .color = glm::vec4{1.0f, 0.5f, 0.5f, 1.0f}};
+    type_icons[erhe::Item_type::index_bone                ] = { .code = icons.bone,        .color = glm::vec4{0.5f, 1.0f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_animation           ] = { .code = icons.anim,        .color = glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_camera              ] = { .code = icons.camera};     // .color = glm::vec4{0.4f, 0.0f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_light               ] = { .code = icons.point_light};// .color = glm::vec4{1.0f, 0.8f, 0.5f, 1.0f}};
+    type_icons[erhe::Item_type::index_physics             ] = { .code = icons.physics,     .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_raytrace            ] = { .code = icons.raytrace,    .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
+    type_icons[erhe::Item_type::index_grid                ] = { .code = icons.grid,        .color = glm::vec4{0.0f, 0.6f, 0.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_texture             ] = { .code = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_asset_folder        ] = { .code = icons.folder,      .color = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_asset_file_gltf     ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_asset_file_geogram  ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 0.8f, 1.0f, 1.0f}};
+    //type_icons[erhe::Item_type::index_asset_file_png      ] = { .code = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
+    type_icons[erhe::Item_type::index_asset_file_other    ] = { .code = icons.file,        .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
+
 }
 
-void Icon_set::add_icons(const uint64_t item_type, const float scale)
+void Icon_set::add_icons(const uint64_t item_type, const float size)
 {
     using namespace erhe::utility;
     for (uint64_t bit_position = 0; bit_position < erhe::Item_flags::count; ++ bit_position) {
@@ -131,17 +92,16 @@ void Icon_set::add_icons(const uint64_t item_type, const float scale)
             const auto& icon_opt = type_icons.at(bit_position);
             if (icon_opt.has_value()) {
                 const auto& icon = icon_opt.value();
-                const auto& icon_rasterization = scale < 1.5f
-                    ? get_small_rasterization()
-                    : get_large_rasterization();
                 glm::vec4 color = icon.color.has_value() ? icon.color.value() : glm::vec4{0.9f, 0.9f, 0.9f, 1.0f};
-                icon_rasterization.icon(icon.icon, color);
+                if (icon.code != nullptr) {
+                    draw_icon(icon.code, color, size);
+                }
             }
         }
     }
 }
 
-auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::vec2
+auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const char*
 {
     switch (type) {
         //using enum erhe::scene::Light_type;
@@ -152,35 +112,57 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::
     }
 }
 
-auto Icon_set::get_small_rasterization() const -> const Icon_rasterization&
+void Icon_set::draw_icon(const char* code, glm::vec4 color, float size)
 {
-    return *m_small.get();
+    if (code == nullptr) {
+        return;
+    }
+
+    ImFont*     icon_font = m_context.imgui_renderer->icon_font();
+    const float font_size = m_context.imgui_renderer->get_imgui_settings().icon_font_size;
+
+    ImGui::PushFont(icon_font, size == 0.0f ? font_size : size);
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
+    ImGui::TextUnformatted(code);
+    ImGui::SameLine();
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
 }
 
-auto Icon_set::get_large_rasterization() const -> const Icon_rasterization&
+auto Icon_set::icon_button(
+    const uint32_t  id,
+    const char*     code,
+    const float     size,
+    const glm::vec4 background_color,
+    const glm::vec4 tint_color
+) const -> bool
 {
-    return *m_large.get();
-}
+    ERHE_PROFILE_FUNCTION();
 
-auto Icon_set::get_hotbar_rasterization() const -> const Icon_rasterization&
-{
-    return *m_hotbar.get();
+    if (code == nullptr) {
+        return false;
+    }
+
+    ImFont*     icon_font = m_context.imgui_renderer->icon_font();
+    const float font_size = m_context.imgui_renderer->get_imgui_settings().icon_font_size;
+
+    ImGui::PushID        (id);
+    ImGui::PushFont      (icon_font, size == 0.0f ? font_size : size);
+    ImGui::PushStyleColor(ImGuiCol_Button, background_color);
+    ImGui::PushStyleColor(ImGuiCol_Text,   tint_color);
+    const bool result = ImGui::Button(code);
+    ImGui::SameLine     ();
+    ImGui::PopStyleColor(2);
+    ImGui::PopFont      ();
+    ImGui::SameLine     ();
+    ImGui::PopID        ();
+    return result;
 }
 
 void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const float scale)
 {
-    const auto& icon_rasterization = (scale < 1.5f)
-        ? m_context.icon_set->get_small_rasterization()
-        : m_context.icon_set->get_large_rasterization();
-
-    std::optional<glm::vec2> icon;
+    std::optional<const char*> icon;
     glm::vec4 tint_color{0.8f, 0.8f, 0.8f, 1.0f}; // TODO  item->get_wireframe_color(); ?
-    glm::vec4 background_color{0.0f, 0.0f, 0.0f, 0.0f};
-    ////if (item->is_selected()) {
-    ////    ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
-    ////    ImVec4 selected_color = style.Colors[ImGuiCol_Header];
-    ////    background_color = selected_color;
-    ////}
 
     const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
     if (content_node) {
@@ -188,7 +170,7 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
             item_icon(content_node->item, scale);
         } else {
             // Content libray node without item is considered folder
-            icon_rasterization.icon(icons.folder, background_color, tint_color);
+            draw_icon(icons.folder, tint_color);
         }
         return;
     }
@@ -201,7 +183,7 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
             const auto& icon_opt = type_icons.at(bit_position);
             if (icon_opt.has_value()) {
                 const auto& type_icon = icon_opt.value();
-                icon  = type_icon.icon;
+                icon = type_icon.code;
                 if (type_icon.color.has_value()) {
                     tint_color = type_icon.color.value();
                 }
@@ -231,8 +213,9 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     }
 
     if (icon.has_value()) {
-        icon_rasterization.icon(icon.value(), background_color, tint_color);
+        draw_icon(icon.value(), tint_color);
     }
+
 }
 
 }

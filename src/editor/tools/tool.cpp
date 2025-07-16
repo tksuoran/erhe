@@ -61,7 +61,7 @@ auto Tool::get_flags() const -> uint64_t
     return m_flags;
 }
 
-auto Tool::get_icon() const -> std::optional<glm::vec2>
+auto Tool::get_icon() const -> const char*
 {
     return m_icon;
 }
@@ -86,9 +86,9 @@ void Tool::set_flags(const uint64_t flags)
     m_flags = flags;
 }
 
-void Tool::set_icon(const glm::vec2 icon)
+void Tool::set_icon(const char* icon_code)
 {
-    m_icon = icon;
+    m_icon = icon_code;
 }
     
 auto Tool::get_scene_root() const -> std::shared_ptr<Scene_root>

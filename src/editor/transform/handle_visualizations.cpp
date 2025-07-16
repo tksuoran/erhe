@@ -609,7 +609,7 @@ void Handle_visualizations::set_anchor(const erhe::scene::Trs_transform& world_f
 void Handle_visualizations::viewport_toolbar(bool& hovered)
 {
     ImGui::PushID("Handle_visualizations::viewport_toolbar");
-    const auto& icon_rasterication = m_context.icon_set->get_small_rasterization();
+    const auto& icon_set = m_context.icon_set;
 
     auto& settings = m_context.transform_tool->shared.settings;
     const auto local_pressed = erhe::imgui::make_button("L", settings.local ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
@@ -636,12 +636,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
         const auto mode = settings.show_translate ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
 
         erhe::imgui::begin_button_style(mode);
-        const bool translate_pressed = icon_rasterication.icon_button(
-            ERHE_HASH("move"),
-            m_context.icon_set->icons.move,
-            glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
-        );
+        const bool translate_pressed = icon_set->icon_button(ERHE_HASH("move"), m_context.icon_set->icons.move);
         erhe::imgui::end_button_style(mode);
         if (ImGui::IsItemHovered()) {
             hovered = true;
@@ -657,12 +652,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
     {
         const auto mode = settings.show_rotate ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
         erhe::imgui::begin_button_style(mode);
-        const bool rotate_pressed = icon_rasterication.icon_button(
-            ERHE_HASH("rotate"),
-            m_context.icon_set->icons.rotate,
-            glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
-        );
+        const bool rotate_pressed = icon_set->icon_button(ERHE_HASH("rotate"), m_context.icon_set->icons.rotate);
         erhe::imgui::end_button_style(mode);
         if (ImGui::IsItemHovered()) {
             hovered = true;
@@ -678,12 +668,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
     {
         const auto mode = settings.show_scale ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
         erhe::imgui::begin_button_style(mode);
-        const bool scale_pressed = icon_rasterication.icon_button(
-            ERHE_HASH("scale"),
-            m_context.icon_set->icons.scale,
-            glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
-        );
+        const bool scale_pressed = icon_set->icon_button(ERHE_HASH("scale"), m_context.icon_set->icons.scale);
         erhe::imgui::end_button_style(mode);
         if (ImGui::IsItemHovered()) {
             hovered = true;

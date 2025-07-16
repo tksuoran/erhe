@@ -1300,6 +1300,11 @@ void Device::frame_completed(uint64_t frame)
     }
 }
 
+void Device::start_of_frame()
+{
+    ++m_frame_number;
+}
+
 void Device::end_of_frame()
 {
     // Check previous frame fences for completion
@@ -1349,14 +1354,11 @@ void Device::end_of_frame()
                 frame_sync.fence_sync   = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0),
                 frame_sync.result       = gl::Sync_status::timeout_expired;
                 m_pending_frames.push_back(m_frame_number);
-                ++m_frame_number;
                 m_need_sync = false;
                 return;
             }
         }
         log_context->warn("Out of frame sync slots");
-    } else {
-        ++m_frame_number;
     }
 }
 
@@ -1370,7 +1372,6 @@ void GPU_ring_buffer::wrap_write()
     m_write_position = 0;
 
     sanity_check();
-
 }
 
 void GPU_ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_offset, std::size_t byte_count)

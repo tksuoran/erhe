@@ -121,8 +121,6 @@ erhe_target_sources_grouped(
     graph/subtract.hpp
     graphics/gradients.cpp
     graphics/gradients.hpp
-    graphics/icon_rasterization.cpp
-    graphics/icon_rasterization.hpp
     graphics/icon_set.cpp
     graphics/icon_set.hpp
     graphics/thumbnails.cpp

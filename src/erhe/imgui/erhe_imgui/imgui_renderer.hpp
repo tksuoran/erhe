@@ -34,12 +34,14 @@ namespace erhe::imgui {
 class Imgui_settings
 {
 public:
-    std::string primary_font  {"res/fonts/SourceSansPro-Regular.otf"};
-    std::string mono_font     {"res/fonts/SourceCodePro-Semibold.otf"};
-    std::string icon_font     {"res/fonts/materialdesignicons-webfont.ttf"};
-    float       font_size     {24.0f};
-    float       vr_font_size  {24.0f};
-    float       icon_font_size{0.0f};
+    std::string primary_font        {"res/fonts/SourceSansPro-Regular.otf"};
+    std::string mono_font           {"res/fonts/SourceCodePro-Semibold.otf"};
+    std::string material_design_font{"res/fonts/materialdesignicons-webfont.ttf"};
+    std::string icon_font           {"res/fonts/icons.ttf"};
+    float       font_size                {24.0f};
+    float       vr_font_size             {24.0f};
+    float       material_design_font_size{0.0f};
+    float       icon_font_size           {0.0f};
 };
 
 class Imgui_host;
@@ -125,11 +127,12 @@ public:
     void at_end_of_frame(std::function<void()>&& func);
     void next_frame     ();
 
-    auto primary_font   () const -> ImFont*;
-    auto mono_font      () const -> ImFont*;
-    auto vr_primary_font() const -> ImFont*;
-    auto vr_mono_font   () const -> ImFont*;
-    auto icon_font      () const -> ImFont*;
+    auto primary_font        () const -> ImFont*;
+    auto mono_font           () const -> ImFont*;
+    auto vr_primary_font     () const -> ImFont*;
+    auto vr_mono_font        () const -> ImFont*;
+    auto material_design_font() const -> ImFont*;
+    auto icon_font           () const -> ImFont*;
 
     void make_current         (const Imgui_host* imgui_host);
     void register_imgui_host  (Imgui_host* viewport);
@@ -168,11 +171,12 @@ private:
     Imgui_settings                           m_imgui_settings;
 
     ImFontAtlas                              m_font_atlas;
-    ImFont*                                  m_primary_font   {nullptr};
-    ImFont*                                  m_mono_font      {nullptr};
-    ImFont*                                  m_vr_primary_font{nullptr};
-    ImFont*                                  m_vr_mono_font   {nullptr};
-    ImFont*                                  m_icon_font      {nullptr};
+    ImFont*                                  m_primary_font        {nullptr};
+    ImFont*                                  m_mono_font           {nullptr};
+    ImFont*                                  m_vr_primary_font     {nullptr};
+    ImFont*                                  m_vr_mono_font        {nullptr};
+    ImFont*                                  m_material_design_font{nullptr};
+    ImFont*                                  m_icon_font           {nullptr};
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
     erhe::graphics::Sampler                  m_nearest_sampler;
     erhe::graphics::Sampler                  m_linear_sampler;

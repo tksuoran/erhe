@@ -213,6 +213,7 @@ public:
 
     [[nodiscard]] auto get_frame_number() const -> uint64_t;
     [[nodiscard]] auto allocate_ring_buffer_entry(Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
+    void start_of_frame();
     void end_of_frame();
 
     [[nodiscard]] auto make_render_command_encoder(Render_pass& render_pass) -> Render_command_encoder;

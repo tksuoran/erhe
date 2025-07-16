@@ -36,7 +36,8 @@ public:
     static constexpr uint64_t brush                     = (1u << 18);
     static constexpr uint64_t controller                = (1u << 19);
     static constexpr uint64_t rendertarget              = (1u << 20);
-    static constexpr uint64_t count                     = 21;
+    static constexpr uint64_t expand                    = (1u << 21);
+    static constexpr uint64_t count                     = 22;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -60,7 +61,8 @@ public:
         "Tool",
         "Brush",
         "Controller",
-        "Rendertarget"
+        "Rendertarget",
+        "Expand"
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

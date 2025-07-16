@@ -438,14 +438,14 @@ auto Scene_views::last_scene_view() -> std::shared_ptr<Viewport_scene_view>
 void Scene_views::viewport_toolbar(Viewport_scene_view& viewport_scene_view, bool& hovered)
 {
     ImGui::PushID("Scene_views::viewport_toolbar");
-    const auto& rasterization = m_app_context.icon_set->get_small_rasterization();
+    const auto& icon_set = m_app_context.icon_set;
 
     static constexpr std::string_view open_config{"open_config"};
     static constexpr uint32_t viewport_open_config_id{
         compiletime_xxhash::xxh32(open_config.data(), open_config.size(), {})
     };
 
-    const bool button_pressed = rasterization.icon_button(ERHE_HASH("open_config"), m_app_context.icon_set->icons.three_dots);
+    const bool button_pressed = icon_set->icon_button(ERHE_HASH("open_config"), m_app_context.icon_set->icons.three_dots);
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }
