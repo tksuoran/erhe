@@ -8,8 +8,6 @@
 #include "transform/handle_enums.hpp"
 #include "transform/transform_tool.hpp"
 
-//#include "erhe_imgui/imgui_helpers.hpp"
-
 #include <imgui/imgui.h>
 
 #include <bit>
@@ -21,10 +19,10 @@ using namespace glm;
 Move_tool::Move_tool(App_context& app_context, Icon_set& icon_set, Tools& tools)
     : Subtool{app_context}
 {
-    set_base_priority(c_priority);
-    set_description  ("Move Tool");
-    set_flags        (Tool_flags::toolbox | Tool_flags::allow_secondary);
-    set_icon         (icon_set.icons.move);
+    set_base_priority  (c_priority);
+    set_description    ("Move Tool");
+    set_flags          (Tool_flags::toolbox | Tool_flags::allow_secondary);
+    set_icon           (icon_set.custom_icons, icon_set.icons.move);
     tools.register_tool(this);
 }
 

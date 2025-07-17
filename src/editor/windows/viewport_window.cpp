@@ -8,6 +8,7 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "scene/viewport_scene_view.hpp"
+#include "tools/material_paint_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
@@ -137,16 +138,20 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
             return;
         }
 
-        std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(item);
+        auto brush    = std::dynamic_pointer_cast<Brush>(item);
+        auto material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
         if (brush) {
             if (payload->Preview) {
-                // TODO preview
                 m_app_context.brush_tool->preview_drag_and_drop(brush);
             }
             if (payload->Delivery) {
                 m_app_context.brush_tool->try_insert(brush.get());
             }
-        } else {
+        } else if (material) {
+            // TODO payload->Preview
+            if (payload->Delivery) {
+                m_app_context.material_paint_tool->from_drag_and_drop(material);
+            }
             cancel_brush_drag_and_drop();
         }
         //// const erhe::primitive::Material* material = dynamic_cast<const erhe::primitive::Material*>(item);

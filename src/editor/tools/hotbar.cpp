@@ -667,9 +667,12 @@ void Hotbar::tool_button(const uint32_t id, Tool* tool)
     const auto& icon_set   = m_context.icon_set;
     const float icon_size  = static_cast<float>(m_context.app_settings->icon_settings.hotbar_icon_size);
     const bool  is_pressed = icon_set->icon_button(
-        id, icon, icon_size,
-        is_boosted ? m_color_active : background_color,
-        tint_color
+        id,
+        icon,
+        tool->get_icon_font(),
+        icon_size,
+        tint_color,
+        is_boosted ? m_color_active : background_color
     );
 
     if (ImGui::IsItemHovered()) {

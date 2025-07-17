@@ -117,10 +117,11 @@ Brush_tool::Brush_tool(
     set_base_priority(Brush_tool::c_priority);
     set_description  ("Brush Tool");
     set_flags        (Tool_flags::toolbox);
-    set_icon         (icon_set.icons.brush_big);
+    set_icon         (icon_set.custom_icons, icon_set.icons.brush_big);
 
     commands.register_command(&m_preview_command);
     commands.register_command(&m_insert_command);
+    commands.register_command(&m_pick_command);
     commands.register_command(&m_pick_using_float_input_command);
     commands.bind_command_to_update      (&m_preview_command);
     commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right,  true);
@@ -178,13 +179,13 @@ void Brush_tool::on_message(App_message& message)
 void Brush_tool::handle_priority_update(int old_priority, int new_priority)
 {
     if (new_priority < old_priority) {
-        disable();
+        disable_command_host();
         m_preview_command.set_inactive();
         m_hover = Hover_entry{};
         remove_preview_mesh();
     }
     if (new_priority > old_priority) {
-        enable();
+        enable_command_host();
         m_preview_command.set_active();
         on_motion();
     }
@@ -287,8 +288,12 @@ void Brush_tool::on_motion()
         return;
     }
 
-    const Hover_entry* nearest_hover = scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
-    if (nearest_hover == nullptr) {
+    const Hover_entry* nearest_hover = scene_view->get_nearest_hover(
+        Hover_entry::content_bit |
+        Hover_entry::grid_bit    |
+        Hover_entry::rendertarget_bit
+    );
+    if ((nearest_hover == nullptr) || (nearest_hover->slot == Hover_entry::rendertarget_slot)) {
         return;
     }
     m_hover = *nearest_hover;
@@ -547,6 +552,12 @@ void Brush_tool::do_insert_operation(Brush& brush)
     std::shared_ptr<Brush> shared_brush = std::dynamic_pointer_cast<Brush>(brush.shared_from_this());
     std::shared_ptr<Brush_placement> brush_placement = std::make_shared<Brush_placement>(shared_brush, get_placement_facet(), get_placement_corner0());
     instance_node->attach(brush_placement);
+    brush_placement->enable_flag_bits(
+        erhe::Item_flags::brush      |
+        erhe::Item_flags::visible    |
+        erhe::Item_flags::no_message |
+        erhe::Item_flags::show_in_ui
+    );
 
     std::shared_ptr<erhe::scene::Node> parent;
     const auto& first_selected_node = m_context.selection->get_last_selected<erhe::scene::Node>();

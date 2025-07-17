@@ -101,7 +101,7 @@ Paint_tool::Paint_tool(
     set_base_priority  (c_priority);
     set_description    ("Paint Tool");
     set_flags          (Tool_flags::toolbox);
-    set_icon           (icon_set.icons.brush_small);
+    set_icon           (icon_set.custom_icons, icon_set.icons.brush_small);
     tools.register_tool(this);
 
     m_paint_vertex_command        .set_host(this);
@@ -264,10 +264,10 @@ void Paint_tool::tool_render(const Render_context& context)
 void Paint_tool::handle_priority_update(const int old_priority, const int new_priority)
 {
     if (new_priority < old_priority) {
-        disable();
+        disable_command_host();
     }
     if (new_priority > old_priority) {
-        enable();
+        enable_command_host();
     }
 }
 

@@ -10,9 +10,7 @@
 #include "transform/handle_enums.hpp"
 #include "transform/transform_tool.hpp"
 
-#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 
 #include <imgui/imgui.h>
@@ -24,10 +22,10 @@ using namespace glm;
 Rotate_tool::Rotate_tool(App_context& app_context, Icon_set& icon_set, Tools& tools)
     : Subtool{app_context}
 {
-    set_base_priority(c_priority);
-    set_description  ("Rotate");
-    set_flags        (Tool_flags::toolbox | Tool_flags::allow_secondary);
-    set_icon         (icon_set.icons.rotate);
+    set_base_priority  (c_priority);
+    set_description    ("Rotate");
+    set_flags          (Tool_flags::toolbox | Tool_flags::allow_secondary);
+    set_icon           (icon_set.custom_icons, icon_set.icons.rotate);
     tools.register_tool(this);
 }
 

@@ -9,9 +9,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace erhe {
-    class Item_host;
-}
+namespace erhe { class Item_host; }
 
 namespace erhe::scene {
 

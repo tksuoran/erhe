@@ -2,12 +2,8 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
-namespace erhe::commands {
-    enum class State : unsigned int;
-}
-namespace erhe::imgui {
-    class Imgui_windows;
-}
+namespace erhe::commands { enum class State : unsigned int; }
+namespace erhe::imgui    { class Imgui_windows; }
 
 namespace editor {
 
@@ -19,7 +15,7 @@ public:
     Commands_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        App_context&              editor
+        App_context&                 editor
     );
 
     // Implements Imgui_window

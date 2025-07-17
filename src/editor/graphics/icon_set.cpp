@@ -9,12 +9,19 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/skin.hpp"
 
+#define ICON_MDI_BRUSH                                    "\xf3\xb0\x83\xa3" // U+F00E3
+
 namespace editor {
 
-Icon_set::Icon_set(App_context& context
+Icon_set::Icon_set(
+    App_context&                 context,
+    erhe::imgui::Imgui_renderer& imgui_renderer
 )
     : m_context{context}
 {
+    material_design = imgui_renderer.material_design_font();
+    custom_icons    = imgui_renderer.icon_font();
+
     icons.anim              = "\xee\xa8\x81";
     icons.skin              = "\xee\xa8\x82";
     icons.bone              = "\xee\xa8\x83";
@@ -62,7 +69,10 @@ Icon_set::Icon_set(App_context& context
     type_icons.resize(erhe::Item_type::count);
     type_icons[erhe::Item_type::index_scene               ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_content_library_node] = { .code = icons.folder,      .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
-    type_icons[erhe::Item_type::index_brush               ] = { .code = icons.brush_small, .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
+    type_icons[erhe::Item_type::index_brush               ] = {
+        .code = icons.brush_small,
+        .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}
+    };
     type_icons[erhe::Item_type::index_material            ] = { .code = icons.material};   // .color = glm::vec4{1.0f, 0.1f, 0.1f, 1.0f}};
     type_icons[erhe::Item_type::index_node                ] = { .code = icons.node};       // .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
     type_icons[erhe::Item_type::index_mesh                ] = { .code = icons.mesh,        .color = glm::vec4{0.6f, 1.0f, 0.6f, 1.0f}};
@@ -80,6 +90,11 @@ Icon_set::Icon_set(App_context& context
     type_icons[erhe::Item_type::index_asset_file_geogram  ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 0.8f, 1.0f, 1.0f}};
     //type_icons[erhe::Item_type::index_asset_file_png      ] = { .code = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
     type_icons[erhe::Item_type::index_asset_file_other    ] = { .code = icons.file,        .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
+    type_icons[erhe::Item_type::index_brush_placement     ] = {
+        .font  = material_design,
+        .code  = ICON_MDI_BRUSH,
+        .color = glm::vec4{0.4f, 0.1f, 1.0f, 1.0f}
+    };
 
 }
 
@@ -94,7 +109,7 @@ void Icon_set::add_icons(const uint64_t item_type, const float size)
                 const auto& icon = icon_opt.value();
                 glm::vec4 color = icon.color.has_value() ? icon.color.value() : glm::vec4{0.9f, 0.9f, 0.9f, 1.0f};
                 if (icon.code != nullptr) {
-                    draw_icon(icon.code, color, size);
+                    draw_icon(icon.code, color, icon.font, size);
                 }
             }
         }
@@ -112,13 +127,13 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const char*
     }
 }
 
-void Icon_set::draw_icon(const char* code, glm::vec4 color, float size)
+void Icon_set::draw_icon(const char* code, glm::vec4 color, ImFont* font, float size)
 {
     if (code == nullptr) {
         return;
     }
 
-    ImFont*     icon_font = m_context.imgui_renderer->icon_font();
+    ImFont*     icon_font = (font != nullptr) ? font : m_context.imgui_renderer->icon_font();
     const float font_size = m_context.imgui_renderer->get_imgui_settings().icon_font_size;
 
     ImGui::PushFont(icon_font, size == 0.0f ? font_size : size);
@@ -130,11 +145,12 @@ void Icon_set::draw_icon(const char* code, glm::vec4 color, float size)
 }
 
 auto Icon_set::icon_button(
-    const uint32_t  id,
-    const char*     code,
-    const float     size,
-    const glm::vec4 background_color,
-    const glm::vec4 tint_color
+    const uint32_t                 id,
+    const char*                    code,
+    ImFont* const                  font,
+    const float                    size,
+    const glm::vec4                color,
+    const std::optional<glm::vec4> background_color
 ) const -> bool
 {
     ERHE_PROFILE_FUNCTION();
@@ -143,16 +159,18 @@ auto Icon_set::icon_button(
         return false;
     }
 
-    ImFont*     icon_font = m_context.imgui_renderer->icon_font();
+    ImFont*     icon_font = (font != nullptr) ? font : m_context.imgui_renderer->icon_font();
     const float font_size = m_context.imgui_renderer->get_imgui_settings().icon_font_size;
 
     ImGui::PushID        (id);
     ImGui::PushFont      (icon_font, size == 0.0f ? font_size : size);
-    ImGui::PushStyleColor(ImGuiCol_Button, background_color);
-    ImGui::PushStyleColor(ImGuiCol_Text,   tint_color);
+    if (background_color.has_value()) {
+        ImGui::PushStyleColor(ImGuiCol_Button, background_color.value());
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
     const bool result = ImGui::Button(code);
     ImGui::SameLine     ();
-    ImGui::PopStyleColor(2);
+    ImGui::PopStyleColor(background_color.has_value() ? 2 : 1);
     ImGui::PopFont      ();
     ImGui::SameLine     ();
     ImGui::PopID        ();
@@ -161,7 +179,8 @@ auto Icon_set::icon_button(
 
 void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const float scale)
 {
-    std::optional<const char*> icon;
+    ImFont*                    icon_font{nullptr};
+    std::optional<const char*> icon_code{};
     glm::vec4 tint_color{0.8f, 0.8f, 0.8f, 1.0f}; // TODO  item->get_wireframe_color(); ?
 
     const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
@@ -183,7 +202,8 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
             const auto& icon_opt = type_icons.at(bit_position);
             if (icon_opt.has_value()) {
                 const auto& type_icon = icon_opt.value();
-                icon = type_icon.code;
+                icon_font = type_icon.font;
+                icon_code = type_icon.code;
                 if (type_icon.color.has_value()) {
                     tint_color = type_icon.color.value();
                 }
@@ -193,27 +213,27 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     }
 
     if (erhe::scene::is_bone(item)) {
-        icon = icons.bone;
+        icon_code = icons.bone;
     }
     const auto& material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
     if (material) {
         tint_color = glm::vec4{material->base_color, 1.0f};
-        icon = icons.material;
+        icon_code = icons.material;
     }
     const auto& light = std::dynamic_pointer_cast<erhe::scene::Light>(item);
     if (light) {
         tint_color = glm::vec4{light->color, 1.0f};
         switch (light->type) {
             //using enum erhe::scene::Light_type;
-            case erhe::scene::Light_type::spot:        icon = icons.spot_light; break;
-            case erhe::scene::Light_type::directional: icon = icons.directional_light; break;
-            case erhe::scene::Light_type::point:       icon = icons.point_light; break;
+            case erhe::scene::Light_type::spot:        icon_code = icons.spot_light; break;
+            case erhe::scene::Light_type::directional: icon_code = icons.directional_light; break;
+            case erhe::scene::Light_type::point:       icon_code = icons.point_light; break;
             default: break;
         }
     }
 
-    if (icon.has_value()) {
-        draw_icon(icon.value(), tint_color);
+    if (icon_code.has_value()) {
+        draw_icon(icon_code.value(), tint_color, icon_font);
     }
 
 }

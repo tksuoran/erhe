@@ -61,6 +61,11 @@ auto Tool::get_flags() const -> uint64_t
     return m_flags;
 }
 
+auto Tool::get_icon_font() const -> ImFont*
+{
+    return m_icon_font;
+}
+
 auto Tool::get_icon() const -> const char*
 {
     return m_icon;
@@ -86,8 +91,9 @@ void Tool::set_flags(const uint64_t flags)
     m_flags = flags;
 }
 
-void Tool::set_icon(const char* icon_code)
+void Tool::set_icon(ImFont* icon_font, const char* icon_code)
 {
+    m_icon_font = icon_font;
     m_icon = icon_code;
 }
     

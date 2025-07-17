@@ -1,5 +1,4 @@
 #include "transform/scale_tool.hpp"
-#include "windows/property_editor.hpp"
 
 #include "app_context.hpp"
 #include "graphics/icon_set.hpp"
@@ -15,10 +14,10 @@ using namespace glm;
 Scale_tool::Scale_tool(App_context& app_context, Icon_set& icon_set, Tools& tools)
     : Subtool{app_context}
 {
-    set_base_priority(c_priority);
-    set_description  ("Scale");
-    set_flags        (Tool_flags::toolbox | Tool_flags::allow_secondary);
-    set_icon         (icon_set.icons.scale);
+    set_base_priority  (c_priority);
+    set_description    ("Scale");
+    set_flags          (Tool_flags::toolbox | Tool_flags::allow_secondary);
+    set_icon           (icon_set.custom_icons, icon_set.icons.scale);
     tools.register_tool(this);
 }
 

@@ -290,6 +290,8 @@ void sanitize(std::string& s)
     std::replace_if(s.begin(), s.end(), [](const char c){ return !custom_isalnum(c); }, '_');
 }
 
+int Scene_root::s_browser_window_count = 0;
+
 auto Scene_root::make_browser_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -303,8 +305,8 @@ auto Scene_root::make_browser_window(
         imgui_renderer,
         imgui_windows,
         context,
-        m_scene->get_name(),
-        fmt::format("scene_node_tree_{}", ini_label)
+        fmt::format("Scene Hierarchy [{}]", ++s_browser_window_count),
+        ""
     );
     m_node_tree_window->set_root(m_scene->get_root_node());
     m_node_tree_window->set_item_filter(

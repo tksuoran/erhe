@@ -39,12 +39,12 @@ void Command_host::set_enabled(const bool enabled)
     m_enabled = enabled;
 }
 
-void Command_host::enable()
+void Command_host::enable_command_host()
 {
     m_enabled = true;
 }
 
-void Command_host::disable()
+void Command_host::disable_command_host()
 {
     m_enabled = false;
 }
@@ -111,7 +111,7 @@ void Command::set_inactive()
     m_commands.command_inactivated(this);
 };
 
-void Command::disable()
+void Command::disable_command()
 {
     if (m_state == State::Disabled) {
         return;
@@ -124,7 +124,7 @@ void Command::disable()
     m_state = State::Disabled;
 };
 
-void Command::enable()
+void Command::enable_command()
 {
     if (m_state != State::Disabled) {
         return;

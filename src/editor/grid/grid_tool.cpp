@@ -34,7 +34,7 @@ Grid_tool::Grid_tool(
 
     set_description("Grid");
     set_flags      (Tool_flags::background);
-    set_icon       (icon_set.icons.grid);
+    set_icon       (icon_set.custom_icons, icon_set.icons.grid);
 
     tools.register_tool(this);
 

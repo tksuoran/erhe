@@ -28,10 +28,10 @@ public:
     [[nodiscard]] virtual auto get_priority   () const -> int;
     [[nodiscard]] auto         is_enabled     () const -> bool;
     [[nodiscard]] auto         get_description() const -> const char*;
-    void set_description(const std::string_view description);
-    void set_enabled    (bool enabled);
-    void enable         ();
-    void disable        ();
+    void set_description     (const std::string_view description);
+    void set_enabled         (bool enabled);
+    void enable_command_host ();
+    void disable_command_host();
 
 private:
     std::string m_description;
@@ -56,8 +56,8 @@ public:
     virtual auto get_priority       () const -> int;
     virtual auto is_enabled         () const -> bool;
     virtual auto get_target_command () -> Command&;
-    virtual void disable            ();
-    virtual void enable             ();
+    virtual void disable_command    ();
+    virtual void enable_command     ();
     virtual void on_inactive        ();
     virtual auto get_host           () const -> Command_host*;
     virtual auto get_command_state  () const -> State;

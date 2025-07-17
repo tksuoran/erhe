@@ -103,7 +103,7 @@ Physics_tool::Physics_tool(
     set_base_priority(c_priority);
     set_description  ("Physics Tool");
     set_flags        (Tool_flags::toolbox);
-    set_icon         (icon_set.icons.drag);
+    set_icon         (icon_set.custom_icons, icon_set.icons.drag);
     tools.register_tool(this);
 
     commands.register_command(&m_drag_command);

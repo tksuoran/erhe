@@ -73,9 +73,9 @@ public:
     );
 
     // Implements Tool
-    void tool_render           (const Render_context& context) override;
+    void tool_render           (const Render_context& context)           override;
     void tool_properties       (erhe::imgui::Imgui_window& imgui_window) override;
-    void handle_priority_update(int old_priority, int new_priority) override;
+    void handle_priority_update(int old_priority, int new_priority)      override;
 
     // Commands
     auto try_insert_ready     () -> bool;

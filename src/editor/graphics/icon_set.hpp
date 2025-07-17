@@ -6,7 +6,10 @@
 #include <optional>
 #include <vector>
 
+struct ImFont;
+
 namespace erhe        { class Item_base; }
+namespace erhe::imgui { class Imgui_renderer; }
 namespace erhe::scene { enum class Light_type : unsigned int; }
 
 namespace editor {
@@ -65,16 +68,20 @@ public:
 class Icon_set
 {
 public:
-    Icon_set(App_context& context);
+    Icon_set(
+        App_context&                 context,
+        erhe::imgui::Imgui_renderer& imgui_renderer
+    );
 
     void item_icon(const std::shared_ptr<erhe::Item_base>& item, float scale);
-    void draw_icon(const char* code, glm::vec4 color, float size = 0.0f);
+    void draw_icon(const char* code, glm::vec4 color, ImFont* font = nullptr, float size = 0.0f);
     auto icon_button(
-        uint32_t    id,
-        const char* icon_code,
-        float       size            = 0.0f,
-        glm::vec4   backround_color = glm::vec4{0.0f},
-        glm::vec4   tint_color      = glm::vec4{1.0f}
+        uint32_t                 id,
+        const char*              icon_code,
+        ImFont*                  font            = nullptr,
+        float                    size            = 0.0f,
+        glm::vec4                color           = glm::vec4{1.0f},
+        std::optional<glm::vec4> backround_color = {}
     ) const -> bool;
 
     void add_icons(const uint64_t item_type, const float size);
@@ -83,10 +90,14 @@ public:
 
     Icons icons;
 
+    ImFont* material_design{nullptr};
+    ImFont* custom_icons   {nullptr};
+
     class Type_icon
     {
     public:
-        const char*              code{nullptr};
+        ImFont*                  font {nullptr};
+        const char*              code {nullptr};
         std::optional<glm::vec4> color{};
     };
     std::vector<std::optional<Type_icon>> type_icons;

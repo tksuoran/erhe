@@ -22,8 +22,10 @@
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 
 #include <imgui/imgui.h>
@@ -424,7 +426,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     ERHE_PROFILE_FUNCTION();
 
     if (!item) {
-        log_tree_frame->trace("DnD item is empty");
+        log_tree_frame->trace("DnD target item is empty");
         return false;
     }
 
@@ -438,29 +440,74 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     const float x0       = rect_min.x;
     const float x1       = rect_max.x;
 
-    const auto        id                = item->get_id();
-    const std::string label_move_before = fmt::format("node dnd move before {}: {} {}", id, item->get_type_name(), item->get_name());
-    const std::string label_attach_to   = fmt::format("node dnd attach to {}: {} {}",   id, item->get_type_name(), item->get_name());
-    const std::string label_move_after  = fmt::format("node dnd move after {}: {} {}",  id, item->get_type_name(), item->get_name());
-    const ImGuiID     imgui_id_before   = ImGui::GetID(label_move_before.c_str());
-    const ImGuiID     imgui_id_attach   = ImGui::GetID(label_attach_to.c_str());
-    const ImGuiID     imgui_id_after    = ImGui::GetID(label_move_after.c_str());
+    const auto        id              = item->get_id();
+    const std::string label_top       = fmt::format("node dnd top {}: {} {}",    id, item->get_type_name(), item->get_name());
+    const std::string label_center    = fmt::format("node dnd center {}: {} {}", id, item->get_type_name(), item->get_name());
+    const std::string label_bottom    = fmt::format("node dnd bottom {}: {} {}", id, item->get_type_name(), item->get_name());
+    const ImGuiID     imgui_id_top    = ImGui::GetID(label_top.c_str());
+    const ImGuiID     imgui_id_center = ImGui::GetID(label_center.c_str());
+    const ImGuiID     imgui_id_bottom = ImGui::GetID(label_bottom.c_str());
 
-    // Move selection before drop target
     const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    if (node) {
+    if (!node) {
+        return false;
+    }
+
+    const ImGuiPayload* payload_peek    = ImGui::GetDragDropPayload();
+    const bool          payload_is_node = payload_peek->IsDataType("Node");
+    std::shared_ptr<erhe::primitive::Material> material{};
+
+    if (!payload_is_node && payload_peek->IsDataType("Content_library_node")){
+        erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
+        std::shared_ptr<erhe::Item_base> shared_item_base = payload_item_base->shared_from_this();
+        std::shared_ptr<Content_library_node> content_library_node = std::dynamic_pointer_cast<Content_library_node>(
+            shared_item_base
+        );
+        if (content_library_node) {
+            material = std::dynamic_pointer_cast<erhe::primitive::Material>(content_library_node->item);
+        }
+    }
+    if (material) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+        if (mesh) {
+            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
+            if (!primitives.empty()) {
+                const ImRect rect{rect_min, rect_max};
+                if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_top)) {
+                    drag_and_drop_rectangle_preview(rect);
+                    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+                        "Content_library_node", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+                    );
+                    if (payload != nullptr) {
+                        // TODO payload->Preview
+                        if (payload->Delivery) {
+                            for (erhe::primitive::Primitive& primitive : primitives) {
+                                primitive.material = material;
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                    return true;
+                }
+            }
+        }
+    } else if (payload_is_node) {
         log_tree_frame->trace("Dnd item is Node: {}", node->describe());
         const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
-        if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_before)) {
-            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-            drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
-            if (payload != nullptr) {
-                log_tree_frame->trace("Dnd payload is Node (top rect)");
-                IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
-                erhe::Item_base* payload_item = *(static_cast<erhe::Item_base**>(payload->Data));
-                move_selection(node, payload_item, Placement::Before_anchor);
-            } else {
-                log_tree_frame->trace("Dnd payload is not Node (top rect)");
+        if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_top)) {
+            {
+                drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
+                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+                if (payload != nullptr) {
+                    if (payload != nullptr) {
+                        log_tree_frame->trace("Dnd payload is Node (top rect)");
+                        IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
+                        erhe::Item_base* payload_item = *(static_cast<erhe::Item_base**>(payload->Data));
+                        move_selection(node, payload_item, Placement::Before_anchor);
+                    } else {
+                        log_tree_frame->trace("Dnd payload is not Node (top rect)");
+                    }
+                }
             }
             ImGui::EndDragDropTarget();
             return true;
@@ -468,9 +515,9 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
 
         // Attach selection to target
         const ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
-        if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_attach)) {
-            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+        if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_center)) {
             drag_and_drop_rectangle_preview(middle_rect);
+            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (middle rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
@@ -485,10 +532,10 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
 
         // Move selection after drop target
         const ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
-        if (ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_after)) {
+        if (ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_bottom)) {
             const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-            drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
             if (payload != nullptr) {
+                drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
                 log_tree_frame->trace("Dnd payload is Node (bottom rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
                 erhe::Item_base* payload_item = *(static_cast<erhe::Item_base**>(payload->Data));
@@ -500,7 +547,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
             return true;
         }
     } else {
-        log_tree_frame->trace("Dnd item is not Node: {}", item->describe());
+        log_tree_frame->trace("Dnd item is not Node / Material: {}", item->describe());
     }
     return false;
 }

@@ -4,6 +4,7 @@
 #include "app_settings.hpp"
 
 #include "brushes/brush.hpp"
+#include "brushes/brush_placement.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "content_library/content_library.hpp"
@@ -918,7 +919,19 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
                 .material        = materials.at(material_index),
                 .scale           = config.object_scale
             };
-            auto instance_node = brush->make_instance(brush_instance_create_info);
+            std::shared_ptr<erhe::scene::Node> instance_node = brush->make_instance(brush_instance_create_info);
+
+            std::shared_ptr<erhe::Item_base> shared_brush_item_base = brush->shared_from_this();
+            std::shared_ptr<Brush>           shared_brush           = std::dynamic_pointer_cast<Brush>(shared_brush_item_base);
+            std::shared_ptr<Brush_placement> brush_placement        = std::make_shared<Brush_placement>(shared_brush, GEO::NO_FACET, GEO::NO_CORNER);
+            instance_node->attach(brush_placement);
+            brush_placement->enable_flag_bits(
+                erhe::Item_flags::brush      |
+                erhe::Item_flags::visible    |
+                erhe::Item_flags::no_message |
+                erhe::Item_flags::show_in_ui
+            );
+
             if (config.instance_count > 1) {
                 instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), entry.instance_number + 1));
             }

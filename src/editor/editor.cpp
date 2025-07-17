@@ -74,6 +74,9 @@
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_dataformat/dataformat_log.hpp"
+#if defined(ERHE_PARALLEL_INIT)
+#   include "erhe_file/file.hpp"
+#endif
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_gl/gl_helpers.hpp"
@@ -603,9 +606,9 @@ public:
             ERHE_TASK_HEADER(icon_set_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_icon_set = std::make_unique<Icon_set>(m_app_context);
+                m_icon_set = std::make_unique<Icon_set>(m_app_context, *m_imgui_renderer.get());
             }
-            ERHE_TASK_FOOTER( .name("Icon_set") );
+            ERHE_TASK_FOOTER( .name("Icon_set") .succeed(imgui_renderer_task) );
 
             ERHE_TASK_HEADER(post_processing_task)
             {
@@ -951,6 +954,7 @@ public:
                 m_material_paint_tool = std::make_unique<Material_paint_tool>(
                     *m_commands.get(),
                     m_app_context,
+                    *m_app_message_bus.get(),
                     *m_headset_view.get(),
                     *m_icon_set.get(),
                     *m_tools.get()

@@ -10,15 +10,9 @@
 
 namespace GEO { class Mesh; }
 
-namespace erhe::buffer {
-    class Cpu_buffer;
-}
-namespace erhe::geometry {
-    class Geometry;
-}
-namespace erhe::raytrace {
-    class IGeometry;
-}
+namespace erhe::buffer   { class Cpu_buffer; }
+namespace erhe::geometry { class Geometry; }
+namespace erhe::raytrace { class IGeometry; }
 
 namespace erhe::primitive {
 

@@ -250,10 +250,10 @@ Selection_tool::Selection_tool(App_context& app_context, Icon_set& icon_set, Too
 {
     ERHE_PROFILE_FUNCTION();
 
-    set_base_priority(c_priority);
-    set_description  ("Selection Tool");
-    set_flags        (Tool_flags::toolbox | Tool_flags::secondary);
-    set_icon         (icon_set.icons.select);
+    set_base_priority  (c_priority);
+    set_description    ("Selection Tool");
+    set_flags          (Tool_flags::toolbox | Tool_flags::secondary);
+    set_icon           (icon_set.custom_icons, icon_set.icons.select);
     tools.register_tool(this);
 }
 
@@ -870,7 +870,10 @@ void Selection_tool::viewport_toolbar(bool& hovered)
     const auto mode = boost > 0 ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
 
     erhe::imgui::begin_button_style(mode);
-    const bool button_pressed = icon_set->icon_button(ERHE_HASH("select"), m_context.icon_set->icons.select);
+    const bool button_pressed = icon_set->icon_button(
+        ERHE_HASH("select"),
+        m_context.icon_set->icons.select
+    );
     erhe::imgui::end_button_style(mode);
     if (ImGui::IsItemHovered()) {
         hovered = true;

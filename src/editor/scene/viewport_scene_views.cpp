@@ -445,7 +445,10 @@ void Scene_views::viewport_toolbar(Viewport_scene_view& viewport_scene_view, boo
         compiletime_xxhash::xxh32(open_config.data(), open_config.size(), {})
     };
 
-    const bool button_pressed = icon_set->icon_button(ERHE_HASH("open_config"), m_app_context.icon_set->icons.three_dots);
+    const bool button_pressed = icon_set->icon_button(
+        ERHE_HASH("open_config"),
+        m_app_context.icon_set->icons.three_dots
+    );
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }

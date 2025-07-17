@@ -219,11 +219,13 @@ void Commands_window::filtered_commands(const erhe::commands::State filter)
 {
     const auto& commands = m_context.commands->get_commands();
 
+    int id = 0;
     for (auto* command : commands) {
+        ImGui::PushID(++id);
         if (command->get_command_state() == filter) {
             const auto* host = command->get_host();
             const std::string label = fmt::format(
-                "{}/{} {} : {} {} {}",
+                "{}/{} {} : Host: {} {} {}",
                 command->get_priority(),
                 m_context.commands->get_command_priority(command),
                 command->get_name(),
@@ -233,6 +235,7 @@ void Commands_window::filtered_commands(const erhe::commands::State filter)
             );
             ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf);
         }
+        ImGui::PopID();
     }
 }
 

@@ -2,16 +2,14 @@
 
 #include "operations/ioperation.hpp"
 
-#include "erhe_scene/node.hpp"
-
 #include <memory>
 
 namespace erhe {
     class Hierarchy;
 }
-
 namespace erhe::scene {
     class Node;
+    class Node_attachment;
 }
 
 namespace editor {

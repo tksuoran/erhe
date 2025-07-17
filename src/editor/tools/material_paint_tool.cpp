@@ -1,6 +1,7 @@
 #include "tools/material_paint_tool.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "content_library/content_library.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_root.hpp"
@@ -47,14 +48,7 @@ auto Material_paint_command::try_call() -> bool
         return false;
     }
 
-    if (
-        m_context.material_paint_tool->on_paint() &&
-        (get_command_state() == erhe::commands::State::Ready)
-    ) {
-        set_active();
-    }
-
-    return get_command_state() == erhe::commands::State::Active;
+    return m_context.material_paint_tool->on_paint();
 }
 
 void Material_pick_command::try_ready()
@@ -80,20 +74,15 @@ auto Material_pick_command::try_call() -> bool
         return false;
     }
 
-    if (
-        m_context.material_paint_tool->on_pick() &&
-        (get_command_state() == erhe::commands::State::Ready)
-    ) {
-       set_active();
-    }
-
-    return get_command_state() == erhe::commands::State::Active;
+    return m_context.material_paint_tool->on_pick();
 }
+
 #pragma endregion Command
 
 Material_paint_tool::Material_paint_tool(
     erhe::commands::Commands& commands,
     App_context&              app_context,
+    App_message_bus&          app_message_bus,
     Headset_view&             headset_view,
     Icon_set&                 icon_set,
     Tools&                    tools
@@ -104,15 +93,15 @@ Material_paint_tool::Material_paint_tool(
 {
     ERHE_PROFILE_FUNCTION();
 
-    set_base_priority(c_priority);
-    set_description  ("Material Paint");
-    set_flags        (Tool_flags::toolbox);
-    set_icon         (icon_set.icons.material);
+    set_base_priority  (c_priority);
+    set_description    ("Material Paint Tool (command host)");
+    set_flags          (Tool_flags::toolbox);
+    set_icon           (icon_set.custom_icons, icon_set.icons.material);
     tools.register_tool(this);
 
     commands.register_command(&m_paint_command);
     commands.register_command(&m_pick_command);
-    commands.bind_command_to_mouse_button(&m_paint_command, erhe::window::Mouse_button_left, false);
+    commands.bind_command_to_mouse_button(&m_paint_command, erhe::window::Mouse_button_left,  true);
     commands.bind_command_to_mouse_button(&m_pick_command,  erhe::window::Mouse_button_right, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*    headset  = headset_view.get_headset();
@@ -125,30 +114,64 @@ Material_paint_tool::Material_paint_tool(
     static_cast<void>(headset_view);
 #endif
 
-    set_active_command(c_command_paint);
+    set_active_command(c_command_both);
 
     m_paint_command.set_host(this);
     m_pick_command .set_host(this);
+
+    app_message_bus.add_receiver(
+        [&](App_message& message) {
+            on_message(message);
+        }
+    );
+}
+
+auto Material_paint_tool::get_hover_mesh() const -> const Hover_entry*
+{
+    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_context.scene_views->hover_scene_view();
+    if (!viewport_scene_view) {
+        return nullptr;
+    }
+    const Hover_entry* nearest_hover = viewport_scene_view->get_nearest_hover(
+        Hover_entry::content_bit | Hover_entry::rendertarget_bit
+    );
+    if (
+        (nearest_hover == nullptr) ||
+        (nearest_hover->slot != Hover_entry::content_slot) ||
+        !nearest_hover->valid ||
+        nearest_hover->scene_mesh_weak.expired()
+    )
+    {
+        return nullptr;
+    }
+    return nearest_hover;
 }
 
 auto Material_paint_tool::on_paint_ready() -> bool
 {
-    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_context.scene_views->hover_scene_view();
-    if (!viewport_scene_view) {
-        return false;
-    }
-    const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    return hover.valid && !hover.scene_mesh_weak.expired();
+    return (m_material != nullptr) && (get_hover_mesh() != nullptr);
 }
 
 auto Material_paint_tool::on_pick_ready() -> bool
 {
-    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_context.scene_views->hover_scene_view();
-    if (viewport_scene_view == nullptr) {
-        return false;
+    return get_hover_mesh() != nullptr;
+}
+
+void Material_paint_tool::from_drag_and_drop(const std::shared_ptr<erhe::primitive::Material>& material)
+{
+    if (!material) {
+        return;
     }
-    const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    return hover.valid && !hover.scene_mesh_weak.expired();
+    const Hover_entry* hover_entry = get_hover_mesh();
+    if (hover_entry == nullptr) {
+        return;
+    }
+    std::shared_ptr<erhe::scene::Mesh> mesh = hover_entry->scene_mesh_weak.lock();
+    if (!mesh) {
+        return;
+    }
+    auto& hover_primitive = mesh->get_mutable_primitives().at(hover_entry->scene_mesh_primitive_index);
+    hover_primitive.material = material;
 }
 
 auto Material_paint_tool::on_paint() -> bool
@@ -157,17 +180,15 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
 
-    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
-    if (viewport_scene_view == nullptr) {
+    const Hover_entry* hover_entry = get_hover_mesh();
+    if (hover_entry == nullptr) {
         return false;
     }
-    const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = hover.scene_mesh_weak.lock();
-    if (!hover.valid || !hover_scene_mesh) {
+    std::shared_ptr<erhe::scene::Mesh> mesh = hover_entry->scene_mesh_weak.lock();
+    if (!mesh) {
         return false;
     }
-
-    auto& hover_primitive = hover_scene_mesh->get_mutable_primitives().at(hover.scene_mesh_primitive_index);
+    auto& hover_primitive = mesh->get_mutable_primitives().at(hover_entry->scene_mesh_primitive_index);
     hover_primitive.material = m_material;
 
     return true;
@@ -175,16 +196,15 @@ auto Material_paint_tool::on_paint() -> bool
 
 auto Material_paint_tool::on_pick() -> bool
 {
-    const auto viewport_scene_view = m_context.scene_views->hover_scene_view();
-    if (viewport_scene_view == nullptr) {
+    const Hover_entry* hover_entry = get_hover_mesh();
+    if (hover_entry == nullptr) {
         return false;
     }
-    const Hover_entry& hover = viewport_scene_view->get_hover(Hover_entry::content_slot);
-    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = hover.scene_mesh_weak.lock();
-    if (!hover.valid || !hover_scene_mesh) {
+    std::shared_ptr<erhe::scene::Mesh> mesh = hover_entry->scene_mesh_weak.lock();
+    if (!mesh) {
         return false;
     }
-    auto& hover_primitive = hover_scene_mesh->get_primitives().at(hover.scene_mesh_primitive_index);
+    auto& hover_primitive = mesh->get_mutable_primitives().at(hover_entry->scene_mesh_primitive_index);
     m_material = hover_primitive.material;
 
     return true;
@@ -196,13 +216,18 @@ void Material_paint_tool::set_active_command(const int command)
 
     switch (command) {
         case c_command_paint: {
-            m_paint_command.enable();
-            m_pick_command.disable();
+            m_paint_command.enable_command();
+            m_pick_command.disable_command();
             break;
         }
         case c_command_pick: {
-            m_paint_command.disable();
-            m_pick_command.enable();
+            m_paint_command.disable_command();
+            m_pick_command.enable_command();
+            break;
+        }
+        case c_command_both: {
+            m_paint_command.enable_command();
+            m_pick_command.enable_command();
             break;
         }
         default: {
@@ -214,16 +239,24 @@ void Material_paint_tool::set_active_command(const int command)
 void Material_paint_tool::handle_priority_update(const int old_priority, const int new_priority)
 {
     if (new_priority < old_priority) {
-        disable();
+        disable_command_host();
     }
     if (new_priority > old_priority) {
-        enable();
+        enable_command_host();
     }
 }
 
 void Material_paint_tool::tool_properties(erhe::imgui::Imgui_window&)
 {
-    auto* hover_scene_view = Tool::get_hover_scene_view();
+    int command = m_active_command;
+    ImGui::RadioButton("Paint", &command, c_command_paint); ImGui::SameLine();
+    ImGui::RadioButton("Pick",  &command, c_command_pick);
+    ImGui::RadioButton("Both",  &command, c_command_both);
+    if (command != m_active_command) {
+        set_active_command(command);
+    }
+
+    auto* hover_scene_view = Tool::get_last_hover_scene_view();
     if (hover_scene_view == nullptr) {
         return;
     }
@@ -232,15 +265,7 @@ void Material_paint_tool::tool_properties(erhe::imgui::Imgui_window&)
     if (!scene_root) {
         return;
     }
-
     const auto& material_library = scene_root->get_content_library()->materials;
-    int command = m_active_command;
-    ImGui::RadioButton("Paint", &command, c_command_paint); ImGui::SameLine();
-    ImGui::RadioButton("Pick",  &command, c_command_pick);
-    if (command != m_active_command) {
-        set_active_command(command);
-    }
-
     material_library->combo(m_context, "Material", m_material, false);
 }
 

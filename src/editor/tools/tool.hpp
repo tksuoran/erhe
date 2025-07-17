@@ -7,15 +7,11 @@
 #include <memory>
 #include <optional>
 
-namespace erhe::imgui {
-    class Imgui_window;
-}
-namespace erhe::primitive {
-    class Material;
-}
-namespace erhe::scene {
-    class Node;
-}
+struct ImFont;
+
+namespace erhe::imgui     { class Imgui_window; }
+namespace erhe::primitive { class Material; }
+namespace erhe::scene     { class Node; }
 
 namespace editor {
 
@@ -60,6 +56,7 @@ public:
     [[nodiscard]] auto get_hover_scene_view     () const -> Scene_view*;
     [[nodiscard]] auto get_last_hover_scene_view() const -> Scene_view*;
     [[nodiscard]] auto get_flags                () const -> uint64_t;
+    [[nodiscard]] auto get_icon_font            () const -> ImFont*;
     [[nodiscard]] auto get_icon                 () const -> const char*;
     void set_priority_boost(int priority_boost);
 
@@ -72,7 +69,7 @@ protected:
     void on_message          (App_message& message);
     void set_base_priority   (int base_priority);
     void set_flags           (uint64_t flags);
-    void set_icon            (const char* icon_code);
+    void set_icon            (ImFont* icon_font, const char* icon_code);
     void set_hover_scene_view(Scene_view* scene_view);
 
     App_context& m_context;
@@ -81,6 +78,7 @@ private:
     int         m_base_priority        {0};
     int         m_priority_boost       {0};
     uint64_t    m_flags                {0};
+    ImFont*     m_icon_font            {nullptr};
     const char* m_icon                 {nullptr};
     Scene_view* m_hover_scene_view     {nullptr};
     Scene_view* m_last_hover_scene_view{nullptr};

@@ -6,7 +6,6 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
-#include "app_settings.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
