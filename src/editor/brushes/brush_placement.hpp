@@ -35,6 +35,7 @@ public:
     [[nodiscard]] auto get_brush () const -> std::shared_ptr<Brush>;
     [[nodiscard]] auto get_facet () const -> GEO::index_t;
     [[nodiscard]] auto get_corner() const -> GEO::index_t;
+    void set_corner(GEO::index_t corner);
 
 private:
     std::shared_ptr<Brush> m_brush;

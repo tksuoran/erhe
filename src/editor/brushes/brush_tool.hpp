@@ -26,20 +26,20 @@ class Render_context;
 class Tools;
 class Headset_view;
 
-class Brush_tool_preview_command : public erhe::commands::Command
+class Brush_preview_command : public erhe::commands::Command
 {
 public:
-    Brush_tool_preview_command(erhe::commands::Commands& commands, App_context& context);
+    Brush_preview_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
     App_context& m_context;
 };
 
-class Brush_tool_insert_command : public erhe::commands::Command
+class Brush_insert_command : public erhe::commands::Command
 {
 public:
-    Brush_tool_insert_command(erhe::commands::Commands& commands, App_context& context);
+    Brush_insert_command(erhe::commands::Commands& commands, App_context& context);
     void try_ready() override;
     auto try_call () -> bool override;
 
@@ -47,10 +47,21 @@ private:
     App_context& m_context;
 };
 
-class Brush_tool_pick_command : public erhe::commands::Command
+class Brush_rotate_command : public erhe::commands::Command
 {
 public:
-    Brush_tool_pick_command(erhe::commands::Commands& commands, App_context& context);
+    Brush_rotate_command(erhe::commands::Commands& commands, App_context& context, int direction);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+    int          m_direction{1};
+};
+
+class Brush_pick_command : public erhe::commands::Command
+{
+public:
+    Brush_pick_command(erhe::commands::Commands& commands, App_context& context);
 
     auto try_call() -> bool override;
 
@@ -81,6 +92,7 @@ public:
     auto try_insert_ready     () -> bool;
     auto try_insert           (Brush* brush = nullptr) -> bool;
     auto try_pick             () -> bool;
+    auto try_rotate           (int direction) -> bool;
     void on_motion            ();
     void preview_drag_and_drop(std::shared_ptr<Brush> brush);
 
@@ -102,9 +114,12 @@ private:
     [[nodiscard]] auto get_placement_facet  () const -> GEO::index_t;
     [[nodiscard]] auto get_placement_corner0() const -> GEO::index_t;
 
-    Brush_tool_preview_command              m_preview_command;
-    Brush_tool_insert_command               m_insert_command;
-    Brush_tool_pick_command                 m_pick_command;
+    Brush_preview_command                   m_preview_command;
+    Brush_insert_command                    m_insert_command;
+    Brush_pick_command                      m_pick_command;
+    Brush_rotate_command                    m_rotate_cw_command;
+    Brush_rotate_command                    m_rotate_ccw_command;
+    erhe::commands::Lambda_command          m_toggle_brush_preview_command;
     erhe::commands::Float_threshold_command m_pick_using_float_input_command;
 
     ERHE_PROFILE_MUTEX(std::mutex,     m_brush_mutex);

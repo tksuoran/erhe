@@ -22,6 +22,11 @@ auto Brush_placement::get_corner() const -> GEO::index_t
     return m_corner;
 }
 
+void Brush_placement::set_corner(const GEO::index_t corner)
+{
+    m_corner = corner;
+}
+
 Brush_placement::Brush_placement(
     const std::shared_ptr<Brush>& brush,
     const GEO::index_t            facet,

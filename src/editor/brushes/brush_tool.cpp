@@ -8,6 +8,7 @@
 #include "graphics/icon_set.hpp"
 #include "grid/grid.hpp"
 #include "operations/item_insert_remove_operation.hpp"
+#include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
@@ -47,13 +48,13 @@
 namespace editor {
 
 #pragma region Commands
-Brush_tool_preview_command::Brush_tool_preview_command(erhe::commands::Commands& commands, App_context& context)
+Brush_preview_command::Brush_preview_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Brush_tool.motion_preview"}
     , m_context{context}
 {
 }
 
-auto Brush_tool_preview_command::try_call() -> bool
+auto Brush_preview_command::try_call() -> bool
 {
     if ((get_command_state() != erhe::commands::State::Active) || !m_context.brush_tool->is_enabled()) {
         return false;
@@ -62,20 +63,20 @@ auto Brush_tool_preview_command::try_call() -> bool
     return true;
 }
 
-Brush_tool_insert_command::Brush_tool_insert_command(erhe::commands::Commands& commands, App_context& context)
+Brush_insert_command::Brush_insert_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Brush_tool.insert"}
     , m_context{context}
 {
 }
 
-void Brush_tool_insert_command::try_ready()
+void Brush_insert_command::try_ready()
 {
     if (m_context.brush_tool->try_insert_ready()) {
         set_ready();
     }
 }
 
-auto Brush_tool_insert_command::try_call() -> bool
+auto Brush_insert_command::try_call() -> bool
 {
     if (get_command_state() != erhe::commands::State::Ready) {
         return false;
@@ -85,15 +86,29 @@ auto Brush_tool_insert_command::try_call() -> bool
     return consumed;
 }
 
-Brush_tool_pick_command::Brush_tool_pick_command(erhe::commands::Commands& commands, App_context& context)
+Brush_pick_command::Brush_pick_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "Brush_tool.pick"}
     , m_context{context}
 {
 }
 
-auto Brush_tool_pick_command::try_call() -> bool
+auto Brush_pick_command::try_call() -> bool
 {
     return m_context.brush_tool->try_pick();
+}
+
+Brush_rotate_command::Brush_rotate_command(erhe::commands::Commands& commands, App_context& context, int direction)
+    : Command    {commands, "Brush_tool.rotate"}
+    , m_direction{direction}
+    , m_context  {context}
+{
+}
+
+auto Brush_rotate_command::try_call() -> bool
+{
+    const bool consumed = m_context.brush_tool->try_rotate(m_direction);
+    set_inactive();
+    return consumed;
 }
 
 #pragma endregion Commands
@@ -110,7 +125,18 @@ Brush_tool::Brush_tool(
     , m_preview_command               {commands, context}
     , m_insert_command                {commands, context}
     , m_pick_command                  {commands, context}
+    , m_rotate_cw_command             {commands, context, 1}
+    , m_rotate_ccw_command            {commands, context, -1}
     , m_pick_using_float_input_command{commands, m_pick_command, 0.6f, 0.4f}
+    , m_toggle_brush_preview_command  {
+        commands,
+        "Brush.toggle_preview",
+        [this]() -> bool {
+            m_show_preview = !m_show_preview;
+            update_preview_mesh();
+            return true;
+        }
+    }
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -123,9 +149,16 @@ Brush_tool::Brush_tool(
     commands.register_command(&m_insert_command);
     commands.register_command(&m_pick_command);
     commands.register_command(&m_pick_using_float_input_command);
+    commands.register_command(&m_rotate_cw_command);
+    commands.register_command(&m_rotate_ccw_command);
+    commands.register_command(&m_toggle_brush_preview_command);
     commands.bind_command_to_update      (&m_preview_command);
-    commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right,  true);
-    commands.bind_command_to_mouse_button(&m_pick_command,   erhe::window::Mouse_button_middle, true);
+    commands.bind_command_to_mouse_button(&m_insert_command,     erhe::window::Mouse_button_right, true);
+    //commands.bind_command_to_mouse_button(&m_rotate_cw_command,  erhe::window::Mouse_button_x1,    true);
+    //commands.bind_command_to_mouse_button(&m_rotate_ccw_command, erhe::window::Mouse_button_x2,    true);
+    commands.bind_command_to_key(&m_rotate_cw_command, erhe::window::Key_z);
+    commands.bind_command_to_key(&m_rotate_ccw_command, erhe::window::Key_x);
+    commands.bind_command_to_key(&m_toggle_brush_preview_command, erhe::window::Key_c);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*    headset  = headset_view.get_headset();
@@ -154,7 +187,10 @@ Brush_tool::Brush_tool(
     m_preview_command               .set_host(this);
     m_insert_command                .set_host(this);
     m_pick_command                  .set_host(this);
+    m_rotate_cw_command             .set_host(this);
+    m_rotate_ccw_command            .set_host(this);
     m_pick_using_float_input_command.set_host(this);
+    m_toggle_brush_preview_command  .set_host(this);
 }
 
 void Brush_tool::on_message(App_message& message)
@@ -205,6 +241,67 @@ void Brush_tool::remove_preview_mesh()
     }
 
     m_hover_frame.reset();
+}
+
+auto Brush_tool::try_rotate(int direction) -> bool
+{
+    //remove_preview_mesh();
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
+    if (!hover_scene_mesh) {
+        return false;
+    }
+
+    erhe::scene::Node* node = hover_scene_mesh->get_node();
+    if (node == nullptr) {
+        return false;
+    }
+    std::shared_ptr<erhe::Item_base>   node_item_base = node->shared_from_this();
+    std::shared_ptr<erhe::scene::Node> node_shared    = std::dynamic_pointer_cast<erhe::scene::Node>(node_item_base);
+
+    std::shared_ptr<Brush_placement> brush_placement = get_brush_placement(node);
+    if (!brush_placement) {
+        return false;
+    }
+
+    std::shared_ptr<Brush> brush = brush_placement->get_brush();
+    if (!brush) {
+        return false;
+    }
+
+    if (!m_hover.geometry) {
+        return false;
+    }
+
+    erhe::geometry::Geometry& geometry = *m_hover.geometry.get();
+    const GEO::Mesh& geo_mesh           = geometry.get_mesh();
+    GEO::index_t     facet              = brush_placement->get_facet();
+    ERHE_VERIFY(facet < geo_mesh.facets.nb());
+    GEO::index_t     facet_corner_count = geo_mesh.facets.nb_corners(facet);
+    GEO::index_t     old_corner         = brush_placement->get_corner();
+    GEO::index_t     new_corner         = (old_corner + facet_corner_count + direction) % facet_corner_count;
+
+    Reference_frame initial_frame{geo_mesh, facet, 0, old_corner, Frame_orientation::in};
+    Reference_frame updated_frame{geo_mesh, facet, 0, new_corner, Frame_orientation::in};
+
+    GEO::mat4f initial_brush_transform_ = initial_frame.transform(0.0f);
+    GEO::mat4f updated_brush_transform_ = updated_frame.transform(0.0f);
+    glm::mat4  initial_brush_transform  = to_glm_mat4(initial_brush_transform_);
+    glm::mat4  updated_brush_transform  = to_glm_mat4(updated_brush_transform_);
+    glm::mat4  brush_update_transform   = updated_brush_transform * glm::inverse(initial_brush_transform);
+    glm::mat4  initial_node_transform   = node->parent_from_node();
+    glm::mat4  updated_node_transform   = initial_node_transform * brush_update_transform;
+
+    auto node_operation = std::make_shared<Node_transform_operation>(
+        Node_transform_operation::Parameters{
+            .node                    = node_shared,
+            .parent_from_node_before = node_shared->parent_from_node_transform(),
+            .parent_from_node_after  = erhe::scene::Transform{updated_node_transform}
+        }
+    );
+    m_context.operation_stack->queue(node_operation);
+
+    brush_placement->set_corner(new_corner);
+    return true;
 }
 
 auto Brush_tool::try_insert_ready() -> bool
