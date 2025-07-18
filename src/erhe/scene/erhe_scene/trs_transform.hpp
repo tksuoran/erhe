@@ -50,9 +50,10 @@ private:
     glm::vec3 m_skew       {0.0f};
 };
 
-[[nodiscard]] auto translate(const Trs_transform& t, const glm::vec3 translation) -> Trs_transform;
-[[nodiscard]] auto rotate   (const Trs_transform& t, const glm::quat rotation)    -> Trs_transform;
-[[nodiscard]] auto scale    (const Trs_transform& t, const glm::vec3 scale)       -> Trs_transform;
+[[nodiscard]] auto translate  (const Trs_transform& t, const glm::vec3 translation)       -> Trs_transform;
+[[nodiscard]] auto rotate     (const Trs_transform& t, const glm::quat rotation)          -> Trs_transform;
+[[nodiscard]] auto scale      (const Trs_transform& t, const glm::vec3 scale)             -> Trs_transform;
+[[nodiscard]] auto interpolate(const Trs_transform& t0, const Trs_transform& t1, float t) -> Trs_transform;
 
 auto operator* (const Trs_transform& lhs, const Trs_transform& rhs) -> Trs_transform;
 auto operator==(const Trs_transform& lhs, const Trs_transform& rhs) -> bool;

@@ -20,6 +20,7 @@ public:
         std::shared_ptr<erhe::scene::Node> node;
         erhe::scene::Transform             parent_from_node_before;
         erhe::scene::Transform             parent_from_node_after;
+        float                              time_duration{0.0f};
     };
 
     explicit Node_transform_operation(const Parameters& parameters);

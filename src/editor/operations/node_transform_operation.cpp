@@ -3,6 +3,8 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
+#include "time.hpp"
+
 #include "erhe_log/log_glm.hpp"
 
 #include <glm/gtx/matrix_decompose.hpp>
@@ -100,13 +102,22 @@ auto Node_transform_operation::describe() const -> std::string
 void Node_transform_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
-    m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
-    context.app_message_bus->send_message(
-        App_message{
-            .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
-            .node         = m_parameters.node.get()
-        }
-    );
+    if (m_parameters.time_duration == 0.0f) {
+        m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
+        context.app_message_bus->send_message(
+            App_message{
+                .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
+                .node         = m_parameters.node.get()
+            }
+        );
+    } else {
+        context.time->begin_transform_animation(
+            m_parameters.node,
+            m_parameters.parent_from_node_before,
+            m_parameters.parent_from_node_after,
+            m_parameters.time_duration
+        );
+    }
 }
 
 void Node_transform_operation::undo(App_context& context)

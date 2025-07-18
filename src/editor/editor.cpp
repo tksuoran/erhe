@@ -209,6 +209,7 @@ public:
         std::vector<erhe::window::Input_event>& input_events = m_context_window->get_input_events();
 
         m_time->prepare_update();
+        m_time->update_transform_animations(*m_app_message_bus.get());
         m_fly_camera_tool->on_frame_begin();
 
         // Updating pointer is probably sufficient to be done once per frame

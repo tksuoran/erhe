@@ -17,6 +17,7 @@
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/item_tree_window.hpp"
+#include "time.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
@@ -272,6 +273,8 @@ auto Brush_tool::try_rotate(int direction) -> bool
         return false;
     }
 
+    m_context.time->finish_all_transform_animations(*m_context.app_message_bus);
+
     erhe::geometry::Geometry& geometry = *m_hover.geometry.get();
     const GEO::Mesh& geo_mesh           = geometry.get_mesh();
     GEO::index_t     facet              = brush_placement->get_facet();
@@ -295,7 +298,8 @@ auto Brush_tool::try_rotate(int direction) -> bool
         Node_transform_operation::Parameters{
             .node                    = node_shared,
             .parent_from_node_before = node_shared->parent_from_node_transform(),
-            .parent_from_node_after  = erhe::scene::Transform{updated_node_transform}
+            .parent_from_node_after  = erhe::scene::Transform{updated_node_transform},
+            .time_duration           = 0.25f
         }
     );
     m_context.operation_stack->queue(node_operation);
@@ -410,6 +414,9 @@ void Brush_tool::on_motion()
 
 void Brush_tool::preview_drag_and_drop(std::shared_ptr<Brush> brush)
 {
+    if (brush) {
+        m_show_preview = true;
+    }
     m_drag_and_drop_brush = brush;
     on_motion();
 }
@@ -662,15 +669,19 @@ void Brush_tool::do_insert_operation(Brush& brush)
     if (m_parent_to_first_selected && first_selected_node && (first_selected_node->get_item_host() != nullptr)) {
         parent = first_selected_node;
     }
+    erhe::scene::Scene&                       scene     = scene_root->get_scene();
+    const std::shared_ptr<erhe::scene::Node>& root_node = scene.get_root_node();
     if (!parent && m_parent_to_scene_root) {
-        erhe::scene::Scene&                       scene     = scene_root->get_scene();
-        const std::shared_ptr<erhe::scene::Node>& root_node = scene.get_root_node();
         if (root_node) {
             parent = root_node;
         }
     }
     if (!parent && m_parent_to_hovered) {
-        parent = std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this());
+        if (hover_node) {
+            parent = std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this());
+        } else if (root_node) {
+            parent = root_node;
+        }
     }
 
     auto op = std::make_shared<Item_insert_remove_operation>(

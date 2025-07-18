@@ -129,6 +129,15 @@ auto scale(const Trs_transform& t, const glm::vec3 scale) -> Trs_transform
     };
 }
 
+auto interpolate(const Trs_transform& t0, const Trs_transform& t1, float t) -> Trs_transform
+{
+    const glm::vec3 translation = glm::mix  (t0.get_translation(), t1.get_translation(), t);
+    const glm::quat rotation    = glm::slerp(t0.get_rotation(),    t1.get_rotation(), t);
+    const glm::vec3 scale       = glm::mix  (t0.get_scale(),       t1.get_scale(), t);
+    const glm::vec3 skew        = glm::mix  (t0.get_skew(),        t1.get_skew(), t);
+    return Trs_transform{translation, rotation, scale, skew};
+}
+
 void Trs_transform::scale_by(glm::vec3 scale)
 {
     m_scale = scale * m_scale;
