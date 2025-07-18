@@ -37,7 +37,9 @@ public:
     static constexpr uint64_t controller                = (1u << 19);
     static constexpr uint64_t rendertarget              = (1u << 20);
     static constexpr uint64_t expand                    = (1u << 21);
-    static constexpr uint64_t count                     = 22;
+    static constexpr uint64_t hovered_in_viewport       = (1u << 22);
+    static constexpr uint64_t hovered_in_item_tree      = (1u << 23);
+    static constexpr uint64_t count                     = 24;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -62,7 +64,9 @@ public:
         "Brush",
         "Controller",
         "Rendertarget",
-        "Expand"
+        "Expand",
+        "Hovered in Viewport",
+        "Hovered in Item Tree"
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
@@ -256,6 +260,7 @@ public:
     [[nodiscard]] auto is_no_transform_update      () const -> bool;
     [[nodiscard]] auto is_transform_world_normative() const -> bool;
     [[nodiscard]] auto is_selected                 () const -> bool;
+    [[nodiscard]] auto is_hovered                  () const -> bool;
     [[nodiscard]] auto is_visible                  () const -> bool;
     [[nodiscard]] auto is_shown_in_ui              () const -> bool;
     [[nodiscard]] auto is_hidden                   () const -> bool;

@@ -59,7 +59,7 @@ private:
     [[nodiscard]] auto resolve_paste_target() -> std::shared_ptr<erhe::Hierarchy>;
 
     Clipboard_paste_command                       m_paste_command;
-    App_context&                               m_context;
+    App_context&                                  m_context;
     std::vector<std::shared_ptr<erhe::Item_base>> m_contents;
 
     Scene_view*                                   m_hover_scene_view          {nullptr};

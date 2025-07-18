@@ -107,7 +107,7 @@ auto Content_library_node::make(Args&& ...args) -> std::shared_ptr<T>
 
 template <typename T>
 auto Content_library_node::combo(
-    App_context&     context,
+    App_context&        context,
     const char*         label,
     std::shared_ptr<T>& in_out_selected_entry,
     const bool          empty_option

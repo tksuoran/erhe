@@ -81,13 +81,13 @@ public:
 
 private:
     App_context& m_context;
-    glm::vec2       m_last_value          {0.0f, 0.0f};
-    float           m_activate_threshold  {0.6f};
-    float           m_deactivate_threshold{0.4f};
-    bool            m_left_active         {false};
-    bool            m_right_active        {false};
-    bool            m_up_active           {false};
-    bool            m_down_active         {false};
+    glm::vec2    m_last_value          {0.0f, 0.0f};
+    float        m_activate_threshold  {0.6f};
+    float        m_deactivate_threshold{0.4f};
+    bool         m_left_active         {false};
+    bool         m_right_active        {false};
+    bool         m_up_active           {false};
+    bool         m_down_active         {false};
 };
 
 class Hotbar

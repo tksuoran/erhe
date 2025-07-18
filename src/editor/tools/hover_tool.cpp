@@ -29,12 +29,12 @@ namespace editor {
 Hover_tool::Hover_tool(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    App_context&                 context,
+    App_context&                 app_context,
     App_message_bus&             app_message_bus,
     Tools&                       tools
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover_tool"}
-    , Tool                     {context}
+    , Tool                     {app_context}
 {
     set_flags      (Tool_flags::background | Tool_flags::toolbox);
     set_description("Hover Tool");
@@ -42,13 +42,107 @@ Hover_tool::Hover_tool(
 
     app_message_bus.add_receiver(
         [&](App_message& message) {
-            Tool::on_message(message);
+            on_message(message);
         }
     );
 }
 
+auto Hover_tool::get_hover_node() const -> erhe::scene::Node*
+{
+    Scene_view* scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return nullptr;
+    }
+
+    const Hover_entry* nearest_hover = scene_view->get_nearest_hover(
+        Hover_entry::content_bit |
+        Hover_entry::rendertarget_bit
+    );
+    if ((nearest_hover == nullptr) || (nearest_hover->slot == Hover_entry::rendertarget_slot)) {
+        return nullptr;
+    }
+
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = nearest_hover->scene_mesh_weak.lock();
+    if (hover_scene_mesh) {
+        return hover_scene_mesh->get_node();
+    }
+    return nullptr;
+}
+
+void Hover_tool::reset_item_tree_hover()
+{
+    m_context.app_message_bus->queue_message(
+        App_message{
+            .update_flags = Message_flag_bit::c_flag_bit_hover_tree_node,
+            .item         = {}
+        }
+    );
+}
+
+void Hover_tool::on_message(App_message& message)
+{
+    Tool::on_message(message);
+    using namespace erhe::utility;
+    
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+        m_context.app_message_bus->queue_message(
+            App_message{
+                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh,
+                .item         = {}
+            }
+        );
+    }
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
+        std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_viewport.lock();
+        if (old_hovered_node) {
+            old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+        }
+
+        auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(message.item);
+        erhe::scene::Node* node = mesh ? mesh->get_node() : nullptr;
+        if (node == nullptr) {
+            m_hovered_node_in_viewport.reset();
+            return;
+        }
+        std::shared_ptr<erhe::Item_base> node_item_base = std::dynamic_pointer_cast<erhe::Item_base>(node->shared_from_this());
+        std::shared_ptr<erhe::scene::Node> hovered_node = std::dynamic_pointer_cast<erhe::scene::Node>(node_item_base);
+        if (!hovered_node) {
+            m_hovered_node_in_viewport.reset();
+            return;
+        }
+
+        hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+        m_hovered_node_in_viewport = hovered_node;
+    }
+
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_tree_node)) {
+        std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_item_tree.lock();
+        if (old_hovered_node) {
+            old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_item_tree);
+        }
+
+        std::shared_ptr<erhe::scene::Node> hovered_node = std::dynamic_pointer_cast<erhe::scene::Node>(message.item);
+        if (!hovered_node) {
+            m_hovered_node_in_item_tree.reset();
+            return;
+        }
+
+        hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_item_tree);
+        m_hovered_node_in_item_tree = hovered_node;
+    }
+}
+
 void Hover_tool::imgui()
 {
+    std::shared_ptr<erhe::scene::Node> hovered_in_viewport  = m_hovered_node_in_viewport.lock();
+    std::shared_ptr<erhe::scene::Node> hovered_in_item_tree = m_hovered_node_in_item_tree.lock();
+    if (hovered_in_viewport) {
+        ImGui::Text("Hovered in Viewport: %s", hovered_in_viewport->get_name().c_str());
+    }
+    if (hovered_in_item_tree) {
+        ImGui::Text("Hovered in Item tree: %s", hovered_in_item_tree->get_name().c_str());
+    }
+
     erhe::imgui::Imgui_host* imgui_host = get_imgui_host();
     glm::vec2 mouse_position{0.0f, 0.0f};
     if (imgui_host != nullptr) {

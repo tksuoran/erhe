@@ -124,7 +124,7 @@ public:
 protected:
     void set_hover(std::size_t slot, const Hover_entry& entry);
 
-    App_context&          m_context;
+    App_context&             m_context;
     std::optional<glm::mat4> m_world_from_control;
     std::optional<glm::mat4> m_control_from_world;
     Viewport_config          m_viewport_config;

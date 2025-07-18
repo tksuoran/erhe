@@ -67,6 +67,11 @@ public:
 
     ERHE_PROFILE_MUTEX(std::mutex, item_tree_mutex);
 
+protected:
+    [[nodiscard]] auto get_hovered_item() const -> const std::shared_ptr<erhe::Item_base>&;
+
+    App_context& m_context;
+
 private:
     void set_item_selection_terminator(const std::shared_ptr<erhe::Item_base>& item);
     void set_item_selection           (const std::shared_ptr<erhe::Item_base>& item, bool selected);
@@ -111,7 +116,6 @@ private:
     );
     void drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& node);
 
-    App_context&                                              m_context;
     erhe::Item_filter                                            m_filter;
     ImGuiTextFilter                                              m_text_filter;
     std::shared_ptr<erhe::Hierarchy>                             m_root;
@@ -123,6 +127,7 @@ private:
 
     bool                               m_toggled_open{false};
     std::weak_ptr<erhe::Item_base>     m_last_focus_item;
+    std::shared_ptr<erhe::Item_base>   m_hovered_item;
     std::shared_ptr<erhe::Item_base>   m_popup_item;
     std::string                        m_popup_id_string;
     unsigned int                       m_popup_id{0};

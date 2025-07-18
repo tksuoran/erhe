@@ -107,7 +107,7 @@ class Fly_camera_move_command : public erhe::commands::Command
 public:
     Fly_camera_move_command(
         erhe::commands::Commands&      commands,
-        App_context&                context,
+        App_context&                   context,
         Variable                       variable,
         erhe::math::Input_axis_control control,
         bool                           active
@@ -116,7 +116,7 @@ public:
     auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
 
 private:
-    App_context&                m_context;
+    App_context&                   m_context;
     Variable                       m_variable;
     erhe::math::Input_axis_control m_control;
     bool                           m_active;
@@ -127,7 +127,7 @@ class Fly_camera_active_axis_float_command : public erhe::commands::Command
 public:
     Fly_camera_active_axis_float_command(
         erhe::commands::Commands& commands,
-        App_context&           context,
+        App_context&              context,
         Variable                  variable,
         float                     scale
     );
@@ -136,8 +136,8 @@ public:
 
 private:
     App_context& m_context;
-    Variable        m_variable;
-    float           m_scale;
+    Variable     m_variable;
+    float        m_scale;
 };
 
 class Fly_camera_serialization_command : public erhe::commands::Command
@@ -149,7 +149,7 @@ public:
 
 private:
     App_context& m_context;
-    bool            m_store;
+    bool         m_store;
 };
 
 class Fly_camera_tool

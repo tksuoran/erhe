@@ -20,7 +20,7 @@ public:
     Node_properties_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        App_context&                 context
+        App_context&                 app_context
     );
 
     // Implements Imgui_window

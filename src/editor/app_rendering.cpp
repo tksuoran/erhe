@@ -86,11 +86,16 @@ App_rendering::App_rendering(
     const Item_filter opaque_not_selected_filter{
         .require_all_bits_set         = Item_flags::visible     | Item_flags::opaque,
         .require_at_least_one_bit_set = Item_flags::content     | Item_flags::controller,
-        .require_all_bits_clear       = Item_flags::translucent | Item_flags::selected
+        .require_all_bits_clear       = Item_flags::translucent | Item_flags::selected | Item_flags::hovered_in_item_tree
     };
     const Item_filter opaque_selected_filter{
-        .require_all_bits_set         = Item_flags::visible | Item_flags::opaque | Item_flags::selected,
-        .require_at_least_one_bit_set = Item_flags::content | Item_flags::controller,
+        .require_all_bits_set         = Item_flags::content | Item_flags::visible | Item_flags::opaque,
+        .require_at_least_one_bit_set = Item_flags::selected,
+        .require_all_bits_clear       = Item_flags::translucent
+    };
+    const Item_filter opaque_selected_or_hovered_filter{
+        .require_all_bits_set         = Item_flags::content | Item_flags::visible | Item_flags::opaque,
+        .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = Item_flags::translucent
     };
     const Item_filter translucent_filter{
@@ -119,7 +124,7 @@ App_rendering::App_rendering(
     auto opaque_fill_selected = make_composition_pass("Content fill opaque selected");
     opaque_fill_selected->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
     opaque_fill_selected->primitive_mode   = Primitive_mode::polygon_fill;
-    opaque_fill_selected->filter           = opaque_selected_filter;
+    opaque_fill_selected->filter           = opaque_selected_or_hovered_filter;
     opaque_fill_selected->get_render_style = render_style_selected;
     opaque_fill_selected->passes           = { get_pipeline_pass(*opaque_fill_selected.get(), Blend_mode::opaque, true)};
 
@@ -146,14 +151,18 @@ App_rendering::App_rendering(
     selection_outline = make_composition_pass("Content outline opaque selected");
     selection_outline->mesh_layers      = { Mesh_layer_id::content };
     selection_outline->primitive_mode   = Primitive_mode::polygon_fill;
-    selection_outline->filter           = opaque_selected_filter;
+    selection_outline->filter           = opaque_selected_or_hovered_filter;
     selection_outline->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     selection_outline->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
-    selection_outline->passes           = { &m_pipeline_passes.selection_outline };
+    selection_outline->passes           = { &m_pipeline_passes.outline };
     selection_outline->allow_shader_stages_override = false;
+
+    // This gets overridden in Composition_pass::render()
+    // TODO Figure out a good way to route the settings
     selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
-        .constant_color = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f},
-        .constant_size = -5.0f
+        .constant_color0 = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f},
+        .constant_color1 = glm::vec4{0.0f, 0.0f,  1.0f, 1.0f},
+        .constant_size   = -5.0f
     };
 
     auto sky = make_composition_pass("Sky");
@@ -497,8 +506,8 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         },
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
-    , selection_outline{erhe::graphics::Render_pipeline_state{{
-        .name           = "Selection Outline",
+    , outline{erhe::graphics::Render_pipeline_state{{
+        .name           = "Outline (selection/hover)",
         .shader_stages  = &programs.fat_triangle.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,

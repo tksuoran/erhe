@@ -50,7 +50,7 @@ public:
     [[nodiscard]] auto get_debug_draw_parameters() -> Debug_draw_parameters;
 
 private:
-    App_context&       m_context;
+    App_context&          m_context;
     Debug_draw_parameters m_debug_draw;
 };
 

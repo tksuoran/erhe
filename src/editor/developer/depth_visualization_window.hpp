@@ -71,7 +71,7 @@ public:
 private:
     void set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& shadow_node);
 
-    App_context&                                  m_context;
+    App_context&                                     m_context;
     std::unique_ptr<Depth_to_color_rendergraph_node> m_depth_to_color_node{};
     std::weak_ptr<Shadow_render_node>                m_shadow_renderer_node{};
     int                                              m_selected_shadow_node{0};

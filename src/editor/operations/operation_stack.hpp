@@ -76,7 +76,7 @@ private:
     Undo_command  m_undo_command;
     Redo_command  m_redo_command;
 
-    ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
+    ERHE_PROFILE_MUTEX(std::mutex,          m_mutex);
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;
     std::vector<std::shared_ptr<Operation>> m_queued;

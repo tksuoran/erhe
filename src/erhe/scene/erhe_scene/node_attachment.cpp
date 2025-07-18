@@ -1,5 +1,6 @@
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::scene {
@@ -79,10 +80,15 @@ void Node_attachment::handle_node_update(Node* old_node, Node* new_node)
 void Node_attachment::handle_node_flag_bits_update(const uint64_t old_node_flag_bits, const uint64_t new_node_flag_bits)
 {
     static_cast<void>(old_node_flag_bits);
-    const bool visible = (new_node_flag_bits & Item_flags::visible) == Item_flags::visible;
-    set_visible(visible);
-    const bool selected = (new_node_flag_bits & Item_flags::selected) == Item_flags::selected;
-    set_selected(selected);
+    using namespace erhe::utility;
+    const bool visible              = test_bit_set(new_node_flag_bits, Item_flags::visible);
+    const bool selected             = test_bit_set(new_node_flag_bits, Item_flags::selected);
+    const bool hovered_in_viewport  = test_bit_set(new_node_flag_bits, Item_flags::hovered_in_viewport);
+    const bool hovered_in_item_tree = test_bit_set(new_node_flag_bits, Item_flags::hovered_in_item_tree);
+    set_flag_bits(Item_flags::visible,              visible);
+    set_flag_bits(Item_flags::selected,             selected);
+    set_flag_bits(Item_flags::hovered_in_viewport,  hovered_in_viewport);
+    set_flag_bits(Item_flags::hovered_in_item_tree, hovered_in_item_tree);
 };
 
 void Node_attachment::set_node(Node* const node, const std::size_t position)

@@ -55,19 +55,22 @@ Scene_view::~Scene_view() noexcept = default;
 
 void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
 {
-    std::shared_ptr<erhe::scene::Mesh> hower_scene_mesh = m_hover_entries[slot].scene_mesh_weak.lock();
-    std::shared_ptr<const Grid>        hover_grid       = m_hover_entries[slot].grid_weak.lock();
+    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover_entries[slot].scene_mesh_weak.lock();
     std::shared_ptr<erhe::scene::Mesh> entry_scene_mesh = entry.scene_mesh_weak.lock();
-    std::shared_ptr<const Grid>        entry_grid       = entry.grid_weak.lock();
-    const bool mesh_changed = (hower_scene_mesh != entry_scene_mesh);
-    const bool grid_changed = (hover_grid       != entry_grid);
+    const bool mesh_changed = (hover_scene_mesh != entry_scene_mesh);
     m_hover_entries[slot]      = entry;
     m_hover_entries[slot].slot = slot;
 
-    if (mesh_changed || grid_changed) {
+    //std::shared_ptr<const Grid>        hover_grid       = m_hover_entries[slot].grid_weak.lock();
+    //std::shared_ptr<const Grid>        entry_grid       = entry.grid_weak.lock();
+    //const bool grid_changed = (hover_grid       != entry_grid);
+
+    if (mesh_changed && (slot == Hover_entry::content_slot)) {
+    //if (mesh_changed || grid_changed) {
         m_context.app_message_bus->send_message(
             App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh
+                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh,
+                .item         = hover_scene_mesh
             }
         );
     }

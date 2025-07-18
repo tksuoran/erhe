@@ -198,7 +198,7 @@ void Grid::update()
 
 void Grid::imgui(App_context& context)
 {
-    ImGui::InputText  ("Name",             &m_name);
+    ImGui::InputText  ("Name",     &m_name);
     ImGui::Separator();
     bool visible = is_visible();
     if (ImGui::Checkbox("Visible", &visible)) {

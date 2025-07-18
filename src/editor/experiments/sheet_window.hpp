@@ -57,8 +57,8 @@ private:
     void on_message(App_message& message);
 
     App_context& m_context;
-    bool            m_show_expression{false};
-    Sheet           m_sheet;
+    bool         m_show_expression{false};
+    Sheet        m_sheet;
 };
 
 }

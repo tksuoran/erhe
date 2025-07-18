@@ -101,7 +101,7 @@ private:
 
     void make_combo(const char* label, Visualization_mode& visualization);
 
-    App_context&                      m_context;
+    App_context&                         m_context;
     Scene_view*                          m_hover_scene_view{nullptr};
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;
 

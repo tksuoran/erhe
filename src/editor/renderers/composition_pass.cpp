@@ -63,6 +63,7 @@ void Composition_pass::render(const Render_context& context) const
         return;
     }
 
+    // NOTE This overrides settings in App_rendering::App_rendering()
     // TODO This is a bit hacky, route this better.
     const int64_t t0_ns  = context.app_context.time->get_host_system_time_ns();
     const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
@@ -70,14 +71,15 @@ void Composition_pass::render(const Render_context& context) const
     const float   t1     = static_cast<float>(::fmod(t0, period));
     const float   t2     = static_cast<float>(0.5f + triangle_wave(t1, period) * 0.5f);
     context.app_context.app_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
-        .color_source   = erhe::scene_renderer::Primitive_color_source::constant_color,
-        .constant_color = glm::mix(
+        .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
+        .constant_color0 = glm::mix(
             context.viewport_config.selection_highlight_low,
             context.viewport_config.selection_highlight_high,
             t2
         ),
-        .size_source    = erhe::scene_renderer::Primitive_size_source::constant_size,
-        .constant_size  = mix(
+        .constant_color1 = glm::vec4{0.2f, 0.5, 1.0f, 1.0f},
+        .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
+        .constant_size   = mix(
             context.viewport_config.selection_highlight_width_low,
             context.viewport_config.selection_highlight_width_high,
             t2
@@ -224,6 +226,20 @@ void Composition_pass::imgui()
         ImGui::TreePop();
     }   
     ImGui::Text("Primitive Mode: %s", erhe::primitive::c_str(primitive_mode));
+
+    if (ImGui::TreeNodeEx("Filter", ImGuiTreeNodeFlags_Framed)) {
+        std::string require_all_bits_set           = erhe::Item_flags::to_string(filter.require_all_bits_set          );
+        std::string require_at_least_one_bit_set   = erhe::Item_flags::to_string(filter.require_at_least_one_bit_set  );
+        std::string require_all_bits_clear         = erhe::Item_flags::to_string(filter.require_all_bits_clear        );
+        std::string require_at_least_one_bit_clear = erhe::Item_flags::to_string(filter.require_at_least_one_bit_clear);
+        ImGui::Text("require_all_bits_set = %s",           require_all_bits_set.c_str());
+        ImGui::Text("require_at_least_one_bit_set = %s",   require_at_least_one_bit_set.c_str());
+        ImGui::Text("require_all_bits_clear = %s",         require_all_bits_clear.c_str());
+        ImGui::Text("require_at_least_one_bit_clear = %s", require_at_least_one_bit_clear.c_str());
+        ImGui::TreePop();
+    }
+    ImGui::Text("Primitive Mode: %s", erhe::primitive::c_str(primitive_mode));
+
     ImGui::Checkbox("Allow shader stages override", &allow_shader_stages_override);
     if (primitive_settings.has_value()) {
         //static void render_style_ui(Render_style_data& render_style);

@@ -262,6 +262,7 @@ public:
         // - Update all ImGui hosts. glfw window host processes input events, converting them to ImGui inputs events
         //   This may consume some input events, so that they will not get processed by m_commands.tick() below
         // - Call all ImGui code (Imgui_window)
+        m_hover_tool->reset_item_tree_hover();
         m_imgui_windows->begin_frame();
         m_imgui_windows->draw_imgui_windows();
         m_imgui_windows->end_frame();

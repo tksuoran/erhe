@@ -5,6 +5,7 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
+#include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
 #include "preview/brush_preview.hpp"
 #include "editor_log.hpp"
@@ -584,8 +585,28 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
     const bool was_selected        = item->is_selected();
     const bool non_mouse_activated = ImGui::IsItemActivated() && !mouse_released && !mouse_down;
 
+    if (hovered) {
+        m_hovered_item = item;
+    }
     if (!shift_down) {
         m_shift_down_range_selection_started = false;
+    }
+
+    if (item->is_hovered()) {
+        const ImVec2 rect_min = ImGui::GetItemRectMin();
+        const ImVec2 rect_max = ImGui::GetItemRectMax();
+        const ImRect rect{rect_min, rect_max};
+        const auto* g       = ImGui::GetCurrentContext();
+        const auto* window  = g->CurrentWindow;
+
+        window->DrawList->AddRect(
+            rect.Min - ImVec2{0.0f, 2.0f},
+            rect.Max + ImVec2{0.0f, 2.0f},
+            ImGui::GetColorU32(ImVec4{0.0f, 0.5f, 1.0f, 1.0f}),
+            0.0f,
+            0,
+            1.0f
+        );
     }
 
     std::shared_ptr<erhe::Item_base> last_focus_item = m_last_focus_item.lock();
@@ -1178,6 +1199,9 @@ void Item_tree::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
 void Item_tree::imgui_tree(float ui_scale)
 {
     ERHE_PROFILE_FUNCTION();
+
+    m_hovered_item.reset();
+
     if (!m_root) {
         return;
     }
@@ -1299,12 +1323,17 @@ void Item_tree::imgui_tree(float ui_scale)
     //// m_context.app_scenes->sanity_check();
 }
 
+auto Item_tree::get_hovered_item() const -> const std::shared_ptr<erhe::Item_base>&
+{
+    return m_hovered_item;
+}
+
 ////////////////////////////
 
 Item_tree_window::Item_tree_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    App_context&              context,
+    App_context&                 context,
     const std::string_view       window_title,
     const std::string_view       ini_label
 )
@@ -1329,6 +1358,16 @@ void Item_tree_window::imgui()
     ERHE_PROFILE_FUNCTION();
 
     imgui_tree(get_scale_value());
+
+    if (ImGui::IsWindowHovered()) {
+        m_context.app_message_bus->queue_message(
+            App_message{
+                .update_flags = Message_flag_bit::c_flag_bit_hover_tree_node,
+                .item         = get_hovered_item()
+            }
+        );
+    }
+
 }
 
 }

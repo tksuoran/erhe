@@ -240,7 +240,7 @@ auto Fly_camera_track_command::try_call() -> bool
 #pragma region Fly_camera_active_axis_float_command
 Fly_camera_active_axis_float_command::Fly_camera_active_axis_float_command(
     erhe::commands::Commands& commands,
-    App_context&           context,
+    App_context&              context,
     Variable                  variable,
     float                     scale
 )
@@ -372,7 +372,7 @@ auto Fly_camera_frame_command::try_call() -> bool
 #pragma region Fly_camera_move_command
 Fly_camera_move_command::Fly_camera_move_command(
     erhe::commands::Commands&            commands,
-    App_context&                      context,
+    App_context&                         context,
     const Variable                       variable,
     const erhe::math::Input_axis_control control,
     const bool                           active

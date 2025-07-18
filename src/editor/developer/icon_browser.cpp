@@ -15,10 +15,10 @@ namespace editor {
 Icon_browser::Icon_browser(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    App_context&                 context
+    App_context&                 app_context
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Icon Browser", "icon_browser"}
-    , m_context                {context}
+    , m_context                {app_context}
 {
 }
 

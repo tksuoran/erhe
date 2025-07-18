@@ -32,13 +32,6 @@
 
 namespace editor {
 
-//using Vertex_input_state   = erhe::graphics::Vertex_input_state;
-//using Input_assembly_state = erhe::graphics::Input_assembly_state;
-//using Rasterization_state  = erhe::graphics::Rasterization_state;
-//using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
-//using Color_blend_state    = erhe::graphics::Color_blend_state;
-//
-
 Material_preview::Material_preview(
     erhe::graphics::Device&         graphics_device,
     erhe::scene::Scene_message_bus& scene_message_bus,

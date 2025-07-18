@@ -128,7 +128,7 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
-    {
+    if (do_render) {
         m_context.tools         ->render_viewport_tools(context);
         m_context.app_rendering ->render_viewport_renderables(context);
 
@@ -149,7 +149,7 @@ void Viewport_scene_view::execute_rendergraph_node()
     // Starting render encoder clears render target texture(s)
     if (!do_render) {
         // ending render encoder applies multisample resolve, if applicabale
-        m_context.debug_renderer->release();
+        //m_context.debug_renderer->release();
         return;
     }
 

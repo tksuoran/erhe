@@ -150,17 +150,22 @@ void Item_base::disable_flag_bits(const uint64_t mask)
 
 auto Item_base::is_no_transform_update() const -> bool
 {
-    return (m_flag_bits & Item_flags::no_transform_update) == Item_flags::no_transform_update;
+    return erhe::utility::test_bit_set(m_flag_bits, Item_flags::no_transform_update);
 }
 
 auto Item_base::is_transform_world_normative() const -> bool
 {
-    return (m_flag_bits & Item_flags::transform_world_normative) == Item_flags::transform_world_normative;
+    return erhe::utility::test_bit_set(m_flag_bits, Item_flags::transform_world_normative);
 }
 
 auto Item_base::is_selected() const -> bool
 {
-    return (m_flag_bits & Item_flags::selected) == Item_flags::selected;
+    return erhe::utility::test_bit_set(m_flag_bits, Item_flags::selected);
+}
+
+auto Item_base::is_hovered() const -> bool
+{
+    return erhe::utility::test_any_rhs_bits_set(m_flag_bits, Item_flags::hovered_in_viewport | Item_flags::hovered_in_item_tree);
 }
 
 void Item_base::set_selected(const bool selected)
@@ -185,12 +190,12 @@ void Item_base::hide()
 
 auto Item_base::is_visible() const -> bool
 {
-    return (m_flag_bits & Item_flags::visible) == Item_flags::visible;
+    return erhe::utility::test_bit_set(m_flag_bits, Item_flags::visible);
 }
 
 auto Item_base::is_shown_in_ui() const -> bool
 {
-    return (m_flag_bits & Item_flags::show_in_ui) == Item_flags::show_in_ui;
+    return erhe::utility::test_bit_set(m_flag_bits, Item_flags::show_in_ui);
 }
 
 auto Item_base::is_hidden() const -> bool

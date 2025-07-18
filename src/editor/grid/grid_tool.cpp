@@ -8,7 +8,6 @@
 #include "tools/tools.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-//#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_profile/profile.hpp"
 

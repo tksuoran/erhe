@@ -103,7 +103,13 @@ auto Primitive_buffer::update(
         }
 
         if (!filter(mesh->get_flag_bits())) {
-            // SPDLOG_LOGGER_TRACE(log_primitive_buffer, "node = {}, mesh = {} does not pass filter", node->get_name(), mesh->get_name());
+            SPDLOG_LOGGER_TRACE(log_primitive_buffer, "node = {}, mesh = {} does not pass filter", node->get_name(), mesh->get_name());
+            // log_primitive_buffer->warn(
+            //     "node = {}, mesh = {} does not pass filter item flags = {}",
+            //     node->get_name(),
+            //     mesh->get_name(),
+            //     Item_flags::to_string(node->get_flag_bits())
+            // );
             continue;
         }
 
@@ -136,6 +142,8 @@ auto Primitive_buffer::update(
         if (!filter(mesh->get_flag_bits())) {
             continue;
         }
+
+        const bool use_primary_color = mesh->is_selected() || !mesh->is_hovered();
 
         const glm::mat4 world_from_node = node->world_from_node();
 
@@ -181,9 +189,11 @@ auto Primitive_buffer::update(
 
             using erhe::graphics::as_span;
             const auto color_span =
-                (settings.color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4         ) :
-                (settings.color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(wireframe_color        ) :
-                                                                                          as_span(settings.constant_color);
+                (settings.color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4 ) :
+                (settings.color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(wireframe_color) :
+                use_primary_color                                                       ? as_span(settings.constant_color0) :
+                                                                                          as_span(settings.constant_color1);
+
             const auto size_span =
                 (settings.size_source == Primitive_size_source::mesh_point_size) ? as_span(mesh->point_size      ) :
                 (settings.size_source == Primitive_size_source::mesh_line_width) ? as_span(mesh->line_width      ) :
@@ -249,7 +259,7 @@ auto Primitive_buffer::update(
         const float     skinning_factor  = 0.0f;
         const uint32_t  base_joint_index = 0;
         using erhe::graphics::as_span;
-        const auto color_span = as_span(primitive_settings.constant_color);
+        const auto color_span = as_span(primitive_settings.constant_color0);
         const auto size_span  = as_span(primitive_settings.constant_size);
         using erhe::graphics::write;
         write(primitive_gpu_data, write_offset + offsets.world_from_node,  as_span(world_from_node ));

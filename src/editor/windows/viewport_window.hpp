@@ -29,7 +29,7 @@ public:
         erhe::imgui::Imgui_renderer&                                imgui_renderer,
         erhe::imgui::Imgui_windows&                                 imgui_windows,
         const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
-        App_context&                                             editor_context,
+        App_context&                                                app_context,
         const std::string_view                                      name,
         const std::string_view                                      ini_label,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view

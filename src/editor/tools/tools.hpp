@@ -82,7 +82,7 @@ public:
     [[nodiscard]] auto get_tool_scene_root() -> std::shared_ptr<Scene_root>;
 
 private:
-    App_context&                   m_context;
+    App_context&                      m_context;
     Tools_pipeline_renderpasses       m_pipeline_renderpasses;
     Tool*                             m_priority_tool{nullptr};
     ERHE_PROFILE_MUTEX(std::mutex,    m_mutex);

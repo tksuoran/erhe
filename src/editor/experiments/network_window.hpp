@@ -19,7 +19,7 @@ public:
     Network_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        App_context&              editor_context
+        App_context&                 app_context
     );
 
     // Implements Imgui_window
@@ -29,7 +29,7 @@ public:
 
 private:
 
-    App_context&          m_context;
+    App_context&             m_context;
     erhe::net::Client        m_client;
     erhe::net::Server        m_server;
 

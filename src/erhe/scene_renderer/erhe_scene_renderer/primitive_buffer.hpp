@@ -93,10 +93,11 @@ public:
         )
     };
 
-    Primitive_color_source color_source  {Primitive_color_source::constant_color};
-    glm::vec4              constant_color{1.0f, 1.0f, 1.0f, 1.0f};
-    Primitive_size_source  size_source   {Primitive_size_source::constant_size};
-    float                  constant_size {1.0f};
+    Primitive_color_source color_source   {Primitive_color_source::constant_color};
+    glm::vec4              constant_color0{1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4              constant_color1{1.0f, 0.0f, 0.0f, 1.0f};
+    Primitive_size_source  size_source    {Primitive_size_source::constant_size};
+    float                  constant_size  {1.0f};
 };
 
 class Primitive_buffer : public erhe::graphics::GPU_ring_buffer_client

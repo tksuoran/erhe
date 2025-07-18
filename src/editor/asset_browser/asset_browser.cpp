@@ -29,9 +29,9 @@ public:
     explicit Scene_open_operation(const std::filesystem::path& path);
 
     // Implements Operation
-    auto describe() const -> std::string   override;
-    void execute (App_context& context) override;
-    void undo    (App_context& context) override;
+    auto describe() const -> std::string override;
+    void execute (App_context& context)  override;
+    void undo    (App_context& context)  override;
 
 private:
     std::filesystem::path            m_path;
