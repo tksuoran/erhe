@@ -33,7 +33,7 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
         .base_joint_index = primitive_struct.add_uint ("base_joint_index"      )->get_offset_in_parent()
     }
 {
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
     ini.get("max_primitive_count", max_primitive_count);
 
     primitive_block.add_struct("primitives", &primitive_struct, erhe::graphics::Shader_resource::unsized_array);

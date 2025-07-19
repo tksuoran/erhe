@@ -56,6 +56,7 @@ target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
         erhe::commands
+        erhe::configuration
         erhe::graphics
         erhe::log
         erhe::math
@@ -64,9 +65,13 @@ target_link_libraries(${_target}
         glm::glm-header-only
         imgui
     PRIVATE
-        concurrentqueue
-        cxxopts
-        etl::etl
+        #concurrentqueue
+        #cxxopts
+        #etl::etl
+        #reflectcpp::reflectcpp
+        tomlplusplus::tomlplusplus
+        #erhe::configuration
+        erhe::file
         erhe::gl
         erhe::profile
         erhe::renderer

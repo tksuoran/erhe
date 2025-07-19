@@ -111,7 +111,7 @@ Hud::Hud(
     int   width {1024};
     int   height{1024};
     float ppm   {5000.0f};
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "hud");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "hud");
     ini.get("enabled", m_enabled);
     ini.get("width",   width);
     ini.get("height",  height);

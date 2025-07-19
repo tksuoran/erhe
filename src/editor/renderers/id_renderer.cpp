@@ -61,7 +61,7 @@ static constexpr std::string_view c_id_renderer_initialize_component{"Id_rendere
 [[nodiscard]] auto get_max_draw_count() -> std::size_t
 {
     int max_draw_count = 1000;
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "renderer");
     ini.get("max_draw_count", max_draw_count);
     return max_draw_count;
 }
@@ -106,7 +106,7 @@ Id_renderer::Id_renderer(
 {
     create_id_frame_resources();
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "id_renderer");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "id_renderer");
     ini.get("enabled", enabled);
 }
 

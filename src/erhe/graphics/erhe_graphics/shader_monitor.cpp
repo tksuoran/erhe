@@ -15,7 +15,7 @@ using std::string;
 
 void Shader_monitor::begin()
 {
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "shader_monitor");
+    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "shader_monitor");
     ini.get("enabled", m_run);
 
     if (!m_run) {

@@ -59,7 +59,6 @@ target_link_libraries(${_target}
         erhe::graphics
         erhe::log
         erhe::ui
-        mINI
     PRIVATE
         erhe::profile
         erhe::verify

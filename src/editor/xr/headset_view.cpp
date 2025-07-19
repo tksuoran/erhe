@@ -171,6 +171,9 @@ void Headset_view::update_fixed_step()
 
 void Headset_view::imgui()
 {
+    if (!m_context.OpenXR) {
+        return;
+    }
     // Scene selection
     auto                        old_scene_root = m_scene_root;
     std::shared_ptr<Scene_root> scene_root     = get_scene_root();

@@ -29,7 +29,6 @@ target_link_libraries(${_target}
         erhe::log
         erhe::math
         erhe::ui
-        mINI
     PRIVATE
         erhe::profile
         erhe::verify

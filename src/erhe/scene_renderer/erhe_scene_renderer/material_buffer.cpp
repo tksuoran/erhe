@@ -32,7 +32,7 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device)
         .reserved3                  = material_struct.add_float("reserved3"                 )->get_offset_in_parent()
     }
 {
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
     ini.get("max_material_count", max_material_count);
 
     material_block.add_struct(

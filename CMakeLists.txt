@@ -259,7 +259,22 @@ endif ()
 CPMAddPackage(
     NAME              simdjson
     VERSION           3.13.0
+    GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY simdjson/simdjson
+)
+
+CPMAddPackage(
+    NAME              tomlplusplus
+    GIT_SHALLOW       TRUE
+    VERSION           3.4.0
+    GITHUB_REPOSITORY marzer/tomlplusplus
+)
+
+CPMAddPackage(
+    NAME              reflect-cpp
+    GIT_SHALLOW       TRUE
+    GIT_TAG           908ee226a90a98876aa251120a5a85aee20e487b
+    GITHUB_REPOSITORY getml/reflect-cpp
 )
 
 CPMAddPackage(

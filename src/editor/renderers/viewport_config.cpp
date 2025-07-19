@@ -15,7 +15,7 @@ auto Viewport_config::default_config() -> Viewport_config
     config.selection_highlight_width_high       = -1.0f;
     config.selection_highlight_frequency        =  1.0f;
 
-    auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");
+    auto& erhe_ini = erhe::configuration::get_ini_file(erhe::c_erhe_config_file_path);
     float     gizmo_scale              {3.0f};
     bool      polygon_fill             {true};
     bool      edge_lines               {false};

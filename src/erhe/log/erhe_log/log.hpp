@@ -11,6 +11,8 @@
 
 namespace erhe::log {
 
+static constexpr const char* const c_logging_configuration_file_path = "logging.toml";
+
 void console_init();
 void initialize_log_sinks();
 void log_to_console();

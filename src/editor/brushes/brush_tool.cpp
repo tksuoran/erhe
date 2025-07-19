@@ -182,7 +182,7 @@ Brush_tool::Brush_tool(
         }
     );
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
     ini.get("object_scale", m_grid_scale);
 
     m_preview_command               .set_host(this);

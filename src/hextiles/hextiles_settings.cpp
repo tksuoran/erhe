@@ -9,6 +9,7 @@ Hextiles_settings::Hextiles_settings(
     erhe::window::Context_window& context_window
 )
 {
+#if 0 // TODO
     using namespace erhe::configuration;
     mINI::INIFile file{"settings.ini"};
     mINI::INIStructure ini;
@@ -22,6 +23,7 @@ Hextiles_settings::Hextiles_settings(
             ini_get(section, "icon_font_size", imgui.icon_font_size);
         }
     }
+#endif
 
     imgui.font_size *= context_window.get_scale_factor();
 }

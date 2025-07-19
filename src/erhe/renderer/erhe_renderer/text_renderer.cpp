@@ -98,7 +98,7 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "text_renderer");
+    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "text_renderer");
     ini.get("enabled",   config.enabled);
     ini.get("font_size", config.font_size);
 

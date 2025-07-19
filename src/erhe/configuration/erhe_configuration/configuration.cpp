@@ -1,7 +1,9 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_file/file.hpp"
 
 #include <etl/vector.h>
+#include <toml++/toml.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -59,103 +61,12 @@ auto trim(const std::string& str, const std::string& whitespace) -> std::string
     return str.substr(strBegin, strRange);
 }
 
-void ini_get(const mINI::INIMap<std::string>& ini, std::string key, std::size_t& destination)
-{
-    if (ini.has(key)) {
-        destination = std::stoi(ini.get(key));
-    }
-}
-
-void ini_get(const mINI::INIMap<std::string>& ini, std::string key, int& destination)
-{
-    if (ini.has(key)) {
-        destination = std::stoi(ini.get(key));
-    }
-}
-
-void ini_get(const mINI::INIMap<std::string>& ini, std::string key, float& destination)
-{
-    if (ini.has(key)) {
-        destination = std::stof(ini.get(key));
-    }
-}
-
-void ini_get(const mINI::INIMap<std::string>& ini, std::string key, glm::vec2& destination)
-{
-    if (ini.has(key)) {
-        std::string value = ini.get(key);
-        const auto values = split(value, ',');
-        if (values.size() > 0) {
-            destination.x = std::stof(trim(values.at(0)));
-        }
-        if (values.size() > 1) {
-            destination.y = std::stof(trim(values.at(1)));
-        }
-    }
-}
-
-void ini_get(const mINI::INIMap<std::string>& ini, std::string key, glm::vec3& destination)
-{
-    if (ini.has(key)) {
-        std::string value = ini.get(key);
-        const auto values = split(value, ',');
-        if (values.size() > 0) {
-            destination.x = std::stof(trim(values.at(0)));
-        }
-        if (values.size() > 1) {
-            destination.y = std::stof(trim(values.at(1)));
-        }
-        if (values.size() > 2) {
-            destination.z = std::stof(trim(values.at(2)));
-        }
-    }
-}
-
-void ini_get(const mINI::INIMap<std::string>& ini, std::string key, glm::vec4& destination)
-{
-    if (ini.has(key)) {
-        std::string value = ini.get(key);
-        const auto values = split(value, ',');
-        destination.w = 1.0f;
-        if (values.size() >= 3) {
-            destination.x = std::stof(trim(values.at(0)));
-            destination.y = std::stof(trim(values.at(1)));
-            destination.z = std::stof(trim(values.at(2)));
-        }
-        if (values.size() >= 4) {
-            destination.w = std::stof(trim(values.at(3)));
-        }
-    }
-}
-
-void ini_get(const mINI::INIMap<std::string>& ini, std::string key, std::string& destination)
-{
-    if (ini.has(key)) {
-        destination = ini.get(key);
-    }
-}
-
-void ini_get(const mINI::INIMap<std::string>& ini, std::string key, bool& destination)
-{
-    if (ini.has(key)) {
-        const std::string value = to_lower(ini.get(key));
-        if (value == "1" || value == "yes" || value == "true" || value == "on") {
-            destination = true;
-        }
-        else if (value == "0" || value == "no" || value == "false" || value == "off") {
-            destination = false;
-        }
-    }
-}
-
-//Ini::~Ini() noexcept = default;
-
 class Ini_section_impl : public Ini_section
 {
 public:
-    Ini_section_impl(const std::string& name, mINI::INIStructure& ini)
+    Ini_section_impl(const std::string& name, toml::table* table)
         : m_name{name}
-        , m_ini_map{ini.get(m_name)}
+        , m_table{table}
     {
     }
     Ini_section_impl(const Ini_section_impl&) = delete;
@@ -166,18 +77,120 @@ public:
 
     auto get_name() const -> const std::string& { return m_name; }
 
-    void get(const std::string& key, std::size_t& destination) const override { ini_get(m_ini_map, key, destination); }
-    void get(const std::string& key, bool&        destination) const override { ini_get(m_ini_map, key, destination); }
-    void get(const std::string& key, int&         destination) const override { ini_get(m_ini_map, key, destination); }
-    void get(const std::string& key, float&       destination) const override { ini_get(m_ini_map, key, destination); }
-    void get(const std::string& key, glm::vec2&   destination) const override { ini_get(m_ini_map, key, destination); }
-    void get(const std::string& key, glm::vec3&   destination) const override { ini_get(m_ini_map, key, destination); }
-    void get(const std::string& key, glm::vec4&   destination) const override { ini_get(m_ini_map, key, destination); }
-    void get(const std::string& key, std::string& destination) const override { ini_get(m_ini_map, key, destination); }
+    void get(const std::string& key, std::size_t& destination) const override 
+    {
+        if (m_table == nullptr) {
+            return;
+        }
+        if (const toml::impl::wrap_node<int64_t>* const ptr = m_table->get_as<int64_t>(key)) {
+            destination = static_cast<std::size_t>(ptr->get());
+        }
+    }
+    void get(const std::string& key, bool& destination) const override
+    {
+        if (m_table == nullptr) {
+            return;
+        }
+        if (const toml::impl::wrap_node<bool>* const ptr = m_table->get_as<bool>(key)) {
+            destination = ptr->get();
+        }
+    }
+    void get(const std::string& key, int& destination) const override
+    {
+        if (m_table == nullptr) {
+            return;
+        }
+        if (const toml::impl::wrap_node<int64_t>* const ptr = m_table->get_as<int64_t>(key)) {
+            destination = static_cast<int>(ptr->get());
+        }
+    }
+    void get(const std::string& key, float& destination) const override
+    {
+        if (m_table == nullptr) {
+            return;
+        }
+        if (const toml::impl::wrap_node<double>* const d_ptr = m_table->get_as<double>(key)) {
+            destination = static_cast<float>(d_ptr->get());
+        } else if (const toml::impl::wrap_node<int64_t>* const i_ptr = m_table->get_as<int64_t>(key)) {
+            destination = static_cast<float>(i_ptr->get());
+        }
+    }
+    void get(const std::string& key, glm::vec2& destination) const override
+    {
+        if (m_table == nullptr) {
+            return;
+        }
+        toml::node* node = m_table->get(key);
+        if (toml::array* array = node->as_array()) {
+            if (array->size() == 2) {
+                destination.x = array->at(0).value_or(0.0f);
+                destination.y = array->at(1).value_or(0.0f);
+            }
+        } else if (toml::table* table = node->as_table()) {
+            toml::impl::wrap_node<double>* x_node = table->get_as<double>("x");
+            toml::impl::wrap_node<double>* y_node = table->get_as<double>("y");
+            destination.x = (x_node != nullptr) ? static_cast<float>(x_node->get()) : 0.0f;
+            destination.y = (y_node != nullptr) ? static_cast<float>(x_node->get()) : 0.0f;
+        }
+    }
+    void get(const std::string& key, glm::vec3& destination) const override
+    {
+        if (m_table == nullptr) {
+            return;
+        }
+        toml::node* node = m_table->get(key);
+        if (toml::array* array = node->as_array()) {
+            if (array->size() == 3) {
+                destination.x = array->at(0).value_or(0.0f);
+                destination.y = array->at(1).value_or(0.0f);
+                destination.z = array->at(2).value_or(0.0f);
+            }
+        } else if (toml::table* table = node->as_table()) {
+            toml::impl::wrap_node<double>* x_node = table->get_as<double>("x");
+            toml::impl::wrap_node<double>* y_node = table->get_as<double>("y");
+            toml::impl::wrap_node<double>* z_node = table->get_as<double>("z");
+            destination.x = (x_node != nullptr) ? static_cast<float>(x_node->get()) : 0.0f;
+            destination.y = (y_node != nullptr) ? static_cast<float>(x_node->get()) : 0.0f;
+            destination.z = (z_node != nullptr) ? static_cast<float>(z_node->get()) : 0.0f;
+        }
+    }
+    void get(const std::string& key, glm::vec4& destination) const override
+    {
+        if (m_table == nullptr) {
+            return;
+        }
+        toml::node* node = m_table->get(key);
+        if (toml::array* array = node->as_array()) {
+            if (array->size() == 4) {
+                destination.x = array->at(0).value_or(0.0f);
+                destination.y = array->at(1).value_or(0.0f);
+                destination.z = array->at(2).value_or(0.0f);
+                destination.w = array->at(3).value_or(0.0f);
+            }
+        } else if (toml::table* table = node->as_table()) {
+            toml::impl::wrap_node<double>* x_node = table->get_as<double>("x");
+            toml::impl::wrap_node<double>* y_node = table->get_as<double>("y");
+            toml::impl::wrap_node<double>* z_node = table->get_as<double>("z");
+            toml::impl::wrap_node<double>* w_node = table->get_as<double>("w");
+            destination.x = (x_node != nullptr) ? static_cast<float>(x_node->get()) : 0.0f;
+            destination.y = (y_node != nullptr) ? static_cast<float>(x_node->get()) : 0.0f;
+            destination.z = (z_node != nullptr) ? static_cast<float>(z_node->get()) : 0.0f;
+            destination.w = (w_node != nullptr) ? static_cast<float>(w_node->get()) : 0.0f;
+        }
+    }
+    void get(const std::string& key, std::string& destination) const override
+    {
+        if (m_table == nullptr) {
+            return;
+        }
+        if (const toml::impl::wrap_node<std::string>* const ptr = m_table->get_as<std::string>(key)) {
+            destination = ptr->get();
+        }
+    }
 
-private:
-    std::string m_name;
-    mINI::INIMap<std::string> m_ini_map;
+  private:
+    std::string  m_name{};
+    toml::table* m_table{nullptr};
 };
 
 class Ini_file_impl : public Ini_file
@@ -186,8 +199,13 @@ public:
     Ini_file_impl(const std::string& name)
         : m_name{name}
     {
-        mINI::INIFile file{name};
-        file.read(m_ini);
+        parse_toml(m_root_table, name);
+        m_root_table.for_each(
+            [this](auto& key, toml::table& table)
+            {
+                m_sections.emplace_back(std::string{key}, &table);
+            }
+        );
     }
     Ini_file_impl(const Ini_file_impl&) = delete;
     Ini_file_impl& operator=(const Ini_file_impl&) = delete;
@@ -205,14 +223,14 @@ public:
                 return section;
             }
         }
-        Ini_section_impl& section = m_sections.emplace_back(name, m_ini);
+        Ini_section_impl& section = m_sections.emplace_back(name, nullptr);
         return section;
     }
 
 private:
     std::string                    m_name;
     ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
-    mINI::INIStructure             m_ini;
+    toml::table                    m_root_table;
     std::vector<Ini_section_impl>  m_sections;
 };
 
@@ -262,6 +280,42 @@ auto get_ini_file_section(std::string_view file_name, std::string_view section_n
     Ini_file& file = get_ini_file(file_name);
     const Ini_section& section = file.get_section(std::string{section_name});
     return section;
+}
+
+auto parse_toml(toml::table& table, std::string_view file_name) -> bool
+{
+    try {
+        std::optional<std::string> contents_opt = erhe::file::read("parse_toml()", file_name);
+        if (!contents_opt.has_value()) {
+            return false;
+        }
+        table = toml::parse(contents_opt.value(), file_name);
+        return true;
+    } catch (toml::parse_error e) {
+        char const* what        = e.what();
+        char const* description = e.description().data();
+        printf("what = %s\n", what);
+        printf("description = %s\n", description);
+        printf("file = %s\n", e.source().path ? e.source().path->c_str() : "");
+        printf("line = %u\n", e.source().begin.line);
+        printf("column = %u\n", e.source().begin.column);
+    } catch (std::exception e) {
+        char const* what = e.what();
+        printf("what = %s\n", what);
+    } catch (std::runtime_error& e) {
+        char const* what = e.what();
+        printf("what = %s\n", what);
+    } catch (...) {
+        printf("?!\n");
+    }
+    return false;
+}
+
+auto write_toml(toml::table& table, std::string_view file_name) -> bool
+{
+    std::ostringstream ss;
+    ss << table;
+    return erhe::file::write_file(file_name, ss.str());
 }
 
 } // namespace erhe::configuration

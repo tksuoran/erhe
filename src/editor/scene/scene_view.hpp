@@ -123,12 +123,13 @@ public:
     [[nodiscard]] auto get_nearest_hover                        (uint32_t slot_mask) const -> const Hover_entry*;
 
 protected:
-    void set_hover(std::size_t slot, const Hover_entry& entry);
+    [[nodiscard]] void set_hover(std::size_t slot, const Hover_entry& entry);
 
     App_context&             m_context;
     std::optional<glm::mat4> m_world_from_control;
     std::optional<glm::mat4> m_control_from_world;
     Viewport_config          m_viewport_config;
+    bool                     m_hover_update_pending{true};
 
 private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;

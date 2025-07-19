@@ -13,6 +13,7 @@
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
@@ -26,6 +27,7 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include <imgui/imgui.h>
+#include <toml++/toml.hpp>
 
 #include <cmath>
 #include <numeric>
@@ -568,21 +570,17 @@ void Fly_camera_tool::serialize_transform(bool store)
         const erhe::scene::Trs_transform& world_from_node = m_node->node_data.transforms.world_from_node;
         glm::vec3 translation = world_from_node.get_translation();
         glm::quat rotation    = world_from_node.get_rotation();
-        mINI::INIFile file("fly_camera.ini");
-        mINI::INIStructure ini;
-        ini["translation"]["x"] = std::to_string(translation.x);
-        ini["translation"]["y"] = std::to_string(translation.y);
-        ini["translation"]["z"] = std::to_string(translation.z);
-        ini["rotation"]["x"] = std::to_string(rotation.x);
-        ini["rotation"]["y"] = std::to_string(rotation.y);
-        ini["rotation"]["z"] = std::to_string(rotation.z);
-        ini["rotation"]["w"] = std::to_string(rotation.w);
-        file.generate(ini);
+
+        toml::table table;
+        table.insert("translation", toml::array{ translation.x, translation.y, translation.z });
+        table.insert("rotation",    toml::array{ rotation.x, rotation.y, rotation.z, rotation.w });
+        std::ostringstream ss; ss << table;
+        erhe::file::write_file("fly_camera.toml", ss.str());
     } else {
-        auto& settings_ini = erhe::configuration::get_ini_file("fly_camera.ini");
+        auto& settings_ini = erhe::configuration::get_ini_file("fly_camera.toml");
         glm::vec3 translation{};
         const auto& translation_section = settings_ini.get_section("translation");
-        translation_section.get("x", translation.x);
+        translation_section.get("x", translation.x); // TODO
         translation_section.get("y", translation.y);
         translation_section.get("z", translation.z);
         glm::quat rotation{};
@@ -671,7 +669,7 @@ Fly_camera_tool::Fly_camera_tool(
     m_camera_controller->get_variable(Variable::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_variable(Variable::translate_z).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "camera_controls");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "camera_controls");
     ini.get("invert_x",           config.invert_x);
     ini.get("invert_y",           config.invert_y);
     ini.get("velocity_damp",      config.velocity_damp);

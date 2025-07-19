@@ -33,7 +33,7 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device)
         .padding              = camera_struct.add_uvec2("padding"             )->get_offset_in_parent(),
     }
 {
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
     ini.get("max_camera_count", max_camera_count);
 
     camera_block.add_struct("cameras", &camera_struct, 1);

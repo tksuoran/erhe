@@ -35,7 +35,7 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
 {
     int capacity = 200;
     int size_pixels = 256;
-    const auto& section = erhe::configuration::get_ini_file_section("erhe.ini", "thumbnails");
+    const auto& section = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "thumbnails");
     section.get("capacity", capacity);
     section.get("capacity", size_pixels);
 

@@ -111,7 +111,7 @@ public:
         ERHE_VERIFY(!name.empty());
         const auto groupname = get_groupname(name);
         const auto basename  = get_basename(name);
-        const auto& ini = erhe::configuration::get_ini_file_section("logging.ini", groupname);
+        const auto& ini = erhe::configuration::get_ini_file_section(c_logging_configuration_file_path, groupname);
 
         std::string levelname;
         ini.get(basename.c_str(), levelname);

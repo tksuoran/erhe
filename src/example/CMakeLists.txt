@@ -41,7 +41,6 @@ target_link_libraries(
     erhe::ui
     erhe::verify
     erhe::window
-    mINI
 )
 
 if (DEFINED ERHE_PROFILE_TARGET)

@@ -363,7 +363,7 @@ Device::Device(erhe::window::Context_window& context_window)
     bool capture_support             {false};
     bool initial_clear               {false};
     {
-        const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "graphics");
+        const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "graphics");
         ini.get("post_processing",              configuration.post_processing);
         ini.get("use_time_query",               configuration.use_time_query );
         ini.get("force_bindless_textures_off",  force_bindless_textures_off);
@@ -468,7 +468,7 @@ Device::Device(erhe::window::Context_window& context_window)
     }
 
     {
-        const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderdoc");
+        const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderdoc");
         ini.get("capture_support", capture_support);
     }
 

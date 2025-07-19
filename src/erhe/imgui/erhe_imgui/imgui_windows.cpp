@@ -123,16 +123,20 @@ void Imgui_windows::save_window_state()
     if (m_windows_ini_path.empty()) {
         return;
     }
-    mINI::INIFile file(m_windows_ini_path);
-    mINI::INIStructure ini;
+    toml::table table;
     for (auto& imgui_window : m_imgui_windows) {
         const auto label = imgui_window->get_ini_label();
         if (label.empty()) {
             continue;
         }
-        ini["windows"][label.c_str()] = imgui_window->is_window_visible() ? "true" : "false";
+        table.insert(label.c_str(), imgui_window->is_window_visible());
     }
-    file.generate(ini);
+    toml::table root_table;
+    root_table.insert("windows", table);
+    const bool save_ok = erhe::configuration::write_toml(root_table, m_windows_ini_path);
+    if (!save_ok) {
+        log_imgui->warn("Imgui_windows::save_window_state() failed to write {}", m_windows_ini_path.c_str());
+    }
 }
 
 void Imgui_windows::process_events(const float dt_s, const int64_t time_ns)

@@ -129,7 +129,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_export_gltf_command, "File.Export glTF");
     commands.bind_command_to_menu(&m_create_material,     "Create.Material");
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
     ini.get("instance_count", m_make_mesh_config.instance_count);
     ini.get("instance_gap",   m_make_mesh_config.instance_gap);
     ini.get("object_scale",   m_make_mesh_config.object_scale);

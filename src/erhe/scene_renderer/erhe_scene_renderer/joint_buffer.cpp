@@ -19,7 +19,7 @@ Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device)
     : joint_block {erhe::graphics::Shader_resource{graphics_device, "joint", joint_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}}
     , joint_struct{erhe::graphics::Shader_resource{graphics_device, "Joint"}}
 {
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderer");
+    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
     ini.get("max_joint_count", max_joint_count);
 
     offsets.debug_joint_indices     = joint_block.add_uvec4("debug_joint_indices"    )->get_offset_in_parent();

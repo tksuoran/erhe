@@ -211,7 +211,7 @@ Hotbar::Hotbar(
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "hotbar");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "hotbar");
     ini.get("enabled",    m_enabled);
     ini.get("show",       m_show);
     ini.get("use_radial", m_use_radial);

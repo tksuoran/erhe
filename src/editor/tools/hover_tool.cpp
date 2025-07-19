@@ -47,11 +47,11 @@ Hover_tool::Hover_tool(
     );
 }
 
-auto Hover_tool::get_hover_node() const -> erhe::scene::Node*
+auto Hover_tool::get_hover_node() const -> std::shared_ptr<erhe::scene::Node>
 {
     Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
-        return nullptr;
+        return {};
     }
 
     const Hover_entry* nearest_hover = scene_view->get_nearest_hover(
@@ -59,14 +59,22 @@ auto Hover_tool::get_hover_node() const -> erhe::scene::Node*
         Hover_entry::rendertarget_bit
     );
     if ((nearest_hover == nullptr) || (nearest_hover->slot == Hover_entry::rendertarget_slot)) {
-        return nullptr;
+        return {};
     }
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = nearest_hover->scene_mesh_weak.lock();
-    if (hover_scene_mesh) {
-        return hover_scene_mesh->get_node();
+    if (!hover_scene_mesh) {
+        return {};
     }
-    return nullptr;
+    erhe::scene::Node* node = hover_scene_mesh->get_node();
+    if (node == nullptr) {
+        return {};
+    }
+
+    std::shared_ptr<erhe::Item_base> node_item_base = std::dynamic_pointer_cast<erhe::Item_base>(node->shared_from_this());
+    std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node_item_base);
+
+    return node_shared;
 }
 
 void Hover_tool::reset_item_tree_hover()
@@ -87,32 +95,27 @@ void Hover_tool::on_message(App_message& message)
     if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         m_context.app_message_bus->queue_message(
             App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh,
-                .item         = {}
+                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh
             }
         );
     }
     if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
+        std::shared_ptr<erhe::scene::Node> hovered_node     = get_hover_node();
         std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_viewport.lock();
-        if (old_hovered_node) {
-            old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+        if (old_hovered_node != hovered_node) {
+            log_pointer->debug("Hover_tool::on_message() c_flag_bit_hover_mesh");
+            if (old_hovered_node) {
+                log_pointer->debug("clearing hovered bit for {}", old_hovered_node->get_name());
+                old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+            }
+            if (hovered_node) {
+                log_pointer->debug("setting hovered bit for {}", hovered_node->get_name());
+                hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+            } else {
+                log_pointer->debug("no new hovered mesh / node");
+            }
+            m_hovered_node_in_viewport = hovered_node;
         }
-
-        auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(message.item);
-        erhe::scene::Node* node = mesh ? mesh->get_node() : nullptr;
-        if (node == nullptr) {
-            m_hovered_node_in_viewport.reset();
-            return;
-        }
-        std::shared_ptr<erhe::Item_base> node_item_base = std::dynamic_pointer_cast<erhe::Item_base>(node->shared_from_this());
-        std::shared_ptr<erhe::scene::Node> hovered_node = std::dynamic_pointer_cast<erhe::scene::Node>(node_item_base);
-        if (!hovered_node) {
-            m_hovered_node_in_viewport.reset();
-            return;
-        }
-
-        hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
-        m_hovered_node_in_viewport = hovered_node;
     }
 
     if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_tree_node)) {

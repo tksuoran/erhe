@@ -10,6 +10,7 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
+#include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/gl_log.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -303,7 +304,7 @@ void run_hextiles()
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
     {
         std::error_code error_code{};
-        bool found = std::filesystem::exists("erhe.ini", error_code);
+        bool found = std::filesystem::exists(erhe::c_erhe_config_file_path, error_code);
         if (!found) {
             std::string path_string{};
             std::filesystem::path path = std::filesystem::current_path();

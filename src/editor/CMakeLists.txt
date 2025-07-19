@@ -2,16 +2,12 @@ set(_target "editor")
 add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe.ini
-    graphics_presets.ini
-    # "imgui_Hud Viewport.ini"
-    imgui_window_imgui_host.ini
-    imgui_window_imgui_viewport.ini
-    logging.ini
-    openxr_windows.ini
-    settings.ini
-    windows.ini
-
+    erhe.toml
+    graphics_presets.toml
+    logging.toml
+    openxr_windows.toml
+    settings.toml
+    windows.toml
 
     animation/animation_curve.cpp
     animation/animation_curve.hpp
@@ -402,11 +398,12 @@ target_link_libraries(
     geogram
     imgui
     imgui_gradient::imgui_gradient
-    mINI
-    RectangleBinPack
     rapidjson
+    RectangleBinPack
+    reflectcpp::reflectcpp
     Taskflow
     tinyexpr
+    tomlplusplus::tomlplusplus
 )
 
 # Icon font download and process
@@ -472,7 +469,6 @@ target_link_libraries(
         erhe::log
         erhe::net
         cxxopts
-        mINI
         RectangleBinPack
         rapidjson
 )

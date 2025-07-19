@@ -40,6 +40,9 @@ public:
     int         shadow_light_count{4};
 };
 
+static const char* const c_settings_file_path         = "settings.toml";
+static const char* const c_graphics_presets_file_path = "graphics_presets.toml";
+
 class Graphics_settings
 {
 public:

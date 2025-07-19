@@ -21,7 +21,7 @@ Network_window::Network_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Network", "network"}
     , m_context                {app_context}
 {
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "network");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "network");
     ini.get("upstream_address",   m_upstream_address);
     ini.get("upstream_port",      m_upstream_port);
     ini.get("downstream_address", m_downstream_address);

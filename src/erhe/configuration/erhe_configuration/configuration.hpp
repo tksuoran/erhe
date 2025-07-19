@@ -1,24 +1,21 @@
 #pragma once
 
-#include "erhe_profile/profile.hpp"
-
 #include <glm/glm.hpp>
 
-#include "mini/ini.h"
+#include <toml++/toml.hpp>
+
+//namespace toml { class table; }
+
+namespace erhe {
+static const char* const c_erhe_config_file_path = "erhe.toml";
+}
 
 namespace erhe::configuration {
 
 auto str     (bool value      ) -> const char*;
 auto split   (const std::string& s, char delimeter) -> std::vector<std::string>;
 auto trim    (const std::string& str, const std::string& whitespace = " \t") -> std::string;
-
 auto to_lower(std::string data) -> std::string;
-void ini_get (const mINI::INIMap<std::string>& ini, std::string key, std::size_t& destination);
-void ini_get (const mINI::INIMap<std::string>& ini, std::string key, int& destination);
-void ini_get (const mINI::INIMap<std::string>& ini, std::string key, float& destination);
-void ini_get (const mINI::INIMap<std::string>& ini, std::string key, glm::vec4& destination);
-void ini_get (const mINI::INIMap<std::string>& ini, std::string key, std::string& destination);
-void ini_get (const mINI::INIMap<std::string>& ini, std::string key, bool& destination);
 
 class Ini_section
 {
@@ -57,6 +54,7 @@ public:
 auto get_ini_file(std::string_view file_name) -> Ini_file&;
 auto get_ini_file_section(std::string_view file_name, std::string_view section_name) -> const Ini_section&;
 
-//auto get_ini(const char* path) -> std::unique_ptr<Ini>;
+auto parse_toml(toml::table& table, std::string_view file_name) -> bool;
+auto write_toml(toml::table& table, std::string_view file_name) -> bool;
 
 } // namespace erhe::configuration

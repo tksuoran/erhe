@@ -347,6 +347,14 @@ void Viewport_scene_view::update_hover(bool ray_only)
 
     update_grid_hover();
 
+    if (m_hover_update_pending) {
+        m_context.app_message_bus->send_message(
+            App_message{
+                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh,
+            }
+        );
+        m_hover_update_pending = false;
+    }
 }
 
 void Viewport_scene_view::update_hover_with_id_render()
@@ -423,6 +431,7 @@ void Viewport_scene_view::update_hover_with_id_render()
         hover_brush        ? "brush "        : "",
         hover_rendertarget ? "rendertarget " : ""
     );
+
     set_hover(Hover_entry::content_slot     , hover_content      ? entry : Hover_entry{});
     set_hover(Hover_entry::tool_slot        , hover_tool         ? entry : Hover_entry{});
     set_hover(Hover_entry::brush_slot       , hover_brush        ? entry : Hover_entry{});

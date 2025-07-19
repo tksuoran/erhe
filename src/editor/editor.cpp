@@ -329,22 +329,22 @@ public:
     [[nodiscard]] static auto get_windows_ini_path() -> std::string
     {
         bool openxr{false};
-        const auto& heaset = erhe::configuration::get_ini_file_section("erhe.ini", "headset");
+        const auto& heaset = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "headset");
         heaset.get("openxr", openxr);
-        return openxr ? "openxr_windows.ini" : "windows.ini";
+        return openxr ? "openxr_windows.toml" : "windows.toml";
     }
 
     [[nodiscard]] static auto conditionally_enable_window_imgui_host(erhe::window::Context_window* context_window)
     {
         bool openxr{false};
-        const auto& heaset = erhe::configuration::get_ini_file_section("erhe.ini", "headset");
+        const auto& heaset = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "headset");
         heaset.get("openxr", openxr);
         return openxr ? nullptr : context_window;
     }
 
     [[nodiscard]] auto create_window() -> std::unique_ptr<erhe::window::Context_window>
     {
-        auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");
+        auto& erhe_ini = erhe::configuration::get_ini_file(erhe::c_erhe_config_file_path);
 
         const auto& headset_section = erhe_ini.get_section("headset");
         headset_section.get("openxr",        m_app_context.OpenXR);
@@ -397,7 +397,7 @@ public:
     Editor()
     {
         int thread_count = 1;
-        auto& erhe_ini = erhe::configuration::get_ini_file("erhe.ini");
+        auto& erhe_ini = erhe::configuration::get_ini_file(erhe::c_erhe_config_file_path);
 
         // Note: m_executor is also used at runtime, so it cannot be
         //       skipped even if parallel init is not used.
@@ -459,7 +459,7 @@ public:
                     .composition_alpha = false,
                     .mirror_mode       = false
                 };
-                const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "headset");
+                const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "headset");
                 ini.get("quad_view",         configuration.quad_view);
                 ini.get("debug",             configuration.debug);
                 ini.get("depth",             configuration.depth);
@@ -1013,7 +1013,7 @@ public:
 
         fill_app_context();
 
-        const auto& physics_section = erhe::configuration::get_ini_file_section("erhe.ini", "physics");
+        const auto& physics_section = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "physics");
         physics_section.get("static_enable",  m_app_settings->physics.static_enable);
         physics_section.get("dynamic_enable", m_app_settings->physics.dynamic_enable);
         if (!m_app_settings->physics.static_enable) {
@@ -1322,12 +1322,12 @@ void run_editor()
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
     {
         std::error_code error_code{};
-        bool found = std::filesystem::exists("erhe.ini", error_code);
+        bool found = std::filesystem::exists(erhe::c_erhe_config_file_path, error_code);
         if (!found) {
             std::string path_string{};
             std::filesystem::path path = std::filesystem::current_path();
             path_string = path.string();
-            fprintf(stdout, "erhe.ini not found.\nCurrent working directory is %s\n", path_string.c_str());
+            fprintf(stdout, "erhe.toml not found.\nCurrent working directory is %s\n", path_string.c_str());
 #if defined(ERHE_OS_LINUX)
             char self_path[PATH_MAX];
             ssize_t length = readlink("/proc/self/exe", self_path, PATH_MAX - 1);
@@ -1346,7 +1346,7 @@ void run_editor()
                 const std::filesystem::path try_path = path / std::filesystem::path("src/editor");
                 bool exists_directory = std::filesystem::exists(try_path, error_code);
                 if (exists_directory) {
-                    const std::filesystem::path erhe_ini_path = try_path / std::filesystem::path("erhe.ini");
+                    const std::filesystem::path erhe_ini_path = try_path / std::filesystem::path(erhe::c_erhe_config_file_path);
                     const bool exists_erhe_ini = std::filesystem::exists(erhe_ini_path, error_code);
                     if (exists_erhe_ini) {
                         std::filesystem::current_path(try_path, error_code);
@@ -1405,7 +1405,7 @@ void run_editor()
     {
         ERHE_PROFILE_SCOPE("init renderdoc");
         bool enable_renderdoc_capture_support{false};
-        const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "renderdoc");
+        const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "renderdoc");
         ini.get("capture_support", enable_renderdoc_capture_support);
         if (enable_renderdoc_capture_support) {
             erhe::window::initialize_frame_capture();

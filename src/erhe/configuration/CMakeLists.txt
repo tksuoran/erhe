@@ -11,11 +11,12 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(${_target}
     PUBLIC
-        mINI
-        glm::glm-header-only
         erhe::profile
+        glm::glm-header-only
+        tomlplusplus::tomlplusplus
     PRIVATE
         etl::etl
+        erhe::file
 )
 
 erhe_target_settings(${_target} "erhe")

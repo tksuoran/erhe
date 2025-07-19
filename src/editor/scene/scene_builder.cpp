@@ -78,7 +78,7 @@ Scene_builder::Scene_builder(
     ERHE_PROFILE_FUNCTION();
     m_scene_root = scene;
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
     ini.get("mass_scale", m_mass_scale);
     ini.get("detail",     m_detail);
 
@@ -106,7 +106,7 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
     float camera_exposure{1.0f};
     float shadow_range   {22.0f};
     ini.get("camera_exposure", camera_exposure);
@@ -150,7 +150,7 @@ void Scene_builder::setup_cameras(
     float camera_distance  = 3.0f;
     float camera_elevation = 1.6f;
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
     ini.get("camera_distance",  camera_distance);
     ini.get("camera_elevation", camera_elevation);
 
@@ -566,7 +566,7 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
     float floor_size                  {40.0f};
     bool  floor                       {true};
     bool  make_johnson_solid_brushes  {true};
@@ -1109,7 +1109,7 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "scene");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
     float directional_light_intensity{20.0f};
     float directional_light_radius   {6.0f};
     float directional_light_height   {10.0f};

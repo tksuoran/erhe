@@ -38,7 +38,7 @@ public:
 
 private:
     void on_message(App_message& message);
-    [[nodiscard]] auto get_hover_node() const -> erhe::scene::Node*;
+    [[nodiscard]] auto get_hover_node() const -> std::shared_ptr<erhe::scene::Node>;
 
     bool                     m_show_hover_normal              {true};
     bool                     m_show_snapped_grid_position     {false};

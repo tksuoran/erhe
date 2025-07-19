@@ -120,7 +120,7 @@ Transform_tool::Transform_tool(
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "transform_tool");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "transform_tool");
     auto& settings = shared.settings;
     ini.get("show_translate", settings.show_translate);
     ini.get("show_rotate",    settings.show_rotate);

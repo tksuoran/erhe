@@ -3,7 +3,6 @@
 #include "app_context.hpp"
 #include "app_settings.hpp"
 #include "graphics/icon_set.hpp"
-//#include "renderers/render_context.hpp"
 #include "grid/grid.hpp"
 #include "tools/tools.hpp"
 
@@ -37,7 +36,7 @@ Grid_tool::Grid_tool(
 
     tools.register_tool(this);
 
-    const auto& ini = erhe::configuration::get_ini_file_section("erhe.ini", "grid");
+    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "grid");
     bool initial_snap_enable{true};
     bool initial_grid_visible{true};
     ini.get("snap_enabled", initial_snap_enable);
