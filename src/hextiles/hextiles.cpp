@@ -48,8 +48,7 @@ public:
             erhe::window::Window_configuration{
                 .gl_major          = 4,
                 .gl_minor          = 6,
-                .width             = 1920,
-                .height            = 1080,
+                .size              = glm::ivec2{1920, 1080},
                 .msaa_sample_count = 0,
                 .title             = "erhe HexTiles by Timo Suoranta"
             }

@@ -26,6 +26,7 @@ public:
     virtual void get(const std::string& key, bool&        destination) const = 0;
     virtual void get(const std::string& key, int&         destination) const = 0;
     virtual void get(const std::string& key, float&       destination) const = 0;
+    virtual void get(const std::string& key, glm::ivec2&  destination) const = 0;
     virtual void get(const std::string& key, glm::vec2&   destination) const = 0;
     virtual void get(const std::string& key, glm::vec3&   destination) const = 0;
     virtual void get(const std::string& key, glm::vec4&   destination) const = 0;

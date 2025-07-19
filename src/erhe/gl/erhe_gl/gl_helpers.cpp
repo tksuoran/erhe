@@ -16,13 +16,13 @@
 
 namespace gl_helpers {
 
-std::shared_ptr<spdlog::logger> log_gl;
+std::shared_ptr<spdlog::logger> log_gl_debug;
 
 static bool enable_error_checking = true;
 
 void initialize_logging()
 {
-    log_gl = erhe::log::make_logger("erhe.gl");
+    log_gl_debug = erhe::log::make_logger("erhe.gl.debug");
 }
 
 void set_error_checking(const bool enable)
@@ -43,7 +43,7 @@ void check_error()
 #endif
 
     if (error_code != gl::Error_code::no_error) {
-        log_gl->error("{}", gl::c_str(error_code));
+        log_gl_debug->error("{}", gl::c_str(error_code));
         //error_fmt(log_gl, "{}", gl::c_str(error_code));
 #if defined(WIN32)
         DebugBreak();

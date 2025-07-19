@@ -112,6 +112,9 @@ Hud::Hud(
     int   height{1024};
     float ppm   {5000.0f};
     const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "hud");
+
+    // Set default based on Desktop / OpenXR for case when [hud] enabled is not set in erhe.toml
+    m_enabled = app_context.OpenXR;
     ini.get("enabled", m_enabled);
     ini.get("width",   width);
     ini.get("height",  height);

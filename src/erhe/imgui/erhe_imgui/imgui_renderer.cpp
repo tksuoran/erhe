@@ -458,12 +458,14 @@ static void ImGui_Impl_erhe_PlatformSetImeData(ImGuiContext* context, ImGuiViewp
 void Imgui_renderer::set_ime_data(ImGuiViewport* viewport, ImGuiPlatformImeData* data)
 {
     Imgui_host* imgui_host = static_cast<Imgui_host*>(viewport->PlatformHandle);
-    if ((!data->WantVisible || (m_ime_host != imgui_host)) && m_ime_host != nullptr) {
+    if ((!data->WantVisible || (m_ime_host != imgui_host)) && (m_ime_host != nullptr)) {
         imgui_host->stop_text_input();
         m_ime_host = nullptr;
     }
-    if (data->WantVisible)
-    {
+    if (imgui_host == nullptr) {
+        return;
+    }
+    if (data->WantVisible) {
         int x = (int)(data->InputPos.x - viewport->Pos.x);
         int y = (int)(data->InputPos.y - viewport->Pos.y + data->InputLineHeight);
         int w = 1;

@@ -109,9 +109,9 @@ public:
     auto make_logger(const std::string& name, const bool tail) -> std::shared_ptr<spdlog::logger>
     {
         ERHE_VERIFY(!name.empty());
-        const auto groupname = get_groupname(name);
-        const auto basename  = get_basename(name);
-        const auto& ini = erhe::configuration::get_ini_file_section(c_logging_configuration_file_path, groupname);
+        const std::string groupname = get_groupname(name);
+        const std::string basename  = get_basename(name);
+        const erhe::configuration::Ini_section& ini = erhe::configuration::get_ini_file_section(c_logging_configuration_file_path, groupname);
 
         std::string levelname;
         ini.get(basename.c_str(), levelname);

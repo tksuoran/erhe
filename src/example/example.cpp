@@ -413,8 +413,7 @@ void run_example()
             .use_depth         = true,
             .gl_major          = 4,
             .gl_minor          = 6,
-            .width             = 1920,
-            .height            = 1080,
+            .size              = glm::ivec2{1920, 1080},
             .msaa_sample_count = 0,
             .swap_interval     = 0,
             .title             = "erhe example"

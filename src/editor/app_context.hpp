@@ -92,7 +92,7 @@ public:
     bool  developer_mode{false};
     bool  renderdoc     {false};
     bool  use_sleep     {false};
-    float sleep_margin  {false};
+    float sleep_margin  {0.0f}; // TODO
 
     erhe::commands::Commands*               commands              {nullptr};
     erhe::graphics::Device*                 graphics_device       {nullptr};

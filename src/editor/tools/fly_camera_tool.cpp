@@ -1184,8 +1184,11 @@ void Fly_camera_tool::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
+    if (!m_camera_controller) {
+        return;
+    }
 
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
     float speed = m_camera_controller->translate_z.max_delta();
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
     if (ImGui::IsItemEdited()) {

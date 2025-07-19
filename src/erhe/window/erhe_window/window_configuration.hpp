@@ -18,8 +18,7 @@ public:
     bool            enable_joystick         {true};
     int             gl_major                {4};
     int             gl_minor                {6};
-    int             width                   {1920};
-    int             height                  {1080};
+    glm::ivec2      size                    {1920, 1080};
     int             msaa_sample_count       {0};
     int             swap_interval           {1};
     std::string     title                   {};

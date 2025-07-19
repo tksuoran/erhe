@@ -232,8 +232,7 @@ Context_window::Context_window(Context_window* share)
     const bool ok = open(
         {
             .fullscreen        = false,
-            .width             = 64,
-            .height            = 64,
+            .size              = glm::ivec2{64, 64},
             .msaa_sample_count = 0,
             .title             = "erhe share context",
             .share             = share
@@ -320,7 +319,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         window_flags |= SDL_WINDOW_NOT_FOCUSABLE;
     }
 
-    SDL_Window* sdl_window = SDL_CreateWindow(configuration.title.c_str(), configuration.width, configuration.height, window_flags);
+    SDL_Window* sdl_window = SDL_CreateWindow(configuration.title.c_str(), configuration.size.x, configuration.size.y, window_flags);
     m_sdl_window = sdl_window;
 
     if (sdl_window == nullptr) {

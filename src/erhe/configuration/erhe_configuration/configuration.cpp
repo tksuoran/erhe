@@ -115,6 +115,27 @@ public:
             destination = static_cast<float>(i_ptr->get());
         }
     }
+    void get(const std::string& key, glm::ivec2& destination) const override
+    {
+        if (m_table == nullptr) {
+            return;
+        }
+        toml::node* node = m_table->get(key);
+        if (node == nullptr) {
+            return;
+        }
+        if (toml::array* array = node->as_array()) {
+            toml::impl::wrap_node<int64_t>* x_node = array->get_as<int64_t>(0);
+            toml::impl::wrap_node<int64_t>* y_node = array->get_as<int64_t>(1);
+            if (x_node != nullptr) { destination.x = static_cast<int>(x_node->get()); }
+            if (y_node != nullptr) { destination.y = static_cast<int>(y_node->get()); }
+        } else if (toml::table* table = node->as_table()) {
+            toml::impl::wrap_node<int64_t>* x_node = table->get_as<int64_t>("x");
+            toml::impl::wrap_node<int64_t>* y_node = table->get_as<int64_t>("y");
+            destination.x = (x_node != nullptr) ? static_cast<int>(x_node->get()) : 0;
+            destination.y = (y_node != nullptr) ? static_cast<int>(x_node->get()) : 0;
+        }
+    }
     void get(const std::string& key, glm::vec2& destination) const override
     {
         if (m_table == nullptr) {
@@ -122,15 +143,15 @@ public:
         }
         toml::node* node = m_table->get(key);
         if (toml::array* array = node->as_array()) {
-            if (array->size() == 2) {
-                destination.x = array->at(0).value_or(0.0f);
-                destination.y = array->at(1).value_or(0.0f);
-            }
+            toml::impl::wrap_node<double>* x_node = array->get_as<double>(0);
+            toml::impl::wrap_node<double>* y_node = array->get_as<double>(1);
+            if (x_node != nullptr) { destination.x = static_cast<float>(x_node->get()); }
+            if (y_node != nullptr) { destination.y = static_cast<float>(y_node->get()); }
         } else if (toml::table* table = node->as_table()) {
             toml::impl::wrap_node<double>* x_node = table->get_as<double>("x");
             toml::impl::wrap_node<double>* y_node = table->get_as<double>("y");
-            destination.x = (x_node != nullptr) ? static_cast<float>(x_node->get()) : 0.0f;
-            destination.y = (y_node != nullptr) ? static_cast<float>(x_node->get()) : 0.0f;
+            if (x_node != nullptr) { destination.x = static_cast<float>(x_node->get()); }
+            if (y_node != nullptr) { destination.y = static_cast<float>(y_node->get()); }
         }
     }
     void get(const std::string& key, glm::vec3& destination) const override
@@ -140,11 +161,12 @@ public:
         }
         toml::node* node = m_table->get(key);
         if (toml::array* array = node->as_array()) {
-            if (array->size() == 3) {
-                destination.x = array->at(0).value_or(0.0f);
-                destination.y = array->at(1).value_or(0.0f);
-                destination.z = array->at(2).value_or(0.0f);
-            }
+            toml::impl::wrap_node<double>* x_node = array->get_as<double>(0);
+            toml::impl::wrap_node<double>* y_node = array->get_as<double>(1);
+            toml::impl::wrap_node<double>* z_node = array->get_as<double>(2);
+            if (x_node != nullptr) { destination.x = static_cast<float>(x_node->get()); }
+            if (y_node != nullptr) { destination.y = static_cast<float>(y_node->get()); }
+            if (z_node != nullptr) { destination.z = static_cast<float>(z_node->get()); }
         } else if (toml::table* table = node->as_table()) {
             toml::impl::wrap_node<double>* x_node = table->get_as<double>("x");
             toml::impl::wrap_node<double>* y_node = table->get_as<double>("y");
@@ -161,12 +183,14 @@ public:
         }
         toml::node* node = m_table->get(key);
         if (toml::array* array = node->as_array()) {
-            if (array->size() == 4) {
-                destination.x = array->at(0).value_or(0.0f);
-                destination.y = array->at(1).value_or(0.0f);
-                destination.z = array->at(2).value_or(0.0f);
-                destination.w = array->at(3).value_or(0.0f);
-            }
+            toml::impl::wrap_node<double>* x_node = array->get_as<double>(0);
+            toml::impl::wrap_node<double>* y_node = array->get_as<double>(1);
+            toml::impl::wrap_node<double>* z_node = array->get_as<double>(2);
+            toml::impl::wrap_node<double>* w_node = array->get_as<double>(3);
+            if (x_node != nullptr) { destination.x = static_cast<float>(x_node->get()); }
+            if (y_node != nullptr) { destination.y = static_cast<float>(y_node->get()); }
+            if (z_node != nullptr) { destination.z = static_cast<float>(z_node->get()); }
+            if (w_node != nullptr) { destination.w = static_cast<float>(w_node->get()); }
         } else if (toml::table* table = node->as_table()) {
             toml::impl::wrap_node<double>* x_node = table->get_as<double>("x");
             toml::impl::wrap_node<double>* y_node = table->get_as<double>("y");

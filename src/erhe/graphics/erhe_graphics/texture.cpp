@@ -203,14 +203,14 @@ void convert_texture_dimensions_from_gl(const gl::Texture_target target, int& wi
         case gl::Texture_target::texture_2d_multisample:
         case gl::Texture_target::texture_rectangle:
         {
-            array_layer_count = 1;
+            array_layer_count = 0;
             ERHE_VERIFY(width >= 1);
             ERHE_VERIFY(height >= 1);
             ERHE_VERIFY(depth == 1);
             return;
         }
         case gl::Texture_target::texture_cube_map: {
-            array_layer_count = 1;
+            array_layer_count = 0;
             ERHE_VERIFY(width >= 1);
             ERHE_VERIFY(height >= 1);
             ERHE_VERIFY(depth == 6);
@@ -227,7 +227,7 @@ void convert_texture_dimensions_from_gl(const gl::Texture_target target, int& wi
             return;
         }
         case gl::Texture_target::texture_3d: {
-            array_layer_count = 1;
+            array_layer_count = 0;
             ERHE_VERIFY(width >= 1);
             ERHE_VERIFY(height >= 1);
             ERHE_VERIFY(depth >= 1);

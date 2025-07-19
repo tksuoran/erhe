@@ -1,45 +1,29 @@
-#
 # erhe configuration file
-#
 
-#struct Imgui_config
-#{
-#    bool window_viewport = true;
-#    bool padding = 2.0
-#};}
 [imgui]
 window_viewport = true
 padding         = 2.0
 rounding        = 3.0
 
-[headset]
-openxr = false
-
-
 [window]
 show             = true
 fullscreen       = false
 use_transparency = false
-gl_major         = 4
-gl_minor         = 6 # llvm pipe requires 4.5 - but needs also ERHE_SERIAL_INIT defined - see top of editor.cpp
-#width            = 1792
-#height           = 1024
-#width            = 1920
-#height           = 1080
-#width            = 3072
-#height           = 1728
-width            = 2432
-height           = 1376
-#width            = 2560
-#height           = 1440
-#width            = 512
-#height           = 512
+# Ddefaul is 4.6
+#gl_major         = 4
+#gl_minor         = 5 # llvm pipe requires 4.5 - but needs also ERHE_SERIAL_INIT defined - see top of editor.cpp
+
+#size             = [ 3072, 1728 ]
+#size             = [ 2560, 1440 ]
+size              = [ 2432, 1376 ]
+#size             = [ 1920, 1080 ]
+#size             = [ 1792, 1024 ]
+#size             = [ 32, 256 ]
 use_finish       = false
 use_sleep        = false
-sleep_margin     = 0.002 # 2ms
-swap_interval    = 0 # try 0
+sleep_margin     = 0.0 # 0.002 would be 2ms - TODO measure; This is ignored (and value 0.0 is used) with OpenXR
+swap_interval    = 0   # try 0; This is ignored (and value 0 is used) with OpenXR
 enable_joystick  = false
-
 
 # Buffer sizes use megabytes as unit
 [mesh_memory]
@@ -62,7 +46,7 @@ static_enable  = true
 dynamic_enable = true
 
 [scene]
-imgui_window_scene_view      = true
+imgui_window_scene_view      = true # NOTE This is ignored with OpenXR at the moment
 camera_exposure              =   1.0
 shadow_range                 =  30.0
 directional_light_intensity  =   4.0 # formation total intensity
@@ -85,30 +69,38 @@ object_scale                 = 0.25
 make_johnson_solid_brushes   = true
 make_platonic_solid_brushes_ = true
 make_curved_brushes          = true
-
 # Value of 0.25 object scale makes edges of platonic solids to be 25cm.
 # That makes height of all platonic solids to be around 40cm at most.
 
 [hud]
-enabled = false
+# When left commented, defaults to false on Desktop, true on OpenXR
+#enabled = true
+show    = false
+locked  = false
+width   =  3072
+height  =  2048
+ppm     =  3400
+x       =  0.00
+y       =  0.00
+z       = -0.03
 
 [hotbar]
 enabled    = true
 show       = true
 use_radial = false
-x          =  0.0   # 64
-y          = -0.140 # 64
-z          = -0.5   # 64
-#x          =  0.0   # 32
-#y          = -0.085 # 32
-#z          = -0.3   # 32
-#use_radial = true
-#x          =  0.0
-#y          =  0.0
-#z          = -3.5
+# Uncomment to override defaults which are set in Hotbar::Hotbar()
+# Desktop defaults
+#x          =  0.0   # 64
+#y          = -0.140 # 64
+#z          = -0.5   # 64
+# OpenXR defaults
+#x         = -0.02
+#y         =  0.09
+#z         = -0.28
 
 [viewport]
 polygon_fill              = true
+# edge_lines                = true TODO need separate values for desktop vs OpenXr
 edge_lines                = true
 selection_polygon_fill    = true
 selection_edge_lines      = true
@@ -121,13 +113,15 @@ selection_edge_color      = [ 0.3, 0.2, 0.0, 0.5 ] #
 clear_color               = [ 0.05, 0.05, 0.05 ]
 gizmo_scale               = 8.0
 
+
 [transform_tool]
 show_translate = true
 show_rotate    = false
 
 [grid]
 snap_enabled = true
-visible      = true
+# visible      = true
+visible      = false # TODO this needs separate value for Desktop vs OpenXR
 major_color  = [ 0.0, 0.0, 0.0 ]
 minor_color  = [ 0.0, 0.0, 0.0 ]
 major_width  = 4.0
@@ -137,11 +131,14 @@ cell_div     = 2
 cell_count   = 100
 
 [camera_controls]
-invert_x   = false
-invert_y   = false
-move_power = 1000.0
-move_speed = 2.0
-turn_speed = 1.0
+invert_x           = false
+invert_y           = false
+sensitivity        = 1.0
+velocity_damp      = 0.92
+velocity_max_delta = 0.004
+move_power         = 1000.0
+move_speed         = 2.0
+turn_speed         = 1.0
 
 #  D e v e l o p e r   S e c t i o n  #
 #                                     #
@@ -162,9 +159,9 @@ downstream_port    = 34567
 
 [graphics]
 initial_clear                = true
-post_processing              = true
-force_bindless_textures_off  = false
-force_no_persistent_buffers  = false
+post_processing              = true # Note: This is ignored (and set to false) for OpenXR
+#force_bindless_textures_off  = true
+#force_no_persistent_buffers  = true
 #force_no_direct_state_access = true
 #force_no_multi_draw_indirect = true
 #force_gl_version             = 410
@@ -187,85 +184,18 @@ enabled = false
 
 [text_renderer]
 enabled   = true
-font_size = 14
+font_size = 14 # TODO This needs separate value when using Desktop vs OpenXR
 
 [shader_monitor]
 enabled = true
 
-#[viewport]
-#polygon_fill           = true
-#edge_lines             = false
-#selection_polygon_fill = true
-#selection_edge_lines   = true
-
-
-
-
-
-
-# Enable OpenXR
-#
-# Uncomment sections below to enable OpenXR mode.
-# So far this has only been tested with Oculus Quest 3.
-# In the past, Oculus Rift S and Varjo XR3 were tested
-# as well.
-
-#[imgui]
-#font_size       = 20.0
-#vr_font_size    = 32.0
-#[icons]
-#small_icon_size  = 32
-#large_icon_size  = 32
-#hotbar_icon_size = 128
-##[graphics]
-##post_processing  = true This settings is currently ignored for headset rendering - always off for headset
-#[scene]
-#imgui_window_scene_view = false
-#[headset]
-#openxr          = true
-#openxr_mirror   = false
-#quad_view       = false # Varjo
-#debug           = false
-#depth           = false
-#visibility_mask = false
-#hand_tracking   = false
-#passthrough_fb  = false # Useful with mirror mode, for example
-#[viewport]
-#gizmo_scale = 7.0
-#[window]
-#show          = true
-#fullscreen    = false
-##width         = 256
-##height        = 32
-#width         = 1200
-#height        = 1312
-#use_finish    = false
-#use_sleep     = false
-#sleep_margin  = 0.0
-#swap_interval = 0
-#[grid]
-#snap_enabled = true  # useful for brush tool
-#visible      = false # bad for video recording
-#[hud]
-#enabled =  true
-#show    = false
-#locked  = false
-#width   =  3072
-#height  =  2048
-#ppm     =  3400
-#x       =  0.00
-#y       =  0.00
-#z       = -0.03
-#[icons]
-#hotbar_icon_size = 128
-#[hotbar]
-#enabled = true
-#show    = true
-#x       = -0.02
-#y       =  0.09
-#z       = -0.28
-#[scene]
-#directional_light_intensity =   4.0 # formation total intensity
-#directional_light_radius    =   4.5 # formation radius
-#directional_light_height    =  10.0 # formation height
-#directional_light_count     =  2
+# OpenXR has been tested with Oculus Quest. In the distant past, also with Oculus Rift S and Varjo XR3 were tested.
+[headset]
+#	openxr          = true
+#openxr_mirror   = true
+#quad_view       = true
+#debug           = true
+#depth           = true
+#visibility_mask = true
+#hand_tracking   = true
+#passthrough_fb  = true # Useful with mirror mode, for example

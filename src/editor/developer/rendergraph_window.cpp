@@ -147,7 +147,7 @@ void Rendergraph_window::imgui()
 
     //// m_imnodes_context->PushStyleVar(ImNodesStyleVar_CurveStrength, m_curve_strength);
     for (auto* node : render_graph_nodes) {
-        log_graph_editor->info("Node {}", node->get_id());
+        log_graph_editor->trace("Node {}", node->get_id());
 
         // Start rendering node
         const auto   glm_position = node->get_position();
@@ -173,7 +173,7 @@ void Rendergraph_window::imgui()
         ImGui::TableSetupColumn("InputPin",   ImGuiTableColumnFlags_WidthFixed, 20.0f);
         ImGui::TableSetupColumn("InputLabel", ImGuiTableColumnFlags_None);
         for (const auto& input : inputs) {
-            log_graph_editor->info("  Input {} {}", input.id.get_id(), input.label);
+            log_graph_editor->trace("  Input {} {}", input.id.get_id(), input.label);
             const ax::NodeEditor::PinId pin_id{input.id.get_id()};
             ImGui::TableNextRow();
 
@@ -238,7 +238,7 @@ void Rendergraph_window::imgui()
         ImGui::TableSetupColumn("OutputLabel", ImGuiTableColumnFlags_None);
         ImGui::TableSetupColumn("OutputPin",   ImGuiTableColumnFlags_WidthFixed, 20.0f);
         for (const auto& output : outputs) {
-            log_graph_editor->info("  Output {} {}", output.id.get_id(), output.label);
+            log_graph_editor->trace("  Output {} {}", output.id.get_id(), output.label);
             const ax::NodeEditor::PinId pin_id{output.id.get_id()};
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
@@ -277,11 +277,11 @@ void Rendergraph_window::imgui()
                 const ax::NodeEditor::PinId input_pin_id{consumer_input->id.get_id()};
                 const ax::NodeEditor::PinId output_pin_id{output.id.get_id()};
 
-                log_graph_editor->info("  Link {} to {}", output.id.get_id(), consumer_input->id.get_id());
+                log_graph_editor->trace("  Link {} to {}", output.id.get_id(), consumer_input->id.get_id());
 
                 const bool connection_ok = m_node_editor->Link(link_id, output_pin_id, input_pin_id);
                 if (!connection_ok) {
-                    log_scene->info("Connection delete");
+                    log_scene->debug("Connection delete");
                 }
             }
         }

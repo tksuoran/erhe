@@ -1,4 +1,4 @@
-[erhe.commands]
+["erhe.commands"]
 input_event_consumed = "info"
 command_state_transition = "info"
 input_event_filtered = "info"
@@ -7,10 +7,11 @@ input_event = "info"
 input_events = "info"
 input_frame = "info"
 
-[erhe.gl]
+["erhe.gl"]
 trace = "off"
+debug = "warn"
 
-[erhe.geometry]
+["erhe.geometry"]
 triangulate = "info"
 subdivide = "info"
 weld = "info"
@@ -33,7 +34,7 @@ dataformat = "warning"
 file = "info"
 graph = "warning"
 
-[erhe.raytrace]
+["erhe.raytrace"]
 device = "info"
 buffer = "info"
 geometry = "info"
@@ -42,7 +43,7 @@ scene = "info"
 embree = "info"
 frame = "info"
 
-[erhe.net]
+["erhe.net"]
 server = "info"
 net = "info"
 socket = "info"
@@ -90,7 +91,7 @@ tree = "info"
 tree_frame = "info"
 graph_editor = "info"
 
-[erhe.graphics]
+["erhe.graphics"]
 threads = "info"
 fragment_outputs = "info"
 program = "info"
@@ -109,52 +110,52 @@ vertex_attribute = "info"
 render_pass = "info"
 startup = "info"
 
-[erhe.gltf]
+["erhe.gltf"]
 log = "info"
 
-[erhe.imgui]
+["erhe.imgui"]
 performance = "info"
 input_events = "info"
 imgui = "info"
 windows = "info"
 frame = "info"
 
-[erhe.xr]
+["erhe.xr"]
 log = "info"
 
-[erhe.primitive]
+["erhe.primitive"]
 primitive_builder = "warning"
 primitive = "warning"
 
-[erhe.rendergraph]
+["erhe.rendergraph"]
 frame = "info"
 tail = "info"
 
-[erhe.item]
+["erhe.item"]
 log = "info"
 log_frame = "info"
 
-[erhe.physics]
+["erhe.physics"]
 physics = "info"
 physics_frame = "info"
 
-[erhe.math]
+["erhe.math"]
 input_axis = "warning"
 input_axis_frame = "warning"
 
-[erhe.renderer]
+["erhe.renderer"]
 draw = "info"
 render = "info"
 startup = "info"
 buffer_writer = "info"
 log_gpu_ring_buffer = "info"
 
-[erhe.scene]
+["erhe.scene"]
 log = "warning"
 log_frame = "info"
 mesh_raytrace = "info"
 
-[erhe.scene_renderer]
+["erhe.scene_renderer"]
 draw = "info"
 render = "info"
 log_program_interface = "info"
@@ -164,12 +165,12 @@ startup = "info"
 material_buffer = "info"
 primitive_buffer = "info"
 
-[erhe.window]
+["erhe.window"]
 space_mouse = "info"
 window = "info"
 window_event = "info"
 renderdoc = "info"
 
-[erhe.ui]
+["erhe.ui"]
 text_buffer = "info"
 font = "info"

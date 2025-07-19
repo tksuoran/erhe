@@ -87,6 +87,7 @@ Scene_builder::Scene_builder(
         imgui_renderer,
         imgui_windows,
         rendergraph,
+        context.OpenXR,
         app_rendering,
         app_settings,
         post_processing,
@@ -140,6 +141,7 @@ void Scene_builder::setup_cameras(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
+    bool                            openxr,
     App_rendering&                  app_rendering,
     App_settings&                   app_settings,
     Post_processing&                post_processing,
@@ -173,10 +175,13 @@ void Scene_builder::setup_cameras(
     //// camera_b->set_wireframe_color(glm::vec4{0.3f, 0.6f, 1.00f, 1.0f});
 #endif
 
+    if (openxr) {
+        return;
+    }
+
     const bool enable_post_processing = graphics_device.configuration.post_processing;
     bool imgui_window_scene_view = true;
     ini.get("imgui_window_scene_view", imgui_window_scene_view);
-
     if (!imgui_window_scene_view) {
         return;
     }
@@ -810,6 +815,8 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
     );
 
     std::vector<Pack_entry> pack_entries;
+
+    // TODO Orient brushes using a specificit face - largest maybe?
 
     for (const auto& brush : brushes) {
         for (int i = 0; i < config.instance_count; ++i) {

@@ -191,7 +191,7 @@ Hotbar::Hotbar(
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    App_context&                 context,
+    App_context&                 app_context,
     App_message_bus&             app_message_bus,
     Headset_view&                headset_view,
     Mesh_memory&                 mesh_memory,
@@ -199,14 +199,14 @@ Hotbar::Hotbar(
     Tools&                       tools
 )
     : erhe::imgui::Imgui_window  {imgui_renderer, imgui_windows, "Hotbar", ""}
-    , Tool                       {context}
-    , m_toggle_visibility_command{commands, context}
-    , m_prev_tool_command        {commands, context, -1}
-    , m_next_tool_command        {commands, context, 1}
+    , Tool                       {app_context}
+    , m_toggle_visibility_command{commands, app_context}
+    , m_prev_tool_command        {commands, app_context, -1}
+    , m_next_tool_command        {commands, app_context, 1}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    , m_trackpad_command         {commands, context}
+    , m_trackpad_command         {commands, app_context}
     , m_trackpad_click_command   {commands, m_trackpad_command}
-    , m_thumbstick_command       {commands, context}
+    , m_thumbstick_command       {commands, app_context}
 #endif
 {
     ERHE_PROFILE_FUNCTION();
@@ -215,6 +215,17 @@ Hotbar::Hotbar(
     ini.get("enabled",    m_enabled);
     ini.get("show",       m_show);
     ini.get("use_radial", m_use_radial);
+
+    if (app_context.OpenXR) {
+        m_x = -0.02f;
+        m_y =  0.09f;
+        m_z = -0.28f;
+    } else {
+        m_x =  0.0f  ; // 64
+        m_y = -0.140f; // 64
+        m_z = -0.5f  ; // 64
+    }
+
     ini.get("x",          m_x);
     ini.get("y",          m_y);
     ini.get("z",          m_z);
@@ -344,6 +355,7 @@ void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
     disc_material->opacity = 0.5f;
 
     GEO::Mesh disc_geo_mesh_shared;
+    disc_geo_mesh_shared.vertices.set_single_precision();
     erhe::geometry::shapes::make_disc(
         disc_geo_mesh_shared,
         outer_radius,

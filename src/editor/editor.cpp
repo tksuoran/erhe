@@ -363,13 +363,16 @@ public:
         window_section.get("use_sleep",    m_app_context.use_sleep);
         window_section.get("sleep_margin", m_app_context.sleep_margin);
 
+        if (m_app_context.OpenXR) {
+            m_app_context.sleep_margin = 0.0f;
+        }
+
         erhe::window::Window_configuration configuration{
             .use_depth         = m_app_context.OpenXR_mirror,
             .use_stencil       = m_app_context.OpenXR_mirror,
             .gl_major          = 4,
             .gl_minor          = 6,
-            .width             = 1920,
-            .height            = 1080,
+            .size              = glm::ivec2{1920, 1080},
             .msaa_sample_count = m_app_context.OpenXR_mirror ? 0 : 0,
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta")
         };
@@ -379,10 +382,13 @@ public:
         window_section.get("use_transparency", configuration.framebuffer_transparency);
         window_section.get("gl_major",         configuration.gl_major);
         window_section.get("gl_minor",         configuration.gl_minor);
-        window_section.get("width",            configuration.width);
-        window_section.get("height",           configuration.height);
+        window_section.get("size",             configuration.size);
         window_section.get("swap_interval",    configuration.swap_interval);
         window_section.get("enable_joystick",  configuration.enable_joystick);
+
+        if (m_app_context.OpenXR) {
+            configuration.swap_interval = 0;
+        }
 
         const char* const env_value = std::getenv("LIBGL_ALWAYS_SOFTWARE");
         if (env_value != nullptr) {
@@ -652,7 +658,7 @@ public:
                 m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_composer_window        = std::make_unique<Composer_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_selection_window       = std::make_unique<Selection_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
-                m_settings_window        = std::make_unique<Settings_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_settings_window        = std::make_unique<Settings_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_clipboard_window       = std::make_unique<Clipboard_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_commands_window        = std::make_unique<Commands_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_graph_window           = std::make_unique<Graph_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());

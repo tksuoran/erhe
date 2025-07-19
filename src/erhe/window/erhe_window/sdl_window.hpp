@@ -3,6 +3,8 @@
 #include "erhe_window/window_event_handler.hpp"
 #include "erhe_window/window_configuration.hpp"
 
+#include <glm/glm.hpp>
+
 #include <atomic>
 #include <functional>
 #include <string>

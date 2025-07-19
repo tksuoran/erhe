@@ -77,15 +77,14 @@ void Graphics_settings::read_presets()
     }
     try {
         presets_table.for_each(
-            [this](auto& key, toml::table& table)
+            [this](auto&, toml::table& table)
             {
-                //const auto& section = i.second;
                 Graphics_preset graphics_preset;
-                graphics_preset.name = std::string{key};
-                parse<int >(table, "msaa_sample_count" , graphics_preset.msaa_sample_count );
-                parse<bool>(table, "shadow_enable"     , graphics_preset.shadow_enable     );
-                parse<int >(table, "shadow_resolution" , graphics_preset.shadow_resolution );
-                parse<int >(table, "shadow_light_count", graphics_preset.shadow_light_count);
+                parse<std::string>(table, "name"              , graphics_preset.name              );
+                parse<int        >(table, "msaa_sample_count" , graphics_preset.msaa_sample_count );
+                parse<bool       >(table, "shadow_enable"     , graphics_preset.shadow_enable     );
+                parse<int        >(table, "shadow_resolution" , graphics_preset.shadow_resolution );
+                parse<int        >(table, "shadow_light_count", graphics_preset.shadow_light_count);
                 graphics_presets.push_back(graphics_preset);
             }
         );

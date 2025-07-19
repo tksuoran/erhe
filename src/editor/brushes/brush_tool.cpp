@@ -278,6 +278,9 @@ auto Brush_tool::try_rotate(int direction) -> bool
     erhe::geometry::Geometry& geometry = *m_hover.geometry.get();
     const GEO::Mesh& geo_mesh           = geometry.get_mesh();
     GEO::index_t     facet              = brush_placement->get_facet();
+    if (facet == GEO::NO_INDEX) {
+        return false; // TODO node/mesh was created by Scene_builder
+    }
     ERHE_VERIFY(facet < geo_mesh.facets.nb());
     GEO::index_t     facet_corner_count = geo_mesh.facets.nb_corners(facet);
     GEO::index_t     old_corner         = brush_placement->get_corner();

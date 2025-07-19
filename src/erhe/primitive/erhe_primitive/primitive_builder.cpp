@@ -187,6 +187,7 @@ auto Primitive_builder::build() -> bool
     };
 
     if (!build_context.is_ready()) {
+        log_primitive_builder->debug("Primitive_builder::build() aborted because build_context is not ready");
         return false;
     }
 

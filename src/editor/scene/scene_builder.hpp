@@ -151,6 +151,7 @@ private:
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
+        bool                            openxr,
         App_rendering&                  app_rendering,
         App_settings&                   app_settings,
         Post_processing&                post_processing,
