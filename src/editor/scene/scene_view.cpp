@@ -61,12 +61,7 @@ void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
     m_hover_entries[slot]      = entry;
     m_hover_entries[slot].slot = slot;
 
-    //std::shared_ptr<const Grid>        hover_grid       = m_hover_entries[slot].grid_weak.lock();
-    //std::shared_ptr<const Grid>        entry_grid       = entry.grid_weak.lock();
-    //const bool grid_changed = (hover_grid       != entry_grid);
-
-    if (mesh_changed && (slot == Hover_entry::content_slot)) {
-    //if (mesh_changed || grid_changed) {
+    if (mesh_changed) {
         m_context.app_message_bus->send_message(
             App_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_mesh,
@@ -161,8 +156,7 @@ auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entr
                 get_control_ray_origin_in_world().value(),
                 entry.position.value()
             );
-            if (distance < nearest_distance)
-            {
+            if (distance < nearest_distance) {
                 nearest_distance = distance;
                 nearest_slot = slot;
             }

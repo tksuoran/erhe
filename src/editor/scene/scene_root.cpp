@@ -194,7 +194,7 @@ Scene_root::Scene_root(
         app_message_bus->add_receiver(
             [this](App_message& message) {
                 using namespace erhe::utility;
-                if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
+                if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
                     for (const auto& item : message.no_longer_selected) {
                         if (item->get_item_host() != this) {
                             continue;

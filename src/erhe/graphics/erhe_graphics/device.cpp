@@ -650,10 +650,10 @@ auto Device::get_handle(const Texture& texture, const Sampler& sampler) const ->
 auto Device::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> erhe::dataformat::Format
 {
     using namespace erhe::utility;
-    const bool require_depth     = test_all_rhs_bits_set(flags, format_flag_require_depth    );
-    const bool require_stencil   = test_all_rhs_bits_set(flags, format_flag_require_stencil  );
-    const bool prefer_accuracy   = test_all_rhs_bits_set(flags, format_flag_prefer_accuracy  );
-    const bool prefer_filterable = test_all_rhs_bits_set(flags, format_flag_prefer_filterable);
+    const bool require_depth     = test_bit_set(flags, format_flag_require_depth    );
+    const bool require_stencil   = test_bit_set(flags, format_flag_require_stencil  );
+    const bool prefer_accuracy   = test_bit_set(flags, format_flag_prefer_accuracy  );
+    const bool prefer_filterable = test_bit_set(flags, format_flag_prefer_filterable);
     erhe::dataformat::Format formats[] = {
         erhe::dataformat::Format::format_d16_unorm,
         erhe::dataformat::Format::format_x8_d24_unorm_pack32,

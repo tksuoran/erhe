@@ -258,9 +258,10 @@ void Headset_view::render(const Render_context& render_context)
             ? nearest->position.value() 
             : position + trigger_value * direction;
 
-        bool is_content      = (nearest != nullptr) && erhe::utility::test_all_rhs_bits_set(nearest->mask, Hover_entry::content_bit);
-        bool is_tool         = (nearest != nullptr) && erhe::utility::test_all_rhs_bits_set(nearest->mask, Hover_entry::tool_bit);
-        bool is_rendertarget = (nearest != nullptr) && erhe::utility::test_all_rhs_bits_set(nearest->mask, Hover_entry::rendertarget_bit);
+        using namespace erhe::utility;
+        bool is_content      = (nearest != nullptr) && test_bit_set(nearest->mask, Hover_entry::content_bit);
+        bool is_tool         = (nearest != nullptr) && test_bit_set(nearest->mask, Hover_entry::tool_bit);
+        bool is_rendertarget = (nearest != nullptr) && test_bit_set(nearest->mask, Hover_entry::rendertarget_bit);
         glm::vec4 type_color =
             is_content      ? glm::vec4{0.8f, 0.5f, 0.3f, 1.0f} :
             is_tool         ? glm::vec4{1.0f, 0.0f, 1.0f, 1.0f} :

@@ -151,10 +151,7 @@ auto is_physics(const erhe::Item_base* const scene_item) -> bool
     if (scene_item == nullptr) {
         return false;
     }
-    return erhe::utility::test_all_rhs_bits_set(
-        scene_item->get_type(),
-        erhe::Item_type::physics
-    );
+    return erhe::utility::test_bit_set(scene_item->get_type(), erhe::Item_type::physics);
 }
 
 auto is_physics(const std::shared_ptr<erhe::Item_base>& item) -> bool

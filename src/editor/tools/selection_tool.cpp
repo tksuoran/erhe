@@ -288,7 +288,7 @@ Selection::Selection(erhe::commands::Commands& commands, App_context& context, A
     app_message_bus.add_receiver(
         [&](App_message& message) {
             using namespace erhe::utility;
-            if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+            if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 m_hover_scene_view = message.scene_view;
             }
         }
@@ -691,10 +691,8 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
 {
     Scoped_selection_change selection_change{*this};
 
-    const bool mesh_lock_viewport_select = erhe::utility::test_all_rhs_bits_set(
-        mesh->get_flag_bits(),
-        erhe::Item_flags::lock_viewport_selection
-    );
+    using namespace erhe::utility;
+    const bool mesh_lock_viewport_select = test_bit_set(mesh->get_flag_bits(), erhe::Item_flags::lock_viewport_selection);
     if (mesh_lock_viewport_select) {
         return;
     }
@@ -704,10 +702,7 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
         return;
     }
 
-    const bool node_lock_viewport_select = erhe::utility::test_all_rhs_bits_set(
-        node->get_flag_bits(),
-        erhe::Item_flags::lock_viewport_selection
-    );
+    const bool node_lock_viewport_select = test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_selection);
     if (node_lock_viewport_select) {
         return;
     }

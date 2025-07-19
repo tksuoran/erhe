@@ -298,7 +298,7 @@ void Tools::register_tool(Tool* tool)
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     const auto flags = tool->get_flags();
-    if (erhe::utility::test_all_rhs_bits_set(flags, Tool_flags::background)) {
+    if (erhe::utility::test_bit_set(flags, Tool_flags::background)) {
         m_background_tools.emplace_back(tool);
     } else {
         m_tools.emplace_back(tool);
@@ -341,13 +341,13 @@ void Tools::set_priority_tool(Tool* priority_tool)
         using namespace erhe::utility;
         const bool allow_secondary =
             (m_priority_tool != nullptr) &&
-            test_all_rhs_bits_set(m_priority_tool->get_flags(), Tool_flags::allow_secondary);
+            test_bit_set(m_priority_tool->get_flags(), Tool_flags::allow_secondary);
         log_tools->trace("Update tools: allow_secondary = {}", allow_secondary);
         for (auto* tool : m_tools) {
             const auto flags = tool->get_flags();
-            if (test_all_rhs_bits_set(flags, Tool_flags::toolbox)) {
+            if (test_bit_set(flags, Tool_flags::toolbox)) {
                 const bool is_priority_tool = (tool == m_priority_tool);
-                const bool is_secondary     = test_all_rhs_bits_set(flags, Tool_flags::secondary);
+                const bool is_secondary     = test_bit_set(flags, Tool_flags::secondary);
                 const bool enable           = is_priority_tool || (allow_secondary && is_secondary);
                 tool->set_enabled(enable);
                 log_tools->trace(

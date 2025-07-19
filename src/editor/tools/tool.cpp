@@ -18,7 +18,7 @@ Tool::Tool(App_context& app_context)
 void Tool::on_message(App_message& message)
 {
     using namespace erhe::utility;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         set_hover_scene_view(message.scene_view);
     }
 }

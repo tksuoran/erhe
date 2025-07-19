@@ -103,7 +103,7 @@ void Icon_set::add_icons(const uint64_t item_type, const float size)
     using namespace erhe::utility;
     for (uint64_t bit_position = 0; bit_position < erhe::Item_flags::count; ++ bit_position) {
         const uint64_t bit_mask = (uint64_t{1} << bit_position);
-        if (test_all_rhs_bits_set(item_type, bit_mask)) {
+        if (test_bit_set(item_type, bit_mask)) {
             const auto& icon_opt = type_icons.at(bit_position);
             if (icon_opt.has_value()) {
                 const auto& icon = icon_opt.value();
@@ -198,7 +198,7 @@ void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const flo
     using namespace erhe::utility;
     for (uint64_t bit_position = 0; bit_position < erhe::Item_type::count; ++bit_position) {
         const uint64_t bit_mask = (uint64_t{1} << bit_position);
-        if (test_all_rhs_bits_set(type_mask, bit_mask)) {
+        if (test_bit_set(type_mask, bit_mask)) {
             const auto& icon_opt = type_icons.at(bit_position);
             if (icon_opt.has_value()) {
                 const auto& type_icon = icon_opt.value();

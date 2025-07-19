@@ -626,7 +626,7 @@ auto is_node(const Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::node);
+    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::node);
 }
 
 auto is_node(const std::shared_ptr<erhe::Item_base>& item) -> bool

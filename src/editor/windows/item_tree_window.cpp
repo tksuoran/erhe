@@ -967,9 +967,9 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     ERHE_PROFILE_FUNCTION();
 
     using namespace erhe::utility;
-    bool update       = test_all_rhs_bits_set(visual_flags, item_visual_flag_update);
-    bool force_expand = test_all_rhs_bits_set(visual_flags, item_visual_flag_force_expand);
-    bool table_row    = test_all_rhs_bits_set(visual_flags, item_visual_flag_table_row);
+    bool update       = test_bit_set(visual_flags, item_visual_flag_update);
+    bool force_expand = test_bit_set(visual_flags, item_visual_flag_force_expand);
+    bool table_row    = test_bit_set(visual_flags, item_visual_flag_table_row);
 
     if (table_row) {
         ImGui::PushID(m_row++);
@@ -978,7 +978,7 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     }
     ERHE_DEFER( if (table_row) ImGui::PopID(); );
 
-    bool expand = test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::expand);
+    bool expand = test_bit_set(item->get_flag_bits(), erhe::Item_flags::expand);
     if (force_expand) {
         expand = true;
     }
@@ -1147,7 +1147,7 @@ auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Sho
 void Item_tree::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
 {
     // Special handling for invisible parents (scene root)
-    if (erhe::utility::test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
+    if (erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
         const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (hierarchy) {
             for (const auto& child_node : hierarchy->get_children()) {

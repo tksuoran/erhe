@@ -200,10 +200,10 @@ void Brush_tool::on_message(App_message& message)
 
     Tool::on_message(message);
     using namespace erhe::utility;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
         on_motion();
     }
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         if (message.scene_view != old_scene_view) {
             bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
             if (!visible) {

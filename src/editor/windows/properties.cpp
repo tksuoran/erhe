@@ -614,7 +614,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
     for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
         add_entry(Item_flags::c_bit_labels[bit_position], [item, bit_position, flags, this]() {
             const uint64_t bit_mask = uint64_t{1} << bit_position;
-            bool           value    = test_all_rhs_bits_set(flags, bit_mask);
+            bool           value    = test_bit_set(flags, bit_mask);
             if (ImGui::Checkbox("##", &value)) {
                 if (bit_mask == Item_flags::selected) {
                     if (value) {

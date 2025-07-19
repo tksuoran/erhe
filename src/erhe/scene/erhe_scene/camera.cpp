@@ -112,7 +112,7 @@ auto is_camera(const Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::utility::test_all_rhs_bits_set(item->get_type(), Item_type::camera);
+    return erhe::utility::test_bit_set(item->get_type(), Item_type::camera);
 }
 
 auto is_camera(const std::shared_ptr<Item_base>& item) -> bool

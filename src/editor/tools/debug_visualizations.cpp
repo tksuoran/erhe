@@ -106,7 +106,7 @@ Debug_visualizations::Debug_visualizations(
     app_message_bus.add_receiver(
         [&](App_message& message) {
             using namespace erhe::utility;
-            if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+            if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 m_hover_scene_view = message.scene_view;
             }
         }
@@ -317,7 +317,7 @@ void Debug_visualizations::light_visualization(
     ERHE_PROFILE_FUNCTION();
 
     using namespace erhe::utility;
-    if (!test_all_rhs_bits_set(light->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
+    if (!test_bit_set(light->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
         return;
     }
 
@@ -634,7 +634,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     }
 
     using namespace erhe::utility;
-    if (!test_all_rhs_bits_set(camera->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
+    if (!test_bit_set(camera->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
         return;
     }
 
@@ -734,7 +734,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
         for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
             for (const auto& mesh : layer->meshes) {
                 using namespace erhe::utility;
-                if (!test_all_rhs_bits_set(mesh->get_flag_bits(), erhe::Item_flags::content)) {
+                if (!test_bit_set(mesh->get_flag_bits(), erhe::Item_flags::content)) {
                     continue;
                 }
 

@@ -230,7 +230,7 @@ App_rendering::App_rendering(
     app_message_bus.add_receiver(
         [&](App_message& message) {
             using namespace erhe::utility;
-            if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
+            if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
                 handle_graphics_settings_changed(message.graphics_preset);
             }
         }

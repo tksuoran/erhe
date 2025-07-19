@@ -390,10 +390,10 @@ void Viewport_scene_view::update_hover_with_id_render()
 
     const uint64_t flags = (id_query.mesh != nullptr) && scene_mesh ? scene_mesh->get_flag_bits() : 0;
 
-    const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::content     );
-    const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::tool        );
-    const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::brush       );
-    const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::rendertarget);
+    const bool hover_content      = id_query.mesh && test_bit_set(flags, erhe::Item_flags::content     );
+    const bool hover_tool         = id_query.mesh && test_bit_set(flags, erhe::Item_flags::tool        );
+    const bool hover_brush        = id_query.mesh && test_bit_set(flags, erhe::Item_flags::brush       );
+    const bool hover_rendertarget = id_query.mesh && test_bit_set(flags, erhe::Item_flags::rendertarget);
     SPDLOG_LOGGER_TRACE(
         log_controller_ray,
         "hover mesh = {} primitive index = {} facet {} {}{}{}{}",

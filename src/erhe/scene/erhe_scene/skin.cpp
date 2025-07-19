@@ -42,7 +42,7 @@ auto is_skin(const Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return test_all_rhs_bits_set(item->get_type(), Item_type::skin);
+    return test_bit_set(item->get_type(), Item_type::skin);
 }
 
 auto is_skin(const std::shared_ptr<Item_base>& item) -> bool
@@ -55,7 +55,7 @@ auto is_bone(const Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return test_all_rhs_bits_set(item->get_type(), Item_type::bone);
+    return test_bit_set(item->get_type(), Item_type::bone);
 }
 
 auto is_bone(const std::shared_ptr<Item_base>& item) -> bool

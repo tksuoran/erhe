@@ -409,7 +409,7 @@ void Hotbar::get_all_tools()
         if (icon == nullptr) {
             continue;
         }
-        if (erhe::utility::test_all_rhs_bits_set(tool->get_flags(), Tool_flags::toolbox)) {
+        if (erhe::utility::test_bit_set(tool->get_flags(), Tool_flags::toolbox)) {
             m_slot_last = m_slots.size();
             m_slots.push_back(tool);
         }
@@ -427,11 +427,11 @@ void Hotbar::on_message(App_message& message)
     }
 
     using namespace erhe::utility;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_tool_select)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_tool_select)) {
         update_slot_from_tool(m_context.tools->get_priority_tool());
     }
 
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         if (message.scene_view != old_scene_view) {
             if (m_use_radial) {
                 update_node_transform();
@@ -456,7 +456,7 @@ void Hotbar::on_message(App_message& message)
 
     // Update rendertarget node transform to match render camera.
     // This is used only for horizontal hotbar, not for radial menu.
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
         bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
         set_mesh_visibility(visible);
         if (!m_use_radial) {

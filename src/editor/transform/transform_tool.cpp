@@ -167,7 +167,7 @@ void Transform_tool::on_message(App_message& message)
     Tool::on_message(message);
 
     using namespace erhe::utility;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
         update_hover();
     }
     if (
@@ -178,10 +178,10 @@ void Transform_tool::on_message(App_message& message)
     ) {
         update_target_nodes(nullptr);
     }
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_node_touched_operation_stack)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_node_touched_operation_stack)) {
         update_target_nodes(message.node);
     }
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
         update_for_view(message.scene_view);
     }
 }
@@ -333,16 +333,15 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 
 void Transform_tool::adjust(const mat4& updated_world_from_anchor)
 {
+    using namespace erhe::utility;
+
     touch();
     for (auto& entry : shared.entries) {
         const auto& node = entry.node;
         if (!node) {
             continue;
         }
-        const bool node_lock_viewport_transform = erhe::utility::test_all_rhs_bits_set(
-            node->get_flag_bits(),
-            erhe::Item_flags::lock_viewport_transform
-        );
+        const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
         if (node_lock_viewport_transform) {
             continue;
         }
@@ -368,23 +367,19 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
 
 void Transform_tool::adjust_translation(const vec3 translation)
 {
+    using namespace erhe::utility;
     touch();
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
         if (!node) {
             continue;
         }
-        const bool node_lock_viewport_transform = erhe::utility::test_all_rhs_bits_set(
-            node->get_flag_bits(),
-            erhe::Item_flags::lock_viewport_transform
-        );
+        const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
         if (node_lock_viewport_transform) {
             continue;
         }
 
-        node->set_world_from_node(
-            erhe::scene::translate(entry.world_from_node_before, translation)
-        );
+        node->set_world_from_node(erhe::scene::translate(entry.world_from_node_before, translation));
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
     update_transforms();
@@ -392,6 +387,7 @@ void Transform_tool::adjust_translation(const vec3 translation)
 
 void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat rotation)
 {
+    using namespace erhe::utility;
     if (shared.settings.local && shared.entries.size() == 1) {
         touch();
         for (auto& entry : shared.entries) {
@@ -399,17 +395,12 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
             if (!node) {
                 continue;
             }
-            const bool node_lock_viewport_transform = erhe::utility::test_all_rhs_bits_set(
-                node->get_flag_bits(),
-                erhe::Item_flags::lock_viewport_transform
-            );
+            const bool node_lock_viewport_transform = test_all_rhs_bits_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
             if (node_lock_viewport_transform) {
                 continue;
             }
 
-            node->set_world_from_node(
-                erhe::scene::rotate(entry.world_from_node_before, rotation)
-            );
+            node->set_world_from_node(erhe::scene::rotate(entry.world_from_node_before, rotation));
         }
         shared.world_from_anchor = erhe::scene::rotate(shared.world_from_anchor_initial_state, rotation);
     } else {
@@ -424,6 +415,7 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
 
 void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
 {
+    using namespace erhe::utility;
     if (shared.settings.local && shared.entries.size() == 1) {
         touch();
         for (auto& entry : shared.entries) {
@@ -431,17 +423,12 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
             if (!node) {
                 continue;
             }
-            const bool node_lock_viewport_transform = erhe::utility::test_all_rhs_bits_set(
-                node->get_flag_bits(),
-                erhe::Item_flags::lock_viewport_transform
-            );
+            const bool node_lock_viewport_transform = test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
             if (node_lock_viewport_transform) {
                 continue;
             }
 
-            node->set_world_from_node(
-                erhe::scene::scale(entry.world_from_node_before, scale)
-            );
+            node->set_world_from_node(erhe::scene::scale(entry.world_from_node_before, scale));
         }
         shared.world_from_anchor = erhe::scene::scale(shared.world_from_anchor_initial_state, scale);
     } else {
@@ -465,6 +452,7 @@ void Transform_tool::update_hover()
 {
     auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
+        log_trs_tool->debug("scene_view == nullptr");
         if (m_hover_handle != Handle::e_handle_none) {
             m_hover_handle = Handle::e_handle_none;
         }

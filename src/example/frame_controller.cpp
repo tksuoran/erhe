@@ -230,7 +230,7 @@ auto is_frame_controller(const erhe::Item_base* const item) -> bool
         return false;
     }
     using namespace erhe::utility;
-    return test_all_rhs_bits_set(item->get_type(), erhe::Item_type::frame_controller);
+    return test_bit_set(item->get_type(), erhe::Item_type::frame_controller);
 }
 
 auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool

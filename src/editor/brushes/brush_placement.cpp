@@ -77,7 +77,7 @@ auto is_brush_placement(const erhe::Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::brush_placement);
+    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::brush_placement);
 }
 
 auto is_brush_placement(const std::shared_ptr<erhe::Item_base>& item) -> bool

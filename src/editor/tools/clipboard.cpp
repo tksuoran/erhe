@@ -59,14 +59,14 @@ Clipboard::Clipboard(erhe::commands::Commands& commands, App_context& context, A
 void Clipboard::on_message(App_message& message)
 {
     using namespace erhe::utility;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         m_hover_scene_view = message.scene_view;
         if (message.scene_view != nullptr) {
             m_last_hover_scene_view = message.scene_view;
             m_last_hover_scene_item_tree = nullptr;
         }
     }
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_item_tree)) {
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_item_tree)) {
         m_last_hover_scene_item_tree = message.scene_root;
         if (message.scene_root != nullptr) {
             m_last_hover_scene_view = nullptr;

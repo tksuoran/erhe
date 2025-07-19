@@ -176,13 +176,13 @@ void Mesh::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
 void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits)
 {
     log->info("Mesh '{}' handle_flag_bits_update()", get_name());
-    const bool visibility_changed = erhe::utility::test_all_rhs_bits_set(old_flag_bits ^ new_flag_bits, erhe::Item_flags::visible);
+    const bool visibility_changed = erhe::utility::test_bit_set(old_flag_bits ^ new_flag_bits, erhe::Item_flags::visible);
     if (!visibility_changed) {
         return;
     }
 
     for (const auto& rt_primitive : m_rt_primitives) {
-        const bool visible = (new_flag_bits & erhe::Item_flags::visible) == erhe::Item_flags::visible;
+        const bool visible = erhe::utility::test_bit_set(new_flag_bits, erhe::Item_flags::visible);
         if (visible && !rt_primitive->rt_instance->is_enabled()) {
             rt_primitive->rt_instance->enable();
         } else if (!visible && rt_primitive->rt_instance->is_enabled()) {
@@ -210,7 +210,7 @@ auto is_mesh(const Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::mesh);
+    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::mesh);
 }
 
 auto is_mesh(const std::shared_ptr<erhe::Item_base>& item) -> bool

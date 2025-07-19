@@ -416,7 +416,7 @@ auto is_light(const erhe::Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::light);
+    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::light);
 }
 
 auto is_light(const std::shared_ptr<erhe::Item_base>& item) -> bool
