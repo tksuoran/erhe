@@ -223,6 +223,24 @@ auto Viewport_scene_view::get_camera() const -> std::shared_ptr<erhe::scene::Cam
     return m_camera.lock();
 }
 
+auto Viewport_scene_view::get_perspective_scale() const -> float
+{
+    const auto camera = m_camera.lock();
+    if (!camera) {
+        return 1.0f;
+    }
+    const erhe::scene::Camera_projection_transforms camera_projection_transforms_ = camera->projection_transforms(m_projection_viewport);
+    const glm::mat4 clip_from_view = camera_projection_transforms_.clip_from_camera.get_matrix();
+    const glm::mat2 projection_top_left_2x2{clip_from_view};
+    const glm::mat2 inverted_top_left_2x2 = glm::inverse(projection_top_left_2x2);
+    const float x = inverted_top_left_2x2[0][0];
+    const float y = inverted_top_left_2x2[1][1];
+    const float w = static_cast<float>(m_projection_viewport.width);
+    const float h = static_cast<float>(m_projection_viewport.height);
+    const float vp_scale = 1000.0f / std::min(w, h);
+    return std::min(x, y) * vp_scale;
+}
+
 auto Viewport_scene_view::get_rendergraph_node() -> erhe::rendergraph::Rendergraph_node*
 {
     return this;

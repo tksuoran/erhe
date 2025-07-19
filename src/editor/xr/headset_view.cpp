@@ -640,6 +640,11 @@ auto Headset_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
     return m_root_camera;
 }
 
+auto Headset_view::get_perspective_scale() const -> float
+{
+    return 1.0f; // TODO
+}
+
 auto Headset_view::get_rendergraph_node() -> erhe::rendergraph::Rendergraph_node*
 {
     return m_rendergraph_node.get();

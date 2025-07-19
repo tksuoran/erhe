@@ -586,8 +586,10 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
         return;
     }
 
-    const auto& settings     = m_context.transform_tool->shared.settings;
-    const float scalar_scale = m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f;
+    const auto& settings          = m_context.transform_tool->shared.settings;
+    const float distance_scale    = m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f;
+    const float perspective_scale = m_scene_view->get_perspective_scale();
+    const float scalar_scale      = distance_scale * perspective_scale;
 
     if (!isfinite(scalar_scale)) {
         log_trs_tool->error("!isfinite()");

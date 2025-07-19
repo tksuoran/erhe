@@ -93,6 +93,7 @@ public:
     // Virtual interface
     [[nodiscard]] virtual auto get_scene_root        () const -> std::shared_ptr<Scene_root> = 0;
     [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
+    [[nodiscard]] virtual auto get_perspective_scale () const -> float = 0;
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }
     [[nodiscard]] virtual auto get_shadow_texture    () const -> erhe::graphics::Texture*;
     [[nodiscard]] virtual auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node* = 0;

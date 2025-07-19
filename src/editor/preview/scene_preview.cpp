@@ -179,6 +179,11 @@ auto Scene_preview::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
     return m_camera;
 }
 
+auto Scene_preview::get_perspective_scale() const -> float
+{
+    return 1.0f; // TODO
+}
+
 auto Scene_preview::get_rendergraph_node() -> erhe::rendergraph::Rendergraph_node*
 {
     return {};
