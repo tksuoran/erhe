@@ -126,7 +126,7 @@ auto get_type_details(const Glsl_type type) -> Type_details
         case Glsl_type::unsigned_int_sampler_2d_multisample_array:   return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_2d, 2, sampler_flags_multisample | sampler_flags_array);
 
         default: {
-            ERHE_FATAL("Bad GLSL type %d", type);
+            ERHE_FATAL("Bad GLSL type %u", static_cast<unsigned int>(type));
         }
     }
 }
@@ -491,7 +491,7 @@ auto Shader_resource::get_binding_target() const-> erhe::graphics::Buffer_target
         case Type::shader_storage_block: return Buffer_target::storage;
         default:
         {
-            ERHE_FATAL("not binding target %d", m_type);
+            ERHE_FATAL("not binding target %d", static_cast<unsigned int>(m_type));
             return Buffer_target::index; // TODO
         }
     }

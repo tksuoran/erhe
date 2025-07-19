@@ -54,7 +54,7 @@ auto Sampler::to_gl(const Compare_operation compare_operation) -> int
         case Compare_operation::greater_or_equal: return GL_GEQUAL;
         case Compare_operation::always:           return GL_ALWAYS;
         default: {
-            ERHE_FATAL("Bad compare_operation %u", compare_operation);
+            ERHE_FATAL("Bad compare_operation %u", static_cast<unsigned int>(compare_operation));
             return 0;
         }
     }
@@ -67,7 +67,7 @@ auto Sampler::to_gl(const Sampler_address_mode address_mode) -> int
         case Sampler_address_mode::clamp_to_edge:   return GL_CLAMP_TO_EDGE;
         case Sampler_address_mode::mirrored_repeat: return GL_MIRRORED_REPEAT;
         default: {
-            ERHE_FATAL("Bad address_mode %u", address_mode);
+            ERHE_FATAL("Bad address_mode %u", static_cast<unsigned int>(address_mode));
             return 0;
         }
     }
@@ -80,7 +80,7 @@ auto Sampler::to_gl(Filter filter, Sampler_mipmap_mode mipmap_mode) -> int
             switch (filter) {
                 case Filter::nearest: return GL_NEAREST;
                 case Filter::linear:  return GL_LINEAR;
-                default: ERHE_FATAL("Bad filter %u", filter); return 0;
+                default: ERHE_FATAL("Bad filter %u", static_cast<unsigned int>(filter)); return 0;
             }
             break;
         }
@@ -88,7 +88,7 @@ auto Sampler::to_gl(Filter filter, Sampler_mipmap_mode mipmap_mode) -> int
             switch (filter) {
                 case Filter::nearest: return GL_NEAREST_MIPMAP_NEAREST;
                 case Filter::linear:  return GL_LINEAR_MIPMAP_NEAREST;
-                default: ERHE_FATAL("Bad filter %u", filter); return 0;
+                default: ERHE_FATAL("Bad filter %u", static_cast<unsigned int>(filter)); return 0;
             }
             break;
         }
@@ -96,11 +96,11 @@ auto Sampler::to_gl(Filter filter, Sampler_mipmap_mode mipmap_mode) -> int
             switch (filter) {
                 case Filter::nearest: return GL_NEAREST_MIPMAP_LINEAR;
                 case Filter::linear:  return GL_LINEAR_MIPMAP_LINEAR;
-                default: ERHE_FATAL("Bad filter %u", filter); return 0;
+                default: ERHE_FATAL("Bad filter %u", static_cast<unsigned int>(filter)); return 0;
             }
         }
         default: {
-            ERHE_FATAL("Bad mipmap mode %u", mipmap_mode);
+            ERHE_FATAL("Bad mipmap mode %u", static_cast<unsigned int>(mipmap_mode));
             return 0;
         }
     }

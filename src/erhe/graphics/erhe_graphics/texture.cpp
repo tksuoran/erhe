@@ -595,7 +595,7 @@ auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Textur
                 : gl::Texture_target::texture_cube_map;
         }
         default: {
-            ERHE_FATAL("Bad texture type %d", type);
+            ERHE_FATAL("Bad texture type %u", static_cast<unsigned int>(type));
             return gl::Texture_target::texture_2d;
         }
     }
@@ -655,7 +655,7 @@ auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Textur
             return Texture_type::texture_cube_map;
         }
         default: {
-            ERHE_FATAL("Bad gl::Texture_target %04x", gl_texture_target);
+            ERHE_FATAL("Bad gl::Texture_target %04x", static_cast<unsigned int>(gl_texture_target));
             multisample = false;
             array       = false;
             return Texture_type::texture_2d;

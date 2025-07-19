@@ -57,7 +57,7 @@ void Render_command_encoder::set_vertex_buffer(const Buffer* buffer, std::uintpt
         case Primitive_type::triangle      : return gl::Primitive_type::triangles     ;
         case Primitive_type::triangle_strip: return gl::Primitive_type::triangle_strip;
         default: {
-            ERHE_FATAL("bad primitive type %d", primitive_type);
+            ERHE_FATAL("bad primitive type %u", static_cast<unsigned int>(primitive_type));
             return gl::Primitive_type::points;
         }
     }

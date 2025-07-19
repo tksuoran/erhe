@@ -24,7 +24,7 @@ Command_encoder::~Command_encoder()
         case Buffer_target::storage      : return gl::Buffer_target::shader_storage_buffer;
         case Buffer_target::draw_indirect: return gl::Buffer_target::draw_indirect_buffer;
         default: {
-            ERHE_FATAL("Bad Buffer_target %d", buffer_target);
+            ERHE_FATAL("Bad Buffer_target %u", static_cast<unsigned int>(buffer_target));
             return gl::Buffer_target::copy_read_buffer;
         }
     }
