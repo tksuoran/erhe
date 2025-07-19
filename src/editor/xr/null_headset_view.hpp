@@ -94,10 +94,11 @@ public:
     void render(const Render_context& render_context) override;
 
     // Implements Scene_view
-    [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
-    [[nodiscard]] auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
-    [[nodiscard]] auto get_shadow_render_node() const -> Shadow_render_node*                  override;
-    [[nodiscard]] auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
+    auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
+    auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
+    auto get_perspective_scale () const -> float                                override;
+    auto get_shadow_render_node() const -> Shadow_render_node*                  override;
+    auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
 
 private:
 };

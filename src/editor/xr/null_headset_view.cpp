@@ -51,6 +51,11 @@ auto Headset_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
     return {};
 }
 
+auto Headset_view::get_perspective_scale () const -> float
+{
+    return 1.0f;
+}
+
 auto Headset_view::get_rendergraph_node() -> erhe::rendergraph::Rendergraph_node*
 {
     return {};
