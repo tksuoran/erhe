@@ -47,6 +47,10 @@ Material_preview::Material_preview(
     update_rendertarget(graphics_device);
 }
 
+Material_preview::~Material_preview()
+{
+}
+
 void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();

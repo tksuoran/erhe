@@ -44,6 +44,10 @@ Brush_preview::Brush_preview(
     make_preview_scene();
 }
 
+Brush_preview::~Brush_preview()
+{
+}
+
 void Brush_preview::make_preview_scene()
 {
     ERHE_PROFILE_FUNCTION();

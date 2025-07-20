@@ -32,7 +32,6 @@ namespace editor {
 
 class App_context;
 class App_rendering;
-class Brush;
 class Content_library;
 class Mesh_memory;
 class Programs;
@@ -49,6 +48,7 @@ public:
         Mesh_memory&                    mesh_memory,
         Programs&                       programs
     );
+    ~Scene_preview();
 
     // Implements Scene_view
     auto get_scene_root       () const -> std::shared_ptr<Scene_root>                    override;

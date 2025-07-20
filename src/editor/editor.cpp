@@ -42,6 +42,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
 #include "physics/physics_window.hpp"
+#include "preview/brush_preview.hpp"
 #include "preview/material_preview.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
