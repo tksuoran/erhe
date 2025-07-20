@@ -214,6 +214,7 @@ void Operations::imgui()
         ImGui::Indent(20.0f);
         ERHE_DEFER( ImGui::Unindent(20.0f); );
         const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
+#if 0
         if (erhe::imgui::make_button("Cubes", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_cubes(
                 glm::ivec3{m_make_mesh_config.instance_count, m_make_mesh_config.instance_count, m_make_mesh_config.instance_count},
@@ -221,6 +222,7 @@ void Operations::imgui()
                 m_make_mesh_config.instance_gap
             );
         }
+#endif
         if (erhe::imgui::make_button("Platonic Solids", erhe::imgui::Item_mode::normal, button_size)) {
             m_context.scene_builder->add_platonic_solids(m_make_mesh_config);
         }

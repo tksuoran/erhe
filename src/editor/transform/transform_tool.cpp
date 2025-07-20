@@ -204,12 +204,6 @@ auto Transform_tool::is_transform_tool_active() const -> bool
 
 void Transform_tool::imgui()
 {
-    auto* scene_view = get_last_hover_scene_view();
-    if (scene_view != nullptr) {
-        const float scale = scene_view->get_perspective_scale();
-        ImGui::Text("Perspective scale: %f", scale);
-    }
-
     auto& settings = shared.settings;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x / 2, 0.0f};
 
@@ -233,7 +227,7 @@ void Transform_tool::imgui()
         settings.local = false;
     }
 
-    ImGui::TextUnformatted(is_transform_tool_active() ? "Active" : "Inactive");
+    // ImGui::TextUnformatted(is_transform_tool_active() ? "Active" : "Inactive");
 
     //const bool show_translate = settings.show_translate;
     //const bool show_rotate    = settings.show_rotate;
