@@ -102,7 +102,7 @@ void Viewport_config_window::imgui()
     };
 
     if (m_edit_data != nullptr) {
-        ImGui::SliderFloat("Gizmo Scale", &m_edit_data->gizmo_scale, 1.0f, 8.0f, "%.2f");
+        ImGui::SliderFloat("Gizmo Scale", &m_edit_data->gizmo_scale, 1.0f, 20.0f, "%.2f");
         ImGui::ColorEdit4("Clear Color", &m_edit_data->clear_color.x, ImGuiColorEditFlags_Float);
 
         if (ImGui::TreeNodeEx("Default Style", flags)) {
