@@ -516,7 +516,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
             .depth_test_enable   = false,
             .depth_write_enable  = false,
             .depth_compare_op    = gl::Depth_function::always,
-            .stencil_test_enable = true,
+            .stencil_test_enable = true, // If bit 7 in the stencil buffer is not set, draw and set it. Otherwise, skip drawing
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
@@ -613,7 +613,31 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
                 .vertex_input   = &mesh_memory.vertex_input,
                 .input_assembly = Input_assembly_state::triangle,
                 .rasterization  = Rasterization_state::cull_mode_none_depth_clamp,
-                .depth_stencil  = Depth_stencil_state::depth_test_enabled_less_or_equal_stencil_test_disabled(),
+                .depth_stencil = {
+                    .depth_test_enable   = true,
+                    .depth_write_enable  = true,
+                    .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::lequal),
+                    .stencil_test_enable = true, // Conditionally render fragments where bit 7 is not set, without modifying the stencil buffer
+                    .stencil_front = {
+                        .stencil_fail_op = gl::Stencil_op::keep,
+                        .z_fail_op       = gl::Stencil_op::keep,
+                        .z_pass_op       = gl::Stencil_op::keep,
+                        .function        = gl::Stencil_function::notequal,
+                        .reference       = 0b10000000u,
+                        .test_mask       = 0b10000000u,
+                        .write_mask      = 0b10000000u
+                    },
+                    .stencil_back = {
+                        .stencil_fail_op = gl::Stencil_op::keep,
+                        .z_fail_op       = gl::Stencil_op::keep,
+                        .z_pass_op       = gl::Stencil_op::keep,
+                        .function        = gl::Stencil_function::notequal,
+                    .reference       = 0b10000000u,
+                    .test_mask       = 0b10000000u,
+                    .write_mask      = 0b10000000u
+                }
+                },
+
                 .color_blend    = Color_blend_state::color_blend_premultiplied
             }
         }
