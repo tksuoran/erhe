@@ -43,6 +43,7 @@ private:
     bool                     m_show_hover_normal              {true};
     bool                     m_show_snapped_grid_position     {false};
     bool                     m_geometry_debug_hover_facet_only{true};
+    float                    m_normal_length                  {0.5f};
     std::vector<std::string> m_text_lines;
 
     std::weak_ptr<erhe::scene::Node> m_hovered_node_in_viewport;

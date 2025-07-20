@@ -332,7 +332,7 @@ void Properties::geometry_properties(erhe::geometry::Geometry& geometry)
 {
     ERHE_PROFILE_FUNCTION();
 
-    push_group("Geometry", ImGuiTreeNodeFlags_None, m_indent);
+    push_group("Geometry", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
 
     const GEO::Mesh& geo_mesh = geometry.get_mesh();
     add_entry("Vertices", [&geo_mesh](){
@@ -520,27 +520,48 @@ void Properties::brush_placement_properties(Brush_placement& brush_placement)
 {
     ERHE_PROFILE_FUNCTION();
 
-    add_entry("Brush",  [&](){ ImGui::TextUnformatted(brush_placement.get_brush()->get_name().c_str()); });
-    add_entry(
-        "Facet",
-        [&]() {
-            if (brush_placement.get_facet() == GEO::NO_FACET) {
-                ImGui::TextUnformatted("--");
-            } else {
-                ImGui::Text("%u", brush_placement.get_facet());
+    add_entry("Brush", [&](){ ImGui::TextUnformatted(brush_placement.get_brush()->get_name().c_str()); });
+    if (m_context.developer_mode) {
+        add_entry(
+            "Facet",
+            [&]() {
+                if (brush_placement.get_facet() == GEO::NO_FACET) {
+                    ImGui::TextUnformatted("--");
+                } else {
+                    ImGui::Text("%u", brush_placement.get_facet());
+                }
             }
-        }
-    );
-    add_entry(
-        "Corner",
-        [&]() {
-            if (brush_placement.get_corner() == GEO::NO_FACET) {
-                ImGui::TextUnformatted("--");
-            } else {
-                ImGui::Text("%u", brush_placement.get_corner());
+        );
+        add_entry(
+            "Corner",
+            [&]() {
+                if (brush_placement.get_corner() == GEO::NO_FACET) {
+                    ImGui::TextUnformatted("--");
+                } else {
+                    ImGui::Text("%u", brush_placement.get_corner());
+                }
             }
-        }
-    );
+        );
+    }
+
+    std::shared_ptr<Brush> brush = brush_placement.get_brush();
+    if (!brush) {
+        return;
+    }
+    push_group("Polygons", ImGuiTreeNodeFlags_DefaultOpen);
+    const std::map<GEO::index_t, std::vector<GEO::index_t>>& facets = brush->get_corner_count_to_facets();
+    for (const auto& i : facets) {
+        const GEO::index_t corner_count  = i.first;
+        const std::size_t  polygon_count = i.second.size();
+        const std::string  label         = fmt::format("{}-gons", corner_count);
+        add_entry(
+            label,
+            [polygon_count]() {
+                ImGui::Text("%zu", polygon_count);
+            }
+        );
+    }
+    pop_group();
 }
 
 void Properties::on_begin()
@@ -694,15 +715,13 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& brush_placement = std::dynamic_pointer_cast<Brush_placement        >(item);
     const auto& texture         = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
 
-    ////const bool default_open = !node_physics && !content_library_node && !node;
-
     if (!item) {
         return;
     }
 
     std::string group_label = fmt::format("{} {}", item->get_type_name().data(), item->get_name());
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Framed;
-    if (!node_physics && !rendertarget && !brush_placement) {
+    if (!node_physics && !rendertarget) {
         flags |= ImGuiTreeNodeFlags_DefaultOpen;
     }
     push_group(group_label.c_str(), flags, m_indent);
@@ -802,14 +821,20 @@ void Properties::material_properties()
     m_context.material_preview->update_rendertarget(*m_context.graphics_device);
     m_context.material_preview->render_preview(selected_material_);
     m_context.material_preview->show_preview();
+
     auto* node = m_context.brdf_slice->get_node();
     if (node != nullptr) {
-        push_group("BRDF Slice", ImGuiTreeNodeFlags_None);
         node->set_material(selected_material_);
-        add_entry("BRDF", [this, area_size]() {
+        if (ImGui::TreeNodeEx("BRDF Slice", ImGuiTreeNodeFlags_None)) {
             m_context.brdf_slice->show_brdf_slice(area_size);
-        });
-        pop_group();
+            ImGui::TreePop();
+        }
+
+        //push_group("BRDF Slice", ImGuiTreeNodeFlags_None);
+        //add_entry("BRDF", [this, area_size]() {
+        //    m_context.brdf_slice->show_brdf_slice(area_size);
+        //});
+        //pop_group();
     }
     add_entry("Metallic",    [=](){ ImGui::SliderFloat("##", &selected_material->metallic,     0.0f,  1.0f); });
     add_entry("Reflectance", [=](){ ImGui::SliderFloat("##", &selected_material->reflectance,  0.35f, 1.0f); });

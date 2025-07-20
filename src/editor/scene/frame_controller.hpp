@@ -8,9 +8,7 @@
 
 #include <memory>
 
-namespace erhe::scene {
-    class Node;
-}
+namespace erhe::scene { class Node; }
 
 namespace editor {
 

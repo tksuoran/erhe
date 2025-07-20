@@ -506,6 +506,7 @@ void Physics_tool::tool_render(const Render_context& context)
         }
     }
 
+    line_renderer.set_thickness(0.4f);
     if (m_target_constraint) {
         const float d = 0.05f;
         const glm::vec3 dx{d, 0.0f, 0.0f};
@@ -513,7 +514,6 @@ void Physics_tool::tool_render(const Render_context& context)
         const glm::vec3 dz{0.0f, 0.0f, d};
 
         constexpr glm::vec4 white{6.0f, 1.5f, 1.5f, 1.0f};
-        line_renderer.set_thickness(4.0f);
         line_renderer.add_lines(
             white,
             { { m_grab_position_world, m_goal_position_in_world } }

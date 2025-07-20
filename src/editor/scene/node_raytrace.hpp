@@ -35,7 +35,7 @@ class Ray_hit_style
 {
 public:
     glm::vec4 ray_color    {1.0f, 1.0f, 1.0f, 1.0f};
-    float     ray_thickness{4.0f};
+    float     ray_thickness{2.0f};
     float     ray_length   {1.0f};
     glm::vec4 hit_color    {1.0f, 1.0f, 1.0f, 1.0f};
     float     hit_thickness{2.0f};

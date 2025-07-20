@@ -143,11 +143,11 @@ private:
     bool          m_show_drag_body{true};
     Ray_hit_style m_ray_hit_style{
         .ray_color     = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
-        .ray_thickness = 8.0f,
+        .ray_thickness = 3.0f,
         .ray_length    = 1.0f,
         .hit_color     = glm::vec4{0.8f, 0.2f, 0.8f, 0.75f},
-        .hit_thickness = 8.0f,
-        .hit_size      = 0.5f
+        .hit_thickness = 2.0f,
+        .hit_size      = 0.25f
     };
 };
 

@@ -301,8 +301,8 @@ void Hover_tool::tool_render(const Render_context& context)
     if (m_show_hover_normal && entry->normal.has_value()) {
         erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
         const auto p0 = entry->position.value();
-        const auto p1 = entry->position.value() + entry->normal.value();
-        line_renderer.set_thickness(8.0f);
+        const auto p1 = entry->position.value() + m_normal_length * entry->normal.value();
+        line_renderer.set_thickness(3.0f);
         line_renderer.add_lines(
             get_line_color_from_slot(entry->slot),
             {{ glm::vec3{p0}, glm::vec3{p1} }}
@@ -310,7 +310,7 @@ void Hover_tool::tool_render(const Render_context& context)
         std::shared_ptr<Grid> grid = entry->grid_weak.lock();
         if (m_show_snapped_grid_position && grid) {
             const auto sp0 = grid->snap_world_position(p0);
-            const auto sp1 = sp0 + entry->normal.value();
+            const auto sp1 = sp0 + m_normal_length * entry->normal.value();
             line_renderer.add_lines(
                 glm::vec4{1.0f, 1.0f, 0.0f, 1.0},
                 {{ glm::vec3{sp0}, glm::vec3{sp1} }}

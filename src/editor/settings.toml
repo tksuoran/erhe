@@ -12,4 +12,4 @@ icon_font_size = 24.0
 material_design_font_size = 24.0
 mono_font = 'res/fonts/SourceCodePro-Semibold.otf'
 primary_font = 'res/fonts/SourceSansPro-Regular.otf'
-vr_font_size = 22.0
+vr_font_size = 24.0

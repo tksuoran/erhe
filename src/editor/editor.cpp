@@ -1040,6 +1040,14 @@ public:
 #if defined(ERHE_XR_LIBRARY_OPENXR)
             ////m_theremin.set_developer();
 #endif
+            m_graph_window          ->set_developer();
+            m_gradient_editor       ->set_developer();
+            m_node_properties_window->set_developer();
+            m_network_window        ->set_developer();
+            m_headset_view          ->set_developer();
+            m_sheet_window          ->set_developer();
+
+            m_icon_browser          ->set_developer();
             m_layers_window         ->set_developer();
             m_network_window        ->set_developer();
             m_post_processing_window->set_developer();

@@ -130,7 +130,7 @@ private:
     bool                               m_scale_to_match        {true};
     bool                               m_use_matching_face     {true};
     bool                               m_use_selected_face     {false};
-    bool                               m_debug_visualization   {true};
+    bool                               m_debug_visualization   {false};
     bool                               m_show_receiver_frame   {true};
     bool                               m_show_brush_frame      {true};
     bool                               m_show_preview          {true};
@@ -155,7 +155,7 @@ private:
     std::optional<Reference_frame>     m_brush_placement_frame;
     std::optional<glm::mat4>           m_hover_transform;
     std::optional<glm::mat4>           m_align_transform;
-    std::unique_ptr<Item_tree>         m_brush_item_tree;
+    ///std::unique_ptr<Item_tree>         m_brush_item_tree;
 };
 
 }

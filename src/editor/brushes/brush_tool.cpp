@@ -771,7 +771,7 @@ void Brush_tool::update_preview_mesh()
     update_preview_mesh_node_transform();
 }
 
-void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
+void Brush_tool::tool_properties(erhe::imgui::Imgui_window& /*imgui_window*/)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -838,11 +838,11 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
     ImGui::SliderFloat("Scale",           &m_scale, 0.0001f, 32.0f, "%.3f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
     ImGui::SliderFloat("Grid Scale",      &m_grid_scale, 0.0001f, 32.0f, "%.3f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
     ImGui::Checkbox   ("Physics",         &m_with_physics);
-    ImGui::DragInt    ("Face Offset",     &m_polygon_offset, 0.1f, 0, INT_MAX);
-    ImGui::DragInt    ("Corner Offset",   &m_corner_offset,  0.1f, 0, INT_MAX);
+    //ImGui::DragInt    ("Face Offset",     &m_polygon_offset, 0.1f, 0, INT_MAX);
+    //ImGui::DragInt    ("Corner Offset",   &m_corner_offset,  0.1f, 0, INT_MAX);
 
     ImGui::NewLine    ();
-    ImGui::Checkbox   ("Debug Visualization", &m_debug_visualization);
+    //ImGui::Checkbox   ("Debug Visualization", &m_debug_visualization);
     ImGui::Checkbox   ("Show Receiver Frame", &m_show_receiver_frame);
     ImGui::Checkbox   ("Show Brush Frame",    &m_show_brush_frame);
     ImGui::Checkbox   ("Show Preview",        &m_show_preview);
@@ -856,24 +856,24 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
         }
     }
 
-    if (!m_brush_item_tree) {
-        std::shared_ptr<Content_library> content_library = get_content_library();
-        if (content_library) {
-            m_brush_item_tree = std::make_unique<Item_tree>(m_context);
-            m_brush_item_tree->set_root(content_library->brushes);
-            m_brush_item_tree->set_item_filter(
-                erhe::Item_filter{
-                    .require_all_bits_set           = 0,
-                    .require_at_least_one_bit_set   = 0,
-                    .require_all_bits_clear         = 0,
-                    .require_at_least_one_bit_clear = 0
-                }
-            );
-        }
-    }
-    if (m_brush_item_tree) {
-        m_brush_item_tree->imgui_tree(imgui_window.get_scale_value());
-    }
+    ///if (!m_brush_item_tree) {
+    ///    std::shared_ptr<Content_library> content_library = get_content_library();
+    ///    if (content_library) {
+    ///        m_brush_item_tree = std::make_unique<Item_tree>(m_context);
+    ///        m_brush_item_tree->set_root(content_library->brushes);
+    ///        m_brush_item_tree->set_item_filter(
+    ///            erhe::Item_filter{
+    ///                .require_all_bits_set           = 0,
+    ///                .require_at_least_one_bit_set   = 0,
+    ///                .require_all_bits_clear         = 0,
+    ///                .require_at_least_one_bit_clear = 0
+    ///            }
+    ///        );
+    ///    }
+    ///}
+    ///if (m_brush_item_tree) {
+    ///    m_brush_item_tree->imgui_tree(imgui_window.get_scale_value());
+    ///}
 }
 
 void Brush_tool::tool_render(const Render_context& render_context)

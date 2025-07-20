@@ -135,12 +135,7 @@ Brdf_slice::Brdf_slice(
     : m_rendergraph{rendergraph}
     , m_context    {app_context}
     , m_node{
-        std::make_shared<Brdf_slice_rendergraph_node>(
-            rendergraph,
-            forward_renderer,
-            *this,
-            programs
-        )
+        std::make_shared<Brdf_slice_rendergraph_node>(rendergraph, forward_renderer, *this, programs)
     }
 {
 }

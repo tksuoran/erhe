@@ -32,6 +32,8 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
+#define ICON_MDI_FILTER                                   "\xf3\xb0\x88\xb2" // U+F0232
+
 namespace editor {
 
 using Light_type = erhe::scene::Light_type;
@@ -1221,6 +1223,10 @@ void Item_tree::imgui_tree(float ui_scale)
     ImGui::PushID(table_id);
     ERHE_DEFER( ImGui::PopID(); );
 
+    ImGui::PushFont(m_context.imgui_renderer->material_design_font(), m_context.imgui_renderer->get_imgui_settings().font_size);
+    ImGui::TextUnformatted(ICON_MDI_FILTER);
+    ImGui::PopFont();
+    ImGui::SameLine();
     m_text_filter.Draw("Filter:", -FLT_MIN);
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});

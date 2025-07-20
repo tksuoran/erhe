@@ -39,6 +39,7 @@ public:
     )
         : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Graph Style", "graph_style"}
     {
+        set_developer();
         Property_editor& e = m_property_editor;
         auto& style = node_editor.GetStyle();
         style.PinArrowSize  = 14.0f;
