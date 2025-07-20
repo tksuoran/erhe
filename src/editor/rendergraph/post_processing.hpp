@@ -79,7 +79,7 @@ public:
     class Offsets
     {
     public:
-        Offsets(erhe::graphics::Shader_resource& block);
+        explicit Offsets(erhe::graphics::Shader_resource& block);
 
         std::size_t input_texture        {0}; // uvec2
         std::size_t downsample_texture   {0}; // uvec2

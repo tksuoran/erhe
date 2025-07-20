@@ -14,7 +14,7 @@ class Time_context;
 class App_scenes
 {
 public:
-    App_scenes(App_context& context);
+    explicit App_scenes(App_context& context);
 
     void register_scene_root                 (Scene_root* scene_root);
     void unregister_scene_root               (Scene_root* scene_root);

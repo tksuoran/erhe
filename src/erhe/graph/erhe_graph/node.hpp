@@ -15,7 +15,7 @@ class Node : public erhe::Item<erhe::Item_base, erhe::Item_base, Node, erhe::Ite
 {
 public:
     Node();
-    Node(std::string_view name);
+    explicit Node(std::string_view name);
     explicit Node(const Node&);
     Node& operator=(const Node&);
 

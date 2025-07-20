@@ -14,7 +14,7 @@ class Debug_renderer;
 class Jolt_debug_renderer : public JPH::DebugRenderer
 {
 public:
-    Jolt_debug_renderer(Debug_renderer& debug_renderer);
+    explicit Jolt_debug_renderer(Debug_renderer& debug_renderer);
     ~Jolt_debug_renderer() override;
 
     /// Should be called every frame by the application to provide the camera position.

@@ -137,7 +137,7 @@ void Build_context_root::allocate_index_buffer()
 class Mesh_point_source : public erhe::math::Bounding_volume_source
 {
 public:
-    Mesh_point_source(const GEO::Mesh& mesh) : m_mesh{mesh} {}
+    explicit Mesh_point_source(const GEO::Mesh& mesh) : m_mesh{mesh} {}
 
     auto get_element_count() const -> std::size_t override { return m_mesh.vertices.nb(); }
     auto get_element_point_count(const std::size_t) const -> std::size_t override { return 1;}

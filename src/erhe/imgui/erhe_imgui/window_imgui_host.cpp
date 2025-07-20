@@ -152,11 +152,44 @@ void Window_imgui_host::begin_imgui_frame()
     ImFont* font = m_imgui_renderer.primary_font();
     ImGui::PushFont(font, m_imgui_renderer.get_imgui_settings().font_size);
 
-    ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+    const float status_bar_height = ImGui::GetFrameHeight();
 
+    // Root window
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->Pos);
+    ImGui::SetNextWindowSize(viewport->Size);
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGuiWindowFlags window_flags =
+        ImGuiWindowFlags_NoDocking             |
+        ImGuiWindowFlags_NoTitleBar            |
+        ImGuiWindowFlags_NoCollapse            |
+        ImGuiWindowFlags_NoResize              |
+        ImGuiWindowFlags_NoMove                |
+        ImGuiWindowFlags_NoBringToFrontOnFocus | 
+        ImGuiWindowFlags_NoNavFocus            |
+        ImGuiWindowFlags_MenuBar;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("erhe root window", nullptr, window_flags);
+    ImGui::PopStyleVar(2);
+
+    // Menu
     if (m_begin_callback) {
         m_begin_callback(*this);
     }
+
+    // Dockspace
+    ImGui::DockSpace(ImGui::GetID(0), ImVec2{0.0f, -status_bar_height}, ImGuiDockNodeFlags_PassthruCentralNode);
+
+    // Status bar
+    ImGui::SetCursorPos(ImVec2{0.0f, viewport->Size.y - status_bar_height});
+    ImGui::BeginChild("StatusBar", ImVec2{viewport->Size.x, status_bar_height}, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    if (m_status_bar_callback) {
+        m_status_bar_callback(*this);
+    }
+    ImGui::EndChild();
+
+    ImGui::End();
 }
 
 void Window_imgui_host::end_imgui_frame()
@@ -206,6 +239,11 @@ auto Window_imgui_host::get_viewport() const -> erhe::math::Viewport
         .width  = m_context_window.get_width(),
         .height = m_context_window.get_height()
     };
+}
+
+void Window_imgui_host::set_status_bar_callback(const std::function<void(Window_imgui_host& host)>& callback)
+{
+    m_status_bar_callback = callback;
 }
 
 }  // namespace erhe::imgui

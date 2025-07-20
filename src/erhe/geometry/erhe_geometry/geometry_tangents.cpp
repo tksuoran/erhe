@@ -14,7 +14,7 @@ auto compute_mesh_tangents(GEO::Mesh& mesh, const bool make_facets_flat) -> bool
     class Mesh_context
     {
     public:
-        Mesh_context(GEO::Mesh& mesh)
+        explicit Mesh_context(GEO::Mesh& mesh)
             : mesh      {mesh}
             , attributes{mesh}
         {

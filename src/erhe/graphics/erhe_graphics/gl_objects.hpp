@@ -63,7 +63,7 @@ private:
 class Gl_sampler final
 {
 public:
-    Gl_sampler    (Device& device);
+    explicit Gl_sampler(Device& device);
     ~Gl_sampler   () noexcept;
     Gl_sampler    (const Gl_sampler&) = delete;
     void operator=(const Gl_sampler&) = delete;
@@ -79,7 +79,7 @@ private:
 class Gl_framebuffer final
 {
 public:
-    Gl_framebuffer (Device& device);
+    explicit Gl_framebuffer(Device& device);
     ~Gl_framebuffer() noexcept;
     Gl_framebuffer (const Gl_framebuffer&) = delete;
     void operator= (const Gl_framebuffer&) = delete;
@@ -95,7 +95,7 @@ private:
 class Gl_renderbuffer final
 {
 public:
-    Gl_renderbuffer (Device& device);
+    explicit Gl_renderbuffer(Device& device);
     ~Gl_renderbuffer() noexcept;
     Gl_renderbuffer (const Gl_renderbuffer&) = delete;
     void operator=  (const Gl_renderbuffer&) = delete;
@@ -111,7 +111,7 @@ private:
 class Gl_buffer final
 {
 public:
-    Gl_buffer     (Device& device);
+    explicit Gl_buffer(Device& device);
     ~Gl_buffer    () noexcept;
     Gl_buffer     (const Gl_buffer&) = delete;
     void operator=(const Gl_buffer&) = delete;
@@ -159,7 +159,7 @@ private:
 class Gl_vertex_array final
 {
 public:
-    Gl_vertex_array (Device& device);
+    explicit Gl_vertex_array(Device& device);
     ~Gl_vertex_array() noexcept;
     Gl_vertex_array (const Gl_vertex_array&) = delete;
     void operator=  (const Gl_vertex_array&) = delete;

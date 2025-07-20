@@ -1057,11 +1057,101 @@ public:
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
         gl::enable      (gl::Enable_cap::framebuffer_srgb);
 
-        const auto window_viewport = m_imgui_windows->get_window_imgui_host();
+        const std::shared_ptr<erhe::imgui::Window_imgui_host>& window_imgui_host = m_imgui_windows->get_window_imgui_host();
         if (!m_app_context.OpenXR) {
-            window_viewport->set_begin_callback(
+            window_imgui_host->set_begin_callback(
                 [this](erhe::imgui::Imgui_host& imgui_host) {
                     m_app_windows->viewport_menu(imgui_host);
+                }
+            );
+            window_imgui_host->set_status_bar_callback(
+                [this](erhe::imgui::Window_imgui_host&) {
+                    struct Input_record
+                    {
+                        bool shift              {false};
+                        bool alt                {false};
+                        bool control            {false};
+                        bool mouse_button_left  {false};
+                        bool mouse_button_right {false};
+                        bool mouse_button_middle{false};
+                        bool mouse_button_x1    {false};
+                        bool mouse_button_x2    {false};
+                        bool mouse_drag_left    {false};
+                        bool mouse_drag_right   {false};
+                        bool mouse_drag_middle  {false};
+                        bool mouse_drag_x1      {false};
+                        bool mouse_drag_x2      {false};
+                    };
+                    Input_record r{
+                        .shift               = ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift),
+                        .alt                 = ImGui::IsKeyDown(ImGuiKey_LeftAlt)   || ImGui::IsKeyDown(ImGuiKey_RightAlt),
+                        .control             = ImGui::IsKeyDown(ImGuiKey_LeftCtrl)  || ImGui::IsKeyDown(ImGuiKey_RightCtrl),
+                        .mouse_button_left   = ImGui::IsMouseDown(ImGuiMouseButton_Left),
+                        .mouse_button_right  = ImGui::IsMouseDown(ImGuiMouseButton_Right),
+                        .mouse_button_middle = ImGui::IsMouseDown(ImGuiMouseButton_Middle),
+                        .mouse_button_x1     = ImGui::IsMouseDown(3),
+                        .mouse_button_x2     = ImGui::IsMouseDown(4),
+                        .mouse_drag_left     = ImGui::IsMouseDragging(ImGuiMouseButton_Left),
+                        .mouse_drag_right    = ImGui::IsMouseDragging(ImGuiMouseButton_Right),
+                        .mouse_drag_middle   = ImGui::IsMouseDragging(ImGuiMouseButton_Middle),
+                        .mouse_drag_x1       = ImGui::IsMouseDragging(3),
+                        .mouse_drag_x2       = ImGui::IsMouseDragging(4)
+                    };
+                    if (r.shift) {
+                        ImGui::Button("Shift");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    }
+                    if (r.alt) {
+                        ImGui::Button("Alt");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    }
+                    if (r.control) {
+                        ImGui::Button("Control");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    }
+                    if (r.mouse_drag_left) {
+                        m_icon_set->draw_icon(m_icon_set->icons.mouse_lmb_drag, glm::vec4{1.0f, 1.0f, 1.0f, 1.0}, m_icon_set->custom_icons);
+                        ImGui::Button("Dragging Left Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    } else if (r.mouse_button_left) {
+                        m_icon_set->draw_icon(m_icon_set->icons.mouse_lmb, glm::vec4{1.0f, 1.0f, 1.0f, 1.0}, m_icon_set->custom_icons);
+                        ImGui::Button("Pressing Left Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    }
+
+                    if (r.mouse_drag_middle) {
+                        m_icon_set->draw_icon(m_icon_set->icons.mouse_mmb_drag, glm::vec4{1.0f, 1.0f, 1.0f, 1.0}, m_icon_set->custom_icons);
+                        ImGui::Button("Dragging Middle Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    } else if (r.mouse_button_middle) {
+                        m_icon_set->draw_icon(m_icon_set->icons.mouse_mmb, glm::vec4{1.0f, 1.0f, 1.0f, 1.0}, m_icon_set->custom_icons);
+                        ImGui::Button("Pressing Middle Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    }
+
+                    if (r.mouse_drag_right) {
+                        m_icon_set->draw_icon(m_icon_set->icons.mouse_rmb_drag, glm::vec4{1.0f, 1.0f, 1.0f, 1.0}, m_icon_set->custom_icons);
+                        ImGui::Button("Dragging Right Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    } else if (r.mouse_button_right) {
+                        m_icon_set->draw_icon(m_icon_set->icons.mouse_rmb, glm::vec4{1.0f, 1.0f, 1.0f, 1.0}, m_icon_set->custom_icons);
+                        ImGui::Button("Pressing Right Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    }
+                    if (r.mouse_drag_x1) {
+                        ImGui::Button("Dragging Extra-1 Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    } else if (r.mouse_button_x1) {
+                        ImGui::Button("Pressing Extra-1 Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    }
+                    if (r.mouse_drag_x2) {
+                        ImGui::Button("Dragging Extra-2 Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    } else if (r.mouse_button_x2) {
+                        ImGui::Button("Extra-2 Mouse Button");
+                        ImGui::SameLine(0.0f, 10.0f);
+                    }
                 }
             );
         }
@@ -1074,7 +1164,7 @@ public:
             if (viewport) {
                 auto& windows = m_imgui_windows->get_windows();
                 for (auto window : windows) {
-                    if (window->get_imgui_host() == window_viewport.get()) {
+                    if (window->get_imgui_host() == window_imgui_host.get()) {
                         window->set_imgui_host(viewport.get());
                     }
                 }

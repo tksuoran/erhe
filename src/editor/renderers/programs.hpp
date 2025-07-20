@@ -78,7 +78,7 @@ class Programs
 public:
     static constexpr int s_texture_unit_base = 2; // First two are reserved for shadow samplers
 
-    Programs(erhe::graphics::Device& graphics_device);
+    explicit Programs(erhe::graphics::Device& graphics_device);
 
     void load_programs(tf::Executor& executor, erhe::graphics::Device& graphics_device, erhe::scene_renderer::Program_interface& program_interface);
 

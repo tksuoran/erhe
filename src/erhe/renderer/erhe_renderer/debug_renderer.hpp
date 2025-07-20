@@ -54,7 +54,7 @@ class Debug_renderer_config;
 class Debug_renderer
 {
 public:
-    Debug_renderer(erhe::graphics::Device& graphics_device);
+    explicit Debug_renderer(erhe::graphics::Device& graphics_device);
     ~Debug_renderer();
 
     // Public API
