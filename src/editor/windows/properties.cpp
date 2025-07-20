@@ -363,32 +363,36 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
         return;
     }
 
-    push_group(label, ImGuiTreeNodeFlags_None, m_indent);
+    push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
 
-    add_entry("Fill Triangles",  [=](){ ImGui::Text("%zu", buffer_mesh->triangle_fill_indices.get_triangle_count()); });
-    add_entry("Edge Lines",      [=](){ ImGui::Text("%zu", buffer_mesh->edge_line_indices.get_line_count()); });
-    add_entry("Corner Points",   [=](){ ImGui::Text("%zu", buffer_mesh->corner_point_indices.get_point_count()); });
-    add_entry("Centroid Points", [=](){ ImGui::Text("%zu", buffer_mesh->polygon_centroid_indices.get_point_count()); });
-    add_entry("Indices",         [=](){ ImGui::Text("%zu", buffer_mesh->index_buffer_range.count); });
-
+    add_entry("Fill Triangles", [=](){ ImGui::Text("%zu", buffer_mesh->triangle_fill_indices.get_triangle_count()); });
+    add_entry("Edge Lines",     [=](){ ImGui::Text("%zu", buffer_mesh->edge_line_indices.get_line_count()); });
+    add_entry("Corner Points",  [=](){ ImGui::Text("%zu", buffer_mesh->corner_point_indices.get_point_count()); });
+    if (m_context.developer_mode) {
+        add_entry("Centroid Points", [=](){ ImGui::Text("%zu", buffer_mesh->polygon_centroid_indices.get_point_count()); });
+    }
+    add_entry("Indices",     [=](){ ImGui::Text("%zu", buffer_mesh->index_buffer_range.count); });
+    add_entry("Index Bytes", [=](){ ImGui::Text("%zu", buffer_mesh->index_buffer_range.get_byte_size()); });
     for (size_t i = 0, end = buffer_mesh->vertex_buffer_ranges.size(); i < end; ++i) {
-        std::string stream_label = fmt::format("Vertex stream {}", i);
-        push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        add_entry("Vertices",     [=](){ ImGui::Text("%zu", buffer_mesh->vertex_buffer_ranges.at(i).count); });
-        add_entry("Vertex Bytes", [=](){ ImGui::Text("%zu", buffer_mesh->vertex_buffer_ranges.at(i).get_byte_size()); });
-        add_entry("Index Bytes",  [=](){ ImGui::Text("%zu", buffer_mesh->vertex_buffer_ranges.at(i).get_byte_size()); });
-        pop_group();
+        const erhe::primitive::Buffer_range& vertex_buffer_range = buffer_mesh->vertex_buffer_ranges.at(i);
+        if (vertex_buffer_range.count > 0) {
+            const std::string stream_label = fmt::format("Vertex stream {}", i);
+            push_group(stream_label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+            add_entry("Vertices",     [=](){ ImGui::Text("%zu", vertex_buffer_range.count); });
+            add_entry("Vertex Bytes", [=](){ ImGui::Text("%zu", vertex_buffer_range.get_byte_size()); });
+            pop_group();
+        }
     }
 
     if (buffer_mesh->bounding_box.is_valid()) {
         const glm::vec3 size = buffer_mesh->bounding_box.max - buffer_mesh->bounding_box.min;
-        float volume = buffer_mesh->bounding_box.volume();
+        const float volume = buffer_mesh->bounding_box.volume();
         add_entry("Bounding box size",   [=](){ ImGui::Text("%f, %f, %f", size.x, size.y, size.z); });
         add_entry("Bounding box volume", [=](){ ImGui::Text("%f", volume); });
     }
     if (buffer_mesh->bounding_sphere.radius > 0.0f) {
         add_entry("Bounding sphere radius", [=](){ ImGui::Text("%f", buffer_mesh->bounding_sphere.radius); });
-        add_entry("Bounding box volume",    [=](){ ImGui::Text("%f", buffer_mesh->bounding_sphere.volume()); });
+        add_entry("Bounding sphere volume", [=](){ ImGui::Text("%f", buffer_mesh->bounding_sphere.volume()); });
     }
 
     pop_group();
@@ -396,6 +400,9 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
 
 void Properties::primitive_raytrace_properties(erhe::primitive::Primitive_raytrace* primitive_raytrace)
 {
+    if (!m_context.developer_mode) {
+        return;
+    }
     if (primitive_raytrace == nullptr) {
         return;
     }
@@ -411,16 +418,19 @@ void Properties::shape_properties(const char* label, erhe::primitive::Primitive_
         return;
     }
 
-    push_group(label, ImGuiTreeNodeFlags_None, m_indent);
+    if (m_context.developer_mode) {
+        push_group(label, ImGuiTreeNodeFlags_None, m_indent);
+    }
 
     const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
     if (geometry) {
         geometry_properties(*geometry.get());
     }
 
-    primitive_raytrace_properties(&shape->get_raytrace());
-
-    pop_group();
+    if (m_context.developer_mode) {
+        primitive_raytrace_properties(&shape->get_raytrace());
+        pop_group();
+    }
 }
 
 void Properties::mesh_properties(erhe::scene::Mesh& mesh)
@@ -434,7 +444,9 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
         return;
     }
 
-    add_entry("Layer ID", [&](){ ImGui::Text("%u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id)); });
+    if (m_context.developer_mode) {
+        add_entry("Layer ID", [&](){ ImGui::Text("%u %s", static_cast<unsigned int>(mesh.layer_id), layer_name(mesh.layer_id)); });
+    }
 
     if (mesh.skin) {
         skin_properties(*mesh.skin.get());
@@ -442,49 +454,57 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
 
     auto& material_library = scene_root->get_content_library()->materials;
 
-    push_group("Primitives", ImGuiTreeNodeFlags_None, m_indent);
+    if (m_context.developer_mode) {
+        push_group("Primitives", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+    }
     int primitive_index = 0;
     for (auto& primitive : mesh.get_mutable_primitives()) { // may edit material
         std::string label = fmt::format("Primitive {}", primitive_index++);
         push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
         add_entry("Material", [&](){ material_library->combo(m_context, "##", primitive.material, false); });
-        if (primitive.material) {
-            add_entry("Material Buffer Index", [&](){ ImGui::Text("%u", primitive.material->material_buffer_index); });
+        if (m_context.developer_mode) {
+            if (primitive.material) {
+                add_entry("Material Buffer Index", [&](){ ImGui::Text("%u", primitive.material->material_buffer_index); });
+            }
         }
         if (primitive.render_shape) {
             shape_properties("Render shape", primitive.render_shape.get());
             const erhe::primitive::Buffer_mesh& renderable_mesh = primitive.render_shape->get_renderable_mesh();
             buffer_mesh_properties("Renderable Buffer Mesh", &renderable_mesh);
         }
-        if (primitive.collision_shape) {
+        if (m_context.developer_mode && primitive.collision_shape) {
             shape_properties("Collision shape", primitive.collision_shape.get());
         }
         pop_group();
     }
-    pop_group();
-
-    push_group("Mesh Raytrace", ImGuiTreeNodeFlags_None, m_indent);
-    const auto* mesh_rt_scene = mesh.get_rt_scene();
-    if (mesh_rt_scene != nullptr) {
-        add_entry("RT Scene", [=](){ ImGui::TextUnformatted(mesh_rt_scene->debug_label().data()); });
+    if (m_context.developer_mode) {
+        pop_group();
     }
-    const auto& rt_primitives = mesh.get_rt_primitives();
-    if (!rt_primitives.empty()) {
-        push_group("Raytrace Primitives", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        for (const auto& rt_primitive : rt_primitives) {
-            std::string label = fmt::format("Raytrace Primitive {}", primitive_index++);
-            const auto* rt_instance = rt_primitive->rt_instance.get();
-            const auto* rt_scene    = rt_primitive->rt_scene.get();
-            push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-            add_entry("Mesh",            [&](){ ImGui::TextUnformatted((rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)"); });
-            add_entry("Primitive Index", [&](){ ImGui::Text("%zu", rt_primitive->primitive_index); });
-            add_entry("RT Instance",     [=](){ ImGui::TextUnformatted((rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)"); });
-            add_entry("RT Scene",        [=](){ ImGui::TextUnformatted((rt_scene != nullptr) ? rt_scene->debug_label().data() : "(nullptr)"); });
+
+    if (m_context.developer_mode) {
+        push_group("Mesh Raytrace", ImGuiTreeNodeFlags_None, m_indent);
+        const auto* mesh_rt_scene = mesh.get_rt_scene();
+        if (mesh_rt_scene != nullptr) {
+            add_entry("RT Scene", [=](){ ImGui::TextUnformatted(mesh_rt_scene->debug_label().data()); });
+        }
+        const auto& rt_primitives = mesh.get_rt_primitives();
+        if (!rt_primitives.empty()) {
+            push_group("Raytrace Primitives", ImGuiTreeNodeFlags_None, m_indent);
+            for (const auto& rt_primitive : rt_primitives) {
+                std::string label = fmt::format("Raytrace Primitive {}", primitive_index++);
+                const auto* rt_instance = rt_primitive->rt_instance.get();
+                const auto* rt_scene    = rt_primitive->rt_scene.get();
+                push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+                add_entry("Mesh",            [&](){ ImGui::TextUnformatted((rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)"); });
+                add_entry("Primitive Index", [&](){ ImGui::Text("%zu", rt_primitive->primitive_index); });
+                add_entry("RT Instance",     [=](){ ImGui::TextUnformatted((rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)"); });
+                add_entry("RT Scene",        [=](){ ImGui::TextUnformatted((rt_scene != nullptr) ? rt_scene->debug_label().data() : "(nullptr)"); });
+                pop_group();
+            }
             pop_group();
         }
         pop_group();
     }
-    pop_group();
 }
 
 void Properties::rendertarget_properties(Rendertarget_mesh& rendertarget)
@@ -501,8 +521,26 @@ void Properties::brush_placement_properties(Brush_placement& brush_placement)
     ERHE_PROFILE_FUNCTION();
 
     add_entry("Brush",  [&](){ ImGui::TextUnformatted(brush_placement.get_brush()->get_name().c_str()); });
-    add_entry("Facet",  [&](){ ImGui::Text("%u", brush_placement.get_facet()); });
-    add_entry("Corner", [&](){ ImGui::Text("%u", brush_placement.get_corner()); });
+    add_entry(
+        "Facet",
+        [&]() {
+            if (brush_placement.get_facet() == GEO::NO_FACET) {
+                ImGui::TextUnformatted("--");
+            } else {
+                ImGui::Text("%u", brush_placement.get_facet());
+            }
+        }
+    );
+    add_entry(
+        "Corner",
+        [&]() {
+            if (brush_placement.get_corner() == GEO::NO_FACET) {
+                ImGui::TextUnformatted("--");
+            } else {
+                ImGui::Text("%u", brush_placement.get_corner());
+            }
+        }
+    );
 }
 
 void Properties::on_begin()
@@ -645,16 +683,16 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     ERHE_PROFILE_FUNCTION();
 
     const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node   >(item_in);
-    const auto& item                 = (content_library_node && content_library_node->item) ? content_library_node->item : item_in;
+    const auto& item            = (content_library_node && content_library_node->item) ? content_library_node->item : item_in;
 
-    const auto& node_physics         = std::dynamic_pointer_cast<Node_physics           >(item);
-    const auto& rendertarget         = std::dynamic_pointer_cast<Rendertarget_mesh      >(item);
-    const auto& camera               = std::dynamic_pointer_cast<erhe::scene::Camera    >(item);
-    const auto& light                = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
-    const auto& mesh                 = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
-    const auto& node                 = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
-    const auto& brush_placement      = std::dynamic_pointer_cast<Brush_placement        >(item);
-    const auto& texture              = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
+    const auto& node_physics    = std::dynamic_pointer_cast<Node_physics           >(item);
+    const auto& rendertarget    = std::dynamic_pointer_cast<Rendertarget_mesh      >(item);
+    const auto& camera          = std::dynamic_pointer_cast<erhe::scene::Camera    >(item);
+    const auto& light           = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
+    const auto& mesh            = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
+    const auto& node            = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
+    const auto& brush_placement = std::dynamic_pointer_cast<Brush_placement        >(item);
+    const auto& texture         = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
 
     ////const bool default_open = !node_physics && !content_library_node && !node;
 
@@ -663,7 +701,11 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     }
 
     std::string group_label = fmt::format("{} {}", item->get_type_name().data(), item->get_name());
-    push_group(group_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, m_indent);
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Framed;
+    if (!node_physics && !rendertarget && !brush_placement) {
+        flags |= ImGuiTreeNodeFlags_DefaultOpen;
+    }
+    push_group(group_label.c_str(), flags, m_indent);
     if (show_item_details(item.get())) {
         std::string label_name = fmt::format("{} Name", item->get_type_name());
         add_entry(label_name, [item]() {
@@ -676,9 +718,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
             }
         });
 
-        add_entry("Id", [item]() { ImGui::Text("%u", static_cast<unsigned int>(item->get_id())); });
-
-        item_flags(item);
+        if (m_context.developer_mode) {
+            add_entry("Id", [item]() { ImGui::Text("%u", static_cast<unsigned int>(item->get_id())); });
+            item_flags(item);
+        }
 
         //// if (!erhe::scene::is_light(item)) { // light uses light color, so hide item color
         ////     glm::vec4 color = item->get_wireframe_color();
@@ -724,11 +767,11 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     }
 
     if (node) {
-        push_group("Attachments", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        //push_group("Attachments", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
         for (auto& attachment : node->get_attachments()) {
             item_properties(attachment);
         }
-        pop_group();
+        //pop_group();
     }
 
     pop_group();

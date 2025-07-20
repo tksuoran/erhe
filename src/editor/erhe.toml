@@ -14,8 +14,8 @@ use_transparency = false
 #gl_minor         = 5 # llvm pipe requires 4.5 - but needs also ERHE_SERIAL_INIT defined - see top of editor.cpp
 
 #size             = [ 3072, 1728 ]
-#size             = [ 2560, 1440 ]
-size              = [ 2432, 1376 ]
+size              = [ 2560, 1440 ]
+#size             = [ 2432, 1376 ]
 #size             = [ 1920, 1080 ]
 #size             = [ 1792, 1024 ]
 #size             = [ 32, 256 ]
@@ -149,7 +149,7 @@ turn_speed         = 1.0
 #                                     #
 #    H e r e   b e   d r a g o n s    #
 [developer]
-enable = true
+enable = false
 
 [network]
 upstream_address   = "127.0.0.1"

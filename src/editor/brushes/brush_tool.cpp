@@ -641,6 +641,7 @@ void Brush_tool::do_insert_operation(Brush& brush)
     const uint64_t node_flags =
         erhe::Item_flags::visible     |
         erhe::Item_flags::content     |
+        erhe::Item_flags::expand      |
         erhe::Item_flags::show_in_ui;
 
     auto* const hover_node = hover_scene_mesh ? hover_scene_mesh->get_node() : nullptr;
@@ -781,10 +782,10 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& imgui_window)
     ImGui::Checkbox("Parent to Scene",    &m_parent_to_scene_root    );
     ImGui::Checkbox("Parent to Hovered",  &m_parent_to_hovered       );
 
-    ImGui::Text("Brush: %s", last_selected_brush ? last_selected_brush->get_name().c_str() : "");
+    //ImGui::Text("Brush: %s", last_selected_brush ? last_selected_brush->get_name().c_str() : "");
     //ImGui::Text("Hover Brush: %s", hover_brush ? hover_brush->get_name().c_str() : "");
     //ImGui::Text("Drag and Drop Brush: %s", m_drag_and_drop_brush ? m_drag_and_drop_brush->get_name().c_str() : "");
-    ImGui::SliderFloat("Preview Hover", &m_preview_hover_distance, -0.1f, 0.1f, "%.4f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
+    //ImGui::SliderFloat("Preview Hover", &m_preview_hover_distance, -0.1f, 0.1f, "%.4f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
     //ImGui::Text("Enabled: %s", is_enabled() ? "yes" : "no");
     //if (m_hover.position.has_value()) {
     //    const glm::vec3& p = m_hover.position.value();
