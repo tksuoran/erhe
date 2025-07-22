@@ -1,20 +1,20 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_commands/commands.hpp"
-#include "erhe_commands/commands_log.hpp"
 #include "erhe_commands/command.hpp"
+#include "erhe_commands/commands_log.hpp"
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/mouse_button_binding.hpp"
 #include "erhe_commands/mouse_drag_binding.hpp"
 #include "erhe_commands/mouse_motion_binding.hpp"
 #include "erhe_commands/mouse_wheel_binding.hpp"
+#include "erhe_commands/update_binding.hpp"
 #include "erhe_commands/xr_boolean_binding.hpp"
 #include "erhe_commands/xr_float_binding.hpp"
 #include "erhe_commands/xr_vector2f_binding.hpp"
-#include "erhe_xr/xr_action.hpp"
-#include "erhe_commands/update_binding.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+#include "erhe_xr/xr_action.hpp"
 
 namespace erhe::commands {
 

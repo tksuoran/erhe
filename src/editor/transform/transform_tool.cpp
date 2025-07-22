@@ -4,12 +4,11 @@
 #include "transform/scale_tool.hpp"
 
 #include "app_context.hpp"
-#include "editor_log.hpp"
 #include "app_message_bus.hpp"
+#include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
-
 #include "renderers/mesh_memory.hpp" // need to be able to pass to visualization
 #include "renderers/render_context.hpp"
 #include "scene/node_raytrace.hpp"
@@ -19,7 +18,6 @@
 #include "tools/tools.hpp"
 #include "transform/handle_enums.hpp"
 
-#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
@@ -30,6 +28,8 @@
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"

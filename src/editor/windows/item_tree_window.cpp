@@ -3,11 +3,10 @@
 #include "windows/item_tree_window.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
-#include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
-#include "preview/brush_preview.hpp"
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/thumbnails.hpp"
@@ -15,12 +14,12 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "preview/brush_preview.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_primitive/material.hpp"
@@ -28,6 +27,8 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>

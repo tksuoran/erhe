@@ -4,9 +4,8 @@
 #include "erhe_scene/trs_transform.hpp"
 
 #include <cstdint>
-#include <optional>
 #include <string>
-#include <type_traits>
+#include <string_view>
 #include <vector>
 
 namespace erhe { class Item_host; }

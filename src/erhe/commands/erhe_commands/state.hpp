@@ -1,7 +1,6 @@
 #pragma once
 
-namespace erhe::commands
-{
+namespace erhe::commands {
 
 enum class State : unsigned int {
     Disabled = 0,

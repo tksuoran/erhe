@@ -21,6 +21,9 @@ public:
     ~Compute_command_encoder() override;
 
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
+
+    void dispatch_compute(std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
+
 };
 
 } // namespace erhe::graphics

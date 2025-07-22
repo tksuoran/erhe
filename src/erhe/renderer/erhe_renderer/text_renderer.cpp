@@ -2,6 +2,7 @@
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_configuration/configuration.hpp"
 
+// TODO Need abstraction / texture binding API
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
@@ -230,7 +231,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
         m_projection_buffer.bind(encoder, projection_buffer_range);
     }
 
-    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+    //gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     encoder.set_render_pipeline_state(m_pipeline);
     if (m_graphics_device.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);

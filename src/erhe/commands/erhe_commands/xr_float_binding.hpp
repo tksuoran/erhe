@@ -2,9 +2,7 @@
 
 #include "erhe_commands/command_binding.hpp"
 
-namespace erhe::xr {
-    class Xr_action_float;
-}
+namespace erhe::xr { class Xr_action_float; }
 
 namespace erhe::commands {
 

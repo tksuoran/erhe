@@ -7,9 +7,7 @@
 #include <cstdint>
 #include <span>
 
-namespace erhe::graphics {
-    class Device;
-}
+namespace erhe::graphics { class Device; }
 
 namespace erhe::gltf {
 

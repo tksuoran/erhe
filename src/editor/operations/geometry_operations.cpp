@@ -24,6 +24,7 @@
 #include "erhe_geometry/operation/difference.hpp"
 #include "erhe_geometry/operation/intersection.hpp"
 #include "erhe_geometry/operation/union.hpp"
+#include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
 

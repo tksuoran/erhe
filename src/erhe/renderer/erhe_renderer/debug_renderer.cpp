@@ -4,7 +4,9 @@
 
 #include "erhe_renderer/renderer_log.hpp"
 
+// TODO get rid of using GL API directly
 #include "erhe_gl/wrapper_functions.hpp"
+
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
@@ -262,8 +264,6 @@ void Debug_renderer::render(erhe::graphics::Render_command_encoder& encoder, con
 
     erhe::graphics::Scoped_debug_group scoped_debug_group{"Debug_renderer::render()"};
 
-    gl::enable  (gl::Enable_cap::sample_alpha_to_coverage);
-    gl::enable  (gl::Enable_cap::sample_alpha_to_one);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_view_buffer.bind(encoder, m_view_buffer_range);
 
@@ -290,8 +290,6 @@ void Debug_renderer::render(erhe::graphics::Render_command_encoder& encoder, con
     // TODO Use gl::wait_sync()?
     gl::memory_barrier(gl::Memory_barrier_mask::shader_storage_barrier_bit);
 
-    gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
-    gl::disable(gl::Enable_cap::sample_alpha_to_one);
     m_graphics_device.opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 

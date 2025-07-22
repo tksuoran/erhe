@@ -1,7 +1,5 @@
 #include "erhe_scene/skin.hpp"
-#include "erhe_scene/scene_host.hpp"
 #include "erhe_utility/bit_helpers.hpp"
-#include "erhe_item/unique_id.hpp"
 
 namespace erhe::scene {
 

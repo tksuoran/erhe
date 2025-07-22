@@ -20,6 +20,8 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/scene.hpp"
+
 
 namespace editor {
 

@@ -24,6 +24,7 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>

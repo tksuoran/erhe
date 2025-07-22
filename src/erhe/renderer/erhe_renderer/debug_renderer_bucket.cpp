@@ -1,7 +1,6 @@
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/debug_renderer_bucket.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_stages.hpp"
@@ -188,7 +187,7 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
 
         m_triangle_vertex_buffer.bind(encoder, draw.draw_buffer_range);
 
-        gl::dispatch_compute(static_cast<unsigned int>(draw.primitive_count), 1, 1);
+        encoder.dispatch_compute(draw.primitive_count, 1, 1);
 
         draw.input_buffer_range.release();
     }

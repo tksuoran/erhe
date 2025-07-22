@@ -7,7 +7,6 @@
 #include "erhe_scene/scene_log.hpp"
 #include "erhe_scene/scene_message_bus.hpp"
 #include "erhe_scene/skin.hpp"
-#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 

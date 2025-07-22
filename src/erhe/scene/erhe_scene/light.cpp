@@ -7,7 +7,6 @@
 #include "erhe_scene/scene_log.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
-#include "erhe_item/unique_id.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::scene {

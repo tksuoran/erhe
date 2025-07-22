@@ -1,7 +1,6 @@
 #include "erhe_scene/animation.hpp"
 
 #include "erhe_scene/node.hpp"
-#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::scene {

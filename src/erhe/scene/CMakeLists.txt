@@ -49,7 +49,7 @@ target_link_libraries(
         glm::glm-header-only
     PRIVATE
         erhe::utility
-        erhe::gl
+        # erhe::gl
         erhe::log
         fmt::fmt
 )

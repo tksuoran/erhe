@@ -1,11 +1,11 @@
 #pragma once
 
+#include "erhe_commands/controller_axis_binding.hpp"
+#include "erhe_commands/controller_button_binding.hpp"
 #include "erhe_commands/key_binding.hpp"
 #include "erhe_commands/menu_binding.hpp"
 #include "erhe_commands/mouse_binding.hpp"
 #include "erhe_commands/mouse_wheel_binding.hpp"
-#include "erhe_commands/controller_axis_binding.hpp"
-#include "erhe_commands/controller_button_binding.hpp"
 #include "erhe_commands/update_binding.hpp"
 #include "erhe_commands/xr_boolean_binding.hpp"
 #include "erhe_commands/xr_float_binding.hpp"

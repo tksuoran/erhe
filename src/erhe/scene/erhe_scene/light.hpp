@@ -2,11 +2,11 @@
 
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node_attachment.hpp"
-#include "erhe_scene/scene.hpp" // for Light_layer..
 #include "erhe_scene/transform.hpp"
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace erhe::scene {
 

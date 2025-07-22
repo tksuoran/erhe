@@ -13,9 +13,10 @@
 #include "time.hpp"
 
 #include "erhe_imgui/windows/pipelines.hpp"
-#include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
 
 #include <imgui/imgui.h>
 

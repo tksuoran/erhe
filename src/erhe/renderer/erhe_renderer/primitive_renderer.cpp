@@ -3,7 +3,6 @@
 #include "erhe_renderer/debug_renderer_bucket.hpp"
 
 #include "erhe_scene/camera.hpp"
-#include "erhe_scene/projection.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/sphere.hpp"
 #include "erhe_verify/verify.hpp"

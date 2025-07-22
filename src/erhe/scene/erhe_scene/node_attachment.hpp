@@ -6,9 +6,7 @@
 #include <memory>
 #include <string_view>
 
-namespace erhe {
-    class Item_host;
-}
+namespace erhe { class Item_host; }
 
 namespace erhe::scene {
 

@@ -2,14 +2,11 @@
 
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_verify/verify.hpp"
 
 #include <algorithm>
 

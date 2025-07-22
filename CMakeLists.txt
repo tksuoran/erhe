@@ -273,7 +273,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME              reflect-cpp
     GIT_SHALLOW       TRUE
-    GIT_TAG           908ee226a90a98876aa251120a5a85aee20e487b
+    GIT_TAG           main
     GITHUB_REPOSITORY getml/reflect-cpp
 )
 

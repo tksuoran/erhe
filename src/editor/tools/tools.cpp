@@ -3,20 +3,21 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
+#include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
-#include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tool.hpp"
 #include "windows/item_tree_window.hpp"
 
-#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 namespace editor {
 

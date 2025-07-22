@@ -2,9 +2,7 @@
 
 #include "erhe_item/item.hpp"
 #include "erhe_scene/node_attachment.hpp"
-#include "erhe_scene/scene.hpp"
 #include "erhe_primitive/primitive.hpp"
-#include "erhe_item/unique_id.hpp"
 
 #include <memory>
 #include <vector>

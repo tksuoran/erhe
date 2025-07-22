@@ -1,11 +1,9 @@
 #include "erhe_scene/mesh_raytrace.hpp"
-#include "erhe_scene/scene_log.hpp"
 
 #include "erhe_scene/mesh.hpp"
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/iscene.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
