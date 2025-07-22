@@ -2,6 +2,8 @@
 
 #include "erhe_scene/transform.hpp"
 
+#include <glm/gtc/quaternion.hpp>
+
 namespace erhe::scene {
 
 class Trs_transform : public Transform

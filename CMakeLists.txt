@@ -270,12 +270,12 @@ CPMAddPackage(
     GITHUB_REPOSITORY marzer/tomlplusplus
 )
 
-CPMAddPackage(
-    NAME              reflect-cpp
-    GIT_SHALLOW       TRUE
-    GIT_TAG           main
-    GITHUB_REPOSITORY getml/reflect-cpp
-)
+# CPMAddPackage(
+#     NAME              reflect-cpp
+#     GIT_SHALLOW       TRUE
+#     GIT_TAG           main
+#     GITHUB_REPOSITORY getml/reflect-cpp
+# )
 
 CPMAddPackage(
     NAME              taskflow

@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include <span>
+#include <vector>
 
 namespace erhe::graphics {
     class Buffer;
