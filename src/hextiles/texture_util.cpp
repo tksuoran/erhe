@@ -1,6 +1,8 @@
 #include "texture_util.hpp"
 #include "hextiles_log.hpp"
 
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
@@ -93,12 +95,33 @@ auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem
     };
 
     auto texture = std::make_shared<erhe::graphics::Texture>(graphics_device, texture_create_info);
-    texture->upload(
-        texture_create_info.pixelformat,
-        image.data,
-        texture_create_info.width,
-        texture_create_info.height
+
+    const int src_bytes_per_row   = image.info.row_stride;
+    const int src_bytes_per_image = image.info.height * src_bytes_per_row;
+
+    std::span<const std::uint8_t>          src_span{image.data.data(), image.data.size()};
+    std::size_t                            byte_count = src_span.size_bytes();
+    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{graphics_device, erhe::graphics::Buffer_target::pixel, "hextiles load_texture() texture upload"};
+    erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+    std::span<std::byte>                   dst_span     = buffer_range.get_span();
+    memcpy(dst_span.data(), src_span.data(), byte_count);
+    buffer_range.bytes_written(byte_count);
+    buffer_range.close();
+
+    erhe::graphics::Blit_command_encoder encoder{graphics_device};
+    encoder.copy_from_buffer(
+        buffer_range.get_buffer()->get_buffer(),         // source_buffer
+        buffer_range.get_byte_start_offset_in_buffer(),  // source_offset
+        src_bytes_per_row,                               // source_bytes_per_row
+        src_bytes_per_image,                             // source_bytes_per_image
+        glm::ivec3{2, 2, 1},                             // source_size
+        texture.get(),                                   // destination_texture
+        0,                                               // destination_slice
+        0,                                               // destination_level
+        glm::ivec3{0, 0, 0}                              // destination_origin
     );
+
+    buffer_range.release();
 
     return texture;
 }

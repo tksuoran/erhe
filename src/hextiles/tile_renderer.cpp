@@ -6,6 +6,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
@@ -321,19 +322,32 @@ void Tile_renderer::compose_tileset_texture()
     m_graphics_device.clear_texture(*m_tileset_texture.get(), { 1.0, 0.0, 1.0, 1.0 });
 
     // Upload everything before single unit tiles
-    m_tileset_texture->upload_subimage(
-        m_tileset_image.info.format,                // pixelformat
-        m_tileset_image.data,                       // data
-        m_tileset_image.info.width,                 // src_row_legth
-        0,                                          // src_x
-        0,                                          // src_y
-        m_tileset_image.info.width,                 // width
-        ty0_single_unit_tiles * Tile_shape::height, // height
-        0,                                          // mipmap level
-        0,                                          // x
-        0,                                          // y
-        0                                           // z
-    );
+    erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "Tile_renderer::m_tileset_texture upload"};
+    {
+        std::span<std::uint8_t>                src_span{m_tileset_image.data.data(), m_tileset_image.data.size()};
+        std::size_t                            byte_count = src_span.size_bytes();
+        erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+        std::span<std::byte>                   dst_span     = buffer_range.get_span();
+        memcpy(dst_span.data(), src_span.data(), byte_count);
+        buffer_range.bytes_written(byte_count);
+        buffer_range.close();
+
+        const std::size_t src_bytes_per_row   = m_tileset_image.info.width  * erhe::dataformat::get_format_size(m_tileset_image.info.format);
+        const std::size_t src_bytes_per_image = m_tileset_image.info.height * src_bytes_per_row;
+        encoder.copy_from_buffer(
+            buffer_range.get_buffer()->get_buffer(),          // source_buffer
+            buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
+            src_bytes_per_row,                                // source_bytes_per_row
+            src_bytes_per_image,                              // source_bytes_per_image
+            glm::ivec3{m_tileset_image.info.width, ty0_single_unit_tiles * Tile_shape::height, 1}, // source_size
+            m_tileset_texture.get(),                          // destination_texture
+            0,                                                // destination_slice
+            0,                                                // destination_level
+            glm::ivec3{0, 0, 0}                               // destination_origin
+        );
+        buffer_range.release();
+    }
 
     // Scan player colors
     std::vector<Player_unit_colors> players_colors;
@@ -369,6 +383,9 @@ void Tile_renderer::compose_tileset_texture()
             .data = {}
         };
         scratch.data.resize(scratch.info.height * scratch.info.row_stride);
+        const int src_bytes_per_row   = scratch.info.row_stride;
+        const int src_bytes_per_image = scratch.info.height * src_bytes_per_row;
+        std::span<std::uint8_t> src_span{scratch.data.data(), scratch.data.size()};
 
         int y0 = ty0_single_unit_tiles * Tile_shape::height;
         for (int i = 0; i < max_player_count; ++i) {
@@ -383,18 +400,24 @@ void Tile_renderer::compose_tileset_texture()
                     scratch.put_pixel(x, y, player_color);
                 }
             }
-            m_tileset_texture->upload(
-                scratch.info.format,    // pixelformat
-                scratch.data,           // data
-                scratch.info.width,     // width
-                scratch.info.height,    // height
-                1,                      // depth
-                0,                      // array layer
-                0,                      // mipmap level
-                0,                      // x
-                (ty0_single_unit_tiles + i * Unit_group::height) * Tile_shape::height, // y
-                0                       // Z
+
+            erhe::graphics::Buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, src_bytes_per_image);
+            std::span<std::byte>         dst_span     = buffer_range.get_span();
+            memcpy(dst_span.data(), src_span.data(), src_bytes_per_image);
+            buffer_range.bytes_written(src_bytes_per_image);
+            buffer_range.close();
+            encoder.copy_from_buffer(
+                buffer_range.get_buffer()->get_buffer(),          // source_buffer
+                buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
+                src_bytes_per_row,                                // source_bytes_per_row
+                src_bytes_per_image,                              // source_bytes_per_image
+                glm::ivec3{m_tileset_image.info.width, ty0_single_unit_tiles * Tile_shape::height, 1}, // source_size
+                m_tileset_texture.get(),                          // destination_texture
+                0,                                                // destination_slice
+                0,                                                // destination_level
+                glm::ivec3{0, 0, 0}                               // destination_origin
             );
+            buffer_range.release();
         }
     }
 
@@ -414,6 +437,10 @@ void Tile_renderer::compose_tileset_texture()
             .data = {}
         };
         scratch.data.resize(scratch.info.height * scratch.info.row_stride);
+        const int src_bytes_per_row   = scratch.info.row_stride;
+        const int src_bytes_per_image = scratch.info.height * src_bytes_per_row;
+        std::span<std::uint8_t> src_span{scratch.data.data(), scratch.data.size()};
+
         int tx = 0;
         int ty = ty0_multiple_unit_tiles;
         for (players[0] = 0; players[0] < max_player_count + 1; ++players[0]) {
@@ -426,17 +453,24 @@ void Tile_renderer::compose_tileset_texture()
                             players,
                             (ty0_single_unit_tiles + 6) * Tile_shape::height
                         );
-                        m_tileset_texture->upload(
-                            scratch.info.format,         // pixelformat
-                            scratch.data,                // data span
-                            scratch.info.width,          // width
-                            scratch.info.height,         // height
-                            1,                           // depth
-                            0,                           // array layer
-                            0,                           // mipmap level
-                            tx * Tile_shape::full_width, // destination x
-                            ty * Tile_shape::height      // destination y
+
+                        erhe::graphics::Buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, src_bytes_per_image);
+                        std::span<std::byte>         dst_span     = buffer_range.get_span();
+                        memcpy(dst_span.data(), src_span.data(), src_bytes_per_image);
+                        buffer_range.bytes_written(src_bytes_per_image);
+                        buffer_range.close();
+                        encoder.copy_from_buffer(
+                            buffer_range.get_buffer()->get_buffer(),          // source_buffer
+                            buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
+                            src_bytes_per_row,                                // source_bytes_per_row
+                            src_bytes_per_image,                              // source_bytes_per_image
+                            glm::ivec3{m_tileset_image.info.width, ty0_single_unit_tiles * Tile_shape::height, 1}, // source_size
+                            m_tileset_texture.get(),                          // destination_texture
+                            0,                                                // destination_slice
+                            0,                                                // destination_level
+                            glm::ivec3{0, 0, 0}                               // destination_origin
                         );
+                        buffer_range.release();
 
                         ++tx;
                         if (tx == 8) {

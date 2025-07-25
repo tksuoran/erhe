@@ -125,7 +125,7 @@ constexpr std::array INTERNAL_FORMAT_INFO =
     InternalFormatFormatType{ gl::Internal_format::depth_component16, gl::Pixel_format::depth_component, gl::Pixel_type::unsigned_int   }
 };
 
-auto get_upload_pixel_byte_count(const erhe::dataformat::Format pixelformat)-> size_t
+auto get_gl_pixel_byte_count(const erhe::dataformat::Format pixelformat)-> size_t
 {
     const std::optional<gl::Internal_format> gl_internal_format_opt = gl_helpers::convert_to_gl(pixelformat);
     ERHE_VERIFY(gl_internal_format_opt.has_value());
@@ -338,7 +338,7 @@ void convert_texture_offset_to_gl(const gl::Texture_target target, int& x, int& 
         }
 
         case gl::Texture_target::texture_1d_array: {
-            z = array_layer;
+            y = array_layer;
             return;
         }
         case gl::Texture_target::texture_2d:
@@ -560,7 +560,7 @@ auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Textur
     return create_info;
 }
 
-[[nodiscard]] auto convert_to_gl_texture_target(Texture_type type, bool multisample, bool array)
+auto convert_to_gl_texture_target(Texture_type type, bool multisample, bool array) -> gl::Texture_target
 {
     switch (type) {
         case Texture_type::texture_buffer: {
@@ -903,180 +903,6 @@ auto Texture::is_shown_in_ui() const -> bool
 ////     }
 ////     return i->second;
 //// }
-
-void Texture::upload(const erhe::dataformat::Format pixelformat, int width, int height, int depth, int array_layer_count)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    ERHE_VERIFY(pixelformat == m_pixelformat);
-    ERHE_VERIFY(width  >= 1);
-    ERHE_VERIFY(height >= 1);
-    ERHE_VERIFY(width  <= m_width);
-    ERHE_VERIFY(height <= m_height);
-    ERHE_VERIFY(m_sample_count == 0);
-
-    const gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
-        m_type,
-        m_sample_count != 0,
-        m_array_layer_count != 0
-    );
-
-    convert_texture_dimensions_to_gl(gl_texture_target, width, height, depth, array_layer_count);
-
-    gl::Pixel_format format;
-    gl::Pixel_type   type;
-    ERHE_VERIFY(get_format_and_type(pixelformat, format, type));
-    switch (get_storage_dimensions(gl_texture_target)) {
-        case 1: {
-            gl::texture_sub_image_1d(gl_name(), 0, 0, width, format, type, nullptr);
-            break;
-        }
-
-        case 2: {
-            gl::texture_sub_image_2d(gl_name(), 0, 0, 0, width, height, format, type, nullptr);
-            break;
-        }
-
-        case 3: {
-            gl::texture_sub_image_3d(gl_name(), 0, 0, 0, 0, width, height, depth, format, type, nullptr);
-            break;
-        }
-
-        default: {
-            ERHE_FATAL("Bad texture target");
-        }
-    }
-}
-
-void Texture::upload(
-    const erhe::dataformat::Format      pixelformat,
-    const std::span<const std::uint8_t> data,
-    int                                 width,
-    int                                 height,
-    int                                 depth,
-    const int                           array_layer,
-    const int                           level,
-    int                                 x,
-    int                                 y,
-    int                                 z
-)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    ERHE_VERIFY(pixelformat == m_pixelformat);
-    ERHE_VERIFY(width  >= 1);
-    ERHE_VERIFY(height >= 1);
-    ERHE_VERIFY(width  <= m_width);
-    ERHE_VERIFY(height <= m_height);
-
-    const gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
-        m_type,
-        m_sample_count != 0,
-        m_array_layer_count != 0
-    );
-
-    convert_texture_dimensions_to_gl(gl_texture_target, width, height, depth, array_layer);
-    convert_texture_offset_to_gl    (gl_texture_target, x, y, z, array_layer);
-
-    gl::Pixel_format gl_format;
-    gl::Pixel_type   gl_type;
-    ERHE_VERIFY(get_format_and_type(pixelformat, gl_format, gl_type));
-
-    const auto row_stride = width * get_upload_pixel_byte_count(pixelformat);
-    const auto byte_count = row_stride * height;
-    ERHE_VERIFY(data.size_bytes() >= byte_count);
-    const auto* data_pointer = static_cast<const void*>(data.data());
-
-    switch (get_storage_dimensions(gl_texture_target)) {
-        case 1: {
-            gl::texture_sub_image_1d(gl_name(), level, x, width, gl_format, gl_type, data_pointer);
-            break;
-        }
-
-        case 2: {
-            gl::texture_sub_image_2d(gl_name(), level, x, y, width, height, gl_format, gl_type, data_pointer);
-            break;
-        }
-
-        case 3: {
-            gl::texture_sub_image_3d(gl_name(), level, x, y, z, width, height, depth, gl_format, gl_type, data_pointer);
-            break;
-        }
-
-        default: {
-            ERHE_FATAL("Bad texture target");
-        }
-    }
-}
-
-void Texture::upload_subimage(
-    const erhe::dataformat::Format      pixelformat,
-    const std::span<const std::uint8_t> data,
-    const int                           src_row_length,
-    const int                           src_x,
-    const int                           src_y,
-    int                                 width,
-    int                                 height,
-    const int                           level,
-    int                                 x,
-    int                                 y,
-    int                                 z
-)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    ERHE_VERIFY(pixelformat == m_pixelformat);
-    ERHE_VERIFY(width  >= 1);
-    ERHE_VERIFY(height >= 1);
-    ERHE_VERIFY(width  <= m_width);
-    ERHE_VERIFY(height <= m_height);
-
-    const gl::Texture_target gl_texture_target = convert_to_gl_texture_target(
-        m_type,
-        m_sample_count != 0,
-        m_array_layer_count != 0
-    );
-
-    int depth = 1;
-    int array_layer = 0;
-    convert_texture_dimensions_to_gl(gl_texture_target, width, height, depth, array_layer);
-    convert_texture_offset_to_gl    (gl_texture_target, x, y, z, array_layer);
-
-    gl::Pixel_format format;
-    gl::Pixel_type   type;
-    ERHE_VERIFY(get_format_and_type(pixelformat, format, type));
-
-    const auto pixel_stride = get_upload_pixel_byte_count(pixelformat);;
-    const auto row_stride   = src_row_length * pixel_stride;
-    const auto byte_count   = row_stride * height;
-    ERHE_VERIFY(data.size_bytes() >= byte_count);
-    const std::size_t src_x_offset = src_x * pixel_stride;
-    const std::size_t src_y_offset = src_y * row_stride;
-    const char* data_pointer = reinterpret_cast<const char*>(data.data()) + src_x_offset + src_y_offset;
-    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, src_row_length);
-
-    switch (get_storage_dimensions(gl_texture_target)) {
-        case 1: {
-            gl::texture_sub_image_1d(gl_name(), level, x, width, format, type, data_pointer);
-            break;
-        }
-
-        case 2: {
-            gl::texture_sub_image_2d(gl_name(), level, x, y, width, height, format, type, data_pointer);
-            break;
-        }
-
-        case 3: {
-            gl::texture_sub_image_3d(gl_name(), level, x, y, z, width, height, 1, format, type, data_pointer);
-            break;
-        }
-
-        default: {
-            ERHE_FATAL("Bad texture target");
-        }
-    }
-    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, 0);
-}
 
 auto Texture::get_debug_label() const -> const std::string&
 {

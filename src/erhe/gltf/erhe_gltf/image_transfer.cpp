@@ -1,79 +1,58 @@
 #include "image_transfer.hpp"
 
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::gltf {
 
 Image_transfer::Image_transfer(erhe::graphics::Device& graphics_device)
-    : m_slots{
-        Slot{graphics_device},
-        Slot{graphics_device},
-        Slot{graphics_device},
-        Slot{graphics_device}
-    }
-{
-}
-
-auto Image_transfer::get_slot() -> Slot&
-{
-    m_index = (m_index + 1) % m_slots.size();
-    return m_slots.at(m_index);
-}
-
-Image_transfer::Slot::Slot(erhe::graphics::Device& graphics_device)
     : m_graphics_device{graphics_device}
-    , m_pbo            {graphics_device}
+    , m_texture_upload_buffer{graphics_device, erhe::graphics::Buffer_target::pixel, "Image_transfer::m_texture_upload_buffer"}
 {
-    ERHE_VERIFY(m_pbo.gl_name() != 0);
-
-    m_capacity = 64 * 1024 * 1024;
-    m_storage_mask = gl::Buffer_storage_mask::map_write_bit;
-    m_access_mask = 
-        gl::Map_buffer_access_mask::map_invalidate_buffer_bit |
-        gl::Map_buffer_access_mask::map_flush_explicit_bit    |
-        gl::Map_buffer_access_mask::map_write_bit;
-
-    gl::named_buffer_storage(m_pbo.gl_name(), m_capacity, nullptr, gl::Buffer_storage_mask::map_write_bit);
 }
 
-void Image_transfer::Slot::map()
+auto Image_transfer::acquire_range(const std::size_t byte_count) -> erhe::graphics::Buffer_range
 {
-    auto* map_pointer = gl::map_named_buffer_range(m_pbo.gl_name(), 0, m_capacity, m_access_mask);
-    ERHE_VERIFY(map_pointer != nullptr);
-
-    m_span = std::span(static_cast<std::uint8_t*>(map_pointer), m_capacity);
+    return m_texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
 }
 
-void Image_transfer::Slot::unmap()
+void Image_transfer::upload_to_texture(
+    const erhe::graphics::Image_info& image_info,
+    erhe::graphics::Buffer_range&     buffer_range,
+    erhe::graphics::Texture&          texture,
+    bool                              generate_mipmap
+)
 {
-    gl::unmap_named_buffer(m_pbo.gl_name());
-    m_span = std::span<std::uint8_t>{};
-}
+    erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
 
-void Image_transfer::Slot::end(bool flush)
-{
-    if (flush) {
-        gl::flush_mapped_named_buffer_range(gl_name(), 0, m_span.size_bytes());
+    const erhe::graphics::Buffer*  source_buffer          = buffer_range.get_buffer()->get_buffer();
+    const std::uintptr_t           source_offset          = buffer_range.get_byte_start_offset_in_buffer();
+    const std::uintptr_t           source_bytes_per_row   = image_info.row_stride;
+    const std::uintptr_t           source_bytes_per_image = image_info.row_stride * image_info.height;
+    const glm::ivec3               source_size            = glm::ivec3{image_info.width, image_info.height, image_info.depth};
+    const erhe::graphics::Texture* destination_texture    = &texture;
+    const std::uintptr_t           destination_slice      = 0;
+    const std::uintptr_t           destination_level      = 0;
+    const glm::ivec3               destination_origin     = glm::ivec3{0, 0, 0};
+
+    encoder.copy_from_buffer(
+        source_buffer,
+        source_offset,
+        source_bytes_per_row,
+        source_bytes_per_image,
+        source_size,
+        destination_texture,
+        destination_slice,
+        destination_level,
+        destination_origin
+    );
+
+    if (generate_mipmap) {
+        encoder.generate_mipmaps(destination_texture);
     }
-    unmap();
-}
-
-auto Image_transfer::Slot::begin_span_for(const int span_width, const int span_height, const erhe::dataformat::Format pixelformat) -> std::span<std::uint8_t>
-{
-    ERHE_VERIFY(span_width >= 1);
-    ERHE_VERIFY(span_height >= 1);
-
-    auto row_stride = span_width * erhe::graphics::get_upload_pixel_byte_count(pixelformat);
-    auto byte_count = row_stride * span_height;
-    ERHE_VERIFY(byte_count >= 1);
-    ERHE_VERIFY(byte_count <= m_capacity);
-    map();
-
-    return m_span.subspan(0, byte_count);
 }
 
 } // namespace erhe::gltf

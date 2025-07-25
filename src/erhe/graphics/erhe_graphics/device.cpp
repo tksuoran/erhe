@@ -9,6 +9,7 @@
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/debug.hpp"
@@ -714,14 +715,36 @@ auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
 
     auto texture = std::make_shared<Texture>(*this, create_info);
     const std::array<uint8_t, 16> dummy_pixel{
-        0xee, 0x11, 0xdd, 0xff,
-        0xcc, 0x11, 0xbb, 0xff,
-        0xee, 0x11, 0xdd, 0xff,
-        0xcc, 0x11, 0xbb, 0xff
+        0xee, 0x11, 0xdd, 0xff,  0xcc, 0x11, 0xbb, 0xff,
+        0xcc, 0x11, 0xbb, 0xff,  0xee, 0x11, 0xdd, 0xff,
     };
     const std::span<const std::uint8_t> image_data{&dummy_pixel[0], dummy_pixel.size()};
 
-    texture->upload(create_info.pixelformat, image_data, create_info.width, create_info.height);
+    std::span<const std::uint8_t>          src_span{dummy_pixel.data(), dummy_pixel.size()};
+    std::size_t                            byte_count = src_span.size_bytes();
+    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{*this, erhe::graphics::Buffer_target::pixel, "dummy texture upload"};
+    erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+    std::span<std::byte>                   dst_span     = buffer_range.get_span();
+    memcpy(dst_span.data(), src_span.data(), byte_count);
+    buffer_range.bytes_written(byte_count);
+    buffer_range.close();
+
+    const int src_bytes_per_row   = 2 * 4;
+    const int src_bytes_per_image = 2 * src_bytes_per_row;
+    Blit_command_encoder encoder{*this};
+    encoder.copy_from_buffer(
+        buffer_range.get_buffer()->get_buffer(),         // source_buffer
+        buffer_range.get_byte_start_offset_in_buffer(),  // source_offset
+        src_bytes_per_row,                               // source_bytes_per_row
+        src_bytes_per_image,                             // source_bytes_per_image
+        glm::ivec3{2, 2, 1},                             // source_size
+        texture.get(),                                   // destination_texture
+        0,                                               // destination_slice
+        0,                                               // destination_level
+        glm::ivec3{0, 0, 0}                              // destination_origin
+    );
+
+    buffer_range.release();
 
     return texture;
 }

@@ -3,6 +3,7 @@
 #include "erhe_ui/ui_log.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <fmt/printf.h>
@@ -456,7 +457,30 @@ void Font::post_process()
     };
 
     m_texture = std::make_unique<Texture>(m_graphics_device, create_info);
-    m_texture->upload(create_info.pixelformat, bm.as_span(), create_info.width, create_info.height);
+
+    std::span<std::uint8_t>                src_span   = bm.as_span();
+    std::size_t                            byte_count = src_span.size_bytes();
+    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "font upload"};
+    erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+    std::span<std::byte>                   dst_span     = buffer_range.get_span();
+    memcpy(dst_span.data(), src_span.data(), byte_count);
+    buffer_range.bytes_written(byte_count);
+    buffer_range.close();
+
+    erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+    encoder.copy_from_buffer(
+        buffer_range.get_buffer()->get_buffer(),          // source_buffer
+        buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
+        2 * m_texture_width,                              // source_bytes_per_row
+        2 * m_texture_width * m_texture_height,           // source_bytes_per_image
+        glm::ivec3{m_texture_width, m_texture_height, 1}, // source_size
+        m_texture.get(),                                  // destination_texture
+        0,                                                // destination_slice
+        0,                                                // destination_level
+        glm::ivec3{0, 0, 0}                               // destination_origin
+    );
+
+    buffer_range.release();
 }
 
 // https://en.wikipedia.org/wiki/List_of_typographic_features

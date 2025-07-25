@@ -983,8 +983,6 @@ private:
 
         ERHE_VERIFY(!image_name.empty());
 
-        auto& slot = m_arguments.image_transfer.get_slot();
-
         erhe::graphics::Texture_create_info texture_create_info{
             .device      = m_arguments.graphics_device,
             .pixelformat = image_info.format,
@@ -1001,26 +999,31 @@ private:
         if (generate_mipmap) {
             texture_create_info.level_count = mipmap_count;
         }
-        std::span<std::uint8_t> span = slot.begin_span_for(image_info.width, image_info.height, texture_create_info.pixelformat);
 
-        const bool ok = loader.load(span);
-        loader.close();
-        slot.end(ok);
-        if (!ok) {
-            return {};
-        }
+        // TODO Handle
+        ERHE_VERIFY(image_info.width * erhe::graphics::get_gl_pixel_byte_count(image_info.format) == image_info.row_stride);
+        const int byte_count = image_info.row_stride * image_info.height;
+        ERHE_VERIFY(byte_count >= 1);
 
+        erhe::graphics::Buffer_range buffer_range = m_arguments.image_transfer.acquire_range(byte_count);
+        std::span<std::byte> byte_span = buffer_range.get_span();
+        std::span<std::uint8_t> u8_span{
+            reinterpret_cast<std::uint8_t*>(byte_span.data()),
+            byte_span.size_bytes()
+        };
         auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
         texture->set_source_path(path);
-
-        gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
-        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
-        texture->upload(texture_create_info.pixelformat, texture_create_info.width, texture_create_info.height);
-        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
-
-        if (generate_mipmap) {
-            gl::generate_texture_mipmap(texture->gl_name());
+        const bool ok = loader.load(u8_span);
+        loader.close();
+        if (ok) {
+            buffer_range.bytes_written(byte_count);
+            buffer_range.close();
+            m_arguments.image_transfer.upload_to_texture(image_info, buffer_range, *texture.get(), generate_mipmap);
+            buffer_range.release();
+        } else {
+            buffer_range.cancel();
         }
+
         return texture;
     }
     auto load_image_buffer(
@@ -1041,13 +1044,15 @@ private:
         erhe::graphics::Image_loader loader;
 
         bool load_ok = false;
-        auto& slot = m_arguments.image_transfer.get_slot();
+
         erhe::graphics::Texture_create_info texture_create_info{
             .device      = m_arguments.graphics_device,
             .debug_label = name
         };
         int  mipmap_count    = 0;
         bool generate_mipmap = false;
+
+        std::shared_ptr<erhe::graphics::Texture> texture{};
 
         std::visit(
             fastgltf::visitor{
@@ -1079,38 +1084,51 @@ private:
                     if (generate_mipmap) {
                         texture_create_info.level_count = mipmap_count;
                     }
-                    std::span<std::uint8_t> span = slot.begin_span_for(image_info.width, image_info.height, texture_create_info.pixelformat);
 
-                    load_ok = loader.load(span);
+                    texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
+                    texture->set_source_path(m_arguments.path);
+
+                    // TODO Handle depth > 1 and mipmaps
+                    ERHE_VERIFY(image_info.width * erhe::graphics::get_gl_pixel_byte_count(image_info.format) == image_info.row_stride);
+                    const int byte_count = image_info.row_stride * image_info.height;
+                    ERHE_VERIFY(byte_count >= 1);
+
+                    erhe::graphics::Buffer_range buffer_range = m_arguments.image_transfer.acquire_range(byte_count);
+                    std::span<std::byte> byte_span = buffer_range.get_span();
+                    std::span<std::uint8_t> u8_span{
+                        reinterpret_cast<std::uint8_t*>(byte_span.data()),
+                        byte_span.size_bytes()
+                    };
+
+                    load_ok = loader.load(u8_span);
+                    loader.close();
+
+                    if (load_ok) {
+                        buffer_range.bytes_written(byte_count);
+                        buffer_range.close();
+                        m_arguments.image_transfer.upload_to_texture(image_info, buffer_range, *texture.get(), generate_mipmap);
+                        buffer_range.release();
+                    } else {
+                        buffer_range.cancel();
+                    }
+
                     loader.close();
                 }
             },
             buffer.data
         );
-        slot.end(load_ok);
         if (!load_ok) {
             log_gltf->warn(
                 "Image '{}' load failed: image index = {}, width = {}, height = {}",
                 name, image_index, texture_create_info.width, texture_create_info.height
             );
-            return {};
+        } else {
+            log_gltf->info(
+                "Loaded image '{}': image index = {}, width = {}, height = {}",
+                name, image_index, texture_create_info.width, texture_create_info.height
+            );
         }
 
-        log_gltf->info(
-            "Loaded image '{}': image index = {}, width = {}, height = {}",
-            name, image_index, texture_create_info.width, texture_create_info.height
-        );
-
-        auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
-        texture->set_source_path(m_arguments.path);
-        gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
-        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, slot.gl_name());
-        texture->upload(texture_create_info.pixelformat, texture_create_info.width, texture_create_info.height);
-        gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
-
-        if (generate_mipmap) {
-            gl::generate_texture_mipmap(texture->gl_name());
-        }
         return texture;
     }
     void parse_image(const std::size_t image_index)

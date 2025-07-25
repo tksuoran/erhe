@@ -6,6 +6,7 @@
 
 #include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
@@ -761,17 +762,33 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         auto texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, create_info);
 
         // Upload pixel data
-        const int depth       = 1;
-        const int array_layer = 0;
-        const int level       = 0;
-        const int x           = 0;
-        const int y           = 0;
-        const int z           = 0;
-        const std::span<const std::uint8_t> data{
+        const std::span<const std::uint8_t> src_span{
             static_cast<const std::uint8_t*>(tex->GetPixels()),
             static_cast<size_t>(tex->GetSizeInBytes())
         };
-        texture->upload(create_info.pixelformat, data, create_info.width, create_info.height, depth, array_layer, level, x, y, z);
+
+        std::size_t                            byte_count = src_span.size_bytes();
+        erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "font upload"};
+        erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+        std::span<std::byte>                   dst_span     = buffer_range.get_span();
+        memcpy(dst_span.data(), src_span.data(), byte_count);
+        buffer_range.bytes_written(byte_count);
+        buffer_range.close();
+
+        erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+        encoder.copy_from_buffer(
+            buffer_range.get_buffer()->get_buffer(),          // source_buffer
+            buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
+            tex->GetPitch(),                                  // source_bytes_per_row
+            tex->GetSizeInBytes(),                            // source_bytes_per_image
+            glm::ivec3{tex->Width, tex->Height, 1},           // source_size
+            texture.get(),                                    // destination_texture
+            0,                                                // destination_slice
+            0,                                                // destination_level
+            glm::ivec3{0, 0, 0}                               // destination_origin
+        );
+
+        buffer_range.release();
 
         uint64_t handle = m_graphics_device.get_handle(*texture.get(), m_linear_sampler);
         m_handle_to_texture[handle] = texture;
@@ -789,17 +806,36 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
                 static_cast<const std::uint8_t*>(tex->GetPixels()),
                  static_cast<size_t>(tex->GetSizeInBytes())
             };
-            const erhe::dataformat::Format format = (tex->Format == ImTextureFormat_RGBA32) ? erhe::dataformat::Format::format_8_vec4_unorm : erhe::dataformat::Format::format_8_scalar_unorm;
-            const int src_row_length = tex->Width;
-            const int src_x  = r.x;
-            const int src_y  = r.y;
-            const int width  = r.w;
-            const int height = r.h;
-            const int level  = 0;
-            const int x      = r.x;
-            const int y      = r.y;
-            const int z      = 0;
-            texture->upload_subimage(format, data, src_row_length, src_x, src_y, width, height, level, x,  y, z);
+            const std::span<const std::uint8_t> src_span{
+                static_cast<const std::uint8_t*>(tex->GetPixels()),
+                static_cast<size_t>(tex->GetSizeInBytes())
+            };
+
+            std::size_t buffer_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
+
+            // TODO We don't necessarily always need full texture size buffer range, just for the rectangle
+            std::size_t                            byte_count   = src_span.size_bytes();
+            erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "ImGui Draw Texture Update"};
+            erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+            std::span<std::byte>                   dst_span     = buffer_range.get_span();
+            memcpy(dst_span.data(), src_span.data(), byte_count);
+            buffer_range.bytes_written(byte_count);
+            buffer_range.close();
+
+            erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+            encoder.copy_from_buffer(
+                buffer_range.get_buffer()->get_buffer(),                        // source_buffer
+                buffer_range.get_byte_start_offset_in_buffer() + buffer_offset, // source_offset
+                tex->GetPitch(),                                                // source_bytes_per_row
+                tex->GetSizeInBytes(),                                          // source_bytes_per_image
+                glm::ivec3{r.w, r.h, 1},                                        // source_size
+                texture.get(),                                                  // destination_texture
+                0,                                                              // destination_slice
+                0,                                                              // destination_level
+                glm::ivec3{r.x, r.y, 0}                                         // destination_origin
+            );
+
+            buffer_range.release();
         }
         tex->SetStatus(ImTextureStatus_OK);
     }

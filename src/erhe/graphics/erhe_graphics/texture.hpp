@@ -71,34 +71,6 @@ public:
     [[nodiscard]] static auto get_mipmap_dimensions (Texture_type type) -> int;
     [[nodiscard]] static auto get_size_level_count  (int size) -> int;
 
-    void upload(erhe::dataformat::Format internal_format, int width, int height = 1, int depth = 1, int array_layer_count = 0);
-
-    void upload(
-        const erhe::dataformat::Format      format,
-        const std::span<const std::uint8_t> data,
-        int                                 width,
-        int                                 height = 1,
-        int                                 depth = 1,
-        int                                 array_layer = 0,
-        int                                 level = 0,
-        int                                 x = 0,
-        int                                 y = 0,
-        int                                 z = 0
-    );
-    void upload_subimage(
-        const erhe::dataformat::Format      format,
-        const std::span<const std::uint8_t> data,
-        int                                 src_row_length,
-        int                                 src_x,
-        int                                 src_y,
-        int                                 width,
-        int                                 height,
-        int                                 level,
-        int                                 x,
-        int                                 y,
-        int                                 z = 0
-    );
-
     [[nodiscard]] auto get_debug_label           () const -> const std::string&;
     [[nodiscard]] auto get_pixelformat           () const -> erhe::dataformat::Format;
     [[nodiscard]] auto get_width                 (unsigned int level = 0) const -> int;
@@ -157,9 +129,10 @@ void convert_texture_offset_to_gl      (const gl::Texture_target target, int& x,
 
 [[nodiscard]] auto component_count(gl::Pixel_format pixel_format) -> size_t;
 [[nodiscard]] auto byte_count(gl::Pixel_type pixel_type) -> size_t;
-[[nodiscard]] auto get_upload_pixel_byte_count(const erhe::dataformat::Format pixelformat) -> size_t;
+[[nodiscard]] auto get_gl_pixel_byte_count(const erhe::dataformat::Format pixelformat) -> size_t;
 [[nodiscard]] auto get_format_and_type(const erhe::dataformat::Format pixelformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool;
 [[nodiscard]] auto format_texture_handle(uint64_t handle) -> std::string;
+[[nodiscard]] auto convert_to_gl_texture_target(Texture_type type, bool multisample, bool array) -> gl::Texture_target;
 
 constexpr uint64_t invalid_texture_handle = 0xffffffffu;
 
