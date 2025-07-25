@@ -2,6 +2,8 @@
 
 #include "erhe_graphics/command_encoder.hpp"
 
+#include <glm/glm.hpp>
+
 #include <cstdint>
 
 namespace erhe::graphics {

@@ -176,9 +176,23 @@ namespace erhe::graphics {
     class Sampler;
 }
 
+class Erhe_ImTextureID
+{
+public:
+    const erhe::graphics::Texture_reference* texture_reference;
+    const erhe::graphics::Sampler* sampler;
 
-#define ImTextureID std::tuple<const erhe::graphics::Texture_reference*, const erhe::graphics::Sampler*>
-#define ImTextureID_Invalid std::tuple<const erhe::graphics::Texture_reference*, const erhe::graphics::Sampler*>{nullptr, nullptr}
+    auto operator==(const Erhe_ImTextureID& other) const -> bool { return (texture_reference == other.texture_reference) && (sampler == other.sampler);}
+    auto operator!=(const Erhe_ImTextureID& other) const -> bool {
+        return !(*this == other);
+    }
+};
+
+#define ImTextureID Erhe_ImTextureID
+
+inline constexpr ImTextureID c_ImTextureID_Invalid = Erhe_ImTextureID{nullptr, nullptr};
+
+#define ImTextureID_Invalid c_ImTextureID_Invalid
 
 struct ImGuiIO;
 struct ImGuiContext;

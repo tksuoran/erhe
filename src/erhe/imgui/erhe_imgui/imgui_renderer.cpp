@@ -640,7 +640,7 @@ auto Imgui_renderer::image(
 
     if (texture_reference != nullptr) {
         ImGui::ImageWithBg(
-            std::tuple<const erhe::graphics::Texture_reference*, const erhe::graphics::Sampler*>{texture_reference, &sampler},
+            Erhe_ImTextureID{texture_reference, &sampler},
             ImVec2{static_cast<float>(width), static_cast<float>(height)},
             uv0, uv1,
             background_color, tint_color
@@ -690,7 +690,7 @@ auto Imgui_renderer::image_button(
     //// const uint64_t handle = m_graphics_device.get_handle(*texture.get(), sampler);
     ImGui::ImageButtonEx(
         id,
-        std::tuple<const erhe::graphics::Texture_reference*, const erhe::graphics::Sampler*>{texture_reference, &sampler},
+        Erhe_ImTextureID{texture_reference, &sampler},
         ImVec2{static_cast<float>(width), static_cast<float>(height)},
         uv0,
         uv1,
@@ -758,7 +758,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
 
         const erhe::graphics::Sampler& sampler = get_sampler(erhe::graphics::Filter::linear, erhe::graphics::Sampler_mipmap_mode::not_mipmapped);
         tex->SetTexID(
-            std::make_tuple<const erhe::graphics::Texture*, const erhe::graphics::Sampler*>(
+            Erhe_ImTextureID(
                 texture.get(),
                 &sampler
             )
@@ -769,7 +769,8 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
     {
         // Update selected blocks. We only ever write to textures regions which have never been used before!
         // This backend choose to use tex->Updates[] but you can use tex->UpdateRect to upload a single region.
-        const erhe::graphics::Texture_reference* texture_reference = std::get<0>(tex->GetTexID());
+        Erhe_ImTextureID                         texture_id        = tex->GetTexID();
+        const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
         const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
         ERHE_VERIFY(texture != nullptr);
         log_imgui->trace("updating texture {}", fmt::ptr(texture));
@@ -813,7 +814,8 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         tex->SetStatus(ImTextureStatus_OK);
     }
     else if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames > 0) {
-        const erhe::graphics::Texture_reference* texture_reference = std::get<0>(tex->GetTexID());
+        Erhe_ImTextureID                         texture_id        = tex->GetTexID();
+        const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
         const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
         ERHE_VERIFY(texture != nullptr);
         log_imgui->trace("removing texture {}", fmt::ptr(texture));
@@ -926,9 +928,9 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                     } else {
                         // Check texture heap
                         const ImTextureID                        texture_id        = pcmd->TexRef.GetTexID();
-                        const erhe::graphics::Texture_reference* texture_reference = std::get<0>(texture_id);
+                        const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
                         const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
-                        const erhe::graphics::Sampler*           sampler           = std::get<1>(texture_id);
+                        const erhe::graphics::Sampler*           sampler           = texture_id.sampler;
                         if (texture == nullptr) {
                             texture = m_dummy_texture.get();
                         }
@@ -1032,9 +1034,9 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                         // Write texture indices
                         {
                             const ImTextureID                        texture_id        = pcmd->TexRef.GetTexID();
-                            const erhe::graphics::Texture_reference* texture_reference = std::get<0>(texture_id);
+                            const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
                             const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
-                            const erhe::graphics::Sampler*           sampler           = std::get<1>(texture_id);
+                            const erhe::graphics::Sampler*           sampler           = texture_id.sampler;
 
                             if (texture == nullptr) {
                                 texture = m_dummy_texture.get();
