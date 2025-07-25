@@ -230,9 +230,7 @@ void Brush_preview::render_preview(
         m_camera.get(),
         viewport,
         erhe::math::Viewport{},
-        std::shared_ptr<erhe::graphics::Texture>{},
-        erhe::graphics::invalid_texture_handle,
-        erhe::graphics::invalid_texture_handle
+        m_shadow_texture
     };
 
     {

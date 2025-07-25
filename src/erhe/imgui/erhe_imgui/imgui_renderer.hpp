@@ -58,10 +58,9 @@ public:
 class Imgui_draw_parameter_struct_offsets
 {
 public:
-    std::size_t clip_rect      {0}; // vec4
-    std::size_t texture        {0}; // uvec2   for bindless textures
-    std::size_t extra          {0}; // uvec2   for bindless textures
-    std::size_t texture_indices{0}; // uint[4] for non bindless textures
+    std::size_t clip_rect{0}; // vec4
+    std::size_t texture  {0}; // uvec2   for bindless textures
+    std::size_t padding  {0}; // uvec2   for bindless textures
 };
 
 class Imgui_program_interface
@@ -96,31 +95,31 @@ public:
     void on_font_config_changed(Imgui_settings& settings);
 
     auto image(
-        const std::shared_ptr<erhe::graphics::Texture>& texture,
-        int                                             width,
-        int                                             height,
-        glm::vec2                                       uv0              = {0.0f, 1.0f},
-        glm::vec2                                       uv1              = {1.0f, 0.0f},
-        glm::vec4                                       background_color = {0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4                                       tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter                          filter           = erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode             mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+        const erhe::graphics::Texture_reference* texture_reference,
+        int                                      width,
+        int                                      height,
+        glm::vec2                                uv0              = {0.0f, 1.0f},
+        glm::vec2                                uv1              = {1.0f, 0.0f},
+        glm::vec4                                background_color = {0.0f, 0.0f, 0.0f, 0.0f},
+        glm::vec4                                tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
+        erhe::graphics::Filter                   filter           = erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode      mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     ) -> bool;
 
     auto image_button(
-        uint32_t                                        id,
-        const std::shared_ptr<erhe::graphics::Texture>& texture,
-        int                                             width,
-        int                                             height,
-        glm::vec2                                       uv0              = {0.0f, 1.0f},
-        glm::vec2                                       uv1              = {1.0f, 0.0f},
-        glm::vec4                                       background_color = {0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4                                       tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter                          filter           = erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode             mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+        uint32_t                                 id,
+        const erhe::graphics::Texture_reference* texture_reference,
+        int                                      width,
+        int                                      height,
+        glm::vec2                                uv0              = {0.0f, 1.0f},
+        glm::vec2                                uv1              = {1.0f, 0.0f},
+        glm::vec4                                background_color = {0.0f, 0.0f, 0.0f, 0.0f},
+        glm::vec4                                tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
+        erhe::graphics::Filter                   filter           = erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode      mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     ) -> bool;
 
-    void use(const std::shared_ptr<erhe::graphics::Texture>& texture, const uint64_t handle);
+    //// void use(const std::shared_ptr<erhe::graphics::Texture>& texture, const uint64_t handle);
     void render_draw_data(erhe::graphics::Render_command_encoder& encoder);
 
     void begin_frame    ();
@@ -190,12 +189,9 @@ private:
     std::vector<Imgui_host*>                 m_imgui_hosts;
     const Imgui_host*                        m_current_host{nullptr}; // current context
 
-    std::set<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
-    std::set<uint64_t>                                 m_used_texture_handles;
-
     std::vector<std::function<void()>> m_at_end_of_frame;
 
-    std::unordered_map<uint64_t, std::shared_ptr<erhe::graphics::Texture>> m_handle_to_texture;
+    std::vector<std::shared_ptr<erhe::graphics::Texture>> m_imgui_textures;
 
     Imgui_host* m_ime_host{nullptr};
 };

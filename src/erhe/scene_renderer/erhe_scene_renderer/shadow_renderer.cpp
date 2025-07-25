@@ -44,33 +44,6 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
             }
         )
     }
-    , m_shadow_sampler_compare{
-        graphics_device,
-        erhe::graphics::Sampler_create_info{
-            .min_filter        = erhe::graphics::Filter::linear,
-            .mag_filter        = erhe::graphics::Filter::linear,
-            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
-            .compare_enable    = true,
-            .compare_operation = erhe::graphics::Compare_operation::greater_or_equal,
-            .lod_bias     = 0.0f,
-            .max_lod      = 0.0f,
-            .min_lod      = 0.0f,
-            .debug_label  = "Shadow_renderer::m_shadow_sampler_compare"
-        }
-    }
-    , m_shadow_sampler_no_compare{
-        graphics_device,
-        erhe::graphics::Sampler_create_info{
-            .min_filter     = erhe::graphics::Filter::linear,
-            .mag_filter     = erhe::graphics::Filter::nearest,
-            .mipmap_mode    = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
-            .compare_enable = false,
-            .lod_bias       = 0.0f,
-            .max_lod        = 0.0f,
-            .min_lod        = 0.0f,
-            .debug_label    = "Shadow_renderer::m_shadow_sampler_no_compare"
-        }
-    }
     , m_vertex_input        {graphics_device}
     , m_draw_indirect_buffer{graphics_device}
     , m_joint_buffer        {graphics_device, program_interface.joint_interface}
@@ -78,6 +51,19 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
     , m_material_buffer     {graphics_device, program_interface.material_interface}
     , m_gpu_timer           {graphics_device, "Shadow_renderer"}
+    , m_fallback_sampler{
+        graphics_device,
+        erhe::graphics::Sampler_create_info{
+            .min_filter        = erhe::graphics::Filter::nearest,
+            .mag_filter        = erhe::graphics::Filter::nearest,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
+            .compare_enable    = false,
+            .compare_operation = erhe::graphics::Compare_operation::always,
+            .debug_label       = "Shadow_renderer::m_fallback_sampler"
+        }
+    }
+    , m_dummy_texture{graphics_device.create_dummy_texture()}
 {
     m_pipeline_cache_entries.resize(8);
 }
@@ -125,33 +111,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     ERHE_VERIFY(parameters.view_camera != nullptr);
     ERHE_VERIFY(parameters.texture);
 
-    const Texture& texture = *parameters.texture.get();
-
-    const uint64_t shadow_texture_handle_compare    = m_graphics_device.get_handle(texture, m_shadow_sampler_compare);
-    const uint64_t shadow_texture_handle_no_compare = m_graphics_device.get_handle(texture, m_shadow_sampler_no_compare);
-
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections = Light_projections{
         parameters.lights,
         parameters.view_camera,
         parameters.view_camera_viewport,
         parameters.light_camera_viewport,
-        parameters.texture,
-        shadow_texture_handle_compare,
-        shadow_texture_handle_no_compare
+        parameters.texture
     };
-
-    log_render->debug("Shadow_renderer::render()");
-    log_shadow_renderer->trace(
-        "Making light projections using texture '{}' sampler '{}' / '{}' handle '{}' / '{}'",
-        parameters.texture->get_debug_label(),
-        m_shadow_sampler_compare.get_debug_label(),
-        m_shadow_sampler_no_compare.get_debug_label(),
-        erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle_compare),
-        erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle_no_compare)
-    );
-
-    //ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render)
 
     erhe::graphics::Scoped_debug_group debug_group{"Shadow_renderer::render()"};
     erhe::graphics::Scoped_gpu_timer   timer      {m_gpu_timer};
@@ -171,9 +138,16 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     using Buffer_range = erhe::graphics::Buffer_range;
     using Draw_indirect_buffer_range = erhe::renderer::Draw_indirect_buffer_range;
 
-    Buffer_range material_range = m_material_buffer.update(parameters.materials);
+    erhe::graphics::Texture_heap texture_heap{
+        m_graphics_device,
+        *m_dummy_texture.get(),
+        m_fallback_sampler,
+        erhe::scene_renderer::c_texture_heap_slot_count_reserved
+    };
+
+    Buffer_range material_range = m_material_buffer.update(texture_heap, parameters.materials);
     Buffer_range joint_range = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
-    Buffer_range light_range = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f});
+    Buffer_range light_range = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f}, texture_heap);
 
     log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label());
 
@@ -217,6 +191,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         Buffer_range control_range = m_light_buffer.update_control(light_index);
         m_light_buffer.bind_control_buffer(encoder, control_range);
 
+        texture_heap.bind();
+
         for (const auto& meshes : mesh_spans) {
             std::size_t primitive_count{0};
             Buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
@@ -256,6 +232,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
         gl::disable(gl::Enable_cap::scissor_test);
     }
+
+    texture_heap.unbind();
 
     material_range.release();
     joint_range.release();

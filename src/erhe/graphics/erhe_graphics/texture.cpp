@@ -471,6 +471,11 @@ Texture::~Texture() noexcept
     SPDLOG_LOGGER_TRACE(log_texture, "Deleting texture {} {}", gl_name(), m_debug_label);
 }
 
+auto Texture::get_referenced_texture() const -> const Texture*
+{
+    return this;
+}
+
 auto Texture::gl_name() const -> GLuint
 {
     return m_handle.gl_name();
@@ -886,24 +891,6 @@ auto Texture::is_sparse() const -> bool
     return m_is_sparse;
 }
 
-auto Texture::is_shown_in_ui() const -> bool
-{
-    return true;
-}
-
-//// auto Texture::get_sparse_tile_size() const -> Tile_size
-//// {
-////     if (!m_is_sparse) {
-////         return Tile_size{0, 0, 0};
-////     }
-//// 
-////     const auto i = g_instance->sparse_tile_sizes.find(m_internal_format);
-////     if (i == g_instance->sparse_tile_sizes.end()) {
-////         return Tile_size{0, 0, 0};
-////     }
-////     return i->second;
-//// }
-
 auto Texture::get_debug_label() const -> const std::string&
 {
     return m_debug_label;
@@ -1020,5 +1007,7 @@ auto format_texture_handle(uint64_t handle) -> std::string
     uint32_t high = static_cast<uint32_t>( handle >> 32u);
     return fmt::format("{:08x}.{:08x} {}.{}", high, low, high, low);
 }
+
+Texture_reference::~Texture_reference() = default;
 
 } // namespace erhe::graphics

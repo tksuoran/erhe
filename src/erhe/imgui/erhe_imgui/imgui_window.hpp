@@ -46,11 +46,11 @@ public:
     void hide_window             ();
     void toggle_window_visibility();
     void draw_image              (
-        const std::shared_ptr<erhe::graphics::Texture>& texture,
-        int                                             width,
-        int                                             height,
-        erhe::graphics::Filter                          filter      = erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode             mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+        const erhe::graphics::Texture_reference* reference,
+        int                                      width,
+        int                                      height,
+        erhe::graphics::Filter                   filter      = erhe::graphics::Filter::nearest,
+        erhe::graphics::Sampler_mipmap_mode      mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     );
 
     auto get_imgui_host() const -> Imgui_host*;

@@ -50,17 +50,14 @@ class Material_buffer : public erhe::graphics::GPU_ring_buffer_client
 public:
     Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface);
 
-    auto update(const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::graphics::Buffer_range;
-
-    [[nodiscard]] auto used_handles() const -> const std::set<uint64_t>&;
+    auto update(erhe::graphics::Texture_heap& texture_heap, const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::graphics::Buffer_range;
 
 private:
     erhe::graphics::Device& m_graphics_device;
-    Material_interface&       m_material_interface;
-    std::set<uint64_t>        m_used_handles;
+    Material_interface&     m_material_interface;
 
-    erhe::graphics::Sampler   m_nearest_sampler;
-    erhe::graphics::Sampler   m_linear_sampler;
+    erhe::graphics::Sampler m_nearest_sampler;
+    erhe::graphics::Sampler m_linear_sampler;
 };
 
 } // namespace erhe::scene_renderer

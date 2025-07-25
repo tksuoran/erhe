@@ -307,7 +307,10 @@ void Post_processing_node::viewport_toolbar()
 
 auto Post_processing_node::get_producer_output_texture(const int key, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    if (key == erhe::rendergraph::Rendergraph_node_key::viewport_texture) {
+    if (
+        (key == erhe::rendergraph::Rendergraph_node_key::viewport_texture) ||
+        (key == erhe::rendergraph::Rendergraph_node_key::wildcard)
+    ) {
         if (upsample_texture_views.empty()) {
             return {};
         } else {

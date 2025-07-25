@@ -301,29 +301,7 @@ void Depth_visualization_window::imgui()
 
     m_depth_to_color_node->set_enabled(true);
 
-    const uint32_t shadow_map_texture_handle_compare_uvec2[2] = {
-        static_cast<uint32_t>((light_projections.shadow_map_texture_handle_compare & 0xffffffffu)),
-        static_cast<uint32_t>( light_projections.shadow_map_texture_handle_compare >> 32u)
-    };
-    const uint32_t shadow_map_texture_handle_no_compare_uvec2[2] = {
-        static_cast<uint32_t>((light_projections.shadow_map_texture_handle_no_compare & 0xffffffffu)),
-        static_cast<uint32_t>( light_projections.shadow_map_texture_handle_no_compare >> 32u)
-    };
-
     const auto& texture = m_depth_to_color_node->get_producer_output_texture(erhe::rendergraph::Rendergraph_node_key::depth_visualization);
-
-#if 0
-    ImGui::Text("Shadow Texture Handle Compare: 0x%08x 0x%08x", shadow_map_texture_handle_compare_uvec2[1], shadow_map_texture_handle_compare_uvec2[0]);
-    ImGui::Text("Shadow Texture Handle No Compare: 0x%08x 0x%08x", shadow_map_texture_handle_no_compare_uvec2[1], shadow_map_texture_handle_no_compare_uvec2[0]);
-    ImGui::Text("Shadow Texture Handle Compare: %u %u", shadow_map_texture_handle_compare_uvec2[1], shadow_map_texture_handle_compare_uvec2[0]);
-    ImGui::Text("Shadow Texture Handle No Compare: %u %u", shadow_map_texture_handle_no_compare_uvec2[1], shadow_map_texture_handle_no_compare_uvec2[0]);
-    if (light_projections.shadow_map_texture) {
-        ImGui::Text(
-            "Shadow Texture Name: %u",
-            light_projections.shadow_map_texture->gl_name()
-        );
-    }
-#endif
 
     const auto  available_size = ImGui::GetContentRegionAvail();
     const float image_size     = std::min(available_size.x, available_size.y);
@@ -348,7 +326,7 @@ void Depth_visualization_window::imgui()
         ImGui::SetCursorPos(cursor_position);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
         SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::imgui() - drawing image using texture {}", m_texture->gl_name());
-        draw_image(texture, area_size, area_size);
+        draw_image(m_depth_to_color_node.get(), area_size, area_size);
         // bool is_hovered = ImGui::IsItemHovered();
         ImGui::PopStyleVar();
     } else {

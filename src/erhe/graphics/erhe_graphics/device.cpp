@@ -749,95 +749,222 @@ auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
     return texture;
 }
 
-void Device::texture_unit_cache_reset(const unsigned int base_texture_unit)
+Texture_heap::Texture_heap(
+    Device&        device,
+    const Texture& fallback_texture,
+    const Sampler& fallback_sampler,
+    std::size_t    reserved_slot_count
+)
+    : m_device{device}
+    , m_fallback_texture{fallback_texture}
+    , m_fallback_sampler{fallback_sampler}
+    , m_reserved_slot_count{reserved_slot_count}
+    , m_used_slot_count{0}
 {
-    SPDLOG_LOGGER_TRACE(log_texture_frame, "texture_unit_cache_reset(base_texture_unit = {})", base_texture_unit);
+    // log_texture_frame->trace("Texture_heap::Texture_heap()");
 
-    m_base_texture_unit = base_texture_unit;
-    m_texture_units.clear();
+    if (m_device.info.use_bindless_texture) {
+        const uint64_t fallback_texture_handle = m_device.get_handle(m_fallback_texture, m_fallback_sampler);
+        m_textures.resize(m_reserved_slot_count);
+        m_samplers.resize(m_reserved_slot_count);
+        m_assigned.resize(m_reserved_slot_count);
+        m_gl_bindless_texture_handles.resize(m_reserved_slot_count);
+        m_gl_bindless_texture_resident.resize(m_reserved_slot_count);
+        std::fill(m_assigned.begin(), m_assigned.end(), false);
+        std::fill(m_textures.begin(), m_textures.end(), &m_fallback_texture);
+        std::fill(m_samplers.begin(), m_samplers.end(), &m_fallback_sampler);
+        std::fill(m_gl_bindless_texture_handles.begin(), m_gl_bindless_texture_handles.end(), fallback_texture_handle);
+        std::fill(m_gl_bindless_texture_resident.begin(), m_gl_bindless_texture_resident.end(), false);
+        m_used_slot_count = 0;
+    } else {
+        m_textures.resize(device.limits.max_texture_image_units);
+        m_samplers.resize(device.limits.max_texture_image_units);
+        m_gl_textures.resize(device.limits.max_texture_image_units);
+        m_gl_samplers.resize(device.limits.max_texture_image_units);
+        m_zero_vector.resize(device.limits.max_texture_image_units);
+        reset();
+    }
 }
 
-auto Device::texture_unit_cache_get(const uint64_t handle) -> std::size_t
+Texture_heap::~Texture_heap()
 {
-    for (std::size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit) {
-        if (m_texture_units[texture_unit] == handle) {
-            return texture_unit;
-        }
-    }
-    const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
-    const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(handle);
-    ERHE_FATAL("texture %u sampler %u not found in texture unit cache", texture_name, sampler_name);
+    // log_texture_frame->trace("Texture_heap::~Texture_heap()");
 }
 
-auto Device::texture_unit_cache_allocate(const uint64_t handle) -> std::optional<std::size_t>
+void Texture_heap::reset()
 {
-#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-    const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
-    const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(handle);
-#endif
+    // log_texture_frame->trace("Texture_heap::reset()");
 
-    for (std::size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit) {
-        if (m_texture_units[texture_unit] == handle) {
-            SPDLOG_LOGGER_TRACE(log_texture_frame, "cache hit texture unit {} for texture {}, sampler {}", texture_unit, texture_name, sampler_name);
-            return texture_unit;
-        }
+    if (!m_device.info.use_bindless_texture) {
+        const GLuint fallback_texture_name = m_fallback_texture.gl_name();
+        const GLuint fallback_sampler_name = m_fallback_sampler.gl_name();
+        std::fill(m_textures.begin(), m_textures.end(), &m_fallback_texture);
+        std::fill(m_samplers.begin(), m_samplers.end(), &m_fallback_sampler);
+        std::fill(m_gl_textures.begin(), m_gl_textures.end(), fallback_texture_name);
+        std::fill(m_gl_samplers.begin(), m_gl_samplers.end(), fallback_sampler_name);
+        m_used_slot_count = 0;
+    } else {
+        ERHE_FATAL("This should not happen");
     }
-
-    if (m_texture_units.size() < limits.max_texture_image_units) {
-        const std::size_t result = m_texture_units.size();
-        m_texture_units.push_back(handle);
-        SPDLOG_LOGGER_TRACE(log_texture_frame, "allocted texture unit {} for texture {}, sampler {}", result, texture_name, sampler_name);
-        return result;
-    }
-
-    SPDLOG_LOGGER_TRACE(log_texture_frame, "texture cache is full, unable to allocate texture unit for texture {}, sampler {}", texture_name, sampler_name);
-    return {};
 }
 
-auto Device::texture_unit_cache_bind(const uint64_t fallback_handle) -> std::size_t
+auto Texture_heap::get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t
 {
-    const GLuint fallback_texture_name = erhe::graphics::get_texture_from_handle(fallback_handle);
-    const GLuint fallback_sampler_name = erhe::graphics::get_sampler_from_handle(fallback_handle);
+    ERHE_VERIFY(texture != nullptr);
+    ERHE_VERIFY(sampler != nullptr);
 
-    GLuint i{};
-    GLuint end = std::min(
-        static_cast<GLuint>(m_texture_units.size()),
-        static_cast<GLuint>(limits.max_texture_image_units - m_base_texture_unit)
-    );
-
-    // TODO Use gl::bind_textures() gl::and bind_samplers()
-    for (i = 0; i < end; ++i) {
-        const uint64_t handle       = m_texture_units[i];
-        const GLuint   texture_name = erhe::graphics::get_texture_from_handle(handle);
-        const GLuint   sampler_name = erhe::graphics::get_sampler_from_handle(handle);
-
-        if (handle != 0) {
-#if !defined(NDEBUG)
-            if (gl::is_texture(texture_name) == GL_TRUE) {
-                gl::bind_texture_unit(m_base_texture_unit + i, texture_name);
-                // log_texture_frame->trace("texture unit {} + {} = {}: bound texture {}", m_base_texture_unit, i, m_base_texture_unit + i, texture_name);
+    for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
+        if ((m_textures[slot] == texture) && (m_samplers[slot] == sampler)) {
+            if (m_device.info.use_bindless_texture) {
+                return m_gl_bindless_texture_handles[slot];
             } else {
-                log_texture_frame->warn("texture unit {} + {} = {}: {} is not a texture", m_base_texture_unit, i, m_base_texture_unit + i, texture_name);
-                gl::bind_texture_unit(m_base_texture_unit + i, erhe::graphics::get_texture_from_handle(fallback_handle));
+                return static_cast<uint64_t>(slot - m_reserved_slot_count);
             }
-
-            if ((sampler_name == 0) || (gl::is_sampler(sampler_name) == GL_TRUE)) {
-                gl::bind_sampler(m_base_texture_unit + i, sampler_name);
-                // log_texture_frame->trace("texture unit {} + {} = {}: bound sampler {}", m_base_texture_unit, i, m_base_texture_unit + i, sampler_name);
-            } else {
-                gl::bind_sampler(m_base_texture_unit + i, erhe::graphics::get_sampler_from_handle(fallback_handle));
-                log_texture_frame->warn("texture unit {} + {} = {}: {} is not a sampler", m_base_texture_unit, i, m_base_texture_unit + i, sampler_name);
-            }
-#else
-            gl::bind_texture_unit(m_base_texture_unit + i, texture_name);
-            gl::bind_sampler     (m_base_texture_unit + i, sampler_name);
-#endif
-        } else {
-            gl::bind_texture_unit(m_base_texture_unit + i, fallback_texture_name);
-            gl::bind_sampler     (m_base_texture_unit + i, fallback_sampler_name);
         }
     }
-    return m_base_texture_unit + i;
+    ERHE_FATAL("texture %u sampler %u not found in texture heap", texture->gl_name(), sampler->gl_name());
+}
+
+auto Texture_heap::assign(std::size_t slot, const Texture* texture, const Sampler* sampler) -> uint64_t
+{
+    if (texture == nullptr) {
+        texture = &m_fallback_texture;
+    }
+    if (sampler == nullptr) {
+        sampler = &m_fallback_sampler;
+    }
+
+    if (m_device.info.use_bindless_texture) {
+        const uint64_t gl_bindless_texture_handle = m_device.get_handle(*texture, *sampler);
+        m_assigned                    [slot] = true;
+        m_gl_bindless_texture_handles [slot] = gl_bindless_texture_handle;
+        m_gl_bindless_texture_resident[slot] = false;
+        m_textures                    [slot] = texture;
+        m_samplers                    [slot] = sampler;
+        // log_texture_frame->trace("assigned texture heap slot {} for texture {}, sampler {} bindless handle {}", slot, texture->gl_name(), sampler->gl_name(), format_texture_handle(gl_bindless_texture_handle));
+        return gl_bindless_texture_handle;
+
+    } else {
+
+        m_textures   [slot] = texture;
+        m_samplers   [slot] = sampler;
+        m_gl_textures[slot] = texture->gl_name();
+        m_gl_samplers[slot] = sampler->gl_name();
+        // log_texture_frame->trace("assigned texture heap slot {} for texture {}, sampler {}", slot, texture->gl_name(), sampler->gl_name());
+        return slot;
+    }
+}
+
+auto Texture_heap::allocate(const Texture* texture, const Sampler* sampler) -> std::size_t
+{
+    if ((texture == nullptr) || (sampler == nullptr)) {
+        return erhe::graphics::invalid_texture_handle;
+    }
+
+    // const GLuint texture_name = texture->gl_name(); // erhe::graphics::get_texture_from_handle(handle);
+    // const GLuint sampler_name = sampler->gl_name(); //erhe::graphics::get_sampler_from_handle(handle);
+
+    for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
+        if ((m_textures[slot] == texture) && (m_samplers[slot] == sampler)) {
+            // log_texture_frame->trace("cache hit texture heap slot {} for texture {}, sampler {}", slot, texture_name, sampler_name);
+            if (m_device.info.use_bindless_texture) {
+                return m_gl_bindless_texture_handles[slot];
+            } else {
+                return static_cast<uint64_t>(slot);
+            }
+        }
+    }
+
+    if (m_device.info.use_bindless_texture) {
+        // const std::size_t slot = m_reserved_slot_count + m_used_slot_count;
+        const uint64_t gl_bindless_texture_handle = m_device.get_handle(*texture, *sampler);
+        m_gl_bindless_texture_handles .push_back(gl_bindless_texture_handle);
+        m_gl_bindless_texture_resident.push_back(false);
+        m_textures                    .push_back(texture);
+        m_samplers                    .push_back(sampler);
+        ++m_used_slot_count;
+        // log_texture_frame->trace(
+        //     "allocated texture heap slot {} for texture {}, sampler {} bindless handle = {}",
+        //     slot, texture_name, sampler_name, format_texture_handle(gl_bindless_texture_handle)
+        // );
+        return gl_bindless_texture_handle;
+
+    } else {
+
+        if (m_reserved_slot_count + m_used_slot_count < m_textures.size()) {
+            const std::size_t slot = m_reserved_slot_count + m_used_slot_count;
+            m_textures   [slot] = texture;
+            m_samplers   [slot] = sampler;
+            m_gl_textures[slot] = texture->gl_name();
+            m_gl_samplers[slot] = sampler->gl_name();
+            ++m_used_slot_count;
+            // log_texture_frame->trace("allocated texture heap slot {} for texture {}, sampler {}", slot, texture_name, sampler_name);
+            return slot - m_reserved_slot_count;
+        }
+
+        // log_texture_frame->trace("texture heap is full, unable to allocate slot for texture {}, sampler {}", texture_name, sampler_name);
+        return {};
+    }
+}
+
+// TODO Maybe this should use Render_command_encoder?
+void Texture_heap::unbind()
+{
+    // log_texture_frame->trace("Texture_heap::unbind()");
+
+    if (m_device.info.use_bindless_texture) {
+        for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
+            if ((slot < m_reserved_slot_count) && !m_assigned[slot]) {
+                continue;
+            }
+            if (m_gl_bindless_texture_resident[slot]) {
+                const uint64_t gl_bindless_texture_handle = m_gl_bindless_texture_handles[slot];
+                // log_texture_frame->trace(
+                //     "making texture handle {} non-resident / texture {}, sampler {}",
+                //     format_texture_handle(gl_bindless_texture_handle),
+                //     m_textures[slot]->gl_name(),
+                //     m_samplers[slot]->gl_name()
+                // );
+                gl::make_texture_handle_non_resident_arb(gl_bindless_texture_handle);
+                m_gl_bindless_texture_resident[slot] = false;
+            }
+        }
+    } else {
+        gl::bind_textures(0, m_device.limits.max_texture_image_units, m_zero_vector.data());
+        gl::bind_samplers(0, m_device.limits.max_texture_image_units, m_zero_vector.data());
+    }
+}
+
+// TODO Maybe this should use Render_command_encoder?
+auto Texture_heap::bind() -> std::size_t
+{
+    // log_texture_frame->trace("Texture_heap::bind()");
+
+    if (m_device.info.use_bindless_texture) {
+        for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
+            if ((slot < m_reserved_slot_count) && !m_assigned[slot]) {
+                continue;
+            }
+            if (!m_gl_bindless_texture_resident[slot]) {
+                const uint64_t gl_bindless_texture_handle = m_gl_bindless_texture_handles[slot];
+                // log_texture_frame->trace(
+                //     "making texture handle {} resident / texture {}, sampler {}",
+                //     format_texture_handle(gl_bindless_texture_handle),
+                //     m_textures[slot]->gl_name(),
+                //     m_samplers[slot]->gl_name()
+                // );
+                gl::make_texture_handle_resident_arb(gl_bindless_texture_handle);
+                m_gl_bindless_texture_resident[slot] = true;
+            }
+        }
+        return m_used_slot_count;
+
+    } else {
+
+        gl::bind_textures(0, m_device.limits.max_texture_image_units, m_gl_textures.data());
+        gl::bind_samplers(0, m_device.limits.max_texture_image_units, m_gl_samplers.data());
+        return m_used_slot_count;
+    }
 }
 
 auto Device::get_buffer_alignment(Buffer_target target) -> std::size_t

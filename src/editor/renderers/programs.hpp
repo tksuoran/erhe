@@ -76,8 +76,6 @@ static constexpr const char* c_shader_stages_variant_strings[] =
 class Programs
 {
 public:
-    static constexpr int s_texture_unit_base = 2; // First two are reserved for shadow samplers
-
     explicit Programs(erhe::graphics::Device& graphics_device);
 
     void load_programs(tf::Executor& executor, erhe::graphics::Device& graphics_device, erhe::scene_renderer::Program_interface& program_interface);
@@ -85,8 +83,6 @@ public:
     [[nodiscard]] auto get_variant_shader_stages(Shader_stages_variant variant) const -> const erhe::graphics::Shader_stages*;
 
     // Public members
-    int                              shadow_texture_unit_compare{0};
-    int                              shadow_texture_unit_no_compare{1};
     std::filesystem::path            shader_path;
     erhe::graphics::Shader_resource  default_uniform_block; // for non-bindless textures
     erhe::graphics::Shader_resource* shadow_sampler_compare;

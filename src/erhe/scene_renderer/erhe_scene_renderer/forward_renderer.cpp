@@ -76,7 +76,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
             .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
             .compare_enable    = false,
             .compare_operation = erhe::graphics::Compare_operation::always,
-            .debug_label       = "Shadow_renderer::m_fallback_sampler"
+            .debug_label       = "Forward_renderer::m_fallback_sampler"
         }
     }
 {
@@ -109,24 +109,6 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const auto& passes         = parameters.passes;
     const auto& filter         = parameters.filter;
     const auto  primitive_mode = parameters.primitive_mode;
-    const bool  enable_shadows =
-        (!lights.empty()) &&
-        (parameters.shadow_texture != nullptr) &&
-        (parameters.light_projections->shadow_map_texture_handle_compare != erhe::graphics::invalid_texture_handle) &&
-        (parameters.light_projections->shadow_map_texture_handle_no_compare != erhe::graphics::invalid_texture_handle);
-    const uint64_t fallback_texture_handle = m_graphics_device.get_handle(*m_dummy_texture.get(), m_fallback_sampler);
-
-    if (enable_shadows) {
-        log_forward_renderer->trace(
-            "render({}) shadow T '{}' handle {} / {}",
-            safe_str(parameters.passes.front()->pipeline.data.name),
-            enable_shadows ? parameters.shadow_texture->get_debug_label() : "",
-            erhe::graphics::format_texture_handle(parameters.light_projections->shadow_map_texture_handle_compare),
-            erhe::graphics::format_texture_handle(parameters.light_projections->shadow_map_texture_handle_no_compare)
-        );
-    }
-
-    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
     using Buffer_range = erhe::graphics::Buffer_range;
     std::optional<Buffer_range> camera_buffer_range{};
@@ -143,11 +125,14 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
     }
 
-    if (!m_graphics_device.info.use_bindless_texture) {
-        m_graphics_device.texture_unit_cache_reset(enable_shadows ? 2 : 0);
-    }
+    erhe::graphics::Texture_heap texture_heap{
+        m_graphics_device,
+        *m_dummy_texture.get(),
+        m_fallback_sampler,
+        erhe::scene_renderer::c_texture_heap_slot_count_reserved
+    };
 
-    Buffer_range material_range = m_material_buffer.update(materials);
+    Buffer_range material_range = m_material_buffer.update(texture_heap, materials);
     m_material_buffer.bind(parameters.render_encoder, material_range);
 
     Buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
@@ -155,41 +140,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
+    Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, texture_heap);
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
 
-    if (m_graphics_device.info.use_bindless_texture) {
-        ERHE_PROFILE_SCOPE("make textures resident");
-        if (enable_shadows) {
-            gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
-            gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
-        }
-        for (const uint64_t handle : m_material_buffer.used_handles()) {
-            gl::make_texture_handle_resident_arb(handle);
-        }
-    } else {
-        ERHE_PROFILE_SCOPE("bind texture units");
-        const GLuint fallback_texture = erhe::graphics::get_texture_from_handle(fallback_texture_handle);
-        const GLuint fallback_sampler = erhe::graphics::get_sampler_from_handle(fallback_texture_handle);
-        if (enable_shadows) {
-            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_compare,    parameters.shadow_texture->gl_name());
-            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_no_compare, parameters.shadow_texture->gl_name());
-            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_compare,    m_shadow_sampler_compare.gl_name());
-            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_no_compare, m_shadow_sampler_no_compare.gl_name());
-        } else {
-            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_compare,    fallback_texture);
-            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_no_compare, fallback_texture);
-            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_compare,    fallback_sampler);
-            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_no_compare, fallback_sampler);
-        }
-
-        const auto texture_unit_use_count = m_graphics_device.texture_unit_cache_bind(fallback_texture_handle);
-        const size_t end = static_cast<size_t>(m_graphics_device.limits.max_texture_image_units);
-        for (size_t i = texture_unit_use_count; i < end; ++i) {
-            gl::bind_texture_unit(static_cast<GLuint>(i), fallback_texture);
-            gl::bind_sampler     (static_cast<GLuint>(i), fallback_sampler);
-        }
-    }
+    texture_heap.bind();
 
     for (auto& pass : passes) {
         const auto& pipeline = pass->pipeline;
@@ -269,36 +223,27 @@ void Forward_renderer::render(const Render_parameters& parameters)
     joint_range.release();
     light_range.release();
 
-    if (m_graphics_device.info.use_bindless_texture) {
-        ERHE_PROFILE_SCOPE("make textures non resident");
-        if (enable_shadows) {
-            gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
-            gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
-        }
-        for (const uint64_t handle : m_material_buffer.used_handles()) {
-            gl::make_texture_handle_non_resident_arb(handle);
-        }
-    }
+    texture_heap.unbind();
 }
 
 void Forward_renderer::draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& viewport       = parameters.viewport;
-    const auto* camera         = parameters.camera;
-    const auto& lights         = parameters.lights;
-    const auto& passes         = parameters.passes;
-    const bool  enable_shadows =
-        (!lights.empty()) &&
-        (parameters.shadow_texture != nullptr) &&
-        (parameters.light_projections->shadow_map_texture_handle_compare != erhe::graphics::invalid_texture_handle) &&
-        (parameters.light_projections->shadow_map_texture_handle_no_compare != erhe::graphics::invalid_texture_handle);
+    const auto& viewport = parameters.viewport;
+    const auto* camera   = parameters.camera;
+    const auto& lights   = parameters.lights;
+    const auto& passes   = parameters.passes;
 
-    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+    erhe::graphics::Texture_heap texture_heap{
+        m_graphics_device,
+        *m_dummy_texture.get(),
+        m_fallback_sampler,
+        erhe::scene_renderer::c_texture_heap_slot_count_reserved
+    };
 
     using Buffer_range = erhe::graphics::Buffer_range;
-    Buffer_range material_range = m_material_buffer.update(parameters.materials);
+    Buffer_range material_range = m_material_buffer.update(texture_heap, parameters.materials);
     if (material_range.get_buffer() != nullptr) {
         m_material_buffer.bind(parameters.render_encoder, material_range);
     }
@@ -328,20 +273,10 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         }
     }
 
-    Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
+    Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, texture_heap);
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
 
-    if (enable_shadows) {
-        if (m_graphics_device.info.use_bindless_texture) {
-            gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
-            gl::make_texture_handle_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
-        } else {
-            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_compare,    parameters.shadow_texture->gl_name());
-            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit_no_compare, parameters.shadow_texture->gl_name());
-            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_compare,    m_shadow_sampler_compare.gl_name());
-            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit_no_compare, m_shadow_sampler_no_compare.gl_name());
-        }
-    }
+    texture_heap.bind();
 
     for (auto& pass : passes) {
         const auto& pipeline = pass->pipeline;
@@ -374,12 +309,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         camera_range.value().release();
     }
 
-    if (enable_shadows) {
-        if (m_graphics_device.info.use_bindless_texture) {
-            gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_compare);
-            gl::make_texture_handle_non_resident_arb(parameters.light_projections->shadow_map_texture_handle_no_compare);
-        }
-    }
+    texture_heap.unbind();
 }
 
 } // namespace erhe::scene_renderer

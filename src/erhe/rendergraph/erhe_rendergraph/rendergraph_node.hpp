@@ -1,7 +1,8 @@
 #pragma once
 
+#include "erhe_graphics/texture.hpp"
 #include "erhe_rendergraph/resource_routing.hpp"
-#include "erhe_item/unique_id.hpp"
+#include "erhe_item/item.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -64,13 +65,22 @@ constexpr int rendergraph_max_depth = 10;
 // Rendergraph nodes have inputs and outputs (often both, but at least either input(s) or output(s).
 // Rendergraph nodes have named input and output slots.
 // Rendergraph nodes must have their inputs and outputs connected to other rendergraph nodes.
-class Rendergraph_node : public Rendergraph_id
+class Rendergraph_node 
+    : public erhe::Item<erhe::Item_base, erhe::Item_base, Rendergraph_node, erhe::Item_kind::not_clonable>
+    , public erhe::graphics::Texture_reference
 {
 public:
     Rendergraph_node(Rendergraph& rendergraph, const std::string_view name);
     virtual ~Rendergraph_node() noexcept;
 
-    [[nodiscard]] virtual auto get_type_name() const -> std::string_view { return "Rendergraph_node"; }
+    // Implements Item_base
+    static constexpr std::string_view static_type_name{"Rendergraph_node"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
+
+    // Implements Texture_reference
+    auto get_referenced_texture() const -> const erhe::graphics::Texture* override;
 
     [[nodiscard]] auto get_rendergraph() -> Rendergraph&;
     [[nodiscard]] auto get_rendergraph() const -> const Rendergraph&;
@@ -98,7 +108,6 @@ public:
     auto connect_output   (int key, Rendergraph_node* consumer_node) -> bool;
     auto disconnect_input (int key, Rendergraph_node* producer_node) -> bool;
     auto disconnect_output(int key, Rendergraph_node* consumer_node) -> bool;
-    auto get_id           () const -> std::size_t;
 
     virtual void execute_rendergraph_node() = 0;
 

@@ -6,7 +6,6 @@
 #include "erhe_item/item.hpp"
 #include "erhe_verify/verify.hpp"
 
-#include <span>
 #include <string>
 
 namespace erhe::graphics {
@@ -46,7 +45,18 @@ public:
     int                      view_base_array_layer {0};
 };
 
-class Texture : public erhe::Item<erhe::Item_base, erhe::Item_base, Texture, erhe::Item_kind::not_clonable>
+class Texture;
+
+class Texture_reference
+{
+public:
+    virtual ~Texture_reference() noexcept;
+    [[nodiscard]] virtual auto get_referenced_texture() const -> const Texture* = 0;
+};
+
+class Texture
+    : public erhe::Item<erhe::Item_base, erhe::Item_base, Texture, erhe::Item_kind::not_clonable>
+    , public Texture_reference
 {
 public:
     Texture           (const Texture&) = delete;
@@ -58,10 +68,13 @@ public:
     Texture(Device& device, const Texture_create_info& create_info);
 
     // Implements Item_base
-    static constexpr std::string_view static_type_name{"Material"};
+    static constexpr std::string_view static_type_name{"Texture"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
+
+    // Implements Texture_reference
+    auto get_referenced_texture() const -> const Texture* override;
 
     using Create_info = Texture_create_info;
 
@@ -86,8 +99,6 @@ public:
     [[nodiscard]] auto get_handle                () const -> uint64_t;
     [[nodiscard]] auto is_sparse                 () const -> bool;
     //// [[nodiscard]] auto get_sparse_tile_size() const -> Tile_size;
-
-    [[nodiscard]] auto is_shown_in_ui() const -> bool;
 
 private:
     Gl_texture               m_handle;

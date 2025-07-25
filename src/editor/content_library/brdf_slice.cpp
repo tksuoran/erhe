@@ -174,7 +174,7 @@ void Brdf_slice::show_brdf_slice(int area_size)
         (texture_height > 0) &&
         (area_size      > 0)
     ) {
-        m_context.imgui_renderer->image(texture, area_size, area_size);
+        m_context.imgui_renderer->image(texture.get(), area_size, area_size);
     }
 }
 

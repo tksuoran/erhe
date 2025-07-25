@@ -203,12 +203,6 @@ public:
     [[nodiscard]] auto get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture() -> std::shared_ptr<Texture>;
 
-    // Texture unit cache for bindless emulation
-    void texture_unit_cache_reset   (unsigned int base_texture_unit);
-    auto texture_unit_cache_allocate(uint64_t handle) -> std::optional<std::size_t>;
-    auto texture_unit_cache_get     (uint64_t handle) -> std::size_t;
-    auto texture_unit_cache_bind    (uint64_t fallback_handle) -> std::size_t;
-
     auto get_buffer_alignment(Buffer_target target) -> std::size_t;
 
     [[nodiscard]] auto get_frame_number() const -> uint64_t;
@@ -334,10 +328,6 @@ private:
     void frame_completed(uint64_t frame);
     erhe::window::Context_window& m_context_window;
 
-    // Texture unit cache for bindless emulation
-    unsigned int          m_base_texture_unit;
-    std::vector<uint64_t> m_texture_units;
-
     std::vector<std::unique_ptr<GPU_ring_buffer>> m_ring_buffers;
     std::size_t                                   m_min_buffer_size = 2 * 1024 * 1024; // TODO
 
@@ -347,6 +337,44 @@ private:
     std::vector<uint64_t>      m_pending_frames;
     std::vector<uint64_t>      m_completed_frames;
     bool                       m_need_sync{false};
+};
+
+// Unified API for bindless textures and texture unit cache emulating bindless textures
+// using sampler arrays. Also candidate for future metal argument buffer / vulkan
+// descriptor indexing based implementations
+class Texture_heap
+{
+public:
+    Texture_heap(
+        Device&        device,
+        const Texture& fallback_texture,
+        const Sampler& fallback_sampler,
+        std::size_t    reserved_slot_count
+    );
+    ~Texture_heap();
+
+    auto assign           (std::size_t slot, const Texture* texture, const Sampler* sample) -> uint64_t;
+    void reset            ();
+    auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
+    auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
+    auto bind             () -> std::size_t;
+    void unbind           ();
+
+protected:
+    Device&                     m_device;
+    const Texture&              m_fallback_texture;
+    const Sampler&              m_fallback_sampler;
+    std::size_t                 m_reserved_slot_count;
+    std::vector<bool>           m_assigned;
+    std::vector<uint64_t>       m_gl_bindless_texture_handles;
+    std::vector<bool>           m_gl_bindless_texture_resident;
+    std::vector<bool>           m_reserved;
+    std::vector<const Texture*> m_textures;
+    std::vector<const Sampler*> m_samplers;
+    std::vector<GLuint>         m_gl_textures;
+    std::vector<GLuint>         m_gl_samplers;
+    std::vector<GLuint>         m_zero_vector;
+    std::size_t                 m_used_slot_count{0};
 };
 
 class GPU_ring_buffer_client

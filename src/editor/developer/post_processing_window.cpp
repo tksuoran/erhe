@@ -96,7 +96,7 @@ void Post_processing_window::imgui()
 
         int width  = static_cast<int>(m_size * static_cast<float>(node->level_widths.at(0)));
         int height = static_cast<int>(m_size * static_cast<float>(node->level_heights.at(0)));
-        draw_image(texture, width, height, m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest);
+        draw_image(texture.get(), width, height, m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest);
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
             ImGui::TextUnformatted(texture->get_debug_label().c_str());
@@ -112,7 +112,7 @@ void Post_processing_window::imgui()
     
         int width  = static_cast<int>(m_size * static_cast<float>(node->level_widths.at(0)));
         int height = static_cast<int>(m_size * static_cast<float>(node->level_heights.at(0)));
-        draw_image(texture, width, height, m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest);
+        draw_image(texture.get(), width, height, m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest);
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
             ImGui::TextUnformatted(texture->get_debug_label().c_str());

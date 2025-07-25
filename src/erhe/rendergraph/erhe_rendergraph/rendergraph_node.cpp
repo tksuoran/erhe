@@ -8,6 +8,21 @@
 
 namespace erhe::rendergraph {
 
+auto Rendergraph_node::get_static_type() -> uint64_t
+{
+    return erhe::Item_type::texture;
+}
+
+auto Rendergraph_node::get_type() const -> uint64_t
+{
+    return get_static_type();
+}
+
+auto Rendergraph_node::get_type_name() const -> std::string_view
+{
+    return static_type_name;
+}
+
 Rendergraph_node::Rendergraph_node(Rendergraph& rendergraph, const std::string_view name)
     : m_rendergraph{rendergraph}
     , m_name       {name}
@@ -24,9 +39,9 @@ Rendergraph_node::~Rendergraph_node() noexcept
     m_rendergraph.unregister_node(this);
 }
 
-auto Rendergraph_node::get_id() const -> std::size_t
+auto Rendergraph_node::get_referenced_texture() const -> const erhe::graphics::Texture*
 {
-    return id.get_id();
+    return get_producer_output_texture(erhe::rendergraph::Rendergraph_node_key::wildcard, 0).get();
 }
 
 auto Rendergraph_node::get_input(const int key, const int depth) const -> const Rendergraph_consumer_connector*

@@ -362,7 +362,7 @@ auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> boo
     };
 
     return m_imgui_renderer.image(
-        tileset_texture,
+        tileset_texture.get(),
         Tile_shape::full_width * scale,
         Tile_shape::height * scale,
         uv0,

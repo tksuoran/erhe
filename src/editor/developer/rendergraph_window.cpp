@@ -202,7 +202,7 @@ void Rendergraph_window::imgui()
             ) {
                 const float aspect = static_cast<float>(texture->get_width()) / static_cast<float>(texture->get_height());
                 m_imgui_renderer.image(
-                    texture,
+                    texture.get(),
                     static_cast<int>(zoom * aspect * m_image_size),
                     static_cast<int>(zoom * m_image_size),
                     glm::vec2{0.0f, 1.0f},

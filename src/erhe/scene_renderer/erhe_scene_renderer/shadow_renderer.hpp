@@ -88,8 +88,8 @@ private:
     uint64_t                                 m_pipeline_cache_serial{0};
     std::vector<Pipeline_cache_entry>        m_pipeline_cache_entries;
     erhe::graphics::Reloadable_shader_stages m_shader_stages;
-    erhe::graphics::Sampler                  m_shadow_sampler_compare;
-    erhe::graphics::Sampler                  m_shadow_sampler_no_compare;
+    std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
+    erhe::graphics::Sampler                  m_fallback_sampler;
 
     erhe::graphics::Vertex_input_state       m_vertex_input;
     erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffer;

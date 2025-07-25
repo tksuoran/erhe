@@ -322,7 +322,7 @@ void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Textur
 
     add_entry("Preview", [&](){
         // TODO Draw to available size respecting aspect ratio
-        m_context.imgui_renderer->image(texture, texture->get_width(), texture->get_height());
+        m_context.imgui_renderer->image(texture.get(), texture->get_width(), texture->get_height());
     });
 
     pop_group();

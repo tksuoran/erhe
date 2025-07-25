@@ -84,7 +84,7 @@ void main()
 #if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
     v_texture          = draw.draw_parameters[gl_DrawID].texture;
 #else
-    v_texture_id       = draw.draw_parameters[gl_DrawID].texture_indices.x;
+    v_texture_id       = draw.draw_parameters[gl_DrawID].texture.x;
 #endif
     v_color            = vec4(srgb_to_linear(a_color_0.rgb), a_color_0.a);
 }
@@ -130,10 +130,9 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphic
     : draw_parameter_block{graphics_device, "draw", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , draw_parameter_struct{graphics_device, "Draw_parameters"}
     , draw_parameter_struct_offsets{
-        .clip_rect       = draw_parameter_struct.add_vec4("clip_rect")->get_offset_in_parent(),
-        .texture         = graphics_device.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("texture"        )->get_offset_in_parent() : 0, // bindless
-        .extra           = graphics_device.info.use_bindless_texture ?     draw_parameter_struct.add_uvec2("extra"          )->get_offset_in_parent() : 0, // bindless
-        .texture_indices = graphics_device.info.use_bindless_texture ? 0 : draw_parameter_struct.add_uvec4("texture_indices")->get_offset_in_parent()  // non-bindless
+        .clip_rect = draw_parameter_struct.add_vec4 ("clip_rect")->get_offset_in_parent(),
+        .texture   = draw_parameter_struct.add_uvec2("texture")  ->get_offset_in_parent(),
+        .padding   = draw_parameter_struct.add_uvec2("padding")  ->get_offset_in_parent()
     }
     , block_offsets{
         .scale                       = draw_parameter_block.add_vec4  ("scale"    )->get_offset_in_parent(),
@@ -422,23 +421,6 @@ void Imgui_renderer::next_frame()
         operation();
     }
     m_at_end_of_frame.clear();
-
-#if 0
-    std::stringstream ss;
-    for (const auto& used_texture : m_used_textures) {
-        if (used_texture) {
-            ss << fmt::format("{}-{} ", used_texture->gl_name(), used_texture->get_debug_label());
-        } else {
-            ss << "<> ";
-        }
-    }
-    if (!m_used_textures.empty()) {
-        log_frame->trace("{} used textures: {}", m_used_textures.size(), ss.str());
-    }
-#endif
-
-    m_used_textures.clear();
-    m_used_texture_handles.clear();
 }
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
@@ -632,21 +614,21 @@ auto Imgui_renderer::get_sampler(
 }
 
 auto Imgui_renderer::image(
-    const std::shared_ptr<erhe::graphics::Texture>& texture,
-    const int                                       width,
-    const int                                       height,
-    const glm::vec2                                 uv0,
-    const glm::vec2                                 uv1,
-    const glm::vec4                                 background_color,
-    const glm::vec4                                 tint_color,
-    const erhe::graphics::Filter                    filter,
-    const erhe::graphics::Sampler_mipmap_mode       mipmap_mode
+    const erhe::graphics::Texture_reference*  texture_reference,
+    const int                                 width,
+    const int                                 height,
+    const glm::vec2                           uv0,
+    const glm::vec2                           uv1,
+    const glm::vec4                           background_color,
+    const glm::vec4                           tint_color,
+    const erhe::graphics::Filter              filter,
+    const erhe::graphics::Sampler_mipmap_mode mipmap_mode
 ) -> bool
 {
     SPDLOG_LOGGER_TRACE(
         log_imgui,
         "Imgui_renderer::image(texture {}, width = {}, height = {}, uv0 = {}, uv1 = {}, tint_color = {}, linear = {})",
-        texture->gl_name(),
+        texture_reference != nullptr ? texture_reference->get_texture().gl_name() : 0,
         width,
         height,
         uv0,
@@ -655,15 +637,18 @@ auto Imgui_renderer::image(
         linear
     );
     const erhe::graphics::Sampler& sampler = get_sampler(filter, mipmap_mode);
-    const uint64_t handle = m_graphics_device.get_handle(*texture.get(), sampler);
-    SPDLOG_LOGGER_TRACE(log_imgui, "sampler = {}, handle = {:16x}", sampler->gl_name(), handle);
 
-    ImGui::ImageWithBg(handle, ImVec2{static_cast<float>(width), static_cast<float>(height)}, uv0, uv1, background_color, tint_color);
-
-    // TODO Do proper clipping
-    if (ImGui::IsItemVisible()) {
-        use(texture, handle);
+    if (texture_reference != nullptr) {
+        ImGui::ImageWithBg(
+            std::tuple<const erhe::graphics::Texture_reference*, const erhe::graphics::Sampler*>{texture_reference, &sampler},
+            ImVec2{static_cast<float>(width), static_cast<float>(height)},
+            uv0, uv1,
+            background_color, tint_color
+        );
+    } else {
+        ImGui::Dummy(ImVec2{static_cast<float>(width), static_cast<float>(height)});
     }
+
     return ImGui::IsItemClicked();
 }
 
@@ -677,19 +662,19 @@ namespace {
 }
 
 auto Imgui_renderer::image_button(
-    const uint32_t                                  id,
-    const std::shared_ptr<erhe::graphics::Texture>& texture,
-    const int                                       width,
-    const int                                       height,
-    const glm::vec2                                 uv0,
-    const glm::vec2                                 uv1,
-    const glm::vec4                                 background_color,
-    const glm::vec4                                 tint_color,
-    const erhe::graphics::Filter                    filter,
-    const erhe::graphics::Sampler_mipmap_mode       mipmap_mode
+    const uint32_t                            id,
+    const erhe::graphics::Texture_reference*  texture_reference,
+    const int                                 width,
+    const int                                 height,
+    const glm::vec2                           uv0,
+    const glm::vec2                           uv1,
+    const glm::vec4                           background_color,
+    const glm::vec4                           tint_color,
+    const erhe::graphics::Filter              filter,
+    const erhe::graphics::Sampler_mipmap_mode mipmap_mode
 ) -> bool
 {
-    if (!texture) {
+    if (texture_reference == nullptr) {
         if ((width == 0) || (height == 0)) {
             return false;
         }
@@ -702,38 +687,17 @@ auto Imgui_renderer::image_button(
     }
 
     const erhe::graphics::Sampler& sampler = get_sampler(filter, mipmap_mode);
-    const uint64_t handle = m_graphics_device.get_handle(*texture.get(), sampler);
+    //// const uint64_t handle = m_graphics_device.get_handle(*texture.get(), sampler);
     ImGui::ImageButtonEx(
         id,
-        handle,
+        std::tuple<const erhe::graphics::Texture_reference*, const erhe::graphics::Sampler*>{texture_reference, &sampler},
         ImVec2{static_cast<float>(width), static_cast<float>(height)},
         uv0,
         uv1,
         from_glm(background_color),
         from_glm(tint_color)
     );
-    use(texture, handle);
     return ImGui::IsItemClicked();
-}
-
-void Imgui_renderer::use(const std::shared_ptr<erhe::graphics::Texture>& texture, const uint64_t handle)
-{
-    ERHE_PROFILE_FUNCTION();
-
-#if !defined(NDEBUG)
-    if (!m_graphics_device.info.use_bindless_texture) {
-        const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
-        const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(handle);
-        ERHE_VERIFY(texture_name != 0);
-        ERHE_VERIFY(sampler_name != 0);
-        ERHE_VERIFY(texture_name == texture->gl_name());
-        ERHE_VERIFY(gl::is_texture(texture_name) == GL_TRUE);
-        ERHE_VERIFY(gl::is_sampler(sampler_name) == GL_TRUE);
-    }
-#endif
-
-    m_used_textures.insert(texture);
-    m_used_texture_handles.insert(handle);
 }
 
 void Imgui_renderer::update_texture(ImTextureData* tex)
@@ -745,7 +709,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
     if (tex->Status == ImTextureStatus_WantCreate) {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexID == 0 && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
 
         /// Create texture
         const erhe::graphics::Texture_create_info create_info{
@@ -760,6 +724,8 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             .debug_label = "ImGui texture"
         };
         auto texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, create_info);
+        m_imgui_textures.push_back(texture); // This keeps textures alive
+        log_imgui->trace("created texture {}", fmt::ptr(texture.get()));
 
         // Upload pixel data
         const std::span<const std::uint8_t> src_span{
@@ -790,16 +756,23 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
 
         buffer_range.release();
 
-        uint64_t handle = m_graphics_device.get_handle(*texture.get(), m_linear_sampler);
-        m_handle_to_texture[handle] = texture;
-        tex->SetTexID(handle);
+        const erhe::graphics::Sampler& sampler = get_sampler(erhe::graphics::Filter::linear, erhe::graphics::Sampler_mipmap_mode::not_mipmapped);
+        tex->SetTexID(
+            std::make_tuple<const erhe::graphics::Texture*, const erhe::graphics::Sampler*>(
+                texture.get(),
+                &sampler
+            )
+        );
         tex->SetStatus(ImTextureStatus_OK);
     }
     else if (tex->Status == ImTextureStatus_WantUpdates)
     {
         // Update selected blocks. We only ever write to textures regions which have never been used before!
         // This backend choose to use tex->Updates[] but you can use tex->UpdateRect to upload a single region.
-        std::shared_ptr<erhe::graphics::Texture> texture = m_handle_to_texture[tex->GetTexID()];
+        const erhe::graphics::Texture_reference* texture_reference = std::get<0>(tex->GetTexID());
+        const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
+        ERHE_VERIFY(texture != nullptr);
+        log_imgui->trace("updating texture {}", fmt::ptr(texture));
 
         for (ImTextureRect& r : tex->Updates) {
             const std::span<const std::uint8_t> data{
@@ -829,7 +802,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
                 tex->GetPitch(),                                                // source_bytes_per_row
                 tex->GetSizeInBytes(),                                          // source_bytes_per_image
                 glm::ivec3{r.w, r.h, 1},                                        // source_size
-                texture.get(),                                                  // destination_texture
+                texture,                                                        // destination_texture
                 0,                                                              // destination_slice
                 0,                                                              // destination_level
                 glm::ivec3{r.x, r.y, 0}                                         // destination_origin
@@ -840,9 +813,21 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         tex->SetStatus(ImTextureStatus_OK);
     }
     else if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames > 0) {
-        auto i = m_handle_to_texture.find(tex->GetTexID());
-        ERHE_VERIFY(i != m_handle_to_texture.end());
-        m_handle_to_texture.erase(i);
+        const erhe::graphics::Texture_reference* texture_reference = std::get<0>(tex->GetTexID());
+        const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
+        ERHE_VERIFY(texture != nullptr);
+        log_imgui->trace("removing texture {}", fmt::ptr(texture));
+        m_imgui_textures.erase(
+            std::remove_if(
+                m_imgui_textures.begin(),
+                m_imgui_textures.end(),
+                [texture](const std::shared_ptr<erhe::graphics::Texture>& entry) {
+                    return entry.get() == texture;
+                }
+            ),
+            m_imgui_textures.end()
+        );
+
         tex->SetTexID(ImTextureID_Invalid);
         tex->SetStatus(ImTextureStatus_Destroyed);
     }
@@ -876,12 +861,6 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     erhe::graphics::Scoped_debug_group pass_scope{"Imgui_renderer::render_draw_data()"};
     erhe::graphics::Scoped_gpu_timer   timer     {m_gpu_timer};
 
-    // Make font texture handle resident
-    // TODO Is this needed?
-    for (auto i : m_handle_to_texture) {
-        use(i.second, i.first);
-    }
-
     auto&       program                       = m_imgui_program_interface;
     const auto& draw_parameter_struct_offsets = program.draw_parameter_struct_offsets;
     const auto  draw_parameter_entry_size     = program.draw_parameter_struct.get_size_bytes();
@@ -899,25 +878,6 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     using erhe::graphics::write;
     constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
 
-    if (m_graphics_device.info.use_bindless_texture) {
-        for (const auto handle : m_used_texture_handles) {
-            SPDLOG_LOGGER_TRACE(log_imgui, "making texture handle {:16x} resident", handle);
-            gl::make_texture_handle_resident_arb(handle);
-        }
-    } else {
-#if 0
-        for (const auto& texture : m_used_textures) {
-            //SPDLOG_LOGGER_TRACE(log_imgui, "used texture: {} {}", texture->gl_name(), texture->get_debug_label());
-            log_frame->trace("used texture: {} {}", texture->gl_name(), texture->get_debug_label());
-        }
-        for (const auto texture_handle : m_used_texture_handles) {
-            const GLuint texture_name = erhe::graphics::get_texture_from_handle(texture_handle);
-            const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(texture_handle);
-            log_frame->trace("used via handle texture {} sampler {}", texture_name, sampler_name);
-        }
-#endif
-    }
-
     gl::enable(gl::Enable_cap::clip_distance0);
     gl::enable(gl::Enable_cap::clip_distance1);
     gl::enable(gl::Enable_cap::clip_distance2);
@@ -926,6 +886,13 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     // This binds vertex input states (VAO) and shader stages (shader program)
     // and most other state
     render_encoder.set_render_pipeline_state(m_pipeline);
+
+    erhe::graphics::Texture_heap texture_heap{
+        m_graphics_device,
+        *m_dummy_texture.get(),
+        m_nearest_sampler,
+        0
+    };
 
     for (int n = 0; n < draw_data->CmdListsCount; n++) {
         erhe::graphics::Scoped_debug_group cmd_list_scope{"CmdList"};
@@ -944,10 +911,6 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
         // are no available texture units and new one is needed.
         int cmd_batch_end = 0;
         for (;;) {
-            if (!m_graphics_device.info.use_bindless_texture) {
-                m_graphics_device.texture_unit_cache_reset(0);
-            }
-
             // Pass 1: Count how much memory will be needed, and assign texture unit cache
             int cmd_batch_start = cmd_batch_end;
             {
@@ -961,13 +924,18 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                             pcmd->UserCallback(cmd_list, pcmd);
                         }
                     } else {
-                        // Check texture cache
-                        if (!m_graphics_device.info.use_bindless_texture) {
-                            const uint64_t handle = pcmd->TexRef.GetTexID();
-                            const auto texture_unit_opt = m_graphics_device.texture_unit_cache_allocate(handle);
-                            if (!texture_unit_opt.has_value()) {
-                                break;
-                            }
+                        // Check texture heap
+                        const ImTextureID                        texture_id        = pcmd->TexRef.GetTexID();
+                        const erhe::graphics::Texture_reference* texture_reference = std::get<0>(texture_id);
+                        const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
+                        const erhe::graphics::Sampler*           sampler           = std::get<1>(texture_id);
+                        if (texture == nullptr) {
+                            texture = m_dummy_texture.get();
+                        }
+                        ERHE_VERIFY(texture != nullptr);
+                        const uint64_t shader_handle = texture_heap.allocate(texture, sampler);
+                        if (shader_handle == erhe::graphics::invalid_texture_handle) {
+                            break;
                         }
                         draw_parameter_byte_count += draw_parameter_entry_size;
                         draw_indirect_byte_count  += sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
@@ -1062,35 +1030,31 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                         );
 
                         // Write texture indices
-                        if (m_graphics_device.info.use_bindless_texture) {
-                            const uint64_t handle = pcmd->TexRef.GetTexID();
-                            const uint32_t texture_handle[2] = { static_cast<uint32_t>((handle & 0xffffffffu)), static_cast<uint32_t>(handle >> 32u)};
-                            const std::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
+                        {
+                            const ImTextureID                        texture_id        = pcmd->TexRef.GetTexID();
+                            const erhe::graphics::Texture_reference* texture_reference = std::get<0>(texture_id);
+                            const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
+                            const erhe::graphics::Sampler*           sampler           = std::get<1>(texture_id);
+
+                            if (texture == nullptr) {
+                                texture = m_dummy_texture.get();
+                            }
+                            ERHE_VERIFY(texture != nullptr);
+
+                            const uint64_t                           shader_handle  = texture_heap.get_shader_handle(texture, sampler);
+                            const uint64_t                           padding{0};
 
                             write(
                                 draw_parameter_gpu_data,
                                 draw_parameter_write_offset + draw_parameter_struct_offsets.texture,
-                                texture_handle_cpu_data
+                                erhe::graphics::as_span(shader_handle)
                             );
 
-                            const uint32_t extra[2] = { 0u, 0u };
-                            const std::span<const uint32_t> extra_cpu_data{&extra[0], 2};
 
                             write(
                                 draw_parameter_gpu_data,
-                                draw_parameter_write_offset + draw_parameter_struct_offsets.extra,
-                                extra_cpu_data
-                            );
-                        } else {
-                            const uint64_t handle             = pcmd->TexRef.GetTexID();
-                            const size_t   texture_unit       = m_graphics_device.texture_unit_cache_get(handle);
-                            const uint32_t texture_indices[4] = { static_cast<uint32_t>(texture_unit), 0, 0, 0 };
-                            const std::span<const uint32_t> texture_indices_cpu_data{&texture_indices[0], 4};
-
-                            write(
-                                draw_parameter_gpu_data,
-                                draw_parameter_write_offset + draw_parameter_struct_offsets.texture_indices,
-                                texture_indices_cpu_data
+                                draw_parameter_write_offset + draw_parameter_struct_offsets.padding,
+                                erhe::graphics::as_span(padding)
                             );
                         }
 
@@ -1134,15 +1098,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                 render_encoder.set_index_buffer(index_buffer);
                 render_encoder.set_vertex_buffer(vertex_buffer, vertex_buffer_binding_offset, 0);
 
-                if (!m_graphics_device.info.use_bindless_texture) {
-                    const auto dummy_handle           = m_graphics_device.get_handle(*m_dummy_texture.get(), m_nearest_sampler);
-                    const auto texture_unit_use_count = m_graphics_device.texture_unit_cache_bind(dummy_handle);
-                    const size_t end = static_cast<size_t>(m_graphics_device.limits.max_texture_image_units);
-                    for (size_t i = texture_unit_use_count; i < end; ++i) {
-                        gl::bind_texture_unit(static_cast<GLuint>(i), m_dummy_texture->gl_name());
-                        gl::bind_sampler     (static_cast<GLuint>(i), m_nearest_sampler.gl_name());
-                    }
-                }
+                texture_heap.bind();
 
                 ERHE_VERIFY(draw_parameter_buffer_range.get_written_byte_count() > 0);
                 m_draw_parameter_buffer.bind(render_encoder, draw_parameter_buffer_range);
@@ -1169,6 +1125,8 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
 
             if (cmd_batch_end == cmd_list->CmdBuffer.Size) {
                 break;
+            } else {
+                texture_heap.reset();
             }
         } // outer loop going throught batches of commands
     } // for all cmd lists
@@ -1178,12 +1136,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     gl::disable(gl::Enable_cap::clip_distance2);
     gl::disable(gl::Enable_cap::clip_distance3);
 
-    if (m_graphics_device.info.use_bindless_texture) {
-        for (const auto handle : m_used_texture_handles) {
-            SPDLOG_LOGGER_TRACE(log_imgui, "making texture handle {:16x} non-resident", handle);
-            gl::make_texture_handle_non_resident_arb(handle);
-        }
-    }
+    texture_heap.unbind();
 
     SPDLOG_LOGGER_TRACE(log_frame, "end Imgui_renderer::render_draw_data()");
 }

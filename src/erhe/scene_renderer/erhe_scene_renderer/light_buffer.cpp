@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
+#include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
@@ -58,7 +59,39 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
     , light_index_offset{
         light_control_block.add_uint("light_index")->get_offset_in_parent()
     }
+    , shadow_sampler_compare{
+        graphics_device,
+        erhe::graphics::Sampler_create_info{
+            .min_filter        = erhe::graphics::Filter::linear,
+            .mag_filter        = erhe::graphics::Filter::linear,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .compare_enable    = true,
+            .compare_operation = erhe::graphics::Compare_operation::greater_or_equal,
+            .lod_bias     = 0.0f,
+            .max_lod      = 0.0f,
+            .min_lod      = 0.0f,
+            .debug_label  = "Light_interface::shadow_sampler_compare"
+        }
+    }
+    , shadow_sampler_no_compare{
+        graphics_device,
+        erhe::graphics::Sampler_create_info{
+            .min_filter     = erhe::graphics::Filter::linear,
+            .mag_filter     = erhe::graphics::Filter::nearest,
+            .mipmap_mode    = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .compare_enable = false,
+            .lod_bias       = 0.0f,
+            .max_lod        = 0.0f,
+            .min_lod        = 0.0f,
+            .debug_label    = "Light_interface::shadow_sampler_no_compare"
+        }
+    }
 {
+}
+
+auto Light_interface::get_sampler(const bool compare) const -> const erhe::graphics::Sampler*
+{
+    return compare ? &shadow_sampler_compare : &shadow_sampler_no_compare;
 }
 
 Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interface& light_interface)
@@ -83,8 +116,6 @@ float Light_projections::s_shadow_min_bias   = 0.00006f;
 float Light_projections::s_shadow_max_bias   = 0.00237f;
 
 Light_projections::Light_projections()
-    : shadow_map_texture_handle_compare   {erhe::graphics::invalid_texture_handle}
-    , shadow_map_texture_handle_no_compare{erhe::graphics::invalid_texture_handle}
 {
 }
 
@@ -93,18 +124,14 @@ Light_projections::Light_projections(
     const erhe::scene::Camera*                                  view_camera,
     const erhe::math::Viewport&                                 view_camera_viewport,
     const erhe::math::Viewport&                                 light_texture_viewport,
-    const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
-    uint64_t                                                    shadow_map_texture_handle_compare,
-    uint64_t                                                    shadow_map_texture_handle_no_compare
+    const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture
 )
     : parameters{
         .view_camera          = view_camera,
         .main_camera_viewport = view_camera_viewport,
         .shadow_map_viewport  = light_texture_viewport
     }
-    , shadow_map_texture                  {shadow_map_texture}
-    , shadow_map_texture_handle_compare   {shadow_map_texture_handle_compare}
-    , shadow_map_texture_handle_no_compare{shadow_map_texture_handle_no_compare}
+    , shadow_map_texture{shadow_map_texture}
 {
     light_projection_transforms.clear();
 
@@ -147,7 +174,8 @@ auto Light_projections::get_light_projection_transforms_for_light(const erhe::sc
 auto Light_buffer::update(
     const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const Light_projections*                                    light_projections,
-    const glm::vec3&                                            ambient_light
+    const glm::vec3&                                            ambient_light,
+    erhe::graphics::Texture_heap&                               texture_heap
 ) -> erhe::graphics::Buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -170,14 +198,16 @@ auto Light_buffer::update(
     const uint32_t uint_zero              {0u};
     const float    float_zero             {0.0f};
     const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
-    const uint32_t shadow_map_texture_handle_compare_uvec2[2] = {
-        light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle_compare & 0xffffffffu)) : 0xffffffffu,
-        light_projections ? static_cast<uint32_t>( light_projections->shadow_map_texture_handle_compare >> 32u) : 0
-    };
-    const uint32_t shadow_map_texture_handle_no_compare_uvec2[2] = {
-        light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle_no_compare & 0xffffffffu)) : 0xffffffffu,
-        light_projections ? static_cast<uint32_t>( light_projections->shadow_map_texture_handle_no_compare >> 32u) : 0
-    };
+
+    const erhe::graphics::Sampler* compare_sampler    = m_light_interface.get_sampler(true);
+    const erhe::graphics::Sampler* no_compare_sampler = m_light_interface.get_sampler(false);
+
+    uint64_t shadow_map_texture_handle_compare    = erhe::graphics::invalid_texture_handle;
+    uint64_t shadow_map_texture_handle_no_compare = erhe::graphics::invalid_texture_handle;
+    if (light_projections != nullptr) {
+        shadow_map_texture_handle_compare    = texture_heap.assign(c_texture_heap_slot_shadow_compare,    light_projections->shadow_map_texture.get(), compare_sampler);
+        shadow_map_texture_handle_no_compare = texture_heap.assign(c_texture_heap_slot_shadow_no_compare, light_projections->shadow_map_texture.get(), no_compare_sampler);
+    }
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;
@@ -248,8 +278,8 @@ auto Light_buffer::update(
     const float     shadow_max_bias       = Light_projections::s_shadow_max_bias;
 
     // Late write to begin of buffer to full in light counts
-    write(light_gpu_data, common_offset + offsets.shadow_texture_compare,    as_span(shadow_map_texture_handle_compare_uvec2));
-    write(light_gpu_data, common_offset + offsets.shadow_texture_no_compare, as_span(shadow_map_texture_handle_no_compare_uvec2));
+    write(light_gpu_data, common_offset + offsets.shadow_texture_compare,    as_span(shadow_map_texture_handle_compare));
+    write(light_gpu_data, common_offset + offsets.shadow_texture_no_compare, as_span(shadow_map_texture_handle_no_compare));
 
     write(light_gpu_data, common_offset + offsets.shadow_bias_scale,         as_span(shadow_bias_scale)      );
     write(light_gpu_data, common_offset + offsets.shadow_min_bias,           as_span(shadow_min_bias)        );

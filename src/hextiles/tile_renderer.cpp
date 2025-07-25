@@ -798,7 +798,7 @@ auto Tile_renderer::terrain_image(const terrain_tile_t terrain_tile, const int s
     };
 
     return m_imgui_renderer.image(
-        m_tileset_texture,
+        m_tileset_texture.get(),
         Tile_shape::full_width * scale,
         Tile_shape::height * scale,
         uv0,
@@ -823,7 +823,7 @@ auto Tile_renderer::unit_image(const unit_tile_t unit_tile, const int scale) -> 
     };
 
     return m_imgui_renderer.image(
-        m_tileset_texture,
+        m_tileset_texture.get(),
         Tile_shape::full_width * scale,
         Tile_shape::height * scale,
         uv0,
@@ -841,7 +841,7 @@ void Tile_renderer::show_texture()
     const glm::vec2 uv1{1.0f, 1.0f};
 
     m_imgui_renderer.image(
-        m_tileset_texture,
+        m_tileset_texture.get(),
         m_tileset_texture->get_width(),
         m_tileset_texture->get_height(),
         uv0,

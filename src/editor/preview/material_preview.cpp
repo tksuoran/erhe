@@ -164,23 +164,21 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         m_camera.get(),
         viewport,
         erhe::math::Viewport{},
-        std::shared_ptr<erhe::graphics::Texture>{},
-        erhe::graphics::invalid_texture_handle,
-        erhe::graphics::invalid_texture_handle
+        m_shadow_texture
     };
 
     erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
     const Render_context context{
-        .encoder = &render_encoder,
-        .app_context = m_context,
-        .scene_view = *this,
-        .viewport_config = m_viewport_config,
-        .camera = m_camera.get(),
+        .encoder             = &render_encoder,
+        .app_context         = m_context,
+        .scene_view          = *this,
+        .viewport_config     = m_viewport_config,
+        .camera              = m_camera.get(),
         .viewport_scene_view = nullptr,
         .viewport = erhe::math::Viewport{
-            .x = 0,
-            .y = 0,
-            .width = m_width,
+            .x      = 0,
+            .y      = 0,
+            .width  = m_width,
             .height = m_height
         },
         .override_shader_stages = nullptr
@@ -203,7 +201,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 void Material_preview::show_preview()
 {
     m_context.imgui_renderer->image(
-        m_color_texture,
+        m_color_texture.get(),
         m_width,
         m_height,
         glm::vec2{0.0f, 1.0f},

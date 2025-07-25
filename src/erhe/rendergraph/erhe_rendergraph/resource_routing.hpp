@@ -12,6 +12,7 @@ public:
     constexpr static int depth_visualization  = 4; // shadow map converted to color
     constexpr static int texture_for_gui      = 5; // textures rendered with 3d shown in imgui (brdf slice)
     constexpr static int rendertarget_texture = 6; // imgui host texture rendered in 3d viewport
+    constexpr static int wildcard             = 99; // imgui host texture rendered in 3d viewport
     //constexpr static int window               = 1;
     //constexpr static int viewport             = 3;
     //constexpr static int shadow_maps          = 4;

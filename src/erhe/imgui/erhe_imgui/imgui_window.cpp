@@ -35,15 +35,15 @@ Imgui_window::~Imgui_window() noexcept
 }
 
 void Imgui_window::draw_image(
-    const std::shared_ptr<erhe::graphics::Texture>& texture,
-    const int                                       width,
-    const int                                       height,
-    const erhe::graphics::Filter                    filter,
-    const erhe::graphics::Sampler_mipmap_mode       mipmap_mode
+    const erhe::graphics::Texture_reference*  texture_reference,
+    const int                                 width,
+    const int                                 height,
+    const erhe::graphics::Filter              filter,
+    const erhe::graphics::Sampler_mipmap_mode mipmap_mode
 )
 {
     m_imgui_renderer.image(
-        texture,
+        texture_reference,
         width,
         height,
         glm::vec2{0.0f, 1.0f},

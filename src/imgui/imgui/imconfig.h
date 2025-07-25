@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <tuple>
+
 //---- Define assertion handler. Defaults to calling assert().
 // If your macro uses multiple statements, make sure is enclosed in a 'do { .. } while (0)' block so it can be used as a single statement.
 //#define IM_ASSERT(_EXPR)  MyAssert(_EXPR)
@@ -170,21 +172,19 @@ namespace ImGui
 void ImGui_ImplErhe_assert_user_error(const bool condition, const char* message);
 
 namespace erhe::graphics {
-    class Texture;
+    class Texture_reference;
+    class Sampler;
 }
 
-#define ImTextureID uint64_t
+
+#define ImTextureID std::tuple<const erhe::graphics::Texture_reference*, const erhe::graphics::Sampler*>
+#define ImTextureID_Invalid std::tuple<const erhe::graphics::Texture_reference*, const erhe::graphics::Sampler*>{nullptr, nullptr}
 
 struct ImGuiIO;
 struct ImGuiContext;
 
 namespace ImGui
 {
-    inline auto GetTextureVoidPtr(const ImTextureID& id) -> void*
-    {
-        return (void*)((intptr_t)(id));
-    }
-
     ImGuiIO& GetIO(ImGuiContext* context);
 }
 

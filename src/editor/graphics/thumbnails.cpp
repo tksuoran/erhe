@@ -98,7 +98,7 @@ auto Thumbnails::draw(
             thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_number();
             const float height = ImGui::GetTextLineHeightWithSpacing();
             m_context.imgui_renderer->image(
-                thumbnail.texture_view,
+                thumbnail.texture_view.get(),
                 static_cast<int>(height), //m_size_pixels,
                 static_cast<int>(height), //m_size_pixels,
                 glm::vec2{0.0f, 1.0f},
@@ -114,7 +114,7 @@ auto Thumbnails::draw(
                 ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4{0.0f, 0.0f, 0.0f, 0.8f});
                 ImGui::BeginTooltip();
                 m_context.imgui_renderer->image(
-                    thumbnail.texture_view,
+                    thumbnail.texture_view.get(),
                     m_size_pixels,
                     m_size_pixels,
                     glm::vec2{0.0f, 1.0f},

@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_math/viewport.hpp"
@@ -10,12 +11,15 @@
 
 namespace erhe::graphics {
     class Texture;
+    class Texture_heap;
 }
 namespace erhe::primitive {
     class Material;
 }
 
 namespace erhe::scene_renderer {
+
+class Shadow_renderer;
 
 class Light_struct
 {
@@ -53,10 +57,16 @@ public:
     std::size_t  light_struct;
 };
 
+static constexpr int c_texture_heap_slot_shadow_compare   {0};
+static constexpr int c_texture_heap_slot_shadow_no_compare{1};
+static constexpr int c_texture_heap_slot_count_reserved   {2};
+
 class Light_interface
 {
 public:
     explicit Light_interface(erhe::graphics::Device& graphics_device);
+
+    [[nodiscard]] auto get_sampler(bool compare) const -> const erhe::graphics::Sampler*;
 
     std::size_t                     max_light_count;
     erhe::graphics::Shader_resource light_block;
@@ -64,6 +74,8 @@ public:
     erhe::graphics::Shader_resource light_struct;
     Light_block                     offsets;
     std::size_t                     light_index_offset;
+    erhe::graphics::Sampler         shadow_sampler_compare;
+    erhe::graphics::Sampler         shadow_sampler_no_compare;
 };
 
 // Selects camera for which the shadow frustums are fitted
@@ -76,9 +88,7 @@ public:
         const erhe::scene::Camera*                                  main_camera,
         const erhe::math::Viewport&                                 main_camera_viewport,
         const erhe::math::Viewport&                                 light_texture_viewport,
-        const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
-        uint64_t                                                    shadow_map_texture_handle_compare,
-        uint64_t                                                    shadow_map_texture_handle_no_compare
+        const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture
     );
 
     // Warning: Returns pointer to element of member vector. That pointer
@@ -90,8 +100,6 @@ public:
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
     std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
-    uint64_t                                              shadow_map_texture_handle_compare;
-    uint64_t                                              shadow_map_texture_handle_no_compare;
 
     // TODO A bit hacky injection of these parameters..
     float                                                 brdf_phi         {0.0f};
@@ -111,7 +119,8 @@ public:
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
         const Light_projections*                                    light_projections,
-        const glm::vec3&                                            ambient_light
+        const glm::vec3&                                            ambient_light,
+        erhe::graphics::Texture_heap&                               texture_heap
     ) -> erhe::graphics::Buffer_range;
 
     auto update_control(std::size_t light_index) -> erhe::graphics::Buffer_range;

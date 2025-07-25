@@ -33,12 +33,20 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
     , shadow_sampler_compare{
         graphics_device.info.use_bindless_texture
             ? nullptr
-            : default_uniform_block.add_sampler("s_shadow_compare", erhe::graphics::Glsl_type::sampler_2d_array_shadow, shadow_texture_unit_compare)
+            : default_uniform_block.add_sampler(
+                "s_shadow_compare",
+                erhe::graphics::Glsl_type::sampler_2d_array_shadow,
+                erhe::scene_renderer::c_texture_heap_slot_shadow_compare
+            )
     }
     , shadow_sampler_no_compare{
         graphics_device.info.use_bindless_texture
             ? nullptr
-            : default_uniform_block.add_sampler("s_shadow_no_compare", erhe::graphics::Glsl_type::sampler_2d_array, shadow_texture_unit_no_compare)
+            : default_uniform_block.add_sampler(
+                "s_shadow_no_compare",
+                erhe::graphics::Glsl_type::sampler_2d_array,
+                erhe::scene_renderer::c_texture_heap_slot_shadow_no_compare
+            )
     }
     , texture_sampler{
         graphics_device.info.use_bindless_texture
@@ -46,8 +54,8 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
             : default_uniform_block.add_sampler(
                 "s_texture",
                 erhe::graphics::Glsl_type::sampler_2d,
-                s_texture_unit_base,
-                graphics_device.limits.max_texture_image_units - s_texture_unit_base
+                erhe::scene_renderer::c_texture_heap_slot_count_reserved,
+                graphics_device.limits.max_texture_image_units - erhe::scene_renderer::c_texture_heap_slot_count_reserved
             )
     }
     , nearest_sampler{
