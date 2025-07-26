@@ -4,8 +4,6 @@
 
 #include <toml++/toml.hpp>
 
-//namespace toml { class table; }
-
 namespace erhe {
 static const char* const c_erhe_config_file_path = "erhe.toml";
 }

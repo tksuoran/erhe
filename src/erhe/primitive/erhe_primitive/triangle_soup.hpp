@@ -6,9 +6,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace GEO {
-    class Mesh;
-}
+namespace GEO { class Mesh; }
 
 namespace erhe::primitive {
 

@@ -1,13 +1,15 @@
 ﻿#include "erhe_xr/xr_session.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
+
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_xr/xr_instance.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_gl/gl_helpers.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
+
 #include "erhe_xr/xr.hpp"
+#include "erhe_xr/xr_instance.hpp"
 #include "erhe_xr/xr_log.hpp"
 #include "erhe_xr/xr_swapchain_image.hpp"
 

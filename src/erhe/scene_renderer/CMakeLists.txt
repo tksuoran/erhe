@@ -37,7 +37,6 @@ target_link_libraries(
         erhe::scene
     PRIVATE
         erhe::file
-        erhe::gl
         erhe::log
         erhe::message_bus
         erhe::profile

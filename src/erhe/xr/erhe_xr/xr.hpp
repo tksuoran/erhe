@@ -3,7 +3,6 @@
 #include <openxr/openxr.h>
 
 #include "erhe_dataformat/dataformat.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
 
 #include <spdlog/spdlog.h>
 

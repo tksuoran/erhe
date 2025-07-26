@@ -14,7 +14,6 @@ add_subdirectory(item)
 
 add_subdirectory(buffer)
 add_subdirectory(commands)
-add_subdirectory(concurrency)
 add_subdirectory(configuration)
 add_subdirectory(dataformat)
 add_subdirectory(defer)

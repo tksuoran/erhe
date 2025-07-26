@@ -30,6 +30,7 @@ endif ()
 target_link_libraries(
     ${_target}
     PUBLIC
+        etl::etl
         erhe::graphics
         erhe::math
         erhe::primitive
@@ -38,7 +39,6 @@ target_link_libraries(
     PRIVATE
         erhe::utility
         erhe::defer
-        erhe::gl
         erhe::log
         erhe::profile
         erhe::verify

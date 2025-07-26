@@ -17,8 +17,6 @@ target_link_libraries(${_target}
     PUBLIC
         spdlog::spdlog_header_only
         glm::glm-header-only
-        #spdlog::spdlog
-        #glm::glm
         fmt::fmt
         geogram
     PRIVATE

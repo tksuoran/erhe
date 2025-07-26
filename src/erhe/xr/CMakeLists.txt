@@ -30,7 +30,8 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(${_target}
     PUBLIC
-        erhe::gl
+        erhe::gl # TODO; Since OpenXR gives native OpenGL format enum
+        erhe::dataformat
         erhe::window
         glm::glm-header-only
     PRIVATE

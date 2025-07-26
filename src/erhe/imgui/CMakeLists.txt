@@ -65,14 +65,8 @@ target_link_libraries(${_target}
         glm::glm-header-only
         imgui
     PRIVATE
-        #concurrentqueue
-        #cxxopts
-        #etl::etl
-        #reflectcpp::reflectcpp
         tomlplusplus::tomlplusplus
-        #erhe::configuration
         erhe::file
-        erhe::gl
         erhe::profile
         erhe::renderer
         erhe::time

@@ -33,7 +33,6 @@ target_link_libraries(${_target}
         erhe::file
         erhe::profile
         erhe::geometry
-        erhe::gl
         erhe::graphics
         erhe::log
         erhe::primitive

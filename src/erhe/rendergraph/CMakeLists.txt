@@ -21,10 +21,7 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(${_target}
     PUBLIC
-        #cxxopts
-        #etl::etl
         fmt::fmt
-        #erhe::gl
         erhe::graphics
         erhe::log
         erhe::math

@@ -40,7 +40,6 @@ target_link_libraries(${_target}
     PUBLIC
         geogram
         glm::glm-header-only
-        etl::etl
         erhe::buffer
         erhe::dataformat
         erhe::geometry
