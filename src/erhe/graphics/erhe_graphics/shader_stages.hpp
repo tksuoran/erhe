@@ -1,37 +1,26 @@
 #pragma once
 
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_graphics/gl_objects.hpp"
-
-#if defined(ERHE_SPIRV)
-#include "glslang/Public/ShaderLang.h"
-namespace glslang {
-    class TShader;
-    class TProgram;
-}
-#include <unordered_map>
-#endif
+#include "erhe_graphics/enums.hpp"
 
 #include <filesystem>
 #include <map>
 #include <string>
 
-namespace erhe::dataformat {
-    class Vertex_format;
-}
+namespace erhe::dataformat { class Vertex_format; }
 
 namespace erhe::graphics {
 
+class Device_impl;
 class Fragment_outputs;
 class Shader_resource;
-class Gl_shader;
 class Vertex_input_state;
 
 class Shader_stage_extension
 {
 public:
-    gl::Shader_type shader_stage;
-    std::string     extension;
+    Shader_type shader_stage;
+    std::string extension;
 };
 
 class Shader_stage
@@ -39,12 +28,12 @@ class Shader_stage
 public:
     // user-provided constructors are needed for vector::emplace_back()
     // Sadly, this disables using designated initializers
-    Shader_stage(gl::Shader_type type, std::string_view source);
-    Shader_stage(gl::Shader_type type, const std::filesystem::path& path);
+    Shader_stage(Shader_type type, std::string_view source);
+    Shader_stage(Shader_type type, const std::filesystem::path& path);
 
     auto get_description() const -> std::string;
 
-    gl::Shader_type                    type;
+    Shader_type                        type;
     std::string                        source;
     std::vector<std::filesystem::path> paths;
 };
@@ -87,85 +76,53 @@ public:
     bool                                             build                {false};
 };
 
+class Shader_stages_prototype_impl;
 class Shader_stages_prototype final
 {
 public:
-    Shader_stages_prototype (Device& graphics_device, Shader_stages_create_info&& create_info);
-    Shader_stages_prototype (Device& graphics_device, const Shader_stages_create_info& create_info);
-    ~Shader_stages_prototype() noexcept = default;
+    Shader_stages_prototype (Device& device, Shader_stages_create_info&& create_info);
+    Shader_stages_prototype (Device& device, const Shader_stages_create_info& create_info);
+    ~Shader_stages_prototype() noexcept;
     Shader_stages_prototype (const Shader_stages_prototype&) = delete;
     void operator=          (const Shader_stages_prototype&) = delete;
-    Shader_stages_prototype (Shader_stages_prototype&&) = default;
-
-    [[nodiscard]] auto name       () const -> const std::string&;
-    [[nodiscard]] auto create_info() const -> const Shader_stages_create_info&;
-    [[nodiscard]] auto is_valid   () -> bool;
+    Shader_stages_prototype (Shader_stages_prototype&&);
 
     void compile_shaders();
     auto link_program   () -> bool;
     void dump_reflection() const;
 
-    auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
+    [[nodiscard]] auto name            () const -> const std::string&;
+    [[nodiscard]] auto create_info     () const -> const Shader_stages_create_info&;
+    [[nodiscard]] auto is_valid        () -> bool;
+    [[nodiscard]] auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
+    [[nodiscard]] auto get_impl        () -> Shader_stages_prototype_impl&;
+    [[nodiscard]] auto get_impl        () const -> const Shader_stages_prototype_impl&;
 
 private:
-    void post_link();
-    void query_bindings();
-
-#if defined(ERHE_SPIRV)
-    auto compile_glslang     (const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
-    auto link_glslang_program() -> bool;
-#endif
-
-    [[nodiscard]] auto compile     (const Shader_stage& shader) -> Gl_shader;
-    [[nodiscard]] auto post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool;
-
-    static constexpr int state_init                       = 0;
-    static constexpr int state_shader_compilation_started = 1;
-    static constexpr int state_program_link_started       = 2;
-    static constexpr int state_ready                      = 3;
-    static constexpr int state_fail                       = 4;
-
-    friend class Shader_stages;
-    friend class Reloadable_shader_stages;
-    Device&                                             m_graphics_device;
-    Gl_program                                          m_handle;
-    Shader_stages_create_info                           m_create_info;
-    std::vector<Gl_shader>                              m_prelink_shaders;
-    int                                                 m_state{state_init};
-    Shader_resource                                     m_default_uniform_block;
-    std::map<std::string, Shader_resource, std::less<>> m_resources;
-    std::map<unsigned int, std::string>                 m_final_sources;
-    std::vector<std::filesystem::path>                  m_paths;
-
-#if defined(ERHE_SPIRV)
-    std::vector<std::shared_ptr<glslang::TShader>>               m_glslang_shaders;
-    std::unordered_map<::EShLanguage, std::vector<unsigned int>> m_spirv_shaders;
-    std::shared_ptr<glslang::TProgram>                           m_glslang_program;
-#endif
+    std::unique_ptr<Shader_stages_prototype_impl> m_impl;
 };
 
-class Shader_stages
+class Shader_stages_impl;
+class Shader_stages final
 {
 public:
     Shader_stages(Device& device, Shader_stages_prototype&& prototype);
     Shader_stages(Device& device, const std::string& non_functional_name);
-    Shader_stages(Shader_stages&& old);
-    Shader_stages& operator=(Shader_stages&& old);
+    ~Shader_stages();
+    Shader_stages(Shader_stages&&);
+    Shader_stages& operator=(Shader_stages&&);
 
     // Reloads program by consuming prototype
     void reload    (Shader_stages_prototype&& prototype);
     void invalidate();
 
     [[nodiscard]] auto name    () const -> const std::string&;
-    [[nodiscard]] auto gl_name () const -> unsigned int;
     [[nodiscard]] auto is_valid() const -> bool;
+    [[nodiscard]] auto get_impl() -> Shader_stages_impl&;
+    [[nodiscard]] auto get_impl() const -> const Shader_stages_impl&;
 
 private:
-    Device&                m_device;
-    Gl_program             m_handle;
-    std::string            m_name;
-    bool                   m_is_valid{false};
-    std::vector<Gl_shader> m_attached_shaders;
+    std::unique_ptr<Shader_stages_impl> m_impl;
 };
 
 class Reloadable_shader_stages
@@ -184,26 +141,16 @@ private:
     [[nodiscard]] auto make_prototype(Device& graphics_device) -> Shader_stages_prototype;
 };
 
-class Shader_stages_hash
-{
-public:
-    [[nodiscard]] auto operator()(const Shader_stages& program) const noexcept -> std::size_t
-    {
-        return static_cast<std::size_t>(program.gl_name());
-    }
-};
+// class Shader_stages_impl_hash
+// {
+// public:
+//     [[nodiscard]] auto operator()(const Shader_stages_impl& shader_stages) const noexcept -> std::size_t
+//     {
+//         return static_cast<std::size_t>(shader_stages.gl_name());
+//     }
+// };
 
-[[nodiscard]] auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool;
-[[nodiscard]] auto operator!=(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool;
-
-class Shader_stages_tracker
-{
-public:
-    void reset  ();
-    void execute(const Shader_stages* state);
-
-private:
-    unsigned int m_last{0};
-};
+// [[nodiscard]] auto operator==(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool;
+// [[nodiscard]] auto operator!=(const Shader_stages& lhs, const Shader_stages& rhs) noexcept -> bool;
 
 } // namespace erhe::graphics

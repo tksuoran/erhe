@@ -3,7 +3,7 @@
 #include "erhe_scene_renderer/cube_instance_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/span.hpp"
 
 namespace erhe::scene_renderer {
 

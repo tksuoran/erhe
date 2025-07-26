@@ -1,14 +1,8 @@
 #pragma once
 
-#include "erhe_graphics/gl_objects.hpp"
 #include "erhe_dataformat/dataformat.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <array>
-#include <mutex>
-#include <optional>
-#include <thread>
-#include <vector>
 
 namespace erhe::graphics {
 
@@ -42,7 +36,7 @@ public:
     unsigned int          texture_level  {0};
     unsigned int          texture_layer  {0};
     Texture*              texture        {nullptr};
-    Renderbuffer*         renderbuffer   {nullptr};
+    //// Renderbuffer*         renderbuffer   {nullptr};
     std::array<double, 4> clear_value;
     Load_action           load_action    {Load_action::Clear};
     Store_action          store_action   {Store_action::Store};
@@ -66,7 +60,7 @@ public:
     std::string                                      debug_label;
 };
 
-
+class Render_pass_impl;
 class Render_pass final
 {
 public:
@@ -77,46 +71,15 @@ public:
     Render_pass   (Render_pass&&)      = delete;
     void operator=(Render_pass&&)      = delete;
 
-    static void on_thread_enter();
-    static void on_thread_exit ();
-
-    [[nodiscard]] auto gl_name                    () const -> unsigned int;
-    [[nodiscard]] auto gl_multisample_resolve_name() const -> unsigned int;
-    [[nodiscard]] auto get_sample_count           () const -> unsigned int;
-
-    void create      ();
-    void reset       ();
-    auto check_status() const -> bool;
-
-    [[nodiscard]] auto get_render_target_width() const -> int;
+    [[nodiscard]] auto get_sample_count        () const -> unsigned int;
+    [[nodiscard]] auto get_render_target_width () const -> int;
     [[nodiscard]] auto get_render_target_height() const -> int;
-    [[nodiscard]] auto get_debug_label() const -> const std::string&;
+    [[nodiscard]] auto get_debug_label         () const -> const std::string&;
+    [[nodiscard]] auto get_impl                () -> Render_pass_impl&;
+    [[nodiscard]] auto get_impl                () const -> const Render_pass_impl&;
 
 private:
-    friend class Render_command_encoder;
-    void start_render_pass();
-    void end_render_pass  ();
-
-private:
-    Device&                                          m_device;
-    std::optional<Gl_framebuffer>                    m_gl_framebuffer;
-    std::optional<Gl_framebuffer>                    m_gl_multisample_resolve_framebuffer;
-    std::array<Render_pass_attachment_descriptor, 4> m_color_attachments;
-    std::vector<gl::Color_buffer>                    m_draw_buffers;
-    Render_pass_attachment_descriptor                m_depth_attachment;
-    Render_pass_attachment_descriptor                m_stencil_attachment;
-    int                                              m_render_target_width{0};
-    int                                              m_render_target_height{0};
-    std::string                                      m_debug_label;
-    std::string                                      m_debug_group_name;
-    bool                                             m_uses_multisample_resolve{false};
-    bool                                             m_uses_default_framebuffer{false};
-    std::thread::id                                  m_owner_thread;
-    bool                                             m_is_active{false};
-
-    static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
-    static std::vector<Render_pass*>                  s_all_framebuffers;
-    static Render_pass*                               s_active_render_pass;
+    std::unique_ptr<Render_pass_impl> m_impl;
 };
 
 } // namespace erhe::graphics

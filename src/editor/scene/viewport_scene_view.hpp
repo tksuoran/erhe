@@ -18,7 +18,6 @@ namespace erhe::geometry {
 }
 namespace erhe::graphics {
     class Render_pass;
-    class Texture;
     class Renderbuffer;
 }
 namespace erhe::imgui {

@@ -5,6 +5,7 @@
 #include "erhe_graphics/glsl_file_loader.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_profile/profile.hpp"
@@ -17,27 +18,27 @@
 
 namespace erhe::graphics {
 
-auto glsl_token(const gl::Attribute_type attribute_type) -> const char*
+auto glsl_token(const Glsl_type attribute_type) -> const char*
 {
     switch (attribute_type) {
         //using enum gl::Attribute_type;
-        case gl::Attribute_type::float_:            return "float    ";
-        case gl::Attribute_type::float_vec2:        return "vec2     ";
-        case gl::Attribute_type::float_vec3:        return "vec3     ";
-        case gl::Attribute_type::float_vec4:        return "vec4     ";
-        case gl::Attribute_type::bool_:             return "bool     ";
-        case gl::Attribute_type::int_:              return "int      ";
-        case gl::Attribute_type::int_vec2:          return "ivec2    ";
-        case gl::Attribute_type::int_vec3:          return "ivec3    ";
-        case gl::Attribute_type::int_vec4:          return "ivec4    ";
-        case gl::Attribute_type::unsigned_int:      return "uint     ";
-        case gl::Attribute_type::unsigned_int_vec2: return "uvec2    ";
-        case gl::Attribute_type::unsigned_int_vec3: return "uvec3    ";
-        case gl::Attribute_type::unsigned_int_vec4: return "uvec4    ";
-        case gl::Attribute_type::unsigned_int64_arb:return "uint64_t ";
-        case gl::Attribute_type::float_mat2:        return "mat2     ";
-        case gl::Attribute_type::float_mat3:        return "mat3     ";
-        case gl::Attribute_type::float_mat4:        return "mat4     ";
+        case Glsl_type::float_:            return "float    ";
+        case Glsl_type::float_vec2:        return "vec2     ";
+        case Glsl_type::float_vec3:        return "vec3     ";
+        case Glsl_type::float_vec4:        return "vec4     ";
+        case Glsl_type::bool_:             return "bool     ";
+        case Glsl_type::int_:              return "int      ";
+        case Glsl_type::int_vec2:          return "ivec2    ";
+        case Glsl_type::int_vec3:          return "ivec3    ";
+        case Glsl_type::int_vec4:          return "ivec4    ";
+        case Glsl_type::unsigned_int:      return "uint     ";
+        case Glsl_type::unsigned_int_vec2: return "uvec2    ";
+        case Glsl_type::unsigned_int_vec3: return "uvec3    ";
+        case Glsl_type::unsigned_int_vec4: return "uvec4    ";
+        case Glsl_type::unsigned_int64:    return "uint64_t ";
+        case Glsl_type::float_mat_2x2:     return "mat2     ";
+        case Glsl_type::float_mat_3x3:     return "mat3     ";
+        case Glsl_type::float_mat_4x4:     return "mat4     ";
         default: {
             ERHE_FATAL("TODO");
         }
@@ -54,7 +55,7 @@ auto Shader_stages_create_info::attributes_source() const -> std::string
         sb << "// Attributes\n";
         for (const auto& attribute : vertex_input.attributes) {
             sb << "layout(location = " << attribute.layout_location << ") in ";
-            sb << glsl_token(attribute.gl_attribute_type) << " ";
+            sb << glsl_token(to_glsl_attribute_type(attribute.format)) << " ";
             sb << attribute.name,
             sb << ";\n";
         }
@@ -130,8 +131,8 @@ auto Shader_stages_create_info::final_source(
     ERHE_PROFILE_FUNCTION();
 
     std::stringstream sb;
-    sb << "#version " << graphics_device.info.glsl_version << " core\n\n";
-    sb << "// " << gl::c_str(shader.type);
+    sb << "#version " << graphics_device.get_info().glsl_version << " core\n\n";
+    sb << "// " << c_str(shader.type);
     if (gl_name.has_value()) {
         sb << " " << gl_name.value();
     }
@@ -166,14 +167,14 @@ auto Shader_stages_create_info::final_source(
         sb << "\n";
     }
 
-    sb << "#define ERHE_GLSL_VERSION " << graphics_device.info.glsl_version << "\n";
+    sb << "#define ERHE_GLSL_VERSION " << graphics_device.get_info().glsl_version << "\n";
 
-    if (graphics_device.info.gl_version < 430) {
+    if (graphics_device.get_info().gl_version < 430) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
         sb << "#extension GL_ARB_shader_storage_buffer_object : enable\n";
         sb << "#define ERHE_HAS_ARB_SHADER_STORAGE_BUFFER_OBJECT 1\n";
     }
-    if (graphics_device.info.use_bindless_texture) {
+    if (graphics_device.get_info().use_bindless_texture) {
         sb << "#extension GL_ARB_bindless_texture : enable\n";
         sb << "#define ERHE_HAS_ARB_BINDLESS_TEXTURE 1\n";
     }
@@ -181,7 +182,7 @@ auto Shader_stages_create_info::final_source(
         sb << "#extension GL_ARB_shading_language_packing : enable\n";
         sb << "#define ERHE_HAS_ARB_SHADING_LANGUAGE_PACKING 1\n";
     }
-    if (graphics_device.info.gl_version < 460) {
+    if (graphics_device.get_info().gl_version < 460) {
         if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
             sb << "#extension GL_ARB_shader_draw_parameters : enable\n";
             sb << "#define ERHE_HAS_ARB_SHADER_DRAW_PARAMETERS 1\n";
@@ -192,9 +193,9 @@ auto Shader_stages_create_info::final_source(
     }
     sb << "\n";
 
-    if (shader.type == gl::Shader_type::vertex_shader) {
+    if (shader.type == Shader_type::vertex_shader) {
         sb << attributes_source();
-    } else if (shader.type == gl::Shader_type::fragment_shader) {
+    } else if (shader.type == Shader_type::fragment_shader) {
         sb << fragment_outputs_source();
     }
 

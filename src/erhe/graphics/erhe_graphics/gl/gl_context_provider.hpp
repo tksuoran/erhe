@@ -10,9 +10,7 @@
 #include <thread>
 #include <vector>
 
-namespace erhe::window {
-    class Context_window;
-}
+namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
 
@@ -29,7 +27,7 @@ public:
 class Gl_context_provider
 {
 public:
-    Gl_context_provider(Device& graphics_device, OpenGL_state_tracker& opengl_state_tracker);
+    Gl_context_provider(Device& device, OpenGL_state_tracker& gl_state_tracker);
 
     Gl_context_provider(const Gl_context_provider&) = delete;
     void operator=     (const Gl_context_provider&) = delete;
@@ -46,8 +44,8 @@ public:
     );
 
 private:
-    erhe::graphics::Device&                                    m_graphics_device;
-    OpenGL_state_tracker&                                      m_opengl_state_tracker;
+    Device&                                                    m_device;
+    OpenGL_state_tracker&                                      m_gl_state_tracker;
 
     erhe::window::Context_window*                              m_main_window{nullptr};
     std::thread::id                                            m_main_thread_id;

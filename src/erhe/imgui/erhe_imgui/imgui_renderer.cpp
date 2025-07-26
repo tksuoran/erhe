@@ -8,14 +8,13 @@
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -120,7 +119,7 @@ void main()
 auto get_shader_default_uniform_block(erhe::graphics::Device& graphics_device, const int dedicated_texture_unit) -> erhe::graphics::Shader_resource
 {
     erhe::graphics::Shader_resource default_uniform_block{graphics_device};
-    if (!graphics_device.info.use_bindless_texture) {
+    if (!graphics_device.get_info().use_bindless_texture) {
         default_uniform_block.add_sampler("s_textures", erhe::graphics::Glsl_type::sampler_2d, 0, dedicated_texture_unit);
     }
     return default_uniform_block;
@@ -142,7 +141,7 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphic
     , fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
-            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .type     = erhe::graphics::Glsl_type::float_vec4,
             .location = 0
         }
     }
@@ -156,7 +155,7 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphic
             }
         }
     }
-    , default_uniform_block{get_shader_default_uniform_block(graphics_device, graphics_device.limits.max_texture_image_units)}
+    , default_uniform_block{get_shader_default_uniform_block(graphics_device, graphics_device.get_info().max_texture_image_units)}
 {
 }
 
@@ -175,17 +174,25 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
                 .interface_blocks      = { &m_imgui_program_interface.draw_parameter_block },
                 .fragment_outputs      = &m_imgui_program_interface.fragment_outputs,
                 .vertex_format         = &m_imgui_program_interface.vertex_format,
-                .default_uniform_block = graphics_device.info.use_bindless_texture ? nullptr : &m_imgui_program_interface.default_uniform_block,
+                .default_uniform_block = graphics_device.get_info().use_bindless_texture ? nullptr : &m_imgui_program_interface.default_uniform_block,
                 .shaders = {
-                    { gl::Shader_type::vertex_shader,   c_vertex_shader_source   },
-                    { gl::Shader_type::fragment_shader, c_fragment_shader_source }
+                    { erhe::graphics::Shader_type::vertex_shader,   c_vertex_shader_source   },
+                    { erhe::graphics::Shader_type::fragment_shader, c_fragment_shader_source }
                 },
                 .build = true
             }
         }
     }
-    , m_vertex_buffer{graphics_device, erhe::graphics::Buffer_target::vertex, "ImGui Vertex Buffer"}
-    , m_index_buffer{graphics_device,  erhe::graphics::Buffer_target::index, "ImGui Index Buffer"}
+    , m_vertex_buffer{
+        graphics_device,
+        erhe::graphics::Buffer_target::vertex,
+        "ImGui Vertex Buffer"
+    }
+    , m_index_buffer{
+        graphics_device,
+        erhe::graphics::Buffer_target::index,
+        "ImGui Index Buffer"
+    }
     , m_draw_parameter_buffer{
         graphics_device,
         erhe::graphics::Buffer_target::storage,
@@ -471,7 +478,7 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
 
     ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
-    platform_io.Renderer_TextureMaxWidth = platform_io.Renderer_TextureMaxHeight = m_graphics_device.limits.max_texture_size;
+    platform_io.Renderer_TextureMaxWidth = platform_io.Renderer_TextureMaxHeight = m_graphics_device.get_info().max_texture_size;
 
     // TODO platform_io.Platform_SetClipboardTextFn = ImGui_ImplSDL3_SetClipboardText;
     // TODO platform_io.Platform_GetClipboardTextFn = ImGui_ImplSDL3_GetClipboardText;

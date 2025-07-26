@@ -20,16 +20,6 @@ void erhe_opengl_callback(
     const void*   /*userParam*/
 );
 
-class Scoped_debug_group final
-{
-public:
-    explicit Scoped_debug_group(const std::string_view debug_label);
-    ~Scoped_debug_group() noexcept;
-
-private:
-    std::string m_debug_label;
-};
-
 void set_shader_source(const std::string& shader_source);
 
 } // namespace erhe::graphics

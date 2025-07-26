@@ -7,9 +7,9 @@
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/regular_polygon.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -301,7 +301,10 @@ auto Rendertarget_mesh::get_world_to_window(const glm::vec3 position_in_world) c
 
 void Rendertarget_mesh::render_done(App_context& context)
 {
-    gl::generate_texture_mipmap(m_texture->gl_name());
+    {
+        erhe::graphics::Blit_command_encoder encoder = context.graphics_device->make_blit_command_encoder();
+        encoder.generate_mipmaps(m_texture.get());
+    }
 
     if (s_rendertarget_mesh_lod_bias != m_sampler->get_lod_bias()) {
         m_sampler = std::make_shared<erhe::graphics::Sampler>(

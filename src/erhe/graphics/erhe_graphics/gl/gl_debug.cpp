@@ -1,7 +1,8 @@
 #include <fmt/core.h>
 #include <fmt/ostream.h>
 
-#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/gl/gl_debug.hpp"
+#include "erhe_graphics/gl/gl_device.hpp"
 
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"

@@ -6,9 +6,7 @@
 #include "time.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 
 #include <fmt/format.h>
@@ -51,17 +49,9 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
             .width             = m_size_pixels,
             .height            = m_size_pixels,
             .array_layer_count = capacity,
-            .debug_label       = "Thumbnails"
+            .debug_label       = "Thumbnails color texture"
         }
     );
-
-    m_depth_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
-        graphics_device,
-        erhe::dataformat::Format::format_d32_sfloat,
-        m_size_pixels,
-        m_size_pixels
-    );
-    m_depth_renderbuffer->set_debug_label("Thumbnail depth renderbuffer");
 
     for (int i = 0; i < capacity; ++i) {
         Thumbnail& t = m_thumbnails[i];

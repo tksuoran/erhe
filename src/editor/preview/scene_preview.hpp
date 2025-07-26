@@ -11,7 +11,6 @@
 namespace erhe::graphics {
     class Render_pass;
     class Device;
-    class Renderbuffer;
     class Texture;
 }
 namespace erhe::imgui {
@@ -75,7 +74,7 @@ protected:
     erhe::dataformat::Format                      m_color_format;
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
     erhe::dataformat::Format                      m_depth_format;
-    std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
+    std::unique_ptr<erhe::graphics::Texture>      m_depth_texture;
     std::shared_ptr<erhe::graphics::Render_pass>  m_render_pass;
     erhe::scene_renderer::Light_projections       m_light_projections;
     erhe::renderer::Pipeline_pass                 m_pipeline_pass;

@@ -1,19 +1,13 @@
 #pragma once
 
-#include "erhe_graphics/gl_objects.hpp"
-#include "erhe_profile/profile.hpp"
-
-#include <array>
-#include <mutex>
-#include <optional>
-#include <thread>
-#include <vector>
+#include <memory>
 
 namespace erhe::graphics {
 
 class Device;
 
-class Gpu_timer
+class Gpu_timer_impl;
+class Gpu_timer final
 {
 public:
     Gpu_timer(Device& device, const char* label);
@@ -29,35 +23,9 @@ public:
     void begin ();
     void end   ();
     void read  ();
-    void create();
-    void reset ();
-
-    static void on_thread_enter();
-    static void on_thread_exit ();
-    static void end_frame      ();
-    static auto all_gpu_timers () -> std::vector<Gpu_timer*>;
 
 private:
-    class Query
-    {
-    public:
-        std::optional<Gl_query> query_object{};
-        bool                    begin       {false};
-        bool                    end         {false};
-        bool                    pending     {false};
-    };
-
-    static constexpr std::size_t                      s_count = 4;
-    static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
-    static std::vector<Gpu_timer*>                    s_all_gpu_timers;
-    static Gpu_timer*                                 s_active_timer;
-    static std::size_t                                s_index;
-
-    Device&                    m_device;
-    std::array<Query, s_count> m_queries;
-    std::thread::id            m_owner_thread;
-    uint64_t                   m_last_result{0};
-    const char*                m_label{nullptr};
+    std::unique_ptr<Gpu_timer_impl> m_impl;
 };
 
 class Scoped_gpu_timer

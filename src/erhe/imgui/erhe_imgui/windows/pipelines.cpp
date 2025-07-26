@@ -27,24 +27,24 @@ Pipelines::Pipelines(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_window
 {
 }
 
-const char* gl_cull_face_mode_strings[] = {
-    "Front",
+const char* cull_face_mode_strings[] = {
     "Back",
+    "Front",
     "Front and Back"
 };
 
-const char* gl_front_face_direction_strings[] = {
-    "Clockwise",
-    "Counter-Clockwise"
+const char* front_face_direction_strings[] = {
+    "Counter-Clockwise",
+    "Clockwise"
 };
 
-const char* gl_polygon_mode_strings[] = {
-    "Point",
+const char* polygon_mode_strings[] = {
+    "Fill",
     "Line",
-    "Fill"
+    "Point",
 };
 
-const char* gl_depth_function_strings[] = {
+const char* depth_function_strings[] = {
     "Never",
     "Less",
     "Equal",
@@ -55,18 +55,18 @@ const char* gl_depth_function_strings[] = {
     "Always",
 };
 
-const char* gl_stencil_op_strings[] = {
+const char* stencil_op_strings[] = {
     "Zero",
+    "Decrement",
+    "Decrement with Wrap"
+    "Increment",
+    "Increment with Wrap",
     "Invert",
     "Keep",
     "Replace",
-    "Increment",
-    "Decrement",
-    "Increment with Wrap",
-    "Decrement with Wrap"
 };
 
-const char* gl_stencil_function_strings[] = {
+const char* stencil_function_strings[] = {
     "Never",
     "Less",
     "Equal",
@@ -77,34 +77,34 @@ const char* gl_stencil_function_strings[] = {
     "Always"
 };
 
-const char* gl_equation_mode_strings[] = {
+const char* equation_mode_strings[] = {
     "Add",             // 0
-    "Min",             // 1
-    "Max",             // 2
-    "Substract",       // 3
-    "Reverse Subtract" // 4
+    "Reverse Subtract" // 1
+    "Substract",       // 2
+    "Max",             // 3
+    "Min"              // 4
 };
 
-const char* gl_blending_factor_strings[] = {
+const char* blending_factor_strings[] = {
     "0",
-    "1",
-    "Source Color",
-    "1 - Source Color",
-    "Source Alpha",
-    "1 - Source Alpha",
-    "Destination Alpha",
-    "1 - Destiniation Alpha",
-    "Destination Color",
-    "1 - Destination Color",
-    "Source Alpha Saturate",
-    "Constant Color",
-    "1 - Constant Color",
     "Constant Alpha",
+    "Constant Color",
+    "Destination Alpha",
+    "Destination Color",
+    "1",
     "1 - Constant Alpha",
+    "1 - Constant Color",
+    "1 - Destination Alpha",
+    "1 - Destination Color",
+    "1 - Source 1 Alpha"
+    "1 - Source 1 Color",
+    "1 - Source Alpha",
+    "1 - Source Color",
     "Source 1 Alpha",
     "Source 1 Color",
-    "1 - Source 1 Color",
-    "1 - Source 1 Alpha"
+    "Source Alpha",
+    "Source Alpha Saturate",
+    "Source Color"
 };
 
 constexpr float item_width{140.0f};
@@ -118,7 +118,7 @@ void make_combo(
     T(*to_value)(const size_t)
 )
 {
-    int int_value = static_cast<int>(gl::base_zero(value));
+    int int_value = static_cast<int>(value);
     ImGui::SetNextItemWidth(item_width);
     const bool changed = ImGui::Combo(
         label,
@@ -151,21 +151,21 @@ void Pipelines::rasterization(erhe::graphics::Rasterization_state& rasterization
     ImGui::Checkbox("Face Cull", &rasterization.face_cull_enable);
     if (rasterization.face_cull_enable) {
         // TODO Take into account reverse depth
-        make_combo<gl::Cull_face_mode>(
+        make_combo<erhe::graphics::Cull_face_mode>(
             "Cull Mode",
             rasterization.cull_face_mode,
-            gl_cull_face_mode_strings,
-            IM_ARRAYSIZE(gl_cull_face_mode_strings),
-            gl::Cull_face_mode_from_base_zero
+            cull_face_mode_strings,
+            IM_ARRAYSIZE(cull_face_mode_strings),
+            [](const std::size_t ui_value) { return static_cast<erhe::graphics::Cull_face_mode>(ui_value); }
         );
     }
     ImGui::Checkbox("Depth Clamp", &rasterization.depth_clamp_enable);
-    make_combo<gl::Front_face_direction>(
+    make_combo<erhe::graphics::Front_face_direction>(
         "Front Face Direction",
         rasterization.front_face_direction,
-        gl_front_face_direction_strings,
-        IM_ARRAYSIZE(gl_front_face_direction_strings),
-        gl::Front_face_direction_from_base_zero
+        front_face_direction_strings,
+        IM_ARRAYSIZE(front_face_direction_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Front_face_direction>(ui_value); }
     );
     //ImGui::Text(
     //    "Reverse Depth: %s",
@@ -173,12 +173,12 @@ void Pipelines::rasterization(erhe::graphics::Rasterization_state& rasterization
     //        ? "Yes"
     //        : "No"
     //);
-    make_combo<gl::Polygon_mode>(
+    make_combo<erhe::graphics::Polygon_mode>(
         "Polygon Mode",
         rasterization.polygon_mode,
-        gl_polygon_mode_strings,
-        IM_ARRAYSIZE(gl_polygon_mode_strings),
-        gl::Polygon_mode_from_base_zero
+        polygon_mode_strings,
+        IM_ARRAYSIZE(polygon_mode_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Polygon_mode>(ui_value); }
     );
 
     ImGui::PopID();
@@ -217,36 +217,36 @@ void Pipelines::stencil_op(const char* label, erhe::graphics::Stencil_op_state& 
 
     ImGui::PushID(label);
 
-    make_combo<gl::Stencil_op>(
+    make_combo<erhe::graphics::Stencil_op>(
         "Stencil Fail Operation",
         stencil_op.stencil_fail_op,
-        gl_stencil_op_strings,
-        IM_ARRAYSIZE(gl_stencil_op_strings),
-        gl::Stencil_op_from_base_zero
+        stencil_op_strings,
+        IM_ARRAYSIZE(stencil_op_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Stencil_op>(ui_value); }
     );
 
-    make_combo<gl::Stencil_op>(
+    make_combo<erhe::graphics::Stencil_op>(
         "Depth Fail Operation",
         stencil_op.z_fail_op,
-        gl_stencil_op_strings,
-        IM_ARRAYSIZE(gl_stencil_op_strings),
-        gl::Stencil_op_from_base_zero
+        stencil_op_strings,
+        IM_ARRAYSIZE(stencil_op_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Stencil_op>(ui_value); }
     );
 
-    make_combo<gl::Stencil_op>(
+    make_combo<erhe::graphics::Stencil_op>(
         "Depth Pass Operation",
         stencil_op.z_pass_op,
-        gl_stencil_op_strings,
-        IM_ARRAYSIZE(gl_stencil_op_strings),
-        gl::Stencil_op_from_base_zero
+        stencil_op_strings,
+        IM_ARRAYSIZE(stencil_op_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Stencil_op>(ui_value); }
     );
 
-    make_combo<gl::Stencil_function>(
+    make_combo<erhe::graphics::Compare_operation>(
         "Function",
         stencil_op.function,
-        gl_stencil_function_strings,
-        IM_ARRAYSIZE(gl_stencil_function_strings),
-        gl::Stencil_function_from_base_zero
+        stencil_function_strings,
+        IM_ARRAYSIZE(stencil_function_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Compare_operation>(ui_value); }
     );
 
     make_hex_uint("Reference",  stencil_op.reference);
@@ -276,12 +276,12 @@ void Pipelines::depth_stencil(erhe::graphics::Depth_stencil_state& depth_stencil
     ImGui::Checkbox("Depth Test",  &depth_stencil.depth_test_enable);
     ImGui::SetNextItemWidth(item_width);
     ImGui::Checkbox("Depth Write", &depth_stencil.depth_write_enable);
-    make_combo<gl::Depth_function>(
+    make_combo<erhe::graphics::Compare_operation>(
         "Depth function",
         depth_stencil.depth_compare_op,
-        gl_depth_function_strings,
-        IM_ARRAYSIZE(gl_depth_function_strings),
-        gl::Depth_function_from_base_zero
+        depth_function_strings,
+        IM_ARRAYSIZE(depth_function_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Compare_operation>(ui_value); }
     );
     ImGui::SetNextItemWidth(item_width);
     ImGui::Checkbox("Stencil Test", &depth_stencil.stencil_test_enable);
@@ -309,28 +309,28 @@ void Pipelines::blend_state_component(const char* label, erhe::graphics::Blend_s
 
     ImGui::PushID(label);
 
-    make_combo<gl::Blend_equation_mode>(
+    make_combo<erhe::graphics::Blend_equation_mode>(
         "Equation Mode",
         component.equation_mode,
-        gl_equation_mode_strings,
-        IM_ARRAYSIZE(gl_equation_mode_strings),
-        gl::Blend_equation_mode_from_base_zero
+        equation_mode_strings,
+        IM_ARRAYSIZE(equation_mode_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Blend_equation_mode>(ui_value); }
     );
 
-    make_combo<gl::Blending_factor>(
+    make_combo<erhe::graphics::Blending_factor>(
         "Source Factor",
         component.source_factor,
-        gl_blending_factor_strings,
-        IM_ARRAYSIZE(gl_blending_factor_strings),
-        gl::Blending_factor_from_base_zero
+        blending_factor_strings,
+        IM_ARRAYSIZE(blending_factor_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Blending_factor>(ui_value); }
     );
 
-    make_combo<gl::Blending_factor>(
+    make_combo<erhe::graphics::Blending_factor>(
         "Destination Factor",
         component.destination_factor,
-        gl_blending_factor_strings,
-        IM_ARRAYSIZE(gl_blending_factor_strings),
-        gl::Blending_factor_from_base_zero
+        blending_factor_strings,
+        IM_ARRAYSIZE(blending_factor_strings),
+        [](const std::size_t ui_value) { return static_cast<erhe::graphics::Blending_factor>(ui_value); }
     );
 
     ImGui::PopID();
@@ -410,17 +410,14 @@ void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
             if (ImGui::TreeNodeEx("Vertex input", ImGuiTreeNodeFlags_Framed)) {
                 const erhe::graphics::Vertex_input_state_data& vertex_input_data = pipeline.data.vertex_input->get_data();
                 int attribute_index = 0;
-                for (const erhe::graphics::Gl_vertex_input_attribute& attribute : vertex_input_data.attributes) {
+                for (const erhe::graphics::Vertex_input_attribute& attribute : vertex_input_data.attributes) {
                     std::string attribute_label = fmt::format("Attribute {}", attribute_index++);
                     ImGui::PushID(attribute_index);
                     if (ImGui::TreeNodeEx(attribute_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
-                        ImGui::Text("Location: %u",           attribute.layout_location);
-                        ImGui::Text("Stride: %d",             attribute.stride);
-                        ImGui::Text("Dimension: %d",          attribute.dimension);
-                        ImGui::Text("Attribute type: %s",     gl::c_str(attribute.gl_attribute_type));
-                        ImGui::Text("Vertex Attrib type: %s", gl::c_str(attribute.gl_vertex_atrib_type));
-                        ImGui::Text("Normalized: %s",         attribute.normalized ? "yes" : "no");
-                        ImGui::Text("Offset: %u",             attribute.offset);
+                        ImGui::Text("Location: %u", attribute.layout_location);
+                        ImGui::Text("Stride: %d",   attribute.stride);
+                        ImGui::Text("Format: %s",   c_str(attribute.format) ? "yes" : "no");
+                        ImGui::Text("Offset: %u",   attribute.offset);
                         ImGui::TreePop();
                     }
                     ImGui::PopID();
@@ -431,7 +428,7 @@ void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
                     ImGui::PushID(100 + binding_index);
                     if (ImGui::TreeNodeEx(binding_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
                         ImGui::Text("Binding: %u", binding.binding);
-                        ImGui::Text("Stride: %d", binding.stride);
+                        ImGui::Text("Stride: %d",  binding.stride);
                         ImGui::Text("Divisor: %d", binding.divisor);
                         ImGui::TreePop();
                     }

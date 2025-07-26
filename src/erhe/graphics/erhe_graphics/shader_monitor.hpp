@@ -3,13 +3,14 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_profile/profile.hpp"
 
-#include <condition_variable>
+// #include <condition_variable>
 #include <mutex>
 #include <set>
 #include <thread>
 
 namespace erhe::graphics {
 
+class Device_impl;
 class Shader_stages;
 
 class Shader_monitor
@@ -37,25 +38,22 @@ private:
     void poll_thread();
 
     void add(
-        const std::filesystem::path&                     path,
-        const erhe::graphics::Shader_stages_create_info& create_info,
-        erhe::graphics::Shader_stages*                   program
+        const std::filesystem::path&     path,
+        const Shader_stages_create_info& create_info,
+        Shader_stages*                   program
     );
 
     class Reload_entry
     {
     public:
-        Reload_entry(
-            const erhe::graphics::Shader_stages_create_info& create_info,
-            erhe::graphics::Shader_stages*                   shader_stages
-        )
+        Reload_entry(const Shader_stages_create_info& create_info, Shader_stages* shader_stages)
             : create_info  {create_info}
             , shader_stages{shader_stages}
         {
         }
 
-        erhe::graphics::Shader_stages_create_info create_info;
-        erhe::graphics::Shader_stages*            shader_stages;
+        Shader_stages*            shader_stages;
+        Shader_stages_create_info create_info;
     };
 
     class Compare_object
@@ -75,7 +73,7 @@ private:
         std::set<Reload_entry, Compare_object> reload_entries;
     };
 
-    Device&                             m_graphics_device;
+    Device&                               m_device;
     bool                                  m_run{false};
     std::map<std::filesystem::path, File> m_files;
     ERHE_PROFILE_MUTEX(std::mutex,        m_mutex);

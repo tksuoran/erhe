@@ -21,15 +21,11 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_verify/verify.hpp"
@@ -132,8 +128,6 @@ App_rendering::App_rendering(
     opaque_edge_lines_not_selected->mesh_layers      = { Mesh_layer_id::content };
     opaque_edge_lines_not_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_not_selected->filter           = opaque_not_selected_filter;
-    opaque_edge_lines_not_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
-    opaque_edge_lines_not_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_not_selected->get_render_style = render_style_not_selected;
     opaque_edge_lines_not_selected->passes           = { get_pipeline_pass(*opaque_edge_lines_not_selected.get(), Blend_mode::opaque, false) };
     opaque_edge_lines_not_selected->allow_shader_stages_override = false;
@@ -142,8 +136,6 @@ App_rendering::App_rendering(
     opaque_edge_lines_selected->mesh_layers      = { Mesh_layer_id::content };
     opaque_edge_lines_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_selected->filter           = opaque_selected_filter;
-    opaque_edge_lines_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
-    opaque_edge_lines_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_edge_lines_selected->get_render_style = render_style_selected;
     opaque_edge_lines_selected->passes           = { get_pipeline_pass(*opaque_edge_lines_selected.get(), Blend_mode::opaque, true) };
     opaque_edge_lines_selected->allow_shader_stages_override = false;
@@ -152,8 +144,6 @@ App_rendering::App_rendering(
     selection_outline->mesh_layers      = { Mesh_layer_id::content };
     selection_outline->primitive_mode   = Primitive_mode::polygon_fill;
     selection_outline->filter           = opaque_selected_or_hovered_filter;
-    selection_outline->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
-    selection_outline->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     selection_outline->passes           = { &m_pipeline_passes.outline };
     selection_outline->allow_shader_stages_override = false;
 
@@ -201,8 +191,6 @@ App_rendering::App_rendering(
     translucent_outline->mesh_layers    = { Mesh_layer_id::content };
     translucent_outline->primitive_mode = Primitive_mode::edge_lines;
     translucent_outline->filter         = translucent_filter;
-    translucent_outline->begin          = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
-    translucent_outline->end            = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     translucent_outline->passes         = { get_pipeline_pass(*translucent_outline.get(), Blend_mode::translucent, false) };
 
     auto brush = make_composition_pass("Brush");
@@ -353,11 +341,13 @@ auto App_rendering::make_composition_pass(const std::string_view name) -> std::s
     return renderpass;
 }
 
-using Vertex_input_state   = erhe::graphics::Vertex_input_state;
-using Input_assembly_state = erhe::graphics::Input_assembly_state;
-using Rasterization_state  = erhe::graphics::Rasterization_state;
-using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
-using Color_blend_state    = erhe::graphics::Color_blend_state;
+using Vertex_input_state         = erhe::graphics::Vertex_input_state;
+using Input_assembly_state       = erhe::graphics::Input_assembly_state;
+using Multisample_state          = erhe::graphics::Multisample_state;
+using Viewport_depth_range_state = erhe::graphics::Viewport_depth_range_state;
+using Rasterization_state        = erhe::graphics::Rasterization_state;
+using Depth_stencil_state        = erhe::graphics::Depth_stencil_state;
+using Color_blend_state          = erhe::graphics::Color_blend_state;
 
 Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory&mesh_memory, Programs& programs)
     : m_empty_vertex_input{graphics_device}
@@ -379,22 +369,22 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::less),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less, true),
             .stencil_test_enable = true,
             .stencil_front = {
-                .stencil_fail_op = gl::Stencil_op::replace,
-                .z_fail_op       = gl::Stencil_op::replace,
-                .z_pass_op       = gl::Stencil_op::replace,
-                .function        = gl::Stencil_function::always,
+                .stencil_fail_op = erhe::graphics::Stencil_op::replace,
+                .z_fail_op       = erhe::graphics::Stencil_op::replace,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::always,
                 .reference       = 0b10000000u,
                 .test_mask       = 0b00000000u, // always does not use
                 .write_mask      = 0b10000000u  // = 0x80 = 128
             },
             .stencil_back = {
-                .stencil_fail_op = gl::Stencil_op::replace,
-                .z_fail_op       = gl::Stencil_op::replace,
-                .z_pass_op       = gl::Stencil_op::replace,
-                .function        = gl::Stencil_function::always,
+                .stencil_fail_op = erhe::graphics::Stencil_op::replace,
+                .z_fail_op       = erhe::graphics::Stencil_op::replace,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::always,
                 .reference       = 0b10000000u,
                 .test_mask       = 0b00000000u,
                 .write_mask      = 0b10000000u
@@ -412,30 +402,33 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , line_hidden_blend{erhe::graphics::Render_pipeline_state{{
-        .name                       = "Hidden lines with blending",
-        .shader_stages              = &programs.wide_lines_draw_color.shader_stages,
-        .vertex_input               = &mesh_memory.vertex_input,
-        .input_assembly             = Input_assembly_state::line,
-        .rasterization              = Rasterization_state::cull_mode_back_ccw,
+        .name                    = "Hidden lines with blending",
+        .shader_stages           = &programs.wide_lines_draw_color.shader_stages,
+        .vertex_input            = &mesh_memory.vertex_input,
+        .input_assembly          = Input_assembly_state::line,
+        .multisample             = Multisample_state{
+            .alpha_to_coverage_enable = true
+        },
+        .rasterization           = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil  = {
-            .depth_test_enable      = true,
-            .depth_write_enable     = false,
-            .depth_compare_op       = graphics_device.depth_function(gl::Depth_function::greater),
+            .depth_test_enable   = true,
+            .depth_write_enable  = false,
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::greater, true),
             .stencil_test_enable = true,
             .stencil_front = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::incr,
-                .function        = gl::Stencil_function::equal,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::incr,
+                .function        = erhe::graphics::Compare_operation::equal,
                 .reference       = 0u,
                 .test_mask       = 0b11111111u,
                 .write_mask      = 0b01111111u // ignore high bit (selection)
             },
             .stencil_back = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::incr,
-                .function        = gl::Stencil_function::equal,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::incr,
+                .function        = erhe::graphics::Compare_operation::equal,
                 .reference       = 0u,
                 .test_mask       = 0b11111111u,
                 .write_mask      = 0b01111111u // ignore high bit (selection)
@@ -444,14 +437,14 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend = {
             .enabled                = true,
             .rgb = {
-                .equation_mode      = gl::Blend_equation_mode::func_add,
-                .source_factor      = gl::Blending_factor::constant_alpha,
-                .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+                .source_factor      = erhe::graphics::Blending_factor::constant_alpha,
+                .destination_factor = erhe::graphics::Blending_factor::one_minus_constant_alpha
             },
             .alpha = {
-                .equation_mode      = gl::Blend_equation_mode::func_add,
-                .source_factor      = gl::Blending_factor::constant_alpha,
-                .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+                .source_factor      = erhe::graphics::Blending_factor::constant_alpha,
+                .destination_factor = erhe::graphics::Blending_factor::one_minus_constant_alpha
             },
             .constant = { 0.0f, 0.0f, 0.0f, 0.2f }
         }
@@ -483,22 +476,22 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::lequal),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, true),
             .stencil_test_enable = true,
             .stencil_front = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::incr,
-                .function        = gl::Stencil_function::equal,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::incr,
+                .function        = erhe::graphics::Compare_operation::equal,
                 .reference       = 0u,
                 .test_mask       = 0b01111111u,
                 .write_mask      = 0b01111111u // ignore high bit (selection)
             },
             .stencil_back = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::incr,
-                .function        = gl::Stencil_function::equal,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::incr,
+                .function        = erhe::graphics::Compare_operation::equal,
                 .reference       = 0u,
                 .test_mask       = 0b01111111u,
                 .write_mask      = 0b01111111u // ignore high bit (selection)
@@ -511,26 +504,29 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.fat_triangle.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
+        .multisample    = Multisample_state{
+            .alpha_to_coverage_enable = true
+        },
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
         .depth_stencil = {
             .depth_test_enable   = false,
             .depth_write_enable  = false,
-            .depth_compare_op    = gl::Depth_function::always,
+            .depth_compare_op    = erhe::graphics::Compare_operation::always,
             .stencil_test_enable = true, // If bit 7 in the stencil buffer is not set, draw and set it. Otherwise, skip drawing
             .stencil_front = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::replace,
-                .function        = gl::Stencil_function::notequal,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::not_equal,
                 .reference       = 0b10000000u,
                 .test_mask       = 0b10000000u,
                 .write_mask      = 0b10000000u
             },
             .stencil_back = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::replace,
-                .function        = gl::Stencil_function::notequal,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::not_equal,
                 .reference       = 0b10000000u,
                 .test_mask       = 0b10000000u,
                 .write_mask      = 0b10000000u
@@ -570,30 +566,34 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
     , sky{
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Sky",
-                .shader_stages  = &programs.sky.shader_stages,
-                .vertex_input   = &mesh_memory.vertex_input,
-                .input_assembly = Input_assembly_state::triangle,
+                .name                 = "Sky",
+                .shader_stages        = &programs.sky.shader_stages,
+                .vertex_input         = &mesh_memory.vertex_input,
+                .input_assembly       = Input_assembly_state::triangle,
+                .viewport_depth_range = Viewport_depth_range_state{
+                    .min_depth = 0.0f, // Reverse Z far plane
+                    .max_depth = 0.0f  // Reverse Z far plane
+                },
                 .rasterization  = Rasterization_state::cull_mode_none,
                 .depth_stencil  = Depth_stencil_state{
                     .depth_test_enable   = true,
                     .depth_write_enable  = false,
-                    .depth_compare_op    = gl::Depth_function::equal, // Depth buffer must be cleared to the far plane value
+                    .depth_compare_op    = erhe::graphics::Compare_operation::equal, // Depth buffer must be cleared to the far plane value
                     .stencil_test_enable = true, // Require stencil clear value 0 (to prevent overdrawing selection silhouette)
                     .stencil_front = {
-                        .stencil_fail_op = gl::Stencil_op::keep,
-                        .z_fail_op       = gl::Stencil_op::keep,
-                        .z_pass_op       = gl::Stencil_op::keep,
-                        .function        = gl::Stencil_function::equal,
+                        .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                        .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                        .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                        .function        = erhe::graphics::Compare_operation::equal,
                         .reference       = 0u,
                         .test_mask       = 0b11111111u,
                         .write_mask      = 0b00000000u
                     },
                     .stencil_back = {
-                        .stencil_fail_op = gl::Stencil_op::keep,
-                        .z_fail_op       = gl::Stencil_op::keep,
-                        .z_pass_op       = gl::Stencil_op::keep,
-                        .function        = gl::Stencil_function::equal,
+                        .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                        .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                        .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                        .function        = erhe::graphics::Compare_operation::equal,
                         .reference       = 0u,
                         .test_mask       = 0b11111111u,
                         .write_mask      = 0b00000000u
@@ -601,9 +601,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
                 },
                 .color_blend    = Color_blend_state::color_blend_disabled
             }
-        },
-        [](){ gl::depth_range(0.0f, 0.0f); },
-        [](){ gl::depth_range(0.0f, 1.0f); }
+        }
     }
     , grid{
         erhe::graphics::Render_pipeline_state{
@@ -616,26 +614,26 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
                 .depth_stencil = {
                     .depth_test_enable   = true,
                     .depth_write_enable  = true,
-                    .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::lequal),
+                    .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, true),
                     .stencil_test_enable = true, // Conditionally render fragments where bit 7 is not set, without modifying the stencil buffer
                     .stencil_front = {
-                        .stencil_fail_op = gl::Stencil_op::keep,
-                        .z_fail_op       = gl::Stencil_op::keep,
-                        .z_pass_op       = gl::Stencil_op::keep,
-                        .function        = gl::Stencil_function::notequal,
+                        .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                        .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                        .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                        .function        = erhe::graphics::Compare_operation::not_equal,
                         .reference       = 0b10000000u,
                         .test_mask       = 0b10000000u,
                         .write_mask      = 0b10000000u
                     },
                     .stencil_back = {
-                        .stencil_fail_op = gl::Stencil_op::keep,
-                        .z_fail_op       = gl::Stencil_op::keep,
-                        .z_pass_op       = gl::Stencil_op::keep,
-                        .function        = gl::Stencil_function::notequal,
-                    .reference       = 0b10000000u,
-                    .test_mask       = 0b10000000u,
-                    .write_mask      = 0b10000000u
-                }
+                        .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                        .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                        .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                        .function        = erhe::graphics::Compare_operation::not_equal,
+                        .reference       = 0b10000000u,
+                        .test_mask       = 0b10000000u,
+                        .write_mask      = 0b10000000u
+                    }
                 },
 
                 .color_blend    = Color_blend_state::color_blend_premultiplied
@@ -772,10 +770,6 @@ void App_rendering::render_viewport_main(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto& opengl_state_tracker = m_context.graphics_device->opengl_state_tracker;
-    opengl_state_tracker.shader_stages.reset();
-    opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
-
     render_composer(context);
 }
 
@@ -797,7 +791,7 @@ void App_rendering::render_composer(const Render_context& context)
 
     m_composer.render(context);
 
-    m_context.graphics_device->opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
+    ///// TODO Check m_context.graphics_device->opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
 void App_rendering::render_id(const Render_context& context)

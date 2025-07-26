@@ -2,7 +2,6 @@
 #include "erhe_scene_renderer/cube_instance_buffer.hpp"
 
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"

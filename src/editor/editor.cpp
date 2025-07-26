@@ -87,7 +87,6 @@
 #include "erhe_graph/graph_log.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -293,7 +292,7 @@ public:
         m_fly_camera_tool->on_frame_end();
 
         // Rendering
-        m_graphics_device->shader_monitor.update_once_per_frame();
+        m_graphics_device->get_shader_monitor().update_once_per_frame();
         m_mesh_memory->buffer_transfer_queue.flush();
 
         m_app_rendering->begin_frame(); // tests renderdoc capture start
@@ -695,7 +694,6 @@ public:
                 m_tools = std::make_unique<Tools>(
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
-                    *m_graphics_device.get(),
                     *m_scene_message_bus.get(),
                     m_app_context,
                     *m_app_rendering.get(),
@@ -1008,7 +1006,7 @@ public:
         }
 
         m_context_window->make_current();
-        m_graphics_device->opengl_state_tracker.on_thread_enter();
+        m_graphics_device->on_thread_enter();
 
         ERHE_PROFILE_FUNCTION();
         ERHE_PROFILE_GPU_CONTEXT

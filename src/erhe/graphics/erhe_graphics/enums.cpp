@@ -1,7 +1,134 @@
 #include "erhe_graphics/enums.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::graphics {
+
+auto to_string(Buffer_usage usage) -> std::string
+{
+    using namespace erhe::utility;
+    std::stringstream ss;
+    bool is_empty = true;
+    if (test_bit_set(usage, Buffer_usage::vertex)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "vertex";
+        is_empty = false;
+    }
+    if (test_bit_set(usage, Buffer_usage::index)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "index";
+        is_empty = false;
+    }
+    if (test_bit_set(usage, Buffer_usage::uniform)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "uniform";
+        is_empty = false;
+    }
+    if (test_bit_set(usage, Buffer_usage::storage)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "storage";
+        is_empty = false;
+    }
+    if (test_bit_set(usage, Buffer_usage::indirect)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "indirect";
+        is_empty = false;
+    }
+    if (test_bit_set(usage, Buffer_usage::texture)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "texture";
+        is_empty = false;
+    }
+    if (test_bit_set(usage, Buffer_usage::pixel)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "pixel";
+        is_empty = false;
+    }
+    if (test_bit_set(usage, Buffer_usage::transfer)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "transfer";
+        is_empty = false;
+    }
+    return ss.str();
+}
+auto c_str(Buffer_direction direction) -> const char*
+{
+    switch (direction) {
+        case Buffer_direction::cpu_to_gpu: return "cpu_to_gpu";
+        case Buffer_direction::gpu_only  : return "gpu_only";
+        case Buffer_direction::gpu_to_cpu: return "gpu_to_cpu";
+        default: return "?";
+    }
+}
+auto c_str(Buffer_cache_mode cache_mode) -> const char*
+{
+    switch (cache_mode) {
+        case Buffer_cache_mode::write_combined: return "write_combined";
+        case Buffer_cache_mode::default_:       return "defaul";
+        default: return "?";
+    }
+}
+auto c_str(Buffer_mapping mapping) -> const char*
+{
+    switch (mapping) {
+        case Buffer_mapping::not_mappable: return "not_mappable";
+        case Buffer_mapping::persistent:   return "persistent";
+        case Buffer_mapping::transient:    return "transient";
+        default: return "?";
+    }
+}
+auto c_str(Buffer_coherency coherency) -> const char*
+{
+    switch (coherency) {
+        case Buffer_coherency::on:  return "on";
+        case Buffer_coherency::off: return "off";
+        default: return "?";
+    }
+}
+auto to_string(Buffer_map_flags flags) -> std::string
+{
+    using namespace erhe::utility;
+    std::stringstream ss;
+    bool is_empty = true;
+    if (test_bit_set(flags, Buffer_map_flags::explicit_flush)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "explicit_flush";
+        is_empty = false;
+    }
+    if (test_bit_set(flags, Buffer_map_flags::invalidate_range)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "invalidate_range";
+        is_empty = false;
+    }
+    if (test_bit_set(flags, Buffer_map_flags::invalidate_buffer)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "invalidate_buffer";
+        is_empty = false;
+    }
+    return ss.str();
+}
 
 auto glsl_type_c_str(const Glsl_type type) -> const char*
 {
@@ -218,6 +345,108 @@ auto c_str(const Compare_operation compare_operation) -> const char*
         case Compare_operation::greater_or_equal: return "greater_or_equal";
         case Compare_operation::always:           return "always";
         default: return "?";
+    }
+}
+
+auto c_str(const Shader_type shader_type) -> const char*
+{
+    switch (shader_type) {
+        case Shader_type::vertex_shader         : return "vertex_shader";
+        case Shader_type::fragment_shader       : return "fragment_shader";
+        case Shader_type::compute_shader        : return "compute_shader";
+        case Shader_type::geometry_shader       : return "geometry_shader";
+        case Shader_type::tess_control_shader   : return "tess_control_shader";
+        case Shader_type::tess_evaluation_shader: return "tess_evaluation_shader";
+        default: return "?";
+    }
+}
+
+auto to_glsl_attribute_type(const erhe::dataformat::Format format) -> Glsl_type
+{
+    using namespace erhe::dataformat;
+    switch (format) {
+        case Format::format_8_scalar_unorm:           return Glsl_type::float_;
+        case Format::format_8_scalar_snorm:           return Glsl_type::float_;
+        case Format::format_8_scalar_uscaled:         return Glsl_type::float_;
+        case Format::format_8_scalar_sscaled:         return Glsl_type::float_;
+        case Format::format_8_scalar_uint:            return Glsl_type::unsigned_int;
+        case Format::format_8_scalar_sint:            return Glsl_type::int_;
+        case Format::format_8_vec2_unorm:             return Glsl_type::float_vec2;
+        case Format::format_8_vec2_snorm:             return Glsl_type::float_vec2;
+        case Format::format_8_vec2_uscaled:           return Glsl_type::float_vec2;
+        case Format::format_8_vec2_sscaled:           return Glsl_type::float_vec2;
+        case Format::format_8_vec2_uint:              return Glsl_type::unsigned_int_vec2;
+        case Format::format_8_vec2_sint:              return Glsl_type::int_vec2;
+        case Format::format_8_vec3_unorm:             return Glsl_type::float_vec3;
+        case Format::format_8_vec3_snorm:             return Glsl_type::float_vec3;
+        case Format::format_8_vec3_uscaled:           return Glsl_type::float_vec3;
+        case Format::format_8_vec3_sscaled:           return Glsl_type::float_vec3;
+        case Format::format_8_vec3_uint:              return Glsl_type::unsigned_int_vec3;
+        case Format::format_8_vec3_sint:              return Glsl_type::int_vec3;
+        case Format::format_8_vec4_unorm:             return Glsl_type::float_vec4;
+        case Format::format_8_vec4_snorm:             return Glsl_type::float_vec4;
+        case Format::format_8_vec4_uscaled:           return Glsl_type::float_vec4;
+        case Format::format_8_vec4_sscaled:           return Glsl_type::float_vec4;
+        case Format::format_8_vec4_uint:              return Glsl_type::unsigned_int_vec4;
+        case Format::format_8_vec4_sint:              return Glsl_type::int_vec4;
+        case Format::format_16_scalar_unorm:          return Glsl_type::float_;
+        case Format::format_16_scalar_snorm:          return Glsl_type::float_;
+        case Format::format_16_scalar_uscaled:        return Glsl_type::float_;
+        case Format::format_16_scalar_sscaled:        return Glsl_type::float_;
+        case Format::format_16_scalar_uint:           return Glsl_type::unsigned_int;
+        case Format::format_16_scalar_sint:           return Glsl_type::int_;
+        case Format::format_16_scalar_float:          return Glsl_type::float_;
+        case Format::format_16_vec2_unorm:            return Glsl_type::float_vec2;
+        case Format::format_16_vec2_snorm:            return Glsl_type::float_vec2;
+        case Format::format_16_vec2_uscaled:          return Glsl_type::float_vec2;
+        case Format::format_16_vec2_sscaled:          return Glsl_type::float_vec2;
+        case Format::format_16_vec2_uint:             return Glsl_type::unsigned_int_vec2;
+        case Format::format_16_vec2_sint:             return Glsl_type::int_vec2;
+        case Format::format_16_vec2_float:            return Glsl_type::float_vec2;
+        case Format::format_16_vec3_unorm:            return Glsl_type::float_vec3;
+        case Format::format_16_vec3_snorm:            return Glsl_type::float_vec3;
+        case Format::format_16_vec3_uscaled:          return Glsl_type::float_vec3;
+        case Format::format_16_vec3_sscaled:          return Glsl_type::float_vec3;
+        case Format::format_16_vec3_uint:             return Glsl_type::unsigned_int_vec3;
+        case Format::format_16_vec3_sint:             return Glsl_type::int_vec3;
+        case Format::format_16_vec3_float:            return Glsl_type::float_vec3;
+        case Format::format_16_vec4_unorm:            return Glsl_type::float_vec4;
+        case Format::format_16_vec4_snorm:            return Glsl_type::float_vec4;
+        case Format::format_16_vec4_uscaled:          return Glsl_type::float_vec4;
+        case Format::format_16_vec4_sscaled:          return Glsl_type::float_vec4;
+        case Format::format_16_vec4_uint:             return Glsl_type::unsigned_int_vec4;
+        case Format::format_16_vec4_sint:             return Glsl_type::int_vec4;
+        case Format::format_16_vec4_float:            return Glsl_type::float_vec4;
+        case Format::format_32_scalar_uscaled:        return Glsl_type::float_;
+        case Format::format_32_scalar_sscaled:        return Glsl_type::float_;
+        case Format::format_32_scalar_uint:           return Glsl_type::unsigned_int;
+        case Format::format_32_scalar_sint:           return Glsl_type::int_;
+        case Format::format_32_scalar_float:          return Glsl_type::float_;
+        case Format::format_32_vec2_uscaled:          return Glsl_type::float_vec2;
+        case Format::format_32_vec2_sscaled:          return Glsl_type::float_vec2;
+        case Format::format_32_vec2_uint:             return Glsl_type::unsigned_int_vec2;
+        case Format::format_32_vec2_sint:             return Glsl_type::int_vec2;
+        case Format::format_32_vec2_float:            return Glsl_type::float_vec2;
+        case Format::format_32_vec3_uscaled:          return Glsl_type::float_vec3;
+        case Format::format_32_vec3_sscaled:          return Glsl_type::float_vec3;
+        case Format::format_32_vec3_uint:             return Glsl_type::unsigned_int_vec3;
+        case Format::format_32_vec3_sint:             return Glsl_type::int_vec3;
+        case Format::format_32_vec3_float:            return Glsl_type::float_vec3;
+        case Format::format_32_vec4_uscaled:          return Glsl_type::float_vec4;
+        case Format::format_32_vec4_sscaled:          return Glsl_type::float_vec4;
+        case Format::format_32_vec4_uint:             return Glsl_type::unsigned_int_vec4;
+        case Format::format_32_vec4_sint:             return Glsl_type::int_vec4;
+        case Format::format_32_vec4_float:            return Glsl_type::float_vec4;
+        case Format::format_packed1010102_vec4_unorm: return Glsl_type::float_vec4;
+        case Format::format_packed1010102_vec4_snorm: return Glsl_type::float_vec4;
+        case Format::format_packed1010102_vec4_uint:  return Glsl_type::unsigned_int_vec4;
+        case Format::format_packed1010102_vec4_sint:  return Glsl_type::int_vec4;
+        case Format::format_packed111110_vec3_unorm:  return Glsl_type::float_vec3;
+
+        default: {
+            ERHE_FATAL("Bad format");
+            return static_cast<Glsl_type>(0);
+        }
     }
 }
 

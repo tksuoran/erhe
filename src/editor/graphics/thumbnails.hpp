@@ -11,7 +11,6 @@
 namespace erhe::graphics {
     class Device;
     class Render_command_encoder;
-    class Renderbuffer;
     class Texture;
 }
 
@@ -59,14 +58,13 @@ public:
     ) -> bool;
 
 private:
-    App_context&                                  m_context;
-    erhe::graphics::Device&                       m_graphics_device;
-    std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
-    std::shared_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
-    erhe::graphics::Sampler                       m_color_sampler;
-    std::vector<Thumbnail>                        m_thumbnails;
-    int                                           m_size_pixels{0};
-    std::vector<uint64_t>                         m_color_texture_handles;
+    App_context&                             m_context;
+    erhe::graphics::Device&                  m_graphics_device;
+    std::shared_ptr<erhe::graphics::Texture> m_color_texture;
+    erhe::graphics::Sampler                  m_color_sampler;
+    std::vector<Thumbnail>                   m_thumbnails;
+    int                                      m_size_pixels{0};
+    std::vector<uint64_t>                    m_color_texture_handles;
 };
 
 }

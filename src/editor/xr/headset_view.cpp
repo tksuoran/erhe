@@ -14,13 +14,11 @@
 #include "xr/hand_tracker.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/compute_command_encoder.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -290,7 +288,7 @@ auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view
     ERHE_PROFILE_FUNCTION();
 
     auto match_color_texture = [&render_view](const auto& i) {
-        return i->get_color_texture()->gl_name() == render_view.color_texture;
+        return i->get_color_texture()->get_impl().gl_name() == render_view.color_texture;
     };
 
     const auto i = std::find_if(m_view_resources.begin(), m_view_resources.end(), match_color_texture);
@@ -465,19 +463,12 @@ auto Headset_view::render_headset() -> bool
             m_context.app_rendering ->render_viewport_renderables(render_context);
 
             m_context.debug_renderer->update(render_context.viewport, *render_context.camera);
-            {
-                erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
-                m_context.debug_renderer->compute(compute_encoder);
-            }
 
             {
                 erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(*render_pass);
                 render_context.encoder = &encoder;
                 ERHE_VERIFY(render_view.width  == static_cast<uint32_t>(render_pass->get_render_target_width()));
                 ERHE_VERIFY(render_view.height == static_cast<uint32_t>(render_pass->get_render_target_height()));
-
-                graphics_device.opengl_state_tracker.shader_stages.reset();
-                graphics_device.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
 
                 // TODO This conflicts with hud grab - proper command for this?
                 //
@@ -515,41 +506,52 @@ auto Headset_view::render_headset() -> bool
                 // - crop if too much in src
                 int width_diff = std::abs(src_width - dst_width);
                 int src_x0 = (src_width > dst_width ) ? width_diff / 2     : 0;
-                int src_x1 = (src_width > dst_width ) ? src_x0 + dst_width : src_width;
+                //int src_x1 = (src_width > dst_width ) ? src_x0 + dst_width : src_width;
                 int dst_x0 = (src_width > dst_width ) ? 0                  : width_diff / 2;
-                int dst_x1 = (src_width > dst_width ) ? dst_width          : dst_x0 + src_width;
+                //int dst_x1 = (src_width > dst_width ) ? dst_width          : dst_x0 + src_width;
 
                 int height_diff = std::abs(src_height - dst_height);
                 int src_y0 = (src_height > dst_height) ? height_diff / 2     : 0;
-                int src_y1 = (src_height > dst_height) ? src_y0 + dst_height : src_height;
+                //int src_y1 = (src_height > dst_height) ? src_y0 + dst_height : src_height;
                 int dst_y0 = (src_height > dst_height) ? 0                   : height_diff / 2;
-                int dst_y1 = (src_height > dst_height) ? dst_height          : src_y0 + src_height;
+                //int dst_y1 = (src_height > dst_height) ? dst_height          : src_y0 + src_height;
 
-                const GLint src_fbo = view_render_pass->gl_name();
-                const GLint dst_fbo = mirror_render_pass->gl_name();
-
-                auto get = [&mirror_render_pass](gl::Framebuffer_attachment_parameter_name parameter) -> GLint {
-                    GLint value{0};
-                    gl::get_named_framebuffer_attachment_parameter_iv(
-                        mirror_render_pass->gl_name(),
-                        gl::Framebuffer_attachment::back_left,
-                        parameter,
-                        &value
+                {
+                    erhe::graphics::Blit_command_encoder blit_encoder = graphics_device.make_blit_command_encoder();
+                    blit_encoder.blit_framebuffer(
+                        *view_render_pass,
+                        glm::ivec2{src_x0, src_y0},
+                        glm::ivec2{src_width, src_height},
+                        *mirror_render_pass,
+                        glm::ivec2{dst_x0, dst_y0}
                     );
-                    return value;
-                };
+                }
 
-                gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, src_fbo);
-                gl::named_framebuffer_read_buffer(src_fbo, gl::Color_buffer::color_attachment0);
-                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, dst_fbo);
-                const gl::Color_buffer draw_buffer = gl::Color_buffer::back;
-                gl::named_framebuffer_draw_buffers(dst_fbo, 1, &draw_buffer);
-
-                gl::blit_framebuffer(
-                    src_x0, src_y0, src_x1, src_y1,
-                    dst_x0, dst_y0, dst_x1, dst_y1,
-                    gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
-                );
+                /// const GLint src_fbo = view_render_pass->gl_name();
+                /// const GLint dst_fbo = mirror_render_pass->gl_name();
+                /// 
+                /// auto get = [&mirror_render_pass](gl::Framebuffer_attachment_parameter_name parameter) -> GLint {
+                ///     GLint value{0};
+                ///     gl::get_named_framebuffer_attachment_parameter_iv(
+                ///         mirror_render_pass->gl_name(),
+                ///         gl::Framebuffer_attachment::back_left,
+                ///         parameter,
+                ///         &value
+                ///     );
+                ///     return value;
+                /// };
+                /// 
+                /// gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, src_fbo);
+                /// gl::named_framebuffer_read_buffer(src_fbo, gl::Color_buffer::color_attachment0);
+                /// gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, dst_fbo);
+                /// const gl::Color_buffer draw_buffer = gl::Color_buffer::back;
+                /// gl::named_framebuffer_draw_buffers(dst_fbo, 1, &draw_buffer);
+                /// 
+                /// gl::blit_framebuffer(
+                ///     src_x0, src_y0, src_x1, src_y1,
+                ///     dst_x0, dst_y0, dst_x1, dst_y1,
+                ///     gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
+                /// );
                 m_context_window.swap_buffers();
             }
             first_view = false;

@@ -4,11 +4,8 @@
 #include "hextiles_log.hpp"
 
 #include "erhe_dataformat/vertex_format.hpp"
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/scoped_buffer_mapping.hpp"
@@ -43,20 +40,20 @@ auto Tile_renderer::make_prototype(erhe::graphics::Device& graphics_device) cons
         .interface_blocks      = { &m_projection_block },
         .fragment_outputs      = &m_fragment_outputs,
         .vertex_format         = &m_vertex_format,
-        .default_uniform_block = m_graphics_device.info.use_bindless_texture
+        .default_uniform_block = m_graphics_device.get_info().use_bindless_texture
             ? nullptr
             : &m_default_uniform_block,
         .shaders = {
-            { gl::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path{"tile.vert"} },
-            { gl::Shader_type::fragment_shader, m_shader_path / std::filesystem::path{"tile.frag"} }
+            { erhe::graphics::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path{"tile.vert"} },
+            { erhe::graphics::Shader_type::fragment_shader, m_shader_path / std::filesystem::path{"tile.frag"} }
         },
         .dump_interface    = true,
         .dump_final_source = true
     };
 
-    if (m_graphics_device.info.use_bindless_texture) {
+    if (m_graphics_device.get_info().use_bindless_texture) {
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        create_info.extensions.push_back({erhe::graphics::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
     return erhe::graphics::Shader_stages_prototype{graphics_device, create_info};
@@ -83,14 +80,14 @@ Tile_renderer::Tile_renderer(
     , m_tiles                {tiles}
     , m_default_uniform_block{graphics_device}
     , m_texture_sampler{
-        graphics_device.info.use_bindless_texture
+        graphics_device.get_info().use_bindless_texture
             ? nullptr
             : m_default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, 0)
     }
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
-            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .type     = erhe::graphics::Glsl_type::float_vec4,
             .location = 0
         }
     }
@@ -323,12 +320,16 @@ void Tile_renderer::compose_tileset_texture()
 
     // Upload everything before single unit tiles
     erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
-    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "Tile_renderer::m_tileset_texture upload"};
+    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{
+        m_graphics_device,
+        erhe::graphics::Buffer_target::pixel,
+        "Tile_renderer::m_tileset_texture upload"
+    };
     {
-        std::span<std::uint8_t>                src_span{m_tileset_image.data.data(), m_tileset_image.data.size()};
-        std::size_t                            byte_count = src_span.size_bytes();
-        erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-        std::span<std::byte>                   dst_span     = buffer_range.get_span();
+        std::span<std::uint8_t>      src_span{m_tileset_image.data.data(), m_tileset_image.data.size()};
+        std::size_t                  byte_count   = src_span.size_bytes();
+        erhe::graphics::Buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+        std::span<std::byte>         dst_span     = buffer_range.get_span();
         memcpy(dst_span.data(), src_span.data(), byte_count);
         buffer_range.bytes_written(byte_count);
         buffer_range.close();
@@ -751,20 +752,15 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
     //gl::invalidate_tex_image()
     erhe::graphics::Buffer* vertex_buffer = vertex_buffer_range.get_buffer()->get_buffer();
 
-    gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
-    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     render_encoder.set_render_pipeline_state(m_pipeline);
     render_encoder.set_index_buffer(&m_index_buffer);
     render_encoder.set_vertex_buffer(vertex_buffer, vertex_buffer_range.get_byte_start_offset_in_buffer(), 0);
 
     m_projection_buffer.bind(render_encoder, projection_buffer_range);
 
-    if (m_graphics_device.info.use_bindless_texture) {
-        gl::make_texture_handle_resident_arb(handle);
-    } else {
-        gl::bind_texture_unit(0, m_tileset_texture->gl_name());
-        gl::bind_sampler     (0, m_nearest_sampler.gl_name());
-    }
+    erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_tileset_texture.get(), m_nearest_sampler, 1};
+    texture_heap.assign(0, m_tileset_texture.get(), &m_nearest_sampler);
+    texture_heap.bind();
 
     render_encoder.draw_indexed_primitives(
         m_pipeline.data.input_assembly.primitive_topology,
@@ -776,11 +772,7 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
     projection_buffer_range.release();
     vertex_buffer_range.release();
 
-    if (m_graphics_device.info.use_bindless_texture) {
-        gl::make_texture_handle_non_resident_arb(handle);
-    }
-
-    gl::disable(gl::Enable_cap::primitive_restart_fixed_index);
+    texture_heap.unbind();
 
     m_vertex_buffer_range.reset();
 }

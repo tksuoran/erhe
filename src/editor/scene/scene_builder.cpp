@@ -179,7 +179,10 @@ void Scene_builder::setup_cameras(
         return;
     }
 
-    const bool enable_post_processing = graphics_device.configuration.post_processing;
+    const auto& g_ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "graphics");
+    bool enable_post_processing = true;
+    g_ini.get("post_processing", enable_post_processing);
+
     bool imgui_window_scene_view = true;
     ini.get("imgui_window_scene_view", imgui_window_scene_view);
     if (!imgui_window_scene_view) {

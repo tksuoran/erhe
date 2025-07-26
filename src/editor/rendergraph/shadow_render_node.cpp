@@ -8,7 +8,6 @@
 #include "scene/scene_view.hpp"
 
 #include "erhe_rendergraph/rendergraph.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -58,7 +57,8 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         return;
     }
     log_render->debug("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
-    gl::finish();
+
+    //// TODO device.wait_for_idle()
 
     {
         ERHE_PROFILE_SCOPE("allocating shadow map array texture");

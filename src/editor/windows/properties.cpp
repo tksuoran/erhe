@@ -22,7 +22,6 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -31,7 +30,6 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/iinstance.hpp"
-#include "erhe_raytrace/igeometry.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"

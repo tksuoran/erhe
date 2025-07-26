@@ -1,104 +1,60 @@
 #pragma once
 
-#include "erhe_graphics/gl_objects.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <cstddef>
-#include <mutex>
-#include <optional>
-#include <thread>
+#include <string>
 #include <vector>
-
-typedef int GLsizei;
-typedef int GLint;
 
 namespace erhe::graphics {
 
+class Device;
 class Buffer;
 
-static constexpr int MAX_ATTRIBUTE_COUNT { 16 }; // TODO(tksuoran@gmail.com): Get rid of this kind of constant?
-
-class Gl_vertex_input_attribute // VkVertexInputAttributeDescription
+class Vertex_input_attribute
 {
 public:
-    GLuint                 layout_location{0};
-    GLuint                 binding;
-    GLsizei                stride;
-    GLint                  dimension;
-    gl::Attribute_type     gl_attribute_type;
-    gl::Vertex_attrib_type gl_vertex_atrib_type;
-    bool                   normalized;
-    GLuint                 offset;
-    std::string            name;
+    unsigned int             layout_location{0};
+    std::size_t              binding;
+    std::size_t              stride;
+    erhe::dataformat::Format format;
+    std::size_t              offset;
+    std::string              name;
 };
 
-class Vertex_input_binding // VkVertexInputBindingDescription
+class Vertex_input_binding
 {
 public:
-    GLuint  binding;
-    GLsizei stride;
-    GLuint  divisor;
+    std::size_t  binding;
+    std::size_t  stride;
+    unsigned int divisor;
 };
-
-[[nodiscard]] auto get_vertex_divisor(erhe::dataformat::Vertex_step step) -> GLuint;
-
-[[nodiscard]] auto get_gl_attribute_type(erhe::dataformat::Format format) -> gl::Attribute_type;
-
-[[nodiscard]] auto get_gl_vertex_attrib_type(erhe::dataformat::Format format) -> gl::Vertex_attrib_type;
-
-[[nodiscard]] auto get_gl_normalized(erhe::dataformat::Format format) -> bool;
 
 class Vertex_input_state_data
 {
 public:
-    std::vector<Gl_vertex_input_attribute> attributes;
-    std::vector<Vertex_input_binding>      bindings;
+    std::vector<Vertex_input_attribute> attributes;
+    std::vector<Vertex_input_binding>   bindings;
 
     static auto make(const erhe::dataformat::Vertex_format& vertex_format) -> Vertex_input_state_data;
 };
 
-class Vertex_input_state
+class Vertex_input_state_impl;
+class Vertex_input_state final
 {
 public:
     Vertex_input_state(Device& device);
     Vertex_input_state(Device& device, Vertex_input_state_data&& create_info);
     ~Vertex_input_state() noexcept;
 
-    void set    (const Vertex_input_state_data& data);
-    auto gl_name() const -> unsigned int;
-    void create ();
-    void reset  ();
-    void update ();
+    void set(const Vertex_input_state_data& data);
 
     [[nodiscard]] auto get_data() const -> const Vertex_input_state_data&;
-
-    static void on_thread_enter();
-    static void on_thread_exit();
-
-private:
-    Device&                        m_device;
-    std::optional<Gl_vertex_array> m_gl_vertex_array;
-    std::thread::id                m_owner_thread;
-    Vertex_input_state_data        m_data;
-
-    static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
-    static std::vector<Vertex_input_state*>           s_all_vertex_input_states;
-};
-
-class Vertex_input_state_tracker
-{
-public:
-    void reset  ();
-    void execute(const Vertex_input_state* state);
-
-    void set_index_buffer (const erhe::graphics::Buffer* buffer) const;
-    void set_vertex_buffer(std::uintptr_t binding, const erhe::graphics::Buffer* buffer, std::uintptr_t offset);
+    [[nodiscard]] auto get_impl() -> Vertex_input_state_impl&;
+    [[nodiscard]] auto get_impl() const -> const Vertex_input_state_impl&;
 
 private:
-    std::vector<Vertex_input_binding> m_bindings;
-    unsigned int m_last{0};
+    std::unique_ptr<Vertex_input_state_impl> m_impl;
 };
 
 } // namespace erhe::graphics

@@ -49,7 +49,7 @@ class Scene_views;
 class Tools_pipeline_renderpasses
 {
 public:
-    Tools_pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs);
+    Tools_pipeline_renderpasses(Mesh_memory& mesh_memory, Programs& programs);
     erhe::renderer::Pipeline_pass tool1_hidden_stencil;
     erhe::renderer::Pipeline_pass tool2_visible_stencil;
     erhe::renderer::Pipeline_pass tool3_depth_clear;
@@ -64,8 +64,6 @@ public:
     Tools(
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
-
-        erhe::graphics::Device&         graphics_device,
         erhe::scene::Scene_message_bus& scene_message_bus,
         App_context&                    context,
         App_rendering&                  app_rendering,

@@ -2,8 +2,6 @@
 
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -179,8 +177,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         m_light_buffer.bind_light_buffer(encoder, light_range);
 
         if ((parameters.light_camera_viewport.width > 2) && (parameters.light_camera_viewport.height > 2)) {
-            gl::enable(gl::Enable_cap::scissor_test);
-            gl::scissor(
+            encoder.set_scissor_rect(
                 parameters.light_camera_viewport.x + 1,
                 parameters.light_camera_viewport.y + 1,
                 parameters.light_camera_viewport.width - 2,
@@ -229,8 +226,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         }
 
         control_range.release();
-
-        gl::disable(gl::Enable_cap::scissor_test);
     }
 
     texture_heap.unbind();

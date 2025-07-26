@@ -8,12 +8,10 @@
 
 namespace erhe::graphics {
 
-class Device;
-class Resource;
-class Texture;
 class Buffer;
-class Fence;
-class Indirect_command_buffer;
+class Device;
+class Render_pass;
+class Texture;
 
 class Blit_command_encoder final : public Command_encoder
 {
@@ -24,6 +22,8 @@ public:
     Blit_command_encoder(Blit_command_encoder&&) = delete;
     Blit_command_encoder& operator=(Blit_command_encoder&&) = delete;
     ~Blit_command_encoder() override;
+
+    void blit_framebuffer(const Render_pass& source_renderpass, glm::ivec2 source_origin, glm::ivec2 source_size, const Render_pass& destination_renderpass, glm::ivec2 destination_origin);
 
     void copy_from_texture(const Texture* source_texture, std::uintptr_t source_slice,  std::uintptr_t source_level,         glm::ivec3     source_origin,          glm::ivec3 source_size, const Texture* destination_texture, std::uintptr_t destination_slice,  std::uintptr_t destination_level,         glm::ivec3     destination_origin);
     void copy_from_buffer (const Buffer*  source_buffer,  std::uintptr_t source_offset, std::uintptr_t source_bytes_per_row, std::uintptr_t source_bytes_per_image, glm::ivec3 source_size, const Texture* destination_texture, std::uintptr_t destination_slice,  std::uintptr_t destination_level,         glm::ivec3     destination_origin);

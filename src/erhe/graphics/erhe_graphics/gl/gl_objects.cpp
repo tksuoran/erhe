@@ -1,5 +1,4 @@
-#include "erhe_graphics/gl_objects.hpp"
-#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/gl/gl_objects.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -8,10 +7,8 @@
 
 namespace erhe::graphics {
 
-Gl_texture::Gl_texture(Device& device, gl::Texture_target target, bool for_texture_view)
+Gl_texture::Gl_texture(gl::Texture_target target, bool for_texture_view)
 {
-    static_cast<void>(device);
-
     if (!for_texture_view) {
         gl::create_textures(target, 1, &m_gl_name);
     } else {
@@ -20,12 +17,10 @@ Gl_texture::Gl_texture(Device& device, gl::Texture_target target, bool for_textu
     ERHE_VERIFY(m_gl_name != 0);
 }
 
-Gl_texture::Gl_texture(Device& device, gl::Texture_target target, GLuint wrap_name, bool for_texture_view)
+Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name, bool for_texture_view)
     : m_gl_name{wrap_name}
     , m_owned  {wrap_name == 0}
 {
-    static_cast<void>(device);
-
     if (m_owned) {
         if (!for_texture_view) {
             gl::create_textures(target, 1, &m_gl_name);
@@ -65,7 +60,7 @@ auto Gl_texture::gl_name() const -> GLuint
 }
 
 
-Gl_program::Gl_program(Device&)
+Gl_program::Gl_program()
 {
     m_gl_name = gl::create_program();
     ERHE_VERIFY(m_gl_name != 0);
@@ -97,7 +92,7 @@ auto Gl_program::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_shader::Gl_shader(Device&, gl::Shader_type shader_type)
+Gl_shader::Gl_shader(gl::Shader_type shader_type)
 {
     m_gl_name = gl::create_shader(shader_type);
     ERHE_VERIFY(m_gl_name != 0);
@@ -129,10 +124,8 @@ auto Gl_shader::gl_name() const -> unsigned int
     return m_gl_name;
 }
 
-Gl_sampler::Gl_sampler(Device& device)
+Gl_sampler::Gl_sampler()
 {
-    static_cast<void>(device);
-
     gl::create_samplers(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -163,10 +156,8 @@ auto Gl_sampler::gl_name() const -> unsigned int
     return m_gl_name;
 }
 
-Gl_framebuffer::Gl_framebuffer(Device& device)
+Gl_framebuffer::Gl_framebuffer()
 {
-    static_cast<void>(device);
-
     gl::create_framebuffers(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -197,10 +188,8 @@ auto Gl_framebuffer::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_renderbuffer::Gl_renderbuffer(Device& device)
+Gl_renderbuffer::Gl_renderbuffer()
 {
-    static_cast<void>(device);
-
     gl::create_renderbuffers(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -231,10 +220,8 @@ auto Gl_renderbuffer::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_buffer::Gl_buffer(Device& device)
+Gl_buffer::Gl_buffer()
 {
-    static_cast<void>(device);
-
     gl::create_buffers(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -265,46 +252,8 @@ auto Gl_buffer::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-
-Gl_transform_feedback::Gl_transform_feedback(Device& device)
+Gl_query::Gl_query(gl::Query_target target)
 {
-    static_cast<void>(device);
-
-    gl::create_transform_feedbacks(1, &m_gl_name);
-    ERHE_VERIFY(m_gl_name != 0);
-}
-
-Gl_transform_feedback::~Gl_transform_feedback() noexcept
-{
-    if (m_gl_name != 0) {
-        gl::delete_transform_feedbacks(1, &m_gl_name);
-        m_gl_name = 0;
-    }
-}
-
-Gl_transform_feedback::Gl_transform_feedback(Gl_transform_feedback&& old) noexcept
-    : m_gl_name{std::exchange(old.m_gl_name, 0)}
-{
-}
-
-auto Gl_transform_feedback::operator=(Gl_transform_feedback&& old) noexcept -> Gl_transform_feedback&
-{
-    if (&old == this) {
-        return *this;
-    }
-    this->~Gl_transform_feedback();
-    return *new (this) Gl_transform_feedback(std::move(old));
-}
-
-auto Gl_transform_feedback::gl_name() const -> GLuint
-{
-    return m_gl_name;
-}
-
-Gl_query::Gl_query(Device& device, gl::Query_target target)
-{
-    static_cast<void>(device);
-
     gl::create_queries(target, 1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
@@ -335,10 +284,8 @@ auto Gl_query::gl_name() const -> GLuint
     return m_gl_name;
 }
 
-Gl_vertex_array::Gl_vertex_array(Device& device)
+Gl_vertex_array::Gl_vertex_array()
 {
-    static_cast<void>(device);
-
     gl::create_vertex_arrays(1, &m_gl_name);
     ERHE_VERIFY(m_gl_name != 0);
 }
