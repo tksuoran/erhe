@@ -128,18 +128,18 @@ target_link_libraries(${_target}
         concurrentqueue
         erhe::configuration
         erhe::dataformat
-        erhe::gl
         erhe::item
         erhe::window
         fmt::fmt
         glm::glm-header-only
         mango
     PRIVATE
-        erhe::utility
         erhe::defer
         erhe::file
+        erhe::gl
         erhe::log
         erhe::profile
+        erhe::utility
         erhe::verify
 )
 

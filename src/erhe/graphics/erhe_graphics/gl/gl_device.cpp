@@ -100,8 +100,8 @@ auto get_string(gl::String_name string_name) -> std::string
 
 Device_impl::Device_impl(Device& device, erhe::window::Context_window& context_window)
     : m_device             {device}
-    , m_shader_monitor     {device}
     , m_context_window     {context_window}
+    , m_shader_monitor     {device}
     , m_gl_context_provider{device, m_gl_state_tracker}
 {
     ERHE_PROFILE_FUNCTION();

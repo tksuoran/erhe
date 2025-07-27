@@ -34,7 +34,7 @@ auto Render_context::get_line_renderer(const erhe::renderer::Debug_renderer_conf
 auto Render_context::get_line_renderer(unsigned int stencil, bool visible, bool hidden) const -> erhe::renderer::Primitive_renderer
 {
     erhe::renderer::Debug_renderer_config config{
-        .primitive_type    = gl::Primitive_type::lines,
+        .primitive_type    = erhe::graphics::Primitive_type::line,
         .stencil_reference = stencil,
         .draw_visible      = visible,
         .draw_hidden       = hidden

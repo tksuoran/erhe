@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe_dataformat/vertex_format.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
 #include "erhe_graphics/enums.hpp"
 
 #include <memory>
@@ -10,9 +9,7 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe::dataformat {
-    class Vertex_attribute;
-}
+namespace erhe::dataformat { class Vertex_attribute; }
 
 namespace erhe::graphics {
 

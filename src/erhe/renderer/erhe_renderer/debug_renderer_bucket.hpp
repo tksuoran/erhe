@@ -17,10 +17,10 @@ class Debug_renderer;
 class Debug_renderer_config
 {
 public:
-    gl::Primitive_type primitive_type   {gl::Primitive_type{0}};
-    unsigned int       stencil_reference{0};
-    bool               draw_visible     {true};
-    bool               draw_hidden      {false};
+    erhe::graphics::Primitive_type primitive_type   {0};
+    unsigned int                   stencil_reference{0};
+    bool                           draw_visible     {true};
+    bool                           draw_hidden      {false};
 };
 
 auto operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& rhs) -> bool;

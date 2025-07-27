@@ -238,17 +238,18 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
     }
 }
 
-[[nodiscard]] auto to_erhe(const fastgltf::PrimitiveType value) -> gl::Primitive_type
+[[nodiscard]] auto to_erhe(const fastgltf::PrimitiveType value) -> erhe::graphics::Primitive_type
 {
+    // TODO Not all primitive types are natively supported by metal / vulkan
     switch (value) {
-        case fastgltf::PrimitiveType::Points:        return gl::Primitive_type::points;
-        case fastgltf::PrimitiveType::Lines:         return gl::Primitive_type::lines;
-        case fastgltf::PrimitiveType::LineLoop:      return gl::Primitive_type::line_loop;
-        case fastgltf::PrimitiveType::LineStrip:     return gl::Primitive_type::line_strip;
-        case fastgltf::PrimitiveType::Triangles:     return gl::Primitive_type::triangles;
-        case fastgltf::PrimitiveType::TriangleStrip: return gl::Primitive_type::triangle_strip;
-        case fastgltf::PrimitiveType::TriangleFan:   return gl::Primitive_type::triangle_fan;
-        default:                                     return gl::Primitive_type::points;
+        case fastgltf::PrimitiveType::Points:        return erhe::graphics::Primitive_type::point;
+        case fastgltf::PrimitiveType::Lines:         return erhe::graphics::Primitive_type::line;
+        case fastgltf::PrimitiveType::LineLoop:      return erhe::graphics::Primitive_type::line;
+        case fastgltf::PrimitiveType::LineStrip:     return erhe::graphics::Primitive_type::line_strip;
+        case fastgltf::PrimitiveType::Triangles:     return erhe::graphics::Primitive_type::triangle;
+        case fastgltf::PrimitiveType::TriangleStrip: return erhe::graphics::Primitive_type::triangle_strip;
+        case fastgltf::PrimitiveType::TriangleFan:   return erhe::graphics::Primitive_type::triangle;
+        default:                                     return erhe::graphics::Primitive_type::point;
     }
 }
 

@@ -11,7 +11,7 @@ namespace editor {
 auto Create_shape::get_line_renderer(const Create_preview_settings& preview_settings) -> erhe::renderer::Primitive_renderer
 {
     erhe::renderer::Debug_renderer_config config {
-        .primitive_type    = gl::Primitive_type::lines,
+        .primitive_type    = erhe::graphics::Primitive_type::line,
         .stencil_reference = 2,
         .draw_visible      = true,
         .draw_hidden       = true

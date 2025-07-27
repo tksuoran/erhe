@@ -5,8 +5,6 @@
 
 namespace editor {
 
-static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
-
 auto Mesh_memory::get_vertex_buffer_size(std::size_t stream_index) const -> std::size_t
 {
     int vertex_buffer_size{stream_index == 0 ? 8 : 32}; // in megabytes

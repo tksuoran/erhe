@@ -131,7 +131,7 @@ void Cube_renderer::render(const Render_parameters& parameters)
     const erhe::graphics::Render_pipeline_state& pipeline = parameters.pipeline;
     parameters.render_encoder.set_render_pipeline_state(pipeline);
     const std::size_t cube_count   = parameters.cube_instance_buffer.bind(parameters.render_encoder);
-    const GLsizei     vertex_count = static_cast<GLsizei>(cube_count * 6 * 6);
+    const std::size_t vertex_count = cube_count * 6 * 6;
     parameters.render_encoder.draw_primitives(pipeline.data.input_assembly.primitive_topology, 0, vertex_count);
 
     camera_buffer_range.value().release();

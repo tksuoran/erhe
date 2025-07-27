@@ -250,7 +250,11 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
 
         m_vertex_ssbo_buffer.bind(encoder, vertex_buffer_range);
 
-        encoder.draw_primitives(m_pipeline.data.input_assembly.primitive_topology, 0, static_cast<GLsizei>(6 * quad_count));
+        encoder.draw_primitives(
+            m_pipeline.data.input_assembly.primitive_topology,
+            0,
+            6 * quad_count
+        );
 
         vertex_buffer_range.release();
     }

@@ -148,12 +148,15 @@ void Debug_renderer_bucket::clear()
     m_draws.clear();
 }
 
-[[nodiscard]] auto vertex_count_from_primitive_count(std::size_t primitive_count, gl::Primitive_type primitive_type) -> std::size_t
+[[nodiscard]] auto vertex_count_from_primitive_count(
+    std::size_t                    primitive_count,
+    erhe::graphics::Primitive_type primitive_type
+) -> std::size_t
 {
     switch (primitive_type) {
-        case gl::Primitive_type::points:    return primitive_count;
-        case gl::Primitive_type::lines:     return 2 * primitive_count;
-        case gl::Primitive_type::triangles: return 3 * primitive_count;
+        case erhe::graphics::Primitive_type::point:    return primitive_count;
+        case erhe::graphics::Primitive_type::line:     return 2 * primitive_count;
+        case erhe::graphics::Primitive_type::triangle: return 3 * primitive_count;
         default: {
             ERHE_FATAL("TODO");
             return 0;
@@ -163,7 +166,7 @@ void Debug_renderer_bucket::clear()
 
 void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_encoder& encoder)
 {
-    if (m_config.primitive_type != gl::Primitive_type::lines) {
+    if (m_config.primitive_type != erhe::graphics::Primitive_type::line) {
         ERHE_FATAL("TODO");
     }
 
@@ -218,7 +221,7 @@ void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& rende
             render_encoder.draw_primitives(
                 m_pipeline_hidden.data.input_assembly.primitive_topology,
                 0,
-                static_cast<GLint>(6 * draw.primitive_count)
+                6 * draw.primitive_count
             );
         }
     }
@@ -232,7 +235,7 @@ void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& rende
             render_encoder.draw_primitives(
                 m_pipeline_visible.data.input_assembly.primitive_topology,
                 0,
-                static_cast<GLint>(6 * draw.primitive_count)
+                6 * draw.primitive_count
             );
         }
     }
