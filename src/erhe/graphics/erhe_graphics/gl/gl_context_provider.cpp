@@ -1,6 +1,6 @@
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/gl_context_provider.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/gl/gl_context_provider.hpp"
+#include "erhe_graphics/gl/gl_state_tracker.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
@@ -9,10 +9,10 @@
 
 namespace erhe::graphics {
 
-Gl_context_provider::Gl_context_provider(erhe::graphics::Device& graphics_device, OpenGL_state_tracker& opengl_state_tracker)
-    : m_graphics_device     {graphics_device}
-    , m_opengl_state_tracker{opengl_state_tracker}
-    , m_main_thread_id      {std::this_thread::get_id()}
+Gl_context_provider::Gl_context_provider(Device& device, OpenGL_state_tracker& gl_state_tracker)
+    : m_device          {device}
+    , m_gl_state_tracker{gl_state_tracker}
+    , m_main_thread_id  {std::this_thread::get_id()}
 {
 }
 
@@ -87,7 +87,7 @@ auto Gl_context_provider::acquire_gl_context() -> Gl_worker_context
     //ZoneValue(context.id);
     ERHE_VERIFY(context.context != nullptr);
     context.context->make_current();
-    m_opengl_state_tracker.on_thread_enter();
+    m_gl_state_tracker.on_thread_enter();
     log_context->trace("Made current GL context {}", context.id);
     return context;
 }
@@ -107,7 +107,7 @@ void Gl_context_provider::release_gl_context(Gl_worker_context context)
     //const std::string text = fmt::format("Releasing GL context {}", context.id);
     //ERHE_PROFILE_MESSAGE(text.c_str(), text.length());
     //ZoneValue(context.id);
-    m_opengl_state_tracker.on_thread_exit();
+    m_gl_state_tracker.on_thread_exit();
     context.context->clear_current();
     m_worker_context_pool.enqueue(context);
     m_condition_variable.notify_one();

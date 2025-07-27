@@ -1,9 +1,10 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/gl/gl_shader_stages.hpp"
 #include "erhe_graphics/glsl_format_source.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/gl/gl_debug.hpp"
+#include "erhe_graphics/gl/gl_helpers.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -325,11 +326,11 @@ template <typename T>
 
 } // anonymous namespace
 
-auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
+auto Shader_stages_prototype_impl::compile(const Shader_stage& shader) -> Gl_shader
 {
     ERHE_PROFILE_FUNCTION();
 
-    Gl_shader gl_shader{m_graphics_device, shader.type};
+    Gl_shader gl_shader{to_gl(shader.type)};
 
     if (m_state == state_fail) {
         return gl_shader;
@@ -373,7 +374,10 @@ auto Shader_stages_prototype::compile(const Shader_stage& shader) -> Gl_shader
     return gl_shader;
 }
 
-auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string
+auto Shader_stages_prototype_impl::get_final_source(
+    const Shader_stage&         shader,
+    std::optional<unsigned int> gl_name
+) -> std::string
 {
     if (gl_name.has_value()) {
         const auto i = m_final_sources.find(gl_name.value());
@@ -381,10 +385,10 @@ auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::
             return i->second;
         }
     }
-    return m_create_info.final_source(m_graphics_device, shader, &m_paths, gl_name);
+    return m_create_info.final_source(m_device, shader, &m_paths, gl_name);
 }
 
-auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool
+auto Shader_stages_prototype_impl::post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -415,11 +419,10 @@ auto Shader_stages_prototype::post_compile(const Shader_stage& shader, Gl_shader
     return true;
 }
 
-Shader_stages_prototype::Shader_stages_prototype(Device& graphics_device, Shader_stages_create_info&& create_info)
-    : m_graphics_device      {graphics_device}
-    , m_handle               {graphics_device}
+Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, Shader_stages_create_info&& create_info)
+    : m_device               {device}
     , m_create_info          {create_info}
-    , m_default_uniform_block{graphics_device}
+    , m_default_uniform_block{device}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -428,11 +431,10 @@ Shader_stages_prototype::Shader_stages_prototype(Device& graphics_device, Shader
         post_link();
     }
 }
-Shader_stages_prototype::Shader_stages_prototype(Device& graphics_device, const Shader_stages_create_info& create_info)
-    : m_graphics_device      {graphics_device}
-    , m_handle               {graphics_device}
+Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, const Shader_stages_create_info& create_info)
+    : m_device               {device}
     , m_create_info          {create_info}
-    , m_default_uniform_block{graphics_device}
+    , m_default_uniform_block{device}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -442,7 +444,7 @@ Shader_stages_prototype::Shader_stages_prototype(Device& graphics_device, const 
     }
 }
 
-void Shader_stages_prototype::compile_shaders()
+void Shader_stages_prototype_impl::compile_shaders()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -459,7 +461,7 @@ void Shader_stages_prototype::compile_shaders()
     }
 }
 
-auto Shader_stages_prototype::link_program() -> bool
+auto Shader_stages_prototype_impl::link_program() -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -500,7 +502,7 @@ auto Shader_stages_prototype::link_program() -> bool
     return true;
 }
 
-void Shader_stages_prototype::post_link()
+void Shader_stages_prototype_impl::post_link()
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -595,7 +597,7 @@ void Shader_stages_prototype::post_link()
     m_prelink_shaders.clear();
 }
 
-auto Shader_stages_prototype::is_valid() -> bool
+auto Shader_stages_prototype_impl::is_valid() -> bool
 {
     if ((m_state != state_ready) && (m_state != state_fail)) {
         post_link();
@@ -645,7 +647,7 @@ auto is_array_and_nonzero(const std::string& name)
     return true;
 }
 
-void Shader_stages_prototype::dump_reflection() const
+void Shader_stages_prototype_impl::dump_reflection() const
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -809,12 +811,12 @@ void Shader_stages_prototype::dump_reflection() const
     /// }
 }
 
-auto Shader_stages_prototype::create_info() const -> const Shader_stages_create_info&
+auto Shader_stages_prototype_impl::create_info() const -> const Shader_stages_create_info&
 {
     return m_create_info;
 }
 
-auto Shader_stages_prototype::name() const -> const std::string&
+auto Shader_stages_prototype_impl::name() const -> const std::string&
 {
     return m_create_info.name;
 }

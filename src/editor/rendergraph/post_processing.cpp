@@ -2,12 +2,11 @@
 
 #include "app_context.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/align.hpp"
@@ -361,7 +360,7 @@ auto Post_processing::make_program(
 
     std::vector<erhe::graphics::Shader_stage_extension> extensions; 
     std::vector<std::pair<std::string, std::string>>    defines;
-    const bool bindless_textures = graphics_device.info.use_bindless_texture;
+    const bool bindless_textures = graphics_device.get_info().use_bindless_texture;
     if (flags & flag_first_pass       ) { defines.push_back({"FIRST_PASS", "1"}); }
     if (flags & flag_last_pass        ) { defines.push_back({"LAST_PASS",  "1"}); }
     if (flags & flag_source_input     ) { defines.push_back({"SOURCE", "s_input"}); }
@@ -377,8 +376,8 @@ auto Post_processing::make_program(
             .fragment_outputs      = &m_fragment_outputs,
             .default_uniform_block = bindless_textures ? nullptr : &m_default_uniform_block,
             .shaders = {
-                { gl::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path("post_processing.vert")},
-                { gl::Shader_type::fragment_shader, m_shader_path / fs_path }
+                { erhe::graphics::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path("post_processing.vert")},
+                { erhe::graphics::Shader_type::fragment_shader, m_shader_path / fs_path }
             },
             .build                 = true
         };
@@ -386,7 +385,7 @@ auto Post_processing::make_program(
 
 Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_context)
     : m_context         {app_context}
-    , m_fragment_outputs{erhe::graphics::Fragment_output{.name = "out_color", .type = gl::Fragment_shader_output_type::float_vec4, .location = 0}}
+    , m_fragment_outputs{erhe::graphics::Fragment_output{.name = "out_color", .type = erhe::graphics::Glsl_type::float_vec4, .location = 0}}
     , m_dummy_texture   {d.create_dummy_texture()}
     , m_sampler_linear{
         d,
@@ -412,17 +411,17 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
 
     , m_default_uniform_block{d}
     , m_input_texture_resource{
-        d.info.use_bindless_texture
+        d.get_info().use_bindless_texture
             ? nullptr
             : m_default_uniform_block.add_sampler("s_input", erhe::graphics::Glsl_type::sampler_2d, s_input_texture)
     }
     , m_downsample_texture_resource{
-        d.info.use_bindless_texture
+        d.get_info().use_bindless_texture
             ? nullptr
             : m_default_uniform_block.add_sampler("s_downsample", erhe::graphics::Glsl_type::sampler_2d, s_downsample_texture)
     }
     , m_upsample_texture_resource{
-        d.info.use_bindless_texture
+        d.get_info().use_bindless_texture
             ? nullptr
             : m_default_uniform_block.add_sampler("s_upsample", erhe::graphics::Glsl_type::sampler_2d, s_upsample_texture)
     }
@@ -505,11 +504,11 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
     }
     , m_gpu_timer{d, "Post_processing"}
 {
-    d.shader_monitor.add(m_shader_stages.downsample_with_lowpass_input);
-    d.shader_monitor.add(m_shader_stages.downsample_with_lowpass      );
-    d.shader_monitor.add(m_shader_stages.downsample                   );
-    d.shader_monitor.add(m_shader_stages.upsample                     );
-    d.shader_monitor.add(m_shader_stages.upsample_last                );
+    d.get_shader_monitor().add(m_shader_stages.downsample_with_lowpass_input);
+    d.get_shader_monitor().add(m_shader_stages.downsample_with_lowpass      );
+    d.get_shader_monitor().add(m_shader_stages.downsample                   );
+    d.get_shader_monitor().add(m_shader_stages.upsample                     );
+    d.get_shader_monitor().add(m_shader_stages.upsample_last                );
 }
 
 auto Post_processing::create_node(
@@ -543,25 +542,13 @@ void Post_processing::post_process(Post_processing_node& node)
         m_context.graphics_device->get_buffer_alignment(m_parameter_block.get_binding_target())
     );
 
-    const uint64_t input_handle      = graphics_device.get_handle(*input_texture.get(),     m_sampler_linear);
-    const uint64_t downsample_handle = graphics_device.get_handle(*node.downsample_texture, m_sampler_linear_mipmap_nearest);
-    const uint64_t upsample_handle   = graphics_device.get_handle(*node.upsample_texture,   m_sampler_linear_mipmap_nearest);
-    if (m_context.graphics_device->info.use_bindless_texture) {
-        ERHE_PROFILE_SCOPE("make post processing textures resident");
-        gl::make_texture_handle_resident_arb(input_handle);
-        gl::make_texture_handle_resident_arb(downsample_handle);
-        gl::make_texture_handle_resident_arb(upsample_handle);
-    } else {
-        ERHE_VERIFY(m_input_texture_resource     ->get_texture_unit() == s_input_texture);
-        ERHE_VERIFY(m_downsample_texture_resource->get_texture_unit() == s_downsample_texture);
-        ERHE_VERIFY(m_upsample_texture_resource  ->get_texture_unit() == s_upsample_texture);
-        gl::bind_texture_unit(s_input_texture,      input_texture->gl_name());
-        gl::bind_sampler     (s_input_texture,      m_sampler_linear.gl_name());
-        gl::bind_texture_unit(s_downsample_texture, node.downsample_texture->gl_name());
-        gl::bind_sampler     (s_downsample_texture, m_sampler_linear_mipmap_nearest.gl_name());
-        gl::bind_texture_unit(s_upsample_texture,   node.upsample_texture->gl_name());
-        gl::bind_sampler     (s_upsample_texture,   m_sampler_linear_mipmap_nearest.gl_name());
-    }
+    erhe::graphics::Texture_heap texture_heap{graphics_device, *m_dummy_texture.get(), m_sampler_linear, s_reserved_texture_slot_count};
+
+    texture_heap.assign(s_input_texture,      input_texture.get(),           &m_sampler_linear);
+    texture_heap.assign(s_downsample_texture, node.downsample_texture.get(), &m_sampler_linear_mipmap_nearest);
+    texture_heap.assign(s_upsample_texture,   node.upsample_texture.get(),   &m_sampler_linear_mipmap_nearest);
+
+    texture_heap.bind();
 
     // Downsample passes
     for (const size_t source_level : node.downsample_source_levels) {
@@ -579,11 +566,11 @@ void Post_processing::post_process(Post_processing_node& node)
             binding_point
         );
         if (source_level == 0) {
-            graphics_device.opengl_state_tracker.execute_(m_pipelines.downsample_with_lowpass_input);
+            encoder.set_render_pipeline_state(m_pipelines.downsample_with_lowpass_input);
         } else if (source_level < node.lowpass_count) {
-            graphics_device.opengl_state_tracker.execute_(m_pipelines.downsample_with_lowpass);
+            encoder.set_render_pipeline_state(m_pipelines.downsample_with_lowpass);
         } else {
-            graphics_device.opengl_state_tracker.execute_(m_pipelines.downsample);
+            encoder.set_render_pipeline_state(m_pipelines.downsample);
         }
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
@@ -598,17 +585,18 @@ void Post_processing::post_process(Post_processing_node& node)
     // Upsample passes
     for (const size_t source_level : node.upsample_source_levels) {
         const size_t destination_level = source_level - 1;
-        if (source_level == node.upsample_source_levels.front()) {
-            m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.upsample_first);
-        } else if (source_level == node.upsample_source_levels.back()) {
-            m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.upsample_last);
-        } else {
-            m_context.graphics_device->opengl_state_tracker.execute_(m_pipelines.upsample);
-        }
         erhe::graphics::Render_pass* render_pass = node.upsample_render_passes.at(destination_level).get();
         const unsigned int binding_point = m_parameter_block.get_binding_point();
 
         erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
+
+        if (source_level == node.upsample_source_levels.front()) {
+            encoder.set_render_pipeline_state(m_pipelines.upsample_first);
+        } else if (source_level == node.upsample_source_levels.back()) {
+            encoder.set_render_pipeline_state(m_pipelines.upsample_last);
+        } else {
+            encoder.set_render_pipeline_state(m_pipelines.upsample);
+        }
 
         const int render_pass_width  = render_pass->get_render_target_width();
         const int render_pass_height = render_pass->get_render_target_height();
@@ -624,12 +612,7 @@ void Post_processing::post_process(Post_processing_node& node)
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
-    if (m_context.graphics_device->info.use_bindless_texture) {
-        ERHE_PROFILE_SCOPE("make input texture non resident");
-        gl::make_texture_handle_non_resident_arb(input_handle);
-        gl::make_texture_handle_non_resident_arb(downsample_handle);
-        gl::make_texture_handle_non_resident_arb(upsample_handle);
-    }
+    texture_heap.unbind();
 }
 
 }

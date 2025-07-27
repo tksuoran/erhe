@@ -6,9 +6,7 @@
 #include "programs.hpp"
 
 #include "erhe_dataformat/dataformat_log.hpp"
-#include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/gl_log.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/gltf_log.hpp"
 #include "erhe_gltf/image_transfer.hpp"
@@ -135,7 +133,7 @@ public:
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
             m_graphics_device.start_of_frame();
-            gl::finish();
+            // m_graphics_device.wait_for_idle()
             // m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
 
             m_window.poll_events();
@@ -457,8 +455,6 @@ void run_example()
     }
 
     mesh_memory.buffer_transfer_queue.flush();
-    gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
-    gl::enable      (gl::Enable_cap::framebuffer_srgb);
 
     Example example{window, scene, graphics_device, forward_renderer, gltf_data, mesh_memory, programs};
     example.run();

@@ -7,7 +7,6 @@
 #include "erhe_buffer/ibuffer.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_file/file.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
@@ -994,14 +993,14 @@ private:
             .row_stride  = image_info.row_stride,
             .debug_label = std::string{image_name} // path.filename().string()
         };
-        const int  mipmap_count    = texture_create_info.calculate_level_count();
+        const int  mipmap_count    = texture_create_info.get_texture_level_count();
         const bool generate_mipmap = mipmap_count != image_info.level_count;
         if (generate_mipmap) {
             texture_create_info.level_count = mipmap_count;
         }
 
         // TODO Handle
-        ERHE_VERIFY(image_info.width * erhe::graphics::get_gl_pixel_byte_count(image_info.format) == image_info.row_stride);
+        ERHE_VERIFY(image_info.width * erhe::dataformat::get_format_size(image_info.format) == image_info.row_stride);
         const int byte_count = image_info.row_stride * image_info.height;
         ERHE_VERIFY(byte_count >= 1);
 
@@ -1079,7 +1078,7 @@ private:
                     texture_create_info.row_stride  = image_info.row_stride;
                     texture_create_info.debug_label = name;
 
-                    mipmap_count    = texture_create_info.calculate_level_count();
+                    mipmap_count    = texture_create_info.get_texture_level_count();
                     generate_mipmap = mipmap_count != image_info.level_count;
                     if (generate_mipmap) {
                         texture_create_info.level_count = mipmap_count;
@@ -1089,7 +1088,7 @@ private:
                     texture->set_source_path(m_arguments.path);
 
                     // TODO Handle depth > 1 and mipmaps
-                    ERHE_VERIFY(image_info.width * erhe::graphics::get_gl_pixel_byte_count(image_info.format) == image_info.row_stride);
+                    ERHE_VERIFY(image_info.width * erhe::dataformat::get_format_size(image_info.format) == image_info.row_stride);
                     const int byte_count = image_info.row_stride * image_info.height;
                     ERHE_VERIFY(byte_count >= 1);
 
@@ -1204,12 +1203,11 @@ private:
         create_info.address_mode[0] = from_gl(sampler.wrapS);
         create_info.address_mode[1] = from_gl(sampler.wrapT);
         create_info.address_mode[2] = from_gl(sampler.wrapT);
-        create_info.max_anisotropy  = m_arguments.graphics_device.limits.max_texture_max_anisotropy; // TODO
+        create_info.max_anisotropy  = m_arguments.graphics_device.get_info().max_texture_max_anisotropy; // TODO
         create_info.debug_label     = sampler_name;
 
         auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(m_arguments.graphics_device, create_info);
         // TODO erhe_sampler->set_source_path(m_path);
-        erhe_sampler->set_debug_label(sampler_name);
         m_data_out.samplers[sampler_index] = erhe_sampler;
         m_data_out.samplers.push_back(erhe_sampler);
     }

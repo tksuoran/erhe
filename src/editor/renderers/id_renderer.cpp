@@ -5,23 +5,19 @@
 #include "renderers/programs.hpp"
 
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_gl/enum_bit_mask_operators.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
-#include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
-#include "erhe_verify/verify.hpp"
 
 namespace editor {
 
@@ -36,27 +32,6 @@ using erhe::graphics::Color_blend_state;
 using glm::mat4;
 
 // TODO Check mapping and coherency
-Id_renderer::Id_frame_resources::Id_frame_resources(erhe::graphics::Device& graphics_device, const std::size_t /*slot*/)
-    : pixel_pack_buffer{
-        graphics_device,
-        erhe::graphics::Buffer_create_info{
-            .capacity_byte_count = s_id_buffer_size,
-            .usage               = erhe::graphics::Buffer_usage::pixel,
-            .direction           = erhe::graphics::Buffer_direction::gpu_to_cpu,
-            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
-            .mapping             = erhe::graphics::Buffer_mapping::persistent,
-            .coherency           = erhe::graphics::Buffer_coherency::on,
-            .debug_label         = "ID"
-        }
-    }
-{
-}
-
-Id_renderer::Id_frame_resources::Id_frame_resources(Id_frame_resources&& other) noexcept = default;
-
-auto Id_renderer::Id_frame_resources::operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources& = default;
-
-static constexpr std::string_view c_id_renderer_initialize_component{"Id_renderer::initialize_component()"};
 
 [[nodiscard]] auto get_max_draw_count() -> std::size_t
 {
@@ -102,10 +77,13 @@ Id_renderer::Id_renderer(
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
         .color_blend    = Color_blend_state::color_writes_disabled,
     }}
+    , m_texture_read_buffer{
+        graphics_device,
+        erhe::graphics::Buffer_target::pixel,
+        "Id_renderer::m_texture_read_buffer"
+    }
     , m_gpu_timer{graphics_device, "Id_renderer"}
 {
-    create_id_frame_resources();
-
     const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "id_renderer");
     ini.get("enabled", enabled);
 }
@@ -114,18 +92,9 @@ Id_renderer::~Id_renderer()
 {
 }
 
-void Id_renderer::create_id_frame_resources()
+auto Id_renderer::get_current_transfer_entry() -> Transfer_entry&
 {
-    ERHE_PROFILE_FUNCTION();
-
-    for (size_t slot = 0; slot < s_frame_resources_count; ++slot) {
-        m_id_frame_resources.emplace_back(m_graphics_device, slot);
-    }
-}
-
-auto Id_renderer::current_id_frame_resources() -> Id_frame_resources&
-{
-    return m_id_frame_resources[m_current_id_frame_resource_slot];
+    return m_transfer_entries[m_current_transfer_entry_slot];
 }
 
 void Id_renderer::next_frame()
@@ -134,7 +103,7 @@ void Id_renderer::next_frame()
         return;
     }
 
-    m_current_id_frame_resource_slot = (m_current_id_frame_resource_slot + 1) % s_frame_resources_count;
+    m_current_transfer_entry_slot = (m_current_transfer_entry_slot + 1) % s_transfer_entry_count;
 }
 
 void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
@@ -145,90 +114,55 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
         return;
     }
 
-    ERHE_VERIFY(m_use_renderbuffers != m_use_textures);
+    if (
+        !m_color_texture ||
+        (m_color_texture->get_width()  != viewport.width) ||
+        (m_color_texture->get_height() != viewport.height)
+    ) {
+        m_color_texture.reset();
+        m_depth_texture.reset();
+        m_render_pass.reset();
+        m_color_texture = std::make_unique<Texture>(
+            m_graphics_device,
+            Texture::Create_info{
+                .device      = m_graphics_device,
+                .type        = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
+                .use_mipmaps = false,
+                .width       = viewport.width,
+                .height      = viewport.height,
+                .debug_label = "ID Render color"
+            }
+        );
+        m_depth_texture = std::make_unique<Texture>(
+            m_graphics_device,
+            Texture::Create_info{
+                .device      = m_graphics_device,
+                .type        = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
+                .use_mipmaps = false,
+                .width       = viewport.width,
+                .height      = viewport.height,
+                .debug_label = "ID Render depth"
+            }
+        );
+        erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+        render_pass_descriptor.color_attachments[0].texture      = m_color_texture.get();
+        render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
+        render_pass_descriptor.depth_attachment.texture          = m_depth_texture.get();
+        render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Store;
+        render_pass_descriptor.render_target_width               = viewport.width;
+        render_pass_descriptor.render_target_height              = viewport.height;
+        render_pass_descriptor.debug_label                       = "ID";
+        m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
+        constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
 
-    if (m_use_renderbuffers) {
-        if (
-            !m_color_renderbuffer ||
-            (m_color_renderbuffer->get_width()  != viewport.width) ||
-            (m_color_renderbuffer->get_height() != viewport.height)
-        ) {
-            m_color_renderbuffer.reset();
-            m_depth_renderbuffer.reset();
-            m_render_pass.reset();
-            m_color_renderbuffer = std::make_unique<Renderbuffer>(
-                m_graphics_device,
-                erhe::dataformat::Format::format_8_vec4_unorm,
-                viewport.width,
-                viewport.height
-            );
-            m_depth_renderbuffer = std::make_unique<Renderbuffer>(
-                m_graphics_device,
-                erhe::dataformat::Format::format_d32_sfloat,
-                viewport.width,
-                viewport.height
-            );
-            m_color_renderbuffer->set_debug_label("ID Color");
-            m_depth_renderbuffer->set_debug_label("ID Depth");
-            erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-            render_pass_descriptor.color_attachments[0].renderbuffer = m_color_renderbuffer.get();
-            render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
-            render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
-            render_pass_descriptor.depth_attachment.renderbuffer     = m_depth_renderbuffer.get();
-            render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
-            render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Store;
-            render_pass_descriptor.render_target_width               = viewport.width;
-            render_pass_descriptor.render_target_height              = viewport.height;
-            render_pass_descriptor.debug_label                       = "ID";
-            m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
-        }
-    }
-
-    if (m_use_textures) {
-        if (
-            !m_color_texture ||
-            (m_color_texture->get_width()  != viewport.width) ||
-            (m_color_texture->get_height() != viewport.height)
-        ) {
-            m_color_texture.reset();
-            m_depth_texture.reset();
-            m_render_pass.reset();
-            m_color_texture = std::make_unique<Texture>(
-                m_graphics_device,
-                Texture::Create_info{
-                    .device      = m_graphics_device,
-                    .type        = erhe::graphics::Texture_type::texture_2d,
-                    .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
-                    .use_mipmaps = false,
-                    .width       = viewport.width,
-                    .height      = viewport.height,
-                    .debug_label = "ID Render color"
-                }
-            );
-            m_depth_texture = std::make_unique<Texture>(
-                m_graphics_device,
-                Texture::Create_info{
-                    .device      = m_graphics_device,
-                    .type        = erhe::graphics::Texture_type::texture_2d,
-                    .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
-                    .use_mipmaps = false,
-                    .width       = viewport.width,
-                    .height      = viewport.height,
-                    .debug_label = "ID Render depth"
-                }
-            );
-            erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-            render_pass_descriptor.color_attachments[0].texture      = m_color_texture.get();
-            render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
-            render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
-            render_pass_descriptor.depth_attachment.texture          = m_depth_texture.get();
-            render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
-            render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Store;
-            render_pass_descriptor.render_target_width               = viewport.width;
-            render_pass_descriptor.render_target_height              = viewport.height;
-            render_pass_descriptor.debug_label                       = "ID";
-            m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
-            constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
+        const std::size_t color_image_size = s_extent * s_extent * erhe::dataformat::get_format_size(m_color_texture->get_pixelformat());
+        const std::size_t depth_image_size = s_extent * s_extent * erhe::dataformat::get_format_size(m_depth_texture->get_pixelformat());
+        for (Transfer_entry& entry : m_transfer_entries) {
+            entry.data.resize(color_image_size + depth_image_size);
         }
     }
 }
@@ -280,6 +214,8 @@ void Id_renderer::render(erhe::graphics::Render_command_encoder& render_encoder,
 
 void Id_renderer::render(const Render_parameters& parameters)
 {
+    using namespace erhe::graphics;
+
     ERHE_PROFILE_FUNCTION();
 
     if (!m_enabled) {
@@ -299,20 +235,27 @@ void Id_renderer::render(const Render_parameters& parameters)
         return;
     }
 
-    erhe::graphics::Scoped_debug_group debug_group{"Id_renderer::render()"};
-    erhe::graphics::Scoped_gpu_timer   timer      {m_gpu_timer};
+    const std::size_t color_image_size = s_extent * s_extent * erhe::dataformat::get_format_size(m_color_texture->get_pixelformat());
+    const std::size_t depth_image_size = s_extent * s_extent * erhe::dataformat::get_format_size(m_depth_texture->get_pixelformat());
+
+    Scoped_debug_group debug_group{"Id_renderer::render()"};
+    Scoped_gpu_timer   timer      {m_gpu_timer};
 
     update_framebuffer(viewport);
 
     const auto projection_transforms = camera.projection_transforms(viewport);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
-    auto& idr = current_id_frame_resources();
-    idr.x_offset        = std::max(x - (static_cast<int>(s_extent / 2)), 0);
-    idr.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
-    idr.clip_from_world = clip_from_world;
+    Transfer_entry& entry = get_current_transfer_entry();
+    if (entry.state == Transfer_entry::State::Waiting_for_read) {
+        log_id_render->warn("Id_renderer::render(): Transfer_entry slot busy");
+        return;
+    }
+    entry.x_offset        = std::max(x - (static_cast<int>(s_extent / 2)), 0);
+    entry.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
+    entry.clip_from_world = clip_from_world;
 
-    erhe::graphics::Buffer_range camera_range = m_camera_buffers.update(
+    Buffer_range camera_range = m_camera_buffers.update(
         *camera.projection(),
         *camera.get_node(),
         viewport,
@@ -322,79 +265,101 @@ void Id_renderer::render(const Render_parameters& parameters)
         0
     );
 
-    erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
-    m_camera_buffers.bind(encoder, camera_range);
-
-    gl::viewport   (viewport.x, viewport.y, viewport.width, viewport.height);
-    if (m_use_scissor) {
-        gl::scissor(idr.x_offset, idr.y_offset, s_extent, s_extent);
-        gl::enable (gl::Enable_cap::scissor_test);
-    }
-
-    //// TODO Abstraction for partial clear
-    //gl::clear_color(1.0f, 1.0f, 1.0f, 0.1f);
-    //gl::clear      (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
-
-    m_primitive_buffers.reset_id_ranges();
-
-    encoder.set_render_pipeline_state(m_pipeline);
-
-    for (auto meshes : content_mesh_spans) {
-        render(encoder, meshes);
-    }
-
-    // Clear depth for tool pixels
+    // Render
     {
-        encoder.set_render_pipeline_state(m_selective_depth_clear_pipeline);
-        gl::depth_range(0.0f, 0.0f); // TODO move to render pipeline
-        for (auto mesh_spans : tool_mesh_spans) {
-            render(encoder, mesh_spans);
+        Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+        m_camera_buffers.bind(encoder, camera_range);
+
+        if (m_use_scissor) {
+            encoder.set_scissor_rect(entry.x_offset, entry.y_offset, s_extent, s_extent);
         }
-    }
 
-    // Resume normal depth usage
-    {
-        //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
+        //// TODO Abstraction for partial clear
+        //gl::clear_color(1.0f, 1.0f, 1.0f, 0.1f);
+        //gl::clear      (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
+
+        m_primitive_buffers.reset_id_ranges();
 
         encoder.set_render_pipeline_state(m_pipeline);
-        gl::depth_range(0.0f, 1.0f); // TODO move to render pipeline
-        for (auto meshes : tool_mesh_spans) {
+
+        for (auto meshes : content_mesh_spans) {
             render(encoder, meshes);
+        }
+
+        // Clear depth for tool pixels
+        {
+            encoder.set_render_pipeline_state(m_selective_depth_clear_pipeline);
+            encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+            encoder.set_viewport_depth_range(0.0f, 0.0f); // Reverse Z far
+            for (auto mesh_spans : tool_mesh_spans) {
+                render(encoder, mesh_spans);
+            }
+        }
+
+        // Resume normal depth usage
+        {
+            //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
+
+            encoder.set_render_pipeline_state(m_pipeline);
+            encoder.set_viewport_depth_range(0.0f, 1.0f);
+            for (auto meshes : tool_mesh_spans) {
+                render(encoder, meshes);
+            }
         }
     }
 
+    // Transfer pixel data from GPU to CPU
     {
-        if (m_use_scissor) {
-            gl::disable(gl::Enable_cap::scissor_test);
-        }
-        gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, idr.pixel_pack_buffer.gl_name());
-        void* const color_offset = nullptr;
-        void* const depth_offset = reinterpret_cast<void*>(s_extent * s_extent * 4);
-        const unsigned int fbo = m_render_pass->gl_name();
-        gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, fbo);
-        gl::named_framebuffer_read_buffer(fbo, gl::Color_buffer::color_attachment0);
-        gl::read_pixels(
-            idr.x_offset,
-            idr.y_offset,
-            s_extent,
-            s_extent,
-            gl::Pixel_format::rgba,
-            gl::Pixel_type::unsigned_byte,
-            color_offset
+        entry.buffer_range = m_texture_read_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_read, color_image_size + depth_image_size);
+        Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder();
+
+        const Texture* source_texture              = m_color_texture.get();
+        std::uintptr_t source_slice                = 0;
+        std::uintptr_t source_level                = 0;
+        glm::ivec3     source_origin               = glm::ivec3{entry.x_offset, entry.y_offset, 0};
+        glm::ivec3     source_size                 = glm::ivec3{s_extent, s_extent, 1};
+        const Buffer*  destination_buffer          = entry.buffer_range.get_buffer()->get_buffer();
+        std::uintptr_t destination_offset          = 0;
+        std::uintptr_t destination_bytes_per_row   = s_extent * erhe::dataformat::get_format_size(m_color_texture->get_pixelformat());
+        std::uintptr_t destination_bytes_per_image = s_extent * destination_bytes_per_row;
+
+        encoder.copy_from_texture(
+            source_texture             ,
+            source_slice               ,
+            source_level               ,
+            source_origin              ,
+            source_size                ,
+            destination_buffer         ,
+            destination_offset         ,
+            destination_bytes_per_row  ,
+            destination_bytes_per_image
         );
-        gl::read_pixels(
-            idr.x_offset,
-            idr.y_offset,
-            s_extent,
-            s_extent,
-            gl::Pixel_format::depth_component,
-            gl::Pixel_type::float_,
-            depth_offset
+
+        source_texture     = m_depth_texture.get();
+        destination_offset = destination_bytes_per_image;
+
+        encoder.copy_from_texture(
+            source_texture             ,
+            source_slice               ,
+            source_level               ,
+            source_origin              ,
+            source_size                ,
+            destination_buffer         ,
+            destination_offset         ,
+            destination_bytes_per_row  ,
+            destination_bytes_per_image
         );
-        gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, 0);
-        idr.sync         = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0);
-        idr.state        = Id_frame_resources::State::Waiting_for_read;
-        idr.frame_number = m_graphics_device.get_frame_number();
+
+        entry.state        = Transfer_entry::State::Waiting_for_read;
+        entry.frame_number = m_graphics_device.get_frame_number();
+        m_graphics_device.add_completion_handler(
+            [&entry]() {
+                std::span<std::byte> gpu_data = entry.buffer_range.get_span();
+                memcpy(&entry.data[0], gpu_data.data(), gpu_data.size_bytes());
+                entry.buffer_range.release();
+                entry.state = Transfer_entry::State::Read_complete;
+            }
+        );
     }
 
     camera_range.release();
@@ -411,50 +376,32 @@ inline T read_as(uint8_t const* raw_memory)
 
 auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool
 {
-    if (m_id_frame_resources.empty()) {
-        return false;
-    }
-    int slot = static_cast<int>(m_current_id_frame_resource_slot);
+    int slot = static_cast<int>(m_current_transfer_entry_slot);
 
-    for (size_t i = 0; i < s_frame_resources_count; ++i) {
+    for (size_t i = 0; i < s_transfer_entry_count; ++i) {
         --slot;
         if (slot < 0) {
-            slot = s_frame_resources_count - 1;
+            slot = s_transfer_entry_count - 1;
         }
 
-        auto& idr = m_id_frame_resources[slot];
-
-        if (idr.state == Id_frame_resources::State::Waiting_for_read) {
-            GLint sync_status = GL_UNSIGNALED;
-            gl::get_sync_iv(idr.sync, gl::Sync_parameter_name::sync_status, 4, nullptr, &sync_status);
-
-            if (sync_status == GL_SIGNALED) {
-                gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, idr.pixel_pack_buffer.gl_name());
-
-                std::span<std::byte> gpu_data = idr.pixel_pack_buffer.get_map();
-
-                memcpy(&idr.data[0], gpu_data.data(), gpu_data.size_bytes());
-                idr.state = Id_frame_resources::State::Read_complete;
-            }
-        }
-
-        if (idr.state == Id_frame_resources::State::Read_complete) {
-            if ((x >= idr.x_offset) && (y >= idr.y_offset)) {
-                const int x_ = x - idr.x_offset;
-                const int y_ = y - idr.y_offset;
+        Transfer_entry& entry = m_transfer_entries[slot];
+        if (entry.state == Transfer_entry::State::Read_complete) {
+            if ((x >= entry.x_offset) && (y >= entry.y_offset)) {
+                const int x_ = x - entry.x_offset;
+                const int y_ = y - entry.y_offset;
                 if ((static_cast<size_t>(x_) < s_extent) && (static_cast<size_t>(y_) < s_extent)) {
                     const uint32_t stride = s_extent * 4;
-                    const uint8_t  r      = idr.data[x_ * 4 + y_ * stride + 0];
-                    const uint8_t  g      = idr.data[x_ * 4 + y_ * stride + 1];
-                    const uint8_t  b      = idr.data[x_ * 4 + y_ * stride + 2];
+                    const uint8_t  r      = entry.data[x_ * 4 + y_ * stride + 0];
+                    const uint8_t  g      = entry.data[x_ * 4 + y_ * stride + 1];
+                    const uint8_t  b      = entry.data[x_ * 4 + y_ * stride + 2];
                     // if ((r == 255u) && (g == 255u) && (b == 255u)) { // overflow detected in id.vert
                     //     static int counter = 0;
                     //     ++counter; // breakpoint placeholder
                     // }
-                    const uint8_t* const depth_ptr = &idr.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
+                    const uint8_t* const depth_ptr = &entry.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
                     out_id           = (r << 16u) | (g << 8u) | b;
                     out_depth        = read_as<float>(depth_ptr);
-                    out_frame_number = idr.frame_number;
+                    out_frame_number = entry.frame_number;
                     // log_id_render->debug("id: r = {:>3} g = {:>3} b = {:>3} id = {} depth = {} frame = {}", r, g, b, out_id, out_depth, out_frame_number);
                     return true;
                 }

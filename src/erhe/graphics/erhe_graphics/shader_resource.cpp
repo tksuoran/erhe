@@ -484,7 +484,7 @@ auto Shader_resource::get_texture_unit() const -> int
     return m_binding_point;
 }
 
-auto Shader_resource::get_binding_target() const-> erhe::graphics::Buffer_target
+auto Shader_resource::get_binding_target() const-> Buffer_target
 {
     switch (m_type) {
         case Type::uniform_block:        return Buffer_target::uniform;
@@ -524,7 +524,7 @@ auto Shader_resource::get_size_bytes() const -> std::size_t
     // TODO Shader storage buffer alignment?
     if (is_block(m_type)) {
         std::size_t padded_size = m_offset;
-        while ((padded_size % m_device.implementation_defined.uniform_buffer_offset_alignment) != 0) {
+        while ((padded_size % m_device.get_info().uniform_buffer_offset_alignment) != 0) {
             ++padded_size;
         }
 
@@ -614,7 +614,7 @@ auto Shader_resource::get_layout_string() const -> std::string
         return {};
     }
 
-    if ((m_type == Type::sampler) && (m_device.info.glsl_version < 430)) {
+    if ((m_type == Type::sampler) && (m_device.get_info().glsl_version < 430)) {
         return {};
     }
 
@@ -626,7 +626,7 @@ auto Shader_resource::get_layout_string() const -> std::string
         ss << "std140";
         first = false;
     } else if (m_type == Type::shader_storage_block) {
-        if (m_device.info.glsl_version < 430) {
+        if (m_device.get_info().glsl_version < 430) {
             ss << "std140";
         } else {
             ss << "std430";
@@ -647,7 +647,7 @@ auto Shader_resource::get_layout_string() const -> std::string
         ss << "offset = " << m_offset_in_parent;
         first = false;
     }
-    if (m_device.info.glsl_version >= 420) {
+    if (m_device.get_info().glsl_version >= 420) {
         if (m_binding_point != -1) {
             if (!first)
             {
@@ -658,7 +658,7 @@ auto Shader_resource::get_layout_string() const -> std::string
         }
     }
     ss << ") ";
-    if (m_device.info.glsl_version >= 420) {
+    if (m_device.get_info().glsl_version >= 420) {
         if (m_readonly) {
             ss << "readonly ";
         }
@@ -1029,12 +1029,12 @@ void Shader_resource::indent(std::stringstream& ss, const int indent_level) cons
     }
 }
 
-void add_vertex_stream(const erhe::dataformat::Vertex_stream& vertex_stream, erhe::graphics::Shader_resource& vertex_struct, erhe::graphics::Shader_resource& vertices_block)
+void add_vertex_stream(const erhe::dataformat::Vertex_stream& vertex_stream, Shader_resource& vertex_struct, Shader_resource& vertices_block)
 {
     for (const auto& attribute : vertex_stream.attributes) {
         vertex_struct.add_attribute(attribute);
     }
-    vertices_block.add_struct("vertices", &vertex_struct, erhe::graphics::Shader_resource::unsized_array);
+    vertices_block.add_struct("vertices", &vertex_struct, Shader_resource::unsized_array);
 }
 
 } // namespace erhe::graphics

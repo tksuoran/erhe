@@ -101,7 +101,11 @@ auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem
 
     std::span<const std::uint8_t>          src_span{image.data.data(), image.data.size()};
     std::size_t                            byte_count = src_span.size_bytes();
-    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{graphics_device, erhe::graphics::Buffer_target::pixel, "hextiles load_texture() texture upload"};
+    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{
+        graphics_device,
+        erhe::graphics::Buffer_target::pixel,
+        "hextiles load_texture() texture upload"
+    };
     erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
     std::span<std::byte>                   dst_span     = buffer_range.get_span();
     memcpy(dst_span.data(), src_span.data(), byte_count);

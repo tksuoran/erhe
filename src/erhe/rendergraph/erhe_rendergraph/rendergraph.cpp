@@ -3,7 +3,7 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
-#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 

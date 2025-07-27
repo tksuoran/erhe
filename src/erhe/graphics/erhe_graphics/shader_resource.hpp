@@ -265,6 +265,6 @@ private:
     // Only used for uniforms in program
 };
 
-void add_vertex_stream(const erhe::dataformat::Vertex_stream& vertex_stream, erhe::graphics::Shader_resource& vertex_struct, erhe::graphics::Shader_resource& vertices_block);
+void add_vertex_stream(const erhe::dataformat::Vertex_stream& vertex_stream, Shader_resource& vertex_struct, Shader_resource& vertices_block);
 
 } // namespace erhe::graphics

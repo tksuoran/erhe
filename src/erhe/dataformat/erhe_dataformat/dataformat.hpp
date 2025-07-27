@@ -128,14 +128,14 @@ enum class Format_kind {
 [[nodiscard]] auto srgb_to_linear(float cs) -> float;
 [[nodiscard]] auto linear_rgb_to_srgb(float cl) -> float;
 
-[[nodiscard]] auto c_str(Format format) -> const char*;
-[[nodiscard]] auto get_format_kind(Format format) -> Format_kind;
-[[nodiscard]] auto get_component_count(Format format) -> std::size_t;
+[[nodiscard]] auto c_str                  (Format format) -> const char*;
+[[nodiscard]] auto get_format_kind        (Format format) -> Format_kind;
+[[nodiscard]] auto get_component_count    (Format format) -> std::size_t;
 [[nodiscard]] auto get_component_byte_size(Format format) -> std::size_t;
-[[nodiscard]] auto has_color(Format format) -> bool;
-[[nodiscard]] auto get_format_size(Format format) -> std::size_t;
-[[nodiscard]] auto get_depth_size(Format format) -> std::size_t;
-[[nodiscard]] auto get_stencil_size(Format format) -> std::size_t;
+[[nodiscard]] auto has_color              (Format format) -> bool;
+[[nodiscard]] auto get_format_size        (Format format) -> std::size_t;
+[[nodiscard]] auto get_depth_size         (Format format) -> std::size_t;
+[[nodiscard]] auto get_stencil_size       (Format format) -> std::size_t;
 void convert(const void* src, Format src_format, void* dst, Format dst_format, float scale);
 
 } // namespace erhe::dataformat

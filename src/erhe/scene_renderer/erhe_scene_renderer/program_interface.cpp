@@ -1,17 +1,12 @@
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-namespace erhe::graphics {
-    class Vertex_attribute;
-}
+namespace erhe::graphics { class Vertex_attribute; }
 
 namespace erhe::scene_renderer {
 
@@ -25,7 +20,7 @@ Program_interface::Program_interface(
     , fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
-            .type     = gl::Fragment_shader_output_type::float_vec4,
+            .type     = erhe::graphics::Glsl_type::float_vec4,
             .location = 0
         }
     }
@@ -83,18 +78,10 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&cube_interface.cube_control_block);
     create_info.add_interface_block(&primitive_interface.primitive_block);
     create_info.add_interface_block(&joint_interface.joint_block);
-
-    if (graphics_device.info.gl_version < 430) {
-        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object)) {
-            create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
-            create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
-            create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
-        }
-    }
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
 
     bool found = false;
-    auto process_shader = [&create_info, &found](gl::Shader_type shader_type, const std::filesystem::path& path) -> void
+    auto process_shader = [&create_info, &found](erhe::graphics::Shader_type shader_type, const std::filesystem::path& path) -> void
     {
         if (erhe::file::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", path, true)) {
             create_info.shaders.emplace_back(shader_type, path);
@@ -102,10 +89,10 @@ auto Program_interface::make_prototype(
         }
     };
 
-    process_shader(gl::Shader_type::compute_shader,  cs_path);
-    process_shader(gl::Shader_type::fragment_shader, fs_path);
-    process_shader(gl::Shader_type::geometry_shader, gs_path);
-    process_shader(gl::Shader_type::vertex_shader,   vs_path);
+    process_shader(erhe::graphics::Shader_type::compute_shader,  cs_path);
+    process_shader(erhe::graphics::Shader_type::fragment_shader, fs_path);
+    process_shader(erhe::graphics::Shader_type::geometry_shader, gs_path);
+    process_shader(erhe::graphics::Shader_type::vertex_shader,   vs_path);
 
     if (!found) {
         log_program_interface->error("Could not load shader source file {} (.vert / .frag / .comp / .geom)", create_info.name);

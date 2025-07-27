@@ -9,7 +9,6 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"

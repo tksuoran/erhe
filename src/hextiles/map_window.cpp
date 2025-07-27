@@ -12,18 +12,14 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_graphics/render_pass.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 
 #include <algorithm>
-#include <functional>
 
-namespace hextiles
-{
+namespace hextiles {
 
 #pragma region commands
 Map_free_zoom_command::Map_free_zoom_command(erhe::commands::Commands& commands, Map_window& map_window)
@@ -552,8 +548,6 @@ void Map_window::render()
     int height = static_cast<int>(extent_y);
     m_tile_renderer.render(encoder, erhe::math::Viewport{0, 0, width, height});
     m_text_renderer.render(encoder, erhe::math::Viewport{0, 0, width, height});
-
-    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 }
 
 void Map_window::blit(

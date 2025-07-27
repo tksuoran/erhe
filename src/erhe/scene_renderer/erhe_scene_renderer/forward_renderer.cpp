@@ -2,21 +2,17 @@
 
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
-#include "erhe_graphics/opengl_state_tracker.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
-#include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <functional>
 
@@ -167,12 +163,13 @@ void Forward_renderer::render(const Render_parameters& parameters)
         erhe::graphics::Scoped_debug_group pass_scope{debug_group_name};
 
         if (use_override_shader_stages) {
-            m_graphics_device.opengl_state_tracker.shader_stages.execute(used_shader_stages);
+            parameters.render_encoder.set_render_pipeline_state(pipeline, used_shader_stages);
+        } else {
+            parameters.render_encoder.set_render_pipeline_state(pipeline);
         }
-        m_graphics_device.opengl_state_tracker.execute_(pipeline, use_override_shader_stages);
-        m_graphics_device.opengl_state_tracker.vertex_input.set_index_buffer(parameters.index_buffer);
-        m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(0, parameters.vertex_buffer0, 0);
-        m_graphics_device.opengl_state_tracker.vertex_input.set_vertex_buffer(1, parameters.vertex_buffer1, 0);
+        parameters.render_encoder.set_index_buffer(parameters.index_buffer);
+        parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer0, 0, 0);
+        parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer1, 0, 1);
 
         for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");

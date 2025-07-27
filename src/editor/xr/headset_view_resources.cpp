@@ -93,11 +93,6 @@ Headset_view_resources::Headset_view_resources(
     render_pass_descriptor.debug_label = fmt::format("XR {}", slot);
     m_render_pass = std::make_shared<Render_pass>(graphics_device, render_pass_descriptor);
 
-    if (!m_render_pass->check_status()) {
-        log_headset->warn("Invalid framebuffer for headset - disabling headset");
-        return;
-    }
-
     m_camera = std::make_shared<erhe::scene::Camera>(
         fmt::format("Headset Camera slot {}", slot)
     );

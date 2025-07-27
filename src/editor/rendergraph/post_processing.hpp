@@ -144,9 +144,10 @@ private:
         erhe::graphics::Render_pipeline_state upsample_last;
     };
 
-    static constexpr int    s_input_texture      = 0;
-    static constexpr int    s_downsample_texture = 1;
-    static constexpr int    s_upsample_texture   = 2;
+    static constexpr int    s_input_texture               = 0;
+    static constexpr int    s_downsample_texture          = 1;
+    static constexpr int    s_upsample_texture            = 2;
+    static constexpr int    s_reserved_texture_slot_count = 3;
     static constexpr size_t s_max_level_count = 20;
 
     App_context&                                       m_context;

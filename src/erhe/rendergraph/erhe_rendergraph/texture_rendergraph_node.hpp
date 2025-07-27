@@ -45,15 +45,15 @@ public:
     void reconfigure       (int sample_count);
 
 protected:
-    int                                           m_input_key;
-    int                                           m_output_key;
-    erhe::dataformat::Format                      m_color_format;
-    erhe::dataformat::Format                      m_depth_stencil_format;
-    int                                           m_sample_count;
-    std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
-    std::shared_ptr<erhe::graphics::Texture>      m_multisampled_color_texture;
-    std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_stencil_renderbuffer;
-    std::unique_ptr<erhe::graphics::Render_pass>  m_render_pass;
+    int                                          m_input_key;
+    int                                          m_output_key;
+    erhe::dataformat::Format                     m_color_format;
+    erhe::dataformat::Format                     m_depth_stencil_format;
+    int                                          m_sample_count;
+    std::shared_ptr<erhe::graphics::Texture>     m_color_texture;
+    std::shared_ptr<erhe::graphics::Texture>     m_multisampled_color_texture;
+    std::unique_ptr<erhe::graphics::Texture>     m_depth_stencil_texture;
+    std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
 };
 
 } // namespace erhe::rendergraph

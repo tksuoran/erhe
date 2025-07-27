@@ -4,7 +4,6 @@
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
-
 #include "erhe_renderer/pipeline_renderpass.hpp"
 
 namespace erhe::graphics {

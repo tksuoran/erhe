@@ -163,6 +163,7 @@ void Window_imgui_host::begin_imgui_frame()
         ImGuiWindowFlags_NoDocking             |
         ImGuiWindowFlags_NoTitleBar            |
         ImGuiWindowFlags_NoCollapse            |
+        ImGuiWindowFlags_NoScrollbar           |
         ImGuiWindowFlags_NoResize              |
         ImGuiWindowFlags_NoMove                |
         ImGuiWindowFlags_NoBringToFrontOnFocus | 

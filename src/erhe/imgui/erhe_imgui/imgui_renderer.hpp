@@ -15,7 +15,6 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <vector>
 
 namespace erhe::graphics {
@@ -34,10 +33,10 @@ namespace erhe::imgui {
 class Imgui_settings
 {
 public:
-    std::string primary_font        {"res/fonts/SourceSansPro-Regular.otf"};
-    std::string mono_font           {"res/fonts/SourceCodePro-Semibold.otf"};
-    std::string material_design_font{"res/fonts/materialdesignicons-webfont.ttf"};
-    std::string icon_font           {"res/fonts/icons.ttf"};
+    std::string primary_font             {"res/fonts/SourceSansPro-Regular.otf"};
+    std::string mono_font                {"res/fonts/SourceCodePro-Semibold.otf"};
+    std::string material_design_font     {"res/fonts/materialdesignicons-webfont.ttf"};
+    std::string icon_font                {"res/fonts/icons.ttf"};
     float       font_size                {24.0f};
     float       vr_font_size             {24.0f};
     float       material_design_font_size{0.0f};
@@ -54,13 +53,12 @@ public:
     std::size_t draw_parameter_struct_array{0}; // struct
 };
 
-// TODO Merge texture and texture_indices
 class Imgui_draw_parameter_struct_offsets
 {
 public:
     std::size_t clip_rect{0}; // vec4
-    std::size_t texture  {0}; // uvec2   for bindless textures
-    std::size_t padding  {0}; // uvec2   for bindless textures
+    std::size_t texture  {0}; // uvec2
+    std::size_t padding  {0}; // uvec2
 };
 
 class Imgui_program_interface
@@ -119,7 +117,6 @@ public:
         erhe::graphics::Sampler_mipmap_mode      mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     ) -> bool;
 
-    //// void use(const std::shared_ptr<erhe::graphics::Texture>& texture, const uint64_t handle);
     void render_draw_data(erhe::graphics::Render_command_encoder& encoder);
 
     void begin_frame    ();

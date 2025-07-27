@@ -22,7 +22,6 @@
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
-#include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_log/log_glm.hpp"
@@ -154,9 +153,7 @@ void Viewport_scene_view::execute_rendergraph_node()
     }
 
     // TODO This would be? needed for basic (non-ImGui) viewports?
-    //// gl::enable(gl::Enable_cap::scissor_test);
-    //// gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
-    //// ERHE_DEFER( gl::disable(gl::Enable_cap::scissor_test); );
+    // encoder.set_scissor_rect(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
 
     scene_root->get_scene().update_node_transforms();
 

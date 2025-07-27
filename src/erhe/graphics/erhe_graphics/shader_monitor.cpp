@@ -1,5 +1,6 @@
 #include "erhe_graphics/shader_monitor.hpp"
 
+#include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/glsl_file_loader.hpp"
 #include "erhe_configuration/configuration.hpp"
@@ -27,7 +28,7 @@ void Shader_monitor::begin()
 }
 
 Shader_monitor::Shader_monitor(Device& device)
-    : m_graphics_device{device}
+    : m_device{device}
 {
 }
 
@@ -49,7 +50,7 @@ void Shader_monitor::set_enabled(const bool enabled)
     set_run(enabled);
 }
 
-void Shader_monitor::add(erhe::graphics::Shader_stages_create_info create_info, erhe::graphics::Shader_stages* shader_stages)
+void Shader_monitor::add(Shader_stages_create_info create_info, erhe::graphics::Shader_stages* shader_stages)
 {
     ERHE_VERIFY(shader_stages != nullptr);
     for (const auto& shader : create_info.shaders) {
@@ -73,9 +74,9 @@ void Shader_monitor::add(Reloadable_shader_stages& reloadable_shader_stages)
 }
 
 void Shader_monitor::add(
-    const std::filesystem::path&                     path,
-    const erhe::graphics::Shader_stages_create_info& create_info,
-    erhe::graphics::Shader_stages*                   shader_stages
+    const std::filesystem::path&     path,
+    const Shader_stages_create_info& create_info,
+    Shader_stages*                   shader_stages
 )
 {
     ERHE_VERIFY(shader_stages != nullptr);
@@ -147,7 +148,7 @@ void Shader_monitor::update_once_per_frame()
     for (auto* f : m_reload_list) {
         for (auto& entry : f->reload_entries) {
             const auto& create_info = entry.create_info;
-            erhe::graphics::Shader_stages_prototype prototype{m_graphics_device, create_info};
+            Shader_stages_prototype prototype{m_device, create_info};
             if (prototype.is_valid()) {
                 entry.shader_stages->reload(std::move(prototype));
                 std::stringstream ss;

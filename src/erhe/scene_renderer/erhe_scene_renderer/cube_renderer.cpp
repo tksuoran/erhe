@@ -1,8 +1,6 @@
 #include "erhe_scene_renderer/cube_renderer.hpp"
 #include "erhe_scene_renderer/cube_instance_buffer.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/debug.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
@@ -99,7 +97,7 @@ void Cube_renderer::render(const Render_parameters& parameters)
 
     erhe::graphics::Scoped_debug_group pass_scope{"Cube_renderer::render()"};
 
-    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+    parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
 
     using Buffer_range = erhe::graphics::Buffer_range;
     std::optional<Buffer_range> camera_buffer_range{};

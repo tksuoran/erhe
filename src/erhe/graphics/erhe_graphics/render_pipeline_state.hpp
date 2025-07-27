@@ -4,6 +4,8 @@
 #include "erhe_graphics/state/depth_stencil_state.hpp"
 #include "erhe_graphics/state/input_assembly_state.hpp"
 #include "erhe_graphics/state/multisample_state.hpp"
+#include "erhe_graphics/state/viewport_state.hpp"
+#include "erhe_graphics/state/scissor_state.hpp"
 #include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -18,14 +20,16 @@ class Vertex_input_state;
 class Render_pipeline_data
 {
 public:
-    const char*               name          {nullptr};
-    Shader_stages*            shader_stages {nullptr};
-    const Vertex_input_state* vertex_input  {nullptr};
-    Input_assembly_state      input_assembly{};
-    Multisample_state         multisample   {};
-    Rasterization_state       rasterization {};
-    Depth_stencil_state       depth_stencil {};
-    Color_blend_state         color_blend   {};
+    const char*                name                {nullptr};
+    Shader_stages*             shader_stages       {nullptr};
+    const Vertex_input_state*  vertex_input        {nullptr};
+    Input_assembly_state       input_assembly      {};
+    Multisample_state          multisample         {};
+    Viewport_depth_range_state viewport_depth_range{};
+    Scissor_state              scissor             {};
+    Rasterization_state        rasterization       {};
+    Depth_stencil_state        depth_stencil       {};
+    Color_blend_state          color_blend         {};
 };
 
 class Render_pipeline_state final

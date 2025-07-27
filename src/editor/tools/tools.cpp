@@ -13,7 +13,6 @@
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_commands/commands.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene.hpp"
@@ -21,13 +20,14 @@
 
 namespace editor {
 
-using Vertex_input_state   = erhe::graphics::Vertex_input_state;
-using Input_assembly_state = erhe::graphics::Input_assembly_state;
-using Rasterization_state  = erhe::graphics::Rasterization_state;
-using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
-using Color_blend_state    = erhe::graphics::Color_blend_state;
+using Vertex_input_state         = erhe::graphics::Vertex_input_state;
+using Input_assembly_state       = erhe::graphics::Input_assembly_state;
+using Viewport_depth_range_state = erhe::graphics::Viewport_depth_range_state;
+using Rasterization_state        = erhe::graphics::Rasterization_state;
+using Depth_stencil_state        = erhe::graphics::Depth_stencil_state;
+using Color_blend_state          = erhe::graphics::Color_blend_state;
 
-Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs)
+Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memory, Programs& programs)
     // Tool pass one: For hidden tool parts, set stencil to s_stencil_tool_mesh_hidden.
     // Only reads depth buffer, only writes stencil buffer.
     : tool1_hidden_stencil{erhe::graphics::Render_pipeline_state{{
@@ -39,22 +39,22 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
-            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::greater),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::greater),
             .stencil_test_enable = true,
             .stencil_front = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::replace,
-                .function        = gl::Stencil_function::always,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::always,
                 .reference       = s_stencil_tool_mesh_hidden,
                 .test_mask       = 0b00000000u,
                 .write_mask      = 0b11111111u
             },
             .stencil_back = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::replace,
-                .function        = gl::Stencil_function::always,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::always,
                 .reference       = s_stencil_tool_mesh_hidden,
                 .test_mask       = 0b00000000u,
                 .write_mask      = 0b11111111u
@@ -74,22 +74,22 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
-            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::lequal),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal),
             .stencil_test_enable = true,
             .stencil_front = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::replace,
-                .function        = gl::Stencil_function::always,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::always,
                 .reference       = s_stencil_tool_mesh_visible,
                 .test_mask       = 0b00000000u,
                 .write_mask      = 0b11111111u
             },
             .stencil_back = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::replace,
-                .function        = gl::Stencil_function::always,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::always,
                 .reference       = s_stencil_tool_mesh_visible,
                 .test_mask       = 0b00000000u,
                 .write_mask      = 0b11111111u
@@ -103,17 +103,19 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
     , tool3_depth_clear{
         erhe::graphics::Render_pipeline_state{
             {
-                .name           = "Tool pass 3: Set depth to fixed value",
-                .shader_stages  = &programs.tool.shader_stages,
-                .vertex_input   = &mesh_memory.vertex_input,
-                .input_assembly = Input_assembly_state::triangle,
-                .rasterization  = Rasterization_state::cull_mode_back_ccw,
-                .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
-                .color_blend    = Color_blend_state::color_writes_disabled
+                .name                 = "Tool pass 3: Set depth to fixed value",
+                .shader_stages        = &programs.tool.shader_stages,
+                .vertex_input         = &mesh_memory.vertex_input,
+                .input_assembly       = Input_assembly_state::triangle,
+                .viewport_depth_range = Viewport_depth_range_state{
+                    .min_depth = 0.0f,
+                    .max_depth = 0.0f
+                },
+                .rasterization        = Rasterization_state::cull_mode_back_ccw,
+                .depth_stencil        = Depth_stencil_state::depth_test_always_stencil_test_disabled,
+                .color_blend          = Color_blend_state::color_writes_disabled
             }
-        },
-        [](){ gl::depth_range(0.0f, 0.0f); },
-        [](){ gl::depth_range(0.0f, 1.0f); }
+        }
     }
 
     // Tool pass four: Set depth to proper tool depth
@@ -139,22 +141,22 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = graphics_device.depth_function(gl::Depth_function::lequal),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal),
             .stencil_test_enable = true,
             .stencil_front = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::keep,
-                .function        = gl::Stencil_function::equal,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                .function        = erhe::graphics::Compare_operation::equal,
                 .reference       = s_stencil_tool_mesh_visible,
                 .test_mask       = 0b11111111u,
                 .write_mask      = 0b11111111u
             },
             .stencil_back = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::keep,
-                .function        = gl::Stencil_function::equal,
+                .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                .function        = erhe::graphics::Compare_operation::equal,
                 .reference       = s_stencil_tool_mesh_visible,
                 .test_mask       = 0b11111111u,
                 .write_mask      = 0b11111111u
@@ -174,22 +176,22 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .depth_stencil = {
             .depth_test_enable      = true,
             .depth_write_enable     = true,
-            .depth_compare_op       = graphics_device.depth_function(gl::Depth_function::lequal),
+            .depth_compare_op       = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal),
             .stencil_test_enable    = true,
             .stencil_front = {
-                .stencil_fail_op    = gl::Stencil_op::keep,
-                .z_fail_op          = gl::Stencil_op::keep,
-                .z_pass_op          = gl::Stencil_op::keep,
-                .function           = gl::Stencil_function::equal,
+                .stencil_fail_op    = erhe::graphics::Stencil_op::keep,
+                .z_fail_op          = erhe::graphics::Stencil_op::keep,
+                .z_pass_op          = erhe::graphics::Stencil_op::keep,
+                .function           = erhe::graphics::Compare_operation::equal,
                 .reference          = s_stencil_tool_mesh_hidden,
                 .test_mask          = 0b11111111u,
                 .write_mask         = 0b11111111u
             },
             .stencil_back = {
-                .stencil_fail_op    = gl::Stencil_op::keep,
-                .z_fail_op          = gl::Stencil_op::keep,
-                .z_pass_op          = gl::Stencil_op::replace,
-                .function           = gl::Stencil_function::always,
+                .stencil_fail_op    = erhe::graphics::Stencil_op::keep,
+                .z_fail_op          = erhe::graphics::Stencil_op::keep,
+                .z_pass_op          = erhe::graphics::Stencil_op::replace,
+                .function           = erhe::graphics::Compare_operation::always,
                 .reference          = s_stencil_tool_mesh_hidden,
                 .test_mask          = 0b00000000u,
                 .write_mask         = 0b11111111u,
@@ -198,14 +200,14 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
         .color_blend = {
             .enabled                = true,
             .rgb = {
-                .equation_mode      = gl::Blend_equation_mode::func_add,
-                .source_factor      = gl::Blending_factor::constant_alpha,
-                .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+                .source_factor      = erhe::graphics::Blending_factor::constant_alpha,
+                .destination_factor = erhe::graphics::Blending_factor::one_minus_constant_alpha
             },
             .alpha = {
-                .equation_mode      = gl::Blend_equation_mode::func_add,
-                .source_factor      = gl::Blending_factor::constant_alpha,
-                .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+                .source_factor      = erhe::graphics::Blending_factor::constant_alpha,
+                .destination_factor = erhe::graphics::Blending_factor::one_minus_constant_alpha
             },
             .constant               = { 0.0f, 0.0f, 0.0f, 0.6f }
         }
@@ -216,7 +218,6 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device&
 Tools::Tools(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
-    erhe::graphics::Device&         graphics_device,
     erhe::scene::Scene_message_bus& scene_message_bus,
     App_context&                    app_context,
     App_rendering&                  app_rendering,
@@ -224,7 +225,7 @@ Tools::Tools(
     Programs&                       programs
 )
     : m_context              {app_context}
-    , m_pipeline_renderpasses{graphics_device, mesh_memory, programs}
+    , m_pipeline_renderpasses{mesh_memory, programs}
 {
     ERHE_PROFILE_FUNCTION();
 

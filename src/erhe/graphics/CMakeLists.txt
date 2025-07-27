@@ -9,16 +9,12 @@ erhe_target_sources_grouped(
     erhe_graphics/buffer.hpp
     erhe_graphics/buffer_transfer_queue.cpp
     erhe_graphics/buffer_transfer_queue.hpp
-    erhe_graphics/command_buffer.cpp
-    erhe_graphics/command_buffer.hpp
     erhe_graphics/command_encoder.cpp
     erhe_graphics/command_encoder.hpp
     erhe_graphics/compute_command_encoder.cpp
     erhe_graphics/compute_command_encoder.hpp
     erhe_graphics/compute_pipeline_state.cpp
     erhe_graphics/compute_pipeline_state.hpp
-    erhe_graphics/debug.cpp
-    erhe_graphics/debug.hpp
     erhe_graphics/device.cpp
     erhe_graphics/device.hpp
     erhe_graphics/enums.cpp
@@ -27,10 +23,6 @@ erhe_target_sources_grouped(
     erhe_graphics/fragment_output.hpp
     erhe_graphics/fragment_outputs.cpp
     erhe_graphics/fragment_outputs.hpp
-    erhe_graphics/gl_context_provider.cpp
-    erhe_graphics/gl_context_provider.hpp
-    erhe_graphics/gl_objects.cpp
-    erhe_graphics/gl_objects.hpp
     erhe_graphics/glsl_file_loader.cpp
     erhe_graphics/glsl_file_loader.hpp
     erhe_graphics/glsl_format_source.cpp
@@ -42,16 +34,12 @@ erhe_target_sources_grouped(
     erhe_graphics/image_loader.hpp
     erhe_graphics/image_loader_wuffs.cpp
     erhe_graphics/image_loader_wuffs.hpp
-    erhe_graphics/opengl_state_tracker.cpp
-    erhe_graphics/opengl_state_tracker.hpp
     erhe_graphics/render_command_encoder.cpp
     erhe_graphics/render_command_encoder.hpp
     erhe_graphics/render_pass.cpp
     erhe_graphics/render_pass.hpp
     erhe_graphics/render_pipeline_state.cpp
     erhe_graphics/render_pipeline_state.hpp
-    erhe_graphics/renderbuffer.cpp
-    erhe_graphics/renderbuffer.hpp
     erhe_graphics/sampler.cpp
     erhe_graphics/sampler.hpp
     erhe_graphics/shader_monitor.cpp
@@ -61,7 +49,6 @@ erhe_target_sources_grouped(
     erhe_graphics/shader_stages.cpp
     erhe_graphics/shader_stages.hpp
     erhe_graphics/shader_stages_create_info.cpp
-    erhe_graphics/shader_stages_prototype.cpp
     erhe_graphics/span.hpp
     erhe_graphics/state/color_blend_state.cpp
     erhe_graphics/state/color_blend_state.hpp
@@ -73,12 +60,52 @@ erhe_target_sources_grouped(
     erhe_graphics/state/multisample_state.hpp
     erhe_graphics/state/rasterization_state.cpp
     erhe_graphics/state/rasterization_state.hpp
+    erhe_graphics/state/scissor_state.cpp
+    erhe_graphics/state/scissor_state.hpp
     erhe_graphics/state/vertex_input_state.cpp
     erhe_graphics/state/vertex_input_state.hpp
     erhe_graphics/state/viewport_state.cpp
     erhe_graphics/state/viewport_state.hpp
     erhe_graphics/texture.cpp
     erhe_graphics/texture.hpp
+
+    erhe_graphics/gl/gl_blit_command_encoder.cpp
+    erhe_graphics/gl/gl_blit_command_encoder.hpp
+    erhe_graphics/gl/gl_buffer.cpp
+    erhe_graphics/gl/gl_buffer.hpp
+    erhe_graphics/gl/gl_command_encoder.cpp
+    erhe_graphics/gl/gl_command_encoder.hpp
+    erhe_graphics/gl/gl_compute_command_encoder.cpp
+    erhe_graphics/gl/gl_compute_command_encoder.hpp
+    erhe_graphics/gl/gl_context_provider.cpp
+    erhe_graphics/gl/gl_context_provider.hpp
+    erhe_graphics/gl/gl_debug.cpp
+    erhe_graphics/gl/gl_debug.hpp
+    erhe_graphics/gl/gl_device.cpp
+    erhe_graphics/gl/gl_device.hpp
+    erhe_graphics/gl/gl_helpers.cpp
+    erhe_graphics/gl/gl_helpers.hpp
+    erhe_graphics/gl/gl_objects.cpp
+    erhe_graphics/gl/gl_objects.hpp
+    erhe_graphics/gl/gl_gpu_timer.cpp
+    erhe_graphics/gl/gl_gpu_timer.hpp
+    erhe_graphics/gl/gl_state_tracker.cpp
+    erhe_graphics/gl/gl_state_tracker.hpp
+    erhe_graphics/gl/gl_render_command_encoder.cpp
+    erhe_graphics/gl/gl_render_command_encoder.hpp
+    erhe_graphics/gl/gl_render_pass.cpp
+    erhe_graphics/gl/gl_render_pass.hpp
+    erhe_graphics/gl/gl_renderbuffer.cpp
+    erhe_graphics/gl/gl_renderbuffer.hpp
+    erhe_graphics/gl/gl_sampler.cpp
+    erhe_graphics/gl/gl_sampler.hpp
+    erhe_graphics/gl/gl_shader_stages.cpp
+    erhe_graphics/gl/gl_shader_stages.hpp
+    erhe_graphics/gl/gl_shader_stages_prototype.cpp
+    erhe_graphics/gl/gl_texture.cpp
+    erhe_graphics/gl/gl_texture.hpp
+    erhe_graphics/gl/gl_vertex_input_state.cpp
+    erhe_graphics/gl/gl_vertex_input_state.hpp
 )
 
 if (ERHE_SPIRV)

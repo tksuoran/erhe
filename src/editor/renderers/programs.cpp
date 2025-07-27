@@ -31,7 +31,7 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
     : shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , default_uniform_block{graphics_device}
     , shadow_sampler_compare{
-        graphics_device.info.use_bindless_texture
+        graphics_device.get_info().use_bindless_texture
             ? nullptr
             : default_uniform_block.add_sampler(
                 "s_shadow_compare",
@@ -40,7 +40,7 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
             )
     }
     , shadow_sampler_no_compare{
-        graphics_device.info.use_bindless_texture
+        graphics_device.get_info().use_bindless_texture
             ? nullptr
             : default_uniform_block.add_sampler(
                 "s_shadow_no_compare",
@@ -49,13 +49,13 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
             )
     }
     , texture_sampler{
-        graphics_device.info.use_bindless_texture
+        graphics_device.get_info().use_bindless_texture
             ? nullptr
             : default_uniform_block.add_sampler(
                 "s_texture",
                 erhe::graphics::Glsl_type::sampler_2d,
                 erhe::scene_renderer::c_texture_heap_slot_count_reserved,
-                graphics_device.limits.max_texture_image_units - erhe::scene_renderer::c_texture_heap_slot_count_reserved
+                graphics_device.get_info().max_texture_image_units - erhe::scene_renderer::c_texture_heap_slot_count_reserved
             )
     }
     , nearest_sampler{
@@ -129,7 +129,7 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
 
 void Programs::load_programs(
     tf::Executor&                            executor,
-    erhe::graphics::Device&                graphics_device,
+    erhe::graphics::Device&                  graphics_device,
     erhe::scene_renderer::Program_interface& program_interface
 )
 {
@@ -218,7 +218,7 @@ void Programs::load_programs(
 
         for (auto& entry : prototypes) {
             entry.reloadable_shader_stages.shader_stages.reload(std::move(entry.prototype));
-            graphics_device.shader_monitor.add(entry.reloadable_shader_stages);
+            graphics_device.get_shader_monitor().add(entry.reloadable_shader_stages);
         }
     }
 }

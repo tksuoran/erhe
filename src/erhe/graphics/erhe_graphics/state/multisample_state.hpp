@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstddef>
-
 namespace erhe::graphics {
 
 class Multisample_state
@@ -21,15 +19,5 @@ public:
 
 [[nodiscard]] auto operator==(const Multisample_state& lhs, const Multisample_state& rhs) noexcept -> bool;
 [[nodiscard]] auto operator!=(const Multisample_state& lhs, const Multisample_state& rhs) noexcept -> bool;
-
-class Multisample_state_tracker
-{
-public:
-    void reset();
-    void execute(const Multisample_state& state);
-
-private:
-    Multisample_state m_cache;
-};
 
 } // namespace erhe::graphics

@@ -9,9 +9,7 @@
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
-#include "erhe_graphics/renderbuffer.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_scene/light.hpp"
 #include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
@@ -135,21 +133,24 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
     }
 
     if (
-        !m_depth_renderbuffer ||
-        (m_depth_renderbuffer->get_width() != m_width) ||
-        (m_depth_renderbuffer->get_height() != m_height)
+        !m_depth_texture ||
+        (m_depth_texture->get_width() != m_width) ||
+        (m_depth_texture->get_height() != m_height)
     ) {
         m_depth_format = erhe::dataformat::Format::format_d32_sfloat;
-        using Render_pass  = erhe::graphics::Render_pass;
-        using Renderbuffer = erhe::graphics::Renderbuffer;
-        using Texture      = erhe::graphics::Texture;
-        m_depth_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
+        using Render_pass = erhe::graphics::Render_pass;
+        using Texture     = erhe::graphics::Texture;
+        m_depth_texture = std::make_unique<erhe::graphics::Texture>(
             graphics_device,
-            m_depth_format,
-            m_width,
-            m_height
+            erhe::graphics::Texture_create_info{
+                .device      = graphics_device,
+                .type        = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat = m_depth_format,
+                .width       = m_width,
+                .height      = m_height,
+                .debug_label = "Material Preview Depth Texture"
+            }
         );
-        m_depth_renderbuffer->set_debug_label("Material Preview Depth Renderbuffer");
         attachment_changed = true;
     }
 
@@ -163,7 +164,7 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
     render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
     render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
     render_pass_descriptor.color_attachments[0].clear_value  = { m_clear_color.x, m_clear_color.y, m_clear_color.z, m_clear_color.w };
-    render_pass_descriptor.depth_attachment.renderbuffer     = m_depth_renderbuffer.get();
+    render_pass_descriptor.depth_attachment.texture          = m_depth_texture.get();
     render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
     render_pass_descriptor.depth_attachment.clear_value[0]   = 0.0; // Reverse Z
     render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Dont_care;

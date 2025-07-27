@@ -24,53 +24,55 @@ bool operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& r
 
 auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible, const bool reverse_depth) -> erhe::graphics::Render_pipeline_state
 {
-    erhe::graphics::Shader_stages* const graphics_shader_stages = m_debug_renderer.get_program_interface().graphics_shader_stages.get();
+    using namespace erhe::graphics;
 
-    const gl::Depth_function depth_compare_op0 = visible ? gl::Depth_function::less : gl::Depth_function::gequal;
-    const gl::Depth_function depth_compare_op  = reverse_depth ? erhe::graphics::reverse(depth_compare_op0) : depth_compare_op0;
-    return erhe::graphics::Render_pipeline_state{
-        erhe::graphics::Render_pipeline_data{
+    Shader_stages* const graphics_shader_stages = m_debug_renderer.get_program_interface().graphics_shader_stages.get();
+
+    const Compare_operation depth_compare_op0 = visible ? Compare_operation::less : Compare_operation::greater_or_equal;
+    const Compare_operation depth_compare_op  = reverse_depth ? reverse(depth_compare_op0) : depth_compare_op0;
+    return Render_pipeline_state{
+        Render_pipeline_data{
             .name           = "Line Renderer",
             .shader_stages  = graphics_shader_stages,
             .vertex_input   = m_debug_renderer.get_vertex_input(),
-            .input_assembly = erhe::graphics::Input_assembly_state::triangle,
-            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .input_assembly = Input_assembly_state::triangle,
+            .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
                 .depth_test_enable   = true,
                 .depth_write_enable  = false,
                 .depth_compare_op    = depth_compare_op,
                 .stencil_test_enable = true,
                 .stencil_front = {
-                    .stencil_fail_op = gl::Stencil_op::keep,
-                    .z_fail_op       = gl::Stencil_op::keep,
-                    .z_pass_op       = gl::Stencil_op::replace,
-                    .function        = gl::Stencil_function::greater, //gequal,
+                    .stencil_fail_op = Stencil_op::keep,
+                    .z_fail_op       = Stencil_op::keep,
+                    .z_pass_op       = Stencil_op::replace,
+                    .function        = Compare_operation::greater, //gequal,
                     .reference       = m_config.stencil_reference,
                     .test_mask       = visible ? 0b01111111u : 0b11111111u,
                     .write_mask      = 0b01111111u
                 },
                 .stencil_back = {
-                    .stencil_fail_op = gl::Stencil_op::keep,
-                    .z_fail_op       = gl::Stencil_op::keep,
-                    .z_pass_op       = gl::Stencil_op::replace,
-                    .function        = gl::Stencil_function::greater, //gequal,
+                    .stencil_fail_op = Stencil_op::keep,
+                    .z_fail_op       = Stencil_op::keep,
+                    .z_pass_op       = Stencil_op::replace,
+                    .function        = Compare_operation::greater, //gequal,
                     .reference       = m_config.stencil_reference,
                     .test_mask       = visible ? 0b01111111u : 0b11111111u,
                     .write_mask      = 0b01111111u
                 },
             },
 
-            .color_blend = visible ? erhe::graphics::Color_blend_state::color_blend_premultiplied : erhe::graphics::Color_blend_state{
+            .color_blend = visible ? Color_blend_state::color_blend_premultiplied : Color_blend_state{
                 .enabled  = true,
                 .rgb      = {
-                    .equation_mode      = gl::Blend_equation_mode::func_add,
-                    .source_factor      = gl::Blending_factor::constant_alpha,
-                    .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                    .equation_mode      = Blend_equation_mode::func_add,
+                    .source_factor      = Blending_factor::constant_alpha,
+                    .destination_factor = Blending_factor::one_minus_constant_alpha
                 },
                 .alpha    = {
-                    .equation_mode      = gl::Blend_equation_mode::func_add,
-                    .source_factor      = gl::Blending_factor::constant_alpha,
-                    .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                    .equation_mode      = Blend_equation_mode::func_add,
+                    .source_factor      = Blending_factor::constant_alpha,
+                    .destination_factor = Blending_factor::one_minus_constant_alpha
                 },
                 .constant = { 0.0f, 0.0f, 0.0f, 0.1f },
             }
@@ -182,7 +184,7 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
         //      previous GPU reads, and possibly also
         //      gl::memory_barrier(gl::Memory_barrier_mask::shader_storage_barrier_bit)
         draw.draw_buffer_range = m_triangle_vertex_buffer.acquire(erhe::graphics::Ring_buffer_usage::GPU_access, triangle_byte_count);
-        draw.draw_buffer_range.bytes_written(triangle_byte_count);
+        draw.draw_buffer_range.bytes_gpu_used(triangle_byte_count);
         draw.draw_buffer_range.close();
 
         m_triangle_vertex_buffer.bind(encoder, draw.draw_buffer_range);
@@ -204,7 +206,7 @@ void Debug_renderer_bucket::release_buffers()
 void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& render_encoder, bool draw_hidden, bool draw_visible)
 {
     if (draw_hidden && m_config.draw_hidden) {
-        m_graphics_device.opengl_state_tracker.execute_(m_pipeline_hidden);
+        render_encoder.set_render_pipeline_state(m_pipeline_hidden);
         for (const Debug_draw_entry& draw : m_draws) {
             erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
             size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
@@ -218,7 +220,7 @@ void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& rende
     }
 
     if (draw_visible && m_config.draw_visible) {
-        m_graphics_device.opengl_state_tracker.execute_(m_pipeline_visible);
+        render_encoder.set_render_pipeline_state(m_pipeline_visible);
         for (const Debug_draw_entry& draw : m_draws) {
             erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
             size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
